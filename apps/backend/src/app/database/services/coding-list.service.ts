@@ -6,7 +6,10 @@ import * as ExcelJS from 'exceljs';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
-import { statusStringToNumber, statusNumberToString } from '../utils/response-status-converter';
+import {
+  statusStringToNumber,
+  statusNumberToString
+} from '../utils/response-status-converter';
 import { LRUCache } from './lru-cache';
 import { WorkspaceFilesService } from './workspace-files.service';
 
@@ -43,7 +46,10 @@ export class CodingListService {
     private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
 
-  private async loadVoudData(unitName: string, workspaceId: number): Promise<Map<string, string>> {
+  private async loadVoudData(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Map<string, string>> {
     const cacheKey = `${workspaceId}:${unitName}`;
     let variablePageMap = this.voudCache.get(cacheKey);
     if (variablePageMap) {
@@ -66,11 +72,16 @@ export class CodingListService {
         const variableLocation = extractVariableLocation([respDefinition]);
         if (variableLocation[0]?.variable_pages) {
           for (const pageInfo of variableLocation[0].variable_pages) {
-            variablePageMap.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');
+            variablePageMap.set(
+              pageInfo.variable_ref,
+              pageInfo.variable_path?.pages?.toString() || '0'
+            );
           }
         }
       } catch (error) {
-        this.logger.debug(`Error parsing VOUD file for unit ${unitName}: ${error.message}`);
+        this.logger.debug(
+          `Error parsing VOUD file for unit ${unitName}: ${error.message}`
+        );
       }
     }
 
@@ -78,7 +89,10 @@ export class CodingListService {
     return variablePageMap;
   }
 
-  private async loadVocsExclusions(unitName: string, workspaceId: number): Promise<Set<string>> {
+  private async loadVocsExclusions(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Set<string>> {
     const cacheKey = `${workspaceId}:${unitName}`;
 
     let exclusions = this.vocsCache.get(cacheKey);
@@ -98,19 +112,31 @@ export class CodingListService {
 
     if (vocsFile) {
       try {
-        interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
+        interface VocsScheme {
+          variableCodings?: { id: string; sourceType?: string }[];
+        }
 
-        const data = typeof vocsFile.data === 'string' ? JSON.parse(vocsFile.data) : vocsFile.data;
+        const data =
+          typeof vocsFile.data === 'string' ?
+            JSON.parse(vocsFile.data) :
+            vocsFile.data;
         const scheme = data as VocsScheme;
         const vars = scheme?.variableCodings || [];
 
         for (const vc of vars) {
-          if (vc && vc.id && vc.sourceType && vc.sourceType === 'BASE_NO_VALUE') {
+          if (
+            vc &&
+            vc.id &&
+            vc.sourceType &&
+            vc.sourceType === 'BASE_NO_VALUE'
+          ) {
             exclusions.add(`${unitName}||${vc.id}`);
           }
         }
       } catch (error) {
-        this.logger.debug(`Error parsing VOCS file for unit ${unitName}: ${error.message}`);
+        this.logger.debug(
+          `Error parsing VOCS file for unit ${unitName}: ${error.message}`
+        );
       }
     }
 
@@ -118,7 +144,10 @@ export class CodingListService {
     return exclusions;
   }
 
-  async getVariablePageMap(unitName: string, workspaceId: number): Promise<Map<string, string>> {
+  async getVariablePageMap(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Map<string, string>> {
     return this.loadVoudData(unitName, workspaceId);
   }
 
@@ -196,29 +225,42 @@ export class CodingListService {
         }
       });
 
-      this.logger.log(`Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`);
+      this.logger.log(
+        `Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`
+      );
 
       const variablePageMap = new Map<string, Map<string, string>>();
       for (const voudFile of voudFiles) {
         try {
-          const respDefinition = { definition: (voudFile).data };
+          const respDefinition = { definition: voudFile.data };
           const variableLocation = extractVariableLocation([respDefinition]);
           const unitVarPages = new Map<string, string>();
           for (const pageInfo of variableLocation[0].variable_pages) {
-            unitVarPages.set(pageInfo.variable_ref, pageInfo.variable_path?.pages?.toString() || '0');
+            unitVarPages.set(
+              pageInfo.variable_ref,
+              pageInfo.variable_path?.pages?.toString() || '0'
+            );
           }
-          variablePageMap.set(voudFile.file_id.replace('.VOUD', ''), unitVarPages);
+          variablePageMap.set(
+            voudFile.file_id.replace('.VOUD', ''),
+            unitVarPages
+          );
         } catch (error) {
-          this.logger.error(`Error parsing VOUD file ${voudFile.filename}: ${error.message}`);
+          this.logger.error(
+            `Error parsing VOUD file ${voudFile.filename}: ${error.message}`
+          );
         }
       }
       // 2) Query all coding incomplete responses
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      const queryBuilder = this.responseRepository
+        .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+        .where('response.status_v1 = :status', {
+          status: statusStringToNumber('CODING_INCOMPLETE')
+        })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
@@ -226,7 +268,9 @@ export class CodingListService {
       const [responses, total] = await queryBuilder.getManyAndCount();
 
       // 3) Build exclusion Set from VOCS files where sourceType == BASE_NO_VALUE
-      interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
+      interface VocsScheme {
+        variableCodings?: { id: string; sourceType?: string }[];
+      }
 
       const vocsFiles = await this.fileUploadRepository.find({
         where: {
@@ -241,25 +285,35 @@ export class CodingListService {
       for (const file of vocsFiles) {
         try {
           const unitKey = file.file_id.replace('.VOCS', '');
-          const data = typeof (file).data === 'string' ? JSON.parse((file).data) : (file).data;
+          const data =
+            typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
           const scheme = data as VocsScheme;
           const vars = scheme?.variableCodings || [];
           for (const vc of vars) {
-            if (vc && vc.id && vc.sourceType && vc.sourceType === 'BASE_NO_VALUE') {
+            if (
+              vc &&
+              vc.id &&
+              vc.sourceType &&
+              vc.sourceType === 'BASE_NO_VALUE'
+            ) {
               excludedPairs.add(`${unitKey}||${vc.id}`);
             }
           }
         } catch (e) {
-          this.logger.error(`Error parsing VOCS file ${file.file_id}: ${e.message}`);
+          this.logger.error(
+            `Error parsing VOCS file ${file.file_id}: ${e.message}`
+          );
         }
       }
 
       // 4) Map responses to output and filter by excludedPairs, variable id substrings, and empty values
-      const filtered = (responses).filter(r => {
+      const filtered = responses.filter(r => {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
         const hasExcludedPair = excludedPairs.has(`${unitKey}||${variableId}`);
-        const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
+        const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(
+          variableId
+        );
         const hasValue = r.value != null && r.value.trim() !== '';
         return !hasExcludedPair && !hasExcludedSubstring && hasValue;
       });
@@ -305,7 +359,9 @@ export class CodingListService {
         return a.variable_id.localeCompare(b.variable_id);
       });
 
-      this.logger.log(`Found ${sortedResult.length} coding items after filtering derived variables, total raw ${total}`);
+      this.logger.log(
+        `Found ${sortedResult.length} coding items after filtering derived variables, total raw ${total}`
+      );
       return { items: sortedResult, total };
     } catch (error) {
       this.logger.error(`Error fetching coding list: ${error.message}`);
@@ -314,8 +370,14 @@ export class CodingListService {
   }
 
   // Memory-efficient streaming CSV generator with on-demand file loading
-  async getCodingListCsvStream(workspace_id: number, authToken: string, serverUrl?: string) {
-    this.logger.log(`Memory-efficient CSV export for workspace ${workspace_id}`);
+  async getCodingListCsvStream(
+    workspace_id: number,
+    authToken: string,
+    serverUrl?: string
+  ) {
+    this.logger.log(
+      `Memory-efficient CSV export for workspace ${workspace_id}`
+    );
     this.voudCache.clear();
     this.vocsCache.clear();
     const csvStream = fastCsv.format({ headers: true });
@@ -326,13 +388,16 @@ export class CodingListService {
         let lastId = 0;
         let totalWritten = 0;
 
-        for (; ;) {
-          const responses = await this.responseRepository.createQueryBuilder('response')
+        for (;;) {
+          const responses = await this.responseRepository
+            .createQueryBuilder('response')
             .leftJoinAndSelect('response.unit', 'unit')
             .leftJoinAndSelect('unit.booklet', 'booklet')
             .leftJoinAndSelect('booklet.person', 'person')
             .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-            .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+            .where('response.status_v1 = :status', {
+              status: statusStringToNumber('CODING_INCOMPLETE')
+            })
             .andWhere('person.workspace_id = :workspace_id', { workspace_id })
             .andWhere('person.consider = :consider', { consider: true })
             .andWhere('response.id > :lastId', { lastId })
@@ -344,7 +409,12 @@ export class CodingListService {
 
           // Process responses in parallel batches for better performance
           const items: CodingItem[] = [];
-          const processingPromises = responses.map(response => this.processResponseItem(response, authToken, serverUrl!, workspace_id)
+          const processingPromises = responses.map(response => this.processResponseItem(
+            response,
+            authToken,
+            serverUrl!,
+            workspace_id
+          )
           );
 
           const results = await Promise.allSettled(processingPromises);
@@ -361,7 +431,9 @@ export class CodingListService {
             totalWritten += 1;
 
             if (!ok) {
-              await new Promise(resolve => { csvStream.once('drain', resolve); });
+              await new Promise(resolve => {
+                csvStream.once('drain', resolve);
+              });
             }
           }
 
@@ -371,7 +443,9 @@ export class CodingListService {
           }
 
           lastId = responses[responses.length - 1].id;
-          await new Promise(resolve => { setImmediate(resolve); });
+          await new Promise(resolve => {
+            setImmediate(resolve);
+          });
         }
 
         this.logger.log(`CSV stream finished. Rows written: ${totalWritten}`);
@@ -389,8 +463,14 @@ export class CodingListService {
     return csvStream;
   }
 
-  async getCodingListAsExcel(workspace_id: number, authToken?: string, serverUrl?: string): Promise<Buffer> {
-    this.logger.log(`Memory-efficient Excel export for workspace ${workspace_id}`);
+  async getCodingListAsExcel(
+    workspace_id: number,
+    authToken?: string,
+    serverUrl?: string
+  ): Promise<Buffer> {
+    this.logger.log(
+      `Memory-efficient Excel export for workspace ${workspace_id}`
+    );
     this.voudCache.clear();
     this.vocsCache.clear();
 
@@ -415,13 +495,16 @@ export class CodingListService {
       let lastId = 0;
       let totalWritten = 0;
 
-      for (; ;) {
-        const responses = await this.responseRepository.createQueryBuilder('response')
+      for (;;) {
+        const responses = await this.responseRepository
+          .createQueryBuilder('response')
           .leftJoinAndSelect('response.unit', 'unit')
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+          .where('response.status_v1 = :status', {
+            status: statusStringToNumber('CODING_INCOMPLETE')
+          })
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .andWhere('response.id > :lastId', { lastId })
           .orderBy('response.id', 'ASC')
@@ -430,7 +513,12 @@ export class CodingListService {
 
         if (!responses.length) break;
 
-        const processingPromises = responses.map(response => this.processResponseItem(response, authToken!, serverUrl!, workspace_id)
+        const processingPromises = responses.map(response => this.processResponseItem(
+          response,
+          authToken!,
+          serverUrl!,
+          workspace_id
+        )
         );
 
         const results = await Promise.allSettled(processingPromises);
@@ -448,7 +536,9 @@ export class CodingListService {
         }
 
         lastId = responses[responses.length - 1].id;
-        await new Promise(resolve => { setImmediate(resolve); });
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
       }
 
       this.logger.log(`Excel export finished. Rows written: ${totalWritten}`);
@@ -464,15 +554,32 @@ export class CodingListService {
     }
   }
 
-  getCodingListJsonStream(workspace_id: number, authToken: string, serverUrl?: string): JsonStream {
-    this.logger.log(`Memory-efficient JSON stream export for workspace ${workspace_id}`);
+  getCodingListJsonStream(
+    workspace_id: number,
+    authToken: string,
+    serverUrl?: string
+  ): JsonStream {
+    this.logger.log(
+      `Memory-efficient JSON stream export for workspace ${workspace_id}`
+    );
     this.voudCache.clear();
     this.vocsCache.clear();
 
     return {
-      on: (event: string, listener: ((item: CodingItem) => void) | (() => void) | ((error: Error) => void)) => {
+      on: (
+        event: string,
+        listener:
+        | ((item: CodingItem) => void)
+        | (() => void)
+        | ((error: Error) => void)
+      ) => {
         if (event === 'data') {
-          this.processJsonExport(workspace_id, authToken, serverUrl!, listener as (item: CodingItem) => void);
+          this.processJsonExport(
+            workspace_id,
+            authToken,
+            serverUrl!,
+            listener as (item: CodingItem) => void
+          );
         } else if (event === 'end') {
           this.endListener = listener as () => void;
         } else if (event === 'error') {
@@ -485,18 +592,26 @@ export class CodingListService {
   private endListener: (() => void) | null = null;
   private errorListener: ((error: Error) => void) | null = null;
 
-  private async processJsonExport(workspace_id: number, authToken: string, serverUrl: string, dataListener: (item: CodingItem) => void) {
+  private async processJsonExport(
+    workspace_id: number,
+    authToken: string,
+    serverUrl: string,
+    dataListener: (item: CodingItem) => void
+  ) {
     try {
       const batchSize = 5000;
       let lastId = 0;
 
-      for (; ;) {
-        const responses = await this.responseRepository.createQueryBuilder('response')
+      for (;;) {
+        const responses = await this.responseRepository
+          .createQueryBuilder('response')
           .leftJoinAndSelect('response.unit', 'unit')
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+          .where('response.status_v1 = :status', {
+            status: statusStringToNumber('CODING_INCOMPLETE')
+          })
           .andWhere('person.workspace_id = :workspace_id', { workspace_id })
           .andWhere('response.id > :lastId', { lastId })
           .orderBy('response.id', 'ASC')
@@ -522,7 +637,9 @@ export class CodingListService {
         }
 
         lastId = responses[responses.length - 1].id;
-        await new Promise(resolve => { setImmediate(resolve); });
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
       }
 
       // Signal end of stream
@@ -540,8 +657,11 @@ export class CodingListService {
     }
   }
 
-  async getCodingListVariables(workspaceId: number): Promise<Array<{ unitName: string; variableId: string }>> {
-    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+  async getCodingListVariables(
+    workspaceId: number
+  ): Promise<Array<{ unitName: string; variableId: string }>> {
+    const queryBuilder = this.responseRepository
+      .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
@@ -550,9 +670,13 @@ export class CodingListService {
       .distinct(true)
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+      .andWhere('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      });
 
-    interface VocsScheme { variableCodings?: { id: string; sourceType?: string }[] }
+    interface VocsScheme {
+      variableCodings?: { id: string; sourceType?: string }[];
+    }
 
     const vocsFiles = await this.fileUploadRepository.find({
       where: {
@@ -567,16 +691,24 @@ export class CodingListService {
     for (const file of vocsFiles) {
       try {
         const unitKey = file.file_id.replace('.VOCS', '');
-        const data = typeof (file).data === 'string' ? JSON.parse((file).data) : (file).data;
+        const data =
+          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = data as VocsScheme;
         const vars = scheme?.variableCodings || [];
         for (const vc of vars) {
-          if (vc && vc.id && vc.sourceType && vc.sourceType === 'BASE_NO_VALUE') {
+          if (
+            vc &&
+            vc.id &&
+            vc.sourceType &&
+            vc.sourceType === 'BASE_NO_VALUE'
+          ) {
             excludedPairs.add(`${unitKey}||${vc.id}`);
           }
         }
       } catch (e) {
-        this.logger.error(`Error parsing VOCS file ${file.file_id}: ${e.message}`);
+        this.logger.error(
+          `Error parsing VOCS file ${file.file_id}: ${e.message}`
+        );
       }
     }
 
@@ -588,12 +720,17 @@ export class CodingListService {
         const [unitKey, varId] = pair.split('||');
         const unitParam = `unit${index}`;
         const varParam = `var${index}`;
-        exclusionConditions.push(`NOT (unit.name = :${unitParam} AND response.variableid = :${varParam})`);
+        exclusionConditions.push(
+          `NOT (unit.name = :${unitParam} AND response.variableid = :${varParam})`
+        );
         exclusionParams[unitParam] = unitKey;
         exclusionParams[varParam] = varId;
       });
 
-      queryBuilder.andWhere(`(${exclusionConditions.join(' AND ')})`, exclusionParams);
+      queryBuilder.andWhere(
+        `(${exclusionConditions.join(' AND ')})`,
+        exclusionParams
+      );
     }
 
     // Exclude media variables and derived variables
@@ -607,12 +744,14 @@ export class CodingListService {
     );
 
     queryBuilder.andWhere(
-      '(response.value IS NOT NULL AND response.value != \'\')'
+      "(response.value IS NOT NULL AND response.value != '')"
     );
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
+      workspaceId
+    );
 
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables: Set<string>, unitName: string) => {
@@ -620,17 +759,29 @@ export class CodingListService {
     });
 
     const filteredResults = rawResults.filter(row => {
-      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      const unitNamesValidVars = validVariableSets.get(
+        row.unitName?.toUpperCase()
+      );
       return unitNamesValidVars?.has(row.variableId);
     });
 
-    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResults.length} valid variables`);
+    this.logger.log(
+      `Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResults.length} valid variables`
+    );
 
     return filteredResults;
   }
 
-  async getCodingResultsByVersionCsvStream(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken: string, serverUrl?: string, includeReplayUrls: boolean = false) {
-    this.logger.log(`Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`);
+  async getCodingResultsByVersionCsvStream(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false
+  ) {
+    this.logger.log(
+      `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+    );
     this.voudCache.clear();
     this.vocsCache.clear();
     const csvStream = fastCsv.format({ headers: true });
@@ -641,8 +792,9 @@ export class CodingListService {
         let lastId = 0;
         let totalWritten = 0;
 
-        for (; ;) {
-          const responses = await this.responseRepository.createQueryBuilder('response')
+        for (;;) {
+          const responses = await this.responseRepository
+            .createQueryBuilder('response')
             .leftJoinAndSelect('response.unit', 'unit')
             .leftJoinAndSelect('unit.booklet', 'booklet')
             .leftJoinAndSelect('booklet.person', 'person')
@@ -658,7 +810,14 @@ export class CodingListService {
 
           // Process responses in parallel batches for better performance
           const items: CodingItem[] = [];
-          const processingPromises = responses.map(response => this.processResponseItemWithVersions(response, version, authToken, serverUrl!, workspace_id, includeReplayUrls)
+          const processingPromises = responses.map(response => this.processResponseItemWithVersions(
+            response,
+            version,
+            authToken,
+            serverUrl!,
+            workspace_id,
+            includeReplayUrls
+          )
           );
 
           const results = await Promise.allSettled(processingPromises);
@@ -675,7 +834,9 @@ export class CodingListService {
             totalWritten += 1;
 
             if (!ok) {
-              await new Promise(resolve => { csvStream.once('drain', resolve); });
+              await new Promise(resolve => {
+                csvStream.once('drain', resolve);
+              });
             }
           }
 
@@ -685,13 +846,19 @@ export class CodingListService {
           }
 
           lastId = responses[responses.length - 1].id;
-          await new Promise(resolve => { setImmediate(resolve); });
+          await new Promise(resolve => {
+            setImmediate(resolve);
+          });
         }
 
-        this.logger.log(`CSV stream finished for version ${version}. Rows written: ${totalWritten}`);
+        this.logger.log(
+          `CSV stream finished for version ${version}. Rows written: ${totalWritten}`
+        );
         csvStream.end();
       } catch (error) {
-        this.logger.error(`Error streaming CSV export for version ${version}: ${error.message}`);
+        this.logger.error(
+          `Error streaming CSV export for version ${version}: ${error.message}`
+        );
         csvStream.emit('error', error);
       } finally {
         // Clear caches after export to free memory
@@ -703,8 +870,16 @@ export class CodingListService {
     return csvStream;
   }
 
-  async getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', authToken?: string, serverUrl?: string, includeReplayUrls: boolean = false): Promise<Buffer> {
-    this.logger.log(`Starting Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`);
+  async getCodingResultsByVersionAsExcel(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken?: string,
+    serverUrl?: string,
+    includeReplayUrls: boolean = false
+  ): Promise<Buffer> {
+    this.logger.log(
+      `Starting Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+    );
     this.voudCache.clear();
     this.vocsCache.clear();
 
@@ -723,15 +898,24 @@ export class CodingListService {
 
     // Style header row
     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
-    worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4472C4' }
+    };
+    worksheet.getRow(1).alignment = {
+      horizontal: 'center',
+      vertical: 'middle',
+      wrapText: true
+    };
 
     const batchSize = 5000;
     let lastId = 0;
 
     try {
-      for (; ;) {
-        const responses = await this.responseRepository.createQueryBuilder('response')
+      for (;;) {
+        const responses = await this.responseRepository
+          .createQueryBuilder('response')
           .leftJoinAndSelect('response.unit', 'unit')
           .leftJoinAndSelect('unit.booklet', 'booklet')
           .leftJoinAndSelect('booklet.person', 'person')
@@ -746,7 +930,14 @@ export class CodingListService {
         if (!responses.length) break;
 
         for (const response of responses) {
-          const itemData = await this.processResponseItemWithVersions(response, version, authToken || '', serverUrl || '', workspace_id, includeReplayUrls);
+          const itemData = await this.processResponseItemWithVersions(
+            response,
+            version,
+            authToken || '',
+            serverUrl || '',
+            workspace_id,
+            includeReplayUrls
+          );
           if (itemData) {
             worksheet.addRow(itemData);
           }
@@ -758,13 +949,17 @@ export class CodingListService {
         }
 
         lastId = responses[responses.length - 1].id;
-        await new Promise(resolve => { setImmediate(resolve); });
+        await new Promise(resolve => {
+          setImmediate(resolve);
+        });
       }
 
       this.logger.log(`Excel export completed for version ${version}`);
-      return await workbook.xlsx.writeBuffer() as unknown as Buffer;
+      return (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
     } catch (error) {
-      this.logger.error(`Error during Excel export for version ${version}: ${error.message}`);
+      this.logger.error(
+        `Error during Excel export for version ${version}: ${error.message}`
+      );
       throw error;
     } finally {
       this.voudCache.clear();
@@ -776,10 +971,10 @@ export class CodingListService {
     const baseHeaders = [
       'unit_key',
       'unit_alias',
-      'login_name',
-      'login_code',
-      'login_group',
-      'booklet_id',
+      'person_login',
+      'person_code',
+      'person_group',
+      'booklet_name',
       'variable_id',
       'variable_page',
       'variable_anchor'
@@ -787,13 +982,9 @@ export class CodingListService {
 
     // Add version-specific columns for comparison
     if (version === 'v1') {
-      return [
-        ...baseHeaders,
-        'status_v1',
-        'code_v1',
-        'score_v1'
-      ];
-    } if (version === 'v2') {
+      return [...baseHeaders, 'status_v1', 'code_v1', 'score_v1'];
+    }
+    if (version === 'v2') {
       return [
         ...baseHeaders,
         'status_v1',
@@ -866,24 +1057,43 @@ export class CodingListService {
 
       // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
-        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
+        baseItem.status_v1 =
+          response.status_v1 != null ?
+            statusNumberToString(response.status_v1) || '' :
+            '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
       } else if (targetVersion === 'v2') {
-        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
+        baseItem.status_v1 =
+          response.status_v1 != null ?
+            statusNumberToString(response.status_v1) || '' :
+            '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 = response.status_v2 != null ? statusNumberToString(response.status_v2) || '' : '';
+        baseItem.status_v2 =
+          response.status_v2 != null ?
+            statusNumberToString(response.status_v2) || '' :
+            '';
         baseItem.code_v2 = response.code_v2 || '';
         baseItem.score_v2 = response.score_v2 || '';
-      } else { // v3
-        baseItem.status_v1 = response.status_v1 != null ? statusNumberToString(response.status_v1) || '' : '';
+      } else {
+        // v3
+        baseItem.status_v1 =
+          response.status_v1 != null ?
+            statusNumberToString(response.status_v1) || '' :
+            '';
         baseItem.code_v1 = response.code_v1 || '';
         baseItem.score_v1 = response.score_v1 || '';
-        baseItem.status_v2 = response.status_v2 != null ? statusNumberToString(response.status_v2) || '' : '';
+        baseItem.status_v2 =
+          response.status_v2 != null ?
+            statusNumberToString(response.status_v2) || '' :
+            '';
         baseItem.code_v2 = response.code_v2 || '';
         baseItem.score_v2 = response.score_v2 || '';
-        baseItem.status_v3 = response.status_v3 != null ? statusNumberToString(response.status_v3) || '' : '';
+        baseItem.status_v3 =
+          response.status_v3 != null ?
+            statusNumberToString(response.status_v3) || '' :
+            '';
         baseItem.code_v3 = response.code_v3 || '';
         baseItem.score_v3 = response.score_v3 || '';
       }
@@ -895,7 +1105,9 @@ export class CodingListService {
 
       return baseItem;
     } catch (error) {
-      this.logger.error(`Error processing response ${response.id}: ${error.message}`);
+      this.logger.error(
+        `Error processing response ${response.id}: ${error.message}`
+      );
       return null;
     }
   }
