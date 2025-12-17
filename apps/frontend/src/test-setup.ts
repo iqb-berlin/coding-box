@@ -36,3 +36,29 @@ jest.mock('d3-transition', () => ({
 jest.mock('jwt-decode', () => ({
   jwtDecode: jest.fn(() => ({ workspace: '1' }))
 }));
+
+// Mock Angular Material components that have CSS parsing issues in jsdom
+jest.mock('@angular/material/snack-bar', () => ({
+  MatSnackBar: jest.fn(() => ({
+    open: jest.fn()
+  })),
+  MatSnackBarModule: {}
+}));
+
+// Suppress jsdom CSS parsing errors for CDK overlay styles
+// eslint-disable-next-line no-console
+const originalError = console.error;
+beforeAll(() => {
+  // eslint-disable-next-line no-console
+  console.error = jest.fn((...args) => {
+    if (args[0]?.message?.includes('Could not parse CSS stylesheet')) {
+      return;
+    }
+    originalError.call(console, ...args);
+  });
+});
+
+afterAll(() => {
+  // eslint-disable-next-line no-console
+  console.error = originalError;
+});
