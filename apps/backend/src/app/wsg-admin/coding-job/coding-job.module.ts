@@ -33,6 +33,7 @@ import { CacheModule } from '../../cache/cache.module';
       Setting
     ]),
     AuthModule,
+    AuthModule,
     DatabaseModule,
     CacheModule
   ],
