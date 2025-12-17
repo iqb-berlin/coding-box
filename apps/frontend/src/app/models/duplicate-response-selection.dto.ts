@@ -10,7 +10,7 @@ export interface DuplicateResponseSelectionDto extends DuplicateResponseDto {
   selectedResponseId?: number;
 
   /**
-   * A unique key for the duplicate response, format: `${unitId}_${variableId}_${testTakerLogin}`
+   * A unique key for the duplicate response, format: `${unitId}|${encodeURIComponent(variableId)}|${encodeURIComponent(subform)}|${encodeURIComponent(testTakerLogin)}`
    */
   key: string;
 }
@@ -21,7 +21,7 @@ export interface DuplicateResponseSelectionDto extends DuplicateResponseDto {
 export interface ResolveDuplicateResponsesRequestDto {
   /**
    * Map of unit+variable+testTaker identifiers to selected response IDs
-   * Key format: `${unitId}_${variableId}_${testTakerLogin}`
+   * Key format: `${unitId}|${encodeURIComponent(variableId)}|${encodeURIComponent(subform)}|${encodeURIComponent(testTakerLogin)}`
    * Value: The selected response ID to keep
    */
   resolutionMap: Record<string, number>;

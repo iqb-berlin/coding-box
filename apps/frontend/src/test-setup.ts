@@ -37,14 +37,31 @@ jest.mock('jwt-decode', () => ({
   jwtDecode: jest.fn(() => ({ workspace: '1' }))
 }));
 
-// Mock keycloak-js
-jest.mock('keycloak-js', () => jest.fn(() => ({
-  authenticated: true,
-  token: 'mock-token',
-  idTokenParsed: { preferred_username: 'user' },
-  loadUserProfile: jest.fn().mockResolvedValue({}),
-  login: jest.fn(),
-  logout: jest.fn(),
-  accountManagement: jest.fn(),
-  realmAccess: { roles: [] }
-})));
+// Mock Angular Material components that have CSS parsing issues in jsdom
+jest.mock('@angular/material/snack-bar', () => {
+  const actual = jest.requireActual('@angular/material/snack-bar');
+  return {
+    ...actual,
+    MatSnackBar: class MatSnackBarMock {
+      open = jest.fn();
+    }
+  };
+});
+
+// Suppress jsdom CSS parsing errors for CDK overlay styles
+// eslint-disable-next-line no-console
+const originalError = console.error;
+beforeAll(() => {
+  // eslint-disable-next-line no-console
+  console.error = jest.fn((...args) => {
+    if (args[0]?.message?.includes('Could not parse CSS stylesheet')) {
+      return;
+    }
+    originalError.call(console, ...args);
+  });
+});
+
+afterAll(() => {
+  // eslint-disable-next-line no-console
+  console.error = originalError;
+});

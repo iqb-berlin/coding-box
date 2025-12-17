@@ -1,11 +1,14 @@
-
 // Main container styles
 .container {
-  margin: 20px;
-  width: 100%;
-  max-width: 1600px;
-  height: auto;
-  min-height: 60vh;
+  padding: 20px;
+  width: auto;
+  box-sizing: border-box;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-x: hidden;
+  position: relative;
   animation: fadeIn 0.3s ease-in-out;
 }
 
@@ -29,19 +32,39 @@
   }
 }
 
+:host ::ng-deep coding-box-search-filter {
+  .search-field {
+    padding: 0;
+  }
+
+  .search-field-container {
+    background-color: transparent;
+  }
+}
+
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 // Card styles
-.action-card, .data-card {
+.action-card,
+.data-card {
   background-color: white;
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 24px;
   margin-bottom: 24px;
   width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   transition: box-shadow 0.3s ease, transform 0.2s ease;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
@@ -70,6 +93,10 @@
   }
 }
 
+.data-card {
+  margin-bottom: 0;
+}
+
 // Loading container styles
 .loading-container {
   display: flex;
@@ -93,21 +120,53 @@
   }
 }
 
+.busy-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background-color: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(2px);
+  cursor: wait;
+  pointer-events: all;
+}
+
+.busy-overlay .loading-text {
+  font-size: 16px;
+  color: #666;
+}
+
+.busy-overlay .mat-spinner {
+  margin-bottom: 0;
+}
+
 // Search section styles
 .search-section {
   margin-bottom: 20px;
 
   coding-box-search-filter {
-    min-width: 100%;
+    flex: 1 1 360px;
+    min-width: 360px;
   }
 }
 
 // Filter container styles
 .filter-container {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: stretch;
+  }
 
   .filter-selects {
     display: flex;
@@ -124,6 +183,14 @@
       min-width: 200px;
       max-width: 300px;
 
+      ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+        display: none;
+      }
+
+      ::ng-deep .mat-mdc-form-field-bottom-align::before {
+        display: none;
+      }
+
       @media (max-width: 768px) {
         min-width: 100%;
         max-width: 100%;
@@ -137,6 +204,11 @@
       font-weight: 500;
       letter-spacing: 0.3px;
       transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: center;
+      box-sizing: border-box;
 
       mat-icon {
         margin-right: 8px;
@@ -157,14 +229,16 @@
 // Table container styles
 .table-container {
   position: relative;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
-  max-height: 400px; /* Default max height for smaller screens */
+  flex: 1;
+  min-height: 0;
+  max-height: none;
   border-radius: 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
   background-color: white;
-  margin-bottom: 16px;
+  margin-bottom: 0;
 
   /* Custom scrollbar styling */
   &::-webkit-scrollbar {
@@ -188,20 +262,23 @@
 
   /* Responsive max-height adjustments */
   @media (min-height: 768px) {
-    max-height: 500px; /* Medium screens */
+    max-height: none;
   }
 
   @media (min-height: 1024px) {
-    max-height: 600px; /* Larger screens */
+    max-height: none;
   }
 }
 
 // Table styles
-.files-table, .resource-packages-table {
+.files-table,
+.resource-packages-table {
   width: 100%;
 
-  mat-header-cell, mat-cell {
-    white-space: nowrap;
+  mat-header-cell,
+  mat-cell {
+    white-space: normal;
+    overflow-wrap: anywhere;
     padding: 14px 18px;
   }
 
@@ -254,7 +331,9 @@
 }
 
 // Column width styles
-.mat-column-file_size, .mat-column-file_type, .mat-column-created_at {
+.mat-column-file_size,
+.mat-column-file_type,
+.mat-column-created_at {
   width: 20%;
 }
 

@@ -1,39 +1,37 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import {
-  catchError,
-  Observable,
-  of
-} from 'rxjs';
+import { catchError, Observable, of } from 'rxjs';
 import { SERVER_URL } from '../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../api-dto/files/test-groups-info.dto';
+import { TestFilesUploadResultDto } from '../../../../../api-dto/files/test-files-upload-result.dto';
 
 export type ImportOptions = {
-  responses:string,
-  definitions:string,
-  units:string,
-  player:string,
-  codings:string,
-  logs:string,
-  testTakers:string,
-  booklets:string
+  responses: string;
+  definitions: string;
+  units: string;
+  player: string;
+  codings: string;
+  logs: string;
+  testTakers: string;
+  booklets: string;
 };
 
 export type Result = {
-  success: boolean,
-  testFiles: number,
-  responses: number,
-  logs: number,
-  booklets: number,
-  units: number,
-  persons: number,
-  importedGroups: string[],
-  filesPlayer?: number,
-  filesUnits?: number,
-  filesDefinitions?: number,
-  filesCodings?: number,
-  filesBooklets?: number,
-  filesTestTakers?: number
+  success: boolean;
+  testFiles: number;
+  responses: number;
+  logs: number;
+  booklets: number;
+  units: number;
+  persons: number;
+  importedGroups: string[];
+  filesPlayer?: number;
+  filesUnits?: number;
+  filesDefinitions?: number;
+  filesCodings?: number;
+  filesBooklets?: number;
+  filesTestTakers?: number;
+  testFilesUploadResult?: TestFilesUploadResultDto;
 };
 
 @Injectable({
@@ -47,17 +45,26 @@ export class ImportService {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
 
-  importWorkspaceFiles(workspace_id: number,
-                       testCenterWorkspace: string,
-                       server: string,
-                       url: string,
-                       token: string,
-                       importOptions: ImportOptions,
-                       testGroups: string[],
-                       overwriteExistingLogs: boolean = false
+  importWorkspaceFiles(
+    workspace_id: number,
+    testCenterWorkspace: string,
+    server: string,
+    url: string,
+    token: string,
+    importOptions: ImportOptions,
+    testGroups: string[],
+    overwriteExistingLogs: boolean = false,
+    overwriteFileIds?: string[]
   ): Observable<Result> {
     const {
-      units, responses, definitions, player, codings, logs, testTakers, booklets
+      units,
+      responses,
+      definitions,
+      player,
+      codings,
+      logs,
+      testTakers,
+      booklets
     } = importOptions;
 
     const params = new HttpParams()
@@ -74,10 +81,14 @@ export class ImportService {
       .set('testTakers', String(testTakers))
       .set('booklets', String(booklets))
       .set('testGroups', String(testGroups.join(',')))
-      .set('overwriteExistingLogs', String(overwriteExistingLogs));
+      .set('overwriteExistingLogs', String(overwriteExistingLogs))
+      .set('overwriteFileIds', String((overwriteFileIds || []).join(';')));
 
     return this.http
-      .get<Result>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`, { headers: this.authHeader, params })
+      .get<Result>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
+      { headers: this.authHeader, params }
+    )
       .pipe(
         catchError(() => of({
           success: false,
@@ -94,15 +105,17 @@ export class ImportService {
           filesCodings: 0,
           filesBooklets: 0,
           filesTestTakers: 0
-        }))
+        })
+        )
       );
   }
 
-  importTestcenterGroups(workspace_id: number,
-                         testCenterWorkspace: string,
-                         server: string,
-                         url: string,
-                         authToken: string
+  importTestcenterGroups(
+    workspace_id: number,
+    testCenterWorkspace: string,
+    server: string,
+    url: string,
+    authToken: string
   ): Observable<TestGroupsInfoDto[]> {
     const params = new HttpParams()
       .set('tc_workspace', testCenterWorkspace)
@@ -111,9 +124,10 @@ export class ImportService {
       .set('token', authToken);
 
     return this.http
-      .get<TestGroupsInfoDto[]>(`${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`, { headers: this.authHeader, params })
-      .pipe(
-        catchError(() => of([]))
-      );
+      .get<TestGroupsInfoDto[]>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(catchError(() => of([])));
   }
 }

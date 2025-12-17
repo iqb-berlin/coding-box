@@ -24,6 +24,7 @@ dev-registry-logout:
 # Param (optional): SERVICE - Build the specified service only, e.g. `SERVICE=db make dev-build`
 dev-build: dev-registry-login
 	cd $(CODING_BOX_BASE_DIR) && docker build --progress plain --pull -t coding-box-base:latest .
+	docker compose --progress plain --env-file $(CODING_BOX_BASE_DIR)/.env.dev pull redis
 	docker compose --progress plain --env-file $(CODING_BOX_BASE_DIR)/.env.dev build $(SERVICE)
 
 ## Create and start all docker containers

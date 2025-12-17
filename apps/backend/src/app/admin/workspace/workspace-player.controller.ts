@@ -1,6 +1,5 @@
 import {
-  Controller,
-  Get, Param, UseGuards
+  Controller, Get, Param, UseGuards
 } from '@nestjs/common';
 import {
   ApiOperation, ApiParam, ApiResponse, ApiTags
@@ -10,28 +9,34 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import FileUpload from '../../database/entities/file_upload.entity';
-import { WorkspacePlayerService, BookletUnit } from '../../database/services/workspace-player.service';
+import {
+  WorkspacePlayerService,
+  BookletUnit
+} from '../../database/services/workspace-player.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Player')
 @Controller('admin/workspace')
 export class WorkspacePlayerController {
-  constructor(
-    private workspacePlayerService: WorkspacePlayerService
-  ) {}
+  constructor(private workspacePlayerService: WorkspacePlayerService) {}
 
   @Get(':workspace_id/player/:playerName')
   @ApiParam({ name: 'workspace_id', type: Number })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async findPlayer(@Param('workspace_id') workspace_id: number,
-    @Param('playerName') playerName:string): Promise<FilesDto[]> {
-    return this.workspacePlayerService.findPlayer(Number(workspace_id), playerName);
+  async findPlayer(
+    @WorkspaceId() workspaceId: number,
+      @Param('playerName') playerName: string
+  ): Promise<FilesDto[]> {
+    return this.workspacePlayerService.findPlayer(workspaceId, playerName);
   }
 
   @Get(':workspace_id/units/:testPerson')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findTestPersonUnits(@WorkspaceId() id: number, @Param('testPerson') testPerson:string): Promise<ResponseEntity[]> {
+  async findTestPersonUnits(
+    @WorkspaceId() id: number,
+      @Param('testPerson') testPerson: string
+  ): Promise<ResponseEntity[]> {
     return this.workspacePlayerService.findTestPersonUnits(id, testPerson);
   }
 
@@ -45,17 +50,24 @@ export class WorkspacePlayerController {
   @Get(':workspace_id/:unit/unitDef')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findUnitDef(@Param('workspace_id') workspace_id:number,
-    @Param('unit') unit:string): Promise<FilesDto[]> {
+  async findUnitDef(
+    @Param('workspace_id') workspace_id: number,
+      @Param('unit') unit: string
+  ): Promise<FilesDto[]> {
     const unitIdToUpperCase = unit.toUpperCase();
-    return this.workspacePlayerService.findUnitDef(workspace_id, unitIdToUpperCase);
+    return this.workspacePlayerService.findUnitDef(
+      workspace_id,
+      unitIdToUpperCase
+    );
   }
 
   @Get(':workspace_id/unit/:unitId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async findUnit(@WorkspaceId() id: number,
-    @Param('unitId') unitId:string): Promise<FileUpload[]> {
+  async findUnit(
+    @WorkspaceId() id: number,
+      @Param('unitId') unitId: string
+  ): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
     return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
   }
@@ -67,9 +79,9 @@ export class WorkspacePlayerController {
   @ApiOperation({ summary: 'Get units from a booklet in order' })
   @ApiResponse({
     status: 200,
-    description: 'Returns an array of units from the booklet in the correct order'
+    description:
+      'Returns an array of units from the booklet in the correct order'
   })
-
   async getBookletUnits(
     @WorkspaceId() workspaceId: number,
       @Param('bookletId') bookletId: string

@@ -3,13 +3,29 @@ import {
   Body,
   Controller,
   Delete,
-  Get, InternalServerErrorException, NotFoundException, Param, Post, Query, Res, UseGuards, UseInterceptors, UploadedFiles
+  Get,
+  HttpCode,
+  InternalServerErrorException,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  StreamableFile,
+  UseGuards,
+  UseInterceptors,
+  UploadedFiles
 } from '@nestjs/common';
-import { Response } from 'express';
 import {
   ApiBadRequestResponse,
-  ApiBearerAuth, ApiBody, ApiConsumes, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
-  ApiParam, ApiQuery, ApiTags
+  ApiBearerAuth,
+  ApiBody,
+  ApiConsumes,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+  ApiQuery,
+  ApiTags
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { logger } from 'nx/src/utils/logger';
@@ -24,26 +40,35 @@ import { WorkspaceFilesService } from '../../database/services/workspace-files.s
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
+import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
+import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   constructor(
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly personService: PersonService
+    private readonly personService: PersonService,
+    private readonly codingStatisticsService: CodingStatisticsService,
+    private readonly workspaceCodingService: WorkspaceCodingService
   ) {}
 
   @Get(':workspace_id/files')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get workspace files', description: 'Retrieves paginated files associated with a workspace' })
+  @ApiOperation({
+    summary: 'Get workspace files',
+    description: 'Retrieves paginated files associated with a workspace'
+  })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
     required: true,
-    description: 'The unique ID of the workspace for which the files should be retrieved.'
+    description:
+      'The unique ID of the workspace for which the files should be retrieved.'
   })
   @ApiQuery({
     name: 'page',
@@ -66,7 +91,8 @@ export class WorkspaceFilesController {
   @ApiQuery({
     name: 'fileSize',
     required: false,
-    description: 'Filter by file size range (e.g. 0-10KB, 10KB-100KB, 100KB-1MB, 1MB-10MB, 10MB+)',
+    description:
+      'Filter by file size range (e.g. 0-10KB, 10KB-100KB, 100KB-1MB, 1MB-10MB, 10MB+)',
     type: String
   })
   @ApiQuery({
@@ -80,7 +106,10 @@ export class WorkspaceFilesController {
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/FilesDto' } },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/FilesDto' }
+        },
         total: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' },
@@ -103,16 +132,27 @@ export class WorkspaceFilesController {
                            @Query('fileType') fileType?: string,
                            @Query('fileSize') fileSize?: string,
                            @Query('searchText') searchText?: string
-  ): Promise<{ data: FilesDto[]; total: number; page: number; limit: number; fileTypes: string[] }> {
+  ): Promise<{
+        data: FilesDto[];
+        total: number;
+        page: number;
+        limit: number;
+        fileTypes: string[];
+      }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
       );
     }
     try {
-      const [files, total, fileTypes] = await this.workspaceFilesService.findFiles(workspace_id, {
-        page, limit, fileType, fileSize, searchText
-      });
+      const [files, total, fileTypes] =
+        await this.workspaceFilesService.findFiles(workspace_id, {
+          page,
+          limit,
+          fileType,
+          fileSize,
+          searchText
+        });
       return {
         data: files,
         total,
@@ -131,17 +171,30 @@ export class WorkspaceFilesController {
   @ApiTags('ws admin test-files')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  async deleteTestFiles(@Query() query: { fileIds: string },
-    @Param('workspace_id') workspace_id: number) {
-    return this.workspaceFilesService.deleteTestFiles(workspace_id, query.fileIds.split(';'));
+  async deleteTestFiles(
+  @Query() query: { fileIds: string },
+    @Param('workspace_id') workspace_id: number
+  ) {
+    return this.workspaceFilesService.deleteTestFiles(
+      workspace_id,
+      query.fileIds.split(';')
+    );
   }
 
   @Post(':workspace_id/persons/exclude')
   @ApiTags('ws admin test-files')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Mark persons as not to be considered', description: 'Marks persons with specified logins as not to be considered in the persons database' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Mark persons as not to be considered',
+    description:
+      'Marks persons with specified logins as not to be considered in the persons database'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -156,7 +209,10 @@ export class WorkspaceFilesController {
       }
     }
   })
-  @ApiOkResponse({ description: 'Persons marked as not to be considered', type: Boolean })
+  @ApiOkResponse({
+    description: 'Persons marked as not to be considered',
+    type: Boolean
+  })
   async excludePersons(
     @Param('workspace_id') workspaceId: number,
       @Body() body: { logins: string[] }
@@ -165,31 +221,121 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    if (!body.logins || !Array.isArray(body.logins) || body.logins.length === 0) {
-      throw new BadRequestException('At least one login name must be provided.');
+    if (
+      !body.logins ||
+      !Array.isArray(body.logins) ||
+      body.logins.length === 0
+    ) {
+      throw new BadRequestException(
+        'At least one login name must be provided.'
+      );
     }
 
-    return this.personService.markPersonsAsNotConsidered(workspaceId, body.logins);
+    const success = await this.personService.markPersonsAsNotConsidered(
+      workspaceId,
+      body.logins
+    );
+
+    if (success) {
+      await this.codingStatisticsService.invalidateCache(workspaceId);
+      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+        workspaceId
+      );
+    }
+
+    return success;
+  }
+
+  @Post(':workspace_id/persons/consider')
+  @ApiTags('ws admin test-files')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Mark persons as considered',
+    description:
+      'Marks persons with specified logins as to be considered in the persons database'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        logins: {
+          type: 'array',
+          items: {
+            type: 'string'
+          },
+          description: 'Array of login names to mark as considered'
+        }
+      }
+    }
+  })
+  @ApiOkResponse({ description: 'Persons marked as considered', type: Boolean })
+  async considerPersons(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: { logins: string[] }
+  ): Promise<boolean> {
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+
+    if (
+      !body.logins ||
+      !Array.isArray(body.logins) ||
+      body.logins.length === 0
+    ) {
+      throw new BadRequestException(
+        'At least one login name must be provided.'
+      );
+    }
+
+    const success = await this.personService.markPersonsAsConsidered(
+      workspaceId,
+      body.logins
+    );
+
+    if (success) {
+      await this.codingStatisticsService.invalidateCache(workspaceId);
+      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+        workspaceId
+      );
+    }
+
+    return success;
   }
 
   @Get(':workspace_id/files/validation')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Validate test files', description: 'Validates test files and returns a hierarchical view of expected files and their status' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate test files',
+    description:
+      'Validates test files and returns a hierarchical view of expected files and their status'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'excludeModes',
     type: String,
     required: false,
-    description: 'Comma-separated list of modes to exclude from filtering (e.g., "run-hot-return,run-hot-restart,run-trial")'
+    description:
+      'Comma-separated list of modes to exclude from filtering (e.g., "run-hot-return,run-hot-restart,run-trial")'
   })
   @ApiOkResponse({
     description: 'Files validation result',
     type: FileValidationResultDto
   })
   async validateTestFiles(
-    @Param('workspace_id') workspace_id: number): Promise<FileValidationResultDto> {
+    @Param('workspace_id') workspace_id: number
+  ): Promise<FileValidationResultDto> {
     return this.workspaceFilesService.validateTestFiles(workspace_id);
   }
 
@@ -197,8 +343,15 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Upload test files', description: 'Uploads test files to a workspace' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Upload test files',
+    description: 'Uploads test files to a workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @UseInterceptors(FilesInterceptor('files'))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -215,13 +368,20 @@ export class WorkspaceFilesController {
       }
     }
   })
-  @ApiOkResponse({ description: 'Files uploaded successfully', type: Boolean })
-  @ApiBadRequestResponse({ description: 'Invalid workspace ID or no files uploaded' })
+  @ApiOkResponse({
+    description: 'Files uploaded successfully',
+    type: TestFilesUploadResultDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or no files uploaded'
+  })
   @ApiTags('workspace')
   async addTestFiles(
     @Param('workspace_id') workspaceId: number,
+      @Query('overwriteExisting') overwriteExisting: string | undefined,
+      @Query('overwriteFileIds') overwriteFileIds: string | undefined,
       @UploadedFiles() files: Express.Multer.File[]
-  ): Promise<boolean> {
+  ): Promise<TestFilesUploadResultDto> {
     if (!workspaceId) {
       throw new BadRequestException('Workspace ID is required.');
     }
@@ -231,10 +391,30 @@ export class WorkspaceFilesController {
     }
 
     try {
-      return await this.workspaceFilesService.uploadTestFiles(workspaceId, files);
+      const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
+      const overwriteIds = (overwriteFileIds || '')
+        .split(';')
+        .map(s => s.trim())
+        .filter(Boolean);
+      return await this.workspaceFilesService.uploadTestFiles(
+        workspaceId,
+        files,
+        overwrite,
+        overwriteIds.length > 0 ? overwriteIds : undefined
+      );
     } catch (error) {
       logger.error('Error uploading test files:');
-      return false;
+      return {
+        total: Array.isArray(files) ? files.length : 0,
+        uploaded: 0,
+        failed: Array.isArray(files) ? files.length : 0,
+        failedFiles: Array.isArray(files) ?
+          files.map(f => ({
+            filename: f.originalname,
+            reason: 'Upload failed'
+          })) :
+          []
+      };
     }
   }
 
@@ -242,9 +422,20 @@ export class WorkspaceFilesController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Download a file', description: 'Downloads a specific file from a workspace' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiParam({ name: 'fileId', type: Number, description: 'ID of the file to download' })
+  @ApiOperation({
+    summary: 'Download a file',
+    description: 'Downloads a specific file from a workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiParam({
+    name: 'fileId',
+    type: Number,
+    description: 'ID of the file to download'
+  })
   @ApiOkResponse({
     description: 'File downloaded successfully',
     type: FileDownloadDto
@@ -253,24 +444,33 @@ export class WorkspaceFilesController {
   @ApiNotFoundResponse({ description: 'File not found' })
   @ApiTags('workspace')
   async downloadFile(
-    @Param('workspace_id') workspaceId: number, @Param('fileId') fileId: number
+    @Param('workspace_id') workspaceId: number,
+      @Param('fileId') fileId: number
   ): Promise<FileDownloadDto> {
     if (!workspaceId) {
       logger.error('Workspace ID is required.');
       throw new BadRequestException('Workspace ID is required.');
     }
     try {
-      return await this.workspaceFilesService.downloadTestFile(workspaceId, fileId);
+      return await this.workspaceFilesService.downloadTestFile(
+        workspaceId,
+        fileId
+      );
     } catch (error) {
       logger.error(`'Error downloading test file:' ${error}`);
-      throw new InternalServerErrorException('Unable to download the file. Please try again later.');
+      throw new InternalServerErrorException(
+        'Unable to download the file. Please try again later.'
+      );
     }
   }
 
   @Get(':workspace_id/unit/:unit_id/content')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get unit XML content', description: 'Retrieves the XML content of a unit file' })
+  @ApiOperation({
+    summary: 'Get unit XML content',
+    description: 'Retrieves the XML content of a unit file'
+  })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
@@ -304,27 +504,41 @@ export class WorkspaceFilesController {
       @Param('unit_id') unit_id: number
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
-      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+      throw new BadRequestException(
+        'Invalid workspace ID. Please provide a valid ID.'
+      );
     }
     if (!unit_id || unit_id <= 0) {
-      throw new BadRequestException('Invalid unit ID. Please provide a valid ID.');
+      throw new BadRequestException(
+        'Invalid unit ID. Please provide a valid ID.'
+      );
     }
 
     try {
-      const content = await this.workspaceFilesService.getUnitContent(workspace_id, unit_id);
+      const content = await this.workspaceFilesService.getUnitContent(
+        workspace_id,
+        unit_id
+      );
       return { content };
     } catch (error) {
       if (error.message.includes('not found')) {
-        throw new NotFoundException(`Unit with ID ${unit_id} not found in workspace ${workspace_id}`);
+        throw new NotFoundException(
+          `Unit with ID ${unit_id} not found in workspace ${workspace_id}`
+        );
       }
-      throw new InternalServerErrorException(`Error retrieving unit content: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error retrieving unit content: ${error.message}`
+      );
     }
   }
 
   @Get(':workspace_id/files/testtakers/:testtaker_id/content')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get TestTakers XML content', description: 'Retrieves the XML content of a TestTakers file by its file_id' })
+  @ApiOperation({
+    summary: 'Get TestTakers XML content',
+    description: 'Retrieves the XML content of a TestTakers file by its file_id'
+  })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
@@ -347,36 +561,52 @@ export class WorkspaceFilesController {
     }
   })
   @ApiNotFoundResponse({ description: 'TestTakers file not found' })
-  @ApiBadRequestResponse({ description: 'Invalid workspace ID or TestTakers file_id' })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or TestTakers file_id'
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getTestTakerContent(
     @Param('workspace_id') workspace_id: number,
       @Param('testtaker_id') testtaker_id: string
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
-      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+      throw new BadRequestException(
+        'Invalid workspace ID. Please provide a valid ID.'
+      );
     }
 
     if (!testtaker_id) {
-      throw new BadRequestException('Invalid TestTakers file_id. Please provide a valid id.');
+      throw new BadRequestException(
+        'Invalid TestTakers file_id. Please provide a valid id.'
+      );
     }
 
     try {
-      const content = await this.workspaceFilesService.getTestTakerContent(workspace_id, testtaker_id);
+      const content = await this.workspaceFilesService.getTestTakerContent(
+        workspace_id,
+        testtaker_id
+      );
       return { content };
     } catch (error) {
       if (error.message.includes('not found')) {
-        throw new NotFoundException(`TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`);
+        throw new NotFoundException(
+          `TestTakers file with id ${testtaker_id} not found in workspace ${workspace_id}`
+        );
       }
 
-      throw new InternalServerErrorException(`Error retrieving TestTakers content: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error retrieving TestTakers content: ${error.message}`
+      );
     }
   }
 
   @Get(':workspace_id/files/coding-scheme/:coding_scheme_ref')
   @ApiTags('admin workspace')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get coding scheme file', description: 'Retrieves a coding scheme file by its reference name' })
+  @ApiOperation({
+    summary: 'Get coding scheme file',
+    description: 'Retrieves a coding scheme file by its reference name'
+  })
   @ApiParam({
     name: 'workspace_id',
     type: Number,
@@ -405,40 +635,66 @@ export class WorkspaceFilesController {
       @Param('coding_scheme_ref') coding_scheme_ref: string
   ): Promise<FileDownloadDto> {
     if (!workspace_id || workspace_id <= 0) {
-      throw new BadRequestException('Invalid workspace ID. Please provide a valid ID.');
+      throw new BadRequestException(
+        'Invalid workspace ID. Please provide a valid ID.'
+      );
     }
     if (!coding_scheme_ref) {
-      throw new BadRequestException('Invalid coding scheme reference. Please provide a valid reference.');
+      throw new BadRequestException(
+        'Invalid coding scheme reference. Please provide a valid reference.'
+      );
     }
 
     try {
-      return await this.workspaceFilesService.getCodingSchemeByRef(workspace_id, coding_scheme_ref);
+      return await this.workspaceFilesService.getCodingSchemeByRef(
+        workspace_id,
+        coding_scheme_ref
+      );
     } catch (error) {
       if (error.status === 404) {
         throw error;
       }
-      throw new InternalServerErrorException(`Error retrieving coding scheme file: ${error.message}`);
+      throw new InternalServerErrorException(
+        `Error retrieving coding scheme file: ${error.message}`
+      );
     }
   }
 
   @Get(':workspace_id/files/validate-testtakers')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate TestTakers', description: 'Validates TestTakers XML files and checks if each person from the persons table is found' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate TestTakers',
+    description:
+      'Validates TestTakers XML files and checks if each person from the persons table is found'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiOkResponse({
     description: 'TestTakers validation result'
   })
   async validateTestTakers(
-    @Param('workspace_id') workspace_id: number): Promise<TestTakersValidationDto> {
+    @Param('workspace_id') workspace_id: number
+  ): Promise<TestTakersValidationDto> {
     return this.workspaceFilesService.validateTestTakers(workspace_id);
   }
 
   @Get(':workspace_id/files/validate-group-responses')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate group responses', description: 'Validates if there\'s at least one response for each group found in TestTakers XML files' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate group responses',
+    description:
+      "Validates if there's at least one response for each group found in TestTakers XML files"
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -486,14 +742,26 @@ export class WorkspaceFilesController {
         page: number;
         limit: number;
       }> {
-    return this.workspaceFilesService.validateGroupResponses(workspace_id, page, limit);
+    return this.workspaceFilesService.validateGroupResponses(
+      workspace_id,
+      page,
+      limit
+    );
   }
 
   @Get(':workspace_id/files/validate-response-status')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate response status', description: 'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate response status',
+    description:
+      'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -511,7 +779,10 @@ export class WorkspaceFilesController {
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/InvalidVariableDto' }
+        },
         total: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' }
@@ -522,15 +793,32 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    return this.workspaceFilesService.validateResponseStatus(workspace_id, page, limit);
+  ): Promise<{
+        data: InvalidVariableDto[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    return this.workspaceFilesService.validateResponseStatus(
+      workspace_id,
+      page,
+      limit
+    );
   }
 
   @Get(':workspace_id/files/validate-duplicate-responses')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate duplicate responses', description: 'Identifies duplicate responses (same variable ID for the same unit, booklet, and test taker)' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate duplicate responses',
+    description:
+      'Identifies duplicate responses (same variable ID for the same unit, booklet, and test taker)'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -583,14 +871,25 @@ export class WorkspaceFilesController {
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 10
   ): Promise<DuplicateResponsesResultDto> {
-    return this.workspaceFilesService.validateDuplicateResponses(workspace_id, page, limit);
+    return this.workspaceFilesService.validateDuplicateResponses(
+      workspace_id,
+      page,
+      limit
+    );
   }
 
   @Get(':workspace_id/files/validate-variables')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate variables', description: 'Validates if variables in responses are defined in Unit-XMLs' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate variables',
+    description: 'Validates if variables in responses are defined in Unit-XMLs'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -608,7 +907,10 @@ export class WorkspaceFilesController {
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/InvalidVariableDto' }
+        },
         total: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' }
@@ -619,15 +921,32 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    return this.workspaceFilesService.validateVariables(workspace_id, page, limit);
+  ): Promise<{
+        data: InvalidVariableDto[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    return this.workspaceFilesService.validateVariables(
+      workspace_id,
+      page,
+      limit
+    );
   }
 
   @Get(':workspace_id/files/validate-variable-types')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Validate variable types', description: 'Validates if variable values match their defined types in Unit-XMLs' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Validate variable types',
+    description:
+      'Validates if variable values match their defined types in Unit-XMLs'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'page',
     required: false,
@@ -645,36 +964,59 @@ export class WorkspaceFilesController {
     schema: {
       type: 'object',
       properties: {
-        data: { type: 'array', items: { $ref: '#/components/schemas/InvalidVariableDto' } },
+        data: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/InvalidVariableDto' }
+        },
         total: { type: 'number' },
         page: { type: 'number' },
         limit: { type: 'number' }
       }
     }
   })
-
   async validateVariableTypes(
     @Param('workspace_id') workspace_id: number,
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
-    return this.workspaceFilesService.validateVariableTypes(workspace_id, page, limit);
+  ): Promise<{
+        data: InvalidVariableDto[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
+    return this.workspaceFilesService.validateVariableTypes(
+      workspace_id,
+      page,
+      limit
+    );
   }
 
   @Delete(':workspace_id/files/invalid-responses')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Delete invalid responses', description: 'Deletes invalid responses from the database' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiQuery({ name: 'responseIds', type: String, description: 'Comma-separated list of response IDs to delete' })
+  @ApiOperation({
+    summary: 'Delete invalid responses',
+    description: 'Deletes invalid responses from the database'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'responseIds',
+    type: String,
+    description: 'Comma-separated list of response IDs to delete'
+  })
   @ApiOkResponse({
     description: 'Number of deleted responses',
     type: Number
   })
   async deleteInvalidResponses(
     @Param('workspace_id') workspace_id: number,
-      @Query('responseIds') responseIds: string): Promise<number> {
+      @Query('responseIds') responseIds: string
+  ): Promise<number> {
     const ids = responseIds.split(',').map(id => parseInt(id, 10));
     return this.workspaceFilesService.deleteInvalidResponses(workspace_id, ids);
   }
@@ -683,8 +1025,16 @@ export class WorkspaceFilesController {
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Delete all invalid responses', description: 'Deletes all invalid responses of a specific type from the database' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Delete all invalid responses',
+    description:
+      'Deletes all invalid responses of a specific type from the database'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiQuery({
     name: 'validationType',
     enum: ['variables', 'variableTypes', 'responseStatus'],
@@ -696,16 +1046,29 @@ export class WorkspaceFilesController {
   })
   async deleteAllInvalidResponses(
     @Param('workspace_id') workspace_id: number,
-      @Query('validationType') validationType: 'variables' | 'variableTypes' | 'responseStatus'): Promise<number> {
-    return this.workspaceFilesService.deleteAllInvalidResponses(workspace_id, validationType);
+      @Query('validationType')
+                           validationType: 'variables' | 'variableTypes' | 'responseStatus'
+  ): Promise<number> {
+    return this.workspaceFilesService.deleteAllInvalidResponses(
+      workspace_id,
+      validationType
+    );
   }
 
   @Post(':workspace_id/files/create-dummy-testtaker')
   @ApiTags('test files validation')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Create dummy testtaker file', description: 'Creates a dummy testtaker file that includes all booklets in the workspace' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Create dummy testtaker file',
+    description:
+      'Creates a dummy testtaker file that includes all booklets in the workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiOkResponse({
     description: 'Dummy testtaker file created successfully',
     type: Boolean
@@ -714,15 +1077,24 @@ export class WorkspaceFilesController {
     description: 'Failed to create dummy testtaker file'
   })
   async createDummyTestTakerFile(
-    @Param('workspace_id') workspace_id: number): Promise<boolean> {
+    @Param('workspace_id') workspace_id: number
+  ): Promise<boolean> {
     return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
   }
 
   @Get(':workspace_id/files/units-with-file-ids')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Get units with file IDs', description: 'Retrieves a list of units with file_type "Unit" and their file IDs' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Get units with file IDs',
+    description:
+      'Retrieves a list of units with file_type "Unit" and their file IDs'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiOkResponse({
     description: 'Units with file IDs retrieved successfully',
     schema: {
@@ -740,15 +1112,24 @@ export class WorkspaceFilesController {
     description: 'Failed to retrieve units with file IDs'
   })
   async getUnitsWithFileIds(
-    @Param('workspace_id') workspace_id: number): Promise<{ unitId: string; fileName: string }[]> {
+    @Param('workspace_id') workspace_id: number
+  ): Promise<{ unitId: string; fileName: string }[]> {
     return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
   }
 
   @Get(':workspace_id/files/unit-variables')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Get unit variables with details', description: 'Retrieves detailed information about all units and their variables from Unit XML files, including types and coding scheme references. Units with no variables are excluded.' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Get unit variables with details',
+    description:
+      'Retrieves detailed information about all units and their variables from Unit XML files, including types and coding scheme references. Units with no variables are excluded.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiOkResponse({
     description: 'Unit variables details retrieved successfully',
     schema: {
@@ -765,9 +1146,19 @@ export class WorkspaceFilesController {
               properties: {
                 id: { type: 'string', description: 'Variable ID' },
                 alias: { type: 'string', description: 'Variable alias' },
-                type: { type: 'string', description: 'Variable type (string, integer, number, boolean, etc.)' },
-                hasCodingScheme: { type: 'boolean', description: 'Whether the unit has a coding scheme' },
-                codingSchemeRef: { type: 'string', description: 'Coding scheme filename (if exists)' }
+                type: {
+                  type: 'string',
+                  description:
+                    'Variable type (string, integer, number, boolean, etc.)'
+                },
+                hasCodingScheme: {
+                  type: 'boolean',
+                  description: 'Whether the unit has a coding scheme'
+                },
+                codingSchemeRef: {
+                  type: 'string',
+                  description: 'Coding scheme filename (if exists)'
+                }
               }
             }
           }
@@ -779,7 +1170,8 @@ export class WorkspaceFilesController {
     description: 'Failed to retrieve unit variables details'
   })
   async getUnitVariables(
-    @Param('workspace_id') workspace_id: number): Promise<UnitVariableDetailsDto[]> {
+    @Param('workspace_id') workspace_id: number
+  ): Promise<UnitVariableDetailsDto[]> {
     if (!workspace_id) {
       throw new BadRequestException('Workspace ID is required.');
     }
@@ -790,9 +1182,21 @@ export class WorkspaceFilesController {
   @Get(':workspace_id/files/variable-info/:scheme_file_id')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiOperation({ summary: 'Get variable info for scheme', description: 'Retrieves variable information from Unit files for a specific scheme file ID' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
-  @ApiParam({ name: 'scheme_file_id', type: String, description: 'ID of the scheme file' })
+  @ApiOperation({
+    summary: 'Get variable info for scheme',
+    description:
+      'Retrieves variable information from Unit files for a specific scheme file ID'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiParam({
+    name: 'scheme_file_id',
+    type: String,
+    description: 'ID of the scheme file'
+  })
   @ApiOkResponse({
     description: 'Variable information retrieved successfully',
     schema: {
@@ -816,17 +1220,44 @@ export class WorkspaceFilesController {
     description: 'Failed to retrieve variable information'
   })
   async getVariableInfoForScheme(
-    @Param('workspace_id') workspace_id: number, @Param('scheme_file_id') scheme_file_id: string
+    @Param('workspace_id') workspace_id: number,
+      @Param('scheme_file_id') scheme_file_id: string
   ): Promise<VariableInfo[]> {
-    return this.workspaceFilesService.getVariableInfoForScheme(workspace_id, scheme_file_id);
+    return this.workspaceFilesService.getVariableInfoForScheme(
+      workspace_id,
+      scheme_file_id
+    );
   }
 
-  @Get(':workspace_id/files/download-zip')
+  @Post(':workspace_id/files/download-zip')
+  @HttpCode(200)
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @ApiOperation({ summary: 'Download all workspace files as ZIP', description: 'Creates and downloads a ZIP file containing all files in the workspace' })
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiOperation({
+    summary: 'Download all workspace files as ZIP',
+    description:
+      'Creates and downloads a ZIP file containing all files in the workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiBody({
+    description: 'Optional file types to include in the ZIP',
+    required: false,
+    schema: {
+      type: 'object',
+      properties: {
+        fileTypes: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of file types to include'
+        }
+      }
+    }
+  })
   @ApiOkResponse({
     description: 'ZIP file created successfully',
     schema: {
@@ -834,28 +1265,141 @@ export class WorkspaceFilesController {
       format: 'binary'
     }
   })
-  @ApiBadRequestResponse({ description: 'Invalid workspace ID' })
+  @ApiBadRequestResponse({
+    description: 'Invalid workspace ID or request body'
+  })
   async downloadWorkspaceFilesAsZip(
-    @Param('workspace_id') workspaceId: number,
-      @Res() res: Response
-  ): Promise<void> {
-    if (!workspaceId) {
-      throw new BadRequestException('Workspace ID is required.');
+    @Param('workspace_id') workspaceId: string,
+      @Body() body?: { fileTypes?: string[] }
+  ): Promise<StreamableFile> {
+    const startTime = Date.now();
+    const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
+    const MAX_FILE_TYPES = 100;
+
+    // Validate and parse workspace ID
+    const parsedWorkspaceId = parseInt(workspaceId, 10);
+    if (
+      !workspaceId ||
+      Number.isNaN(parsedWorkspaceId) ||
+      parsedWorkspaceId <= 0
+    ) {
+      logger.warn(`Invalid workspace ID provided: ${workspaceId}`);
+      throw new BadRequestException('Workspace ID must be a positive integer.');
+    }
+    const workspaceIdNum = parsedWorkspaceId;
+
+    // Validate and sanitize file types
+    let requestedTypes: string[] = [];
+    if (body?.fileTypes) {
+      if (!Array.isArray(body.fileTypes)) {
+        logger.warn(`Invalid fileTypes format for workspace ${workspaceId}`);
+        throw new BadRequestException('fileTypes must be an array of strings.');
+      }
+
+      if (body.fileTypes.length > MAX_FILE_TYPES) {
+        logger.warn(
+          `Too many file types requested for workspace ${workspaceId}: ${body.fileTypes.length}`
+        );
+        throw new BadRequestException(
+          `Maximum ${MAX_FILE_TYPES} file types allowed.`
+        );
+      }
+
+      // Validate each file type is a non-empty string
+      requestedTypes = body.fileTypes.filter(
+        (type): type is string => typeof type === 'string' && type.trim().length > 0
+      );
+
+      if (requestedTypes.length === 0 && body.fileTypes.length > 0) {
+        logger.warn(
+          `Invalid file types provided for workspace ${workspaceIdNum}`
+        );
+        throw new BadRequestException(
+          'All file types must be non-empty strings.'
+        );
+      }
     }
 
     try {
-      const zipBuffer = await this.workspaceFilesService.downloadWorkspaceFilesAsZip(workspaceId);
+      logger.log(
+        `Starting ZIP download for workspace ${workspaceIdNum} with ${requestedTypes.length} file types`
+      );
 
-      res.set({
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="workspace-${workspaceId}-files.zip"`,
-        'Content-Length': zipBuffer.length
+      const zipBuffer =
+        await this.workspaceFilesService.downloadWorkspaceFilesAsZip(
+          workspaceIdNum,
+          requestedTypes.length > 0 ? requestedTypes : undefined
+        );
+
+      // Validate ZIP buffer
+      if (!zipBuffer || zipBuffer.length === 0) {
+        logger.error(
+          `Empty ZIP buffer generated for workspace ${workspaceIdNum}`
+        );
+        throw new InternalServerErrorException(
+          'No files available to download.'
+        );
+      }
+
+      if (zipBuffer.length > MAX_ZIP_SIZE) {
+        logger.error(
+          `ZIP file exceeds maximum size for workspace ${workspaceIdNum}: ${zipBuffer.length} bytes`
+        );
+        throw new InternalServerErrorException(
+          'ZIP file is too large. Please select fewer file types.'
+        );
+      }
+
+      const duration = Date.now() - startTime;
+      logger.log(
+        `ZIP download completed for workspace ${workspaceIdNum} in ${duration}ms (${zipBuffer.length} bytes)`
+      );
+
+      return new StreamableFile(zipBuffer, {
+        type: 'application/zip',
+        disposition: `attachment; filename="workspace-${workspaceIdNum}-files.zip"`
       });
-
-      res.send(zipBuffer);
     } catch (error) {
-      logger.error(`Error creating ZIP file for download: ${error.message}`);
-      throw new InternalServerErrorException('Unable to create ZIP file. Please try again later.');
+      const duration = Date.now() - startTime;
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      logger.error(
+        `Error creating ZIP file for workspace ${workspaceIdNum} after ${duration}ms: ${errorMessage}${
+          errorStack ? `\n${errorStack}` : ''
+        }`
+      );
+
+      // Re-throw known exceptions
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
+      ) {
+        throw error;
+      }
+
+      // Handle specific error types
+      if (error instanceof Error) {
+        if (error.message.includes('ENOENT')) {
+          throw new InternalServerErrorException(
+            'One or more files could not be found.'
+          );
+        }
+        if (error.message.includes('EACCES')) {
+          throw new InternalServerErrorException(
+            'Permission denied accessing files.'
+          );
+        }
+        if (error.message.includes('ENOMEM')) {
+          throw new InternalServerErrorException(
+            'Insufficient memory to create ZIP file.'
+          );
+        }
+      }
+
+      throw new InternalServerErrorException(
+        'Unable to create ZIP file. Please try again later.'
+      );
     }
   }
 }

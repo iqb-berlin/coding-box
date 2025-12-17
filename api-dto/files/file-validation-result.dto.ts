@@ -12,6 +12,7 @@ type DataValidation = {
   missing: string[];
   missingUnitsPerBooklet?: { booklet: string; missingUnits: string[] }[];
   unitsWithoutPlayer?: string[];
+  missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
 };
 
@@ -19,6 +20,7 @@ export type FilteredTestTaker = {
   testTaker: string;
   mode: string;
   login: string;
+  consider?: boolean | null;
 };
 
 export type DuplicateTestTaker = {
@@ -52,6 +54,8 @@ export class FileValidationResultDto {
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {
     testTaker: string;
+    testTakerSchemaValid?: boolean;
+    testTakerSchemaErrors?: string[];
     booklets: DataValidation;
     units: DataValidation;
     schemes: DataValidation;

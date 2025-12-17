@@ -4,14 +4,13 @@ import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 @Injectable({
   providedIn: 'root'
 })
-
 export class AuthService {
   private readonly keycloak = inject(Keycloak);
   getLoggedUser(): KeycloakTokenParsed | undefined {
     try {
       return this.keycloak.idTokenParsed;
     } catch (e) {
-      return { message: 'Parsing id token failed', err: e };
+      return undefined;
     }
   }
 
