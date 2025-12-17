@@ -1,24 +1,50 @@
 <div class="fx-column-start-start fx-gap-10 container">
+  @if (isBusy) {
+  <div class="busy-overlay" aria-busy="true" aria-live="polite">
+    <mat-spinner class="mat-spinner"></mat-spinner>
+    <p class="loading-text">{{ busyText }}</p>
+  </div>
+  }
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
     <a mat-raised-button color="primary" (click)="testCenterImport()">
       <mat-icon>upload</mat-icon>
       Testcenter Import
     </a>
-    <a mat-raised-button color="primary" (click)="hiddenFileInput.click()" matTooltip="Unterstützte Dateitypen: .xml, .voud, .vocs, .zip, .html">
+    <a
+      mat-raised-button
+      color="primary"
+      (click)="hiddenFileInput.click()"
+      matTooltip="Unterstützte Dateitypen: .xml, .voud, .vocs, .zip, .html"
+    >
       <mat-icon>upload</mat-icon>
       Test Dateien hochladen
     </a>
-    <a mat-raised-button color="primary" [disabled]="tableCheckboxSelection.selected.length === 0" (click)="deleteFiles()">
+    <a
+      mat-raised-button
+      color="primary"
+      [disabled]="isBusy || tableCheckboxSelection.selected.length === 0"
+      (click)="deleteFiles()"
+    >
       <mat-icon>delete</mat-icon>
       Test Datei(en) löschen
     </a>
-    <a mat-raised-button color="primary" (click)="validateFiles()">
+    <a
+      mat-raised-button
+      color="primary"
+      [disabled]="isBusy"
+      (click)="validateFiles()"
+    >
       <mat-icon>fact_check</mat-icon>
       Validieren
     </a>
-    <a mat-raised-button color="primary" (click)="downloadAllFilesAsZip()">
+    <a
+      mat-raised-button
+      color="primary"
+      [disabled]="isBusy"
+      (click)="downloadAllFilesAsZip()"
+    >
       <mat-icon>download</mat-icon>
-      Alle herunterladen (ZIP)
+      Exportieren
     </a>
     <a mat-raised-button color="primary" (click)="openResourcePackagesDialog()">
       <mat-icon>archive</mat-icon>
@@ -26,46 +52,61 @@
     </a>
   </div>
 
-  <input #hiddenFileInput type="file"
+  <input
+    #hiddenFileInput
+    type="file"
     name="files"
     accept=".xml,.voud,.vocs,.zip,.html"
     multiple
     [hidden]="true"
-    (change)="onFileSelected($event.currentTarget)"/>
+    (change)="onFileSelected($event.currentTarget)"
+  />
 
   <div class="data-card">
     <div class="search-section">
       <div class="filter-container">
         <coding-box-search-filter
           [title]="'search-filter.filter-test-files' | translate"
-          (valueChange)="onTextFilterChange($event)">
+          (valueChange)="onTextFilterChange($event)"
+        >
         </coding-box-search-filter>
 
         <div class="filter-selects">
           <mat-form-field appearance="outline" class="filter-select">
-            <mat-label>{{'file-upload.file_type' | translate}}</mat-label>
-            <mat-select [(ngModel)]="selectedFileType" (selectionChange)="applyFilters()">
+            <mat-label>{{ 'file-upload.file_type' | translate }}</mat-label>
+            <mat-select
+              [(ngModel)]="selectedFileType"
+              (selectionChange)="applyFilters()"
+            >
               <mat-option value="">Alle Dateitypen</mat-option>
               @for (type of fileTypes; track type) {
-                <mat-option [value]="type">
-                  {{type}}
-                </mat-option>
+              <mat-option [value]="type">
+                {{ type }}
+              </mat-option>
               }
             </mat-select>
           </mat-form-field>
 
           <mat-form-field appearance="outline" class="filter-select">
-            <mat-label>{{'file-upload.file_size' | translate}}</mat-label>
-            <mat-select [(ngModel)]="selectedFileSize" (selectionChange)="applyFilters()">
+            <mat-label>{{ 'file-upload.file_size' | translate }}</mat-label>
+            <mat-select
+              [(ngModel)]="selectedFileSize"
+              (selectionChange)="applyFilters()"
+            >
               @for (range of fileSizeRanges; track range) {
-                <mat-option [value]="range.value">
-                  {{range.display}}
-                </mat-option>
+              <mat-option [value]="range.value">
+                {{ range.display }}
+              </mat-option>
               }
             </mat-select>
           </mat-form-field>
 
-          <button mat-stroked-button color="primary" (click)="clearFilters()" class="clear-filters-btn">
+          <button
+            mat-stroked-button
+            color="primary"
+            (click)="clearFilters()"
+            class="clear-filters-btn"
+          >
             <mat-icon>clear</mat-icon>
             Filter zurücksetzen
           </button>
@@ -73,94 +114,126 @@
       </div>
     </div>
 
-    @if (isLoading || isDownloadingAllFiles) {
-      <div class="loading-container">
-        <mat-spinner class="mat-spinner"></mat-spinner>
-        @if (isDownloadingAllFiles) {
-          <p class="loading-text">ZIP-Datei wird erstellt und heruntergeladen...</p>
-        } @else if (isValidating) {
-          <p class="loading-text">Validierung wird durchgeführt...</p>
-        } @else {
-          <p class="loading-text">Dateiliste wird geladen...</p>
-        }
-      </div>
-    } @else {
-      <div class="table-container">
-        <mat-table [dataSource]="dataSource" class="files-table">
-          <mat-header-row *matHeaderRowDef="displayedColumns;sticky: true"></mat-header-row>
-          <mat-row *matRowDef="let row; columns: displayedColumns;" (click)="downloadFile(row)" class="clickable-row">
-          </mat-row>
+    <div class="table-container">
+      <mat-table [dataSource]="dataSource" class="files-table">
+        <mat-header-row
+          *matHeaderRowDef="displayedColumns; sticky: true"
+        ></mat-header-row>
+        <mat-row
+          *matRowDef="let row; columns: displayedColumns"
+          (click)="downloadFile(row)"
+          class="clickable-row"
+        >
+        </mat-row>
 
-          <ng-container matColumnDef="selectCheckbox">
-            <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-              <mat-checkbox [checked]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) &&  (tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
-                [indeterminate]="(tableCheckboxSelection | hasSelectionValue : tableCheckboxSelection.selected.length) && !(tableCheckboxSelection.selected.length | isAllSelected : dataSource.data.length)"
-                (change)="$event ? masterToggle() : null">
-              </mat-checkbox>
-            </mat-header-cell>
-            <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-              <mat-checkbox [checked]="tableCheckboxSelection | isSelected: row : tableCheckboxSelection.selected.length"
-                (click)="$event.stopPropagation()"
-                (change)="$event ? tableCheckboxSelection.toggle(row) : null">
-              </mat-checkbox>
-            </mat-cell>
-          </ng-container>
+        <ng-container matColumnDef="selectCheckbox">
+          <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+            <mat-checkbox
+              [checked]="
+                (tableCheckboxSelection
+                  | hasSelectionValue
+                    : tableCheckboxSelection.selected.length) &&
+                (tableCheckboxSelection.selected.length
+                  | isAllSelected : dataSource.data.length)
+              "
+              [indeterminate]="
+                (tableCheckboxSelection
+                  | hasSelectionValue
+                    : tableCheckboxSelection.selected.length) &&
+                !(
+                  tableCheckboxSelection.selected.length
+                  | isAllSelected : dataSource.data.length
+                )
+              "
+              (change)="$event ? masterToggle() : null"
+            >
+            </mat-checkbox>
+          </mat-header-cell>
+          <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+            <mat-checkbox
+              [checked]="
+                tableCheckboxSelection
+                  | isSelected : row : tableCheckboxSelection.selected.length
+              "
+              (click)="$event.stopPropagation()"
+              (change)="$event ? tableCheckboxSelection.toggle(row) : null"
+            >
+            </mat-checkbox>
+          </mat-cell>
+        </ng-container>
 
-          <ng-container matColumnDef="filename">
-            <mat-header-cell *matHeaderCellDef>{{'file-upload.filename' | translate}}</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              <div class="file-info">
-                <mat-icon class="file-icon">{{getFileIcon(element.file_type)}}</mat-icon>
-                <span>{{element.filename}}</span>
-              </div>
-            </mat-cell>
-          </ng-container>
+        <ng-container matColumnDef="filename">
+          <mat-header-cell *matHeaderCellDef>{{
+            'file-upload.filename' | translate
+          }}</mat-header-cell>
+          <mat-cell *matCellDef="let element">
+            <div class="file-info">
+              <mat-icon class="file-icon">{{
+                getFileIcon(element.file_type)
+              }}</mat-icon>
+              <span>{{ element.filename }}</span>
+            </div>
+          </mat-cell>
+        </ng-container>
 
-          <ng-container matColumnDef="file_size">
-            <mat-header-cell *matHeaderCellDef>{{'file-upload.file_size' | translate}}</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              <span class="file-size">{{element.file_size | fileSize}}</span>
-            </mat-cell>
-          </ng-container>
+        <ng-container matColumnDef="file_size">
+          <mat-header-cell *matHeaderCellDef>{{
+            'file-upload.file_size' | translate
+          }}</mat-header-cell>
+          <mat-cell *matCellDef="let element">
+            <span class="file-size">{{ element.file_size | fileSize }}</span>
+          </mat-cell>
+        </ng-container>
 
-          <ng-container matColumnDef="file_type">
-            <mat-header-cell *matHeaderCellDef>{{'file-upload.file_type' | translate}}</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              <span class="file-type-badge">{{element.file_type}}</span>
-            </mat-cell>
-          </ng-container>
+        <ng-container matColumnDef="file_type">
+          <mat-header-cell *matHeaderCellDef>{{
+            'file-upload.file_type' | translate
+          }}</mat-header-cell>
+          <mat-cell *matCellDef="let element">
+            <span class="file-type-badge">{{ element.file_type }}</span>
+          </mat-cell>
+        </ng-container>
 
-          <ng-container matColumnDef="created_at">
-            <mat-header-cell *matHeaderCellDef>{{'file-upload.created_at' | translate}}</mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              <span class="date-time">{{element.created_at | date: 'dd.MM.yyyy HH:mm'}}</span>
-            </mat-cell>
-          </ng-container>
+        <ng-container matColumnDef="created_at">
+          <mat-header-cell *matHeaderCellDef>{{
+            'file-upload.created_at' | translate
+          }}</mat-header-cell>
+          <mat-cell *matCellDef="let element">
+            <span class="date-time">{{
+              element.created_at | date : 'dd.MM.yyyy HH:mm'
+            }}</span>
+          </mat-cell>
+        </ng-container>
 
-          <ng-container matColumnDef="actions">
-            <mat-header-cell *matHeaderCellDef></mat-header-cell>
-            <mat-cell *matCellDef="let element">
-              <button mat-icon-button (click)="showFileContent(element); $event.stopPropagation();">
-                <mat-icon>visibility</mat-icon>
-              </button>
-            </mat-cell>
-          </ng-container>
-        </mat-table>
-      </div>
+        <ng-container matColumnDef="actions">
+          <mat-header-cell *matHeaderCellDef></mat-header-cell>
+          <mat-cell *matCellDef="let element">
+            <button
+              mat-icon-button
+              (click)="showFileContent(element); $event.stopPropagation()"
+            >
+              <mat-icon>visibility</mat-icon>
+            </button>
+          </mat-cell>
+        </ng-container>
+      </mat-table>
+    </div>
 
-      @if (dataSource.data.length === 0) {
-        <div class="empty-state">
-          <mat-icon class="empty-icon">folder_open</mat-icon>
-          <p class="empty-text">Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.</p>
-        </div>
-      }
-      <mat-paginator
-        [length]="total"
-        [pageIndex]="page - 1"
-        [pageSize]="limit"
-        [pageSizeOptions]="[100, 200, 500,1000]"
-        (page)="onPageChange($event)">
-      </mat-paginator>
+    @if (!isBusy && dataSource.data.length === 0) {
+    <div class="empty-state">
+      <mat-icon class="empty-icon">folder_open</mat-icon>
+      <p class="empty-text">
+        Keine Test-Dateien vorhanden. Laden Sie Dateien hoch, um zu beginnen.
+      </p>
+    </div>
     }
+    <mat-paginator
+      [length]="total"
+      [pageIndex]="page - 1"
+      [pageSize]="limit"
+      [pageSizeOptions]="[100, 200, 500, 1000]"
+      (page)="onPageChange($event)"
+    >
+    </mat-paginator>
   </div>
 </div>

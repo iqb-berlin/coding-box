@@ -194,14 +194,23 @@
       }
 
       .checkbox-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
 
         .checkbox-item {
+          padding: 10px 12px;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 8px;
+          background: #fff;
+
           .checkbox-label {
             font-size: 14px;
             color: #333;
+          }
+
+          .checkbox-hint {
+            margin-left: 32px;
           }
         }
       }
@@ -320,7 +329,8 @@
   .testgroups-table {
     width: 100%;
 
-    th, td {
+    th,
+    td {
       padding: 14px 16px;
       white-space: nowrap;
     }
@@ -470,7 +480,8 @@
 }
 
 // Message styles
-.error-message, .success-message {
+.error-message,
+.success-message {
   display: flex;
   gap: 12px;
   padding: 16px;
@@ -675,8 +686,14 @@ mat-dialog-actions {
 
 // Animations
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 // Responsive adjustments
@@ -698,7 +715,9 @@ mat-dialog-actions {
     }
   }
 
-  .auth-section, .import-section, .testgroups-section {
+  .auth-section,
+  .import-section,
+  .testgroups-section {
     padding: 0 16px 16px;
   }
 
@@ -715,7 +734,8 @@ mat-dialog-actions {
   }
 
   .testgroups-table {
-    th, td {
+    th,
+    td {
       padding: 12px;
       font-size: 13px;
     }
@@ -735,11 +755,14 @@ mat-dialog-actions {
     }
   }
 
-  .auth-section, .import-section, .testgroups-section {
+  .auth-section,
+  .import-section,
+  .testgroups-section {
     padding: 0 12px 12px;
   }
 
-  .auth-form, .import-form {
+  .auth-form,
+  .import-form {
     padding: 16px;
   }
 
@@ -748,7 +771,8 @@ mat-dialog-actions {
   }
 
   .testgroups-table {
-    th, td {
+    th,
+    td {
       padding: 10px 8px;
       font-size: 12px;
     }

@@ -1,5 +1,10 @@
 import {
-  Component, ViewChild, AfterViewInit, OnInit, OnDestroy, inject
+  Component,
+  ViewChild,
+  AfterViewInit,
+  OnInit,
+  OnDestroy,
+  inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
@@ -16,16 +21,24 @@ import {
   of, Subject, timer, forkJoin
 } from 'rxjs';
 import {
-  MatCell, MatCellDef,
+  MatCell,
+  MatCellDef,
   MatColumnDef,
-  MatHeaderCell, MatHeaderCellDef,
-  MatHeaderRow, MatHeaderRowDef, MatRow, MatRowDef,
+  MatHeaderCell,
+  MatHeaderCellDef,
+  MatHeaderRow,
+  MatHeaderRowDef,
+  MatRow,
+  MatRowDef,
   MatTable,
   MatTableDataSource
 } from '@angular/material/table';
 import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+  MatPaginator,
+  MatPaginatorModule,
+  MatPaginatorIntl,
+  PageEvent
 } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -34,7 +47,10 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
-  MatAnchor, MatButton, MatFabButton, MatIconButton
+  MatAnchor,
+  MatButton,
+  MatFabButton,
+  MatIconButton
 } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ScrollingModule } from '@angular/cdk/scrolling';
@@ -49,7 +65,10 @@ import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
-import { ExportDialogComponent, ExportFormat } from '../export-dialog/export-dialog.component';
+import {
+  ExportDialogComponent,
+  ExportFormat
+} from '../export-dialog/export-dialog.component';
 import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
@@ -64,9 +83,7 @@ import { DownloadCodingResultsDialogComponent } from './download-coding-results-
   selector: 'app-coding-management',
   templateUrl: './coding-management.component.html',
   standalone: true,
-  providers: [
-    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
-  ],
+  providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }],
   imports: [
     CommonModule,
     MatTable,
@@ -102,14 +119,17 @@ import { DownloadCodingResultsDialogComponent } from './download-coding-results-
   ],
   styleUrls: ['./coding-management.component.scss']
 })
-export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestroy {
+export class CodingManagementComponent
+implements AfterViewInit, OnInit, OnDestroy {
   private backendService = inject(BackendService);
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
 
-  private responseStatusMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
+  private responseStatusMap = new Map(
+    responseStatesNumericMap.map(entry => [entry.key, entry.value])
+  );
 
   mapStatusToString(status: number): string {
     return this.responseStatusMap.get(status) || 'UNKNOWN';
@@ -120,7 +140,20 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   data: Success[] = [];
   dataSource = new MatTableDataSource<Success>(this.data);
-  displayedColumns: string[] = ['unitname', 'variableid', 'value', 'codedstatus', 'code', 'score', 'person_code', 'person_login', 'person_group', 'booklet_id', 'actions'];
+  displayedColumns: string[] = [
+    'unitname',
+    'variableid',
+    'value',
+    'codedstatus',
+    'code',
+    'score',
+    'person_code',
+    'person_login',
+    'person_group',
+    'booklet_id',
+    'actions'
+  ];
+
   isLoading = false;
   isFilterLoading = false;
   isLoadingStatistics = false;
@@ -194,7 +227,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.workspaceSettingsService.getAutoFetchCodingStatistics(workspaceId)
+      this.workspaceSettingsService
+        .getAutoFetchCodingStatistics(workspaceId)
         .subscribe(autoFetch => {
           if (autoFetch) {
             this.fetchCodingStatistics();
@@ -205,7 +239,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.filterTextChanged
       .pipe(
         debounceTime(300),
-        distinctUntilChanged((prev, curr) => (prev.target as HTMLInputElement).value === (curr.target as HTMLInputElement).value)
+        distinctUntilChanged(
+          (prev, curr) => (prev.target as HTMLInputElement).value ===
+            (curr.target as HTMLInputElement).value
+        )
       )
       .subscribe(event => {
         const filterValue = (event.target as HTMLInputElement).value;
@@ -222,24 +259,43 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.referenceStatistics = null;
     this.referenceVersion = null;
 
-    this.backendService.createCodingStatisticsJob(workspaceId)
+    this.backendService
+      .createCodingStatisticsJob(workspaceId)
       .pipe(
-        catchError(() => of({ jobId: '' as string, message: this.translateService.instant('coding-management.loading.creating-coding-statistics') }))
+        catchError(() => of({
+          jobId: '' as string,
+          message: this.translateService.instant(
+            'coding-management.loading.creating-coding-statistics'
+          )
+        })
+        )
       )
       .subscribe(({ jobId }) => {
         if (!jobId) {
           if (this.selectedStatisticsVersion === 'v2') {
             // v2 compares to v1
             forkJoin({
-              current: this.backendService.getCodingStatistics(workspaceId, 'v2'),
-              reference: this.backendService.getCodingStatistics(workspaceId, 'v1')
+              current: this.backendService.getCodingStatistics(
+                workspaceId,
+                'v2'
+              ),
+              reference: this.backendService.getCodingStatistics(
+                workspaceId,
+                'v1'
+              )
             })
               .pipe(
                 catchError(() => {
-                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
-                    duration: 5000,
-                    panelClass: ['error-snackbar']
-                  });
+                  this.snackBar.open(
+                    this.translateService.instant(
+                      'coding-management.descriptions.error-statistics'
+                    ),
+                    this.translateService.instant('close'),
+                    {
+                      duration: 5000,
+                      panelClass: ['error-snackbar']
+                    }
+                  );
                   return of({
                     current: { totalResponses: 0, statusCounts: {} },
                     reference: { totalResponses: 0, statusCounts: {} }
@@ -258,16 +314,31 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           } else if (this.selectedStatisticsVersion === 'v3') {
             // v3 compares to v2 if v2 has data, otherwise to v1
             forkJoin({
-              current: this.backendService.getCodingStatistics(workspaceId, 'v3'),
-              v2Stats: this.backendService.getCodingStatistics(workspaceId, 'v2'),
-              v1Stats: this.backendService.getCodingStatistics(workspaceId, 'v1')
+              current: this.backendService.getCodingStatistics(
+                workspaceId,
+                'v3'
+              ),
+              v2Stats: this.backendService.getCodingStatistics(
+                workspaceId,
+                'v2'
+              ),
+              v1Stats: this.backendService.getCodingStatistics(
+                workspaceId,
+                'v1'
+              )
             })
               .pipe(
                 catchError(() => {
-                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
-                    duration: 5000,
-                    panelClass: ['error-snackbar']
-                  });
+                  this.snackBar.open(
+                    this.translateService.instant(
+                      'coding-management.descriptions.error-statistics'
+                    ),
+                    this.translateService.instant('close'),
+                    {
+                      duration: 5000,
+                      panelClass: ['error-snackbar']
+                    }
+                  );
                   return of({
                     current: { totalResponses: 0, statusCounts: {} },
                     v2Stats: { totalResponses: 0, statusCounts: {} },
@@ -291,13 +362,20 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                 this.statisticsLoaded = true;
               });
           } else {
-            this.backendService.getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
+            this.backendService
+              .getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
               .pipe(
                 catchError(() => {
-                  this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-statistics'), this.translateService.instant('close'), {
-                    duration: 5000,
-                    panelClass: ['error-snackbar']
-                  });
+                  this.snackBar.open(
+                    this.translateService.instant(
+                      'coding-management.descriptions.error-statistics'
+                    ),
+                    this.translateService.instant('close'),
+                    {
+                      duration: 5000,
+                      panelClass: ['error-snackbar']
+                    }
+                  );
                   return of({
                     totalResponses: 0,
                     statusCounts: {}
@@ -318,8 +396,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         timer(0, 2000)
           .pipe(
             takeUntil(this.destroy$),
-            switchMap(() => this.backendService.getCodingJobStatus(workspaceId, jobId)),
-            takeWhile(status => ['pending', 'processing'].includes(status.status), true),
+            switchMap(() => this.backendService.getCodingJobStatus(workspaceId, jobId)
+            ),
+            takeWhile(
+              status => ['pending', 'processing'].includes(status.status),
+              true
+            ),
             finalize(() => {
               this.isLoadingStatistics = false;
             })
@@ -330,8 +412,12 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
               this.statisticsLoaded = true;
               // Fetch reference statistics
               if (this.selectedStatisticsVersion === 'v2') {
-                this.backendService.getCodingStatistics(workspaceId, 'v1')
-                  .pipe(catchError(() => of({ totalResponses: 0, statusCounts: {} })))
+                this.backendService
+                  .getCodingStatistics(workspaceId, 'v1')
+                  .pipe(
+                    catchError(() => of({ totalResponses: 0, statusCounts: {} })
+                    )
+                  )
                   .subscribe(ref => {
                     this.referenceStatistics = ref;
                     this.referenceVersion = 'v1';
@@ -339,10 +425,22 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
               } else if (this.selectedStatisticsVersion === 'v3') {
                 // For v3, check if v2 has data, otherwise use v1
                 forkJoin({
-                  v2Stats: this.backendService.getCodingStatistics(workspaceId, 'v2'),
-                  v1Stats: this.backendService.getCodingStatistics(workspaceId, 'v1')
+                  v2Stats: this.backendService.getCodingStatistics(
+                    workspaceId,
+                    'v2'
+                  ),
+                  v1Stats: this.backendService.getCodingStatistics(
+                    workspaceId,
+                    'v1'
+                  )
                 })
-                  .pipe(catchError(() => of({ v2Stats: { totalResponses: 0, statusCounts: {} }, v1Stats: { totalResponses: 0, statusCounts: {} } })))
+                  .pipe(
+                    catchError(() => of({
+                      v2Stats: { totalResponses: 0, statusCounts: {} },
+                      v1Stats: { totalResponses: 0, statusCounts: {} }
+                    })
+                    )
+                  )
                   .subscribe(({ v2Stats, v1Stats }) => {
                     // Use v2 as reference if v2 differs from v1 (manual coding was done), otherwise use v1
                     if (this.statisticsDiffer(v2Stats, v1Stats)) {
@@ -354,8 +452,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
                     }
                   });
               }
-            } else if (['failed', 'cancelled', 'paused'].includes(status.status)) {
-              this.snackBar.open(`Statistik-Job ${status.status}`, 'Schließen', { duration: 5000, panelClass: ['error-snackbar'] });
+            } else if (
+              ['failed', 'cancelled', 'paused'].includes(status.status)
+            ) {
+              this.snackBar.open(
+                `Statistik-Job ${status.status}`,
+                'Schließen',
+                { duration: 5000, panelClass: ['error-snackbar'] }
+              );
             }
           });
       });
@@ -377,7 +481,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   getStatuses(): string[] {
     const currentStatuses = Object.keys(this.codingStatistics.statusCounts);
     if (this.referenceStatistics) {
-      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts);
+      const referenceStatuses = Object.keys(
+        this.referenceStatistics.statusCounts
+      );
       const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
       return Array.from(allStatuses);
     }
@@ -385,7 +491,11 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   getStatusDifference(status: string): number | null {
-    if (!this.referenceStatistics || (this.selectedStatisticsVersion !== 'v2' && this.selectedStatisticsVersion !== 'v3')) {
+    if (
+      !this.referenceStatistics ||
+      (this.selectedStatisticsVersion !== 'v2' &&
+        this.selectedStatisticsVersion !== 'v3')
+    ) {
       return null;
     }
     // Don't show differences if current version has no data yet (coding job hasn't run)
@@ -398,22 +508,33 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   getTotalResponsesDifference(): number | null {
-    if (!this.referenceStatistics || (this.selectedStatisticsVersion !== 'v2' && this.selectedStatisticsVersion !== 'v3')) {
+    if (
+      !this.referenceStatistics ||
+      (this.selectedStatisticsVersion !== 'v2' &&
+        this.selectedStatisticsVersion !== 'v3')
+    ) {
       return null;
     }
     // Don't show differences if current version has no data yet (coding job hasn't run)
     if (this.codingStatistics.totalResponses === 0) {
       return null;
     }
-    return this.codingStatistics.totalResponses - this.referenceStatistics.totalResponses;
+    return (
+      this.codingStatistics.totalResponses -
+      this.referenceStatistics.totalResponses
+    );
   }
 
   getDifferenceTooltip(): string {
     if (this.referenceVersion === 'v1') {
-      return this.translateService.instant('coding-management.statistics.difference-tooltip-v1');
+      return this.translateService.instant(
+        'coding-management.statistics.difference-tooltip-v1'
+      );
     }
     if (this.referenceVersion === 'v2') {
-      return this.translateService.instant('coding-management.statistics.difference-tooltip-v2');
+      return this.translateService.instant(
+        'coding-management.statistics.difference-tooltip-v2'
+      );
     }
     return '';
   }
@@ -425,7 +546,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     return '±0';
   }
 
-  private statisticsDiffer(stats1: CodingStatistics, stats2: CodingStatistics): boolean {
+  private statisticsDiffer(
+    stats1: CodingStatistics,
+    stats2: CodingStatistics
+  ): boolean {
     if (stats1.totalResponses !== stats2.totalResponses) {
       return true;
     }
@@ -434,7 +558,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       ...Object.keys(stats2.statusCounts)
     ]);
     for (const status of allStatuses) {
-      if ((stats1.statusCounts[status] || 0) !== (stats2.statusCounts[status] || 0)) {
+      if (
+        (stats1.statusCounts[status] || 0) !==
+        (stats2.statusCounts[status] || 0)
+      ) {
         return true;
       }
     }
@@ -442,25 +569,47 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   }
 
   getStatusPercentage(status: string): number {
-    if (!this.codingStatistics.totalResponses || !this.codingStatistics.statusCounts[status]) {
+    if (
+      !this.codingStatistics.totalResponses ||
+      !this.codingStatistics.statusCounts[status]
+    ) {
       return 0;
     }
-    return Math.round((this.codingStatistics.statusCounts[status] / this.codingStatistics.totalResponses) * 100);
+    return Math.round(
+      (this.codingStatistics.statusCounts[status] /
+        this.codingStatistics.totalResponses) *
+        100
+    );
   }
 
-  fetchResponsesByStatus(status: string, page: number = 1, limit: number = this.pageSize): void {
+  fetchResponsesByStatus(
+    status: string,
+    page: number = 1,
+    limit: number = this.pageSize
+  ): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
     this.currentStatusFilter = status;
 
-    this.backendService.getResponsesByStatus(workspaceId, status, this.selectedStatisticsVersion, page, limit)
+    this.backendService
+      .getResponsesByStatus(
+        workspaceId,
+        status,
+        this.selectedStatisticsVersion,
+        page,
+        limit
+      )
       .pipe(
         catchError(() => {
           this.isLoading = false;
-          this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Fehler beim Abrufen der Antworten mit Status ${status}`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of({
             data: [],
             total: 0,
@@ -474,8 +623,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe(response => {
         this.data = response.data.map((item: ResponseEntity) => {
-          const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
-          const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+          const codeKey =
+            `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+          const scoreKey =
+            `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
 
           return {
             id: item.id,
@@ -490,7 +641,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             codedstatus: item.status_v1 || '',
             unitname: item.unit?.name || '',
             login_name: item.unit?.booklet?.person?.login || '',
-            login_group: (item.unit?.booklet?.person as { login: string; code: string; group?: string })?.group || '',
+            login_group:
+              (
+                item.unit?.booklet?.person as {
+                  login: string;
+                  code: string;
+                  group?: string;
+                }
+              )?.group || '',
             login_code: item.unit?.booklet?.person?.code || '',
             booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
           };
@@ -499,9 +657,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         this.totalRecords = response.total;
 
         if (this.data.length === 0) {
-          this.snackBar.open(`Keine Antworten mit Status ${status} gefunden.`, 'Schließen', {
-            duration: 5000
-          });
+          this.snackBar.open(
+            `Keine Antworten mit Status ${status} gefunden.`,
+            'Schließen',
+            {
+              duration: 5000
+            }
+          );
         }
       });
   }
@@ -556,7 +718,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
-    const hasActiveFilters = Object.values(this.filterParams).some(value => value.trim() !== '');
+    const hasActiveFilters = Object.values(this.filterParams).some(
+      value => value.trim() !== ''
+    );
 
     if (!hasActiveFilters) {
       this.data = [];
@@ -566,14 +730,24 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       return;
     }
 
-    this.backendService.searchResponses(workspaceId, this.filterParams, this.pageIndex + 1, this.pageSize)
+    this.backendService
+      .searchResponses(
+        workspaceId,
+        this.filterParams,
+        this.pageIndex + 1,
+        this.pageSize
+      )
       .pipe(
         catchError(() => {
           this.isLoading = false;
-          this.snackBar.open('Fehler beim Filtern der Kodierdaten', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Filtern der Kodierdaten',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of<{ data: unknown[]; total: number }>({ data: [], total: 0 });
         }),
         finalize(() => {
@@ -607,9 +781,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         this.totalRecords = response.total;
 
         if (this.data.length === 0) {
-          this.snackBar.open('Keine Daten mit den angegebenen Filtern gefunden.', 'Schließen', {
-            duration: 5000
-          });
+          this.snackBar.open(
+            'Keine Daten mit den angegebenen Filtern gefunden.',
+            'Schließen',
+            {
+              duration: 5000
+            }
+          );
         }
       });
   }
@@ -623,8 +801,7 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
   applyFilter(event: Event): void {
     const filterValue = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = filterValue.trim()
-      .toLowerCase();
+    this.dataSource.filter = filterValue.trim().toLowerCase();
 
     if (this.dataSource.paginator) {
       this.dataSource.paginator.firstPage();
@@ -645,10 +822,16 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     this.pageIndex = event.pageIndex;
 
     if (this.currentStatusFilter) {
-      this.fetchResponsesByStatus(this.currentStatusFilter, this.pageIndex + 1, this.pageSize);
+      this.fetchResponsesByStatus(
+        this.currentStatusFilter,
+        this.pageIndex + 1,
+        this.pageSize
+      );
     } else {
       // Check if we have active filters
-      const hasActiveFilters = Object.values(this.filterParams).some(value => value.trim() !== '');
+      const hasActiveFilters = Object.values(this.filterParams).some(
+        value => value.trim() !== ''
+      );
 
       if (hasActiveFilters) {
         this.fetchResponsesWithFilters();
@@ -669,28 +852,41 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       return;
     }
 
-    this.appService.createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
+    this.appService
+      .createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
       .pipe(
         catchError(() => {
-          this.snackBar.open('Fehler beim Abrufen des Tokens für Replay', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Abrufen des Tokens für Replay',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of('');
         }),
         switchMap(token => {
           if (!token) {
             return of({ replayUrl: '' });
           }
-          return this.backendService.getReplayUrl(workspaceId, response.id, token);
+          return this.backendService.getReplayUrl(
+            workspaceId,
+            response.id,
+            token
+          );
         })
       )
       .subscribe(result => {
         if (!result.replayUrl) {
-          this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Generieren der Replay-URL',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return;
         }
         window.open(result.replayUrl, '_blank');
@@ -714,45 +910,53 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       width: '500px'
     });
 
-    dialogRef.afterClosed()
-      .subscribe((format: ExportFormat | undefined) => {
-        if (!format) {
-          return;
-        }
+    dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
+      if (!format) {
+        return;
+      }
 
-        const workspaceId = this.appService.selectedWorkspaceId;
+      const workspaceId = this.appService.selectedWorkspaceId;
 
-        switch (format) {
-          case 'csv':
-            this.downloadCodingListAsCsvBackground(workspaceId);
-            break;
-          case 'excel':
-            this.downloadCodingListAsExcelBackground(workspaceId);
-            break;
-          case 'json':
-            this.downloadCodingListAsJsonBackground(workspaceId);
-            break;
-          default:
-            this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            });
-            break;
-        }
-      });
-  }
-
-  downloadCodingListAsJsonBackground(workspaceId: number): void {
-    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
-      duration: 3000
-    });
-    this.backendService.getCodingListAsCsv(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.snackBar.open('Fehler beim Abrufen der Kodierliste (JSON)', 'Schließen', {
+      switch (format) {
+        case 'csv':
+          this.downloadCodingListAsCsvBackground(workspaceId);
+          break;
+        case 'excel':
+          this.downloadCodingListAsExcelBackground(workspaceId);
+          break;
+        case 'json':
+          this.downloadCodingListAsJsonBackground(workspaceId);
+          break;
+        default:
+          this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
+          break;
+      }
+    });
+  }
+
+  downloadCodingListAsJsonBackground(workspaceId: number): void {
+    this.snackBar.open(
+      'Kodierliste wird im Hintergrund erstellt...',
+      'Schließen',
+      {
+        duration: 3000
+      }
+    );
+    this.backendService
+      .getCodingListAsCsv(workspaceId)
+      .pipe(
+        catchError(() => {
+          this.snackBar.open(
+            'Fehler beim Abrufen der Kodierliste (JSON)',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
@@ -762,14 +966,31 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           const text = await blob.text();
           const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
           if (lines.length === 0) {
-            this.snackBar.open('Keine Einträge in der Kodierliste gefunden.', 'Schließen', { duration: 5000 });
+            this.snackBar.open(
+              'Keine Einträge in der Kodierliste gefunden.',
+              'Schließen',
+              { duration: 5000 }
+            );
             return;
           }
-          const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g, ''));
+          const headerLine = lines[0].replace(/^\uFEFF/, '');
+          const delimiter = headerLine.includes(';') ? ';' : ',';
+          const splitRegex =
+            delimiter === ';' ?
+              /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ :
+              /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
+          const headers = headerLine
+            .split(splitRegex)
+            .map(h => h.replace(/^"|"$/g, ''));
           const data = lines.slice(1).map(line => {
-            const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, ''));
+            const cleanLine = line.replace(/^\uFEFF/, '');
+            const values = cleanLine
+              .split(splitRegex)
+              .map(v => v.replace(/^"|"$/g, ''));
             const obj: Record<string, unknown> = {};
-            headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+            headers.forEach((h, i) => {
+              obj[h] = values[i] ?? '';
+            });
             return obj;
           });
 
@@ -779,7 +1000,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
           const a = document.createElement('a');
           a.href = url;
-          a.download = `coding-list-${new Date().toISOString()
+          a.download = `coding-list-${new Date()
+            .toISOString()
             .slice(0, 10)}.json`;
           document.body.appendChild(a);
           a.click();
@@ -787,30 +1009,47 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           window.URL.revokeObjectURL(url);
           document.body.removeChild(a);
 
-          this.snackBar.open('Kodierliste wurde als JSON erfolgreich heruntergeladen.', 'Schließen', {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
+          this.snackBar.open(
+            'Kodierliste wurde als JSON erfolgreich heruntergeladen.',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            }
+          );
         } catch (e) {
-          this.snackBar.open('Fehler beim Umwandeln der CSV-Daten in JSON', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Umwandeln der CSV-Daten in JSON',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
         }
       });
   }
 
   downloadCodingListAsCsvBackground(workspaceId: number): void {
-    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
-      duration: 3000
-    });
-    this.backendService.getCodingListAsCsv(workspaceId)
+    this.snackBar.open(
+      'Kodierliste wird im Hintergrund erstellt...',
+      'Schließen',
+      {
+        duration: 3000
+      }
+    );
+    this.backendService
+      .getCodingListAsCsv(workspaceId)
       .pipe(
         catchError(() => {
-          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als CSV', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Herunterladen der Kodierliste als CSV',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
@@ -822,31 +1061,43 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `coding-list-${new Date().toISOString()
-          .slice(0, 10)}.csv`;
+        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.csv`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        this.snackBar.open('Kodierliste wurde als CSV erfolgreich heruntergeladen.', 'Schließen', {
-          duration: 5000,
-          panelClass: ['success-snackbar']
-        });
+        this.snackBar.open(
+          'Kodierliste wurde als CSV erfolgreich heruntergeladen.',
+          'Schließen',
+          {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          }
+        );
       });
   }
 
   downloadCodingListAsExcelBackground(workspaceId: number): void {
-    this.snackBar.open('Kodierliste wird im Hintergrund erstellt...', 'Schließen', {
-      duration: 3000
-    });
-    this.backendService.getCodingListAsExcel(workspaceId)
+    this.snackBar.open(
+      'Kodierliste wird im Hintergrund erstellt...',
+      'Schließen',
+      {
+        duration: 3000
+      }
+    );
+    this.backendService
+      .getCodingListAsExcel(workspaceId)
       .pipe(
         catchError(() => {
-          this.snackBar.open('Fehler beim Herunterladen der Kodierliste als Excel', 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            'Fehler beim Herunterladen der Kodierliste als Excel',
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
@@ -859,30 +1110,40 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `coding-list-${new Date().toISOString()
+        a.download = `coding-list-${new Date()
+          .toISOString()
           .slice(0, 10)}.xlsx`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
 
-        this.snackBar.open('Kodierliste wurde als Excel erfolgreich heruntergeladen.', 'Schließen', {
-          duration: 5000,
-          panelClass: ['success-snackbar']
-        });
+        this.snackBar.open(
+          'Kodierliste wurde als Excel erfolgreich heruntergeladen.',
+          'Schließen',
+          {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          }
+        );
       });
   }
 
   getCodingSchemeRefFromUnit(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService.getUnitContentXml(workspaceId, unitId.toString())
+    this.backendService
+      .getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
-          this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
@@ -893,9 +1154,13 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         if (codingSchemeRef) {
           this.showCodingScheme(codingSchemeRef);
         } else {
-          this.snackBar.open(`Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`, 'Schließen', {
-            duration: 5000
-          });
+          this.snackBar.open(
+            `Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`,
+            'Schließen',
+            {
+              duration: 5000
+            }
+          );
         }
       });
   }
@@ -910,10 +1175,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
         return codingSchemeRefElement.textContent.trim();
       }
     } catch (error) {
-      this.snackBar.open('Fehler beim Verarbeiten der Unit-XML-Daten', 'Schließen', {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      });
+      this.snackBar.open(
+        'Fehler beim Verarbeiten der Unit-XML-Daten',
+        'Schließen',
+        {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        }
+      );
     }
 
     return null;
@@ -922,22 +1191,31 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   showCodingScheme(codingSchemeRef: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService.getCodingSchemeFile(workspaceId, codingSchemeRef)
+    this.backendService
+      .getCodingSchemeFile(workspaceId, codingSchemeRef)
       .pipe(
         catchError(() => {
-          this.snackBar.open(`Fehler beim Abrufen des Kodierschemas '${codingSchemeRef}'`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Fehler beim Abrufen des Kodierschemas '${codingSchemeRef}'`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
       .subscribe(fileData => {
         if (!fileData || !fileData.base64Data) {
-          this.snackBar.open(`Kodierschema '${codingSchemeRef}' in Kodierdaten nicht gefunden.`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Kodierschema '${codingSchemeRef}' in Kodierdaten nicht gefunden.`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return;
         }
 
@@ -953,10 +1231,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
             }
           });
         } catch (error) {
-          this.snackBar.open(`Fehler beim Verarbeiten des Kodierschemas '${codingSchemeRef}'`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Fehler beim Verarbeiten des Kodierschemas '${codingSchemeRef}'`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
         }
       });
   }
@@ -964,13 +1246,18 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   showUnitXml(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService.getUnitContentXml(workspaceId, unitId.toString())
+    this.backendService
+      .getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
-          this.snackBar.open(`Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
+          this.snackBar.open(
+            `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,
+            'Schließen',
+            {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            }
+          );
           return of(null);
         })
       )
@@ -1028,19 +1315,28 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   openResetVersionDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      });
+      this.snackBar.open(
+        this.translateService.instant(
+          'coding-management.descriptions.error-workspace'
+        ),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        }
+      );
       return;
     }
 
     // Get version label
-    const versionOption = this.codingRunOptions.find(opt => opt.value === this.selectedStatisticsVersion);
+    const versionOption = this.codingRunOptions.find(
+      opt => opt.value === this.selectedStatisticsVersion
+    );
     const versionLabel = versionOption?.label || '';
 
     // Determine cascade versions
-    const cascadeVersions = this.selectedStatisticsVersion === 'v2' ? ['v3'] : [];
+    const cascadeVersions =
+      this.selectedStatisticsVersion === 'v2' ? ['v3'] : [];
 
     const dialogRef = this.dialog.open(ResetVersionDialogComponent, {
       width: '500px',
@@ -1063,7 +1359,8 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     if (!workspaceId) return;
 
     this.isLoading = true;
-    this.backendService.resetCodingVersion(workspaceId, version)
+    this.backendService
+      .resetCodingVersion(workspaceId, version)
       .pipe(
         finalize(() => {
           this.isLoading = false;
@@ -1071,17 +1368,23 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
       )
       .subscribe({
         next: result => {
-          this.snackBar.open(result.message, this.translateService.instant('close'), {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
+          this.snackBar.open(
+            result.message,
+            this.translateService.instant('close'),
+            {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            }
+          );
 
           // Refresh statistics after reset
           this.fetchCodingStatistics();
         },
         error: () => {
           this.snackBar.open(
-            this.translateService.instant('coding-management.descriptions.error-reset'),
+            this.translateService.instant(
+              'coding-management.descriptions.error-reset'
+            ),
             this.translateService.instant('close'),
             {
               duration: 5000,
@@ -1095,10 +1398,16 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
   openDownloadCodingResultsDialog(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.snackBar.open(this.translateService.instant('coding-management.descriptions.error-workspace'), this.translateService.instant('close'), {
-        duration: 5000,
-        panelClass: ['error-snackbar']
-      });
+      this.snackBar.open(
+        this.translateService.instant(
+          'coding-management.descriptions.error-workspace'
+        ),
+        this.translateService.instant('close'),
+        {
+          duration: 5000,
+          panelClass: ['error-snackbar']
+        }
+      );
       return;
     }
 
@@ -1112,20 +1421,43 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         const { version, format, includeReplayUrls } = result;
-        this.downloadCodingResultsByVersion(workspaceId, version, format, includeReplayUrls);
+        this.downloadCodingResultsByVersion(
+          workspaceId,
+          version,
+          format,
+          includeReplayUrls
+        );
       }
     });
   }
 
-  private downloadCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat, includeReplayUrls: boolean = false): void {
-    this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
+  private downloadCodingResultsByVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    format: ExportFormat,
+    includeReplayUrls: boolean = false
+  ): void {
+    this.performBackgroundDownload(
+      workspaceId,
+      version,
+      format,
+      includeReplayUrls
+    );
   }
 
-  private async performBackgroundDownload(workspaceId: number, version: 'v1' | 'v2' | 'v3', format: ExportFormat, includeReplayUrls: boolean = false): Promise<void> {
+  private async performBackgroundDownload(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    format: ExportFormat,
+    includeReplayUrls: boolean = false
+  ): Promise<void> {
     this.isDownloadInProgress = true;
 
     const snackBarRef = this.snackBar.open(
-      this.translateService.instant('coding-management.download-dialog.download-started', { version, format }),
+      this.translateService.instant(
+        'coding-management.download-dialog.download-started',
+        { version, format }
+      ),
       this.translateService.instant('close'),
       {
         duration: 0, // Keep open until we dismiss it
@@ -1136,18 +1468,32 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     try {
       switch (format) {
         case 'csv':
-          await this.downloadCodingResultsAsCsvBackground(workspaceId, version, includeReplayUrls);
+          await this.downloadCodingResultsAsCsvBackground(
+            workspaceId,
+            version,
+            includeReplayUrls
+          );
           break;
         case 'excel':
-          await this.downloadCodingResultsAsExcelBackground(workspaceId, version, includeReplayUrls);
+          await this.downloadCodingResultsAsExcelBackground(
+            workspaceId,
+            version,
+            includeReplayUrls
+          );
           break;
         case 'json':
-          await this.downloadCodingResultsAsJsonBackground(workspaceId, version, includeReplayUrls);
+          await this.downloadCodingResultsAsJsonBackground(
+            workspaceId,
+            version,
+            includeReplayUrls
+          );
           break;
         default:
           snackBarRef.dismiss();
           this.snackBar.open(
-            this.translateService.instant('coding-management.download-dialog.error-unknown-format'),
+            this.translateService.instant(
+              'coding-management.download-dialog.error-unknown-format'
+            ),
             this.translateService.instant('close'),
             {
               duration: 5000,
@@ -1159,7 +1505,10 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
       snackBarRef.dismiss();
       this.snackBar.open(
-        this.translateService.instant('coding-management.download-dialog.download-complete', { version, format }),
+        this.translateService.instant(
+          'coding-management.download-dialog.download-complete',
+          { version, format }
+        ),
         this.translateService.instant('close'),
         {
           duration: 5000,
@@ -1169,7 +1518,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     } catch (error) {
       snackBarRef.dismiss();
       this.snackBar.open(
-        this.translateService.instant('coding-management.download-dialog.download-failed'),
+        this.translateService.instant(
+          'coding-management.download-dialog.download-failed'
+        ),
         this.translateService.instant('close'),
         {
           duration: 5000,
@@ -1181,9 +1532,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     }
   }
 
-  private downloadCodingResultsAsJsonBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
+  private downloadCodingResultsAsJsonBackground(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
+      this.backendService
+        .getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch JSON data'));
@@ -1197,16 +1553,31 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
           }
           try {
             const text = await blob.text();
-            const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+            const lines = text
+              .split(/\r?\n/)
+              .filter(l => l.trim().length > 0);
             if (lines.length === 0) {
               reject(new Error('No entries found'));
               return;
             }
-            const headers = lines[0].split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(h => h.replace(/^"|"$/g, ''));
+            const headerLine = lines[0].replace(/^\uFEFF/, '');
+            const delimiter = headerLine.includes(';') ? ';' : ',';
+            const splitRegex =
+              delimiter === ';' ?
+                /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ :
+                /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
+            const headers = headerLine
+              .split(splitRegex)
+              .map(h => h.replace(/^"|"$/g, ''));
             const data = lines.slice(1).map(line => {
-              const values = line.split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(v => v.replace(/^"|"$/g, ''));
+              const cleanLine = line.replace(/^\uFEFF/, '');
+              const values = cleanLine
+                .split(splitRegex)
+                .map(v => v.replace(/^"|"$/g, ''));
               const obj: Record<string, unknown> = {};
-              headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+              headers.forEach((h, i) => {
+                obj[h] = values[i] ?? '';
+              });
               return obj;
             });
 
@@ -1216,7 +1587,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
             const a = document.createElement('a');
             a.href = url;
-            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = `coding-results-${version}-${new Date()
+              .toISOString()
+              .slice(0, 10)}.json`;
             document.body.appendChild(a);
             a.click();
 
@@ -1231,9 +1604,14 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  private downloadCodingResultsAsCsvBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
+  private downloadCodingResultsAsCsvBackground(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
+      this.backendService
+        .getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch CSV data'));
@@ -1251,7 +1629,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
             const a = document.createElement('a');
             a.href = url;
-            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.csv`;
+            a.download = `coding-results-${version}-${new Date()
+              .toISOString()
+              .slice(0, 10)}.csv`;
             document.body.appendChild(a);
             a.click();
 
@@ -1266,9 +1646,18 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
     });
   }
 
-  private downloadCodingResultsAsExcelBackground(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Promise<void> {
+  private downloadCodingResultsAsExcelBackground(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false
+  ): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.backendService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
+      this.backendService
+        .getCodingResultsByVersionAsExcel(
+          workspaceId,
+          version,
+          includeReplayUrls
+        )
         .pipe(
           catchError(() => {
             reject(new Error('Failed to fetch Excel data'));
@@ -1287,7 +1676,9 @@ export class CodingManagementComponent implements AfterViewInit, OnInit, OnDestr
 
             const a = document.createElement('a');
             a.href = url;
-            a.download = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+            a.download = `coding-results-${version}-${new Date()
+              .toISOString()
+              .slice(0, 10)}.xlsx`;
             document.body.appendChild(a);
             a.click();
 

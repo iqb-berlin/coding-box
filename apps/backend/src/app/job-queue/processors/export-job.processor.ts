@@ -1,14 +1,15 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
-  Injectable,
-  Logger,
-  Inject,
-  forwardRef
+  Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExportJobData, ExportJobResult, JobQueueService } from '../job-queue.service';
+import {
+  ExportJobData,
+  ExportJobResult,
+  JobQueueService
+} from '../job-queue.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
 import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
 import { CacheService } from '../../cache/cache.service';
@@ -28,8 +29,14 @@ export class ExportJobProcessor {
     private jobQueueService: JobQueueService
   ) {}
 
-  private async checkCancellation(job: Job<ExportJobData>, filePath?: string): Promise<void> {
-    if (job.data.isCancelled || await this.jobQueueService.isExportJobCancelled(job.id.toString())) {
+  private async checkCancellation(
+    job: Job<ExportJobData>,
+    filePath?: string
+  ): Promise<void> {
+    if (
+      job.data.isCancelled ||
+      (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
+    ) {
       this.logger.log(`Export job ${job.id} cancellation detected`);
       // Clean up partial file if it exists
       if (filePath && fs.existsSync(filePath)) {
@@ -37,7 +44,9 @@ export class ExportJobProcessor {
           fs.unlinkSync(filePath);
           this.logger.log(`Cleaned up partial export file: ${filePath}`);
         } catch (cleanupError) {
-          this.logger.warn(`Failed to clean up partial file ${filePath}: ${cleanupError.message}`);
+          this.logger.warn(
+            `Failed to clean up partial file ${filePath}: ${cleanupError.message}`
+          );
         }
       }
       throw new ExportJobCancelledException(job.id);
@@ -46,12 +55,24 @@ export class ExportJobProcessor {
 
   @Process()
   async process(job: Job<ExportJobData>): Promise<ExportJobResult> {
-    this.logger.log(`Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`);
+    this.logger.log(
+      `Processing export job ${job.id} for workspace ${job.data.workspaceId}, type: ${job.data.exportType}`
+    );
 
-    const validExportTypes = ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times', 'test-results'];
+    const validExportTypes = [
+      'aggregated',
+      'by-coder',
+      'by-variable',
+      'detailed',
+      'coding-times',
+      'test-results',
+      'test-logs'
+    ];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
-      this.logger.error(`Error processing export job ${job.id}: ${errorMessage}`);
+      this.logger.error(
+        `Error processing export job ${job.id}: ${errorMessage}`
+      );
       throw new Error(errorMessage);
     }
 
@@ -64,7 +85,8 @@ export class ExportJobProcessor {
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-      const fileName = `export_${job.id}_${Date.now()}.xlsx`;
+      const fileExt = job.data.exportType === 'detailed' ? 'csv' : 'xlsx';
+      const fileName = `export_${job.id}_${Date.now()}.${fileExt}`;
       filePath = path.join(tempDir, fileName);
       this.logger.log(`Generating export file: ${filePath}`);
       await this.checkCancellation(job, filePath);
@@ -151,8 +173,22 @@ export class ExportJobProcessor {
           break;
 
         case 'test-results':
-          filePath = filePath.replace('.xlsx', '.csv');
+          filePath = filePath.replace(/\.xlsx$/, '.csv');
           await this.workspaceTestResultsService.exportTestResultsToFile(
+            job.data.workspaceId,
+            filePath,
+            job.data.testResultFilters,
+            async progress => {
+              const jobProgress = 20 + Math.round((progress / 100) * 70);
+              await job.progress(jobProgress);
+              await this.checkCancellation(job, filePath);
+            }
+          );
+          break;
+
+        case 'test-logs':
+          filePath = filePath.replace(/\.xlsx$/, '.csv');
+          await this.workspaceTestResultsService.exportTestLogsToFile(
             job.data.workspaceId,
             filePath,
             job.data.testResultFilters,
@@ -181,7 +217,9 @@ export class ExportJobProcessor {
       const fileSize = stats.size;
       const finalFileName = path.basename(filePath);
 
-      this.logger.log(`Export file generated successfully: ${finalFileName} (${fileSize} bytes)`);
+      this.logger.log(
+        `Export file generated successfully: ${finalFileName} (${fileSize} bytes)`
+      );
 
       // Cache file metadata in Redis with 1 hour TTL
       const metadata: ExportJobResult = {
@@ -210,7 +248,10 @@ export class ExportJobProcessor {
         this.logger.log(`Export job ${job.id} was cancelled`);
         throw error;
       }
-      this.logger.error(`Error processing export job ${job.id}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error processing export job ${job.id}: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }

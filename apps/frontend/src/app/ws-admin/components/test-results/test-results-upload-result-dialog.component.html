@@ -1,0 +1,103 @@
+<h2 mat-dialog-title>
+  Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Responses' }})
+</h2>
+
+<div mat-dialog-content>
+  <div class="summary-grid">
+    <div class="section">
+      <div class="section-title">Erwartet (aus Upload)</div>
+      <div class="kv">
+        <div class="k">Testpersonen</div><div class="v">{{ result.expected.testPersons }}</div>
+        <div class="k">Testgruppen</div><div class="v">{{ result.expected.testGroups }}</div>
+        <div class="k">Booklets (unique)</div><div class="v">{{ result.expected.uniqueBooklets }}</div>
+        <div class="k">Units (unique)</div><div class="v">{{ result.expected.uniqueUnits }}</div>
+        <div class="k">Responses (unique)</div><div class="v">{{ result.expected.uniqueResponses }}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Workspace vorher</div>
+      <div class="kv">
+        <div class="k">Testpersonen</div><div class="v">{{ result.before.testPersons }}</div>
+        <div class="k">Testgruppen</div><div class="v">{{ result.before.testGroups }}</div>
+        <div class="k">Booklets (unique)</div><div class="v">{{ result.before.uniqueBooklets }}</div>
+        <div class="k">Units (unique)</div><div class="v">{{ result.before.uniqueUnits }}</div>
+        <div class="k">Responses</div><div class="v">{{ result.before.uniqueResponses }}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Workspace nachher</div>
+      <div class="kv">
+        <div class="k">Testpersonen</div><div class="v">{{ result.after.testPersons }}</div>
+        <div class="k">Testgruppen</div><div class="v">{{ result.after.testGroups }}</div>
+        <div class="k">Booklets (unique)</div><div class="v">{{ result.after.uniqueBooklets }}</div>
+        <div class="k">Units (unique)</div><div class="v">{{ result.after.uniqueUnits }}</div>
+        <div class="k">Responses</div><div class="v">{{ result.after.uniqueResponses }}</div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Delta</div>
+      <div class="kv">
+        <div class="k">Testpersonen</div><div class="v">{{ result.delta.testPersons }}</div>
+        <div class="k">Testgruppen</div><div class="v">{{ result.delta.testGroups }}</div>
+        <div class="k">Booklets (unique)</div><div class="v">{{ result.delta.uniqueBooklets }}</div>
+        <div class="k">Units (unique)</div><div class="v">{{ result.delta.uniqueUnits }}</div>
+        <div class="k">Responses</div><div class="v">{{ result.delta.uniqueResponses }}</div>
+      </div>
+    </div>
+  </div>
+
+  <mat-tab-group>
+    <mat-tab label="Status ({{ statusCounts.length }})">
+      <div class="tab-pad">
+        @if (statusCounts.length === 0) {
+          <div class="empty">Keine Status-Informationen vorhanden.</div>
+        } @else {
+          <div class="status-grid">
+            @for (s of statusCounts; track s.status) {
+              <div class="status-row">
+                <div class="status">{{ s.status }}</div>
+                <div class="count">{{ s.count }}</div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <mat-tab label="Probleme ({{ issues.length }})">
+      <div class="tab-pad">
+        <mat-form-field appearance="outline" style="width: 100%;">
+          <mat-label>Suche</mat-label>
+          <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
+          <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        @if (filteredIssues.length === 0) {
+          <div class="empty">Keine Probleme gefunden.</div>
+        } @else {
+          <cdk-virtual-scroll-viewport itemSize="60" class="viewport">
+            <div *cdkVirtualFor="let i of filteredIssues; trackBy: trackByIssue" class="issue-row" [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">
+              <div class="issue-main">
+                <div class="issue-title">
+                  <span class="pill" [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">{{ i.level }}</span>
+                  <span class="msg">{{ i.message }}</span>
+                </div>
+                <div class="issue-meta">
+                  @if (i.fileName) { <span>Datei: {{ i.fileName }}</span> }
+                  @if (i.rowIndex !== null && i.rowIndex !== undefined) { <span>Zeile: {{ i.rowIndex }}</span> }
+                </div>
+              </div>
+            </div>
+          </cdk-virtual-scroll-viewport>
+        }
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="close()">Schließen</button>
+</div>

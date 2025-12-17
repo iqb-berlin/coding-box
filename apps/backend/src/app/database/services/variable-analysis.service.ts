@@ -143,19 +143,22 @@ export class VariableAnalysisService {
     }
 
     if (variableId) {
-      query.andWhere('response.variableId LIKE :variableId', { variableId: `%${variableId}%` });
+      query.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableId}%` });
     }
 
     // Get distinct combinations of unit name and variable ID
     const variableCombosQuery = query.clone()
-      .select('DISTINCT unit.name', 'unitName')
-      .addSelect('response.variableId', 'variableId')
+      .select('unit.id', 'unitId')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .distinct(true)
       .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableId', 'ASC');
+      .addOrderBy('response.variableid', 'ASC');
 
     // Execute the query to get variable combinations
     const variableCombosResult = await variableCombosQuery.getRawMany();
     const variableCombos = variableCombosResult.map(result => ({
+      unitId: Number(result.unitId),
       unitName: result.unitName,
       variableId: result.variableId
     }));
@@ -171,7 +174,7 @@ export class VariableAnalysisService {
 
     // Get total count of distinct variable combinations
     const totalQuery = query.clone()
-      .select('COUNT(DISTINCT CONCAT(unit.name, response.variableId))', 'count');
+      .select("COUNT(DISTINCT CONCAT(unit.id, ':', response.variableid))", 'count');
     const totalResult = await totalQuery.getRawOne();
     const total = parseInt(totalResult.count, 10);
 
@@ -181,14 +184,14 @@ export class VariableAnalysisService {
     // Process each variable combination
     for (const combo of variableCombos) {
       // Create a unique key for this combination
-      const comboKey = `${combo.unitName}:${combo.variableId}`;
+      const comboKey = `${combo.unitId}:${combo.variableId}`;
 
       // Get all values for this variable combination
       const valuesQuery = query.clone()
         .select('response.value', 'value')
         .addSelect('COUNT(*)', 'count')
-        .where('unit.name = :unitName', { unitName: combo.unitName })
-        .andWhere('response.variableId = :varId', { varId: combo.variableId })
+        .andWhere('unit.id = :unitId', { unitId: combo.unitId })
+        .andWhere('response.variableid = :varId', { varId: combo.variableId })
         .groupBy('response.value')
         .orderBy('count', 'DESC');
 
@@ -198,6 +201,7 @@ export class VariableAnalysisService {
 
       // Map to DTOs
       frequencies[comboKey] = valuesResult.map(result => ({
+        unitId: combo.unitId,
         unitName: combo.unitName,
         variableId: combo.variableId,
         value: result.value || '',

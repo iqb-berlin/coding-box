@@ -1,6 +1,6 @@
 {
   "name": "coding-box",
-  "version": "1.8.1",
+  "version": "1.9.0",
   "author": "IQB - Institut zur Qualitätsentwicklung im Bildungswesen",
   "license": "MIT",
   "scripts": {
@@ -16,7 +16,9 @@
     "lint-backend": "nx lint backend",
     "build-app": "nx run-many --target=build --all --parallel",
     "build-frontend": "nx build frontend",
-    "build-backend": "nx build backend"
+    "build-backend": "nx build backend",
+    "cypress:open-ct": "cypress open --component",
+    "cypress:run-ct": "cypress run --component"
   },
   "private": true,
   "dependencies": {
@@ -107,6 +109,7 @@
     "@types/multer": "^1.4.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/xml2js": "^0.4.14",
+    "cypress": "^15.0.0",
     "esbuild": "^0.25.8",
     "eslint": "8.57.1",
     "eslint-plugin-html": "^8.1.1",
@@ -128,6 +131,7 @@
     "extends": "@iqb/eslint-config",
     "rules": {
       "no-await-in-loop": "off",
+      "no-spaced-func": "off",
       "no-restricted-syntax": "off",
       "class-methods-use-this": "off",
       "no-continue": "off",

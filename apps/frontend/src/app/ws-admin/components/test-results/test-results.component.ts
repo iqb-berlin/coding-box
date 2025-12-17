@@ -4,27 +4,43 @@ import {
   MatCellDef,
   MatHeaderRowDef,
   MatRowDef,
-  MatTableDataSource, MatCell, MatColumnDef, MatHeaderCell, MatHeaderRow, MatRow
+  MatTableDataSource,
+  MatCell,
+  MatColumnDef,
+  MatHeaderCell,
+  MatHeaderRow,
+  MatRow
 } from '@angular/material/table';
 import {
-  Component, OnDestroy, OnInit, ViewChild, inject
+  Component,
+  ElementRef,
+  OnDestroy,
+  OnInit,
+  ViewChild,
+  inject
 } from '@angular/core';
+
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  MatPaginator, MatPaginatorModule, MatPaginatorIntl, PageEvent
+  MatPaginator,
+  MatPaginatorModule,
+  MatPaginatorIntl,
+  PageEvent
 } from '@angular/material/paginator';
 import {
   Subject,
   Subscription,
   debounceTime,
-  distinctUntilChanged
+  distinctUntilChanged,
+  firstValueFrom
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
 import {
   MatAccordion,
-  MatExpansionPanel, MatExpansionPanelHeader,
+  MatExpansionPanel,
+  MatExpansionPanelHeader,
   MatExpansionPanelTitle
 } from '@angular/material/expansion';
 import { MatList, MatListItem } from '@angular/material/list';
@@ -34,38 +50,57 @@ import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatCheckbox } from '@angular/material/checkbox';
-import {
-  MatAnchor, MatButton, MatIconButton
-} from '@angular/material/button';
-import {
-  MatDialog
-} from '@angular/material/dialog';
+import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
+import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { TestResultsImportDialogComponent } from './test-results-import-dialog.component';
+import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
-import { TestResultService } from '../../../services/test-result.service';
+import {
+  TestResultService,
+  TestResultsOverviewResponse
+} from '../../../services/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { TestResultsSearchComponent } from '../test-results-search/test-results-search.component';
-import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
+import {
+  ConfirmDialogComponent,
+  ConfirmDialogData
+} from '../../../shared/dialogs/confirm-dialog.component';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
-import { UnitsReplay, UnitsReplayService } from '../../../services/units-replay.service';
+import {
+  UnitsReplay,
+  UnitsReplayService
+} from '../../../services/units-replay.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
-import { ExportOptionsDialogComponent, ExportOptions } from './export-options-dialog.component';
+import {
+  ExportOptionsDialogComponent,
+  ExportOptions
+} from './export-options-dialog.component';
+import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
+import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import {
+  OverwriteMode,
+  TestResultsUploadOptionsDialogComponent,
+  TestResultsUploadOptionsDialogData,
+  TestResultsUploadOptionsDialogResult
+} from './test-results-upload-options-dialog.component';
 
 interface BookletLog {
   id: number;
@@ -111,7 +146,6 @@ interface Unit {
   results: UnitResult[];
   logs: UnitLog[];
   tags: UnitTagDto[];
-
 }
 
 interface Booklet {
@@ -144,8 +178,78 @@ interface P {
   group: string;
   login: string;
   uploaded_at: Date;
-
 }
+
+const RESPONSE_STATUS_INFO: Record<
+string,
+{ numeric: number; description: string }
+> = {
+  UNSET: {
+    numeric: 0,
+    description:
+      'Ausgangszustand beim Anlegen von Variablen. Sollte eine Variable an ein Interaktionselement gebunden sein, dann erhält sie jedoch sofort den Status NOT_REACHED.'
+  },
+  NOT_REACHED: {
+    numeric: 1,
+    description:
+      'Ausgangszustand beim Anlegen von Variablen, die an ein Interaktionselement gebunden sind.'
+  },
+  DISPLAYED: {
+    numeric: 2,
+    description:
+      'Variablen, die an ein Interaktionselement gebunden sind, bekommen diesen Status, wenn sie der Testperson präsentiert wurden - also sichtbar sind.'
+  },
+  VALUE_CHANGED: {
+    numeric: 3,
+    description:
+      'Dieser Status zeigt an, dass eine Interaktion stattgefunden hat und also der Wert (Value) auszuwerten ist. Bei abgeleiteten Variablen zeigt dieser Status eine erfolgreiche Ableitung an.'
+  },
+  DERIVE_ERROR: {
+    numeric: 4,
+    description:
+      'Dieser Status zeigt an, dass eine Ableitung fehlgeschlagen ist. Dies kann sich beispielsweise auf einen Typkonflikt (numerisch, Text) beziehen und ist in den meisten Fällen über eine Anpassung des Kodierschemas korrigierbar. Der Status bezieht sich allerdings nicht darauf, ob die zugrundeliegenden Variablen einen unzureichenden Status haben, sondern es geht um technische Fehler beim Ableitungsprozess.'
+  },
+  CODING_COMPLETE: {
+    numeric: 5,
+    description: 'Die Kodierung der Variablen ist erfolgreich abgeschlossen.'
+  },
+  NO_CODING: {
+    numeric: 6,
+    description:
+      'Bei diesem Status wurde festgestellt, dass keine Informationen für eine Kodierung vorliegen (keine Codes sind im Kodierschema definiert). Das stellt eine Fehlersituation dar.'
+  },
+  INVALID: {
+    numeric: 7,
+    description:
+      'Es wurde bei diesem Status eine Antwort festgestellt, die außerhalb des zulässigen Bereiches liegt. Beispielsweise wurde zwar zunächst ein Text eingegeben, dann aber alles gelöscht, so dass eine leere Antwort gespeichert wurde. Mit diesem Code werden auch Spaßantworten “Mir ist langweilig” kodiert.'
+  },
+  CODING_INCOMPLETE: {
+    numeric: 8,
+    description:
+      'Dieser Code zeigt nach einem Durchlauf einer Kodierprozedur an, dass keiner der vorgesehenen Codes als zutreffend angesehen wurde. Dieser Kodierfall muss dann manuell gesichtet werden.'
+  },
+  CODING_ERROR: {
+    numeric: 9,
+    description:
+      'Während der Kodierung ist ein Fehler aufgetreten, der die Bewertung der Antwort verhindert hat. Dies kann ein technischer Fehler bei der Anzeige (Replay) für das manuelle Kodieren sein, aber auch Typkonflikte zwischen dem Wert und dem Kodierschema können die Ursache sein.'
+  },
+  PARTLY_DISPLAYED: {
+    numeric: 10,
+    description:
+      'Diesen Zustand erhalten abgeleitete Variablen, die von Variablen abgeleitet wurden mit dem Status PARTLY_DISPLAYED oder mit DISPLAYED sowie außerdem den Status NOT_REACHED oder UNSET.'
+  },
+  DERIVE_PENDING: {
+    numeric: 11,
+    description:
+      'Dieser Status zeigt an, dass eine Ableitung nicht möglich ist, weil mindestens eine Variable, die zur Ableitung nötig ist, den Status CODING_INCOMPLETE oder CODING_ERROR hat. Im Arbeitsablauf “wartet” diese Variable also darauf, dass eine manuelle Kodierung zu CODING_COMPLETE führt und der Autocoder neu angestoßen wird.'
+  },
+  INTENDED_INCOMPLETE: {
+    numeric: 12,
+    description:
+      'Die Kodierung der Variablen ist nicht abgeschlossen, aber dies stellt keinen Fehler dar. Es handelt sich hier z. B. um Variablen, die über andere Wege kodiert werden sollen (z. B. Rating oder Übersetzung in Berufe-Codes außerhalb der regulären Kodierprozesse). Es kann auch sein, dass der Variablenwert erst durch eine Ableitung ausgewertet wird und innerhalb der Variable keine isolierte Bewertung möglich ist.'
+  },
+  CODE_SELECTION_PENDING: { numeric: 13, description: '' }
+};
 
 @Component({
   selector: 'coding-box-test-results',
@@ -156,7 +260,8 @@ interface P {
     DatePipe,
     { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ],
-  imports: [CommonModule,
+  imports: [
+    CommonModule,
     FormsModule,
     MatExpansionPanelHeader,
     MatPaginatorModule,
@@ -186,7 +291,8 @@ interface P {
     MatButton,
     MatIconButton,
     MatDivider,
-    MatTooltipModule
+    MatTooltipModule,
+    TestResultsFlatTableComponent
   ]
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
@@ -203,8 +309,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
   selection = new SelectionModel<P>(true, []);
-  dataSource !: MatTableDataSource<P>;
-  displayedColumns: string[] = ['select', 'code', 'group', 'login', 'uploaded_at'];
+  dataSource!: MatTableDataSource<P>;
+  displayedColumns: string[] = [
+    'select',
+    'code',
+    'group',
+    'login',
+    'uploaded_at'
+  ];
+
+  isTableView: boolean = false;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -232,23 +346,32 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private validationStatusInterval: number | null = null;
   private isInitialized: boolean = false;
 
+  overview: TestResultsOverviewResponse | null = null;
+  isLoadingOverview: boolean = false;
+
   exportJobId: string | null = null;
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
+  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
+  @ViewChild('hiddenResponsesFileInput')
+    hiddenResponsesFileInput!: ElementRef<HTMLInputElement>;
+
+  @ViewChild('hiddenLogsFileInput')
+    hiddenLogsFileInput!: ElementRef<HTMLInputElement>;
 
   ngOnInit(): void {
-    this.searchSubscription = this.searchSubject.pipe(
-      debounceTime(this.SEARCH_DEBOUNCE_TIME),
-      distinctUntilChanged()
-    ).subscribe(searchText => {
-      this.createTestResultsList(0, this.pageSize, searchText);
-    });
+    this.searchSubscription = this.searchSubject
+      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
+      .subscribe(searchText => {
+        this.createTestResultsList(0, this.pageSize, searchText);
+      });
 
     this.createTestResultsList(0, this.pageSize);
+    this.loadWorkspaceOverview();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -261,6 +384,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     this.stopValidationStatusCheck();
+  }
+
+  toggleTableView(): void {
+    this.isTableView = !this.isTableView;
   }
 
   private startValidationStatusCheck(): void {
@@ -283,24 +410,37 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const taskIds = this.validationTaskStateService.getAllTaskIds(this.appService.selectedWorkspaceId);
+    const taskIds = this.validationTaskStateService.getAllTaskIds(
+      this.appService.selectedWorkspaceId
+    );
 
     if (Object.keys(taskIds).length > 0) {
       for (const [type, taskId] of Object.entries(taskIds)) {
-        this.backendService.getValidationTask(this.appService.selectedWorkspaceId, taskId)
+        this.backendService
+          .getValidationTask(this.appService.selectedWorkspaceId, taskId)
           .subscribe({
             next: task => {
               if (task.status === 'completed' || task.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
-                  type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'
+                  type as
+                    | 'variables'
+                    | 'variableTypes'
+                    | 'responseStatus'
+                    | 'testTakers'
+                    | 'groupResponses'
                 );
               }
             },
             error: () => {
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
-                type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses'
+                type as
+                  | 'variables'
+                  | 'variableTypes'
+                  | 'responseStatus'
+                  | 'testTakers'
+                  | 'groupResponses'
               );
             }
           });
@@ -313,7 +453,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    const taskIds = this.validationTaskStateService.getAllTaskIds(this.appService.selectedWorkspaceId);
+    const taskIds = this.validationTaskStateService.getAllTaskIds(
+      this.appService.selectedWorkspaceId
+    );
     return Object.keys(taskIds).length > 0;
   }
 
@@ -323,16 +465,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     if (this.appService.selectedWorkspaceId) {
-      const results = this.validationTaskStateService.getAllValidationResults(this.appService.selectedWorkspaceId);
+      const results = this.validationTaskStateService.getAllValidationResults(
+        this.appService.selectedWorkspaceId
+      );
 
       if (Object.keys(results).length > 0) {
-        const hasFailedValidation = Object.values(results).some(result => result.status === 'failed');
+        const hasFailedValidation = Object.values(results).some(
+          result => result.status === 'failed'
+        );
         if (hasFailedValidation) {
           return 'failed';
         }
 
-        const validationTypes = ['variables', 'variableTypes', 'responseStatus', 'testTakers', 'groupResponses'];
-        const hasAllValidations = validationTypes.every(type => results[type]);
+        const validationTypes = [
+          'variables',
+          'variableTypes',
+          'responseStatus',
+          'testTakers',
+          'groupResponses'
+        ];
+        const hasAllValidations = validationTypes.every(
+          type => results[type]
+        );
         if (hasAllValidations) {
           return 'success';
         }
@@ -353,10 +507,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.unitTagsMap.clear();
     this.unitNotesMap.clear();
     this.isLoadingBooklets = true;
-    this.backendService.getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
+    this.backendService
+      .getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
         next: booklets => {
-          this.selectedBooklet = row.group;
+          this.selectedBooklet = '';
           this.booklets = booklets as unknown as Booklet[];
           this.sortBooklets();
           this.sortBookletUnits();
@@ -437,91 +592,91 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getNotesForMultipleUnits(
-      this.appService.selectedWorkspaceId,
-      unitIds
-    ).subscribe({
-      next: notesByUnitId => {
-        Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-          this.unitNotesMap.set(Number(unitId), notes);
-        });
-      },
-      error: () => {
-        this.snackBar.open(
-          'Fehler beim Laden der Notizen',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
+    this.backendService
+      .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
+      .subscribe({
+        next: notesByUnitId => {
+          Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
+            this.unitNotesMap.set(Number(unitId), notes);
+          });
+        },
+        error: () => {
+          this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
+            duration: 3000
+          });
+        }
+      });
   }
 
   replayBooklet(booklet: Booklet) {
     if (!booklet || !booklet.name) {
-      this.snackBar.open(
-        'Ungültiges Testheft',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Ungültiges Testheft', 'Info', { duration: 3000 });
       return;
     }
 
-    const loadingSnackBar = this.snackBar.open(
-      'Lade Testheft...',
-      '',
-      { duration: 3000 }
-    );
+    const loadingSnackBar = this.snackBar.open('Lade Testheft...', '', {
+      duration: 3000
+    });
 
-    this.unitsReplayService.getUnitsFromFileUpload(
-      this.appService.selectedWorkspaceId,
-      booklet.name
-    ).subscribe({
-      next: bookletReplay => {
-        loadingSnackBar.dismiss();
+    this.unitsReplayService
+      .getUnitsFromFileUpload(this.appService.selectedWorkspaceId, booklet.name)
+      .subscribe({
+        next: bookletReplay => {
+          loadingSnackBar.dismiss();
 
-        if (!bookletReplay || !bookletReplay.units || bookletReplay.units.length === 0) {
-          this.snackBar.open(
-            'Keine Units im Testheft vorhanden',
-            'Info',
-            { duration: 3000 }
-          );
-          return;
-        }
-        const serializedBooklet = this.serializeUnitsData(bookletReplay);
-        const firstUnit = bookletReplay.units[0];
+          if (
+            !bookletReplay ||
+            !bookletReplay.units ||
+            bookletReplay.units.length === 0
+          ) {
+            this.snackBar.open('Keine Units im Testheft vorhanden', 'Info', {
+              duration: 3000
+            });
+            return;
+          }
+          const serializedBooklet = this.serializeUnitsData(bookletReplay);
+          const firstUnit = bookletReplay.units[0];
 
-        this.appService
-          .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
-          .subscribe(token => {
-            const queryParams = {
-              auth: token,
-              mode: 'booklet',
-              unitsData: serializedBooklet
-            };
+          this.appService
+            .createToken(
+              this.appService.selectedWorkspaceId,
+              this.appService.loggedUser?.sub || '',
+              1
+            )
+            .subscribe(token => {
+              const queryParams = {
+                auth: token,
+                mode: 'booklet',
+                unitsData: serializedBooklet
+              };
 
-            const url = this.router
-              .serializeUrl(
+              const url = this.router.serializeUrl(
                 this.router.createUrlTree(
-                  [`replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${booklet.name}/${firstUnit.name}/0/0`],
-                  { queryParams: queryParams })
+                  [
+                    `replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${booklet.name}/${firstUnit.name}/0/0`
+                  ],
+                  { queryParams: queryParams }
+                )
               );
 
-            window.open(`#/${url}`, '_blank');
+              window.open(`#/${url}`, '_blank');
+            });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open('Fehler beim Laden des Testhefts', 'Fehler', {
+            duration: 3000
           });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden des Testhefts',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
+        }
+      });
   }
 
   replayUnit() {
-    if (!this.selectedUnit || !this.testPerson || !this.appService.selectedWorkspaceId) {
+    if (
+      !this.selectedUnit ||
+      !this.testPerson ||
+      !this.appService.selectedWorkspaceId
+    ) {
       this.snackBar.open(
         'Keine gültige Unit oder Testperson ausgewählt',
         'Info',
@@ -531,18 +686,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     }
 
     if (!this.responses || this.responses.length === 0) {
-      this.snackBar.open(
-        'Keine Antworten für diese Unit vorhanden',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Antworten für diese Unit vorhanden', 'Info', {
+        duration: 3000
+      });
       return;
     }
 
     const firstResponse = this.responses[0];
 
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+      .createToken(
+        this.appService.selectedWorkspaceId,
+        this.appService.loggedUser?.sub || '',
+        1
+      )
       .subscribe({
         next: token => {
           if (!token) {
@@ -554,30 +711,32 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             return;
           }
 
-          this.backendService.getReplayUrl(
-            this.appService.selectedWorkspaceId,
-            firstResponse.id,
-            token
-          ).subscribe({
-            next: result => {
-              if (result && result.replayUrl) {
-                window.open(result.replayUrl, '_blank');
-              } else {
+          this.backendService
+            .getReplayUrl(
+              this.appService.selectedWorkspaceId,
+              firstResponse.id,
+              token
+            )
+            .subscribe({
+              next: result => {
+                if (result && result.replayUrl) {
+                  window.open(result.replayUrl, '_blank');
+                } else {
+                  this.snackBar.open(
+                    'Replay-URL konnte nicht erzeugt werden',
+                    'Fehler',
+                    { duration: 3000 }
+                  );
+                }
+              },
+              error: () => {
                 this.snackBar.open(
-                  'Replay-URL konnte nicht erzeugt werden',
+                  'Fehler beim Laden der Replay-URL',
                   'Fehler',
                   { duration: 3000 }
                 );
               }
-            },
-            error: () => {
-              this.snackBar.open(
-                'Fehler beim Laden der Replay-URL',
-                'Fehler',
-                { duration: 3000 }
-              );
-            }
-          });
+            });
         },
         error: () => {
           this.snackBar.open(
@@ -597,11 +756,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openBookletLogsDialog(booklet: Booklet) {
     if (!booklet.logs || booklet.logs.length === 0) {
-      this.snackBar.open(
-        'Keine Logs für dieses Testheft vorhanden',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Logs für dieses Testheft vorhanden', 'Info', {
+        duration: 3000
+      });
       return;
     }
 
@@ -617,11 +774,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openUnitLogsDialog() {
     if (!this.selectedUnit || !this.logs || this.logs.length === 0) {
-      this.snackBar.open(
-        'Keine Logs für diese Unit vorhanden',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Logs für diese Unit vorhanden', 'Info', {
+        duration: 3000
+      });
       return;
     }
 
@@ -629,18 +784,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '700px',
       data: {
         logs: this.logs,
-        title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+        title: `Logs für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
+        }`
       }
     });
   }
 
   openTagsDialog() {
     if (!this.selectedUnit || !this.selectedUnit.id) {
-      this.snackBar.open(
-        'Keine Unit ausgewählt',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
 
@@ -649,7 +802,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         tags: this.unitTags,
-        title: `Tags für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+        title: `Tags für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
+        }`
       }
     });
 
@@ -663,11 +818,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   openNotesDialog() {
     if (!this.selectedUnit || !this.selectedUnit.id) {
-      this.snackBar.open(
-        'Keine Unit ausgewählt',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
 
@@ -676,7 +827,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         notes: this.unitNotes,
-        title: `Notizen für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'}`
+        title: `Notizen für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
+        }`
       }
     });
 
@@ -716,7 +869,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   loadUnitTags(): void {
     if (this.selectedUnit && this.selectedUnit.id) {
-      this.unitTags = this.unitTagsMap.get(this.selectedUnit.id as number) || [];
+      this.unitTags =
+        this.unitTagsMap.get(this.selectedUnit.id as number) || [];
     } else {
       this.unitTags = [];
     }
@@ -728,22 +882,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (this.unitNotesMap.has(unitId)) {
         this.unitNotes = this.unitNotesMap.get(unitId) || [];
       } else {
-        this.backendService.getUnitNotes(
-          this.appService.selectedWorkspaceId,
-          unitId
-        ).subscribe({
-          next: notes => {
-            this.unitNotes = notes;
-            this.unitNotesMap.set(unitId, notes);
-          },
-          error: () => {
-            this.snackBar.open(
-              'Fehler beim Laden der Notizen',
-              'Fehler',
-              { duration: 3000 }
-            );
-          }
-        });
+        this.backendService
+          .getUnitNotes(this.appService.selectedWorkspaceId, unitId)
+          .subscribe({
+            next: notes => {
+              this.unitNotes = notes;
+              this.unitNotesMap.set(unitId, notes);
+            },
+            error: () => {
+              this.snackBar.open('Fehler beim Laden der Notizen', 'Fehler', {
+                duration: 3000
+              });
+            }
+          });
       }
     } else {
       this.unitNotes = [];
@@ -763,12 +914,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   calculateBookletProcessingTime(booklet: Booklet): number | null {
-    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+    if (
+      !booklet.logs ||
+      !Array.isArray(booklet.logs) ||
+      booklet.logs.length === 0
+    ) {
       return null;
     }
 
-    const pollingLog = booklet.logs.find((log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING');
-    const terminatedLog = booklet.logs.find((log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED');
+    const pollingLog = booklet.logs.find(
+      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'RUNNING'
+    );
+    const terminatedLog = booklet.logs.find(
+      (log: BookletLog) => log.key === 'CONTROLLER' && log.parameter === 'TERMINATED'
+    );
     if (pollingLog && terminatedLog) {
       const pollingTime = Number(pollingLog.ts);
       const terminatedTime = Number(terminatedLog.ts);
@@ -782,32 +941,48 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   isBookletComplete(booklet: Booklet): boolean {
-    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+    if (
+      !booklet.logs ||
+      !Array.isArray(booklet.logs) ||
+      booklet.logs.length === 0
+    ) {
       return true;
     }
 
-    if (!booklet.units || !Array.isArray(booklet.units) || booklet.units.length === 0) {
+    if (
+      !booklet.units ||
+      !Array.isArray(booklet.units) ||
+      booklet.units.length === 0
+    ) {
       return false;
     }
-    const unitIdLogs = booklet.logs.filter((log: BookletLog) => log.key === 'CURRENT_UNIT_ID');
+    const unitIdLogs = booklet.logs.filter(
+      (log: BookletLog) => log.key === 'CURRENT_UNIT_ID'
+    );
     const unitAliases = booklet.units
       .map((unit: Unit) => unit.alias)
       .filter((alias: string | null) => alias !== null) as string[];
 
-    const allUnitsVisited = unitAliases.every(
-      (alias: string) => unitIdLogs.some((log: BookletLog) => log.parameter === alias)
+    const allUnitsVisited = unitAliases.every((alias: string) => unitIdLogs.some((log: BookletLog) => log.parameter === alias)
     );
 
     return allUnitsVisited && unitAliases.length > 0;
   }
 
   hasShortProcessingTime(booklet: Booklet): boolean {
-    if (!booklet.logs || !Array.isArray(booklet.logs) || booklet.logs.length === 0) {
+    if (
+      !booklet.logs ||
+      !Array.isArray(booklet.logs) ||
+      booklet.logs.length === 0
+    ) {
       return false;
     }
 
     const processingTime = this.calculateBookletProcessingTime(booklet);
-    return processingTime === null || processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS;
+    return (
+      processingTime === null ||
+      processingTime < this.SHORT_PROCESSING_TIME_THRESHOLD_MS
+    );
   }
 
   hasGeogebraResponse(unit: Unit): boolean {
@@ -815,7 +990,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return false;
     }
 
-    return unit.results.some((response: UnitResult) => response.value && response.value.startsWith('UEsD'));
+    return unit.results.some(
+      (response: UnitResult) => response.value && response.value.startsWith('UEsD')
+    );
   }
 
   getColor(status: string): string {
@@ -834,12 +1011,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   getCurrentSearchText(): string {
-    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    const searchInput = document.querySelector(
+      '.search-input'
+    ) as HTMLInputElement;
     return searchInput ? searchInput.value : '';
   }
 
   clearSearch(): void {
-    const searchInput = document.querySelector('.search-input') as HTMLInputElement;
+    const searchInput = document.querySelector(
+      '.search-input'
+    ) as HTMLInputElement;
     if (searchInput) {
       searchInput.value = '';
       this.createTestResultsList(0, this.pageSize);
@@ -849,19 +1030,68 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   onPaginatorChange(event: PageEvent): void {
     this.pageSize = event.pageSize;
     this.pageIndex = event.pageIndex;
-    this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+    this.createTestResultsList(
+      this.pageIndex,
+      this.pageSize,
+      this.getCurrentSearchText()
+    );
   }
 
-  createTestResultsList(page: number = 0, limit: number = 50, searchText: string = ''): void {
+  createTestResultsList(
+    page: number = 0,
+    limit: number = 50,
+    searchText: string = ''
+  ): void {
     const validPage = Math.max(0, page);
     this.isLoading = !this.isSearching;
-    this.testResultService.getTestResults(this.appService.selectedWorkspaceId, validPage, limit, searchText)
+    this.testResultService
+      .getTestResults(
+        this.appService.selectedWorkspaceId,
+        validPage,
+        limit,
+        searchText
+      )
       .subscribe(response => {
         this.isLoading = false;
         this.isSearching = false;
         const { data, total } = response;
         this.updateTable(data, total);
       });
+  }
+
+  private loadWorkspaceOverview(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      this.overview = null;
+      return;
+    }
+
+    this.isLoadingOverview = true;
+    this.testResultService
+      .getWorkspaceOverview(this.appService.selectedWorkspaceId)
+      .subscribe(result => {
+        this.overview = result;
+        this.isLoadingOverview = false;
+      });
+  }
+
+  get overviewStatusCounts(): Array<{ status: string; count: number }> {
+    const map = (this.overview?.responseStatusCounts || {}) as Record<
+    string,
+    number
+    >;
+    return Object.entries(map)
+      .map(([status, count]) => ({ status, count: Number(count) }))
+      .sort((a, b) => b.count - a.count);
+  }
+
+  getResponseStatusTooltip(status: string): string {
+    const info = RESPONSE_STATUS_INFO[status];
+    if (!info) {
+      return status;
+    }
+
+    const descriptionPart = info.description ? `: ${info.description}` : '';
+    return `${status}${descriptionPart}`;
   }
 
   isAllSelected(): boolean {
@@ -896,62 +1126,258 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.dataSource.sort = this.sort;
   }
 
-  testCenterImport(): void {
+  openImportDialog(): void {
+    const dialogRef = this.dialog.open(TestResultsImportDialogComponent, {
+      width: '500px'
+    });
+
+    dialogRef.afterClosed().subscribe(async result => {
+      if (result) {
+        switch (result.type) {
+          case 'testcenter':
+            await this.testCenterImport();
+            break;
+          case 'responses':
+            this.hiddenResponsesFileInput.nativeElement.click();
+            break;
+          case 'logs':
+            this.hiddenLogsFileInput.nativeElement.click();
+            break;
+          default:
+            break;
+        }
+      }
+    });
+  }
+
+  async testCenterImport(): Promise<void> {
+    const fallbackOverview: TestResultsOverviewResponse = {
+      testPersons: 0,
+      testGroups: 0,
+      uniqueBooklets: 0,
+      uniqueUnits: 0,
+      uniqueResponses: 0,
+      responseStatusCounts: {}
+    };
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const beforeOverview = workspaceId ?
+      (await firstValueFrom(
+        this.testResultService.getWorkspaceOverview(workspaceId)
+      )) || fallbackOverview :
+      this.overview || fallbackOverview;
+
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '800px',
+      width: '1000px',
+      maxWidth: '95vw',
       minHeight: '800px',
       data: {
         importType: 'testResults'
       }
     });
 
-    dialogRef.afterClosed().subscribe((result: boolean | UntypedFormGroup) => {
-      if (result instanceof UntypedFormGroup || result) {
-        if (this.appService.selectedWorkspaceId) {
-          this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+    const sleep = (ms: number) => new Promise<void>(resolve => {
+      window.setTimeout(() => resolve(), ms);
+    });
+
+    const pollOverviewAfterImport =
+      async (): Promise<TestResultsOverviewResponse> => {
+        if (!workspaceId) {
+          return fallbackOverview;
         }
-        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+        // Poll a bit because the import may finish before overview aggregates are updated.
+        for (let i = 0; i < 10; i += 1) {
+          const current =
+            (await firstValueFrom(
+              this.testResultService.getWorkspaceOverview(workspaceId)
+            )) || fallbackOverview;
+          const changed =
+            current.testPersons !== beforeOverview.testPersons ||
+            current.testGroups !== beforeOverview.testGroups ||
+            current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
+            current.uniqueUnits !== beforeOverview.uniqueUnits ||
+            current.uniqueResponses !== beforeOverview.uniqueResponses;
+          if (changed) {
+            return current;
+          }
+          await sleep(300);
+        }
+        return (
+          (await firstValueFrom(
+            this.testResultService.getWorkspaceOverview(workspaceId)
+          )) || fallbackOverview
+        );
+      };
+
+    dialogRef.afterClosed().subscribe(result => {
+      const maybePayload = result as
+        | {
+          didImport?: boolean;
+          resultType?: 'logs' | 'responses';
+        }
+        | boolean
+        | UntypedFormGroup
+        | undefined;
+
+      if (
+        maybePayload &&
+        typeof maybePayload === 'object' &&
+        'didImport' in maybePayload &&
+        (maybePayload as { didImport?: boolean }).didImport
+      ) {
+        (async () => {
+          if (workspaceId) {
+            this.testResultService.invalidateCache(workspaceId);
+          }
+
+          const afterOverview = await pollOverviewAfterImport();
+
+          const delta = {
+            testPersons: afterOverview.testPersons - beforeOverview.testPersons,
+            testGroups: afterOverview.testGroups - beforeOverview.testGroups,
+            uniqueBooklets:
+              afterOverview.uniqueBooklets - beforeOverview.uniqueBooklets,
+            uniqueUnits: afterOverview.uniqueUnits - beforeOverview.uniqueUnits,
+            uniqueResponses:
+              afterOverview.uniqueResponses - beforeOverview.uniqueResponses
+          };
+
+          const dialogResult: TestResultsUploadResultDto = {
+            expected: { ...delta },
+            before: {
+              testPersons: beforeOverview.testPersons,
+              testGroups: beforeOverview.testGroups,
+              uniqueBooklets: beforeOverview.uniqueBooklets,
+              uniqueUnits: beforeOverview.uniqueUnits,
+              uniqueResponses: beforeOverview.uniqueResponses
+            },
+            after: {
+              testPersons: afterOverview.testPersons,
+              testGroups: afterOverview.testGroups,
+              uniqueBooklets: afterOverview.uniqueBooklets,
+              uniqueUnits: afterOverview.uniqueUnits,
+              uniqueResponses: afterOverview.uniqueResponses
+            },
+            delta,
+            responseStatusCounts: afterOverview.responseStatusCounts,
+            issues: []
+          };
+
+          const payload = maybePayload as { resultType?: 'logs' | 'responses' };
+          this.dialog.open(TestResultsUploadResultDialogComponent, {
+            width: '1000px',
+            maxWidth: '95vw',
+            data: {
+              resultType: payload.resultType || 'responses',
+              result: dialogResult
+            }
+          });
+        })();
+      }
+
+      if (result instanceof UntypedFormGroup || result) {
+        if (workspaceId) {
+          this.testResultService.invalidateCache(workspaceId);
+        }
+        this.loadWorkspaceOverview();
+        this.createTestResultsList(
+          this.pageIndex,
+          this.pageSize,
+          this.getCurrentSearchText()
+        );
       }
     });
   }
 
-  onFileSelected(targetElement: EventTarget | null, resultType:'logs' | 'responses') {
+  onFileSelected(
+    targetElement: EventTarget | null,
+    resultType: 'logs' | 'responses'
+  ) {
     if (targetElement) {
       const inputElement = targetElement as HTMLInputElement;
       if (inputElement.files && inputElement.files.length > 0) {
-        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-          width: '400px',
-          data: <ConfirmDialogData>{
-            title: resultType === 'logs' ? 'Logs überschreiben' : 'Antworten überschreiben',
-            content: resultType === 'logs' ?
-              'Möchten Sie vorhandene Logs überschreiben, falls diese bereits existieren?' :
-              'Möchten Sie vorhandene Antworten überschreiben, falls diese bereits existieren?',
-            confirmButtonLabel: 'Überschreiben',
-            showCancel: true
+        const optionsRef = this.dialog.open<
+        TestResultsUploadOptionsDialogComponent,
+        TestResultsUploadOptionsDialogData,
+        TestResultsUploadOptionsDialogResult | undefined
+        >(TestResultsUploadOptionsDialogComponent, {
+          width: '600px',
+          data: {
+            resultType,
+            defaultOverwriteMode: 'skip',
+            defaultScope: 'person'
           }
         });
 
-        dialogRef.afterClosed().subscribe(overwriteExisting => {
-          if (overwriteExisting !== undefined) {
-            this.isLoading = true;
-            this.isUploadingResults = true;
-            this.backendService.uploadTestResults(
-              this.appService.selectedWorkspaceId,
-              inputElement.files,
-              resultType,
-              overwriteExisting
-            ).subscribe(() => {
-              if (this.appService.selectedWorkspaceId) {
-                this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+        optionsRef
+          .afterClosed()
+          .subscribe(
+            (options: TestResultsUploadOptionsDialogResult | undefined) => {
+              if (!options) {
+                return;
               }
-              setTimeout(() => {
-                this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-              }, 1000);
-              this.isLoading = false;
-              this.isUploadingResults = false;
-            });
-          }
-        });
+
+              const overwriteMode: OverwriteMode = options.overwriteMode;
+              const scope = options.scope;
+              const filters = {
+                groupName: options.groupName,
+                bookletName: options.bookletName,
+                unitNameOrAlias: options.unitNameOrAlias,
+                variableId: options.variableId,
+                subform: options.subform
+              };
+
+              // Backward compatibility: old behavior treated overwriteExisting=false as strict skip.
+              const overwriteExisting = overwriteMode !== 'skip';
+
+              this.isLoading = true;
+              this.isUploadingResults = true;
+              this.backendService
+                .uploadTestResults(
+                  this.appService.selectedWorkspaceId,
+                  inputElement.files,
+                  resultType,
+                  overwriteExisting,
+                  overwriteMode,
+                  scope,
+                  filters
+                )
+                .subscribe((uploadResult: TestResultsUploadResultDto) => {
+                  if (this.appService.selectedWorkspaceId) {
+                    this.testResultService.invalidateCache(
+                      this.appService.selectedWorkspaceId
+                    );
+                  }
+
+                  this.loadWorkspaceOverview();
+
+                  this.snackBar.open(
+                    `Upload abgeschlossen: Δ Testpersonen ${uploadResult.delta.testPersons}, Δ Responses ${uploadResult.delta.uniqueResponses}`,
+                    'OK',
+                    { duration: 5000 }
+                  );
+
+                  this.dialog.open(TestResultsUploadResultDialogComponent, {
+                    width: '1000px',
+                    maxWidth: '95vw',
+                    data: {
+                      resultType,
+                      result: uploadResult
+                    }
+                  });
+
+                  setTimeout(() => {
+                    this.createTestResultsList(
+                      this.pageIndex,
+                      this.pageSize,
+                      this.getCurrentSearchText()
+                    );
+                  }, 1000);
+                  this.isLoading = false;
+                  this.isUploadingResults = false;
+                });
+            }
+          );
       }
     }
   }
@@ -967,147 +1393,34 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.isDeletingTestPersons = true;
     const selectedTestPersons = this.selection.selected;
-    this.backendService.deleteTestPersons(
-      this.appService.selectedWorkspaceId,
-      selectedTestPersons.map(person => person.id)
-    ).subscribe(respOk => {
-      if (respOk) {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-deleted'),
-          '',
-          { duration: 1000 }
-        );
-        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-      } else {
-        this.snackBar.open(
-          this.translateService.instant('ws-admin.test-group-not-deleted'),
-          this.translateService.instant('error'),
-          { duration: 1000 }
-        );
-      }
-      this.isDeletingTestPersons = false;
-      this.selection.clear();
-    });
-  }
-
-  codeSelectedPersons(): void {
-    this.isLoading = true;
-    const selectedTestPersons = this.selection.selected;
-    const loadingSnackBar = this.snackBar.open(
-      'Starte Kodierung...',
-      '',
-      { duration: 3000 }
-    );
-
-    this.backendService.codeTestPersons(
-      this.appService.selectedWorkspaceId,
-      selectedTestPersons.map(person => person.id)
-    ).subscribe({
-      next: result => {
-        loadingSnackBar.dismiss();
-        this.isLoading = false;
-        this.selection.clear();
-
-        if (result.jobId) {
+    this.backendService
+      .deleteTestPersons(
+        this.appService.selectedWorkspaceId,
+        selectedTestPersons.map(person => person.id)
+      )
+      .subscribe(respOk => {
+        if (respOk) {
           this.snackBar.open(
-            `Kodierung gestartet (Job ID: ${result.jobId}). Sie werden benachrichtigt, wenn die Kodierung abgeschlossen ist.`,
-            'OK',
-            { duration: 5000 }
-          );
-
-          this.pollCodingJobStatus(result.jobId);
-        } else if (result.totalResponses > 0) {
-          this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-coded'),
+            this.translateService.instant('ws-admin.test-group-deleted'),
             '',
             { duration: 1000 }
           );
-          this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+          this.loadWorkspaceOverview();
+          this.createTestResultsList(
+            this.pageIndex,
+            this.pageSize,
+            this.getCurrentSearchText()
+          );
         } else {
           this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-not-coded'),
+            this.translateService.instant('ws-admin.test-group-not-deleted'),
             this.translateService.instant('error'),
             { duration: 1000 }
           );
         }
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.isLoading = false;
+        this.isDeletingTestPersons = false;
         this.selection.clear();
-
-        this.snackBar.open(
-          'Fehler beim Starten der Kodierung',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
-  private pollCodingJobStatus(jobId: string): void {
-    const pollingInterval = 5000;
-    const timer = setInterval(() => {
-      this.backendService.getCodingJobStatus(
-        this.appService.selectedWorkspaceId,
-        jobId
-      ).subscribe({
-        next: job => {
-          if (job.status === 'completed') {
-            clearInterval(timer);
-
-            const snackBarRef = this.snackBar.open(
-              'Kodierung abgeschlossen',
-              'Ergebnisse anzeigen',
-              { duration: 10000 }
-            );
-
-            snackBarRef.onAction().subscribe(() => {
-              this.showCodingResults(job.result);
-              this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
-            });
-          } else if (job.status === 'failed') {
-            clearInterval(timer);
-
-            this.snackBar.open(
-              `Fehler bei der Kodierung: ${job.error || 'Unbekannter Fehler'}`,
-              'Fehler',
-              { duration: 5000 }
-            );
-          }
-        },
-        error: () => {
-          clearInterval(timer);
-
-          this.snackBar.open(
-            'Fehler beim Abrufen des Kodierungs-Status',
-            'Fehler',
-            { duration: 3000 }
-          );
-        }
       });
-    }, pollingInterval);
-  }
-
-  private showCodingResults(result?: { totalResponses: number; statusCounts: { [key: string]: number } }): void {
-    if (!result) {
-      this.snackBar.open(
-        'Keine Kodierungsergebnisse verfügbar',
-        'Info',
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    const statusMessages = Object.entries(result.statusCounts)
-      .map(([status, count]) => `${status}: ${count}`)
-      .join(', ');
-
-    this.snackBar.open(
-      `Kodierung abgeschlossen: ${result.totalResponses} Antworten verarbeitet (${statusMessages})`,
-      'OK',
-      { duration: 5000 }
-    );
   }
 
   openTestResultsSearchDialog(): void {
@@ -1133,7 +1446,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '400px',
       data: <ConfirmDialogData>{
         title: 'Unit löschen',
-        content: `Möchten Sie die Unit "${unit.alias || 'Unbenannte Einheit'}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
+        content: `Möchten Sie die Unit "${
+          unit.alias || 'Unbenannte Einheit'
+        }" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Löschen',
         showCancel: true
       }
@@ -1141,44 +1456,49 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.backendService.deleteUnit(
-          this.appService.selectedWorkspaceId,
-          unit.id as number
-        ).subscribe({
-          next: result => {
-            if (result.success) {
-              const unitIndex = booklet.units.findIndex(u => u.id === unit.id);
-              if (unitIndex !== -1) {
-                booklet.units.splice(unitIndex, 1);
-              }
+        this.backendService
+          .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number)
+          .subscribe({
+            next: result => {
+              if (result.success) {
+                const unitIndex = booklet.units.findIndex(
+                  u => u.id === unit.id
+                );
+                if (unitIndex !== -1) {
+                  booklet.units.splice(unitIndex, 1);
+                }
 
-              if (this.selectedUnit && this.selectedUnit.id === unit.id) {
-                this.selectedUnit = undefined;
-                this.responses = [];
-                this.logs = [];
-              }
+                if (this.selectedUnit && this.selectedUnit.id === unit.id) {
+                  this.selectedUnit = undefined;
+                  this.responses = [];
+                  this.logs = [];
+                }
 
+                this.snackBar.open(
+                  `Unit "${
+                    unit.alias || 'Unbenannte Einheit'
+                  }" wurde erfolgreich gelöscht.`,
+                  'Erfolg',
+                  { duration: 3000 }
+                );
+              } else {
+                this.snackBar.open(
+                  `Fehler beim Löschen der Unit: ${result.report.warnings.join(
+                    ', '
+                  )}`,
+                  'Fehler',
+                  { duration: 3000 }
+                );
+              }
+            },
+            error: () => {
               this.snackBar.open(
-                `Unit "${unit.alias || 'Unbenannte Einheit'}" wurde erfolgreich gelöscht.`,
-                'Erfolg',
-                { duration: 3000 }
-              );
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen der Unit: ${result.report.warnings.join(', ')}`,
+                'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
                 'Fehler',
                 { duration: 3000 }
               );
             }
-          },
-          error: () => {
-            this.snackBar.open(
-              'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 3000 }
-            );
-          }
-        });
+          });
       }
     });
   }
@@ -1205,47 +1525,57 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.backendService.deleteResponse(
-          this.appService.selectedWorkspaceId,
-          response.id as number
-        ).subscribe({
-          next: result => {
-            if (result.success) {
-              const responseIndex = this.responses.findIndex(r => r.id === response.id);
-              if (responseIndex !== -1) {
-                this.responses.splice(responseIndex, 1);
-              }
+        this.backendService
+          .deleteResponse(
+            this.appService.selectedWorkspaceId,
+            response.id as number
+          )
+          .subscribe({
+            next: result => {
+              if (result.success) {
+                const responseIndex = this.responses.findIndex(
+                  r => r.id === response.id
+                );
+                if (responseIndex !== -1) {
+                  this.responses.splice(responseIndex, 1);
+                }
 
+                this.snackBar.open(
+                  `Antwort für Variable "${response.variableid}" wurde erfolgreich gelöscht.`,
+                  'Erfolg',
+                  { duration: 3000 }
+                );
+              } else {
+                this.snackBar.open(
+                  `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
+                    ', '
+                  )}`,
+                  'Fehler',
+                  { duration: 3000 }
+                );
+              }
+            },
+            error: () => {
               this.snackBar.open(
-                `Antwort für Variable "${response.variableid}" wurde erfolgreich gelöscht.`,
-                'Erfolg',
-                { duration: 3000 }
-              );
-            } else {
-              this.snackBar.open(
-                `Fehler beim Löschen der Antwort: ${result.report.warnings.join(', ')}`,
+                'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
                 'Fehler',
                 { duration: 3000 }
               );
             }
-          },
-          error: () => {
-            this.snackBar.open(
-              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-              'Fehler',
-              { duration: 3000 }
-            );
-          }
-        });
+          });
       }
     });
   }
 
   openValidationDialog(): void {
     const dialogRef = this.dialog.open(ValidationDialogComponent, {
-      width: '1000px',
-      maxHeight: '90vh',
-      autoFocus: false
+      width: '90vw',
+      maxWidth: '1400px',
+      height: '90vh',
+      autoFocus: false,
+      data: {
+        autoStart: true
+      }
     });
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1271,39 +1601,39 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openVariableAnalysisDialog(): void {
-    const loadingSnackBar = this.snackBar.open(
-      'Lade Analyse-Aufträge...',
-      '',
-      { duration: 3000 }
-    );
-
-    this.backendService.getAllVariableAnalysisJobs(
-      this.appService.selectedWorkspaceId
-    ).subscribe({
-      next: jobs => {
-        loadingSnackBar.dismiss();
-
-        const variableAnalysisJobs = jobs.filter(job => job.type === 'variable-analysis');
-
-        this.dialog.open(VariableAnalysisDialogComponent, {
-          width: '900px',
-          data: {
-            unitId: this.selectedUnit?.id,
-            title: 'Item/Variablen Analyse',
-            workspaceId: this.appService.selectedWorkspaceId,
-            jobs: variableAnalysisJobs
-          }
-        });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden der Analyse-Aufträge',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
+    const loadingSnackBar = this.snackBar.open('Lade Analyse-Aufträge...', '', {
+      duration: 3000
     });
+
+    this.backendService
+      .getAllVariableAnalysisJobs(this.appService.selectedWorkspaceId)
+      .subscribe({
+        next: jobs => {
+          loadingSnackBar.dismiss();
+
+          const variableAnalysisJobs = jobs.filter(
+            job => job.type === 'variable-analysis'
+          );
+
+          this.dialog.open(VariableAnalysisDialogComponent, {
+            width: '900px',
+            data: {
+              unitId: this.selectedUnit?.id,
+              title: 'Item/Variablen Analyse',
+              workspaceId: this.appService.selectedWorkspaceId,
+              jobs: variableAnalysisJobs
+            }
+          });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open(
+            'Fehler beim Laden der Analyse-Aufträge',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 
   openBookletInfo(bookletName: string): void {
@@ -1313,40 +1643,43 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
-      this.appService.selectedWorkspaceId,
-      bookletName
-    ).subscribe({
-      next: (bookletInfo: BookletInfoDto) => {
-        loadingSnackBar.dismiss();
+    this.backendService
+      .getBookletInfo(this.appService.selectedWorkspaceId, bookletName)
+      .subscribe({
+        next: (bookletInfo: BookletInfoDto) => {
+          loadingSnackBar.dismiss();
 
-        this.dialog.open(BookletInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
-          data: {
-            bookletInfo,
-            bookletId: bookletName
-          }
-        });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden der Booklet-Informationen',
-          'Fehler',
-          { duration: 3000 }
-        );
-      }
-    });
+          this.dialog.open(BookletInfoDialogComponent, {
+            width: '1200px',
+            height: '80vh',
+            data: {
+              bookletInfo,
+              bookletId: bookletName
+            }
+          });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open(
+            'Fehler beim Laden der Booklet-Informationen',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 
   openUnitInfoForSelectedUnit(): void {
     if (!this.selectedUnit || !this.selectedUnit.name) {
-      this.snackBar.open(
-        'Keine Unit ausgewählt',
-        'Info',
-        { duration: 3000 }
-      );
+      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
+      return;
+    }
+
+    const unitFileId = String(this.selectedUnit.name || '')
+      .trim()
+      .toUpperCase();
+    if (!unitFileId) {
+      this.snackBar.open('Keine Unit ausgewählt', 'Info', { duration: 3000 });
       return;
     }
 
@@ -1356,34 +1689,56 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService.getUnitInfo(
-      this.appService.selectedWorkspaceId,
-      this.selectedUnit.name
-    ).subscribe({
-      next: (unitInfo: UnitInfoDto) => {
-        loadingSnackBar.dismiss();
+    this.backendService
+      .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
+      .subscribe({
+        next: (unitInfo: UnitInfoDto) => {
+          loadingSnackBar.dismiss();
 
-        this.dialog.open(UnitInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
-          data: {
-            unitInfo,
-            unitId: this.selectedUnit?.name
-          }
-        });
-      },
-      error: () => {
-        loadingSnackBar.dismiss();
-        this.snackBar.open(
-          'Fehler beim Laden der Unit-Informationen',
-          'Fehler',
-          { duration: 3000 }
-        );
+          this.dialog.open(UnitInfoDialogComponent, {
+            width: '1200px',
+            height: '80vh',
+            data: {
+              unitInfo,
+              unitId: unitFileId
+            }
+          });
+        },
+        error: () => {
+          loadingSnackBar.dismiss();
+          this.snackBar.open(
+            'Fehler beim Laden der Unit-Informationen',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+  }
+
+  openExportDialog(): void {
+    const dialogRef = this.dialog.open(TestResultsExportDialogComponent, {
+      width: '500px',
+      data: {
+        isExporting: this.isExporting,
+        exportTypeInProgress: this.exportTypeInProgress,
+        exportJobStatus: this.exportJobStatus,
+        exportJobProgress: this.exportJobProgress,
+        exportJobId: this.exportJobId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        if (result.type === 'download') {
+          this.downloadExportResult(result.jobId);
+        } else if (result.type === 'results' || result.type === 'logs') {
+          this.startExportJob(result.type);
+        }
       }
     });
   }
 
-  exportResults(): void {
+  private startExportJob(exportType: 'results' | 'logs'): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -1398,34 +1753,57 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
       if (result) {
         const filters = {
-          groupNames: result.groupNames && result.groupNames.length > 0 ? result.groupNames : undefined,
-          bookletNames: result.bookletNames && result.bookletNames.length > 0 ? result.bookletNames : undefined,
-          unitNames: result.unitNames && result.unitNames.length > 0 ? result.unitNames : undefined,
-          personIds: result.personIds && result.personIds.length > 0 ? result.personIds : undefined
+          groupNames:
+            result.groupNames && result.groupNames.length > 0 ?
+              result.groupNames :
+              undefined,
+          bookletNames:
+            result.bookletNames && result.bookletNames.length > 0 ?
+              result.bookletNames :
+              undefined,
+          unitNames:
+            result.unitNames && result.unitNames.length > 0 ?
+              result.unitNames :
+              undefined,
+          personIds:
+            result.personIds && result.personIds.length > 0 ?
+              result.personIds :
+              undefined
         };
 
         this.isExporting = true;
-        this.backendService.startExportTestResultsJob(this.appService.selectedWorkspaceId, filters)
-          .subscribe({
-            next: response => {
-              this.exportJobId = response.jobId;
-              this.exportJobStatus = 'active';
-              this.snackBar.open(
-                'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
-                'OK',
-                { duration: 3000 }
-              );
-              this.pollExportJobStatus(response.jobId);
-            },
-            error: () => {
-              this.isExporting = false;
-              this.snackBar.open(
-                'Fehler beim Starten des Exports',
-                'Fehler',
-                { duration: 3000 }
-              );
-            }
-          });
+        this.exportTypeInProgress =
+          exportType === 'results' ? 'test-results' : 'test-logs';
+        const exportMethod =
+          exportType === 'results' ?
+            this.backendService.startExportTestResultsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            ) :
+            this.backendService.startExportTestLogsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            );
+
+        exportMethod.subscribe({
+          next: response => {
+            this.exportJobId = response.jobId;
+            this.exportJobStatus = 'active';
+            this.snackBar.open(
+              'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
+              'OK',
+              { duration: 3000 }
+            );
+            this.pollExportJobStatus(response.jobId);
+          },
+          error: () => {
+            this.isExporting = false;
+            this.exportTypeInProgress = null;
+            this.snackBar.open('Fehler beim Starten des Exports', 'Fehler', {
+              duration: 3000
+            });
+          }
+        });
       }
     });
   }
@@ -1434,15 +1812,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
-    this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+    this.backendService
+      .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
         next: jobs => {
-          const testResultJobs = jobs.filter(j => j.exportType === 'test-results');
+          const relevantJobs = jobs.filter(
+            j => j.exportType === 'test-results' || j.exportType === 'test-logs'
+          );
           // Find the most recent active job only (not completed jobs)
-          const activeJob = testResultJobs.find(j => j.status === 'active' || j.status === 'waiting' || j.status === 'delayed');
+          const activeJob = relevantJobs.find(
+            j => j.status === 'active' ||
+              j.status === 'waiting' ||
+              j.status === 'delayed'
+          );
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
+            this.exportTypeInProgress = activeJob.exportType as
+              | 'test-results'
+              | 'test-logs';
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -1456,7 +1844,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         clearInterval(timer);
         return;
       }
-      this.backendService.getExportTestResultsJobs(this.appService.selectedWorkspaceId)
+      this.backendService
+        .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
         .subscribe({
           next: jobs => {
             const job = jobs.find(j => j.jobId === jobId);
@@ -1478,11 +1867,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               } else if (job.status === 'failed') {
                 clearInterval(timer);
                 this.isExporting = false;
-                this.snackBar.open(
-                  'Export fehlgeschlagen',
-                  'Fehler',
-                  { duration: 5000 }
-                );
+                this.snackBar.open('Export fehlgeschlagen', 'Fehler', {
+                  duration: 5000
+                });
               }
             } else {
               clearInterval(timer);
@@ -1501,22 +1888,32 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
-    this.backendService.downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
+    this.backendService
+      .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
       .subscribe({
         next: blob => {
           const url = window.URL.createObjectURL(blob);
           const link = document.createElement('a');
           link.href = url;
-          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${new Date().toISOString().split('T')[0]}.csv`;
+          const datePart = new Date().toISOString().split('T')[0];
+          const suffix =
+            this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
 
           // Hide the download button after successful download
           this.exportJobStatus = null;
           this.exportJobId = null;
+          this.exportTypeInProgress = null;
 
           // Delete the job from the server
-          this.backendService.deleteTestResultExportJob(this.appService.selectedWorkspaceId, jobId).subscribe();
+          this.backendService
+            .deleteTestResultExportJob(
+              this.appService.selectedWorkspaceId,
+              jobId
+            )
+            .subscribe();
         },
         error: () => {
           this.snackBar.open(

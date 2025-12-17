@@ -113,7 +113,9 @@ export class ReplayCodingService {
       return null;
     }
 
-    const variableCoding = this.codingScheme.variableCodings?.find((v: VariableCoding) => v.alias === this.currentVariableId);
+    const variableCoding = this.codingScheme.variableCodings?.find(
+      (v: VariableCoding) => v.alias === this.currentVariableId || v.id === this.currentVariableId
+    );
     if (variableCoding) {
       return variableCoding.codes?.find((c: Code) => c.id === codeId) || null;
     }

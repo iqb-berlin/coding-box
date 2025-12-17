@@ -13,7 +13,7 @@ export interface TestPersonCodingJobData {
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
-  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times' | 'test-results';
+  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times' | 'test-results' | 'test-logs';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;

@@ -3,6 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CoderListComponent } from './coder-list.component';
 
 import { environment } from '../../../../environments/environment';
@@ -18,7 +19,7 @@ describe('CoderListComponent', () => {
   let fixture: ComponentFixture<CoderListComponent>;
 
   const fakeActivatedRoute = {
-    snapshot: { data: { } }
+    snapshot: { data: {} }
   } as ActivatedRoute;
 
   beforeEach(async () => {
@@ -35,7 +36,8 @@ describe('CoderListComponent', () => {
           useValue: fakeActivatedRoute
         },
         { provide: SERVER_URL, useValue: environment.backendUrl },
-        { provide: AppService, useClass: AppServiceMock }
+        { provide: AppService, useClass: AppServiceMock },
+        { provide: MatSnackBar, useValue: { open: jest.fn() } }
       ]
     }).compileComponents();
 
