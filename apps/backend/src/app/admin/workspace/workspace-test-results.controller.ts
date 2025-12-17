@@ -117,13 +117,13 @@ export class WorkspaceTestResultsController {
   async getOverview(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<{
-    testPersons: number;
-    testGroups: number;
-    uniqueBooklets: number;
-    uniqueUnits: number;
-    uniqueResponses: number;
-    responseStatusCounts: Record<string, number>;
-  }> {
+        testPersons: number;
+        testGroups: number;
+        uniqueBooklets: number;
+        uniqueUnits: number;
+        uniqueResponses: number;
+        responseStatusCounts: Record<string, number>;
+      }> {
     try {
       return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
         workspaceId
@@ -180,9 +180,9 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findTestResults(
     @Param('workspace_id') workspace_id: number,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20,
-    @Query('searchText') searchText?: string
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 20,
+                           @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findTestResults(workspace_id, {
@@ -203,15 +203,15 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async deleteTestGroups(
     @Query('testPersons') testPersonIds: string,
-    @Param('workspace_id') workspaceId: string,
-    @Req() req: RequestWithUser
+      @Param('workspace_id') workspaceId: string,
+      @Req() req: RequestWithUser
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedPersons: string[];
-      warnings: string[];
-    };
-  }> {
+        success: boolean;
+        report: {
+          deletedPersons: string[];
+          warnings: string[];
+        };
+      }> {
     return this.workspaceTestResultsService.deleteTestPersons(
       Number(workspaceId),
       testPersonIds,
@@ -256,15 +256,15 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteUnit(
     @Param('workspace_id') workspaceId: number,
-    @Param('unitId') unitId: number,
-    @Req() req: RequestWithUser
+      @Param('unitId') unitId: number,
+      @Req() req: RequestWithUser
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedUnit: number | null;
-      warnings: string[];
-    };
-  }> {
+        success: boolean;
+        report: {
+          deletedUnit: number | null;
+          warnings: string[];
+        };
+      }> {
     return this.workspaceTestResultsService.deleteUnit(
       workspaceId,
       unitId,
@@ -371,17 +371,17 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findFlatResponses(
     @Param('workspace_id') workspace_id: number,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 50,
-    @Query('code') code?: string,
-    @Query('group') group?: string,
-    @Query('login') login?: string,
-    @Query('booklet') booklet?: string,
-    @Query('unit') unit?: string,
-    @Query('response') response?: string,
-    @Query('responseStatus') responseStatus?: string,
-    @Query('responseValue') responseValue?: string,
-    @Query('tags') tags?: string
+                           @Query('page') page: number = 1,
+                           @Query('limit') limit: number = 50,
+                           @Query('code') code?: string,
+                           @Query('group') group?: string,
+                           @Query('login') login?: string,
+                           @Query('booklet') booklet?: string,
+                           @Query('unit') unit?: string,
+                           @Query('response') response?: string,
+                           @Query('responseStatus') responseStatus?: string,
+                           @Query('responseValue') responseValue?: string,
+                           @Query('tags') tags?: string
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
@@ -462,16 +462,16 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findFlatResponseFrequencies(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
-    @Body() body: FlatResponseFrequenciesRequest
+      @Body() body: FlatResponseFrequenciesRequest
   ): Promise<
-    Record<
+      Record<
       string,
       {
         total: number;
         values: Array<{ value: string; count: number; p: number }>;
       }
-    >
-  > {
+      >
+      > {
     try {
       return await this.workspaceTestResultsService.findFlatResponseFrequencies(
         workspaceId,
@@ -553,25 +553,25 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
     @Param('workspace_id') workspace_id: number,
-    @Query('code') code?: string,
-    @Query('group') group?: string,
-    @Query('login') login?: string,
-    @Query('booklet') booklet?: string,
-    @Query('unit') unit?: string,
-    @Query('response') response?: string,
-    @Query('responseStatus') responseStatus?: string,
-    @Query('responseValue') responseValue?: string,
-    @Query('tags') tags?: string
+      @Query('code') code?: string,
+      @Query('group') group?: string,
+      @Query('login') login?: string,
+      @Query('booklet') booklet?: string,
+      @Query('unit') unit?: string,
+      @Query('response') response?: string,
+      @Query('responseStatus') responseStatus?: string,
+      @Query('responseValue') responseValue?: string,
+      @Query('tags') tags?: string
   ): Promise<{
-    codes: string[];
-    groups: string[];
-    logins: string[];
-    booklets: string[];
-    units: string[];
-    responses: string[];
-    responseStatuses: string[];
-    tags: string[];
-  }> {
+        codes: string[];
+        groups: string[];
+        logins: string[];
+        booklets: string[];
+        units: string[];
+        responses: string[];
+        responseStatuses: string[];
+        tags: string[];
+      }> {
     return this.workspaceTestResultsService.findFlatResponseFilterOptions(
       workspace_id,
       {
@@ -624,10 +624,10 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findUnitLogs(
     @Param('workspace_id') workspace_id: number,
-    @Param('unitId', ParseIntPipe) unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<
-    { id: number; unitid: number; ts: string; key: string; parameter: string }[]
-  > {
+      { id: number; unitid: number; ts: string; key: string; parameter: string }[]
+      > {
     return this.workspaceTestResultsService.findUnitLogs(workspace_id, unitId);
   }
 
@@ -663,37 +663,37 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findBookletLogsForUnit(
     @Param('workspace_id') workspace_id: number,
-    @Param('unitId', ParseIntPipe) unitId: number
+      @Param('unitId', ParseIntPipe) unitId: number
   ): Promise<{
-    bookletId: number;
-    logs: {
-      id: number;
-      bookletid: number;
-      ts: string;
-      key: string;
-      parameter: string;
-    }[];
-    sessions: {
-      id: number;
-      browser: string;
-      os: string;
-      screen: string;
-      ts: string;
-    }[];
-    units: {
-      id: number;
-      bookletid: number;
-      name: string;
-      alias: string | null;
-      logs: {
-        id: number;
-        unitid: number;
-        ts: string;
-        key: string;
-        parameter: string;
-      }[];
-    }[];
-  }> {
+        bookletId: number;
+        logs: {
+          id: number;
+          bookletid: number;
+          ts: string;
+          key: string;
+          parameter: string;
+        }[];
+        sessions: {
+          id: number;
+          browser: string;
+          os: string;
+          screen: string;
+          ts: string;
+        }[];
+        units: {
+          id: number;
+          bookletid: number;
+          name: string;
+          alias: string | null;
+          logs: {
+            id: number;
+            unitid: number;
+            ts: string;
+            key: string;
+            parameter: string;
+          }[];
+        }[];
+      }> {
     return this.workspaceTestResultsService.findBookletLogsByUnitId(
       workspace_id,
       unitId
@@ -786,43 +786,43 @@ export class WorkspaceTestResultsController {
   @RequireAccessLevel(3)
   async findPersonTestResults(
     @Param('workspace_id') workspace_id: number,
-    @Param('personId', ParseIntPipe) personId: number
+      @Param('personId', ParseIntPipe) personId: number
   ): Promise<
-    {
-      id: number;
-      name: string;
-      logs: {
-        id: number;
-        bookletid: number;
-        ts: string;
-        parameter: string;
-        key: string;
-      }[];
-      units: {
+      {
         id: number;
         name: string;
-        alias: string | null;
-        results: {
+        logs: {
           id: number;
-          unitid: number;
-          variableid: string;
-          status: string;
-          value: string;
-          subform: string;
-          code?: number;
-          score?: number;
-          codedstatus?: string;
+          bookletid: number;
+          ts: string;
+          parameter: string;
+          key: string;
         }[];
-        tags: {
+        units: {
           id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
+          name: string;
+          alias: string | null;
+          results: {
+            id: number;
+            unitid: number;
+            variableid: string;
+            status: string;
+            value: string;
+            subform: string;
+            code?: number;
+            score?: number;
+            codedstatus?: string;
+          }[];
+          tags: {
+            id: number;
+            unitId: number;
+            tag: string;
+            color?: string;
+            createdAt: Date;
+          }[];
         }[];
-      }[];
-    }[]
-  > {
+      }[]
+      > {
     return this.workspaceTestResultsService.findPersonTestResults(
       personId,
       workspace_id
@@ -866,15 +866,15 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteResponse(
     @Param('workspace_id') workspaceId: number,
-    @Param('responseId') responseId: number,
-    @Req() req: RequestWithUser
+      @Param('responseId') responseId: number,
+      @Req() req: RequestWithUser
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedResponse: number | null;
-      warnings: string[];
-    };
-  }> {
+        success: boolean;
+        report: {
+          deletedResponse: number | null;
+          warnings: string[];
+        };
+      }> {
     return this.workspaceTestResultsService.deleteResponse(
       workspaceId,
       responseId,
@@ -918,8 +918,8 @@ export class WorkspaceTestResultsController {
   })
   async resolveDuplicateResponses(
     @Param('workspace_id') workspaceId: number,
-    @Body() body: ResolveDuplicateResponsesRequest,
-    @Req() req: RequestWithUser
+      @Body() body: ResolveDuplicateResponsesRequest,
+      @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     try {
       return await this.workspaceTestResultsService.resolveDuplicateResponses(
@@ -971,15 +971,15 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteBooklet(
     @Param('workspace_id') workspaceId: number,
-    @Param('bookletId') bookletId: number,
-    @Req() req: RequestWithUser
+      @Param('bookletId') bookletId: number,
+      @Req() req: RequestWithUser
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedBooklet: number | null;
-      warnings: string[];
-    };
-  }> {
+        success: boolean;
+        report: {
+          deletedBooklet: number | null;
+          warnings: string[];
+        };
+      }> {
     return this.workspaceTestResultsService.deleteBooklet(
       workspaceId,
       bookletId,
@@ -1019,14 +1019,14 @@ export class WorkspaceTestResultsController {
   })
   async findWorkspaceResponse(
     @WorkspaceId() id: number,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20
+                   @Query('page') page: number = 1,
+                   @Query('limit') limit: number = 20
   ): Promise<{
-    data: ResponseEntity[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+        data: ResponseEntity[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
     const [responses, total] =
       await this.workspaceTestResultsService.findWorkspaceResponses(id, {
         page,
@@ -1045,14 +1045,14 @@ export class WorkspaceTestResultsController {
   @ApiParam({ name: 'workspace_id', type: Number })
   async findResponse(
     @WorkspaceId() id: number,
-    @Param('testPerson') testPerson: string,
-    @Param('unitId') unitId: string
+      @Param('testPerson') testPerson: string,
+      @Param('unitId') unitId: string
   ): Promise<{
-    responses: {
-      id: string;
-      content: { id: string; value: string; status: string }[];
-    }[];
-  }> {
+        responses: {
+          id: string;
+          content: { id: string; value: string; status: string }[];
+        }[];
+      }> {
     return this.workspaceTestResultsService.findUnitResponse(
       id,
       testPerson,
@@ -1094,15 +1094,15 @@ export class WorkspaceTestResultsController {
   })
   async getResponsesByStatus(
     @WorkspaceId() workspace_id: number,
-    @Param('status') status: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 20
+      @Param('status') status: string,
+                   @Query('page') page: number = 1,
+                   @Query('limit') limit: number = 20
   ): Promise<{
-    data: ResponseEntity[];
-    total: number;
-    page: number;
-    limit: number;
-  }> {
+        data: ResponseEntity[];
+        total: number;
+        page: number;
+        limit: number;
+      }> {
     const [responses, total] =
       await this.workspaceTestResultsService.getResponsesByStatus(
         workspace_id,
@@ -1257,38 +1257,38 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async searchResponses(
     @Param('workspace_id') workspace_id: number,
-    @Query('value') value?: string,
-    @Query('variableId') variableId?: string,
-    @Query('unitName') unitName?: string,
-    @Query('bookletName') bookletName?: string,
-    @Query('status') status?: string,
-    @Query('codedStatus') codedStatus?: string,
-    @Query('group') group?: string,
-    @Query('code') code?: string,
-    @Query('version') version?: 'v1' | 'v2' | 'v3',
-    @Query('page') page?: number,
-    @Query('limit') limit?: number
+      @Query('value') value?: string,
+      @Query('variableId') variableId?: string,
+      @Query('unitName') unitName?: string,
+      @Query('bookletName') bookletName?: string,
+      @Query('status') status?: string,
+      @Query('codedStatus') codedStatus?: string,
+      @Query('group') group?: string,
+      @Query('code') code?: string,
+      @Query('version') version?: 'v1' | 'v2' | 'v3',
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
   ): Promise<{
-    data: {
-      responseId: number;
-      variableId: string;
-      value: string;
-      status: string;
-      code?: number;
-      score?: number;
-      codedStatus?: string;
-      unitId: number;
-      unitName: string;
-      unitAlias: string | null;
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-    }[];
-    total: number;
-  }> {
+        data: {
+          responseId: number;
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+        }[];
+        total: number;
+      }> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -1401,25 +1401,25 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findBookletsByName(
     @Param('workspace_id') workspace_id: number,
-    @Query('bookletName') bookletName: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number
+      @Query('bookletName') bookletName: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
   ): Promise<{
-    data: {
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      units: {
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
-      }[];
-    }[];
-    total: number;
-  }> {
+        data: {
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          units: {
+            unitId: number;
+            unitName: string;
+            unitAlias: string | null;
+          }[];
+        }[];
+        total: number;
+      }> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -1564,38 +1564,38 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUnitsByName(
     @Param('workspace_id') workspace_id: number,
-    @Query('unitName') unitName: string,
-    @Query('page') page?: number,
-    @Query('limit') limit?: number
+      @Query('unitName') unitName: string,
+      @Query('page') page?: number,
+      @Query('limit') limit?: number
   ): Promise<{
-    data: {
-      unitId: number;
-      unitName: string;
-      unitAlias: string | null;
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      tags: {
-        id: number;
-        unitId: number;
-        tag: string;
-        color?: string;
-        createdAt: Date;
-      }[];
-      responses: {
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number;
-        score?: number;
-        codedStatus?: string;
-      }[];
-    }[];
-    total: number;
-  }> {
+        data: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+          bookletId: number;
+          bookletName: string;
+          personId: number;
+          personLogin: string;
+          personCode: string;
+          personGroup: string;
+          tags: {
+            id: number;
+            unitId: number;
+            tag: string;
+            color?: string;
+            createdAt: Date;
+          }[];
+          responses: {
+            variableId: string;
+            value: string;
+            status: string;
+            code?: number;
+            score?: number;
+            codedStatus?: string;
+          }[];
+        }[];
+        total: number;
+      }> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -1695,17 +1695,17 @@ export class WorkspaceTestResultsController {
   @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
     @Param('workspace_id') workspace_id: number,
-    @Param('resultType') resultType: 'logs' | 'responses',
-    @UploadedFiles() files: Express.Multer.File[],
-    @Query('overwriteExisting') overwriteExisting?: string,
-    @Query('personMatchMode') personMatchMode?: string,
-    @Query('overwriteMode') overwriteMode?: string,
-    @Query('scope') scope?: string,
-    @Query('groupName') groupName?: string,
-    @Query('bookletName') bookletName?: string,
-    @Query('unitNameOrAlias') unitNameOrAlias?: string,
-    @Query('variableId') variableId?: string,
-    @Query('subform') subform?: string
+      @Param('resultType') resultType: 'logs' | 'responses',
+      @UploadedFiles() files: Express.Multer.File[],
+      @Query('overwriteExisting') overwriteExisting?: string,
+      @Query('personMatchMode') personMatchMode?: string,
+      @Query('overwriteMode') overwriteMode?: string,
+      @Query('scope') scope?: string,
+      @Query('groupName') groupName?: string,
+      @Query('bookletName') bookletName?: string,
+      @Query('unitNameOrAlias') unitNameOrAlias?: string,
+      @Query('variableId') variableId?: string,
+      @Query('subform') subform?: string
   ): Promise<TestResultsUploadResultDto> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
@@ -1748,9 +1748,9 @@ export class WorkspaceTestResultsController {
       type UploadScope = (typeof allowedScopes)[number];
       const normalizedScope: UploadScope = (
         allowedScopes as readonly string[]
-      ).includes(finalScope)
-        ? (finalScope as UploadScope)
-        : 'person';
+      ).includes(finalScope) ?
+        (finalScope as UploadScope) :
+        'person';
       return await this.uploadResults.uploadTestResults(
         workspace_id,
         files,
@@ -1802,7 +1802,7 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async exportWorkspaceToSqlite(
     @Param('workspace_id') workspace_id: number,
-    @Res() response: Response
+      @Res() response: Response
   ): Promise<void> {
     try {
       response.setHeader('Content-Type', 'application/x-sqlite3');
@@ -1852,7 +1852,7 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async exportTestResults(
     @Param('workspace_id') workspace_id: number,
-    @Res() response: Response
+      @Res() response: Response
   ): Promise<void> {
     try {
       response.setHeader('Content-Type', 'text/csv');
@@ -1965,14 +1965,14 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestResultsJob(
     @Param('workspace_id') workspace_id: number,
-    @Req() req: RequestWithUser,
-    @Body()
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    }
+      @Req() req: RequestWithUser,
+      @Body()
+                           filters?: {
+                             groupNames?: string[];
+                             bookletNames?: string[];
+                             unitNames?: string[];
+                             personIds?: number[];
+                           }
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -2027,14 +2027,14 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestLogsJob(
     @Param('workspace_id') workspace_id: number,
-    @Req() req: RequestWithUser,
-    @Body()
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    }
+      @Req() req: RequestWithUser,
+      @Body()
+                           filters?: {
+                             groupNames?: string[];
+                             bookletNames?: string[];
+                             unitNames?: string[];
+                             personIds?: number[];
+                           }
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -2119,8 +2119,8 @@ export class WorkspaceTestResultsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async downloadExportJobResult(
     @Param('workspace_id') workspace_id: number,
-    @Param('jobId') jobId: string,
-    @Res() res: Response
+      @Param('jobId') jobId: string,
+      @Res() res: Response
   ): Promise<void> {
     const result = await this.cacheService.get<ExportResult>(
       `export-result:${jobId}`

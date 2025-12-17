@@ -1,4 +1,6 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Response } from 'express';
@@ -131,7 +133,7 @@ export class WorkspaceTestResultsService {
       .getRawMany<{ status: string | number; count: string | number }>();
 
     const responseStatusCounts: Record<string, number> = {};
-    (statusRows || []).forEach((r) => {
+    (statusRows || []).forEach(r => {
       const num = Number(r.status);
       const label = statusNumberToString(num) || String(num);
       responseStatusCounts[label] = Number(r.count) || 0;
@@ -185,7 +187,7 @@ export class WorkspaceTestResultsService {
         }[];
       }[];
     }[]
-  > {
+    > {
     if (!personId || !workspaceId) {
       throw new Error('Both personId and workspaceId are required.');
     }
@@ -211,7 +213,7 @@ export class WorkspaceTestResultsService {
         return [];
       }
 
-      const bookletIds = booklets.map((booklet) => booklet.id);
+      const bookletIds = booklets.map(booklet => booklet.id);
 
       const units = await this.unitRepository
         .createQueryBuilder('unit')
@@ -234,29 +236,29 @@ export class WorkspaceTestResultsService {
         ])
         .getMany();
 
-      const unitIds = units.map((unit) => unit.id);
+      const unitIds = units.map(unit => unit.id);
 
       const unitResultMap = new Map<
-        number,
-        {
-          id: number;
-          unitid: number;
-          variableid: string;
-          status: string;
-          value: string;
-          subform: string;
-          code?: number;
-          score?: number;
-          codedstatus?: string;
-        }[]
+      number,
+      {
+        id: number;
+        unitid: number;
+        variableid: string;
+        status: string;
+        value: string;
+        subform: string;
+        code?: number;
+        score?: number;
+        codedstatus?: string;
+      }[]
       >();
-      units.forEach((unit) => {
+      units.forEach(unit => {
         if (unit.responses) {
           const uniqueResponses = Array.from(
             new Map(
-              unit.responses.map((response) => [response.id, response])
+              unit.responses.map(response => [response.id, response])
             ).values()
-          ).map((response) => ({
+          ).map(response => ({
             id: response.id,
             unitid: response.unitid,
             variableid: response.variableid,
@@ -284,20 +286,20 @@ export class WorkspaceTestResultsService {
         .getMany();
 
       const unitTagsMap = new Map<
-        number,
-        {
-          id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
-        }[]
+      number,
+      {
+        id: number;
+        unitId: number;
+        tag: string;
+        color?: string;
+        createdAt: Date;
+      }[]
       >();
 
       if (unitIds.length > 0) {
         const allTags = await this.unitTagService.findAllByUnitIds(unitIds);
 
-        allTags.forEach((tag) => {
+        allTags.forEach(tag => {
           if (!unitTagsMap.has(tag.unitId)) {
             unitTagsMap.set(tag.unitId, []);
           }
@@ -306,16 +308,16 @@ export class WorkspaceTestResultsService {
       }
 
       const bookletLogsMap = new Map<
-        number,
-        {
-          id: number;
-          bookletid: number;
-          ts: string;
-          key: string;
-          parameter: string;
-        }[]
+      number,
+      {
+        id: number;
+        bookletid: number;
+        ts: string;
+        key: string;
+        parameter: string;
+      }[]
       >();
-      bookletLogs.forEach((log) => {
+      bookletLogs.forEach(log => {
         if (!bookletLogsMap.has(log.bookletid)) {
           bookletLogsMap.set(log.bookletid, []);
         }
@@ -329,18 +331,18 @@ export class WorkspaceTestResultsService {
       });
 
       const unitsMap = new Map<number, Unit[]>();
-      units.forEach((unit) => {
+      units.forEach(unit => {
         if (!unitsMap.has(unit.bookletid)) {
           unitsMap.set(unit.bookletid, []);
         }
         unitsMap.get(unit.bookletid)?.push(unit);
       });
 
-      return booklets.map((booklet) => ({
+      return booklets.map(booklet => ({
         id: booklet.id,
         name: booklet.bookletinfo.name,
         logs: bookletLogsMap.get(booklet.id) || [],
-        units: (unitsMap.get(booklet.id) || []).map((unit) => ({
+        units: (unitsMap.get(booklet.id) || []).map(unit => ({
           id: unit.id,
           name: unit.name,
           alias: unit.alias,
@@ -468,7 +470,7 @@ export class WorkspaceTestResultsService {
       return { resolvedCount: 0, success: true };
     }
 
-    return this.connection.transaction(async (manager) => {
+    return this.connection.transaction(async manager => {
       let resolvedCount = 0;
 
       for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
@@ -508,7 +510,7 @@ export class WorkspaceTestResultsService {
           .select(['response.id'])
           .getMany();
 
-        const ids = (responses || []).map((r) => r.id);
+        const ids = (responses || []).map(r => r.id);
         if (ids.length <= 1) {
           continue;
         }
@@ -520,7 +522,7 @@ export class WorkspaceTestResultsService {
           continue;
         }
 
-        const deleteIds = ids.filter((id) => id !== selectedResponseId);
+        const deleteIds = ids.filter(id => id !== selectedResponseId);
         if (deleteIds.length === 0) {
           continue;
         }
@@ -588,7 +590,7 @@ export class WorkspaceTestResultsService {
       }>,
       number
     ]
-  > {
+    > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -730,7 +732,7 @@ export class WorkspaceTestResultsService {
     const total = await countQb
       .select('COUNT(DISTINCT response.id)', 'cnt')
       .getRawOne()
-      .then((r) => Number(r?.cnt || 0));
+      .then(r => Number(r?.cnt || 0));
 
     const raw = await qb
       .select([
@@ -767,14 +769,14 @@ export class WorkspaceTestResultsService {
       .limit(validLimit)
       .getRawMany();
 
-    const mapped = (raw || []).map((r) => {
+    const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
-      const tagList = tagsStr
-        ? tagsStr
-            .split(',')
-            .map((t) => t.trim())
-            .filter(Boolean)
-        : [];
+      const tagList = tagsStr ?
+        tagsStr
+          .split(',')
+          .map(t => t.trim())
+          .filter(Boolean) :
+        [];
 
       const statusNum = Number(r.responseStatus);
       const statusLabel = statusNumberToString(statusNum);
@@ -802,36 +804,36 @@ export class WorkspaceTestResultsService {
     combos: Array<{ unitKey: string; variableId: string; values: string[] }>
   ): Promise<
     Record<
-      string,
-      {
-        total: number;
-        values: Array<{ value: string; count: number; p: number }>;
-      }
+    string,
+    {
+      total: number;
+      values: Array<{ value: string; count: number; p: number }>;
+    }
     >
-  > {
+    > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
 
     const normalized = (combos || [])
-      .map((c) => ({
+      .map(c => ({
         unitKey: String(c.unitKey || '').trim(),
         variableId: String(c.variableId || '').trim(),
-        values: Array.isArray(c.values)
-          ? c.values.map((v) => String(v ?? ''))
-          : []
+        values: Array.isArray(c.values) ?
+          c.values.map(v => String(v ?? '')) :
+          []
       }))
-      .filter((c) => !!c.unitKey && !!c.variableId);
+      .filter(c => !!c.unitKey && !!c.variableId);
 
     if (normalized.length === 0) {
       return {};
     }
 
     const uniqueMap = new Map<
-      string,
-      { unitKey: string; variableId: string; values: string[] }
+    string,
+    { unitKey: string; variableId: string; values: string[] }
     >();
-    normalized.forEach((c) => {
+    normalized.forEach(c => {
       const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
         c.variableId
       )}`;
@@ -870,8 +872,7 @@ export class WorkspaceTestResultsService {
 
     const allRequestedValues = Array.from(
       new Set(
-        uniqueCombos.flatMap((c) =>
-          (c.values || []).map((v) => String(v ?? ''))
+        uniqueCombos.flatMap(c => (c.values || []).map(v => String(v ?? ''))
         )
       )
     );
@@ -886,13 +887,13 @@ export class WorkspaceTestResultsService {
       .groupBy('COALESCE(unit.alias, unit.name)')
       .addGroupBy('response.variableid')
       .getRawMany<{
-        unitKey: string;
-        variableId: string;
-        total: number | string;
-      }>();
+      unitKey: string;
+      variableId: string;
+      total: number | string;
+    }>();
 
     const totalByKey = new Map<string, number>();
-    totalsRaw.forEach((r) => {
+    totalsRaw.forEach(r => {
       const unitKey = String(r.unitKey || '').trim();
       const variableId = String(r.variableId || '').trim();
       totalByKey.set(
@@ -920,14 +921,14 @@ export class WorkspaceTestResultsService {
       .addGroupBy('response.variableid')
       .addGroupBy("SUBSTRING(COALESCE(response.value, ''), 1, 2000)")
       .getRawMany<{
-        unitKey: string;
-        variableId: string;
-        value: string;
-        count: number | string;
-      }>();
+      unitKey: string;
+      variableId: string;
+      value: string;
+      count: number | string;
+    }>();
 
     const countByKeyAndValue = new Map<string, number>();
-    countsRaw.forEach((r) => {
+    countsRaw.forEach(r => {
       const unitKey = String(r.unitKey || '').trim();
       const variableId = String(r.variableId || '').trim();
       const comboKey = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
@@ -938,20 +939,20 @@ export class WorkspaceTestResultsService {
     });
 
     const result: Record<
-      string,
-      {
-        total: number;
-        values: Array<{ value: string; count: number; p: number }>;
-      }
+    string,
+    {
+      total: number;
+      values: Array<{ value: string; count: number; p: number }>;
+    }
     > = {};
-    uniqueCombos.forEach((c) => {
+    uniqueCombos.forEach(c => {
       const key = `${encodeURIComponent(c.unitKey)}:${encodeURIComponent(
         c.variableId
       )}`;
       const total = totalByKey.get(key) || 0;
       const values = Array.from(new Set(c.values || []));
 
-      const rows = values.map((v) => {
+      const rows = values.map(v => {
         const count = countByKeyAndValue.get(`${key}@@${v}`) || 0;
         return {
           value: v,
@@ -979,15 +980,15 @@ export class WorkspaceTestResultsService {
       tags?: string;
     }
   ): Promise<{
-    codes: string[];
-    groups: string[];
-    logins: string[];
-    booklets: string[];
-    units: string[];
-    responses: string[];
-    responseStatuses: string[];
-    tags: string[];
-  }> {
+      codes: string[];
+      groups: string[];
+      logins: string[];
+      booklets: string[];
+      units: string[];
+      responses: string[];
+      responseStatuses: string[];
+      tags: string[];
+    }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -1129,18 +1130,15 @@ export class WorkspaceTestResultsService {
         .getRawMany<{ v: string }>()
     ]);
 
-    const mapVals = (rows: Array<{ v: string }>) =>
-      (rows || []).map((r) => String(r.v || '').trim()).filter(Boolean);
+    const mapVals = (rows: Array<{ v: string }>) => (rows || []).map(r => String(r.v || '').trim()).filter(Boolean);
 
     const responseStatuses = Array.from(
       new Set(
         (responseStatusRows || [])
-          .map((r) =>
-            statusNumberToString(Number((r as { v: string | number }).v))
+          .map(r => statusNumberToString(Number((r as { v: string | number }).v))
           )
           .filter(
-            (v): v is Exclude<ReturnType<typeof statusNumberToString>, null> =>
-              v !== null
+            (v): v is Exclude<ReturnType<typeof statusNumberToString>, null> => v !== null
           )
       )
     );
@@ -1162,7 +1160,7 @@ export class WorkspaceTestResultsService {
     unitId: number
   ): Promise<
     { id: number; unitid: number; ts: string; key: string; parameter: string }[]
-  > {
+    > {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -1186,22 +1184,22 @@ export class WorkspaceTestResultsService {
       ])
       .orderBy('unitLog.id', 'ASC')
       .getRawMany<{
-        id: number;
-        unitid: number;
-        ts: number | null;
-        key: string;
-        parameter: string | null;
-      }>();
+      id: number;
+      unitid: number;
+      ts: number | null;
+      key: string;
+      parameter: string | null;
+    }>();
 
-    return (raw || []).map((r) => ({
+    return (raw || []).map(r => ({
       id: Number(r.id),
       unitid: Number(r.unitid),
       ts: r.ts !== null && r.ts !== undefined ? String(r.ts) : '',
       key: String(r.key || ''),
       parameter:
-        r.parameter !== null && r.parameter !== undefined
-          ? String(r.parameter)
-          : ''
+        r.parameter !== null && r.parameter !== undefined ?
+          String(r.parameter) :
+          ''
     }));
   }
 
@@ -1209,35 +1207,35 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     unitId: number
   ): Promise<{
-    bookletId: number;
-    logs: {
-      id: number;
-      bookletid: number;
-      ts: string;
-      key: string;
-      parameter: string;
-    }[];
-    sessions: {
-      id: number;
-      browser: string;
-      os: string;
-      screen: string;
-      ts: string;
-    }[];
-    units: {
-      id: number;
-      bookletid: number;
-      name: string;
-      alias: string | null;
+      bookletId: number;
       logs: {
         id: number;
-        unitid: number;
+        bookletid: number;
         ts: string;
         key: string;
         parameter: string;
       }[];
-    }[];
-  }> {
+      sessions: {
+        id: number;
+        browser: string;
+        os: string;
+        screen: string;
+        ts: string;
+      }[];
+      units: {
+        id: number;
+        bookletid: number;
+        name: string;
+        alias: string | null;
+        logs: {
+          id: number;
+          unitid: number;
+          ts: string;
+          key: string;
+          parameter: string;
+        }[];
+      }[];
+    }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
@@ -1298,21 +1296,21 @@ export class WorkspaceTestResultsService {
 
     return {
       bookletId,
-      logs: (bookletLogs || []).map((l) => ({
+      logs: (bookletLogs || []).map(l => ({
         id: l.id,
         bookletid: l.bookletid,
         ts: l.ts !== null && l.ts !== undefined ? String(l.ts) : '',
         key: l.key,
         parameter: l.parameter || ''
       })),
-      sessions: (sessions || []).map((s) => ({
+      sessions: (sessions || []).map(s => ({
         id: s.id,
         browser: s.browser || '',
         os: s.os || '',
         screen: s.screen || '',
         ts: s.ts !== null && s.ts !== undefined ? String(s.ts) : ''
       })),
-      units: (units || []).map((u) => ({
+      units: (units || []).map(u => ({
         id: u.id,
         bookletid: u.bookletid,
         name: u.name,
@@ -1327,11 +1325,11 @@ export class WorkspaceTestResultsService {
     connector: string,
     unitId: string
   ): Promise<{
-    responses: {
-      id: string;
-      content: { id: string; value: string; status: string }[];
-    }[];
-  }> {
+      responses: {
+        id: string;
+        content: { id: string; value: string; status: string }[];
+      }[];
+    }> {
     const cacheKey = this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
@@ -1397,9 +1395,9 @@ export class WorkspaceTestResultsService {
       });
 
       if (!person) {
-        const searchDescription = group
-          ? `Person mit Login ${login}, Code ${code} und Gruppe ${group}`
-          : `Person mit Login ${login} und Code ${code}`;
+        const searchDescription = group ?
+          `Person mit Login ${login}, Code ${code} und Gruppe ${group}` :
+          `Person mit Login ${login} und Code ${code}`;
         throw new Error(`${searchDescription} wurde nicht gefunden.`);
       }
 
@@ -1435,7 +1433,7 @@ export class WorkspaceTestResultsService {
 
     if (chunks.length > 0) {
       this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
-      chunks.forEach((chunk) => {
+      chunks.forEach(chunk => {
         this.logger.log(
           `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
         );
@@ -1445,10 +1443,10 @@ export class WorkspaceTestResultsService {
     }
 
     const chunkKeyMap = new Map<string, string>();
-    chunks.forEach((chunk) => {
+    chunks.forEach(chunk => {
       if (chunk.variables) {
-        const variables = chunk.variables.split(',').map((v) => v.trim());
-        variables.forEach((variable) => {
+        const variables = chunk.variables.split(',').map(v => v.trim());
+        variables.forEach(variable => {
           chunkKeyMap.set(variable, chunk.key);
         });
       }
@@ -1456,7 +1454,7 @@ export class WorkspaceTestResultsService {
 
     const responsesByChunk = {};
 
-    unit.responses.forEach((response) => {
+    unit.responses.forEach(response => {
       let value = response.value;
       if (typeof value === 'string') {
         if (value.startsWith('[') && value.endsWith(']')) {
@@ -1493,10 +1491,9 @@ export class WorkspaceTestResultsService {
       responsesByChunk[chunkKey].push(mappedResponse);
     });
 
-    const responsesArray = Object.keys(responsesByChunk).map((chunkKey) => {
+    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
       const uniqueResponses = responsesByChunk[chunkKey].filter(
-        (response: { id: string }, index: number, self: { id: string }[]) =>
-          index === self.findIndex((r: { id: string }) => r.id === response.id)
+        (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
       );
 
       return {
@@ -1582,14 +1579,14 @@ export class WorkspaceTestResultsService {
     testPersonIds: string,
     userId: string
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedPersons: string[];
-      warnings: string[];
-    };
-  }> {
-    return this.connection.transaction(async (manager) => {
-      const ids = testPersonIds.split(',').map((id) => id.trim());
+      success: boolean;
+      report: {
+        deletedPersons: string[];
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
+      const ids = testPersonIds.split(',').map(id => id.trim());
       const report = {
         deletedPersons: [],
         warnings: []
@@ -1616,7 +1613,7 @@ export class WorkspaceTestResultsService {
         return { success: false, report };
       }
 
-      const existingIds = existingPersons.map((person) => person.id);
+      const existingIds = existingPersons.map(person => person.id);
 
       await manager
         .createQueryBuilder()
@@ -1661,13 +1658,13 @@ export class WorkspaceTestResultsService {
     unitId: number,
     userId: string
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedUnit: number | null;
-      warnings: string[];
-    };
-  }> {
-    return this.connection.transaction(async (manager) => {
+      success: boolean;
+      report: {
+        deletedUnit: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
       const report = {
         deletedUnit: null,
         warnings: []
@@ -1733,13 +1730,13 @@ export class WorkspaceTestResultsService {
     responseId: number,
     userId: string
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedResponse: number | null;
-      warnings: string[];
-    };
-  }> {
-    return this.connection.transaction(async (manager) => {
+      success: boolean;
+      report: {
+        deletedResponse: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
       const report = {
         deletedResponse: null,
         warnings: []
@@ -1808,13 +1805,13 @@ export class WorkspaceTestResultsService {
     bookletId: number,
     userId: string
   ): Promise<{
-    success: boolean;
-    report: {
-      deletedBooklet: number | null;
-      warnings: string[];
-    };
-  }> {
-    return this.connection.transaction(async (manager) => {
+      success: boolean;
+      report: {
+        deletedBooklet: number | null;
+        warnings: string[];
+      };
+    }> {
+    return this.connection.transaction(async manager => {
       const report = {
         deletedBooklet: null,
         warnings: []
@@ -1888,27 +1885,27 @@ export class WorkspaceTestResultsService {
     },
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-    data: {
-      responseId: number;
-      variableId: string;
-      value: string;
-      status: string;
-      code?: number;
-      score?: number;
-      codedStatus?: string;
-      unitId: number;
-      unitName: string;
-      unitAlias: string | null;
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      variablePage?: string;
-    }[];
-    total: number;
-  }> {
+      data: {
+        responseId: number;
+        variableId: string;
+        value: string;
+        status: string;
+        code?: number;
+        score?: number;
+        codedStatus?: string;
+        unitId: number;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        variablePage?: string;
+      }[];
+      total: number;
+    }> {
     if (!workspaceId) {
       throw new Error('workspaceId is required.');
     }
@@ -1966,9 +1963,9 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const statusColumn = searchParams.version
-          ? `status_${searchParams.version}`
-          : 'status_v1';
+        const statusColumn = searchParams.version ?
+          `status_${searchParams.version}` :
+          'status_v1';
         query.andWhere(`response.${statusColumn} = :codedStatus`, {
           codedStatus: searchParams.codedStatus
         });
@@ -2000,7 +1997,7 @@ export class WorkspaceTestResultsService {
       );
 
       // Pre-load variable page maps for all unique units
-      const uniqueUnitNames = [...new Set(responses.map((r) => r.unit.name))];
+      const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
       const variablePageMaps = new Map<string, Map<string, string>>();
       for (const unitName of uniqueUnitNames) {
         const pageMap = await this.codingListService.getVariablePageMap(
@@ -2011,7 +2008,7 @@ export class WorkspaceTestResultsService {
       }
 
       const version = searchParams.version || 'v1';
-      const data = responses.map((response) => {
+      const data = responses.map(response => {
         const code = response[
           `code_${version}` as keyof ResponseEntity
         ] as number;
@@ -2063,34 +2060,34 @@ export class WorkspaceTestResultsService {
     unitName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-    data: {
-      unitId: number;
-      unitName: string;
-      unitAlias: string | null;
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      tags: {
-        id: number;
+      data: {
         unitId: number;
-        tag: string;
-        color?: string;
-        createdAt: Date;
+        unitName: string;
+        unitAlias: string | null;
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        tags: {
+          id: number;
+          unitId: number;
+          tag: string;
+          color?: string;
+          createdAt: Date;
+        }[];
+        responses: {
+          variableId: string;
+          value: string;
+          status: string;
+          code?: number;
+          score?: number;
+          codedStatus?: string;
+        }[];
       }[];
-      responses: {
-        variableId: string;
-        value: string;
-        status: string;
-        code?: number;
-        score?: number;
-        codedStatus?: string;
-      }[];
-    }[];
-    total: number;
-  }> {
+      total: number;
+    }> {
     if (!workspaceId || !unitName) {
       throw new Error('Both workspaceId and unitName are required.');
     }
@@ -2135,26 +2132,26 @@ export class WorkspaceTestResultsService {
         `Found ${total} units with name: ${unitName} in workspace: ${workspaceId}, returning ${units.length} for page ${page}`
       );
 
-      const unitIds = units.map((unit) => unit.id);
+      const unitIds = units.map(unit => unit.id);
       const allUnitTags = await Promise.all(
-        unitIds.map((unitId) => this.unitTagService.findAllByUnitId(unitId))
+        unitIds.map(unitId => this.unitTagService.findAllByUnitId(unitId))
       );
 
       const unitTagsMap = new Map<
-        number,
-        {
-          id: number;
-          unitId: number;
-          tag: string;
-          color?: string;
-          createdAt: Date;
-        }[]
+      number,
+      {
+        id: number;
+        unitId: number;
+        tag: string;
+        color?: string;
+        createdAt: Date;
+      }[]
       >();
       unitIds.forEach((unitId, index) => {
         unitTagsMap.set(unitId, allUnitTags[index]);
       });
 
-      let data = units.map((unit) => ({
+      let data = units.map(unit => ({
         unitId: unit.id,
         unitName: unit.name,
         unitAlias: unit.alias,
@@ -2165,20 +2162,20 @@ export class WorkspaceTestResultsService {
         personCode: unit.booklet.person.code,
         personGroup: unit.booklet.person.group,
         tags: unitTagsMap.get(unit.id) || [],
-        responses: unit.responses
-          ? unit.responses.map((response) => ({
-              variableId: response.variableid,
-              value: response.value || '',
-              status: statusNumberToString(response.status) || 'UNSET',
-              code: response.code_v1,
-              score: response.score_v1,
-              codedStatus: statusNumberToString(response.status_v1) || 'UNSET'
-            }))
-          : []
+        responses: unit.responses ?
+          unit.responses.map(response => ({
+            variableId: response.variableid,
+            value: response.value || '',
+            status: statusNumberToString(response.status) || 'UNSET',
+            code: response.code_v1,
+            score: response.score_v1,
+            codedStatus: statusNumberToString(response.status_v1) || 'UNSET'
+          })) :
+          []
       }));
 
       const uniqueMap = new Map<string, (typeof data)[0]>();
-      data.forEach((item) => {
+      data.forEach(item => {
         const uniqueKey = `${item.personGroup}|${item.personCode}|${item.personLogin}|${item.bookletName}|${item.unitName}`;
         if (!uniqueMap.has(uniqueKey)) {
           uniqueMap.set(uniqueKey, item);
@@ -2203,21 +2200,21 @@ export class WorkspaceTestResultsService {
     bookletName: string,
     options: { page?: number; limit?: number } = {}
   ): Promise<{
-    data: {
-      bookletId: number;
-      bookletName: string;
-      personId: number;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      units: {
-        unitId: number;
-        unitName: string;
-        unitAlias: string | null;
+      data: {
+        bookletId: number;
+        bookletName: string;
+        personId: number;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        units: {
+          unitId: number;
+          unitName: string;
+          unitAlias: string | null;
+        }[];
       }[];
-    }[];
-    total: number;
-  }> {
+      total: number;
+    }> {
     if (!workspaceId || !bookletName) {
       throw new Error('Both workspaceId and bookletName are required.');
     }
@@ -2263,20 +2260,20 @@ export class WorkspaceTestResultsService {
         `Found ${total} booklets with name: ${bookletName} in workspace: ${workspaceId}, returning ${booklets.length} for page ${page}`
       );
 
-      const data = booklets.map((booklet) => ({
+      const data = booklets.map(booklet => ({
         bookletId: booklet.id,
         bookletName: booklet.bookletinfo.name,
         personId: booklet.person.id,
         personLogin: booklet.person.login,
         personCode: booklet.person.code,
         personGroup: booklet.person.group,
-        units: booklet.units
-          ? booklet.units.map((unit) => ({
-              unitId: unit.id,
-              unitName: unit.name,
-              unitAlias: unit.alias
-            }))
-          : []
+        units: booklet.units ?
+          booklet.units.map(unit => ({
+            unitId: unit.id,
+            unitName: unit.name,
+            unitAlias: unit.alias
+          })) :
+          []
       }));
 
       return { data, total };
@@ -2420,7 +2417,7 @@ export class WorkspaceTestResultsService {
       }
 
       lastUnitId = units[units.length - 1].id;
-      const unitIds = units.map((u) => u.id);
+      const unitIds = units.map(u => u.id);
 
       const responses = await this.responseRepository
         .createQueryBuilder('response')
@@ -2461,25 +2458,25 @@ export class WorkspaceTestResultsService {
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
       const chunksByUnitId = new Map<number, ChunkEntity[]>();
       const lastStatesByUnitId = new Map<
-        number,
-        Array<{ key: string; value: unknown }>
+      number,
+      Array<{ key: string; value: unknown }>
       >();
 
-      responses.forEach((r) => {
+      responses.forEach(r => {
         if (!responsesByUnitId.has(r.unitid)) {
           responsesByUnitId.set(r.unitid, []);
         }
         responsesByUnitId.get(r.unitid)!.push(r);
       });
 
-      chunks.forEach((chunk) => {
+      chunks.forEach(chunk => {
         if (!chunksByUnitId.has(chunk.unitid)) {
           chunksByUnitId.set(chunk.unitid, []);
         }
         chunksByUnitId.get(chunk.unitid)!.push(chunk);
       });
 
-      lastStates.forEach((ls) => {
+      lastStates.forEach(ls => {
         if (!lastStatesByUnitId.has(ls.unitid)) {
           lastStatesByUnitId.set(ls.unitid, []);
         }
@@ -2496,10 +2493,10 @@ export class WorkspaceTestResultsService {
         const chunkKeyMap = new Map<string, string>();
         const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
 
-        unitChunks.forEach((chunk) => {
+        unitChunks.forEach(chunk => {
           if (chunk.variables) {
-            const variables = chunk.variables.split(',').map((v) => v.trim());
-            variables.forEach((variable) => {
+            const variables = chunk.variables.split(',').map(v => v.trim());
+            variables.forEach(variable => {
               chunkKeyMap.set(variable, chunk.key);
             });
           }
@@ -2515,7 +2512,7 @@ export class WorkspaceTestResultsService {
 
         const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
 
-        unitResponses.forEach((r) => {
+        unitResponses.forEach(r => {
           const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
           if (!responsesByChunkKey.has(chunkKey)) {
             responsesByChunkKey.set(chunkKey, []);
@@ -2544,7 +2541,7 @@ export class WorkspaceTestResultsService {
         responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
           const meta = chunkMetaByKey.get(chunkKey);
           const resolvedSubForm =
-            chunkResponses.find((r) => r.subform && r.subform.length > 0)
+            chunkResponses.find(r => r.subform && r.subform.length > 0)
               ?.subform || '';
 
           exportChunks.push({
@@ -2557,7 +2554,7 @@ export class WorkspaceTestResultsService {
         });
 
         const lastStateMap: { [key: string]: unknown } = {};
-        unitLastStates.forEach((ls) => {
+        unitLastStates.forEach(ls => {
           lastStateMap[ls.key] = ls.value;
         });
 
@@ -2573,7 +2570,7 @@ export class WorkspaceTestResultsService {
         });
 
         if (!canContinue) {
-          await new Promise((resolve) => {
+          await new Promise(resolve => {
             csvStream.once('drain', resolve);
           });
         }
@@ -2713,15 +2710,15 @@ export class WorkspaceTestResultsService {
           .orderBy('bookletLog.id', 'ASC')
           .take(BATCH_SIZE)
           .getRawMany<{
-            id: number;
-            ts: string | number | null;
-            key: string;
-            parameter: string | null;
-            groupname: string;
-            loginname: string;
-            code: string;
-            bookletname: string;
-          }>();
+          id: number;
+          ts: string | number | null;
+          key: string;
+          parameter: string | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
 
         if (logs.length === 0) {
           hasMoreBookletLogs = false;
@@ -2745,7 +2742,7 @@ export class WorkspaceTestResultsService {
           });
 
           if (!canContinue) {
-            await new Promise((resolve) => {
+            await new Promise(resolve => {
               csvStream.once('drain', resolve);
             });
           }
@@ -2816,17 +2813,17 @@ export class WorkspaceTestResultsService {
         .orderBy('unitLog.id', 'ASC')
         .take(BATCH_SIZE)
         .getRawMany<{
-          id: number;
-          ts: string | number | null;
-          key: string;
-          parameter: string | null;
-          unitname: string;
-          originalUnitId: string | null;
-          groupname: string;
-          loginname: string;
-          code: string;
-          bookletname: string;
-        }>();
+        id: number;
+        ts: string | number | null;
+        key: string;
+        parameter: string | null;
+        unitname: string;
+        originalUnitId: string | null;
+        groupname: string;
+        loginname: string;
+        code: string;
+        bookletname: string;
+      }>();
 
       if (logs.length === 0) {
         hasMoreUnitLogs = false;
@@ -2851,7 +2848,7 @@ export class WorkspaceTestResultsService {
         });
 
         if (!canContinue) {
-          await new Promise((resolve) => {
+          await new Promise(resolve => {
             csvStream.once('drain', resolve);
           });
         }
@@ -2921,15 +2918,15 @@ export class WorkspaceTestResultsService {
       .getRawMany();
 
     return {
-      testPersons: testPersons.map((p) => ({
+      testPersons: testPersons.map(p => ({
         id: p.id,
         groupName: p.group,
         code: p.code,
         login: p.login
       })),
-      groups: groups.map((g) => g.name),
-      booklets: booklets.map((b) => b.name),
-      units: units.map((u) => u.name)
+      groups: groups.map(g => g.name),
+      booklets: booklets.map(b => b.name),
+      units: units.map(u => u.name)
     };
   }
 }
