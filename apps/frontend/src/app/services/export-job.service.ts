@@ -20,13 +20,21 @@ export interface ExportJob {
 }
 
 export interface ExportJobConfig {
-  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+  exportType:
+  | 'aggregated'
+  | 'by-coder'
+  | 'by-variable'
+  | 'detailed'
+  | 'coding-times';
   userId: number;
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
-  doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
+  doubleCodingMethod?:
+  | 'new-row-per-variable'
+  | 'new-column-per-coder'
+  | 'most-frequent';
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
@@ -79,8 +87,7 @@ export class ExportJobService implements OnDestroy {
         this.addJob(newJob);
         this.startPollingForJob(workspaceId, response.jobId);
       },
-      error: () => {
-      }
+      error: () => {}
     });
   }
 
@@ -91,13 +98,16 @@ export class ExportJobService implements OnDestroy {
 
   private updateJob(jobId: string, updates: Partial<ExportJob>): void {
     const currentJobs = this.jobsSubject.value;
-    const updatedJobs = currentJobs.map(job => (job.jobId === jobId ? { ...job, ...updates } : job)
-    );
+    const updatedJobs = currentJobs.map(job => {
+      if (job.jobId === jobId) {
+        return { ...job, ...updates };
+      }
+      return job;
+    });
     this.jobsSubject.next(updatedJobs);
   }
 
   private startPollingForJob(workspaceId: number, jobId: string): void {
-    // Avoid duplicate polling
     if (this.pollingSubscriptions.has(jobId)) {
       return;
     }
@@ -105,23 +115,47 @@ export class ExportJobService implements OnDestroy {
     const subscription = interval(2000)
       .pipe(
         takeUntil(this.stopPolling$),
-        switchMap(() => this.backendService.getExportJobStatus(workspaceId, jobId))
+        switchMap(() => this.backendService.getExportJobStatus(workspaceId, jobId)
+        )
       )
       .subscribe({
         next: status => {
-          const mappedStatus = this.mapStatus(status.status);
+          const statusAny = status as unknown as {
+            status?: string;
+            progress?: number;
+            result?: { fileName?: string; fileSize?: number };
+            error?: string;
+          };
+
+          if (!statusAny.status && statusAny.error) {
+            this.updateJob(jobId, {
+              status: 'failed',
+              error: statusAny.error
+            });
+            this.stopPollingForJob(jobId);
+            return;
+          }
+
+          const mappedStatus = this.mapStatus(statusAny.status || '');
+          const result = statusAny.result ?
+            {
+              fileName: statusAny.result.fileName || '',
+              fileSize: statusAny.result.fileSize || 0
+            } :
+            undefined;
           this.updateJob(jobId, {
             status: mappedStatus,
-            progress: status.progress || 0,
-            result: status.result ? {
-              fileName: status.result.fileName,
-              fileSize: status.result.fileSize
-            } : undefined,
-            error: status.error
+            progress: statusAny.progress || 0,
+            result,
+            error: statusAny.error
           });
 
           // Stop polling when job is done
-          if (mappedStatus === 'completed' || mappedStatus === 'failed' || mappedStatus === 'cancelled') {
+          if (
+            mappedStatus === 'completed' ||
+            mappedStatus === 'failed' ||
+            mappedStatus === 'cancelled'
+          ) {
             this.stopPollingForJob(jobId);
           }
         },
@@ -139,6 +173,10 @@ export class ExportJobService implements OnDestroy {
 
   private mapStatus(status: string): ExportJob['status'] {
     switch (status) {
+      case 'pending':
+        return 'waiting';
+      case 'processing':
+        return 'active';
       case 'waiting':
       case 'delayed':
         return 'waiting';
@@ -150,6 +188,8 @@ export class ExportJobService implements OnDestroy {
         return 'failed';
       case 'cancelled':
         return 'cancelled';
+      case 'paused':
+        return 'waiting';
       default:
         return 'waiting';
     }
@@ -192,14 +232,15 @@ export class ExportJobService implements OnDestroy {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `export-${exportType}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const ext = exportType === 'detailed' ? 'csv' : 'xlsx';
+        const date = new Date().toISOString().slice(0, 10);
+        a.download = `export-${exportType}-${date}.${ext}`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
       },
-      error: () => {
-      }
+      error: () => {}
     });
   }
 

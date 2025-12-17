@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, ViewChild, inject } from '@angular/core';
+import {
+  Component, OnDestroy, OnInit, ViewChild, inject
+} from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { UntypedFormGroup, FormsModule } from '@angular/forms';
@@ -59,6 +61,10 @@ import {
   TestFilesUploadResultDialogComponent,
   TestFilesUploadResultDialogData
 } from './test-files-upload-result-dialog.component';
+import {
+  TestFilesZipExportOptions,
+  TestFilesZipExportOptionsDialogComponent
+} from './test-files-zip-export-options-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../services/import.service';
@@ -214,11 +220,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   masterToggle(): void {
-    this.isAllSelected()
-      ? this.tableCheckboxSelection.clear()
-      : this.dataSource?.data.forEach((row) =>
-          this.tableCheckboxSelection.select(row)
-        );
+    this.isAllSelected() ?
+      this.tableCheckboxSelection.clear() :
+      this.dataSource?.data.forEach(row => this.tableCheckboxSelection.select(row)
+      );
   }
 
   loadTestFiles(): void {
@@ -239,7 +244,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (response) => {
+        next: response => {
           this.total = response.total;
           this.page = response.page;
           this.limit = response.limit;
@@ -325,16 +330,16 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     }
 
     const ref = this.dialog.open<
-      TestFilesUploadConflictsDialogComponent,
-      { conflicts: typeof conflicts },
-      TestFilesUploadConflictsDialogResult
+    TestFilesUploadConflictsDialogComponent,
+    { conflicts: typeof conflicts },
+    TestFilesUploadConflictsDialogResult
     >(TestFilesUploadConflictsDialogComponent, {
       width: '800px',
       maxWidth: '95vw',
       data: { conflicts }
     });
 
-    ref.afterClosed().subscribe((resultChoice) => {
+    ref.afterClosed().subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
         this.isLoading = true;
         this.isUploading = true;
@@ -354,7 +359,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             })
           )
           .subscribe({
-            next: (overwriteResult) => {
+            next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
 
               const finalUploadedFiles = [
@@ -366,7 +371,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                 ...(overwriteResult.failedFiles || [])
               ];
               const remainingConflicts = conflicts.filter(
-                (c) => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
+                c => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
               );
 
               this.openUploadResultDialog({
@@ -416,7 +421,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           })
         )
         .subscribe({
-          next: (result) => {
+          next: result => {
             this.handleUploadResult(workspaceId, files, result);
           },
           error: () => {
@@ -451,11 +456,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe((result: unknown) => {
       const maybePayload = result as
         | {
-            didImport?: boolean;
-            importType?: 'testFiles';
-            result?: Result;
-            overwriteSelectedCount?: number;
-          }
+          didImport?: boolean;
+          importType?: 'testFiles';
+          result?: Result;
+          overwriteSelectedCount?: number;
+        }
         | boolean
         | UntypedFormGroup
         | undefined;
@@ -502,7 +507,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   deleteFiles(): void {
-    const fileIds = this.tableCheckboxSelection.selected.map((file) => file.id);
+    const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
     this.isDeleting = true;
     this.backendService
       .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
@@ -512,7 +517,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (respOk) => {
+        next: respOk => {
           this.handleDeleteResponse(respOk);
         },
         error: () => {
@@ -551,36 +556,60 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   downloadAllFilesAsZip(): void {
-    this.isDownloadingAllFiles = true;
-    this.backendService
-      .downloadWorkspaceFilesAsZip(this.appService.selectedWorkspaceId)
-      .subscribe({
-        next: (blob: Blob) => {
-          const url = window.URL.createObjectURL(blob);
-          const anchor = document.createElement('a');
-          anchor.href = url;
-          anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
-          document.body.appendChild(anchor);
-          anchor.click();
-          document.body.removeChild(anchor);
-          window.URL.revokeObjectURL(url);
-          this.isDownloadingAllFiles = false;
+    const ref = this.dialog.open(TestFilesZipExportOptionsDialogComponent, {
+      width: '700px',
+      maxWidth: '95vw',
+      data: {
+        availableFileTypes: this.fileTypes || [],
+        selectedFileTypes: this.fileTypes || []
+      }
+    });
 
-          this.snackBar.open(
-            'ZIP-Datei wurde erfolgreich heruntergeladen.',
-            'OK',
-            { duration: 3000 }
-          );
-        },
-        error: () => {
-          this.isDownloadingAllFiles = false;
-          this.snackBar.open(
-            'Fehler beim Herunterladen der ZIP-Datei.',
-            this.translate.instant('error'),
-            { duration: 3000 }
-          );
-        }
-      });
+    ref.afterClosed().subscribe((result?: TestFilesZipExportOptions) => {
+      if (!result) {
+        return;
+      }
+      if (!result.fileTypes || result.fileTypes.length === 0) {
+        this.snackBar.open('Keine Dateitypen ausgewählt.', 'OK', {
+          duration: 3000
+        });
+        return;
+      }
+
+      this.isDownloadingAllFiles = true;
+      this.backendService
+        .downloadWorkspaceFilesAsZip(
+          this.appService.selectedWorkspaceId,
+          result.fileTypes
+        )
+        .subscribe({
+          next: (blob: Blob) => {
+            const url = window.URL.createObjectURL(blob);
+            const anchor = document.createElement('a');
+            anchor.href = url;
+            anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
+            document.body.appendChild(anchor);
+            anchor.click();
+            document.body.removeChild(anchor);
+            window.URL.revokeObjectURL(url);
+            this.isDownloadingAllFiles = false;
+
+            this.snackBar.open(
+              'ZIP-Datei wurde erfolgreich heruntergeladen.',
+              'OK',
+              { duration: 3000 }
+            );
+          },
+          error: err => {
+            this.isDownloadingAllFiles = false;
+            this.snackBar.open(
+              'Fehler beim Herunterladen der ZIP-Datei.',
+              'OK',
+              { duration: 3000 }
+            );
+          }
+        });
+    });
   }
 
   validateFiles(): void {
@@ -589,7 +618,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.backendService
       .validateFiles(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: (respOk) => {
+        next: respOk => {
           this.handleValidationResponse(respOk);
         },
         error: () => {
@@ -606,9 +635,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   private handleDeleteResponse(success: boolean): void {
     this.snackBar.open(
-      success
-        ? this.translate.instant('ws-admin.files-deleted')
-        : this.translate.instant('ws-admin.files-not-deleted'),
+      success ?
+        this.translate.instant('ws-admin.files-deleted') :
+        this.translate.instant('ws-admin.files-not-deleted'),
       success ? '' : this.translate.instant('error'),
       { duration: 1000 }
     );
@@ -642,13 +671,13 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           }
         });
 
-        confirmRef.afterClosed().subscribe((result) => {
+        confirmRef.afterClosed().subscribe(result => {
           if (result === true) {
             this.isLoading = true;
             this.backendService
               .createDummyTestTakerFile(this.appService.selectedWorkspaceId)
               .subscribe({
-                next: (success) => {
+                next: success => {
                   this.isLoading = false;
                   if (success) {
                     this.snackBar.open(
@@ -683,7 +712,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             });
 
             const validationResults = (res.validationResults || []).filter(
-              (v) => !!v?.testTaker
+              v => !!v?.testTaker
             );
             if (validationResults.length > 0) {
               this.dialog.open(FilesValidationDialogComponent, {
@@ -707,7 +736,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           height: '80vh',
           data: {
             validationResults: (res.validationResults || []).filter(
-              (v) => !!v?.testTaker
+              v => !!v?.testTaker
             ),
             filteredTestTakers: res.filteredTestTakers,
             unusedTestFiles: res.unusedTestFiles,
@@ -727,7 +756,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
         this.resourcePackagesModified = true;
       }
@@ -744,7 +773,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   showFileContent(file: FilesInListDto): void {
     this.backendService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
-      .subscribe((fileData) => {
+      .subscribe(fileData => {
         const decodedContent = atob(fileData.base64Data);
 
         if (
@@ -762,7 +791,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             }
           });
 
-          dialogRef.afterClosed().subscribe((result) => {
+          dialogRef.afterClosed().subscribe(result => {
             if (result === true) {
               this.loadTestFiles();
             }
