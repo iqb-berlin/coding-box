@@ -1,10 +1,23 @@
 import {
   Controller,
-  Get, Param, Post, Put, Query, Req, Res, UseGuards, Body, Delete, Logger
+  Get,
+  Param,
+  Post,
+  Put,
+  Query,
+  Req,
+  Res,
+  UseGuards,
+  Body,
+  Delete,
+  Logger
 } from '@nestjs/common';
 import {
   ApiOkResponse,
-  ApiParam, ApiQuery, ApiTags, ApiBody
+  ApiParam,
+  ApiQuery,
+  ApiTags,
+  ApiBody
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { CodingStatistics } from '../../database/services/shared-types';
@@ -14,12 +27,19 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CoderTrainingService } from '../../database/services/coder-training.service';
-import { CodingListService, CodingItem } from '../../database/services/coding-list.service';
+import {
+  CodingListService,
+  CodingItem
+} from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { JobQueueService, ExportJobData, ExportJobResult } from '../../job-queue/job-queue.service';
+import {
+  JobQueueService,
+  ExportJobData,
+  ExportJobResult
+} from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
@@ -70,23 +90,39 @@ export class WorkspaceCodingController {
   @ApiQuery({
     name: 'autoCoderRun',
     required: false,
-    description: 'Autocoder run type: 1 (standard) or 2 (uses v2 as input, saves to v3)',
+    description:
+      'Autocoder run type: 1 (standard) or 2 (uses v2 as input, saves to v3)',
     enum: [1, 2],
     example: 1
   })
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async codeTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() workspace_id: number, @Query('autoCoderRun') autoCoderRun: string): Promise<CodingStatistics> {
+  async codeTestPersons(
+    @Query('testPersons') testPersons: string,
+      @WorkspaceId() workspace_id: number,
+      @Query('autoCoderRun') autoCoderRun: string
+  ): Promise<CodingStatistics> {
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
-    return this.workspaceCodingService.codeTestPersons(workspace_id, testPersons, autoCoderRunNumber);
+    return this.workspaceCodingService.codeTestPersons(
+      workspace_id,
+      testPersons,
+      autoCoderRunNumber
+    );
   }
 
   @Get(':workspace_id/coding/manual')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
-  async getManualTestPersons(@Query('testPersons') testPersons: string, @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */ workspace_id: number): Promise<Array<ResponseEntity & { unitname: string }>> {
-    return this.workspaceCodingService.getManualTestPersons(workspace_id, testPersons);
+  async getManualTestPersons(
+    @Query('testPersons') testPersons: string,
+      @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
+                          workspace_id: number
+  ): Promise<Array<ResponseEntity & { unitname: string }>> {
+    return this.workspaceCodingService.getManualTestPersons(
+      workspace_id,
+      testPersons
+    );
   }
 
   @Get(':workspace_id/coding/coding-list')
@@ -104,8 +140,17 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getCodingListAsCsv(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
-    const csvStream = await this.codingListService.getCodingListCsvStream(workspace_id, authToken || '', serverUrl || '');
+  async getCodingListAsCsv(
+    @WorkspaceId() workspace_id: number,
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const csvStream = await this.codingListService.getCodingListCsvStream(
+      workspace_id,
+      authToken || '',
+      serverUrl || ''
+    );
     csvStream.pipe(res);
   }
 
@@ -136,11 +181,28 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getCodingListAsExcel(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
-    const excelData = await this.codingListService.getCodingListAsExcel(workspace_id, authToken || '', serverUrl || '');
+  async getCodingListAsExcel(
+    @WorkspaceId() workspace_id: number,
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
+    const excelData = await this.codingListService.getCodingListAsExcel(
+      workspace_id,
+      authToken || '',
+      serverUrl || ''
+    );
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx"`
+    );
     res.send(excelData);
   }
 
@@ -185,17 +247,31 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getCodingListAsJson(@WorkspaceId() workspace_id: number, @Query('authToken') authToken: string, @Query('serverUrl') serverUrl: string, @Res() res: Response): Promise<void> {
+  async getCodingListAsJson(
+    @WorkspaceId() workspace_id: number,
+      @Query('authToken') authToken: string,
+      @Query('serverUrl') serverUrl: string,
+      @Res() res: Response
+  ): Promise<void> {
     this.logger.log(`Starting JSON export for workspace ${workspace_id}`);
 
     res.setHeader('Content-Type', 'application/json');
-    res.setHeader('Content-Disposition', `attachment; filename="coding-list-${new Date().toISOString().slice(0, 10)}.json"`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json"`
+    );
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
     try {
       res.write('[');
-      const stream = await this.codingListService.getCodingListJsonStream(workspace_id, authToken || '', serverUrl || '');
+      const stream = await this.codingListService.getCodingListJsonStream(
+        workspace_id,
+        authToken || '',
+        serverUrl || ''
+      );
       let first = true;
       stream.on('data', (item: CodingItem) => {
         if (!first) {
@@ -277,11 +353,19 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
-      @Res() res: Response
+      @Query('includeReplayUrls', { transform: value => value === 'true' })
+                   includeReplayUrls: boolean,
+                   @Res() res: Response
   ): Promise<void> {
     const includeReplay = includeReplayUrls ?? false;
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
+    const csvStream =
+      await this.codingListService.getCodingResultsByVersionCsvStream(
+        workspace_id,
+        version,
+        authToken || '',
+        serverUrl || '',
+        includeReplay
+      );
     csvStream.pipe(res);
   }
 
@@ -329,14 +413,30 @@ export class WorkspaceCodingController {
       @Query('version') version: 'v1' | 'v2' | 'v3',
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
-      @Query('includeReplayUrls', { transform: value => value === 'true' }) includeReplayUrls: boolean,
-      @Res() res: Response
+      @Query('includeReplayUrls', { transform: value => value === 'true' })
+                   includeReplayUrls: boolean,
+                   @Res() res: Response
   ): Promise<void> {
     const includeReplay = includeReplayUrls ?? false;
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(workspace_id, version, authToken || '', serverUrl || '', includeReplay);
+    const excelData =
+      await this.codingListService.getCodingResultsByVersionAsExcel(
+        workspace_id,
+        version,
+        authToken || '',
+        serverUrl || '',
+        includeReplay
+      );
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="coding-results-${version}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx"`
+    );
     res.send(excelData);
   }
 
@@ -354,8 +454,14 @@ export class WorkspaceCodingController {
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
-  async getCodingStatistics(@WorkspaceId() workspace_id: number, @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
-    return this.workspaceCodingService.getCodingStatistics(workspace_id, version);
+  async getCodingStatistics(
+    @WorkspaceId() workspace_id: number,
+                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
+  ): Promise<CodingStatistics> {
+    return this.workspaceCodingService.getCodingStatistics(
+      workspace_id,
+      version
+    );
   }
 
   @Post(':workspace_id/coding/statistics/job')
@@ -372,7 +478,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async createCodingStatisticsJob(@WorkspaceId() workspace_id: number): Promise<{ jobId: string; message: string }> {
+  async createCodingStatisticsJob(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{ jobId: string; message: string }> {
     return this.workspaceCodingService.createCodingStatisticsJob(workspace_id);
   }
 
@@ -380,7 +488,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the background job'
+  })
   @ApiOkResponse({
     description: 'Job status retrieved successfully.',
     schema: {
@@ -388,7 +500,14 @@ export class WorkspaceCodingController {
       properties: {
         status: {
           type: 'string',
-          enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+          enum: [
+            'pending',
+            'processing',
+            'completed',
+            'failed',
+            'cancelled',
+            'paused'
+          ],
           description: 'Current status of the job'
         },
         progress: {
@@ -397,7 +516,8 @@ export class WorkspaceCodingController {
         },
         result: {
           type: 'object',
-          description: 'Result of the job (only available when status is completed)',
+          description:
+            'Result of the job (only available when status is completed)',
           properties: {
             totalResponses: { type: 'number' },
             statusCounts: {
@@ -413,7 +533,17 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getJobStatus(@Param('jobId') jobId: string): Promise<{ status: string; progress: number; result?: CodingStatistics; error?: string } | { error: string }> {
+  async getJobStatus(
+    @Param('jobId') jobId: string
+  ): Promise<
+      | {
+        status: string;
+        progress: number;
+        result?: CodingStatistics;
+        error?: string;
+      }
+      | { error: string }
+      > {
     const status = await this.workspaceCodingService.getJobStatus(jobId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
@@ -425,7 +555,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to cancel' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the background job to cancel'
+  })
   @ApiOkResponse({
     description: 'Job cancellation request processed.',
     schema: {
@@ -437,12 +571,15 @@ export class WorkspaceCodingController {
         },
         message: {
           type: 'string',
-          description: 'Message describing the result of the cancellation request'
+          description:
+            'Message describing the result of the cancellation request'
         }
       }
     }
   })
-  async cancelJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async cancelJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.workspaceCodingService.cancelJob(jobId);
   }
 
@@ -450,7 +587,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to delete' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the background job to delete'
+  })
   @ApiOkResponse({
     description: 'Job deletion request processed.',
     schema: {
@@ -467,7 +608,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async deleteJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async deleteJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.workspaceCodingService.deleteJob(jobId);
   }
 
@@ -488,7 +631,14 @@ export class WorkspaceCodingController {
           },
           status: {
             type: 'string',
-            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+            enum: [
+              'pending',
+              'processing',
+              'completed',
+              'failed',
+              'cancelled',
+              'paused'
+            ],
             description: 'Current status of the job'
           },
           progress: {
@@ -497,7 +647,8 @@ export class WorkspaceCodingController {
           },
           result: {
             type: 'object',
-            description: 'Result of the job (only available when status is completed)',
+            description:
+              'Result of the job (only available when status is completed)',
             properties: {
               totalResponses: { type: 'number' },
               statusCounts: {
@@ -523,9 +674,16 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getAllJobs(@WorkspaceId() workspace_id: number): Promise<{
+  async getAllJobs(@WorkspaceId() workspace_id: number): Promise<
+  {
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'paused';
     progress: number;
     result?: CodingStatistics;
     error?: string;
@@ -535,7 +693,8 @@ export class WorkspaceCodingController {
     durationMs?: number;
     completedAt?: Date;
     autoCoderRun?: number;
-  }[]> {
+  }[]
+  > {
     return this.workspaceCodingService.getBullJobs(workspace_id);
   }
 
@@ -556,7 +715,14 @@ export class WorkspaceCodingController {
           },
           status: {
             type: 'string',
-            enum: ['pending', 'processing', 'completed', 'failed', 'cancelled', 'paused'],
+            enum: [
+              'pending',
+              'processing',
+              'completed',
+              'failed',
+              'cancelled',
+              'paused'
+            ],
             description: 'Current status of the job'
           },
           progress: {
@@ -565,7 +731,8 @@ export class WorkspaceCodingController {
           },
           result: {
             type: 'object',
-            description: 'Result of the job (only available when status is completed)',
+            description:
+              'Result of the job (only available when status is completed)',
             properties: {
               totalResponses: { type: 'number' },
               statusCounts: {
@@ -604,9 +771,16 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getBullJobs(@WorkspaceId() workspace_id: number): Promise<{
+  async getBullJobs(@WorkspaceId() workspace_id: number): Promise<
+  {
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'paused';
     progress: number;
     result?: CodingStatistics;
     error?: string;
@@ -615,7 +789,8 @@ export class WorkspaceCodingController {
     groupNames?: string;
     durationMs?: number;
     completedAt?: Date;
-  }[]> {
+  }[]
+  > {
     return this.workspaceCodingService.getBullJobs(workspace_id);
   }
 
@@ -624,7 +799,8 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'List of all test person groups in the workspace retrieved successfully.',
+    description:
+      'List of all test person groups in the workspace retrieved successfully.',
     schema: {
       type: 'array',
       items: {
@@ -633,7 +809,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getWorkspaceGroups(@WorkspaceId() workspace_id: number): Promise<string[]> {
+  async getWorkspaceGroups(
+    @WorkspaceId() workspace_id: number
+  ): Promise<string[]> {
     return this.personService.getWorkspaceGroups(workspace_id);
   }
 
@@ -642,22 +820,32 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'List of all test person groups in the workspace with coding statistics.',
+    description:
+      'List of all test person groups in the workspace with coding statistics.',
     schema: {
       type: 'array',
       items: {
         type: 'object',
         properties: {
           groupName: { type: 'string', description: 'Group name' },
-          testPersonCount: { type: 'number', description: 'Number of test persons in this group' },
-          responsesToCode: { type: 'number', description: 'Number of responses that still need to be coded for this group' }
+          testPersonCount: {
+            type: 'number',
+            description: 'Number of test persons in this group'
+          },
+          responsesToCode: {
+            type: 'number',
+            description:
+              'Number of responses that still need to be coded for this group'
+          }
         }
       }
     }
   })
   async getWorkspaceGroupCodingStats(
     @WorkspaceId() workspace_id: number
-  ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
+  ): Promise<
+      { groupName: string; testPersonCount: number; responsesToCode: number }[]
+      > {
     return this.personService.getWorkspaceGroupCodingStats(workspace_id);
   }
 
@@ -665,7 +853,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to pause' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the background job to pause'
+  })
   @ApiOkResponse({
     description: 'Job pause request processed.',
     schema: {
@@ -682,7 +874,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async pauseJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async pauseJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.workspaceCodingService.pauseJob(jobId);
   }
 
@@ -690,7 +884,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the background job to resume' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the background job to resume'
+  })
   @ApiOkResponse({
     description: 'Job resume request processed.',
     schema: {
@@ -707,7 +905,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async resumeJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async resumeJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.workspaceCodingService.resumeJob(jobId);
   }
 
@@ -715,7 +915,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the failed background job to restart' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the failed background job to restart'
+  })
   @ApiOkResponse({
     description: 'Job restart request processed.',
     schema: {
@@ -736,7 +940,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async restartJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
+  async restartJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string; jobId?: string }> {
     return this.workspaceCodingService.restartJob(jobId);
   }
 
@@ -759,7 +965,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getMissingsProfiles(@WorkspaceId() workspace_id: number): Promise<{ label: string }[]> {
+  async getMissingsProfiles(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{ label: string }[]> {
     return this.missingsProfilesService.getMissingsProfiles(workspace_id);
   }
 
@@ -812,23 +1020,24 @@ export class WorkspaceCodingController {
   })
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
-      @Body() body: {
-        missingsProfile: number;
-        contentOptions: {
-          exportFormat: string;
-          missingsProfile: string;
-          hasOnlyManualCoding: boolean;
-          hasGeneralInstructions: boolean;
-          hasDerivedVars: boolean;
-          hasOnlyVarsWithCodes: boolean;
-          hasClosedVars: boolean;
-          codeLabelToUpper: boolean;
-          showScore: boolean;
-          hideItemVarRelation: boolean;
-        };
-        unitList: number[];
-      },
-      @Res() res: Response
+      @Body()
+                   body: {
+                     missingsProfile: number;
+                     contentOptions: {
+                       exportFormat: string;
+                       missingsProfile: string;
+                       hasOnlyManualCoding: boolean;
+                       hasGeneralInstructions: boolean;
+                       hasDerivedVars: boolean;
+                       hasOnlyVarsWithCodes: boolean;
+                       hasClosedVars: boolean;
+                       codeLabelToUpper: boolean;
+                       showScore: boolean;
+                       hideItemVarRelation: boolean;
+                     };
+                     unitList: number[];
+                   },
+                   @Res() res: Response
   ): Promise<void> {
     const { missingsProfile, contentOptions, unitList } = body;
 
@@ -844,12 +1053,16 @@ export class WorkspaceCodingController {
       return;
     }
 
-    const contentType = contentOptions.exportFormat === 'docx' ?
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-      'application/json';
+    const contentType =
+      contentOptions.exportFormat === 'docx' ?
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+        'application/json';
 
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename=codebook.${contentOptions.exportFormat.toLowerCase()}`);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename=codebook.${contentOptions.exportFormat.toLowerCase()}`
+    );
     res.send(codebook);
   }
 
@@ -909,16 +1122,30 @@ export class WorkspaceCodingController {
           items: {
             type: 'object',
             properties: {
-              replayUrl: { type: 'string', description: 'Link to the replay of unit with its responses' },
+              replayUrl: {
+                type: 'string',
+                description: 'Link to the replay of unit with its responses'
+              },
               unitId: { type: 'string', description: 'Unit ID' },
               variableId: { type: 'string', description: 'Variable ID' },
               derivation: { type: 'string', description: 'Derivation' },
               code: { type: 'string', description: 'Code' },
               description: { type: 'string', description: 'Description' },
               score: { type: 'number', description: 'Score' },
-              occurrenceCount: { type: 'number', description: 'How often this unitId in combination with variableId with that code is in responses' },
-              totalCount: { type: 'number', description: 'Total amount of that combination variableId and unit Id' },
-              relativeOccurrence: { type: 'number', description: 'Relative occurrence (for bar chart)' }
+              occurrenceCount: {
+                type: 'number',
+                description:
+                  'How often this unitId in combination with variableId with that code is in responses'
+              },
+              totalCount: {
+                type: 'number',
+                description:
+                  'Total amount of that combination variableId and unit Id'
+              },
+              relativeOccurrence: {
+                type: 'number',
+                description: 'Relative occurrence (for bar chart)'
+              }
             }
           }
         },
@@ -1010,15 +1237,19 @@ export class WorkspaceCodingController {
       @Body() request: ExportValidationResultsRequestDto,
       @Res() res: Response
   ): Promise<void> {
-    const excelData = await this.workspaceCodingService.exportValidationResultsAsExcel(
-      workspace_id,
-      request.cacheKey
-    );
+    const excelData =
+      await this.workspaceCodingService.exportValidationResultsAsExcel(
+        workspace_id,
+        request.cacheKey
+      );
 
     const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `validation-results-${timestamp}.xlsx`;
 
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(excelData);
   }
@@ -1042,9 +1273,19 @@ export class WorkspaceCodingController {
         properties: {
           unitName: { type: 'string', description: 'Unit name' },
           variableId: { type: 'string', description: 'Variable ID' },
-          responseCount: { type: 'number', description: 'Number of responses for this variable' },
-          casesInJobs: { type: 'number', description: 'Number of unique cases already assigned to coding jobs' },
-          availableCases: { type: 'number', description: 'Number of cases available for new job assignments' }
+          responseCount: {
+            type: 'number',
+            description: 'Number of responses for this variable'
+          },
+          casesInJobs: {
+            type: 'number',
+            description:
+              'Number of unique cases already assigned to coding jobs'
+          },
+          availableCases: {
+            type: 'number',
+            description: 'Number of cases available for new job assignments'
+          }
         }
       }
     }
@@ -1052,7 +1293,15 @@ export class WorkspaceCodingController {
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
       @Query('unitName') unitName?: string
-  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
+  ): Promise<
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+      }[]
+      > {
     return this.workspaceCodingService.getCodingIncompleteVariables(
       workspace_id,
       unitName
@@ -1064,7 +1313,8 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'List of CODING_INCOMPLETE variables to check for applied results',
+    description:
+      'List of CODING_INCOMPLETE variables to check for applied results',
     schema: {
       type: 'object',
       properties: {
@@ -1087,12 +1337,14 @@ export class WorkspaceCodingController {
     description: 'Count of applied results for CODING_INCOMPLETE variables.',
     schema: {
       type: 'number',
-      description: 'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
+      description:
+        'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
     }
   })
   async getAppliedResultsCount(
     @WorkspaceId() workspace_id: number,
-      @Body() body: { incompleteVariables: { unitName: string; variableId: string }[] }
+      @Body()
+                   body: { incompleteVariables: { unitName: string; variableId: string }[] }
   ): Promise<number> {
     return this.workspaceCodingService.getAppliedResultsCount(
       workspace_id,
@@ -1109,17 +1361,29 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        totalCasesToCode: { type: 'number', description: 'Total number of cases that need to be coded' },
-        completedCases: { type: 'number', description: 'Number of cases that have been completed through coding jobs' },
-        completionPercentage: { type: 'number', description: 'Percentage of coding completion' }
+        totalCasesToCode: {
+          type: 'number',
+          description: 'Total number of cases that need to be coded'
+        },
+        completedCases: {
+          type: 'number',
+          description:
+            'Number of cases that have been completed through coding jobs'
+        },
+        completionPercentage: {
+          type: 'number',
+          description: 'Percentage of coding completion'
+        }
       }
     }
   })
-  async getCodingProgressOverview(@WorkspaceId() workspace_id: number): Promise<{
-    totalCasesToCode: number;
-    completedCases: number;
-    completionPercentage: number;
-  }> {
+  async getCodingProgressOverview(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        totalCasesToCode: number;
+        completedCases: number;
+        completionPercentage: number;
+      }> {
     return this.workspaceCodingService.getCodingProgressOverview(workspace_id);
   }
 
@@ -1132,12 +1396,30 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        totalCasesToCode: { type: 'number', description: 'Total number of cases that need to be coded' },
-        casesInJobs: { type: 'number', description: 'Number of cases assigned to coding jobs' },
-        doubleCodedCases: { type: 'number', description: 'Number of cases that are double-coded' },
-        singleCodedCases: { type: 'number', description: 'Number of cases that are single-coded' },
-        unassignedCases: { type: 'number', description: 'Number of cases not assigned to any coding job' },
-        coveragePercentage: { type: 'number', description: 'Percentage of cases covered by coding jobs' }
+        totalCasesToCode: {
+          type: 'number',
+          description: 'Total number of cases that need to be coded'
+        },
+        casesInJobs: {
+          type: 'number',
+          description: 'Number of cases assigned to coding jobs'
+        },
+        doubleCodedCases: {
+          type: 'number',
+          description: 'Number of cases that are double-coded'
+        },
+        singleCodedCases: {
+          type: 'number',
+          description: 'Number of cases that are single-coded'
+        },
+        unassignedCases: {
+          type: 'number',
+          description: 'Number of cases not assigned to any coding job'
+        },
+        coveragePercentage: {
+          type: 'number',
+          description: 'Percentage of cases covered by coding jobs'
+        }
       }
     }
   })
@@ -1161,16 +1443,48 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        totalVariables: { type: 'number', description: 'Total number of potential variables from unit XML files' },
-        coveredVariables: { type: 'number', description: 'Total number of variables covered by job definitions' },
-        coveredByDraft: { type: 'number', description: 'Number of variables covered by draft job definitions' },
-        coveredByPendingReview: { type: 'number', description: 'Number of variables covered by pending review job definitions' },
-        coveredByApproved: { type: 'number', description: 'Number of variables covered by approved job definitions' },
-        conflictedVariables: { type: 'number', description: 'Number of variables assigned to multiple job definitions' },
-        missingVariables: { type: 'number', description: 'Number of variables not covered by job definitions' },
-        partiallyAbgedeckteVariablen: { type: 'number', description: 'Number of variables with partial case coverage' },
-        fullyAbgedeckteVariablen: { type: 'number', description: 'Number of variables with full case coverage' },
-        coveragePercentage: { type: 'number', description: 'Percentage of variables covered by job definitions' },
+        totalVariables: {
+          type: 'number',
+          description: 'Total number of potential variables from unit XML files'
+        },
+        coveredVariables: {
+          type: 'number',
+          description: 'Total number of variables covered by job definitions'
+        },
+        coveredByDraft: {
+          type: 'number',
+          description: 'Number of variables covered by draft job definitions'
+        },
+        coveredByPendingReview: {
+          type: 'number',
+          description:
+            'Number of variables covered by pending review job definitions'
+        },
+        coveredByApproved: {
+          type: 'number',
+          description: 'Number of variables covered by approved job definitions'
+        },
+        conflictedVariables: {
+          type: 'number',
+          description:
+            'Number of variables assigned to multiple job definitions'
+        },
+        missingVariables: {
+          type: 'number',
+          description: 'Number of variables not covered by job definitions'
+        },
+        partiallyAbgedeckteVariablen: {
+          type: 'number',
+          description: 'Number of variables with partial case coverage'
+        },
+        fullyAbgedeckteVariablen: {
+          type: 'number',
+          description: 'Number of variables with full case coverage'
+        },
+        coveragePercentage: {
+          type: 'number',
+          description: 'Percentage of variables covered by job definitions'
+        },
         variableCaseCounts: {
           type: 'array',
           items: {
@@ -1178,7 +1492,10 @@ export class WorkspaceCodingController {
             properties: {
               unitName: { type: 'string', description: 'Unit name' },
               variableId: { type: 'string', description: 'Variable ID' },
-              caseCount: { type: 'number', description: 'Number of coding cases for this variable' }
+              caseCount: {
+                type: 'number',
+                description: 'Number of coding cases for this variable'
+              }
             }
           },
           description: 'List of all variables with their case counts'
@@ -1186,28 +1503,50 @@ export class WorkspaceCodingController {
         coverageByStatus: {
           type: 'object',
           properties: {
-            draft: { type: 'array', items: { type: 'string' }, description: 'Variables covered by draft definitions' },
-            pending_review: { type: 'array', items: { type: 'string' }, description: 'Variables covered by pending review definitions' },
-            approved: { type: 'array', items: { type: 'string' }, description: 'Variables covered by approved definitions' },
+            draft: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Variables covered by draft definitions'
+            },
+            pending_review: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Variables covered by pending review definitions'
+            },
+            approved: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Variables covered by approved definitions'
+            },
             conflicted: {
               type: 'array',
               items: {
                 type: 'object',
                 properties: {
-                  variableKey: { type: 'string', description: 'Variable key in format unitName:variableId' },
+                  variableKey: {
+                    type: 'string',
+                    description: 'Variable key in format unitName:variableId'
+                  },
                   conflictingDefinitions: {
                     type: 'array',
                     items: {
                       type: 'object',
                       properties: {
-                        id: { type: 'number', description: 'Job definition ID' },
-                        status: { type: 'string', description: 'Job definition status' }
+                        id: {
+                          type: 'number',
+                          description: 'Job definition ID'
+                        },
+                        status: {
+                          type: 'string',
+                          description: 'Job definition status'
+                        }
                       }
                     }
                   }
                 }
               },
-              description: 'Variables assigned to multiple definitions with conflict details'
+              description:
+                'Variables assigned to multiple definitions with conflict details'
             }
           },
           description: 'Coverage breakdown by job definition status'
@@ -1215,32 +1554,40 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getVariableCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
-    totalVariables: number;
-    coveredVariables: number;
-    coveredByDraft: number;
-    coveredByPendingReview: number;
-    coveredByApproved: number;
-    conflictedVariables: number;
-    missingVariables: number;
-    partiallyAbgedeckteVariablen: number;
-    fullyAbgedeckteVariablen: number;
-    coveragePercentage: number;
-    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
-    coverageByStatus: {
-      draft: string[];
-      pending_review: string[];
-      approved: string[];
-      conflicted: Array<{
-        variableKey: string;
-        conflictingDefinitions: Array<{
-          id: number;
-          status: string;
-        }>;
-      }>;
-    };
-  }> {
-    return this.workspaceCodingService.getVariableCoverageOverview(workspace_id);
+  async getVariableCoverageOverview(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        totalVariables: number;
+        coveredVariables: number;
+        coveredByDraft: number;
+        coveredByPendingReview: number;
+        coveredByApproved: number;
+        conflictedVariables: number;
+        missingVariables: number;
+        partiallyAbgedeckteVariablen: number;
+        fullyAbgedeckteVariablen: number;
+        coveragePercentage: number;
+        variableCaseCounts: {
+          unitName: string;
+          variableId: string;
+          caseCount: number;
+        }[];
+        coverageByStatus: {
+          draft: string[];
+          pending_review: string[];
+          approved: string[];
+          conflicted: Array<{
+            variableKey: string;
+            conflictingDefinitions: Array<{
+              id: number;
+              status: string;
+            }>;
+          }>;
+        };
+      }> {
+    return this.workspaceCodingService.getVariableCoverageOverview(
+      workspace_id
+    );
   }
 
   @Get(':workspace_id/coding/response-analysis')
@@ -1248,14 +1595,18 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
+    description:
+      'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
     schema: {
       type: 'object',
       properties: {
         emptyResponses: {
           type: 'object',
           properties: {
-            total: { type: 'number', description: 'Total number of empty responses' },
+            total: {
+              type: 'number',
+              description: 'Total number of empty responses'
+            },
             items: {
               type: 'array',
               items: {
@@ -1276,8 +1627,14 @@ export class WorkspaceCodingController {
         duplicateValues: {
           type: 'object',
           properties: {
-            total: { type: 'number', description: 'Total number of duplicate value groups' },
-            totalResponses: { type: 'number', description: 'Total number of responses in duplicate groups' },
+            total: {
+              type: 'number',
+              description: 'Total number of duplicate value groups'
+            },
+            totalResponses: {
+              type: 'number',
+              description: 'Total number of responses in duplicate groups'
+            },
             groups: {
               type: 'array',
               items: {
@@ -1311,7 +1668,10 @@ export class WorkspaceCodingController {
           items: { type: 'string' },
           description: 'Response matching flags used for normalization'
         },
-        analysisTimestamp: { type: 'string', description: 'ISO timestamp of when the analysis was performed' }
+        analysisTimestamp: {
+          type: 'string',
+          description: 'ISO timestamp of when the analysis was performed'
+        }
       }
     }
   })
@@ -1325,7 +1685,8 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'External coding file upload (CSV/Excel) with streaming progress',
+    description:
+      'External coding file upload (CSV/Excel) with streaming progress',
     type: ExternalCodingImportDto
   })
   @ApiOkResponse({
@@ -1350,27 +1711,32 @@ export class WorkspaceCodingController {
     res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
 
     try {
-      const result = await this.workspaceCodingService.importExternalCodingWithProgress(
-        workspace_id,
-        body,
-        (progress: number, message: string) => {
-          res.write(`data: ${JSON.stringify({ progress, message })}\n\n`);
-        }
-      );
+      const result =
+        await this.workspaceCodingService.importExternalCodingWithProgress(
+          workspace_id,
+          body,
+          (progress: number, message: string) => {
+            res.write(`data: ${JSON.stringify({ progress, message })}\n\n`);
+          }
+        );
 
       // Send final result
-      res.write(`data: ${JSON.stringify({
-        progress: 100,
-        message: 'Import completed',
-        result
-      })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          progress: 100,
+          message: 'Import completed',
+          result
+        })}\n\n`
+      );
       res.end();
     } catch (error) {
-      res.write(`data: ${JSON.stringify({
-        progress: 0,
-        message: `Import failed: ${error.message}`,
-        error: true
-      })}\n\n`);
+      res.write(
+        `data: ${JSON.stringify({
+          progress: 0,
+          message: `Import failed: ${error.message}`,
+          error: true
+        })}\n\n`
+      );
       res.end();
     }
   }
@@ -1415,7 +1781,8 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
-    description: 'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
+    description:
+      'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
     schema: {
       type: 'object',
       properties: {
@@ -1476,11 +1843,17 @@ export class WorkspaceCodingController {
   })
   async generateCoderTrainingPackages(
     @WorkspaceId() workspace_id: number,
-      @Body() body: {
-        selectedCoders: { id: number; name: string }[];
-        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
-      }
-  ): Promise<{
+      @Body()
+                   body: {
+                     selectedCoders: { id: number; name: string }[];
+                     variableConfigs: {
+                       variableId: string;
+                       unitId: string;
+                       sampleCount: number;
+                     }[];
+                   }
+  ): Promise<
+      {
         coderId: number;
         coderName: string;
         responses: {
@@ -1495,7 +1868,8 @@ export class WorkspaceCodingController {
           bookletName: string;
           variable: string;
         }[];
-      }[]> {
+      }[]
+      > {
     return this.coderTrainingService.generateCoderTrainingPackages(
       workspace_id,
       body.selectedCoders,
@@ -1517,21 +1891,34 @@ export class WorkspaceCodingController {
           id: { type: 'number', description: 'Training ID' },
           workspace_id: { type: 'number', description: 'Workspace ID' },
           label: { type: 'string', description: 'Training label' },
-          created_at: { type: 'string', format: 'date-time', description: 'Creation date' },
-          updated_at: { type: 'string', format: 'date-time', description: 'Last update date' },
-          jobsCount: { type: 'number', description: 'Number of coding jobs in this training' }
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Creation date'
+          },
+          updated_at: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Last update date'
+          },
+          jobsCount: {
+            type: 'number',
+            description: 'Number of coding jobs in this training'
+          }
         }
       }
     }
   })
-  async getCoderTrainings(@WorkspaceId() workspace_id: number): Promise<{
+  async getCoderTrainings(@WorkspaceId() workspace_id: number): Promise<
+  {
     id: number;
     workspace_id: number;
     label: string;
     created_at: Date;
     updated_at: Date;
     jobsCount: number;
-  }[]> {
+  }[]
+  > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
   }
 
@@ -1544,8 +1931,15 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        trainingLabel: { type: 'string', description: 'Label for the coder training session' },
-        missingsProfileId: { type: 'number', description: 'ID of the missings profile to assign to all created coding jobs' },
+        trainingLabel: {
+          type: 'string',
+          description: 'Label for the coder training session'
+        },
+        missingsProfileId: {
+          type: 'number',
+          description:
+            'ID of the missings profile to assign to all created coding jobs'
+        },
         selectedCoders: {
           type: 'array',
           items: {
@@ -1600,13 +1994,29 @@ export class WorkspaceCodingController {
   })
   async createCoderTrainingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body() body: {
-        trainingLabel: string;
-        missingsProfileId?: number;
-        selectedCoders: { id: number; name: string }[];
-        variableConfigs: { variableId: string; unitId: string; sampleCount: number }[];
-      }
-  ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: { coderId: number; coderName: string; jobId: number; jobName: string }[]; trainingId?: number }> {
+      @Body()
+                   body: {
+                     trainingLabel: string;
+                     missingsProfileId?: number;
+                     selectedCoders: { id: number; name: string }[];
+                     variableConfigs: {
+                       variableId: string;
+                       unitId: string;
+                       sampleCount: number;
+                     }[];
+                   }
+  ): Promise<{
+        success: boolean;
+        jobsCreated: number;
+        message: string;
+        jobs: {
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          jobName: string;
+        }[];
+        trainingId?: number;
+      }> {
     return this.coderTrainingService.createCoderTrainingJobs(
       workspace_id,
       body.selectedCoders,
@@ -1641,9 +2051,18 @@ export class WorkspaceCodingController {
               type: 'object',
               properties: {
                 trainingId: { type: 'number', description: 'Training ID' },
-                trainingLabel: { type: 'string', description: 'Training label' },
-                code: { type: 'string', description: 'Code given by coders in this training' },
-                score: { type: 'number', description: 'Score given by coders in this training' }
+                trainingLabel: {
+                  type: 'string',
+                  description: 'Training label'
+                },
+                code: {
+                  type: 'string',
+                  description: 'Code given by coders in this training'
+                },
+                score: {
+                  type: 'number',
+                  description: 'Score given by coders in this training'
+                }
               }
             }
           }
@@ -1654,7 +2073,8 @@ export class WorkspaceCodingController {
   async compareTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
       @Query('trainingIds') trainingIdsQuery: string
-  ): Promise<Array<{
+  ): Promise<
+      Array<{
         unitName: string;
         variableId: string;
         trainings: Array<{
@@ -1663,14 +2083,21 @@ export class WorkspaceCodingController {
           code: string | null;
           score: number | null;
         }>;
-      }>> {
-    const trainingIds = trainingIdsQuery.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !Number.isNaN(id));
+      }>
+      > {
+    const trainingIds = trainingIdsQuery
+      .split(',')
+      .map(id => parseInt(id.trim(), 10))
+      .filter(id => !Number.isNaN(id));
 
     if (trainingIds.length === 0) {
       throw new Error('At least one valid training ID must be provided');
     }
 
-    return this.coderTrainingService.getTrainingCodingComparison(workspace_id, trainingIds);
+    return this.coderTrainingService.getTrainingCodingComparison(
+      workspace_id,
+      trainingIds
+    );
   }
 
   @Get(':workspace_id/coding/compare-within-training')
@@ -1684,7 +2111,8 @@ export class WorkspaceCodingController {
     type: Number
   })
   @ApiOkResponse({
-    description: 'Comparison of coding results within a single training by individual coders',
+    description:
+      'Comparison of coding results within a single training by individual coders',
     schema: {
       type: 'array',
       items: {
@@ -1702,8 +2130,14 @@ export class WorkspaceCodingController {
               properties: {
                 jobId: { type: 'number', description: 'Job ID' },
                 coderName: { type: 'string', description: 'Name of the coder' },
-                code: { type: 'string', description: 'Code given by this coder' },
-                score: { type: 'number', description: 'Score given by this coder' }
+                code: {
+                  type: 'string',
+                  description: 'Code given by this coder'
+                },
+                score: {
+                  type: 'number',
+                  description: 'Score given by this coder'
+                }
               }
             }
           }
@@ -1714,7 +2148,8 @@ export class WorkspaceCodingController {
   async compareWithinTrainingCodingResults(
     @WorkspaceId() workspace_id: number,
       @Query('trainingId') trainingId: number
-  ): Promise<Array<{
+  ): Promise<
+      Array<{
         unitName: string;
         variableId: string;
         personCode: string;
@@ -1726,20 +2161,28 @@ export class WorkspaceCodingController {
           code: string | null;
           score: number | null;
         }>;
-      }>> {
+      }>
+      > {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }
 
     // Get coding results for all jobs within the training
-    return this.coderTrainingService.getWithinTrainingCodingComparison(workspace_id, trainingId);
+    return this.coderTrainingService.getWithinTrainingCodingComparison(
+      workspace_id,
+      trainingId
+    );
   }
 
   @Put(':workspace_id/coding/coder-trainings/:trainingId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'trainingId', type: Number, description: 'ID of the coder training to update' })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training to update'
+  })
   @ApiBody({
     description: 'New label for the coder training',
     schema: {
@@ -1758,7 +2201,10 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean', description: 'Whether the update was successful' },
+        success: {
+          type: 'boolean',
+          description: 'Whether the update was successful'
+        },
         message: { type: 'string', description: 'Result message' }
       }
     }
@@ -1776,14 +2222,22 @@ export class WorkspaceCodingController {
       throw new Error('Valid label must be provided');
     }
 
-    return this.coderTrainingService.updateCoderTrainingLabel(workspace_id, trainingId, body.label.trim());
+    return this.coderTrainingService.updateCoderTrainingLabel(
+      workspace_id,
+      trainingId,
+      body.label.trim()
+    );
   }
 
   @Get(':workspace_id/coding/coder-trainings/:trainingId/jobs')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'trainingId', type: Number, description: 'ID of the coder training' })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
   @ApiOkResponse({
     description: 'List of coding jobs for the specified coder training.',
     schema: {
@@ -1795,7 +2249,11 @@ export class WorkspaceCodingController {
           name: { type: 'string', description: 'Job name' },
           description: { type: 'string', description: 'Job description' },
           status: { type: 'string', description: 'Job status' },
-          created_at: { type: 'string', format: 'date-time', description: 'Creation date' },
+          created_at: {
+            type: 'string',
+            format: 'date-time',
+            description: 'Creation date'
+          },
           coder: {
             type: 'object',
             properties: {
@@ -1803,7 +2261,10 @@ export class WorkspaceCodingController {
               username: { type: 'string', description: 'Coder username' }
             }
           },
-          unitsCount: { type: 'number', description: 'Number of coding units in the job' }
+          unitsCount: {
+            type: 'number',
+            description: 'Number of coding units in the job'
+          }
         }
       }
     }
@@ -1811,7 +2272,8 @@ export class WorkspaceCodingController {
   async getCodingJobsForTraining(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number
-  ): Promise<Array<{
+  ): Promise<
+      Array<{
         id: number;
         name: string;
         description?: string;
@@ -1822,12 +2284,16 @@ export class WorkspaceCodingController {
           username: string;
         };
         unitsCount: number;
-      }>> {
+      }>
+      > {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }
 
-    return this.coderTrainingService.getCodingJobsForTraining(workspace_id, trainingId);
+    return this.coderTrainingService.getCodingJobsForTraining(
+      workspace_id,
+      trainingId
+    );
   }
 
   @Get(':workspace_id/coding/cohens-kappa')
@@ -1847,7 +2313,8 @@ export class WorkspaceCodingController {
     type: String
   })
   @ApiOkResponse({
-    description: 'Cohen\'s Kappa statistics for double-coded variables with workspace summary.',
+    description:
+      "Cohen's Kappa statistics for double-coded variables with workspace summary.",
     schema: {
       type: 'object',
       properties: {
@@ -1864,30 +2331,71 @@ export class WorkspaceCodingController {
                   type: 'object',
                   properties: {
                     coder1Id: { type: 'number', description: 'First coder ID' },
-                    coder1Name: { type: 'string', description: 'First coder name' },
-                    coder2Id: { type: 'number', description: 'Second coder ID' },
-                    coder2Name: { type: 'string', description: 'Second coder name' },
-                    kappa: { type: 'number', nullable: true, description: 'Cohen\'s Kappa coefficient' },
-                    agreement: { type: 'number', description: 'Observed agreement percentage' },
-                    totalItems: { type: 'number', description: 'Total items coded by both coders' },
-                    validPairs: { type: 'number', description: 'Number of valid coding pairs' },
-                    interpretation: { type: 'string', description: 'Interpretation of the Kappa value' }
+                    coder1Name: {
+                      type: 'string',
+                      description: 'First coder name'
+                    },
+                    coder2Id: {
+                      type: 'number',
+                      description: 'Second coder ID'
+                    },
+                    coder2Name: {
+                      type: 'string',
+                      description: 'Second coder name'
+                    },
+                    kappa: {
+                      type: 'number',
+                      nullable: true,
+                      description: "Cohen's Kappa coefficient"
+                    },
+                    agreement: {
+                      type: 'number',
+                      description: 'Observed agreement percentage'
+                    },
+                    totalItems: {
+                      type: 'number',
+                      description: 'Total items coded by both coders'
+                    },
+                    validPairs: {
+                      type: 'number',
+                      description: 'Number of valid coding pairs'
+                    },
+                    interpretation: {
+                      type: 'string',
+                      description: 'Interpretation of the Kappa value'
+                    }
                   }
                 },
-                description: 'Cohen\'s Kappa statistics for each coder pair'
+                description: "Cohen's Kappa statistics for each coder pair"
               }
             }
           },
-          description: 'Per-variable Cohen\'s Kappa statistics'
+          description: "Per-variable Cohen's Kappa statistics"
         },
         workspaceSummary: {
           type: 'object',
           properties: {
-            totalDoubleCodedResponses: { type: 'number', description: 'Total number of double-coded responses' },
-            totalCoderPairs: { type: 'number', description: 'Total number of coder pairs analyzed' },
-            averageKappa: { type: 'number', nullable: true, description: 'Average Cohen\'s Kappa across all coder pairs' },
-            variablesIncluded: { type: 'number', description: 'Number of variables included in the analysis' },
-            codersIncluded: { type: 'number', description: 'Number of coders included in the analysis' }
+            totalDoubleCodedResponses: {
+              type: 'number',
+              description: 'Total number of double-coded responses'
+            },
+            totalCoderPairs: {
+              type: 'number',
+              description: 'Total number of coder pairs analyzed'
+            },
+            averageKappa: {
+              type: 'number',
+              nullable: true,
+              description: "Average Cohen's Kappa across all coder pairs"
+            },
+            variablesIncluded: {
+              type: 'number',
+              description: 'Number of variables included in the analysis'
+            },
+            codersIncluded: {
+              type: 'number',
+              description: 'Number of coders included in the analysis'
+            }
           },
           description: 'Workspace-wide summary statistics'
         }
@@ -1923,13 +2431,24 @@ export class WorkspaceCodingController {
         };
       }> {
     try {
-      this.logger.log(`Calculating Cohen's Kappa for workspace ${workspace_id}${unitName ? `, unit: ${unitName}` : ''}${variableId ? `, variable: ${variableId}` : ''}`);
+      this.logger.log(
+        `Calculating Cohen's Kappa for workspace ${workspace_id}${
+          unitName ? `, unit: ${unitName}` : ''
+        }${variableId ? `, variable: ${variableId}` : ''}`
+      );
 
       // Get all double-coded data
-      const doubleCodedData = await this.workspaceCodingService.getDoubleCodedVariablesForReview(workspace_id, 1, 10000); // Get all data
+      const doubleCodedData =
+        await this.workspaceCodingService.getDoubleCodedVariablesForReview(
+          workspace_id,
+          1,
+          10000
+        ); // Get all data
 
       // Group by unit and variable
-      const groupedData = new Map<string, Array<{
+      const groupedData = new Map<
+      string,
+      Array<{
         unitName: string;
         variableId: string;
         personLogin: string;
@@ -1943,7 +2462,8 @@ export class WorkspaceCodingController {
           notes: string | null;
           codedAt: Date;
         }>;
-      }>>();
+      }>
+      >();
 
       doubleCodedData.data.forEach(item => {
         // Apply filters if provided
@@ -1998,8 +2518,12 @@ export class WorkspaceCodingController {
             // Collect coding pairs for these two coders
             const codes = [];
             items.forEach(item => {
-              const coder1Result = item.coderResults.find(cr => cr.coderId === coder1Id);
-              const coder2Result = item.coderResults.find(cr => cr.coderId === coder2Id);
+              const coder1Result = item.coderResults.find(
+                cr => cr.coderId === coder1Id
+              );
+              const coder2Result = item.coderResults.find(
+                cr => cr.coderId === coder2Id
+              );
 
               if (coder1Result && coder2Result) {
                 codes.push({
@@ -2023,7 +2547,8 @@ export class WorkspaceCodingController {
 
         if (coderPairs.length > 0) {
           // Calculate Cohen's Kappa for all pairs
-          const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs);
+          const kappaResults =
+            this.codingStatisticsService.calculateCohensKappa(coderPairs);
 
           // Collect all kappa results for later averaging
           allKappaResults.push(...kappaResults);
@@ -2047,7 +2572,10 @@ export class WorkspaceCodingController {
       });
 
       // Calculate workspace summary - return 0 instead of null when no valid kappa values
-      const averageKappa = validKappaCount > 0 ? Math.round((totalKappa / validKappaCount) * 1000) / 1000 : 0;
+      const averageKappa =
+        validKappaCount > 0 ?
+          Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
+          0;
 
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
@@ -2057,15 +2585,22 @@ export class WorkspaceCodingController {
         codersIncluded: uniqueCoders.size
       };
 
-      this.logger.log(`Calculated Cohen's Kappa for ${variables.length} unit/variable combinations in workspace ${workspace_id}, average kappa: ${averageKappa}`);
+      this.logger.log(
+        `Calculated Cohen's Kappa for ${variables.length} unit/variable combinations in workspace ${workspace_id}, average kappa: ${averageKappa}`
+      );
 
       return {
         variables,
         workspaceSummary
       };
     } catch (error) {
-      this.logger.error(`Error calculating Cohen's Kappa: ${error.message}`, error.stack);
-      throw new Error('Could not calculate Cohen\'s Kappa statistics. Please check the database connection.');
+      this.logger.error(
+        `Error calculating Cohen's Kappa: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        "Could not calculate Cohen's Kappa statistics. Please check the database connection."
+      );
     }
   }
 
@@ -2074,13 +2609,20 @@ export class WorkspaceCodingController {
   @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'trainingId', type: Number, description: 'ID of the coder training to delete' })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training to delete'
+  })
   @ApiOkResponse({
     description: 'Coder training deleted successfully.',
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean', description: 'Whether the deletion was successful' },
+        success: {
+          type: 'boolean',
+          description: 'Whether the deletion was successful'
+        },
         message: { type: 'string', description: 'Result message' }
       }
     }
@@ -2093,14 +2635,21 @@ export class WorkspaceCodingController {
       throw new Error('Valid training ID must be provided');
     }
 
-    return this.coderTrainingService.deleteCoderTraining(workspace_id, trainingId);
+    return this.coderTrainingService.deleteCoderTraining(
+      workspace_id,
+      trainingId
+    );
   }
 
   @Get(':workspace_id/coding/responses/:status')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'status', type: String, description: 'Response status to filter by' })
+  @ApiParam({
+    name: 'status',
+    type: String,
+    description: 'Response status to filter by'
+  })
   @ApiQuery({
     name: 'version',
     required: false,
@@ -2179,7 +2728,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'responseId', type: Number, description: 'ID of the response' })
+  @ApiParam({
+    name: 'responseId',
+    type: Number,
+    description: 'ID of the response'
+  })
   @ApiQuery({
     name: 'authToken',
     required: true,
@@ -2226,7 +2779,10 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Body() createDto: CreateJobDefinitionDto
   ): Promise<JobDefinition> {
-    return this.jobDefinitionService.createJobDefinition(createDto, workspace_id);
+    return this.jobDefinitionService.createJobDefinition(
+      createDto,
+      workspace_id
+    );
   }
 
   @Get(':workspace_id/coding/job-definitions')
@@ -2255,7 +2811,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getJobDefinitions(@WorkspaceId() workspace_id: number): Promise<JobDefinition[]> {
+  async getJobDefinitions(
+    @WorkspaceId() workspace_id: number
+  ): Promise<JobDefinition[]> {
     return this.jobDefinitionService.getJobDefinitions(workspace_id);
   }
 
@@ -2284,7 +2842,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getApprovedJobDefinitions(@WorkspaceId() workspaceId: number): Promise<JobDefinition[]> {
+  async getApprovedJobDefinitions(
+    @WorkspaceId() workspaceId: number
+  ): Promise<JobDefinition[]> {
     return this.jobDefinitionService.getApprovedJobDefinitions(workspaceId);
   }
 
@@ -2380,14 +2940,21 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number
   ): Promise<CodingJob> {
-    return this.jobDefinitionService.createCodingJobFromDefinition(id, workspace_id);
+    return this.jobDefinitionService.createCodingJobFromDefinition(
+      id,
+      workspace_id
+    );
   }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: Number, description: 'Coding job ID to apply results for' })
+  @ApiParam({
+    name: 'jobId',
+    type: Number,
+    description: 'Coding job ID to apply results for'
+  })
   @ApiOkResponse({
     description: 'Coding results applied successfully to response database.',
     schema: {
@@ -2467,8 +3034,14 @@ export class WorkspaceCodingController {
             properties: {
               jobId: { type: 'number', description: 'Job ID' },
               jobName: { type: 'string', description: 'Job name' },
-              hasIssues: { type: 'boolean', description: 'Whether the job has coding issues' },
-              skipped: { type: 'boolean', description: 'Whether the job was skipped' },
+              hasIssues: {
+                type: 'boolean',
+                description: 'Whether the job has coding issues'
+              },
+              skipped: {
+                type: 'boolean',
+                description: 'Whether the job was skipped'
+              },
               result: {
                 type: 'object',
                 description: 'Apply result (only present if not skipped)',
@@ -2485,27 +3058,25 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async bulkApplyCodingResults(
-    @WorkspaceId() workspace_id: number
-  ): Promise<{
+  async bulkApplyCodingResults(@WorkspaceId() workspace_id: number): Promise<{
+    success: boolean;
+    jobsProcessed: number;
+    totalUpdatedResponses: number;
+    totalSkippedReview: number;
+    message: string;
+    results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
         success: boolean;
-        jobsProcessed: number;
-        totalUpdatedResponses: number;
-        totalSkippedReview: number;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
         message: string;
-        results: Array<{
-          jobId: number;
-          jobName: string;
-          hasIssues: boolean;
-          skipped: boolean;
-          result?: {
-            success: boolean;
-            updatedResponsesCount: number;
-            skippedReviewCount: number;
-            message: string;
-          };
-        }>;
-      }> {
+      };
+    }>;
+  }> {
     return this.workspaceCodingService.bulkApplyCodingResults(workspace_id);
   }
 
@@ -2599,18 +3170,31 @@ export class WorkspaceCodingController {
   })
   async calculateDistribution(
     @WorkspaceId() workspace_id: number,
-      @Body() body: {
-        selectedVariables: { unitName: string; variableId: string }[];
-        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
-        selectedCoders: { id: number; name: string; username: string }[];
-        doubleCodingAbsolute?: number;
-        doubleCodingPercentage?: number;
-        caseOrderingMode?: 'continuous' | 'alternating';
-        maxCodingCases?: number;
-      }
+      @Body()
+                   body: {
+                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariableBundles?: {
+                       id: number;
+                       name: string;
+                       variables: { unitName: string; variableId: string }[];
+                     }[];
+                     selectedCoders: { id: number; name: string; username: string }[];
+                     doubleCodingAbsolute?: number;
+                     doubleCodingPercentage?: number;
+                     caseOrderingMode?: 'continuous' | 'alternating';
+                     maxCodingCases?: number;
+                   }
   ): Promise<{
         distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+        doubleCodingInfo: Record<
+        string,
+        {
+          totalCases: number;
+          doubleCodedCases: number;
+          singleCodedCasesAssigned: number;
+          doubleCodedCasesPerCoder: Record<string, number>;
+        }
+        >;
       }> {
     return this.codingJobService.calculateDistribution(workspace_id, body);
   }
@@ -2728,21 +3312,34 @@ export class WorkspaceCodingController {
   })
   async createDistributedCodingJobs(
     @WorkspaceId() workspace_id: number,
-      @Body() body: {
-        selectedVariables: { unitName: string; variableId: string }[];
-        selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
-        selectedCoders: { id: number; name: string; username: string }[];
-        doubleCodingAbsolute?: number;
-        doubleCodingPercentage?: number;
-        caseOrderingMode?: 'continuous' | 'alternating';
-        maxCodingCases?: number;
-      }
+      @Body()
+                   body: {
+                     selectedVariables: { unitName: string; variableId: string }[];
+                     selectedVariableBundles?: {
+                       id: number;
+                       name: string;
+                       variables: { unitName: string; variableId: string }[];
+                     }[];
+                     selectedCoders: { id: number; name: string; username: string }[];
+                     doubleCodingAbsolute?: number;
+                     doubleCodingPercentage?: number;
+                     caseOrderingMode?: 'continuous' | 'alternating';
+                     maxCodingCases?: number;
+                   }
   ): Promise<{
         success: boolean;
         jobsCreated: number;
         message: string;
         distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+        doubleCodingInfo: Record<
+        string,
+        {
+          totalCases: number;
+          doubleCodedCases: number;
+          singleCodedCasesAssigned: number;
+          doubleCodedCasesPerCoder: Record<string, number>;
+        }
+        >;
         jobs: {
           coderId: number;
           coderName: string;
@@ -2752,7 +3349,10 @@ export class WorkspaceCodingController {
           caseCount: number;
         }[];
       }> {
-    return this.workspaceCodingService.createDistributedCodingJobs(workspace_id, body);
+    return this.workspaceCodingService.createDistributedCodingJobs(
+      workspace_id,
+      body
+    );
   }
 
   @Post(':workspace_id/coding/export/start')
@@ -2767,7 +3367,13 @@ export class WorkspaceCodingController {
       properties: {
         exportType: {
           type: 'string',
-          enum: ['aggregated', 'by-coder', 'by-variable', 'detailed', 'coding-times'],
+          enum: [
+            'aggregated',
+            'by-coder',
+            'by-variable',
+            'detailed',
+            'coding-times'
+          ],
           description: 'Type of export to generate'
         },
         userId: {
@@ -2780,7 +3386,11 @@ export class WorkspaceCodingController {
         usePseudoCoders: { type: 'boolean' },
         doubleCodingMethod: {
           type: 'string',
-          enum: ['new-row-per-variable', 'new-column-per-coder', 'most-frequent']
+          enum: [
+            'new-row-per-variable',
+            'new-column-per-coder',
+            'most-frequent'
+          ]
         },
         includeComments: { type: 'boolean' },
         includeModalValue: { type: 'boolean' },
@@ -2810,14 +3420,19 @@ export class WorkspaceCodingController {
         workspaceId: workspace_id
       });
 
-      this.logger.log(`Export job ${job.id} created for workspace ${workspace_id}, type: ${body.exportType}`);
+      this.logger.log(
+        `Export job ${job.id} created for workspace ${workspace_id}, type: ${body.exportType}`
+      );
 
       return {
         jobId: job.id.toString(),
         message: `Export job created successfully. Job ID: ${job.id}`
       };
     } catch (error) {
-      this.logger.error(`Error creating export job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error creating export job: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -2826,7 +3441,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the export job'
+  })
   @ApiOkResponse({
     description: 'Export job status retrieved successfully',
     schema: {
@@ -2843,7 +3462,8 @@ export class WorkspaceCodingController {
         },
         result: {
           type: 'object',
-          description: 'Export metadata (only available when status is completed)'
+          description:
+            'Export metadata (only available when status is completed)'
         },
         error: {
           type: 'string',
@@ -2852,7 +3472,8 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getExportJobStatus(@Param('jobId') jobId: string): Promise<{
+  async getExportJobStatus(@Param('jobId') jobId: string): Promise<
+  | {
     status: string;
     progress: number;
     result?: {
@@ -2866,7 +3487,9 @@ export class WorkspaceCodingController {
       createdAt: number;
     };
     error?: string;
-  } | { error: string }> {
+  }
+  | { error: string }
+  > {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
@@ -2902,11 +3525,16 @@ export class WorkspaceCodingController {
       return {
         status,
         progress: typeof progress === 'number' ? progress : 0,
-        ...(status === 'completed' && job.returnvalue ? { result: job.returnvalue } : {}),
+        ...(status === 'completed' && job.returnvalue ?
+          { result: job.returnvalue } :
+          {}),
         ...(status === 'failed' && failedReason ? { error: failedReason } : {})
       };
     } catch (error) {
-      this.logger.error(`Error getting export job status: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting export job status: ${error.message}`,
+        error.stack
+      );
       return { error: error.message };
     }
   }
@@ -2915,7 +3543,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the export job'
+  })
   @ApiOkResponse({
     description: 'Export file downloaded successfully',
     content: {
@@ -2933,7 +3565,9 @@ export class WorkspaceCodingController {
       @Res() res: Response
   ): Promise<void> {
     try {
-      const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+      const metadata = await this.cacheService.get<ExportJobResult>(
+        `export-result:${jobId}`
+      );
 
       if (!metadata) {
         res.status(404).json({ error: 'Export file not found or expired' });
@@ -2953,14 +3587,28 @@ export class WorkspaceCodingController {
         return;
       }
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="${metadata.fileName}"`);
+      const isCsv =
+        metadata.fileName.toLowerCase().endsWith('.csv') ||
+        metadata.exportType === 'detailed';
+      res.setHeader(
+        'Content-Type',
+        isCsv ?
+          'text/csv; charset=utf-8' :
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="${metadata.fileName}"`
+      );
       res.setHeader('Content-Length', metadata.fileSize);
 
       const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
     } catch (error) {
-      this.logger.error(`Error downloading export: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error downloading export: ${error.message}`,
+        error.stack
+      );
       res.status(500).json({ error: error.message });
     }
   }
@@ -2985,13 +3633,15 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<Array<{
+  async getExportJobs(@WorkspaceId() workspace_id: number): Promise<
+  Array<{
     jobId: string;
     status: string;
     progress: number;
     exportType: string;
     createdAt: number;
-  }>> {
+  }>
+  > {
     try {
       const jobs = await this.jobQueueService.getExportJobs(workspace_id);
 
@@ -3010,7 +3660,10 @@ export class WorkspaceCodingController {
         })
       );
     } catch (error) {
-      this.logger.error(`Error getting export jobs: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting export jobs: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
@@ -3019,7 +3672,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job to delete' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the export job to delete'
+  })
   @ApiOkResponse({
     description: 'Export job deleted successfully',
     schema: {
@@ -3030,12 +3687,16 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async deleteExportJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async deleteExportJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
       const success = await this.jobQueueService.deleteExportJob(jobId);
 
       if (success) {
-        const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+        const metadata = await this.cacheService.get<ExportJobResult>(
+          `export-result:${jobId}`
+        );
         if (metadata && metadata.filePath) {
           const fs = await import('fs');
           if (fs.existsSync(metadata.filePath)) {
@@ -3055,7 +3716,10 @@ export class WorkspaceCodingController {
         message: 'Export job not found'
       };
     } catch (error) {
-      this.logger.error(`Error deleting export job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error deleting export job: ${error.message}`,
+        error.stack
+      );
       return {
         success: false,
         message: error.message
@@ -3067,7 +3731,11 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'jobId', type: String, description: 'ID of the export job to cancel' })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'ID of the export job to cancel'
+  })
   @ApiOkResponse({
     description: 'Export job cancelled successfully',
     schema: {
@@ -3078,7 +3746,9 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async cancelExportJob(@Param('jobId') jobId: string): Promise<{ success: boolean; message: string }> {
+  async cancelExportJob(
+    @Param('jobId') jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
       const job = await this.jobQueueService.getExportJob(jobId);
@@ -3113,7 +3783,9 @@ export class WorkspaceCodingController {
       const removed = await this.jobQueueService.cancelExportJob(jobId);
 
       // Clean up any cached metadata and temp files
-      const metadata = await this.cacheService.get<ExportJobResult>(`export-result:${jobId}`);
+      const metadata = await this.cacheService.get<ExportJobResult>(
+        `export-result:${jobId}`
+      );
       if (metadata && metadata.filePath) {
         const fs = await import('fs');
         if (fs.existsSync(metadata.filePath)) {
@@ -3131,13 +3803,19 @@ export class WorkspaceCodingController {
         };
       }
       // Job was marked as cancelled but couldn't be removed (may be actively processing)
-      this.logger.log(`Export job ${jobId} marked as cancelled (job is actively processing)`);
+      this.logger.log(
+        `Export job ${jobId} marked as cancelled (job is actively processing)`
+      );
       return {
         success: true,
-        message: 'Export job cancellation requested (job will stop at next checkpoint)'
+        message:
+          'Export job cancellation requested (job will stop at next checkpoint)'
       };
     } catch (error) {
-      this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error cancelling export job: ${error.message}`,
+        error.stack
+      );
       return {
         success: false,
         message: error.message
@@ -3177,7 +3855,8 @@ export class WorkspaceCodingController {
     name: 'doubleCodingMethod',
     required: false,
     enum: ['new-row-per-variable', 'new-column-per-coder', 'most-frequent'],
-    description: 'Method for handling double-coding: new-row-per-variable, new-column-per-coder, or most-frequent (default)'
+    description:
+      'Method for handling double-coding: new-row-per-variable, new-column-per-coder, or most-frequent (default)'
   })
   @ApiQuery({
     name: 'includeComments',
@@ -3201,7 +3880,8 @@ export class WorkspaceCodingController {
     name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+    description:
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
@@ -3218,42 +3898,56 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
       @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
-      @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('doubleCodingMethod') doubleCodingMethod?: string,
-      @Query('includeComments') includeComments?: string,
-      @Query('includeModalValue') includeModalValue?: string,
-      @Query('authToken') authToken?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+      @Query('outputCommentsInsteadOfCodes')
+                   outputCommentsInsteadOfCodes?: string,
+                   @Query('includeReplayUrl') includeReplayUrl?: string,
+                   @Query('anonymizeCoders') anonymizeCoders?: string,
+                   @Query('usePseudoCoders') usePseudoCoders?: string,
+                   @Query('doubleCodingMethod') doubleCodingMethod?: string,
+                   @Query('includeComments') includeComments?: string,
+                   @Query('includeModalValue') includeModalValue?: string,
+                   @Query('authToken') authToken?: string,
+                   @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
       const includeReplayUrlParam = includeReplayUrl === 'true';
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
-      const doubleCodingMethodParam = (doubleCodingMethod as 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent') || 'most-frequent';
+      const doubleCodingMethodParam =
+        (doubleCodingMethod as
+          | 'new-row-per-variable'
+          | 'new-column-per-coder'
+          | 'most-frequent') || 'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
 
-      const buffer = await this.codingExportService.exportCodingResultsAggregated(
-        workspace_id,
-        outputCommentsParam,
-        includeReplayUrlParam,
-        anonymizeCodersParam,
-        usePseudoCodersParam,
-        doubleCodingMethodParam,
-        includeCommentsParam,
-        includeModalValueParam,
-        authToken || '',
-        req,
-        excludeAutoCodedParam
-      );
+      const buffer =
+        await this.codingExportService.exportCodingResultsAggregated(
+          workspace_id,
+          outputCommentsParam,
+          includeReplayUrlParam,
+          anonymizeCodersParam,
+          usePseudoCodersParam,
+          doubleCodingMethodParam,
+          includeCommentsParam,
+          includeModalValueParam,
+          authToken || '',
+          req,
+          excludeAutoCodedParam
+        );
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=coding-results-aggregated-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=coding-results-aggregated-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -3286,7 +3980,8 @@ export class WorkspaceCodingController {
     name: 'anonymizeCoders',
     required: false,
     type: Boolean,
-    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+    description:
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -3298,7 +3993,8 @@ export class WorkspaceCodingController {
     name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+    description:
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
@@ -3315,12 +4011,13 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
       @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
-      @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+      @Query('outputCommentsInsteadOfCodes')
+                   outputCommentsInsteadOfCodes?: string,
+                   @Query('includeReplayUrl') includeReplayUrl?: string,
+                   @Query('authToken') authToken?: string,
+                   @Query('anonymizeCoders') anonymizeCoders?: string,
+                   @Query('usePseudoCoders') usePseudoCoders?: string,
+                   @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
@@ -3328,10 +4025,27 @@ export class WorkspaceCodingController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam);
+      const buffer = await this.codingExportService.exportCodingResultsByCoder(
+        workspace_id,
+        outputCommentsParam,
+        includeReplayUrlParam,
+        anonymizeCodersParam,
+        usePseudoCodersParam,
+        authToken || '',
+        req,
+        excludeAutoCodedParam
+      );
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-coder-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=coding-results-by-coder-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -3382,7 +4096,8 @@ export class WorkspaceCodingController {
     name: 'anonymizeCoders',
     required: false,
     type: Boolean,
-    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+    description:
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -3394,7 +4109,8 @@ export class WorkspaceCodingController {
     name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+    description:
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
@@ -3414,12 +4130,13 @@ export class WorkspaceCodingController {
       @Query('includeModalValue') includeModalValue?: string,
       @Query('includeDoubleCoded') includeDoubleCoded?: string,
       @Query('includeComments') includeComments?: string,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
-      @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+      @Query('outputCommentsInsteadOfCodes')
+                   outputCommentsInsteadOfCodes?: string,
+                   @Query('includeReplayUrl') includeReplayUrl?: string,
+                   @Query('authToken') authToken?: string,
+                   @Query('anonymizeCoders') anonymizeCoders?: string,
+                   @Query('usePseudoCoders') usePseudoCoders?: string,
+                   @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const includeModal = includeModalValue === 'true';
@@ -3430,8 +4147,30 @@ export class WorkspaceCodingController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByVariable(workspace_id, includeModal, includeDouble, includeCommentsParam, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam); res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=coding-results-by-variable-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const buffer =
+        await this.codingExportService.exportCodingResultsByVariable(
+          workspace_id,
+          includeModal,
+          includeDouble,
+          includeCommentsParam,
+          outputCommentsParam,
+          includeReplayUrlParam,
+          anonymizeCodersParam,
+          usePseudoCodersParam,
+          authToken || '',
+          req,
+          excludeAutoCodedParam
+        );
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=coding-results-by-variable-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -3464,7 +4203,8 @@ export class WorkspaceCodingController {
     name: 'anonymizeCoders',
     required: false,
     type: Boolean,
-    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+    description:
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -3476,7 +4216,8 @@ export class WorkspaceCodingController {
     name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+    description:
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
@@ -3493,12 +4234,13 @@ export class WorkspaceCodingController {
     @WorkspaceId() workspace_id: number,
       @Res() res: Response,
       @Req() req: Request,
-      @Query('outputCommentsInsteadOfCodes') outputCommentsInsteadOfCodes?: string,
-      @Query('includeReplayUrl') includeReplayUrl?: string,
-      @Query('authToken') authToken?: string,
-      @Query('anonymizeCoders') anonymizeCoders?: string,
-      @Query('usePseudoCoders') usePseudoCoders?: string,
-      @Query('excludeAutoCoded') excludeAutoCoded?: string
+      @Query('outputCommentsInsteadOfCodes')
+                   outputCommentsInsteadOfCodes?: string,
+                   @Query('includeReplayUrl') includeReplayUrl?: string,
+                   @Query('authToken') authToken?: string,
+                   @Query('anonymizeCoders') anonymizeCoders?: string,
+                   @Query('usePseudoCoders') usePseudoCoders?: string,
+                   @Query('excludeAutoCoded') excludeAutoCoded?: string
   ): Promise<void> {
     try {
       const outputCommentsParam = outputCommentsInsteadOfCodes === 'true';
@@ -3506,10 +4248,24 @@ export class WorkspaceCodingController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(workspace_id, outputCommentsParam, includeReplayUrlParam, anonymizeCodersParam, usePseudoCodersParam, authToken || '', req, excludeAutoCodedParam);
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(
+        workspace_id,
+        outputCommentsParam,
+        includeReplayUrlParam,
+        anonymizeCodersParam,
+        usePseudoCodersParam,
+        authToken || '',
+        req,
+        excludeAutoCodedParam
+      );
 
       res.setHeader('Content-Type', 'text/csv');
-      res.setHeader('Content-Disposition', `attachment; filename=coding-results-detailed-${new Date().toISOString().slice(0, 10)}.csv`);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=coding-results-detailed-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv`
+      );
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -3524,7 +4280,8 @@ export class WorkspaceCodingController {
     name: 'anonymizeCoders',
     required: false,
     type: Boolean,
-    description: 'Anonymize coder names (rename to K1, K2, etc. in random order)'
+    description:
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -3536,7 +4293,8 @@ export class WorkspaceCodingController {
     name: 'excludeAutoCoded',
     required: false,
     type: Boolean,
-    description: 'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+    description:
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding times report exported as Excel',
@@ -3560,10 +4318,23 @@ export class WorkspaceCodingController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingTimesReport(workspace_id, anonymizeCodersParam, usePseudoCodersParam, excludeAutoCodedParam);
+      const buffer = await this.codingExportService.exportCodingTimesReport(
+        workspace_id,
+        anonymizeCodersParam,
+        usePseudoCodersParam,
+        excludeAutoCodedParam
+      );
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename=coding-times-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename=coding-times-report-${new Date()
+          .toISOString()
+          .slice(0, 10)}.xlsx`
+      );
       res.send(buffer);
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -3602,7 +4373,10 @@ export class WorkspaceCodingController {
               personLogin: { type: 'string', description: 'Person login' },
               personCode: { type: 'string', description: 'Person code' },
               bookletName: { type: 'string', description: 'Booklet name' },
-              givenAnswer: { type: 'string', description: 'The given answer by the test person' },
+              givenAnswer: {
+                type: 'string',
+                description: 'The given answer by the test person'
+              },
               coderResults: {
                 type: 'array',
                 items: {
@@ -3611,10 +4385,26 @@ export class WorkspaceCodingController {
                     coderId: { type: 'number', description: 'Coder user ID' },
                     coderName: { type: 'string', description: 'Coder name' },
                     jobId: { type: 'number', description: 'Coding job ID' },
-                    code: { type: 'number', nullable: true, description: 'Code given by the coder' },
-                    score: { type: 'number', nullable: true, description: 'Score given by the coder' },
-                    notes: { type: 'string', nullable: true, description: 'Notes from the coder' },
-                    codedAt: { type: 'string', format: 'date-time', description: 'When the coding was done' }
+                    code: {
+                      type: 'number',
+                      nullable: true,
+                      description: 'Code given by the coder'
+                    },
+                    score: {
+                      type: 'number',
+                      nullable: true,
+                      description: 'Score given by the coder'
+                    },
+                    notes: {
+                      type: 'string',
+                      nullable: true,
+                      description: 'Notes from the coder'
+                    },
+                    codedAt: {
+                      type: 'string',
+                      format: 'date-time',
+                      description: 'When the coding was done'
+                    }
                   }
                 },
                 description: 'Results from all coders who coded this variable'
@@ -3622,7 +4412,10 @@ export class WorkspaceCodingController {
             }
           }
         },
-        total: { type: 'number', description: 'Total number of double-coded variables' },
+        total: {
+          type: 'number',
+          description: 'Total number of double-coded variables'
+        },
         page: { type: 'number', description: 'Current page number' },
         limit: { type: 'number', description: 'Number of items per page' }
       }
@@ -3680,8 +4473,15 @@ export class WorkspaceCodingController {
             type: 'object',
             properties: {
               responseId: { type: 'number', description: 'Response ID' },
-              selectedJobId: { type: 'number', description: 'Selected coding job ID' },
-              resolutionComment: { type: 'string', nullable: true, description: 'Optional resolution comment' }
+              selectedJobId: {
+                type: 'number',
+                description: 'Selected coding job ID'
+              },
+              resolutionComment: {
+                type: 'string',
+                nullable: true,
+                description: 'Optional resolution comment'
+              }
             },
             required: ['responseId', 'selectedJobId']
           }
@@ -3695,17 +4495,36 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean', description: 'Whether the operation was successful' },
-        appliedCount: { type: 'number', description: 'Number of resolutions applied' },
-        failedCount: { type: 'number', description: 'Number of resolutions that failed' },
-        skippedCount: { type: 'number', description: 'Number of resolutions skipped' },
+        success: {
+          type: 'boolean',
+          description: 'Whether the operation was successful'
+        },
+        appliedCount: {
+          type: 'number',
+          description: 'Number of resolutions applied'
+        },
+        failedCount: {
+          type: 'number',
+          description: 'Number of resolutions that failed'
+        },
+        skippedCount: {
+          type: 'number',
+          description: 'Number of resolutions skipped'
+        },
         message: { type: 'string', description: 'Summary message' }
       }
     }
   })
   async applyDoubleCodedResolutions(
     @WorkspaceId() workspace_id: number,
-      @Body() body: { decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> }
+      @Body()
+                   body: {
+                     decisions: Array<{
+                       responseId: number;
+                       selectedJobId: number;
+                       resolutionComment?: string;
+                     }>;
+                   }
   ): Promise<{
         success: boolean;
         appliedCount: number;
@@ -3724,7 +4543,8 @@ export class WorkspaceCodingController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
-    description: 'Workspace-wide Cohen\'s Kappa statistics for double-coded incomplete variables.',
+    description:
+      "Workspace-wide Cohen's Kappa statistics for double-coded incomplete variables.",
     schema: {
       type: 'object',
       properties: {
@@ -3737,23 +4557,56 @@ export class WorkspaceCodingController {
               coder1Name: { type: 'string', description: 'First coder name' },
               coder2Id: { type: 'number', description: 'Second coder ID' },
               coder2Name: { type: 'string', description: 'Second coder name' },
-              kappa: { type: 'number', nullable: true, description: 'Cohen\'s Kappa coefficient' },
-              agreement: { type: 'number', description: 'Observed agreement percentage' },
-              totalSharedResponses: { type: 'number', description: 'Total responses coded by both coders' },
-              validPairs: { type: 'number', description: 'Number of valid coding pairs' },
-              interpretation: { type: 'string', description: 'Interpretation of the Kappa value' }
+              kappa: {
+                type: 'number',
+                nullable: true,
+                description: "Cohen's Kappa coefficient"
+              },
+              agreement: {
+                type: 'number',
+                description: 'Observed agreement percentage'
+              },
+              totalSharedResponses: {
+                type: 'number',
+                description: 'Total responses coded by both coders'
+              },
+              validPairs: {
+                type: 'number',
+                description: 'Number of valid coding pairs'
+              },
+              interpretation: {
+                type: 'string',
+                description: 'Interpretation of the Kappa value'
+              }
             }
           },
-          description: 'Cohen\'s Kappa statistics for each coder pair across all double-coded work'
+          description:
+            "Cohen's Kappa statistics for each coder pair across all double-coded work"
         },
         workspaceSummary: {
           type: 'object',
           properties: {
-            totalDoubleCodedResponses: { type: 'number', description: 'Total number of double-coded responses' },
-            totalCoderPairs: { type: 'number', description: 'Total number of coder pairs analyzed' },
-            averageKappa: { type: 'number', nullable: true, description: 'Average Cohen\'s Kappa across all coder pairs' },
-            variablesIncluded: { type: 'number', description: 'Number of variables included in the analysis' },
-            codersIncluded: { type: 'number', description: 'Number of coders included in the analysis' }
+            totalDoubleCodedResponses: {
+              type: 'number',
+              description: 'Total number of double-coded responses'
+            },
+            totalCoderPairs: {
+              type: 'number',
+              description: 'Total number of coder pairs analyzed'
+            },
+            averageKappa: {
+              type: 'number',
+              nullable: true,
+              description: "Average Cohen's Kappa across all coder pairs"
+            },
+            variablesIncluded: {
+              type: 'number',
+              description: 'Number of variables included in the analysis'
+            },
+            codersIncluded: {
+              type: 'number',
+              description: 'Number of coders included in the analysis'
+            }
           },
           description: 'Summary statistics for the entire workspace'
         }
@@ -3782,14 +4635,20 @@ export class WorkspaceCodingController {
           codersIncluded: number;
         };
       }> {
-    return this.workspaceCodingService.getWorkspaceCohensKappaSummary(workspace_id);
+    return this.workspaceCodingService.getWorkspaceCohensKappaSummary(
+      workspace_id
+    );
   }
 
   @Get(':workspace_id/coding-job/:codingJobId/notes')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'codingJobId', type: Number, description: 'ID of the coding job' })
+  @ApiParam({
+    name: 'codingJobId',
+    type: Number,
+    description: 'ID of the coding job'
+  })
   @ApiOkResponse({
     description: 'Coding notes retrieved successfully.',
     schema: {
@@ -3809,18 +4668,32 @@ export class WorkspaceCodingController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   @ApiTags('coding')
-  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
   @ApiBody({
     description: 'Reset coding version request',
     schema: {
       type: 'object',
       properties: {
-        version: { type: 'string', enum: ['v1', 'v2', 'v3'], description: 'Coding version to reset' },
+        version: {
+          type: 'string',
+          enum: ['v1', 'v2', 'v3'],
+          description: 'Coding version to reset'
+        },
         unitFilters: {
-          type: 'array', items: { type: 'string' }, nullable: true, description: 'Optional unit names to filter by'
+          type: 'array',
+          items: { type: 'string' },
+          nullable: true,
+          description: 'Optional unit names to filter by'
         },
         variableFilters: {
-          type: 'array', items: { type: 'string' }, nullable: true, description: 'Optional variable IDs to filter by'
+          type: 'array',
+          items: { type: 'string' },
+          nullable: true,
+          description: 'Optional variable IDs to filter by'
         }
       },
       required: ['version']
@@ -3831,16 +4704,31 @@ export class WorkspaceCodingController {
     schema: {
       type: 'object',
       properties: {
-        affectedResponseCount: { type: 'number', description: 'Number of responses that were reset' },
-        cascadeResetVersions: { type: 'array', items: { type: 'string' }, description: 'Versions that were also reset due to cascade' },
-        message: { type: 'string', description: 'Summary message of the reset operation' }
+        affectedResponseCount: {
+          type: 'number',
+          description: 'Number of responses that were reset'
+        },
+        cascadeResetVersions: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Versions that were also reset due to cascade'
+        },
+        message: {
+          type: 'string',
+          description: 'Summary message of the reset operation'
+        }
       }
     }
   })
   async resetCodingVersion(
     @WorkspaceId() workspace_id: number,
-      @Body() body: { version: 'v1' | 'v2' | 'v3'; unitFilters?: string[]; variableFilters?: string[] },
-      @Req() request: RequestWithUser
+      @Body()
+                   body: {
+                     version: 'v1' | 'v2' | 'v3';
+                     unitFilters?: string[];
+                     variableFilters?: string[];
+                   },
+                   @Req() request: RequestWithUser
   ): Promise<{
         affectedResponseCount: number;
         cascadeResetVersions: ('v2' | 'v3')[];
@@ -3854,10 +4742,16 @@ export class WorkspaceCodingController {
     );
 
     // Invalidate statistics cache for reset versions
-    await this.codingStatisticsService.invalidateCache(workspace_id, body.version);
+    await this.codingStatisticsService.invalidateCache(
+      workspace_id,
+      body.version
+    );
     if (result.cascadeResetVersions.length > 0) {
       for (const cascadeVersion of result.cascadeResetVersions) {
-        await this.codingStatisticsService.invalidateCache(workspace_id, cascadeVersion);
+        await this.codingStatisticsService.invalidateCache(
+          workspace_id,
+          cascadeVersion
+        );
       }
     }
 

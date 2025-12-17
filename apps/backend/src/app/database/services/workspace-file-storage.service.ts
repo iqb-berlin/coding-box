@@ -58,7 +58,10 @@ export class WorkspaceFileStorageService {
     return fileIos;
   }
 
-  createZipBufferFromFiles(files: FileUpload[]): Buffer {
+  createZipBufferFromFiles(
+    files: FileUpload[],
+    folderNameMap?: Record<string, string>
+  ): Buffer {
     const zip = new AdmZip();
 
     const filesByType: Record<string, FileUpload[]> = {};
@@ -70,9 +73,10 @@ export class WorkspaceFileStorageService {
     });
 
     for (const [fileType, filesForType] of Object.entries(filesByType)) {
+      const folderName = folderNameMap?.[fileType] || fileType;
       for (const file of filesForType) {
         const fileContent = Buffer.from(file.data.toString(), 'utf8');
-        const zipPath = `${fileType}/${file.filename}`;
+        const zipPath = `${folderName}/${file.filename}`;
         zip.addFile(zipPath, fileContent);
       }
     }

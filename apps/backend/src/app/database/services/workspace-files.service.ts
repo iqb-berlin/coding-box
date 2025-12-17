@@ -1,6 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Like, Repository } from 'typeorm';
+import {
+  FindOperator, In, Like, Repository
+} from 'typeorm';
 import * as cheerio from 'cheerio';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
@@ -1397,12 +1399,25 @@ ${bookletRefs}
     }
   }
 
-  async downloadWorkspaceFilesAsZip(workspaceId: number): Promise<Buffer> {
+  async downloadWorkspaceFilesAsZip(
+    workspaceId: number,
+    fileTypes?: string[]
+  ): Promise<Buffer> {
     try {
       this.logger.log(`Creating ZIP file for workspace ${workspaceId}`);
 
+      let where: { workspace_id: number; file_type?: FindOperator<string> } = {
+        workspace_id: workspaceId
+      };
+      if (fileTypes && fileTypes.length > 0) {
+        where = {
+          workspace_id: workspaceId,
+          file_type: In(fileTypes)
+        };
+      }
+
       const files = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId },
+        where,
         order: { file_type: 'ASC', filename: 'ASC' },
         take: 3000
       });
@@ -1413,8 +1428,20 @@ ${bookletRefs}
 
       this.logger.log(`Found ${files.length} files to include in ZIP`);
 
+      const folderNameMap: Record<string, string> = {
+        Booklet: 'Testhefte',
+        Unit: 'Aufgaben',
+        Resource: 'Ressourcen',
+        Schemer: 'Kodierschemata',
+        TestTakers: 'Testteilnehmer',
+        Testtakers: 'Testteilnehmer'
+      };
+
       const zipBuffer =
-        this.workspaceFileStorageService.createZipBufferFromFiles(files);
+        this.workspaceFileStorageService.createZipBufferFromFiles(
+          files,
+          folderNameMap
+        );
       this.logger.log(
         `ZIP file created successfully (${zipBuffer.length} bytes)`
       );
