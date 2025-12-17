@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingManualComponent } from './coding-manual.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -11,21 +12,27 @@ describe('CodingManualComponent', () => {
   let fixture: ComponentFixture<CodingManualComponent>;
 
   const fakeActivatedRoute = {
-    snapshot: { data: { } }
+    snapshot: { data: {} }
   } as ActivatedRoute;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      providers: [{
-        provide: SERVER_URL,
-        useValue: environment.backendUrl
-      }, provideHttpClient(), {
-        provide: ActivatedRoute,
-        useValue: fakeActivatedRoute
-      }],
-      imports: [
-        TranslateModule.forRoot()
-      ]
+      providers: [
+        {
+          provide: SERVER_URL,
+          useValue: environment.backendUrl
+        },
+        provideHttpClient(),
+        {
+          provide: ActivatedRoute,
+          useValue: fakeActivatedRoute
+        },
+        {
+          provide: MatSnackBar,
+          useValue: { open: jest.fn() }
+        }
+      ],
+      imports: [TranslateModule.forRoot()]
     }).compileComponents();
 
     fixture = TestBed.createComponent(CodingManualComponent);

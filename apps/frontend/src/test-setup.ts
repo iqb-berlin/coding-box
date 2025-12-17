@@ -38,12 +38,15 @@ jest.mock('jwt-decode', () => ({
 }));
 
 // Mock Angular Material components that have CSS parsing issues in jsdom
-jest.mock('@angular/material/snack-bar', () => ({
-  MatSnackBar: jest.fn(() => ({
-    open: jest.fn()
-  })),
-  MatSnackBarModule: {}
-}));
+jest.mock('@angular/material/snack-bar', () => {
+  const actual = jest.requireActual('@angular/material/snack-bar');
+  return {
+    ...actual,
+    MatSnackBar: class MatSnackBarMock {
+      open = jest.fn();
+    }
+  };
+});
 
 // Suppress jsdom CSS parsing errors for CDK overlay styles
 // eslint-disable-next-line no-console

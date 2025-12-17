@@ -1,6 +1,10 @@
 import { Component, OnInit, inject } from '@angular/core';
 import {
-  MAT_DIALOG_DATA, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
+  MAT_DIALOG_DATA,
+  MatDialogTitle,
+  MatDialogContent,
+  MatDialogActions,
+  MatDialogClose
 } from '@angular/material/dialog';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 
@@ -8,6 +12,7 @@ import { MatButton } from '@angular/material/button';
 
 @Component({
   selector: 'tc-confirm-dialog',
+  standalone: true,
   template: `
     <h1 mat-dialog-title>{{ confirmData.title }}</h1>
 
@@ -22,13 +27,20 @@ import { MatButton } from '@angular/material/button';
         {{ confirmData.confirmButtonLabel }}
       </button>
       @if (showCancel) {
-        <button mat-raised-button [mat-dialog-close]="false">
-          {{'workspace.cancel' | translate}}
-        </button>
+      <button mat-raised-button [mat-dialog-close]="false">
+        {{ 'workspace.cancel' | translate }}
+      </button>
       }
     </mat-dialog-actions>
-    `,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose, TranslateModule]
+  `,
+  imports: [
+    MatDialogTitle,
+    MatDialogContent,
+    MatDialogActions,
+    MatButton,
+    MatDialogClose,
+    TranslateModule
+  ]
 })
 export class ConfirmDialogComponent implements OnInit {
   confirmData = inject<ConfirmDialogData>(MAT_DIALOG_DATA);
@@ -36,12 +48,20 @@ export class ConfirmDialogComponent implements OnInit {
 
   showCancel = true;
   ngOnInit(): void {
-    if ((typeof this.confirmData.title === 'undefined') || (this.confirmData.title.length === 0)) {
-      this.confirmData.title = this.translateService.instant('workspace.please-confirm!');
+    if (
+      typeof this.confirmData.title === 'undefined' ||
+      this.confirmData.title.length === 0
+    ) {
+      this.confirmData.title = this.translateService.instant(
+        'workspace.please-confirm!'
+      );
     }
-    if ((typeof this.confirmData.confirmButtonLabel === 'undefined') ||
-      (this.confirmData.confirmButtonLabel.length === 0)) {
-      this.confirmData.confirmButtonLabel = this.translateService.instant('workspace.confirm!');
+    if (
+      typeof this.confirmData.confirmButtonLabel === 'undefined' ||
+      this.confirmData.confirmButtonLabel.length === 0
+    ) {
+      this.confirmData.confirmButtonLabel =
+        this.translateService.instant('workspace.confirm!');
     }
     if (!this.confirmData.showCancel) {
       this.showCancel = false;

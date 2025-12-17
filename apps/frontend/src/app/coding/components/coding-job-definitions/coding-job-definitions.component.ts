@@ -23,8 +23,14 @@ import { AppService } from '../../../services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
-import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
-import { CodingJobBulkCreationDialogComponent, BulkCreationData } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
+import {
+  CodingJobDefinitionDialogComponent,
+  CodingJobDefinitionDialogData
+} from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
+import {
+  CodingJobBulkCreationDialogComponent,
+  BulkCreationData
+} from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 interface JobDefinition {
   id?: number;
@@ -57,6 +63,7 @@ interface BulkCreationResult {
   selector: 'coding-box-coding-job-definitions',
   templateUrl: './coding-job-definitions.component.html',
   styleUrls: ['./coding-job-definitions.component.scss'],
+  standalone: true,
   imports: [
     CommonModule,
     TranslateModule,
@@ -113,10 +120,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private loadCoders(): void {
-    this.coderService.getCoders()
+    this.coderService
+      .getCoders()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: coders => {
+        next: (coders) => {
           this.coders = coders || [];
         },
         error: () => {
@@ -130,20 +138,29 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       this.isLoading = false;
       return;
     }
 
-    this.backendService.getJobDefinitions(workspaceId)
+    this.backendService
+      .getJobDefinitions(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: definitions => {
+        next: (definitions) => {
           this.jobDefinitions = definitions;
           this.isLoading = false;
         },
-        error: error => {
-          this.showError(this.translateService.instant('error.general', { error: error.message }));
+        error: (error) => {
+          this.showError(
+            this.translateService.instant('error.general', {
+              error: error.message
+            })
+          );
           this.isLoading = false;
         }
       });
@@ -154,32 +171,44 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     const coderNames = definition.assignedCoders
-      .map(id => this.coders.find(c => c.id === id)?.name)
-      .filter(name => name)
+      .map((id) => this.coders.find((c) => c.id === id)?.name)
+      .filter((name) => name)
       .join(', ');
     return coderNames || '-';
   }
 
   getBundleNames(definition: JobDefinition): string {
-    if (!definition.assignedVariableBundles || definition.assignedVariableBundles.length === 0) {
+    if (
+      !definition.assignedVariableBundles ||
+      definition.assignedVariableBundles.length === 0
+    ) {
       return '-';
     }
     return definition.assignedVariableBundles
-      .map(bundle => bundle.name)
+      .map((bundle) => bundle.name)
       .join(', ');
   }
 
   getVariableNames(definition: JobDefinition): string {
-    if (!definition.assignedVariables || definition.assignedVariables.length === 0) {
+    if (
+      !definition.assignedVariables ||
+      definition.assignedVariables.length === 0
+    ) {
       return '-';
     }
     return definition.assignedVariables
-      .map(variable => `${variable.unitName}.${variable.variableId}`)
+      .map((variable) => `${variable.unitName}.${variable.variableId}`)
       .join(', ');
   }
 
   getStatusLabel(status: string): string {
-    return this.translateService.instant(`coding-job-definition-dialog.status.definition.${status}`) || status || '-';
+    return (
+      this.translateService.instant(
+        `coding-job-definition-dialog.status.definition.${status}`
+      ) ||
+      status ||
+      '-'
+    );
   }
 
   createDefinition(): void {
@@ -195,7 +224,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       disableClose: true
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result) => {
       if (result) {
         this.loadJobDefinitions();
         this.jobDefinitionChanged.emit();
@@ -234,7 +263,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       disableClose: true
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result) => {
       if (result) {
         this.loadJobDefinitions();
         this.jobDefinitionChanged.emit();
@@ -247,19 +276,37 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       return;
     }
 
-    this.backendService.updateJobDefinition(workspaceId, definition.id, { status: 'pending_review' })
+    this.backendService
+      .updateJobDefinition(workspaceId, definition.id, {
+        status: 'pending_review'
+      })
       .subscribe({
         next: () => {
-          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.submitted-for-review'), this.translateService.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.submitted-for-review'
+            ),
+            this.translateService.instant('common.close'),
+            { duration: 3000 }
+          );
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: error => {
-          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.submit-failed', { error: error.message }));
+        error: (error) => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.submit-failed',
+              { error: error.message }
+            )
+          );
         }
       });
   }
@@ -269,18 +316,34 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       return;
     }
 
-    this.backendService.approveJobDefinition(workspaceId, definition.id, 'approved')
+    this.backendService
+      .approveJobDefinition(workspaceId, definition.id, 'approved')
       .subscribe({
         next: () => {
-          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.approved'), this.translateService.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.approved'
+            ),
+            this.translateService.instant('common.close'),
+            { duration: 3000 }
+          );
           this.loadJobDefinitions();
         },
-        error: error => {
-          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.approve-failed', { error: error.message }));
+        error: (error) => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.approve-failed',
+              { error: error.message }
+            )
+          );
         }
       });
   }
@@ -290,19 +353,35 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       return;
     }
 
-    this.backendService.updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
+    this.backendService
+      .updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
       .subscribe({
         next: () => {
-          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.rejected'), this.translateService.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.rejected'
+            ),
+            this.translateService.instant('common.close'),
+            { duration: 3000 }
+          );
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: error => {
-          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.reject-failed', { error: error.message }));
+        error: (error) => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.reject-failed',
+              { error: error.message }
+            )
+          );
         }
       });
   }
@@ -312,37 +391,62 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       return;
     }
 
-    this.backendService.deleteJobDefinition(workspaceId, definition.id)
+    this.backendService
+      .deleteJobDefinition(workspaceId, definition.id)
       .subscribe({
         next: () => {
-          this.snackBar.open(this.translateService.instant('coding-job-definitions.messages.snackbar.deleted'), this.translateService.instant('common.close'), { duration: 3000 });
+          this.snackBar.open(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.deleted'
+            ),
+            this.translateService.instant('common.close'),
+            { duration: 3000 }
+          );
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: error => {
-          this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.delete-failed', { error: error.message }));
+        error: (error) => {
+          this.showError(
+            this.translateService.instant(
+              'coding-job-definitions.messages.snackbar.delete-failed',
+              { error: error.message }
+            )
+          );
         }
       });
   }
 
-  async createCodingJobFromDefinition(definition: JobDefinition): Promise<void> {
+  async createCodingJobFromDefinition(
+    definition: JobDefinition
+  ): Promise<void> {
     if (!definition.id || !definition.assignedCoders) {
       return;
     }
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.no-workspace'));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
       return;
     }
 
     try {
       const allCoders = await firstValueFrom(this.coderService.getCoders());
-      const selectedCoders = allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)) || [];
+      const selectedCoders =
+        allCoders?.filter((coder) =>
+          definition.assignedCoders!.includes(coder.id)
+        ) || [];
 
       const dialogData: BulkCreationData = {
         selectedVariables: definition.assignedVariables || [],
@@ -361,54 +465,96 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       const result = await firstValueFrom(dialogRef.afterClosed());
 
       if (result && result.confirmed) {
-        await this.createBulkJobsFromDefinition(dialogData, workspaceId, result);
+        await this.createBulkJobsFromDefinition(
+          dialogData,
+          workspaceId,
+          result
+        );
       }
     } catch (error) {
-      this.showError(this.translateService.instant('coding-job-definitions.messages.snackbar.coders-loading-failed', { error: (error as Error).message }));
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.coders-loading-failed',
+          { error: (error as Error).message }
+        )
+      );
     }
   }
 
-  private async createBulkJobsFromDefinition(data: BulkCreationData, workspaceId: number, creationResult: BulkCreationResult): Promise<void> {
+  private async createBulkJobsFromDefinition(
+    data: BulkCreationData,
+    workspaceId: number,
+    creationResult: BulkCreationResult
+  ): Promise<void> {
     this.isBulkCreating = true;
     try {
-      const mappedCoders = data.selectedCoders.map(coder => ({
+      const mappedCoders = data.selectedCoders.map((coder) => ({
         id: coder.id,
         name: coder.name,
         username: coder.name
       }));
 
-      const result = await firstValueFrom(this.backendService.createDistributedCodingJobs(
-        workspaceId,
-        data.selectedVariables,
-        mappedCoders,
-        data.doubleCodingAbsolute,
-        data.doubleCodingPercentage,
-        data.selectedVariableBundles,
-        data.caseOrderingMode,
-        data.maxCodingCases
-      ));
+      const result = await firstValueFrom(
+        this.backendService.createDistributedCodingJobs(
+          workspaceId,
+          data.selectedVariables,
+          mappedCoders,
+          data.doubleCodingAbsolute,
+          data.doubleCodingPercentage,
+          data.selectedVariableBundles,
+          data.caseOrderingMode,
+          data.maxCodingCases
+        )
+      );
 
       if (result && result.success) {
         if (creationResult) {
-          const updatePromises = result.jobs.map(job => (
-            firstValueFrom(this.backendService.updateCodingJob(workspaceId, job.jobId, {
-              showScore: creationResult.showScore,
-              allowComments: creationResult.allowComments,
-              suppressGeneralInstructions: creationResult.suppressGeneralInstructions
-            }))
-          ));
+          const updatePromises = result.jobs.map((job) =>
+            firstValueFrom(
+              this.backendService.updateCodingJob(workspaceId, job.jobId, {
+                showScore: creationResult.showScore,
+                allowComments: creationResult.allowComments,
+                suppressGeneralInstructions:
+                  creationResult.suppressGeneralInstructions
+              })
+            )
+          );
 
           await Promise.allSettled(updatePromises);
         }
 
-        this.snackBar.open(result.message, this.translateService.instant('common.close'), { duration: 3000 });
+        this.snackBar.open(
+          result.message,
+          this.translateService.instant('common.close'),
+          { duration: 3000 }
+        );
       } else if (result) {
-        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message', { message: result.message }), this.translateService.instant('common.close'), { duration: 5000 });
+        this.snackBar.open(
+          this.translateService.instant(
+            'coding-job-definition-dialog.snackbars.bulk-creation-failed-with-message',
+            { message: result.message }
+          ),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
       } else {
-        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-no-response'), this.translateService.instant('common.close'), { duration: 5000 });
+        this.snackBar.open(
+          this.translateService.instant(
+            'coding-job-definition-dialog.snackbars.bulk-creation-no-response'
+          ),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
       }
     } catch (error) {
-      this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.bulk-creation-failed', { error: error instanceof Error ? error.message : error }), this.translateService.instant('common.close'), { duration: 5000 });
+      this.snackBar.open(
+        this.translateService.instant(
+          'coding-job-definition-dialog.snackbars.bulk-creation-failed',
+          { error: error instanceof Error ? error.message : error }
+        ),
+        this.translateService.instant('common.close'),
+        { duration: 5000 }
+      );
     } finally {
       this.isBulkCreating = false;
     }
@@ -420,6 +566,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, this.translateService.instant('common.close'), { duration: 5000 });
+    this.snackBar.open(message, this.translateService.instant('common.close'), {
+      duration: 5000
+    });
   }
 }

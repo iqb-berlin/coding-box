@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute } from '@angular/router';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../core/services/auth.service';
@@ -46,9 +47,14 @@ describe('HomeComponent', () => {
         {
           provide: SERVER_URL,
           useValue: environment.backendUrl
-        }, provideHttpClient()]
-    })
-      .compileComponents();
+        },
+        {
+          provide: MatSnackBar,
+          useValue: { open: jest.fn() }
+        },
+        provideHttpClient()
+      ]
+    }).compileComponents();
     fixture = TestBed.createComponent(HomeComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();

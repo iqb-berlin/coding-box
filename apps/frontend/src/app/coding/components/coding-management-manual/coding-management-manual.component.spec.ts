@@ -3,6 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingManagementManualComponent } from './coding-management-manual.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
@@ -12,7 +13,7 @@ describe('CodingManagementManualComponent', () => {
   let fixture: ComponentFixture<CodingManagementManualComponent>;
 
   const fakeActivatedRoute = {
-    snapshot: { data: { } }
+    snapshot: { data: {} }
   } as ActivatedRoute;
 
   beforeEach(async () => {
@@ -22,14 +23,18 @@ describe('CodingManagementManualComponent', () => {
         {
           provide: ActivatedRoute,
           useValue: fakeActivatedRoute
-        }, {
+        },
+        {
           provide: SERVER_URL,
           useValue: environment.backendUrl
-        }, provideHttpClient()],
-      imports: [
-        TranslateModule.forRoot(),
-        CodingManagementManualComponent
-      ]
+        },
+        {
+          provide: MatSnackBar,
+          useValue: { open: jest.fn() }
+        },
+        provideHttpClient()
+      ],
+      imports: [CodingManagementManualComponent, TranslateModule.forRoot()]
     }).compileComponents();
 
     fixture = TestBed.createComponent(CodingManagementManualComponent);
