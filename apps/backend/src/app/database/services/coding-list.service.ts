@@ -380,7 +380,7 @@ export class CodingListService {
     );
     this.voudCache.clear();
     this.vocsCache.clear();
-    const csvStream = fastCsv.format({ headers: true });
+    const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
 
     (async () => {
       try {
@@ -784,7 +784,7 @@ export class CodingListService {
     );
     this.voudCache.clear();
     this.vocsCache.clear();
-    const csvStream = fastCsv.format({ headers: true });
+    const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
 
     (async () => {
       try {

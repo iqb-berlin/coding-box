@@ -151,6 +151,17 @@ export class WorkspaceCodingController {
       authToken || '',
       serverUrl || ''
     );
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv"`
+    );
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Excel compatibility: UTF-8 BOM
+    res.write('\uFEFF');
     csvStream.pipe(res);
   }
 
@@ -366,6 +377,17 @@ export class WorkspaceCodingController {
         serverUrl || '',
         includeReplay
       );
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv"`
+    );
+    res.setHeader('Cache-Control', 'no-cache');
+
+    // Excel compatibility: UTF-8 BOM
+    res.write('\uFEFF');
     csvStream.pipe(res);
   }
 
@@ -533,17 +555,15 @@ export class WorkspaceCodingController {
       }
     }
   })
-  async getJobStatus(
-    @Param('jobId') jobId: string
-  ): Promise<
-      | {
-        status: string;
-        progress: number;
-        result?: CodingStatistics;
-        error?: string;
-      }
-      | { error: string }
-      > {
+  async getJobStatus(@Param('jobId') jobId: string): Promise<
+  | {
+    status: string;
+    progress: number;
+    result?: CodingStatistics;
+    error?: string;
+  }
+  | { error: string }
+  > {
     const status = await this.workspaceCodingService.getJobStatus(jobId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
