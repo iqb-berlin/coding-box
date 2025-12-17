@@ -36,15 +36,3 @@ jest.mock('d3-transition', () => ({
 jest.mock('jwt-decode', () => ({
   jwtDecode: jest.fn(() => ({ workspace: '1' }))
 }));
-
-// Mock keycloak-js
-jest.mock('keycloak-js', () => jest.fn(() => ({
-  authenticated: true,
-  token: 'mock-token',
-  idTokenParsed: { preferred_username: 'user' },
-  loadUserProfile: jest.fn().mockResolvedValue({}),
-  login: jest.fn(),
-  logout: jest.fn(),
-  accountManagement: jest.fn(),
-  realmAccess: { roles: [] }
-})));
