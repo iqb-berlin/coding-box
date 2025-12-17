@@ -1,4 +1,6 @@
-import { Component, OnDestroy, OnInit, inject, ViewChild } from '@angular/core';
+import {
+  Component, OnDestroy, OnInit, inject, ViewChild
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
@@ -9,7 +11,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { Subject, takeUntil, debounceTime, finalize } from 'rxjs';
+import {
+  Subject, takeUntil, debounceTime, finalize
+} from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
@@ -64,7 +68,7 @@ import {
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
   @ViewChild(CodingJobDefinitionsComponent)
-  codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
+    codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
@@ -206,6 +210,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     variableId: string;
     responseCount: number;
   }[] = [];
+
   statusDistribution: { [status: string]: number } = {};
   appliedResultsOverview: {
     totalIncompleteVariables: number;
@@ -228,7 +233,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
-      .subscribe((progress) => {
+      .subscribe(progress => {
         this.validationProgress = progress;
         this.isLoading =
           progress.status === 'loading' || progress.status === 'processing';
@@ -421,7 +426,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const base64Data = result.split(',')[1];
         resolve(base64Data);
       };
-      reader.onerror = (error) => reject(error);
+      reader.onerror = error => reject(error);
     });
   }
 
@@ -492,7 +497,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (overview) => {
+        next: overview => {
           this.codingProgressOverview = overview;
         },
         error: () => {
@@ -517,7 +522,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (overview) => {
+        next: overview => {
           this.variableCoverageOverview = overview;
         },
         error: () => {
@@ -542,7 +547,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (overview) => {
+        next: overview => {
           this.caseCoverageOverview = overview;
         },
         error: () => {
@@ -567,7 +572,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: (summary) => {
+        next: summary => {
           this.workspaceKappaSummary = summary;
         },
         error: () => {
@@ -613,7 +618,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getCodingStatistics(workspaceId, 'v1')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (statistics) => {
+        next: statistics => {
           this.statusDistribution = {
             CODING_INCOMPLETE: statistics.statusCounts['4'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
@@ -650,9 +655,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               const remainingResponses =
                 totalIncompleteResponses - appliedResponses;
               const completionPercentage =
-                totalIncompleteResponses > 0
-                  ? (appliedResponses / totalIncompleteResponses) * 100
-                  : 0;
+                totalIncompleteResponses > 0 ?
+                  (appliedResponses / totalIncompleteResponses) * 100 :
+                  0;
 
               this.appliedResultsOverview = {
                 totalIncompleteVariables: this.codingIncompleteVariables.length,
@@ -677,9 +682,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               const remainingResponses =
                 totalIncompleteResponses - appliedResponses;
               const completionPercentage =
-                totalIncompleteResponses > 0
-                  ? (appliedResponses / totalIncompleteResponses) * 100
-                  : 0;
+                totalIncompleteResponses > 0 ?
+                  (appliedResponses / totalIncompleteResponses) * 100 :
+                  0;
 
               this.appliedResultsOverview = {
                 totalIncompleteVariables: this.codingIncompleteVariables.length,
@@ -713,7 +718,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (packages) => {
+        next: packages => {
           const totalResponses = packages.reduce(
             (total, pkg) => total + pkg.responses.length,
             0
@@ -754,7 +759,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getResponseMatchingMode(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (flags) => {
+        next: flags => {
           this.responseMatchingFlags = flags;
           this.isLoadingMatchingMode = false;
         },
@@ -785,10 +790,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     } else {
       newFlags = this.responseMatchingFlags.filter(
-        (f) => f !== ResponseMatchingFlag.NO_AGGREGATION
+        f => f !== ResponseMatchingFlag.NO_AGGREGATION
       );
       if (this.hasMatchingFlag(flag)) {
-        newFlags = newFlags.filter((f) => f !== flag);
+        newFlags = newFlags.filter(f => f !== flag);
       } else {
         newFlags = [...newFlags, flag];
       }
@@ -862,7 +867,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getResponseAnalysis(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (analysis) => {
+        next: analysis => {
           this.responseAnalysis = analysis;
           this.isLoadingResponseAnalysis = false;
         },

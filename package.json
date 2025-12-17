@@ -131,6 +131,7 @@
     "extends": "@iqb/eslint-config",
     "rules": {
       "no-await-in-loop": "off",
+      "no-spaced-func": "off",
       "no-restricted-syntax": "off",
       "class-methods-use-this": "off",
       "no-continue": "off",

@@ -124,7 +124,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .getCoders()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (coders) => {
+        next: coders => {
           this.coders = coders || [];
         },
         error: () => {
@@ -151,11 +151,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .getJobDefinitions(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (definitions) => {
+        next: definitions => {
           this.jobDefinitions = definitions;
           this.isLoading = false;
         },
-        error: (error) => {
+        error: error => {
           this.showError(
             this.translateService.instant('error.general', {
               error: error.message
@@ -171,8 +171,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     const coderNames = definition.assignedCoders
-      .map((id) => this.coders.find((c) => c.id === id)?.name)
-      .filter((name) => name)
+      .map(id => this.coders.find(c => c.id === id)?.name)
+      .filter(name => name)
       .join(', ');
     return coderNames || '-';
   }
@@ -185,7 +185,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     return definition.assignedVariableBundles
-      .map((bundle) => bundle.name)
+      .map(bundle => bundle.name)
       .join(', ');
   }
 
@@ -197,7 +197,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return '-';
     }
     return definition.assignedVariables
-      .map((variable) => `${variable.unitName}.${variable.variableId}`)
+      .map(variable => `${variable.unitName}.${variable.variableId}`)
       .join(', ');
   }
 
@@ -224,7 +224,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       disableClose: true
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.loadJobDefinitions();
         this.jobDefinitionChanged.emit();
@@ -263,7 +263,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       disableClose: true
     });
 
-    dialogRef.afterClosed().subscribe((result) => {
+    dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.loadJobDefinitions();
         this.jobDefinitionChanged.emit();
@@ -300,7 +300,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: (error) => {
+        error: error => {
           this.showError(
             this.translateService.instant(
               'coding-job-definitions.messages.snackbar.submit-failed',
@@ -337,7 +337,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           );
           this.loadJobDefinitions();
         },
-        error: (error) => {
+        error: error => {
           this.showError(
             this.translateService.instant(
               'coding-job-definitions.messages.snackbar.approve-failed',
@@ -375,7 +375,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: (error) => {
+        error: error => {
           this.showError(
             this.translateService.instant(
               'coding-job-definitions.messages.snackbar.reject-failed',
@@ -413,7 +413,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           this.loadJobDefinitions();
           this.jobDefinitionChanged.emit();
         },
-        error: (error) => {
+        error: error => {
           this.showError(
             this.translateService.instant(
               'coding-job-definitions.messages.snackbar.delete-failed',
@@ -444,8 +444,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     try {
       const allCoders = await firstValueFrom(this.coderService.getCoders());
       const selectedCoders =
-        allCoders?.filter((coder) =>
-          definition.assignedCoders!.includes(coder.id)
+        allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)
         ) || [];
 
       const dialogData: BulkCreationData = {
@@ -488,7 +487,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   ): Promise<void> {
     this.isBulkCreating = true;
     try {
-      const mappedCoders = data.selectedCoders.map((coder) => ({
+      const mappedCoders = data.selectedCoders.map(coder => ({
         id: coder.id,
         name: coder.name,
         username: coder.name
@@ -509,15 +508,14 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
       if (result && result.success) {
         if (creationResult) {
-          const updatePromises = result.jobs.map((job) =>
-            firstValueFrom(
-              this.backendService.updateCodingJob(workspaceId, job.jobId, {
-                showScore: creationResult.showScore,
-                allowComments: creationResult.allowComments,
-                suppressGeneralInstructions:
+          const updatePromises = result.jobs.map(job => firstValueFrom(
+            this.backendService.updateCodingJob(workspaceId, job.jobId, {
+              showScore: creationResult.showScore,
+              allowComments: creationResult.allowComments,
+              suppressGeneralInstructions:
                   creationResult.suppressGeneralInstructions
-              })
-            )
+            })
+          )
           );
 
           await Promise.allSettled(updatePromises);

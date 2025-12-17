@@ -2174,7 +2174,7 @@ export class WorkspaceTestResultsService {
           []
       }));
 
-      const uniqueMap = new Map<string, (typeof data)[0]>();
+      const uniqueMap = new Map<string, (typeof data)[number]>();
       data.forEach(item => {
         const uniqueKey = `${item.personGroup}|${item.personCode}|${item.personLogin}|${item.bookletName}|${item.unitName}`;
         if (!uniqueMap.has(uniqueKey)) {
