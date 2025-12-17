@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
 import { FilesValidationDialogComponent } from './files-validation.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -12,10 +13,7 @@ describe('FilesValidationComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
-        FilesValidationDialogComponent,
-        TranslateModule.forRoot()
-      ],
+      imports: [FilesValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
         {
@@ -29,7 +27,10 @@ describe('FilesValidationComponent', () => {
         {
           provide: MAT_DIALOG_DATA,
           useValue: []
-
+        },
+        {
+          provide: MatSnackBar,
+          useValue: { open: jest.fn() }
         }
       ]
     }).compileComponents();

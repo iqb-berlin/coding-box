@@ -1,6 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
-
+import {
+  MatDialogModule,
+  MatDialogRef,
+  MAT_DIALOG_DATA
+} from '@angular/material/dialog';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -28,6 +32,10 @@ describe('CodingResultsComparisonComponent', () => {
         {
           provide: SERVER_URL,
           useValue: 'http://localhost:3000'
+        },
+        {
+          provide: MatSnackBar,
+          useValue: { open: jest.fn() }
         }
       ]
     }).compileComponents();
@@ -51,10 +59,16 @@ describe('CodingResultsComparisonComponent', () => {
           testperson: 'Test1',
           trainings: [
             {
-              trainingId: 1, trainingLabel: 'Training 1', code: 'A', score: null
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              code: 'A',
+              score: null
             },
             {
-              trainingId: 2, trainingLabel: 'Training 2', code: 'A', score: null
+              trainingId: 2,
+              trainingLabel: 'Training 2',
+              code: 'A',
+              score: null
             }
           ]
         },
@@ -64,10 +78,16 @@ describe('CodingResultsComparisonComponent', () => {
           testperson: 'Test2',
           trainings: [
             {
-              trainingId: 1, trainingLabel: 'Training 1', code: 'B', score: null
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              code: 'B',
+              score: null
             },
             {
-              trainingId: 2, trainingLabel: 'Training 2', code: 'C', score: null
+              trainingId: 2,
+              trainingLabel: 'Training 2',
+              code: 'C',
+              score: null
             }
           ]
         },
@@ -77,10 +97,16 @@ describe('CodingResultsComparisonComponent', () => {
           testperson: 'Test3',
           trainings: [
             {
-              trainingId: 1, trainingLabel: 'Training 1', code: 'D', score: null
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              code: 'D',
+              score: null
             },
             {
-              trainingId: 2, trainingLabel: 'Training 2', code: null, score: null
+              trainingId: 2,
+              trainingLabel: 'Training 2',
+              code: null,
+              score: null
             }
           ]
         }
@@ -102,10 +128,16 @@ describe('CodingResultsComparisonComponent', () => {
           testperson: 'Test1',
           coders: [
             {
-              jobId: 1, coderName: 'Coder1', code: 'A', score: null
+              jobId: 1,
+              coderName: 'Coder1',
+              code: 'A',
+              score: null
             },
             {
-              jobId: 2, coderName: 'Coder2', code: 'A', score: null
+              jobId: 2,
+              coderName: 'Coder2',
+              code: 'A',
+              score: null
             }
           ]
         },
@@ -115,10 +147,16 @@ describe('CodingResultsComparisonComponent', () => {
           testperson: 'Test2',
           coders: [
             {
-              jobId: 1, coderName: 'Coder1', code: 'B', score: null
+              jobId: 1,
+              coderName: 'Coder1',
+              code: 'B',
+              score: null
             },
             {
-              jobId: 2, coderName: 'Coder2', code: 'C', score: null
+              jobId: 2,
+              coderName: 'Coder2',
+              code: 'C',
+              score: null
             }
           ]
         }

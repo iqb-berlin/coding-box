@@ -1,10 +1,4 @@
-import {
-  Component,
-  OnDestroy,
-  OnInit,
-  inject,
-  ViewChild
-} from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
@@ -15,15 +9,19 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import {
-  Subject, takeUntil, debounceTime, finalize
-} from 'rxjs';
+import { Subject, takeUntil, debounceTime, finalize } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
-import { CoderTrainingComponent, VariableConfig } from '../coder-training/coder-training.component';
+import {
+  CoderTrainingComponent,
+  VariableConfig
+} from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
-import { ImportComparisonDialogComponent, ImportComparisonData } from '../import-comparison-dialog/import-comparison-dialog.component';
+import {
+  ImportComparisonDialogComponent,
+  ImportComparisonData
+} from '../import-comparison-dialog/import-comparison-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
@@ -34,12 +32,16 @@ import {
   ValidationProgress,
   ValidationStateService
 } from '../../services/validation-state.service';
-import { WorkspaceSettingsService, ResponseMatchingFlag } from '../../../ws-admin/services/workspace-settings.service';
+import {
+  WorkspaceSettingsService,
+  ResponseMatchingFlag
+} from '../../../ws-admin/services/workspace-settings.service';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
+  standalone: true,
   imports: [
     TranslateModule,
     MatAnchor,
@@ -61,7 +63,8 @@ import { WorkspaceSettingsService, ResponseMatchingFlag } from '../../../ws-admi
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
   @ViewChild(CodingJobsComponent) codingJobsComponent?: CodingJobsComponent;
-  @ViewChild(CodingJobDefinitionsComponent) codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
+  @ViewChild(CodingJobDefinitionsComponent)
+  codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private backendService = inject(BackendService);
@@ -149,7 +152,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     partiallyAbgedeckteVariablen?: number;
     fullyAbgedeckteVariablen?: number;
     coveragePercentage: number;
-    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    variableCaseCounts: {
+      unitName: string;
+      variableId: string;
+      caseCount: number;
+    }[];
     coverageByStatus: {
       draft: string[];
       pending_review: string[];
@@ -194,7 +201,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     };
   } | null = null;
 
-  codingIncompleteVariables: { unitName: string; variableId: string; responseCount: number }[] = [];
+  codingIncompleteVariables: {
+    unitName: string;
+    variableId: string;
+    responseCount: number;
+  }[] = [];
   statusDistribution: { [status: string]: number } = {};
   appliedResultsOverview: {
     totalIncompleteVariables: number;
@@ -217,25 +228,30 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => {
+      .subscribe((progress) => {
         this.validationProgress = progress;
-        this.isLoading = progress.status === 'loading' || progress.status === 'processing';
+        this.isLoading =
+          progress.status === 'loading' || progress.status === 'processing';
 
         if (progress.status === 'error') {
-          this.showError(progress.error || this.translateService.instant('coding-management-manual.errors.validation-failed'));
+          this.showError(
+            progress.error ||
+              this.translateService.instant(
+                'coding-management-manual.errors.validation-failed'
+              )
+          );
         }
       });
 
     const currentProgress = this.validationStateService.getValidationProgress();
     this.validationProgress = currentProgress;
-    this.isLoading = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+    this.isLoading =
+      currentProgress.status === 'loading' ||
+      currentProgress.status === 'processing';
 
     // Set up debounced statistics refresh
     this.jobDefinitionChangeSubject
-      .pipe(
-        debounceTime(500),
-        takeUntil(this.destroy$)
-      )
+      .pipe(debounceTime(500), takeUntil(this.destroy$))
       .subscribe(() => {
         this.refreshAllStatistics();
       });
@@ -263,13 +279,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const input = event.target as HTMLInputElement;
 
     if (!input.files || input.files.length === 0) {
-      this.showError(this.translateService.instant('coding-management-manual.errors.no-file-selected'));
+      this.showError(
+        this.translateService.instant(
+          'coding-management-manual.errors.no-file-selected'
+        )
+      );
       return;
     }
 
     const file = input.files[0];
     if (!this.isExcelOrCsvFile(file)) {
-      this.showError(this.translateService.instant('coding-management-manual.errors.invalid-file-type'));
+      this.showError(
+        this.translateService.instant(
+          'coding-management-manual.errors.invalid-file-type'
+        )
+      );
       return;
     }
 
@@ -277,7 +301,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private isExcelOrCsvFile(file: File): boolean {
-    return file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv');
+    return (
+      file.name.endsWith('.xlsx') ||
+      file.name.endsWith('.xls') ||
+      file.name.endsWith('.csv')
+    );
   }
 
   private async processExternalCodingFile(file: File): Promise<void> {
@@ -288,13 +316,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       const workspaceId = this.appService.selectedWorkspaceId;
 
       if (!workspaceId) {
-        const errorMsg = this.translateService.instant('coding-management-manual.errors.no-workspace-selected');
+        const errorMsg = this.translateService.instant(
+          'coding-management-manual.errors.no-workspace-selected'
+        );
         this.showError(errorMsg);
         this.validationStateService.setValidationError(errorMsg);
         return;
       }
 
-      this.validationStateService.updateProgress(10, this.translateService.instant('coding-management-manual.progress.file-processing'));
+      this.validationStateService.updateProgress(
+        10,
+        this.translateService.instant(
+          'coding-management-manual.progress.file-processing'
+        )
+      );
       const fileData = await this.fileToBase64(file);
 
       await this.testPersonCodingService.importExternalCodingWithProgress(
@@ -329,24 +364,50 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             } as ImportComparisonData
           });
 
-          this.showSuccess(this.translateService.instant('coding-management-manual.success.preview-completed', { updatedRows: result.updatedRows, processedRows: result.processedRows }));
+          this.showSuccess(
+            this.translateService.instant(
+              'coding-management-manual.success.preview-completed',
+              {
+                updatedRows: result.updatedRows,
+                processedRows: result.processedRows
+              }
+            )
+          );
 
           if (result.errors && result.errors.length > 0) {
-            this.showError(this.translateService.instant('error.general', { error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.` }));
+            this.showError(
+              this.translateService.instant('error.general', {
+                error: `${result.errors.length} Warnungen aufgetreten. Details in der Konsole.`
+              })
+            );
           }
 
           this.isLoading = false;
         },
         // onError callback
         (error: string) => {
-          this.validationStateService.setValidationError(`Import fehlgeschlagen: ${error}`);
-          this.showError(this.translateService.instant('coding-management-manual.errors.import-failed'));
+          this.validationStateService.setValidationError(
+            `Import fehlgeschlagen: ${error}`
+          );
+          this.showError(
+            this.translateService.instant(
+              'coding-management-manual.errors.import-failed'
+            )
+          );
           this.isLoading = false;
         }
       );
     } catch (error) {
-      this.validationStateService.setValidationError(this.translateService.instant('coding-management-manual.errors.import-failed'));
-      this.showError(this.translateService.instant('coding-management-manual.errors.import-failed'));
+      this.validationStateService.setValidationError(
+        this.translateService.instant(
+          'coding-management-manual.errors.import-failed'
+        )
+      );
+      this.showError(
+        this.translateService.instant(
+          'coding-management-manual.errors.import-failed'
+        )
+      );
       this.isLoading = false;
     }
   }
@@ -360,7 +421,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const base64Data = result.split(',')[1];
         resolve(base64Data);
       };
-      reader.onerror = error => reject(error);
+      reader.onerror = (error) => reject(error);
     });
   }
 
@@ -422,7 +483,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingCodingProgress = true;
-    this.testPersonCodingService.getCodingProgressOverview(workspaceId)
+    this.testPersonCodingService
+      .getCodingProgressOverview(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -430,7 +492,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview) => {
           this.codingProgressOverview = overview;
         },
         error: () => {
@@ -446,7 +508,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingVariableCoverage = true;
-    this.testPersonCodingService.getVariableCoverageOverview(workspaceId)
+    this.testPersonCodingService
+      .getVariableCoverageOverview(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -454,7 +517,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview) => {
           this.variableCoverageOverview = overview;
         },
         error: () => {
@@ -470,7 +533,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingCaseCoverage = true;
-    this.testPersonCodingService.getCaseCoverageOverview(workspaceId)
+    this.testPersonCodingService
+      .getCaseCoverageOverview(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -478,7 +542,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview) => {
           this.caseCoverageOverview = overview;
         },
         error: () => {
@@ -494,7 +558,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingKappaSummary = true;
-    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
+    this.testPersonCodingService
+      .getWorkspaceCohensKappaSummary(workspaceId)
       .pipe(
         takeUntil(this.destroy$),
         finalize(() => {
@@ -502,7 +567,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: summary => {
+        next: (summary) => {
           this.workspaceKappaSummary = summary;
         },
         error: () => {
@@ -517,10 +582,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId)
+    this.backendService
+      .getCodingIncompleteVariables(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (variables: { unitName: string; variableId: string; responseCount: number }[]) => {
+        next: (
+          variables: {
+            unitName: string;
+            variableId: string;
+            responseCount: number;
+          }[]
+        ) => {
           this.codingIncompleteVariables = variables;
           this.loadAppliedResultsOverview();
         },
@@ -537,10 +609,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingStatistics(workspaceId, 'v1')
+    this.backendService
+      .getCodingStatistics(workspaceId, 'v1')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: statistics => {
+        next: (statistics) => {
           this.statusDistribution = {
             CODING_INCOMPLETE: statistics.statusCounts['4'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
@@ -563,15 +636,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private loadAppliedResultsOverview(): void {
     if (this.codingIncompleteVariables.length > 0) {
-      const totalIncompleteResponses = this.codingIncompleteVariables.reduce((sum, variable) => sum + variable.responseCount, 0);
+      const totalIncompleteResponses = this.codingIncompleteVariables.reduce(
+        (sum, variable) => sum + variable.responseCount,
+        0
+      );
       const workspaceId = this.appService.selectedWorkspaceId;
       if (workspaceId) {
-        this.backendService.getAppliedResultsCount(workspaceId, this.codingIncompleteVariables)
+        this.backendService
+          .getAppliedResultsCount(workspaceId, this.codingIncompleteVariables)
           .pipe(takeUntil(this.destroy$))
           .subscribe({
             next: (appliedResponses: number) => {
-              const remainingResponses = totalIncompleteResponses - appliedResponses;
-              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+              const remainingResponses =
+                totalIncompleteResponses - appliedResponses;
+              const completionPercentage =
+                totalIncompleteResponses > 0
+                  ? (appliedResponses / totalIncompleteResponses) * 100
+                  : 0;
 
               this.appliedResultsOverview = {
                 totalIncompleteVariables: this.codingIncompleteVariables.length,
@@ -588,12 +669,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               };
             },
             error: () => {
-              const appliedResponses = (this.statusDistribution.CODING_COMPLETE || 0) +
-                                       (this.statusDistribution.INVALID || 0) +
-                                       (this.statusDistribution.CODING_ERROR || 0);
+              const appliedResponses =
+                (this.statusDistribution.CODING_COMPLETE || 0) +
+                (this.statusDistribution.INVALID || 0) +
+                (this.statusDistribution.CODING_ERROR || 0);
 
-              const remainingResponses = totalIncompleteResponses - appliedResponses;
-              const completionPercentage = totalIncompleteResponses > 0 ? (appliedResponses / totalIncompleteResponses) * 100 : 0;
+              const remainingResponses =
+                totalIncompleteResponses - appliedResponses;
+              const completionPercentage =
+                totalIncompleteResponses > 0
+                  ? (appliedResponses / totalIncompleteResponses) * 100
+                  : 0;
 
               this.appliedResultsOverview = {
                 totalIncompleteVariables: this.codingIncompleteVariables.length,
@@ -614,16 +700,24 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
-  onTrainingStart(data: { selectedCoders: Coder[], variableConfigs: VariableConfig[] }): void {
+  onTrainingStart(data: {
+    selectedCoders: Coder[];
+    variableConfigs: VariableConfig[];
+  }): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    this.testPersonCodingService.generateCoderTrainingPackages(
-      workspaceId,
-      data.selectedCoders,
-      data.variableConfigs
-    ).pipe(takeUntil(this.destroy$))
+    this.testPersonCodingService
+      .generateCoderTrainingPackages(
+        workspaceId,
+        data.selectedCoders,
+        data.variableConfigs
+      )
+      .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: packages => {
-          const totalResponses = packages.reduce((total, pkg) => total + pkg.responses.length, 0);
+        next: (packages) => {
+          const totalResponses = packages.reduce(
+            (total, pkg) => total + pkg.responses.length,
+            0
+          );
 
           this.showSuccess(
             `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
@@ -656,10 +750,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingMatchingMode = true;
-    this.workspaceSettingsService.getResponseMatchingMode(workspaceId)
+    this.workspaceSettingsService
+      .getResponseMatchingMode(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: flags => {
+        next: (flags) => {
           this.responseMatchingFlags = flags;
           this.isLoadingMatchingMode = false;
         },
@@ -689,9 +784,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         newFlags = [ResponseMatchingFlag.NO_AGGREGATION];
       }
     } else {
-      newFlags = this.responseMatchingFlags.filter(f => f !== ResponseMatchingFlag.NO_AGGREGATION);
+      newFlags = this.responseMatchingFlags.filter(
+        (f) => f !== ResponseMatchingFlag.NO_AGGREGATION
+      );
       if (this.hasMatchingFlag(flag)) {
-        newFlags = newFlags.filter(f => f !== flag);
+        newFlags = newFlags.filter((f) => f !== flag);
       } else {
         newFlags = [...newFlags, flag];
       }
@@ -707,20 +804,29 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isSavingMatchingMode = true;
-    this.workspaceSettingsService.setResponseMatchingMode(workspaceId, flags)
+    this.workspaceSettingsService
+      .setResponseMatchingMode(workspaceId, flags)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: () => {
           this.responseMatchingFlags = flags;
           this.isSavingMatchingMode = false;
-          this.showSuccess(this.translateService.instant('coding-management-manual.response-matching.save-success'));
+          this.showSuccess(
+            this.translateService.instant(
+              'coding-management-manual.response-matching.save-success'
+            )
+          );
 
           // Refresh all affected areas after matching mode change
           this.onResponseMatchingModeChanged();
         },
         error: () => {
           this.isSavingMatchingMode = false;
-          this.showError(this.translateService.instant('coding-management-manual.response-matching.save-error'));
+          this.showError(
+            this.translateService.instant(
+              'coding-management-manual.response-matching.save-error'
+            )
+          );
         }
       });
   }
@@ -752,10 +858,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingResponseAnalysis = true;
-    this.testPersonCodingService.getResponseAnalysis(workspaceId)
+    this.testPersonCodingService
+      .getResponseAnalysis(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: analysis => {
+        next: (analysis) => {
           this.responseAnalysis = analysis;
           this.isLoadingResponseAnalysis = false;
         },
