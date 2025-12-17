@@ -525,66 +525,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
-  exportLogs(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
-      width: '800px',
-      data: {
-        workspaceId: this.appService.selectedWorkspaceId
-      }
-    });
-
-    dialogRef.afterClosed().subscribe((result: ExportOptions | undefined) => {
-      if (result) {
-        const filters = {
-          groupNames:
-            result.groupNames && result.groupNames.length > 0 ?
-              result.groupNames :
-              undefined,
-          bookletNames:
-            result.bookletNames && result.bookletNames.length > 0 ?
-              result.bookletNames :
-              undefined,
-          unitNames:
-            result.unitNames && result.unitNames.length > 0 ?
-              result.unitNames :
-              undefined,
-          personIds:
-            result.personIds && result.personIds.length > 0 ?
-              result.personIds :
-              undefined
-        };
-
-        this.isExporting = true;
-        this.exportTypeInProgress = 'test-logs';
-        this.backendService
-          .startExportTestLogsJob(this.appService.selectedWorkspaceId, filters)
-          .subscribe({
-            next: response => {
-              this.exportJobId = response.jobId;
-              this.exportJobStatus = 'active';
-              this.snackBar.open(
-                'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
-                'OK',
-                { duration: 3000 }
-              );
-              this.pollExportJobStatus(response.jobId);
-            },
-            error: () => {
-              this.isExporting = false;
-              this.exportTypeInProgress = null;
-              this.snackBar.open('Fehler beim Starten des Exports', 'Fehler', {
-                duration: 3000
-              });
-            }
-          });
-      }
-    });
-  }
-
   sortBooklets(): void {
     if (!this.booklets || this.booklets.length === 0) {
       return;
@@ -1191,17 +1131,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe(async result => {
       if (result) {
         switch (result.type) {
           case 'testcenter':
-            this.testCenterImport();
+            await this.testCenterImport();
             break;
           case 'responses':
             this.hiddenResponsesFileInput.nativeElement.click();
             break;
           case 'logs':
             this.hiddenLogsFileInput.nativeElement.click();
+            break;
+          default:
             break;
         }
       }
@@ -1864,10 +1806,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         });
       }
     });
-  }
-
-  exportResults(): void {
-    this.startExportJob('results');
   }
 
   private checkExistingExportJobs(): void {

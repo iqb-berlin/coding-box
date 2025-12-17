@@ -600,7 +600,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               { duration: 3000 }
             );
           },
-          error: err => {
+          error: () => {
             this.isDownloadingAllFiles = false;
             this.snackBar.open(
               'Fehler beim Herunterladen der ZIP-Datei.',
