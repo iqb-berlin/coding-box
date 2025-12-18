@@ -125,6 +125,9 @@ export interface TestResultsOverviewResponse {
   uniqueUnits: number;
   uniqueResponses: number;
   responseStatusCounts: Record<string, number>;
+  sessionBrowserCounts: Record<string, number>;
+  sessionOsCounts: Record<string, number>;
+  sessionScreenCounts: Record<string, number>;
 }
 
 @Injectable({

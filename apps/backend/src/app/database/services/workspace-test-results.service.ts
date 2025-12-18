@@ -74,6 +74,9 @@ export class WorkspaceTestResultsService {
     uniqueUnits: number;
     uniqueResponses: number;
     responseStatusCounts: Record<string, number>;
+    sessionBrowserCounts: Record<string, number>;
+    sessionOsCounts: Record<string, number>;
+    sessionScreenCounts: Record<string, number>;
   }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -139,13 +142,64 @@ export class WorkspaceTestResultsService {
       responseStatusCounts[label] = Number(r.count) || 0;
     });
 
+    const mapSessionCounts = (
+      rows: Array<{ value: string | null; count: string | number }>
+    ): Record<string, number> => {
+      const out: Record<string, number> = {};
+      (rows || []).forEach(r => {
+        const key = String((r.value || '').trim() || 'unknown');
+        out[key] = Number(r.count) || 0;
+      });
+      return out;
+    };
+
+    const [browserRows, osRows, screenRows] = await Promise.all([
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.browser', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.browser')
+        .getRawMany<{ value: string | null; count: string | number }>(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.os', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.os')
+        .getRawMany<{ value: string | null; count: string | number }>(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.screen', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.screen')
+        .getRawMany<{ value: string | null; count: string | number }>()
+    ]);
+
+    const sessionBrowserCounts = mapSessionCounts(browserRows);
+    const sessionOsCounts = mapSessionCounts(osRows);
+    const sessionScreenCounts = mapSessionCounts(screenRows);
+
     return {
       testPersons,
       testGroups,
       uniqueBooklets,
       uniqueUnits,
       uniqueResponses,
-      responseStatusCounts
+      responseStatusCounts,
+      sessionBrowserCounts,
+      sessionOsCounts,
+      sessionScreenCounts
     };
   }
 

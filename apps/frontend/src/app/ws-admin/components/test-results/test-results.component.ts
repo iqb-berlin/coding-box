@@ -14,10 +14,10 @@ import {
 import {
   Component,
   ElementRef,
+  inject,
   OnDestroy,
   OnInit,
-  ViewChild,
-  inject
+  ViewChild
 } from '@angular/core';
 
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -57,6 +57,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TestResultsImportDialogComponent } from './test-results-import-dialog.component';
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
+import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import {
@@ -292,6 +293,7 @@ string,
     MatIconButton,
     MatDivider,
     MatTooltipModule,
+    SessionDistributionsDialogComponent,
     TestResultsFlatTableComponent
   ]
 })
@@ -1084,6 +1086,68 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   }
 
+  private toSortedCountList(
+    map?: Record<string, number>
+  ): Array<{ key: string; count: number }> {
+    const m = (map || {}) as Record<string, number>;
+    return Object.entries(m)
+      .map(([key, count]) => ({ key, count: Number(count) }))
+      .filter(e => e.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }
+
+  private totalCount(list: Array<{ count: number }>): number {
+    return list.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
+  }
+
+  get overviewBrowserCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionBrowserCounts);
+  }
+
+  get overviewOsCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionOsCounts);
+  }
+
+  get overviewScreenCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionScreenCounts);
+  }
+
+  getBrowserTotal(): number {
+    return this.totalCount(this.overviewBrowserCounts);
+  }
+
+  getOsTotal(): number {
+    return this.totalCount(this.overviewOsCounts);
+  }
+
+  getScreenTotal(): number {
+    return this.totalCount(this.overviewScreenCounts);
+  }
+
+  getPercent(count: number, total: number): number {
+    const t = Number(total) || 0;
+    if (t <= 0) {
+      return 0;
+    }
+    return Math.round((Number(count) / t) * 1000) / 10;
+  }
+
+  openSessionDistributionsDialog(): void {
+    if (!this.overview) {
+      return;
+    }
+
+    this.dialog.open(SessionDistributionsDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      data: {
+        browserCounts: this.overview.sessionBrowserCounts || {},
+        osCounts: this.overview.sessionOsCounts || {},
+        screenCounts: this.overview.sessionScreenCounts || {}
+      }
+    });
+  }
+
   getResponseStatusTooltip(status: string): string {
     const info = RESPONSE_STATUS_INFO[status];
     if (!info) {
@@ -1157,7 +1221,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       uniqueBooklets: 0,
       uniqueUnits: 0,
       uniqueResponses: 0,
-      responseStatusCounts: {}
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
     };
 
     const workspaceId = this.appService.selectedWorkspaceId;
