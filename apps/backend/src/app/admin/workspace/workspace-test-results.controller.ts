@@ -126,6 +126,18 @@ export class WorkspaceTestResultsController {
         responseStatusCounts: {
           type: 'object',
           additionalProperties: { type: 'number' }
+        },
+        sessionBrowserCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        sessionOsCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        sessionScreenCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
         }
       }
     }
@@ -142,6 +154,9 @@ export class WorkspaceTestResultsController {
         uniqueUnits: number;
         uniqueResponses: number;
         responseStatusCounts: Record<string, number>;
+        sessionBrowserCounts: Record<string, number>;
+        sessionOsCounts: Record<string, number>;
+        sessionScreenCounts: Record<string, number>;
       }> {
     try {
       return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
