@@ -54,6 +54,12 @@ export interface FlatResponseFilterOptionsResponse {
   responses: string[];
   responseStatuses: string[];
   tags: string[];
+  processingDurations: string[];
+  unitProgresses: string[];
+  sessionBrowsers: string[];
+  sessionOs: string[];
+  sessionScreens: string[];
+  sessionIds: string[];
 }
 
 export interface FlatResponseFrequencyRequestCombo {
@@ -204,6 +210,15 @@ export class TestResultService {
       shortProcessingThresholdMs?: string;
       longLoading?: string;
       longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      processingDurationMin?: string;
+      processingDurationMax?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
@@ -233,6 +248,18 @@ export class TestResultService {
     addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
     addIf('longLoading', options.longLoading);
     addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('processingDurations', options.processingDurations);
+    addIf(
+      'processingDurationThresholdMs',
+      options.processingDurationThresholdMs
+    );
+    addIf('processingDurationMin', options.processingDurationMin);
+    addIf('processingDurationMax', options.processingDurationMax);
+    addIf('unitProgress', options.unitProgress);
+    addIf('sessionBrowsers', options.sessionBrowsers);
+    addIf('sessionOs', options.sessionOs);
+    addIf('sessionScreens', options.sessionScreens);
+    addIf('sessionIds', options.sessionIds);
 
     return this.http
       .get<FlatTestResultResponsesResponse>(
@@ -269,6 +296,13 @@ export class TestResultService {
       shortProcessingThresholdMs?: string;
       longLoading?: string;
       longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Observable<FlatResponseFilterOptionsResponse> {
     let params = new HttpParams();
@@ -296,6 +330,16 @@ export class TestResultService {
     addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
     addIf('longLoading', options.longLoading);
     addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('processingDurations', options.processingDurations);
+    addIf(
+      'processingDurationThresholdMs',
+      options.processingDurationThresholdMs
+    );
+    addIf('unitProgress', options.unitProgress);
+    addIf('sessionBrowsers', options.sessionBrowsers);
+    addIf('sessionOs', options.sessionOs);
+    addIf('sessionScreens', options.sessionScreens);
+    addIf('sessionIds', options.sessionIds);
 
     return this.http
       .get<FlatResponseFilterOptionsResponse>(
@@ -311,7 +355,13 @@ export class TestResultService {
           units: [],
           responses: [],
           responseStatuses: [],
-          tags: []
+          tags: [],
+          processingDurations: [],
+          unitProgresses: [],
+          sessionBrowsers: [],
+          sessionOs: [],
+          sessionScreens: [],
+          sessionIds: []
         })
         )
       );
