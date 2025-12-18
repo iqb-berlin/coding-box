@@ -139,6 +139,21 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
     'coding-box-test-results-long-loading-threshold-ms';
 
+  private readonly PROCESSING_DURATION_MIN_STORAGE_KEY =
+    'coding-box-test-results-processing-duration-min';
+
+  private readonly PROCESSING_DURATION_MAX_STORAGE_KEY =
+    'coding-box-test-results-processing-duration-max';
+
+  private readonly SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-browsers-allowlist';
+
+  private readonly SESSION_OS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-os-allowlist';
+
+  private readonly SESSION_SCREENS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-screens-allowlist';
+
   private unitIdsWithNotes = new Set<number>();
 
   private personTestResultsCache = new Map<
@@ -187,6 +202,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     tags: string;
     geogebra: boolean;
     audioLow: boolean;
+    sessionFilter: boolean;
     shortProcessing: boolean;
     longLoading: boolean;
   } = {
@@ -201,19 +217,38 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       tags: '',
       geogebra: false,
       audioLow: false,
+      sessionFilter: false,
       shortProcessing: false,
       longLoading: false
     };
 
   mediaFilters: Array<
-  'geogebra' | 'audioLow' | 'shortProcessing' | 'longLoading'
+  | 'geogebra'
+  | 'audioLow'
+  | 'sessionFilter'
+  | 'shortProcessing'
+  | 'longLoading'
+  | 'processingDuration'
+  | 'unitProgressComplete'
   > = [];
+
+  processingDurationEnabled: boolean = false;
+
+  processingDurationsFilters: string[] = [];
+  unitProgressFilters: string[] = [];
 
   audioLowThreshold: number = 0.9;
 
   shortProcessingThresholdMs: number = 60000;
 
   longLoadingThresholdMs: number = 5000;
+
+  processingDurationMin: string = '00:00';
+  processingDurationMax: string = '99:59';
+
+  sessionBrowsersAllowlist: string = '';
+  sessionOsAllowlist: string = '';
+  sessionScreensAllowlist: string = '';
 
   flatFilterOptions: FlatResponseFilterOptionsResponse = {
     codes: [],
@@ -223,7 +258,13 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     units: [],
     responses: [],
     responseStatuses: [],
-    tags: []
+    tags: [],
+    processingDurations: [],
+    unitProgresses: [],
+    sessionBrowsers: [],
+    sessionOs: [],
+    sessionScreens: [],
+    sessionIds: []
   };
 
   private flatSearchSubject = new Subject<void>();
@@ -265,11 +306,63 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       // ignore
     }
 
+    try {
+      const rawMin = localStorage.getItem(
+        this.PROCESSING_DURATION_MIN_STORAGE_KEY
+      );
+      if (rawMin != null && String(rawMin).trim()) {
+        this.processingDurationMin = String(rawMin);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const rawMax = localStorage.getItem(
+        this.PROCESSING_DURATION_MAX_STORAGE_KEY
+      );
+      if (rawMax != null && String(rawMax).trim()) {
+        this.processingDurationMax = String(rawMax);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY
+      );
+      if (raw != null) {
+        this.sessionBrowsersAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.SESSION_OS_ALLOWLIST_STORAGE_KEY);
+      if (raw != null) {
+        this.sessionOsAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY
+      );
+      if (raw != null) {
+        this.sessionScreensAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
     this.flatSearchSubscription = this.flatSearchSubject
       .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
       .subscribe(() => {
         this.fetchFlatResponses(0, this.flatPageSize);
-        this.fetchFlatResponseFilterOptions();
       });
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
@@ -280,7 +373,13 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   private syncMediaFiltersFromFlatFilters(): void {
     const next: Array<
-    'geogebra' | 'audioLow' | 'shortProcessing' | 'longLoading'
+    | 'geogebra'
+    | 'audioLow'
+    | 'sessionFilter'
+    | 'shortProcessing'
+    | 'longLoading'
+    | 'processingDuration'
+    | 'unitProgressComplete'
     > = [];
     if (this.flatFilters.geogebra) {
       next.push('geogebra');
@@ -288,11 +387,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     if (this.flatFilters.audioLow) {
       next.push('audioLow');
     }
+    if (this.flatFilters.sessionFilter) {
+      next.push('sessionFilter');
+    }
     if (this.flatFilters.shortProcessing) {
       next.push('shortProcessing');
     }
     if (this.flatFilters.longLoading) {
       next.push('longLoading');
+    }
+    if (this.processingDurationEnabled) {
+      next.push('processingDuration');
+    }
+    if (this.unitProgressFilters.includes('Vollständig')) {
+      next.push('unitProgressComplete');
     }
     this.mediaFilters = next;
   }
@@ -301,9 +409,39 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const selected = new Set(this.mediaFilters || []);
     this.flatFilters.geogebra = selected.has('geogebra');
     this.flatFilters.audioLow = selected.has('audioLow');
+    this.flatFilters.sessionFilter = selected.has('sessionFilter');
     this.flatFilters.shortProcessing = selected.has('shortProcessing');
     this.flatFilters.longLoading = selected.has('longLoading');
+
+    this.processingDurationEnabled = selected.has('processingDuration');
+
+    if (selected.has('unitProgressComplete')) {
+      if (!this.unitProgressFilters.includes('Vollständig')) {
+        this.unitProgressFilters = ['Vollständig'];
+      }
+    } else {
+      this.unitProgressFilters = this.unitProgressFilters.filter(
+        f => f !== 'Vollständig'
+      );
+    }
+
     this.onFlatFilterChanged();
+  }
+
+  onProcessingDurationsChanged(): void {
+    this.onFlatFilterChanged();
+  }
+
+  onUnitProgressChanged(): void {
+    this.onFlatFilterChanged();
+  }
+
+  private parseCsv(raw: string): string {
+    return String(raw || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean)
+      .join(',');
   }
 
   private loadFrequenciesForCurrentPage(): void {
@@ -322,10 +460,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       if (!unitKey || !variableId) {
         return;
       }
+
       const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
         variableId
       )}`;
-
       const cached = this.frequenciesByComboKey.get(key);
       const alreadyHave =
         !!cached &&
@@ -407,7 +545,6 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.suppressNextFlatFilterChange = true;
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
-    this.fetchFlatResponseFilterOptions();
   }
 
   private filterOptions(options: string[], value: string): string[] {
@@ -752,10 +889,16 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       tags: '',
       geogebra: false,
       audioLow: false,
+      sessionFilter: false,
       shortProcessing: false,
       longLoading: false
     };
     this.syncMediaFiltersFromFlatFilters();
+
+    this.processingDurationEnabled = false;
+    this.processingDurationsFilters = [];
+    this.unitProgressFilters = [];
+
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
@@ -798,39 +941,125 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   }
 
   openFlatSettings(): void {
-    const ref = this.dialog.open<
-    TestResultsFlatTableSettingsDialogComponent,
-    {
-      audioLowThreshold: number;
-      shortProcessingThresholdMs: number;
-      longLoadingThresholdMs: number;
-    },
-    TestResultsFlatTableSettingsDialogResult | undefined
-    >(TestResultsFlatTableSettingsDialogComponent, {
-      width: '720px',
-      maxWidth: '95vw',
-      height: '560px',
-      maxHeight: '90vh',
-      data: {
-        audioLowThreshold: this.audioLowThreshold,
-        shortProcessingThresholdMs: this.shortProcessingThresholdMs,
-        longLoadingThresholdMs: this.longLoadingThresholdMs
-      }
-    });
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
 
-    ref.afterClosed().subscribe(result => {
-      if (!result) {
-        return;
-      }
-      this.audioLowThreshold = result.audioLowThreshold;
+    this.testResultService
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
+      .subscribe(opts => {
+        const currentBrowsers = this.sessionBrowsersAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
+        const currentOs = this.sessionOsAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
+        const currentScreens = this.sessionScreensAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
 
-      this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
-      this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+        const ref = this.dialog.open<
+        TestResultsFlatTableSettingsDialogComponent,
+        {
+          audioLowThreshold: number;
+          shortProcessingThresholdMs: number;
+          longLoadingThresholdMs: number;
+          processingDurationMin: string;
+          processingDurationMax: string;
+          sessionBrowsersAllowlist: string[];
+          sessionOsAllowlist: string[];
+          sessionScreensAllowlist: string[];
+          availableSessionBrowsers: string[];
+          availableSessionOs: string[];
+          availableSessionScreens: string[];
+        },
+        TestResultsFlatTableSettingsDialogResult | undefined
+        >(TestResultsFlatTableSettingsDialogComponent, {
+          width: '720px',
+          maxWidth: '95vw',
+          height: '560px',
+          maxHeight: '90vh',
+          data: {
+            audioLowThreshold: this.audioLowThreshold,
+            shortProcessingThresholdMs: this.shortProcessingThresholdMs,
+            longLoadingThresholdMs: this.longLoadingThresholdMs,
+            processingDurationMin: this.processingDurationMin,
+            processingDurationMax: this.processingDurationMax,
+            sessionBrowsersAllowlist:
+              currentBrowsers.length > 0 ? currentBrowsers : [],
+            sessionOsAllowlist: currentOs.length > 0 ? currentOs : [],
+            sessionScreensAllowlist:
+              currentScreens.length > 0 ? currentScreens : [],
+            availableSessionBrowsers: opts.sessionBrowsers || [],
+            availableSessionOs: opts.sessionOs || [],
+            availableSessionScreens: opts.sessionScreens || []
+          }
+        });
 
-      this.onAudioLowThresholdChanged();
-      this.onShortProcessingThresholdChanged();
-      this.onLongLoadingThresholdChanged();
-    });
+        ref.afterClosed().subscribe(result => {
+          if (!result) {
+            return;
+          }
+          this.audioLowThreshold = result.audioLowThreshold;
+
+          this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
+          this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+
+          this.processingDurationMin = String(
+            result.processingDurationMin ?? ''
+          );
+          this.processingDurationMax = String(
+            result.processingDurationMax ?? ''
+          );
+          this.sessionBrowsersAllowlist = Array.isArray(
+            result.sessionBrowsersAllowlist
+          ) ?
+            result.sessionBrowsersAllowlist.join(',') :
+            '';
+          this.sessionOsAllowlist = Array.isArray(result.sessionOsAllowlist) ?
+            result.sessionOsAllowlist.join(',') :
+            '';
+          this.sessionScreensAllowlist = Array.isArray(
+            result.sessionScreensAllowlist
+          ) ?
+            result.sessionScreensAllowlist.join(',') :
+            '';
+
+          this.onAudioLowThresholdChanged();
+          this.onShortProcessingThresholdChanged();
+          this.onLongLoadingThresholdChanged();
+
+          try {
+            localStorage.setItem(
+              this.PROCESSING_DURATION_MIN_STORAGE_KEY,
+              String(this.processingDurationMin)
+            );
+            localStorage.setItem(
+              this.PROCESSING_DURATION_MAX_STORAGE_KEY,
+              String(this.processingDurationMax)
+            );
+            localStorage.setItem(
+              this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionBrowsersAllowlist)
+            );
+            localStorage.setItem(
+              this.SESSION_OS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionOsAllowlist)
+            );
+            localStorage.setItem(
+              this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionScreensAllowlist)
+            );
+          } catch {
+            // ignore
+          }
+
+          this.onFlatFilterChanged();
+        });
+      });
   }
 
   private fetchFlatResponseFilterOptions(): void {
@@ -839,30 +1068,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {
-        code: this.flatFilters.code,
-        group: this.flatFilters.group,
-        login: this.flatFilters.login,
-        booklet: this.flatFilters.booklet,
-        unit: this.flatFilters.unit,
-        response: this.flatFilters.response,
-        responseStatus: this.flatFilters.responseStatus,
-        responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags,
-        geogebra: this.flatFilters.geogebra ? 'true' : '',
-        audioLow: this.flatFilters.audioLow ? 'true' : '',
-        audioLowThreshold: this.flatFilters.audioLow ?
-          String(this.audioLowThreshold) :
-          '',
-        shortProcessing: this.flatFilters.shortProcessing ? 'true' : '',
-        shortProcessingThresholdMs: this.flatFilters.shortProcessing ?
-          String(this.shortProcessingThresholdMs) :
-          '',
-        longLoading: this.flatFilters.longLoading ? 'true' : '',
-        longLoadingThresholdMs: this.flatFilters.longLoading ?
-          String(this.longLoadingThresholdMs) :
-          ''
-      })
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
         this.flatFilterOptions = opts;
       });
@@ -881,6 +1087,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const validPage = Math.max(0, page);
     this.isLoadingFlat = true;
 
+    const sessionFilterActive = this.flatFilters.sessionFilter;
     this.testResultService
       .getFlatResponses(this.appService.selectedWorkspaceId, {
         page: validPage + 1,
@@ -906,6 +1113,23 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         longLoading: this.flatFilters.longLoading ? 'true' : '',
         longLoadingThresholdMs: this.flatFilters.longLoading ?
           String(this.longLoadingThresholdMs) :
+          '',
+        processingDurations: '',
+        processingDurationMin: this.processingDurationEnabled ?
+          String(this.processingDurationMin) :
+          '',
+        processingDurationMax: this.processingDurationEnabled ?
+          String(this.processingDurationMax) :
+          '',
+        unitProgress: (this.unitProgressFilters || []).join(','),
+        sessionBrowsers: sessionFilterActive ?
+          this.parseCsv(this.sessionBrowsersAllowlist) :
+          '',
+        sessionOs: sessionFilterActive ?
+          this.parseCsv(this.sessionOsAllowlist) :
+          '',
+        sessionScreens: sessionFilterActive ?
+          this.parseCsv(this.sessionScreensAllowlist) :
           ''
       })
       .subscribe(resp => {

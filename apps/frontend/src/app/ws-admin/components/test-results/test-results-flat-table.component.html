@@ -155,8 +155,8 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 260px">
-          <mat-label>Media-Filter</mat-label>
+        <mat-form-field appearance="outline" style="width: 300px">
+          <mat-label>Spezialfilter</mat-label>
           <mat-select
             [(ngModel)]="mediaFilters"
             (ngModelChange)="onMediaFiltersChanged()"
@@ -164,6 +164,13 @@
           >
             <mat-option value="geogebra">GeoGebra</mat-option>
             <mat-option value="audioLow">Audio &lt; Schwellwert</mat-option>
+            <mat-option value="sessionFilter">
+              <span
+                matTooltip="Aktiviert Session-Filterung anhand der Einstellungen (Browser/OS/Screen) im Zahnrad."
+              >
+                Session-Filter
+              </span>
+            </mat-option>
             <mat-option value="shortProcessing">
               <span
                 matTooltip="Log-basiert: CONTROLLER/RUNNING → CONTROLLER/TERMINATED in weniger als dem Schwellwert (konfigurierbar über das Zahnrad)."
@@ -178,17 +185,23 @@
                 Lange Ladezeit
               </span>
             </mat-option>
+            <mat-option value="processingDuration">
+              <span
+                matTooltip="Bearbeitungszeit (CONTROLLER/RUNNING → CONTROLLER/TERMINATED) ist mindestens der Schwellwert (konfigurierbar über das Zahnrad)."
+              >
+                Bearbeitungszeit
+              </span>
+            </mat-option>
+            <mat-option value="unitProgressComplete">
+              <span
+                matTooltip="Zeigt nur Testheft-Durchläufe, bei denen alle Units besucht wurden."
+              >
+                Vollständig bearbeitet
+              </span>
+            </mat-option>
           </mat-select>
         </mat-form-field>
-        <button
-          mat-icon-button
-          (click)="openFlatSettings()"
-          [disabled]="
-            !flatFilters.audioLow &&
-            !flatFilters.shortProcessing &&
-            !flatFilters.longLoading
-          "
-        >
+        <button mat-icon-button (click)="openFlatSettings()">
           <mat-icon>settings</mat-icon>
         </button>
         <button mat-stroked-button color="primary" (click)="clearFlatFilters()">

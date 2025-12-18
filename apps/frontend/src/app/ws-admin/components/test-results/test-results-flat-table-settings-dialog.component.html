@@ -52,6 +52,89 @@
       dieser Wert ist.
     </mat-hint>
   </mat-form-field>
+
+  <div style="margin-top: 16px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
+    Bearbeitungsdauer
+  </div>
+  <div style="display: flex; gap: 12px; margin-bottom: 16px">
+    <mat-form-field
+      appearance="outline"
+      style="flex: 1"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Bearbeitungszeit min. (mm:ss)</mat-label>
+      <input matInput type="text" [(ngModel)]="processingDurationMin" />
+      <mat-hint style="white-space: normal; line-height: 1.35">
+        Wird angewendet, wenn im Spezialfilter „Bearbeitungszeit“ aktiviert ist.
+      </mat-hint>
+    </mat-form-field>
+    <mat-form-field
+      appearance="outline"
+      style="flex: 1"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Bearbeitungszeit max. (mm:ss)</mat-label>
+      <input matInput type="text" [(ngModel)]="processingDurationMax" />
+      <mat-hint style="white-space: normal; line-height: 1.35">
+        Bearbeitungszeit = CONTROLLER/RUNNING → CONTROLLER/TERMINATED.
+      </mat-hint>
+    </mat-form-field>
+  </div>
+
+  <div style="margin-top: 8px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
+    Session-Filter
+  </div>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Browser</mat-label>
+    <mat-select [(ngModel)]="sessionBrowsersAllowlist" multiple>
+      <mat-option
+        *ngFor="let browser of availableSessionBrowsers"
+        [value]="browser"
+      >
+        {{ browser }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>OS</mat-label>
+    <mat-select [(ngModel)]="sessionOsAllowlist" multiple>
+      <mat-option *ngFor="let os of availableSessionOs" [value]="os">
+        {{ os }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Screen</mat-label>
+    <mat-select [(ngModel)]="sessionScreensAllowlist" multiple>
+      <mat-option
+        *ngFor="let screen of availableSessionScreens"
+        [value]="screen"
+      >
+        {{ screen }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
 </div>
 
 <div mat-dialog-actions align="end">

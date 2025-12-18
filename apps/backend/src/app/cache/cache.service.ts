@@ -7,9 +7,45 @@ import { ValidationResultDto } from '../../../../../api-dto/coding/validation-re
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
   private readonly DEFAULT_TTL = 86400; // 24 Stunden in Sekunden
-  constructor(
-    @InjectRedis() private readonly redis: Redis
-  ) {}
+  constructor(@InjectRedis() private readonly redis: Redis) {}
+
+  async getNumber(key: string, fallback: number): Promise<number> {
+    try {
+      const raw = await this.redis.get(key);
+      const parsed = raw != null ? Number(raw) : NaN;
+      return Number.isFinite(parsed) ? parsed : fallback;
+    } catch (error) {
+      this.logger.error(
+        `Error getting number from cache: ${error.message}`,
+        error.stack
+      );
+      return fallback;
+    }
+  }
+
+  async incr(key: string): Promise<number> {
+    try {
+      return await this.redis.incr(key);
+    } catch (error) {
+      this.logger.error(
+        `Error incrementing cache key: ${error.message}`,
+        error.stack
+      );
+      return 0;
+    }
+  }
+
+  generateFlatResponseFilterOptionsVersionKey(workspaceId: number): string {
+    return `flat_response_filter_options:version:${workspaceId}`;
+  }
+
+  generateFlatResponseFilterOptionsCacheKey(
+    workspaceId: number,
+    cacheVersion: number,
+    processingDurationThresholdMs: number
+  ): string {
+    return `flat_response_filter_options:${workspaceId}:v${cacheVersion}:thr${processingDurationThresholdMs}`;
+  }
 
   /**
    * Get a value from the cache
@@ -24,7 +60,10 @@ export class CacheService {
       }
       return JSON.parse(cachedValue) as T;
     } catch (error) {
-      this.logger.error(`Error getting value from cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting value from cache: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
@@ -36,7 +75,11 @@ export class CacheService {
    * @param ttl Time to live in seconds (optional, defaults to 1 hour, use 0 for no expiration)
    * @returns True if the value was set, false otherwise
    */
-  async set<T>(key: string, value: T, ttl: number = this.DEFAULT_TTL): Promise<boolean> {
+  async set<T>(
+    key: string,
+    value: T,
+    ttl: number = this.DEFAULT_TTL
+  ): Promise<boolean> {
     try {
       const serializedValue = JSON.stringify(value);
       if (ttl > 0) {
@@ -46,7 +89,10 @@ export class CacheService {
       }
       return true;
     } catch (error) {
-      this.logger.error(`Error setting value in cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error setting value in cache: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -61,7 +107,10 @@ export class CacheService {
       await this.redis.del(key);
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting value from cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error deleting value from cache: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -76,7 +125,10 @@ export class CacheService {
       const exists = await this.redis.exists(key);
       return exists === 1;
     } catch (error) {
-      this.logger.error(`Error checking if key exists in cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error checking if key exists in cache: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -88,7 +140,11 @@ export class CacheService {
    * @param unitId The unit ID
    * @returns The cache key
    */
-  generateUnitResponseCacheKey(workspaceId: number, testPerson: string, unitId: string): string {
+  generateUnitResponseCacheKey(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string
+  ): string {
     return `responses:${workspaceId}:${testPerson}:${unitId}`;
   }
 
@@ -133,10 +189,15 @@ export class CacheService {
       } else {
         await this.redis.set(cacheKey, serializedValue);
       }
-      this.logger.log(`Stored validation results in cache: ${cacheKey} (${results.length} results)`);
+      this.logger.log(
+        `Stored validation results in cache: ${cacheKey} (${results.length} results)`
+      );
       return true;
     } catch (error) {
-      this.logger.error(`Error storing validation results in cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error storing validation results in cache: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -200,7 +261,10 @@ export class CacheService {
         }
       };
     } catch (error) {
-      this.logger.error(`Error retrieving paginated validation results from cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error retrieving paginated validation results from cache: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
@@ -219,7 +283,9 @@ export class CacheService {
     };
   } | null> {
     try {
-      this.logger.log(`Attempting to retrieve complete validation results from cache with key: ${cacheKey}`);
+      this.logger.log(
+        `Attempting to retrieve complete validation results from cache with key: ${cacheKey}`
+      );
 
       const cachedData = await this.get<{
         results: ValidationResultDto[];
@@ -239,15 +305,22 @@ export class CacheService {
         return null;
       }
 
-      this.logger.log(`Successfully retrieved cached validation results: ${cachedData.results.length} items`);
-      this.logger.log(`Cache metadata - Total: ${cachedData.metadata.total}, Missing: ${cachedData.metadata.missing}`);
+      this.logger.log(
+        `Successfully retrieved cached validation results: ${cachedData.results.length} items`
+      );
+      this.logger.log(
+        `Cache metadata - Total: ${cachedData.metadata.total}, Missing: ${cachedData.metadata.missing}`
+      );
 
       return {
         results: cachedData.results,
         metadata: cachedData.metadata
       };
     } catch (error) {
-      this.logger.error(`Error retrieving complete validation results from cache: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error retrieving complete validation results from cache: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
