@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatSelectModule } from '@angular/material/select';
 import {
   Observable,
   Subject,
@@ -41,6 +42,10 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import {
+  TestResultsFlatTableSettingsDialogComponent,
+  TestResultsFlatTableSettingsDialogResult
+} from './test-results-flat-table-settings-dialog.component';
 
 interface FlatResponseRow {
   responseId: number;
@@ -112,7 +117,8 @@ interface BookletFromPersonTestResults {
     MatDividerModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
-    MatAutocompleteModule
+    MatAutocompleteModule,
+    MatSelectModule
   ],
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
@@ -123,6 +129,15 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+
+  private readonly AUDIO_LOW_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-audio-low-threshold';
+
+  private readonly SHORT_PROCESSING_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-short-processing-threshold-ms';
+
+  private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-long-loading-threshold-ms';
 
   private unitIdsWithNotes = new Set<number>();
 
@@ -170,6 +185,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     responseStatus: string;
     responseValue: string;
     tags: string;
+    geogebra: boolean;
+    audioLow: boolean;
+    shortProcessing: boolean;
+    longLoading: boolean;
   } = {
       code: '',
       group: '',
@@ -179,8 +198,22 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       response: '',
       responseStatus: '',
       responseValue: '',
-      tags: ''
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      shortProcessing: false,
+      longLoading: false
     };
+
+  mediaFilters: Array<
+  'geogebra' | 'audioLow' | 'shortProcessing' | 'longLoading'
+  > = [];
+
+  audioLowThreshold: number = 0.9;
+
+  shortProcessingThresholdMs: number = 60000;
+
+  longLoadingThresholdMs: number = 5000;
 
   flatFilterOptions: FlatResponseFilterOptionsResponse = {
     codes: [],
@@ -200,6 +233,38 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private suppressNextFlatFilterChange = false;
 
   constructor() {
+    try {
+      const raw = localStorage.getItem(this.AUDIO_LOW_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.audioLowThreshold = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY
+      );
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.shortProcessingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.LONG_LOADING_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.longLoadingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
     this.flatSearchSubscription = this.flatSearchSubject
       .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
       .subscribe(() => {
@@ -209,6 +274,36 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
+
+    this.syncMediaFiltersFromFlatFilters();
+  }
+
+  private syncMediaFiltersFromFlatFilters(): void {
+    const next: Array<
+    'geogebra' | 'audioLow' | 'shortProcessing' | 'longLoading'
+    > = [];
+    if (this.flatFilters.geogebra) {
+      next.push('geogebra');
+    }
+    if (this.flatFilters.audioLow) {
+      next.push('audioLow');
+    }
+    if (this.flatFilters.shortProcessing) {
+      next.push('shortProcessing');
+    }
+    if (this.flatFilters.longLoading) {
+      next.push('longLoading');
+    }
+    this.mediaFilters = next;
+  }
+
+  onMediaFiltersChanged(): void {
+    const selected = new Set(this.mediaFilters || []);
+    this.flatFilters.geogebra = selected.has('geogebra');
+    this.flatFilters.audioLow = selected.has('audioLow');
+    this.flatFilters.shortProcessing = selected.has('shortProcessing');
+    this.flatFilters.longLoading = selected.has('longLoading');
+    this.onFlatFilterChanged();
   }
 
   private loadFrequenciesForCurrentPage(): void {
@@ -654,11 +749,88 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       response: '',
       responseStatus: '',
       responseValue: '',
-      tags: ''
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      shortProcessing: false,
+      longLoading: false
     };
+    this.syncMediaFiltersFromFlatFilters();
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
+  }
+
+  onAudioLowThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
+        String(this.audioLowThreshold)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onShortProcessingThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
+        String(this.shortProcessingThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onLongLoadingThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
+        String(this.longLoadingThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  openFlatSettings(): void {
+    const ref = this.dialog.open<
+    TestResultsFlatTableSettingsDialogComponent,
+    {
+      audioLowThreshold: number;
+      shortProcessingThresholdMs: number;
+      longLoadingThresholdMs: number;
+    },
+    TestResultsFlatTableSettingsDialogResult | undefined
+    >(TestResultsFlatTableSettingsDialogComponent, {
+      width: '720px',
+      maxWidth: '95vw',
+      height: '560px',
+      maxHeight: '90vh',
+      data: {
+        audioLowThreshold: this.audioLowThreshold,
+        shortProcessingThresholdMs: this.shortProcessingThresholdMs,
+        longLoadingThresholdMs: this.longLoadingThresholdMs
+      }
+    });
+
+    ref.afterClosed().subscribe(result => {
+      if (!result) {
+        return;
+      }
+      this.audioLowThreshold = result.audioLowThreshold;
+
+      this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
+      this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+
+      this.onAudioLowThresholdChanged();
+      this.onShortProcessingThresholdChanged();
+      this.onLongLoadingThresholdChanged();
+    });
   }
 
   private fetchFlatResponseFilterOptions(): void {
@@ -676,7 +848,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         response: this.flatFilters.response,
         responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags
+        tags: this.flatFilters.tags,
+        geogebra: this.flatFilters.geogebra ? 'true' : '',
+        audioLow: this.flatFilters.audioLow ? 'true' : '',
+        audioLowThreshold: this.flatFilters.audioLow ?
+          String(this.audioLowThreshold) :
+          '',
+        shortProcessing: this.flatFilters.shortProcessing ? 'true' : '',
+        shortProcessingThresholdMs: this.flatFilters.shortProcessing ?
+          String(this.shortProcessingThresholdMs) :
+          '',
+        longLoading: this.flatFilters.longLoading ? 'true' : '',
+        longLoadingThresholdMs: this.flatFilters.longLoading ?
+          String(this.longLoadingThresholdMs) :
+          ''
       })
       .subscribe(opts => {
         this.flatFilterOptions = opts;
@@ -708,7 +893,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         response: this.flatFilters.response,
         responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags
+        tags: this.flatFilters.tags,
+        geogebra: this.flatFilters.geogebra ? 'true' : '',
+        audioLow: this.flatFilters.audioLow ? 'true' : '',
+        audioLowThreshold: this.flatFilters.audioLow ?
+          String(this.audioLowThreshold) :
+          '',
+        shortProcessing: this.flatFilters.shortProcessing ? 'true' : '',
+        shortProcessingThresholdMs: this.flatFilters.shortProcessing ?
+          String(this.shortProcessingThresholdMs) :
+          '',
+        longLoading: this.flatFilters.longLoading ? 'true' : '',
+        longLoadingThresholdMs: this.flatFilters.longLoading ?
+          String(this.longLoadingThresholdMs) :
+          ''
       })
       .subscribe(resp => {
         this.isLoadingFlat = false;
