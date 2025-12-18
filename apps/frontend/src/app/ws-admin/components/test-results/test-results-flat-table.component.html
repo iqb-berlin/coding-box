@@ -155,6 +155,42 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
+        <mat-form-field appearance="outline" style="width: 260px">
+          <mat-label>Media-Filter</mat-label>
+          <mat-select
+            [(ngModel)]="mediaFilters"
+            (ngModelChange)="onMediaFiltersChanged()"
+            multiple
+          >
+            <mat-option value="geogebra">GeoGebra</mat-option>
+            <mat-option value="audioLow">Audio &lt; Schwellwert</mat-option>
+            <mat-option value="shortProcessing">
+              <span
+                matTooltip="Log-basiert: CONTROLLER/RUNNING → CONTROLLER/TERMINATED in weniger als dem Schwellwert (konfigurierbar über das Zahnrad)."
+              >
+                Früh abgebrochen
+              </span>
+            </mat-option>
+            <mat-option value="longLoading">
+              <span
+                matTooltip="Log-basiert: STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad)."
+              >
+                Lange Ladezeit
+              </span>
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+        <button
+          mat-icon-button
+          (click)="openFlatSettings()"
+          [disabled]="
+            !flatFilters.audioLow &&
+            !flatFilters.shortProcessing &&
+            !flatFilters.longLoading
+          "
+        >
+          <mat-icon>settings</mat-icon>
+        </button>
         <button mat-stroked-button color="primary" (click)="clearFlatFilters()">
           <mat-icon>clear</mat-icon>
           Filter zurücksetzen

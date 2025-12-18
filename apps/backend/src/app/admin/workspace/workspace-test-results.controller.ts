@@ -349,6 +349,53 @@ export class WorkspaceTestResultsController {
     description: 'Filter by unit tag (ILIKE)',
     type: String
   })
+  @ApiQuery({
+    name: 'geogebra',
+    required: false,
+    description:
+      'If true, only include responses from units that contain at least one GeoGebra response (response.value starts with "UEsD")',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLow',
+    required: false,
+    description:
+      'If true, only include audio responses (response.variableid starts with "audio") with numeric response.value below the given threshold',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLowThreshold',
+    required: false,
+    description: 'Numeric threshold used together with audioLow (default: 0.9)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessing',
+    required: false,
+    description:
+      'If true, only include responses from booklets with short processing time (derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessingThresholdMs',
+    required: false,
+    description:
+      'Threshold in milliseconds for shortProcessing (default: 60000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoading',
+    required: false,
+    description:
+      'If true, only include responses from units with long loading times (derived from unit logs STARTED -> ENDED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoadingThresholdMs',
+    required: false,
+    description: 'Threshold in milliseconds for longLoading (default: 5000)',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Flat responses retrieved successfully.',
     schema: {
@@ -381,7 +428,14 @@ export class WorkspaceTestResultsController {
                            @Query('response') response?: string,
                            @Query('responseStatus') responseStatus?: string,
                            @Query('responseValue') responseValue?: string,
-                           @Query('tags') tags?: string
+                           @Query('tags') tags?: string,
+                           @Query('geogebra') geogebra?: string,
+                           @Query('audioLow') audioLow?: string,
+                           @Query('audioLowThreshold') audioLowThreshold?: string,
+                           @Query('shortProcessing') shortProcessing?: string,
+                           @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
+                           @Query('longLoading') longLoading?: string,
+                           @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
@@ -395,7 +449,14 @@ export class WorkspaceTestResultsController {
         response,
         responseStatus,
         responseValue,
-        tags
+        tags,
+        geogebra,
+        audioLow,
+        audioLowThreshold,
+        shortProcessing,
+        shortProcessingThresholdMs,
+        longLoading,
+        longLoadingThresholdMs
       });
     return {
       data,
@@ -549,6 +610,53 @@ export class WorkspaceTestResultsController {
     description: 'Filter by unit tag (ILIKE)',
     type: String
   })
+  @ApiQuery({
+    name: 'geogebra',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from units that contain at least one GeoGebra response (response.value starts with "UEsD")',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLow',
+    required: false,
+    description:
+      'If true, only include filter options based on audio responses (response.variableid starts with "audio") with numeric response.value below the given threshold',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLowThreshold',
+    required: false,
+    description: 'Numeric threshold used together with audioLow (default: 0.9)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessing',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from booklets with short processing time (derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessingThresholdMs',
+    required: false,
+    description:
+      'Threshold in milliseconds for shortProcessing (default: 60000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoading',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from units with long loading times (derived from unit logs STARTED -> ENDED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoadingThresholdMs',
+    required: false,
+    description: 'Threshold in milliseconds for longLoading (default: 5000)',
+    type: String
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
@@ -561,7 +669,14 @@ export class WorkspaceTestResultsController {
       @Query('response') response?: string,
       @Query('responseStatus') responseStatus?: string,
       @Query('responseValue') responseValue?: string,
-      @Query('tags') tags?: string
+      @Query('tags') tags?: string,
+      @Query('geogebra') geogebra?: string,
+      @Query('audioLow') audioLow?: string,
+      @Query('audioLowThreshold') audioLowThreshold?: string,
+      @Query('shortProcessing') shortProcessing?: string,
+      @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
+      @Query('longLoading') longLoading?: string,
+      @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string
   ): Promise<{
         codes: string[];
         groups: string[];
@@ -583,7 +698,14 @@ export class WorkspaceTestResultsController {
         response,
         responseStatus,
         responseValue,
-        tags
+        tags,
+        geogebra,
+        audioLow,
+        audioLowThreshold,
+        shortProcessing,
+        shortProcessingThresholdMs,
+        longLoading,
+        longLoadingThresholdMs
       }
     );
   }

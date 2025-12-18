@@ -571,6 +571,13 @@ export class WorkspaceTestResultsService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
     }
   ): Promise<
     [
@@ -612,6 +619,57 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const geogebra = String(options.geogebra || '')
+      .trim()
+      .toLowerCase();
+    const geogebraOnly =
+      geogebra === 'true' || geogebra === '1' || geogebra === 'yes';
+    const audioLow = String(options.audioLow || '')
+      .trim()
+      .toLowerCase();
+    const audioLowOnly =
+      audioLow === 'true' || audioLow === '1' || audioLow === 'yes';
+    const audioLowThresholdRaw = String(options.audioLowThreshold || '').trim();
+    const audioLowThresholdParsed = Number(
+      audioLowThresholdRaw || 0.9
+    );
+    const audioLowThreshold = Number.isFinite(audioLowThresholdParsed) ?
+      audioLowThresholdParsed :
+      0.9;
+
+    const shortProcessing = String(options.shortProcessing || '')
+      .trim()
+      .toLowerCase();
+    const shortProcessingOnly =
+      shortProcessing === 'true' ||
+      shortProcessing === '1' ||
+      shortProcessing === 'yes';
+    const shortProcessingThresholdRaw = String(
+      options.shortProcessingThresholdMs || ''
+    ).trim();
+    const shortProcessingThresholdParsed = Number(
+      shortProcessingThresholdRaw || 60000
+    );
+    const shortProcessingThresholdMs = Number.isFinite(
+      shortProcessingThresholdParsed
+    ) ?
+      shortProcessingThresholdParsed :
+      60000;
+
+    const longLoading = String(options.longLoading || '')
+      .trim()
+      .toLowerCase();
+    const longLoadingOnly =
+      longLoading === 'true' || longLoading === '1' || longLoading === 'yes';
+    const longLoadingThresholdRaw = String(
+      options.longLoadingThresholdMs || ''
+    ).trim();
+    const longLoadingThresholdParsed = Number(
+      longLoadingThresholdRaw || 5000
+    );
+    const longLoadingThresholdMs = Number.isFinite(longLoadingThresholdParsed) ?
+      longLoadingThresholdParsed :
+      5000;
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -677,6 +735,55 @@ export class WorkspaceTestResultsService {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
 
+    if (geogebraOnly) {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      qb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      qb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      qb.andWhere('(response.value::double precision) < :audioLowThreshold', {
+        audioLowThreshold
+      });
+    }
+
+    if (shortProcessingOnly) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (longLoadingOnly) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
+    }
+
     const countQb = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
@@ -727,6 +834,58 @@ export class WorkspaceTestResultsService {
     if (tags) {
       countQb.leftJoin('unit.tags', 'unitTag');
       countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    if (geogebraOnly) {
+      countQb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      countQb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      countQb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      countQb.andWhere(
+        '(response.value::double precision) < :audioLowThreshold',
+        {
+          audioLowThreshold
+        }
+      );
+    }
+
+    if (shortProcessingOnly) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (longLoadingOnly) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
     }
 
     const total = await countQb
@@ -978,6 +1137,13 @@ export class WorkspaceTestResultsService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
     }
   ): Promise<{
       codes: string[];
@@ -1004,6 +1170,57 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const geogebra = String(options.geogebra || '')
+      .trim()
+      .toLowerCase();
+    const geogebraOnly =
+      geogebra === 'true' || geogebra === '1' || geogebra === 'yes';
+    const audioLow = String(options.audioLow || '')
+      .trim()
+      .toLowerCase();
+    const audioLowOnly =
+      audioLow === 'true' || audioLow === '1' || audioLow === 'yes';
+    const audioLowThresholdRaw = String(options.audioLowThreshold || '').trim();
+    const audioLowThresholdParsed = Number(
+      audioLowThresholdRaw || 0.9
+    );
+    const audioLowThreshold = Number.isFinite(audioLowThresholdParsed) ?
+      audioLowThresholdParsed :
+      0.9;
+
+    const shortProcessing = String(options.shortProcessing || '')
+      .trim()
+      .toLowerCase();
+    const shortProcessingOnly =
+      shortProcessing === 'true' ||
+      shortProcessing === '1' ||
+      shortProcessing === 'yes';
+    const shortProcessingThresholdRaw = String(
+      options.shortProcessingThresholdMs || ''
+    ).trim();
+    const shortProcessingThresholdParsed = Number(
+      shortProcessingThresholdRaw || 60000
+    );
+    const shortProcessingThresholdMs = Number.isFinite(
+      shortProcessingThresholdParsed
+    ) ?
+      shortProcessingThresholdParsed :
+      60000;
+
+    const longLoading = String(options.longLoading || '')
+      .trim()
+      .toLowerCase();
+    const longLoadingOnly =
+      longLoading === 'true' || longLoading === '1' || longLoading === 'yes';
+    const longLoadingThresholdRaw = String(
+      options.longLoadingThresholdMs || ''
+    ).trim();
+    const longLoadingThresholdParsed = Number(
+      longLoadingThresholdRaw || 5000
+    );
+    const longLoadingThresholdMs = Number.isFinite(longLoadingThresholdParsed) ?
+      longLoadingThresholdParsed :
+      5000;
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -1067,6 +1284,58 @@ export class WorkspaceTestResultsService {
     }
     if (tags) {
       baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+    }
+
+    if (geogebraOnly) {
+      baseQb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      baseQb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      baseQb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      baseQb.andWhere(
+        '(response.value::double precision) < :audioLowThreshold',
+        {
+          audioLowThreshold
+        }
+      );
+    }
+
+    if (shortProcessingOnly) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (longLoadingOnly) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
     }
 
     const [

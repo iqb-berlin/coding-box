@@ -197,6 +197,13 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
     }
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
@@ -219,6 +226,13 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    addIf('geogebra', options.geogebra);
+    addIf('audioLow', options.audioLow);
+    addIf('audioLowThreshold', options.audioLowThreshold);
+    addIf('shortProcessing', options.shortProcessing);
+    addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
+    addIf('longLoading', options.longLoading);
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
 
     return this.http
       .get<FlatTestResultResponsesResponse>(
@@ -248,6 +262,13 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
     }
   ): Observable<FlatResponseFilterOptionsResponse> {
     let params = new HttpParams();
@@ -268,6 +289,13 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    addIf('geogebra', options.geogebra);
+    addIf('audioLow', options.audioLow);
+    addIf('audioLowThreshold', options.audioLowThreshold);
+    addIf('shortProcessing', options.shortProcessing);
+    addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
+    addIf('longLoading', options.longLoading);
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
 
     return this.http
       .get<FlatResponseFilterOptionsResponse>(
