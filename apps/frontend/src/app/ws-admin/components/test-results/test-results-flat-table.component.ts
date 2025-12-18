@@ -202,6 +202,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     tags: string;
     geogebra: boolean;
     audioLow: boolean;
+    nonEmptyResponse: boolean;
     sessionFilter: boolean;
     shortProcessing: boolean;
     longLoading: boolean;
@@ -217,6 +218,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       tags: '',
       geogebra: false,
       audioLow: false,
+      nonEmptyResponse: false,
       sessionFilter: false,
       shortProcessing: false,
       longLoading: false
@@ -225,6 +227,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   mediaFilters: Array<
   | 'geogebra'
   | 'audioLow'
+  | 'nonEmptyResponse'
   | 'sessionFilter'
   | 'shortProcessing'
   | 'longLoading'
@@ -269,7 +272,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
+  private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
+
+  private refreshFilterOptionsTimeoutIds: number[] = [];
 
   private suppressNextFlatFilterChange = false;
 
@@ -365,6 +371,20 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         this.fetchFlatResponses(0, this.flatPageSize);
       });
 
+    this.workspaceCacheInvalidatedSubscription =
+      this.testResultService.workspaceCacheInvalidated$.subscribe(
+        workspaceId => {
+          if (!this.appService.selectedWorkspaceId) {
+            return;
+          }
+          if (workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
+          this.refreshFlatResponseFilterOptionsWithRetry();
+          this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+        }
+      );
+
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
 
@@ -375,6 +395,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const next: Array<
     | 'geogebra'
     | 'audioLow'
+    | 'nonEmptyResponse'
     | 'sessionFilter'
     | 'shortProcessing'
     | 'longLoading'
@@ -386,6 +407,9 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
     if (this.flatFilters.audioLow) {
       next.push('audioLow');
+    }
+    if (this.flatFilters.nonEmptyResponse) {
+      next.push('nonEmptyResponse');
     }
     if (this.flatFilters.sessionFilter) {
       next.push('sessionFilter');
@@ -409,6 +433,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const selected = new Set(this.mediaFilters || []);
     this.flatFilters.geogebra = selected.has('geogebra');
     this.flatFilters.audioLow = selected.has('audioLow');
+    this.flatFilters.nonEmptyResponse = selected.has('nonEmptyResponse');
     this.flatFilters.sessionFilter = selected.has('sessionFilter');
     this.flatFilters.shortProcessing = selected.has('shortProcessing');
     this.flatFilters.longLoading = selected.has('longLoading');
@@ -823,6 +848,21 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.flatSearchSubscription.unsubscribe();
+    this.workspaceCacheInvalidatedSubscription.unsubscribe();
+    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
+    );
+    this.refreshFilterOptionsTimeoutIds = [];
+  }
+
+  private refreshFlatResponseFilterOptionsWithRetry(): void {
+    this.fetchFlatResponseFilterOptions();
+
+    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
+    );
+    this.refreshFilterOptionsTimeoutIds = [
+      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 1000),
+      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 3000)
+    ];
   }
 
   private getPersonTestResults(
@@ -889,6 +929,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       tags: '',
       geogebra: false,
       audioLow: false,
+      nonEmptyResponse: false,
       sessionFilter: false,
       shortProcessing: false,
       longLoading: false
@@ -1103,6 +1144,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         tags: this.flatFilters.tags,
         geogebra: this.flatFilters.geogebra ? 'true' : '',
         audioLow: this.flatFilters.audioLow ? 'true' : '',
+        hasValue: this.flatFilters.nonEmptyResponse ? 'true' : '',
         audioLowThreshold: this.flatFilters.audioLow ?
           String(this.audioLowThreshold) :
           '',
