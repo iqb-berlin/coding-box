@@ -387,6 +387,13 @@ export class WorkspaceTestResultsController {
     type: String
   })
   @ApiQuery({
+    name: 'hasValue',
+    required: false,
+    description:
+      'If true, only include responses with a non-empty value (not "" and not "[]")',
+    type: String
+  })
+  @ApiQuery({
     name: 'audioLowThreshold',
     required: false,
     description: 'Numeric threshold used together with audioLow (default: 0.9)',
@@ -517,6 +524,7 @@ export class WorkspaceTestResultsController {
                            @Query('tags') tags?: string,
                            @Query('geogebra') geogebra?: string,
                            @Query('audioLow') audioLow?: string,
+                           @Query('hasValue') hasValue?: string,
                            @Query('audioLowThreshold') audioLowThreshold?: string,
                            @Query('shortProcessing') shortProcessing?: string,
                            @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
@@ -548,6 +556,7 @@ export class WorkspaceTestResultsController {
         tags,
         geogebra,
         audioLow,
+        hasValue,
         audioLowThreshold,
         shortProcessing,
         shortProcessingThresholdMs,

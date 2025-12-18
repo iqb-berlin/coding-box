@@ -573,6 +573,7 @@ export class WorkspaceTestResultsService {
       tags?: string;
       geogebra?: string;
       audioLow?: string;
+      hasValue?: string;
       audioLowThreshold?: string;
       shortProcessing?: string;
       shortProcessingThresholdMs?: string;
@@ -638,6 +639,12 @@ export class WorkspaceTestResultsService {
       .toLowerCase();
     const audioLowOnly =
       audioLow === 'true' || audioLow === '1' || audioLow === 'yes';
+
+    const hasValue = String(options.hasValue || '')
+      .trim()
+      .toLowerCase();
+    const hasValueOnly =
+      hasValue === 'true' || hasValue === '1' || hasValue === 'yes';
     const audioLowThresholdRaw = String(options.audioLowThreshold || '').trim();
     const audioLowThresholdParsed = Number(audioLowThresholdRaw || 0.9);
     const audioLowThreshold = Number.isFinite(audioLowThresholdParsed) ?
@@ -822,6 +829,12 @@ export class WorkspaceTestResultsService {
       qb.andWhere('(response.value::double precision) < :audioLowThreshold', {
         audioLowThreshold
       });
+    }
+
+    if (hasValueOnly) {
+      qb.andWhere(
+        "BTRIM(COALESCE(response.value, '')) <> '' AND BTRIM(COALESCE(response.value, '')) <> '[]'"
+      );
     }
 
     if (shortProcessingOnly) {

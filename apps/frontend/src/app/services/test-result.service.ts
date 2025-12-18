@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { catchError, Observable, of } from 'rxjs';
+import {
+  catchError, Observable, of, Subject
+} from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
@@ -133,6 +135,10 @@ export class TestResultService {
   private http = inject(HttpClient);
   private cacheService = inject(TestResultCacheService);
 
+  private workspaceCacheInvalidatedSubject = new Subject<number>();
+  readonly workspaceCacheInvalidated$ =
+    this.workspaceCacheInvalidatedSubject.asObservable();
+
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
@@ -205,6 +211,7 @@ export class TestResultService {
       tags?: string;
       geogebra?: string;
       audioLow?: string;
+      hasValue?: string;
       audioLowThreshold?: string;
       shortProcessing?: string;
       shortProcessingThresholdMs?: string;
@@ -243,6 +250,7 @@ export class TestResultService {
     addIf('tags', options.tags);
     addIf('geogebra', options.geogebra);
     addIf('audioLow', options.audioLow);
+    addIf('hasValue', options.hasValue);
     addIf('audioLowThreshold', options.audioLowThreshold);
     addIf('shortProcessing', options.shortProcessing);
     addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
@@ -390,6 +398,7 @@ export class TestResultService {
 
   invalidateCache(workspaceId: number): void {
     this.cacheService.invalidateWorkspaceCache(workspaceId);
+    this.workspaceCacheInvalidatedSubject.next(workspaceId);
   }
 
   searchBookletsByName(

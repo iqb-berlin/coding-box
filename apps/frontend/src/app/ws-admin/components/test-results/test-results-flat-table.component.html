@@ -164,6 +164,13 @@
           >
             <mat-option value="geogebra">GeoGebra</mat-option>
             <mat-option value="audioLow">Audio &lt; Schwellwert</mat-option>
+            <mat-option value="nonEmptyResponse">
+              <span
+                matTooltip="Filtert Antworten ohne Wert heraus ('' oder [])."
+              >
+                Nur nicht leere Antwortwerte
+              </span>
+            </mat-option>
             <mat-option value="sessionFilter">
               <span
                 matTooltip="Aktiviert Session-Filterung anhand der Einstellungen (Browser/OS/Screen) im Zahnrad."
@@ -204,9 +211,14 @@
         <button mat-icon-button (click)="openFlatSettings()">
           <mat-icon>settings</mat-icon>
         </button>
-        <button mat-stroked-button color="primary" (click)="clearFlatFilters()">
+        <button
+          mat-icon-button
+          type="button"
+          (click)="clearFlatFilters()"
+          matTooltip="Filter zurücksetzen"
+          aria-label="Filter zurücksetzen"
+        >
           <mat-icon>clear</mat-icon>
-          Filter zurücksetzen
         </button>
       </div>
 
