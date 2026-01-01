@@ -109,7 +109,7 @@
     "@types/multer": "^1.4.7",
     "@types/passport-jwt": "^4.0.1",
     "@types/xml2js": "^0.4.14",
-    "cypress": "^15.0.0",
+    "cypress": "^15.8.1",
     "esbuild": "^0.25.8",
     "eslint": "8.57.1",
     "eslint-plugin-html": "^8.1.1",
