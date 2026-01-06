@@ -1,13 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  In, IsNull, Not, Repository
+  Brackets, In, IsNull, Not, Repository
 } from 'typeorm';
-import { CodingScheme, VariableCodingData } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import {
+  VariableCodingData,
+  CodingScheme
+} from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
-import { statusNumberToString, statusStringToNumber } from '../utils/response-status-converter';
+import {
+  statusNumberToString,
+  statusStringToNumber
+} from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import FileUpload from '../entities/file_upload.entity';
@@ -21,17 +27,28 @@ import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
-import { CodeBookContentSetting, UnitPropertiesForCodebook, Missing } from '../../admin/code-book/codebook.interfaces';
+import {
+  CodeBookContentSetting,
+  UnitPropertiesForCodebook,
+  Missing
+} from '../../admin/code-book/codebook.interfaces';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
-import { ResponseAnalysisDto, EmptyResponseDto, DuplicateValueGroupDto } from '../../../../../../api-dto/coding/response-analysis.dto';
+import {
+  ResponseAnalysisDto,
+  EmptyResponseDto,
+  DuplicateValueGroupDto
+} from '../../../../../../api-dto/coding/response-analysis.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
 import { ExportValidationResultsService } from './export-validation-results.service';
-import { ExternalCodingImportService, ExternalCodingImportBody } from './external-coding-import.service';
+import {
+  ExternalCodingImportService,
+  ExternalCodingImportBody
+} from './external-coding-import.service';
 import { BullJobManagementService } from './bull-job-management.service';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
@@ -88,33 +105,59 @@ export class WorkspaceCodingService {
     private codingListService: CodingListService
   ) {}
 
-  private codingSchemeCache: Map<string, { scheme: CodingScheme; timestamp: number }> = new Map();
+  private codingSchemeCache: Map<
+  string,
+  { scheme: CodingScheme; timestamp: number }
+  > = new Map();
+
   private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
 
-  private testFileCache: Map<number, { files: Map<string, FileUpload>; timestamp: number }> = new Map();
+  private testFileCache: Map<
+  number,
+  { files: Map<string, FileUpload>; timestamp: number }
+  > = new Map();
+
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
-  private generateExpectedCombinationsHash(expectedCombinations: ExpectedCombinationDto[]): string {
+  private generateExpectedCombinationsHash(
+    expectedCombinations: ExpectedCombinationDto[]
+  ): string {
     const sortedData = expectedCombinations
-      .map(combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`)
+      .map(
+        combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`
+      )
       .sort()
       .join('||');
 
-    return crypto.createHash('sha256').update(sortedData).digest('hex').substring(0, 16);
+    return crypto
+      .createHash('sha256')
+      .update(sortedData)
+      .digest('hex')
+      .substring(0, 16);
   }
 
-  private async getTestFilesWithCache(workspace_id: number, unitAliasesArray: string[]): Promise<Map<string, FileUpload>> {
+  private async getTestFilesWithCache(
+    workspace_id: number,
+    unitAliasesArray: string[]
+  ): Promise<Map<string, FileUpload>> {
     const cacheEntry = this.testFileCache.get(workspace_id);
     const now = Date.now();
 
-    if (cacheEntry && (now - cacheEntry.timestamp) < this.TEST_FILE_CACHE_TTL_MS) {
+    if (
+      cacheEntry &&
+      now - cacheEntry.timestamp < this.TEST_FILE_CACHE_TTL_MS
+    ) {
       this.logger.log(`Using cached test files for workspace ${workspace_id}`);
-      const missingAliases = unitAliasesArray.filter(alias => !cacheEntry.files.has(alias));
+      const missingAliases = unitAliasesArray.filter(
+        alias => !cacheEntry.files.has(alias)
+      );
       if (missingAliases.length === 0) {
         return cacheEntry.files;
       }
 
-      this.logger.log(`Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`);
+      this.logger.log(
+        `Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`
+      );
       const missingFiles = await this.fileUploadRepository.find({
         where: { workspace_id, file_id: In(missingAliases) },
         select: ['file_id', 'data', 'filename']
@@ -144,14 +187,16 @@ export class WorkspaceCodingService {
     return fileMap;
   }
 
-  private async getCodingSchemesWithCache(codingSchemeRefs: string[]): Promise<Map<string, CodingScheme>> {
+  private async getCodingSchemesWithCache(
+    codingSchemeRefs: string[]
+  ): Promise<Map<string, CodingScheme>> {
     const now = Date.now();
     const result = new Map<string, CodingScheme>();
     const emptyScheme = new CodingScheme({});
 
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
       const cacheEntry = this.codingSchemeCache.get(ref);
-      if (cacheEntry && (now - cacheEntry.timestamp) < this.SCHEME_CACHE_TTL_MS) {
+      if (cacheEntry && now - cacheEntry.timestamp < this.SCHEME_CACHE_TTL_MS) {
         result.set(ref, cacheEntry.scheme);
         return false;
       }
@@ -163,7 +208,9 @@ export class WorkspaceCodingService {
       return result;
     }
 
-    this.logger.log(`Fetching ${missingSchemeRefs.length} missing coding schemes`);
+    this.logger.log(
+      `Fetching ${missingSchemeRefs.length} missing coding schemes`
+    );
     const codingSchemeFiles = await this.fileUploadRepository.find({
       where: { file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
@@ -171,12 +218,15 @@ export class WorkspaceCodingService {
 
     codingSchemeFiles.forEach(file => {
       try {
-        const data = typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+        const data =
+          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
         this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
       } catch (error) {
-        this.logger.error(`--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`);
+        this.logger.error(
+          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
+        );
         result.set(file.file_id, emptyScheme);
       }
     });
@@ -198,20 +248,36 @@ export class WorkspaceCodingService {
     }
   }
 
-  async getJobStatus(jobId: string): Promise<{ status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused'; progress: number; result?: CodingStatistics; error?: string } | null> {
+  async getJobStatus(
+    jobId: string
+  ): Promise<{
+      status:
+      | 'pending'
+      | 'processing'
+      | 'completed'
+      | 'failed'
+      | 'cancelled'
+      | 'paused';
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+    } | null> {
     try {
       let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
 
       if (!bullJob) {
-        bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId) as never;
+        bullJob = (await this.jobQueueService.getCodingStatisticsJob(
+          jobId
+        )) as never;
       }
 
       if (bullJob) {
         const state = await bullJob.getState();
-        const progress = await bullJob.progress() || 0;
+        const progress = (await bullJob.progress()) || 0;
 
         const status = this.bullJobManagementService.mapJobStateToStatus(state);
-        const { result, error } = this.bullJobManagementService.extractJobResult(bullJob, state);
+        const { result, error } =
+          this.bullJobManagementService.extractJobResult(bullJob, state);
 
         return {
           status,
@@ -223,32 +289,55 @@ export class WorkspaceCodingService {
 
       return null;
     } catch (error) {
-      this.logger.error(`Error getting job status: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error getting job status: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
 
-  async createCodingStatisticsJob(workspaceId: number): Promise<{ jobId: string; message: string }> {
+  async createCodingStatisticsJob(
+    workspaceId: number
+  ): Promise<{ jobId: string; message: string }> {
     try {
       const cacheKey = `coding-statistics:${workspaceId}`;
-      const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
+      const cachedResult = await this.cacheService.get<CodingStatistics>(
+        cacheKey
+      );
       if (cachedResult) {
-        this.logger.log(`Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`);
+        this.logger.log(
+          `Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`
+        );
         return { jobId: '', message: 'Using cached coding statistics' };
       }
       await this.cacheService.delete(cacheKey); // Clear any stale cache
-      this.logger.log(`No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`);
+      this.logger.log(
+        `No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`
+      );
 
-      const job = await this.jobQueueService.addCodingStatisticsJob(workspaceId);
-      this.logger.log(`Created coding statistics job ${job.id} for workspace ${workspaceId}`);
-      return { jobId: job.id.toString(), message: 'Created coding statistics job - no cache available' };
+      const job = await this.jobQueueService.addCodingStatisticsJob(
+        workspaceId
+      );
+      this.logger.log(
+        `Created coding statistics job ${job.id} for workspace ${workspaceId}`
+      );
+      return {
+        jobId: job.id.toString(),
+        message: 'Created coding statistics job - no cache available'
+      };
     } catch (error) {
-      this.logger.error(`Error creating coding statistics job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error creating coding statistics job: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
 
-  async cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async cancelJob(
+    jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
       if (!bullJob) {
@@ -270,40 +359,60 @@ export class WorkspaceCodingService {
         };
       }
 
-      const result = await this.jobQueueService.cancelTestPersonCodingJob(jobId);
+      const result = await this.jobQueueService.cancelTestPersonCodingJob(
+        jobId
+      );
       if (result) {
         this.logger.log(`Job ${jobId} has been cancelled successfully`);
-        return { success: true, message: `Job ${jobId} has been cancelled successfully` };
+        return {
+          success: true,
+          message: `Job ${jobId} has been cancelled successfully`
+        };
       }
       return { success: false, message: `Failed to cancel job ${jobId}` };
     } catch (error) {
       this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
-      return { success: false, message: `Error cancelling job: ${error.message}` };
+      return {
+        success: false,
+        message: `Error cancelling job: ${error.message}`
+      };
     }
   }
 
-  async deleteJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async deleteJob(
+    jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     try {
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      const result = await this.jobQueueService.deleteTestPersonCodingJob(jobId);
+      const result = await this.jobQueueService.deleteTestPersonCodingJob(
+        jobId
+      );
       if (result) {
         this.logger.log(`Job ${jobId} has been deleted successfully`);
-        return { success: true, message: `Job ${jobId} has been deleted successfully` };
+        return {
+          success: true,
+          message: `Job ${jobId} has been deleted successfully`
+        };
       }
       return { success: false, message: `Failed to delete job ${jobId}` };
     } catch (error) {
       this.logger.error(`Error deleting job: ${error.message}`, error.stack);
-      return { success: false, message: `Error deleting job: ${error.message}` };
+      return {
+        success: false,
+        message: `Error deleting job: ${error.message}`
+      };
     }
   }
 
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId.toString());
+      const bullJob = await this.jobQueueService.getTestPersonCodingJob(
+        jobId.toString()
+      );
       if (bullJob) {
         if (bullJob.data.isPaused) {
           return true;
@@ -313,7 +422,10 @@ export class WorkspaceCodingService {
       }
       return false;
     } catch (error) {
-      this.logger.error(`Error checking job cancellation or pause: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error checking job cancellation or pause: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -337,14 +449,24 @@ export class WorkspaceCodingService {
         batches.push(allCodedResponses.slice(i, i + updateBatchSize));
       }
 
-      this.logger.log(`Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`);
+      this.logger.log(
+        `Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`
+      );
 
       for (let index = 0; index < batches.length; index++) {
         const batch = batches[index];
-        this.logger.log(`Starte Aktualisierung für Batch #${index + 1} (Größe: ${batch.length}).`);
+        this.logger.log(
+          `Starte Aktualisierung für Batch #${index + 1} (Größe: ${
+            batch.length
+          }).`
+        );
 
-        if (jobId && await this.isJobCancelled(jobId)) {
-          this.logger.log(`Job ${jobId} was cancelled or paused before updating batch #${index + 1}`);
+        if (jobId && (await this.isJobCancelled(jobId))) {
+          this.logger.log(
+            `Job ${jobId} was cancelled or paused before updating batch #${
+              index + 1
+            }`
+          );
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
           return false;
@@ -353,7 +475,17 @@ export class WorkspaceCodingService {
         try {
           if (batch.length > 0) {
             const updatePromises = batch.map(response => {
-              const updateData: Partial<Pick<ResponseEntity, 'code_v1' | 'status_v1' | 'score_v1' | 'code_v3' | 'status_v3' | 'score_v3'>> = {};
+              const updateData: Partial<
+              Pick<
+              ResponseEntity,
+              | 'code_v1'
+              | 'status_v1'
+              | 'score_v1'
+              | 'code_v3'
+              | 'status_v3'
+              | 'score_v3'
+              >
+              > = {};
 
               if (response.code_v1 !== undefined) {
                 updateData.code_v1 = response.code_v1;
@@ -371,14 +503,20 @@ export class WorkspaceCodingService {
               if (response.status_v3 !== undefined) {
                 const statusNumber = statusStringToNumber(response.status_v3);
                 updateData.status_v3 = statusNumber;
-                this.logger.debug(`Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`);
+                this.logger.debug(
+                  `Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`
+                );
               }
               if (response.score_v3 !== undefined) {
                 updateData.score_v3 = response.score_v3;
               }
 
               if (Object.keys(updateData).length > 0) {
-                return queryRunner.manager.update(ResponseEntity, response.id, updateData);
+                return queryRunner.manager.update(
+                  ResponseEntity,
+                  response.id,
+                  updateData
+                );
               }
               return Promise.resolve();
             });
@@ -386,14 +524,23 @@ export class WorkspaceCodingService {
             await Promise.all(updatePromises);
           }
 
-          this.logger.log(`Batch #${index + 1} (Größe: ${batch.length}) erfolgreich aktualisiert.`);
+          this.logger.log(
+            `Batch #${index + 1} (Größe: ${
+              batch.length
+            }) erfolgreich aktualisiert.`
+          );
 
           if (progressCallback) {
-            const batchProgress = 95 + (5 * ((index + 1) / batches.length));
+            const batchProgress = 95 + 5 * ((index + 1) / batches.length);
             progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
           }
         } catch (error) {
-          this.logger.error(`Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${batch.length}):`, error.message);
+          this.logger.error(
+            `Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${
+              batch.length
+            }):`,
+            error.message
+          );
           await queryRunner.rollbackTransaction();
           await queryRunner.release();
           return false;
@@ -401,7 +548,9 @@ export class WorkspaceCodingService {
       }
 
       await queryRunner.commitTransaction();
-      this.logger.log(`${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`);
+      this.logger.log(
+        `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
+      );
 
       if (metrics) {
         metrics.update = Date.now() - updateStart;
@@ -410,11 +559,17 @@ export class WorkspaceCodingService {
       await queryRunner.release();
       return true;
     } catch (error) {
-      this.logger.error('Fehler beim Aktualisieren der Responses:', error.message);
+      this.logger.error(
+        'Fehler beim Aktualisieren der Responses:',
+        error.message
+      );
       try {
         await queryRunner.rollbackTransaction();
       } catch (rollbackError) {
-        this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
+        this.logger.error(
+          'Fehler beim Rollback der Transaktion:',
+          rollbackError.message
+        );
       }
       await queryRunner.release();
       return false;
@@ -432,7 +587,10 @@ export class WorkspaceCodingService {
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner,
     progressCallback?: (progress: number) => void
-  ): Promise<{ allCodedResponses: CodedResponse[]; statistics: CodingStatistics }> {
+  ): Promise<{
+      allCodedResponses: CodedResponse[];
+      statistics: CodingStatistics;
+    }> {
     const allCodedResponses = [];
     allCodedResponses.length = allResponses.length;
     let responseIndex = 0;
@@ -449,7 +607,7 @@ export class WorkspaceCodingService {
         statistics.totalResponses += responses.length;
         const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
         const scheme = codingSchemeRef ?
-          (fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme) :
+          fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
           emptyScheme;
 
         const variableAliasToIdMap = new Map<string, string>();
@@ -466,11 +624,13 @@ export class WorkspaceCodingService {
         for (const response of responses) {
           let inputStatus = response.status;
           if (autoCoderRun === 2) {
-            inputStatus = response.status_v2 || response.status_v1 || response.status;
+            inputStatus =
+              response.status_v2 || response.status_v1 || response.status;
           }
 
           const variableAlias = String(response.variableid);
-          const resolvedVariableId = variableAliasToIdMap.get(variableAlias) ?? variableAlias;
+          const resolvedVariableId =
+            variableAliasToIdMap.get(variableAlias) ?? variableAlias;
 
           const variableCoding = Array.isArray(scheme.variableCodings) ?
             scheme.variableCodings.find((vc: VariableCodingData) => {
@@ -512,8 +672,10 @@ export class WorkspaceCodingService {
         }
       }
 
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused during response processing`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused during response processing`
+        );
         if (queryRunner) {
           await queryRunner.release();
         }
@@ -535,9 +697,13 @@ export class WorkspaceCodingService {
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
   ): Promise<Map<string, CodingScheme>> {
-    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([...codingSchemeRefs]);
-    if (jobId && await this.isJobCancelled(jobId)) {
-      this.logger.log(`Job ${jobId} was cancelled or paused after getting coding scheme files`);
+    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([
+      ...codingSchemeRefs
+    ]);
+    if (jobId && (await this.isJobCancelled(jobId))) {
+      this.logger.log(
+        `Job ${jobId} was cancelled or paused after getting coding scheme files`
+      );
       if (queryRunner) {
         await queryRunner.release();
       }
@@ -552,7 +718,10 @@ export class WorkspaceCodingService {
     fileIdToTestFileMap: Map<string, FileUpload>,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
-  ): Promise<{ codingSchemeRefs: Set<string>; unitToCodingSchemeRefMap: Map<number, string> }> {
+  ): Promise<{
+      codingSchemeRefs: Set<string>;
+      unitToCodingSchemeRefMap: Map<number, string>;
+    }> {
     const codingSchemeRefs = new Set<string>();
     const unitToCodingSchemeRefMap = new Map<number, string>();
     const batchSize = 50;
@@ -572,15 +741,21 @@ export class WorkspaceCodingService {
             codingSchemeRefs.add(codingSchemeRefUpper);
             unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
             this.logger.debug(
-              `Extracted coding scheme mapping: unitId=${unit.id}, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
+              `Extracted coding scheme mapping: unitId=${
+                unit.id
+              }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
             );
           }
         } catch (error) {
-          this.logger.error(`--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`);
+          this.logger.error(
+            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`
+          );
         }
       }
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused during scheme extraction`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused during scheme extraction`
+        );
         if (queryRunner) {
           await queryRunner.release();
         }
@@ -612,12 +787,15 @@ export class WorkspaceCodingService {
       progressCallback(0);
     }
 
-    if (jobId && await this.isJobCancelled(jobId)) {
-      this.logger.log(`Job ${jobId} was cancelled or paused before processing started`);
+    if (jobId && (await this.isJobCancelled(jobId))) {
+      this.logger.log(
+        `Job ${jobId} was cancelled or paused before processing started`
+      );
       return statistics;
     }
 
-    const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+    const queryRunner =
+      this.responseRepository.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction('READ COMMITTED');
 
@@ -642,8 +820,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 1
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting persons`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after getting persons`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -658,7 +838,9 @@ export class WorkspaceCodingService {
       metrics.bookletQuery = Date.now() - bookletQueryStart;
 
       if (!booklets || booklets.length === 0) {
-        this.logger.log('Keine Booklets für die angegebenen Personen gefunden.');
+        this.logger.log(
+          'Keine Booklets für die angegebenen Personen gefunden.'
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -669,8 +851,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 2
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting booklets`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after getting booklets`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -685,7 +869,9 @@ export class WorkspaceCodingService {
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
-        this.logger.log('Keine Aufgaben für die angegebenen Testhefte gefunden.');
+        this.logger.log(
+          'Keine Aufgaben für die angegebenen Testhefte gefunden.'
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -696,8 +882,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 3
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting units`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after getting units`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -725,21 +913,41 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 4
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after processing units`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after processing units`
+        );
         await queryRunner.release();
         return statistics;
       }
 
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
-      const allResponses = await this.responseRepository.find({
-        where: [
-          { unitid: In(unitIdsArray), status: In([3, 2, 1]) },
-          { unitid: In(unitIdsArray), status_v1: statusStringToNumber('DERIVE_PENDING') as number }
-        ],
-        select: ['id', 'unitid', 'variableid', 'value', 'status', 'status_v1', 'status_v2'] // Only select needed fields
-      });
+      const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
+      const allResponses = await responseRepo
+        .createQueryBuilder('ResponseEntity')
+        .select([
+          'ResponseEntity.id',
+          'ResponseEntity.unitid',
+          'ResponseEntity.variableid',
+          'ResponseEntity.value',
+          'ResponseEntity.status',
+          'ResponseEntity.status_v1',
+          'ResponseEntity.status_v2'
+        ])
+        .where('ResponseEntity.unitid = ANY(:unitIds)', {
+          unitIds: unitIdsArray
+        })
+        .andWhere(
+          new Brackets(qb => {
+            qb.where('ResponseEntity.status IN (:...statuses)', {
+              statuses: [3, 2, 1]
+            }).orWhere('ResponseEntity.status_v1 = :derivePending', {
+              derivePending: statusStringToNumber('DERIVE_PENDING') as number
+            });
+          })
+        )
+        .getMany();
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
@@ -754,14 +962,18 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 5
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting responses`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after getting responses`
+        );
         await queryRunner.release();
         return statistics;
       }
 
       // Step 6: Get unit variables for filtering - 55% progress
-      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+      const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
+        workspace_id
+      );
       const validVariableSets = new Map<string, Set<string>>();
       unitVariables.forEach((vars: Set<string>, unitName: string) => {
         validVariableSets.set(unitName.toUpperCase(), vars);
@@ -778,10 +990,18 @@ export class WorkspaceCodingService {
         return validVars?.has(response.variableid);
       });
 
-      this.logger.log(`Filtered responses: ${allResponses.length} -> ${filteredResponses.length} (removed ${allResponses.length - filteredResponses.length} invalid variable responses)`);
+      this.logger.log(
+        `Filtered responses: ${allResponses.length} -> ${
+          filteredResponses.length
+        } (removed ${
+          allResponses.length - filteredResponses.length
+        } invalid variable responses)`
+      );
 
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after filtering responses`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after filtering responses`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -801,8 +1021,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 7
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after processing responses`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -810,7 +1032,10 @@ export class WorkspaceCodingService {
       // Step 8: Get test files - 70% progress
       const fileQueryStart = Date.now();
       // Use cache for test files
-      const fileIdToTestFileMap = await this.getTestFilesWithCache(workspace_id, unitAliasesArray);
+      const fileIdToTestFileMap = await this.getTestFilesWithCache(
+        workspace_id,
+        unitAliasesArray
+      );
       metrics.fileQuery = Date.now() - fileQueryStart;
 
       // Report progress after step 8
@@ -819,20 +1044,23 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 8
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after getting test files`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after getting test files`
+        );
         await queryRunner.release();
         return statistics;
       }
 
       // Step 9: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
-      const { codingSchemeRefs, unitToCodingSchemeRefMap } = await this.extractCodingSchemeReferences(
-        units,
-        fileIdToTestFileMap,
-        jobId,
-        queryRunner
-      );
+      const { codingSchemeRefs, unitToCodingSchemeRefMap } =
+        await this.extractCodingSchemeReferences(
+          units,
+          fileIdToTestFileMap,
+          jobId,
+          queryRunner
+        );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
       // Report progress after step 9
@@ -841,8 +1069,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 9
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after extracting scheme references`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after extracting scheme references`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -869,8 +1099,10 @@ export class WorkspaceCodingService {
       }
 
       // Check for cancellation or pause after step 10
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after parsing coding schemes`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after parsing coding schemes`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -894,8 +1126,10 @@ export class WorkspaceCodingService {
       metrics.processing = Date.now() - processingStart;
 
       // Check for cancellation or pause after step 11
-      if (jobId && await this.isJobCancelled(jobId)) {
-        this.logger.log(`Job ${jobId} was cancelled or paused after processing responses`);
+      if (jobId && (await this.isJobCancelled(jobId))) {
+        this.logger.log(
+          `Job ${jobId} was cancelled or paused after processing responses`
+        );
         await queryRunner.release();
         return statistics;
       }
@@ -918,7 +1152,8 @@ export class WorkspaceCodingService {
       }
 
       const totalTime = Date.now() - startTime;
-      this.logger.log(`Performance metrics for processTestPersonsBatch (total: ${totalTime}ms):
+      this.logger
+        .log(`Performance metrics for processTestPersonsBatch (total: ${totalTime}ms):
         - Persons query: ${metrics.personsQuery}ms
         - Booklet query: ${metrics.bookletQuery}ms
         - Unit query: ${metrics.unitQuery}ms
@@ -940,7 +1175,10 @@ export class WorkspaceCodingService {
       try {
         await queryRunner.rollbackTransaction();
       } catch (rollbackError) {
-        this.logger.error('Fehler beim Rollback der Transaktion:', rollbackError.message);
+        this.logger.error(
+          'Fehler beim Rollback der Transaktion:',
+          rollbackError.message
+        );
       } finally {
         await queryRunner.release();
       }
@@ -949,21 +1187,35 @@ export class WorkspaceCodingService {
     }
   }
 
-  async codeTestPersons(workspace_id: number, testPersonIdsOrGroups: string, autoCoderRun: number = 1): Promise<CodingStatisticsWithJob> {
+  async codeTestPersons(
+    workspace_id: number,
+    testPersonIdsOrGroups: string,
+    autoCoderRun: number = 1
+  ): Promise<CodingStatisticsWithJob> {
     this.cleanupCaches();
 
-    if (!workspace_id || !testPersonIdsOrGroups || testPersonIdsOrGroups.trim() === '') {
-      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder testPersonIdsOrGroups fehlen.');
+    if (
+      !workspace_id ||
+      !testPersonIdsOrGroups ||
+      testPersonIdsOrGroups.trim() === ''
+    ) {
+      this.logger.warn(
+        'Ungültige Eingabeparameter: workspace_id oder testPersonIdsOrGroups fehlen.'
+      );
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    const groupsOrIds = testPersonIdsOrGroups.split(',').filter(item => item.trim() !== '');
+    const groupsOrIds = testPersonIdsOrGroups
+      .split(',')
+      .filter(item => item.trim() !== '');
     if (groupsOrIds.length === 0) {
       this.logger.warn('Keine gültigen Gruppen oder Personen-IDs angegeben.');
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    const areAllNumbers = groupsOrIds.every(item => !Number.isNaN(Number(item)));
+    const areAllNumbers = groupsOrIds.every(
+      item => !Number.isNaN(Number(item))
+    );
 
     let personIds: string[] = [];
 
@@ -984,18 +1236,27 @@ export class WorkspaceCodingService {
         });
 
         personIds = persons.map(person => person.id.toString());
-        this.logger.log(`Found ${personIds.length} persons in the specified groups`);
+        this.logger.log(
+          `Found ${personIds.length} persons in the specified groups`
+        );
 
         if (personIds.length === 0) {
-          this.logger.warn(`No persons found in groups: ${groupsOrIds.join(', ')}`);
+          this.logger.warn(
+            `No persons found in groups: ${groupsOrIds.join(', ')}`
+          );
           return {
             totalResponses: 0,
             statusCounts: {},
-            message: `No persons found in the selected groups: ${groupsOrIds.join(', ')}`
+            message: `No persons found in the selected groups: ${groupsOrIds.join(
+              ', '
+            )}`
           };
         }
       } catch (error) {
-        this.logger.error(`Error fetching persons for groups: ${error.message}`, error.stack);
+        this.logger.error(
+          `Error fetching persons for groups: ${error.message}`,
+          error.stack
+        );
         return {
           totalResponses: 0,
           statusCounts: {},
@@ -1004,7 +1265,9 @@ export class WorkspaceCodingService {
       }
     }
 
-    this.logger.log(`Starting job for ${personIds.length} test persons in workspace ${workspace_id}`);
+    this.logger.log(
+      `Starting job for ${personIds.length} test persons in workspace ${workspace_id}`
+    );
 
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
@@ -1023,7 +1286,10 @@ export class WorkspaceCodingService {
     };
   }
 
-  async getManualTestPersons(workspace_id: number, personIds?: string): Promise<Array<ResponseEntity & { unitname: string }>> {
+  async getManualTestPersons(
+    workspace_id: number,
+    personIds?: string
+  ): Promise<Array<ResponseEntity & { unitname: string }>> {
     this.logger.log(
       `Fetching responses for workspace_id = ${workspace_id} ${
         personIds ? `and personIds = ${personIds}` : ''
@@ -1041,11 +1307,14 @@ export class WorkspaceCodingService {
       }
 
       const filteredPersons = personIds ?
-        persons.filter(person => personIds.split(',').includes(String(person.id))) :
+        persons.filter(person => personIds.split(',').includes(String(person.id))
+        ) :
         persons;
 
       if (!filteredPersons.length) {
-        this.logger.log(`No persons match the personIds in workspace_id = ${workspace_id}.`);
+        this.logger.log(
+          `No persons match the personIds in workspace_id = ${workspace_id}.`
+        );
         return [];
       }
 
@@ -1060,7 +1329,9 @@ export class WorkspaceCodingService {
 
       if (!bookletIds.length) {
         this.logger.log(
-          `No booklets found for persons = [${personIdsArray.join(', ')}] in workspace_id = ${workspace_id}.`
+          `No booklets found for persons = [${personIdsArray.join(
+            ', '
+          )}] in workspace_id = ${workspace_id}.`
         );
         return [];
       }
@@ -1070,12 +1341,16 @@ export class WorkspaceCodingService {
         select: ['id', 'name']
       });
 
-      const unitIdToNameMap = new Map(units.map(unit => [unit.id, unit.name]));
+      const unitIdToNameMap = new Map(
+        units.map(unit => [unit.id, unit.name])
+      );
       const unitIds = Array.from(unitIdToNameMap.keys());
 
       if (!unitIds.length) {
         this.logger.log(
-          `No units found for booklets = [${bookletIds.join(', ')}] in workspace_id = ${workspace_id}.`
+          `No units found for booklets = [${bookletIds.join(
+            ', '
+          )}] in workspace_id = ${workspace_id}.`
         );
         return [];
       }
@@ -1103,13 +1378,24 @@ export class WorkspaceCodingService {
 
       return enrichedResponses;
     } catch (error) {
-      this.logger.error(`Failed to fetch responses: ${error.message}`, error.stack);
-      throw new Error('Could not retrieve responses. Please check the database connection or query.');
+      this.logger.error(
+        `Failed to fetch responses: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not retrieve responses. Please check the database connection or query.'
+      );
     }
   }
 
-  async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
-    return this.codingStatisticsService.getCodingStatistics(workspace_id, version);
+  async getCodingStatistics(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3' = 'v1'
+  ): Promise<CodingStatistics> {
+    return this.codingStatisticsService.getCodingStatistics(
+      workspace_id,
+      version
+    );
   }
 
   async generateCodebook(
@@ -1119,30 +1405,43 @@ export class WorkspaceCodingService {
     unitIds: number[]
   ): Promise<Buffer | null> {
     try {
-      this.logger.log(`Generating codebook for workspace ${workspaceId} with ${unitIds.length} units`);
+      this.logger.log(
+        `Generating codebook for workspace ${workspaceId} with ${unitIds.length} units`
+      );
       const units = await this.fileUploadRepository.findBy({
         id: In(unitIds)
       });
 
       if (!units || units.length === 0) {
-        this.logger.warn(`No units found for workspace ${workspaceId} with IDs ${unitIds}`);
+        this.logger.warn(
+          `No units found for workspace ${workspaceId} with IDs ${unitIds}`
+        );
         return null;
       }
 
       const unitProperties: UnitPropertiesForCodebook[] = units.map(unit => ({
         id: unit.id,
         key: unit.file_id,
-        name: unit.filename.toLowerCase().endsWith('.vocs') ? unit.filename.substring(0, unit.filename.length - 5) : unit.filename,
+        name: unit.filename.toLowerCase().endsWith('.vocs') ?
+          unit.filename.substring(0, unit.filename.length - 5) :
+          unit.filename,
         scheme: unit.data || ''
       }));
 
       let missings: Missing[] = [];
 
       if (missingsProfile) {
-        const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, missingsProfile);
+        const profile =
+          await this.missingsProfilesService.getMissingsProfileDetails(
+            workspaceId,
+            missingsProfile
+          );
         if (profile && profile.missings) {
           try {
-            const profileMissings = typeof profile.missings === 'string' ? JSON.parse(profile.missings) : profile.missings;
+            const profileMissings =
+              typeof profile.missings === 'string' ?
+                JSON.parse(profile.missings) :
+                profile.missings;
             if (Array.isArray(profileMissings) && profileMissings.length > 0) {
               missings = profileMissings.map(m => ({
                 code: m.code.toString(),
@@ -1151,33 +1450,56 @@ export class WorkspaceCodingService {
               }));
             }
           } catch (parseError) {
-            this.logger.error(`Error parsing missings from profile: ${parseError.message}`, parseError.stack);
+            this.logger.error(
+              `Error parsing missings from profile: ${parseError.message}`,
+              parseError.stack
+            );
           }
         }
       }
 
-      return await CodebookGenerator.generateCodebook(unitProperties, contentOptions, missings);
+      return await CodebookGenerator.generateCodebook(
+        unitProperties,
+        contentOptions,
+        missings
+      );
     } catch (error) {
-      this.logger.error(`Error generating codebook for workspace ${workspaceId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error generating codebook for workspace ${workspaceId}: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
 
-  async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async pauseJob(
+    jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.bullJobManagementService.pauseJob(jobId);
   }
 
-  async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
+  async resumeJob(
+    jobId: string
+  ): Promise<{ success: boolean; message: string }> {
     return this.bullJobManagementService.resumeJob(jobId);
   }
 
-  async restartJob(jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
+  async restartJob(
+    jobId: string
+  ): Promise<{ success: boolean; message: string; jobId?: string }> {
     return this.bullJobManagementService.restartJob(jobId);
   }
 
-  async getBullJobs(workspaceId: number): Promise<{
+  async getBullJobs(workspaceId: number): Promise<
+  {
     jobId: string;
-    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'cancelled'
+    | 'paused';
     progress: number;
     result?: CodingStatistics;
     error?: string;
@@ -1186,7 +1508,8 @@ export class WorkspaceCodingService {
     groupNames?: string;
     durationMs?: number;
     completedAt?: Date;
-  }[]> {
+  }[]
+  > {
     return this.bullJobManagementService.getBullJobs(workspaceId);
   }
 
@@ -1221,7 +1544,10 @@ export class WorkspaceCodingService {
     workspaceId: number,
     cacheKey: string
   ): Promise<Buffer> {
-    return this.exportValidationResultsService.exportValidationResultsAsExcel(workspaceId, cacheKey);
+    return this.exportValidationResultsService.exportValidationResultsAsExcel(
+      workspaceId,
+      cacheKey
+    );
   }
 
   async validateCodingCompleteness(
@@ -1231,17 +1557,29 @@ export class WorkspaceCodingService {
     pageSize: number = 50
   ): Promise<ValidateCodingCompletenessResponseDto> {
     try {
-      this.logger.log(`Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`);
+      this.logger.log(
+        `Validating coding completeness for workspace ${workspaceId} with ${expectedCombinations.length} expected combinations`
+      );
       const startTime = Date.now();
 
-      const combinationsHash = this.generateExpectedCombinationsHash(expectedCombinations);
-      const cacheKey = this.cacheService.generateValidationCacheKey(workspaceId, combinationsHash);
+      const combinationsHash =
+        this.generateExpectedCombinationsHash(expectedCombinations);
+      const cacheKey = this.cacheService.generateValidationCacheKey(
+        workspaceId,
+        combinationsHash
+      );
 
       // Try to get paginated results from cache first
-      let cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+      let cachedResults = await this.cacheService.getPaginatedValidationResults(
+        cacheKey,
+        page,
+        pageSize
+      );
 
       if (cachedResults) {
-        this.logger.log(`Returning cached validation results for workspace ${workspaceId} (page ${page})`);
+        this.logger.log(
+          `Returning cached validation results for workspace ${workspaceId} (page ${page})`
+        );
         return {
           results: cachedResults.results,
           total: cachedResults.metadata.total,
@@ -1261,7 +1599,11 @@ export class WorkspaceCodingService {
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
         const batch = expectedCombinations.slice(i, i + batchSize);
-        this.logger.log(`Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(expectedCombinations.length / batchSize)}`);
+        this.logger.log(
+          `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(
+            expectedCombinations.length / batchSize
+          )}`
+        );
 
         for (const expected of batch) {
           const responseExists = await this.responseRepository
@@ -1271,10 +1613,18 @@ export class WorkspaceCodingService {
             .innerJoin('booklet.person', 'person')
             .innerJoin('booklet.bookletinfo', 'bookletinfo')
             .where('unit.alias = :unitKey', { unitKey: expected.unit_key })
-            .andWhere('person.login = :loginName', { loginName: expected.login_name })
-            .andWhere('person.code = :loginCode', { loginCode: expected.login_code })
-            .andWhere('bookletinfo.name = :bookletId', { bookletId: expected.booklet_id })
-            .andWhere('response.variableid = :variableId', { variableId: expected.variable_id })
+            .andWhere('person.login = :loginName', {
+              loginName: expected.login_name
+            })
+            .andWhere('person.code = :loginCode', {
+              loginCode: expected.login_code
+            })
+            .andWhere('bookletinfo.name = :bookletId', {
+              bookletId: expected.booklet_id
+            })
+            .andWhere('response.variableid = :variableId', {
+              variableId: expected.variable_id
+            })
             .andWhere('response.value IS NOT NULL')
             .andWhere('response.value != :empty', { empty: '' })
             .getCount();
@@ -1297,18 +1647,34 @@ export class WorkspaceCodingService {
         timestamp: Date.now()
       };
 
-      const cacheSuccess = await this.cacheService.storeValidationResults(cacheKey, allResults, metadata);
+      const cacheSuccess = await this.cacheService.storeValidationResults(
+        cacheKey,
+        allResults,
+        metadata
+      );
 
       if (cacheSuccess) {
-        this.logger.log(`Successfully cached validation results for workspace ${workspaceId}`);
+        this.logger.log(
+          `Successfully cached validation results for workspace ${workspaceId}`
+        );
       } else {
-        this.logger.warn(`Failed to cache validation results for workspace ${workspaceId}`);
+        this.logger.warn(
+          `Failed to cache validation results for workspace ${workspaceId}`
+        );
       }
 
-      cachedResults = await this.cacheService.getPaginatedValidationResults(cacheKey, page, pageSize);
+      cachedResults = await this.cacheService.getPaginatedValidationResults(
+        cacheKey,
+        page,
+        pageSize
+      );
 
       const endTime = Date.now();
-      this.logger.log(`Validation completed in ${endTime - startTime}ms. Processed all ${expectedCombinations.length} combinations with ${totalMissingCount} missing responses.`);
+      this.logger.log(
+        `Validation completed in ${endTime - startTime}ms. Processed all ${
+          expectedCombinations.length
+        } combinations with ${totalMissingCount} missing responses.`
+      );
 
       if (cachedResults) {
         return {
@@ -1326,7 +1692,10 @@ export class WorkspaceCodingService {
 
       const totalPages = Math.ceil(expectedCombinations.length / pageSize);
       const startIndex = (page - 1) * pageSize;
-      const endIndex = Math.min(startIndex + pageSize, expectedCombinations.length);
+      const endIndex = Math.min(
+        startIndex + pageSize,
+        expectedCombinations.length
+      );
       const paginatedResults = allResults.slice(startIndex, endIndex);
 
       return {
@@ -1341,41 +1710,85 @@ export class WorkspaceCodingService {
         cacheKey
       };
     } catch (error) {
-      this.logger.error(`Error validating coding completeness: ${error.message}`, error.stack);
-      throw new Error('Could not validate coding completeness. Please check the database connection or query.');
+      this.logger.error(
+        `Error validating coding completeness: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not validate coding completeness. Please check the database connection or query.'
+      );
     }
   }
 
   async getCodingIncompleteVariables(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
+  ): Promise<
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+    }[]
+    > {
     try {
       if (unitName) {
-        this.logger.log(`Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`);
-        const variables = await this.fetchCodingIncompleteVariablesFromDb(workspaceId, unitName);
+        this.logger.log(
+          `Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`
+        );
+        const variables = await this.fetchCodingIncompleteVariablesFromDb(
+          workspaceId,
+          unitName
+        );
         return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
       }
       const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
-      const cachedResult = await this.cacheService.get<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]>(cacheKey);
+      const cachedResult = await this.cacheService.get<
+      {
+        unitName: string;
+        variableId: string;
+        responseCount: number;
+        casesInJobs: number;
+        availableCases: number;
+      }[]
+      >(cacheKey);
       if (cachedResult) {
-        this.logger.log(`Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`);
+        this.logger.log(
+          `Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`
+        );
         return cachedResult;
       }
-      this.logger.log(`Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`);
-      const variables = await this.fetchCodingIncompleteVariablesFromDb(workspaceId);
-      const result = await this.enrichVariablesWithCaseInfo(workspaceId, variables);
+      this.logger.log(
+        `Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`
+      );
+      const variables = await this.fetchCodingIncompleteVariablesFromDb(
+        workspaceId
+      );
+      const result = await this.enrichVariablesWithCaseInfo(
+        workspaceId,
+        variables
+      );
 
       const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
       if (cacheSet) {
-        this.logger.log(`Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+        this.logger.log(
+          `Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`
+        );
       } else {
-        this.logger.warn(`Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+        this.logger.warn(
+          `Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`
+        );
       }
       return result;
     } catch (error) {
-      this.logger.error(`Error getting CODING_INCOMPLETE variables: ${error.message}`, error.stack);
-      throw new Error('Could not get CODING_INCOMPLETE variables. Please check the database connection.');
+      this.logger.error(
+        `Error getting CODING_INCOMPLETE variables: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get CODING_INCOMPLETE variables. Please check the database connection.'
+      );
     }
   }
 
@@ -1385,7 +1798,15 @@ export class WorkspaceCodingService {
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
     variables: { unitName: string; variableId: string; responseCount: number }[]
-  ): Promise<{ unitName: string; variableId: string; responseCount: number; casesInJobs: number; availableCases: number }[]> {
+  ): Promise<
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+    }[]
+    > {
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
 
     return variables.map(variable => {
@@ -1404,29 +1825,36 @@ export class WorkspaceCodingService {
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string
-  ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
-    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+  ): Promise<
+    { unitName: string; variableId: string; responseCount: number }[]
+    > {
+    const queryBuilder = this.responseRepository
+      .createQueryBuilder('response')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect('COUNT(response.id)', 'responseCount')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
-      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      })
+      .andWhere('person.workspace_id = :workspace_id', {
+        workspace_id: workspaceId
+      })
       .andWhere('person.consider = :consider', { consider: true });
 
     if (unitName) {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
     }
 
-    queryBuilder
-      .groupBy('unit.name')
-      .addGroupBy('response.variableid');
+    queryBuilder.groupBy('unit.name').addGroupBy('response.variableid');
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
+      workspaceId
+    );
 
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
@@ -1434,7 +1862,9 @@ export class WorkspaceCodingService {
     });
 
     const filteredResult = rawResults.filter(row => {
-      const unitNamesValidVars = validVariableSets.get(row.unitName?.toUpperCase());
+      const unitNamesValidVars = validVariableSets.get(
+        row.unitName?.toUpperCase()
+      );
       return unitNamesValidVars?.has(row.variableId);
     });
 
@@ -1444,7 +1874,13 @@ export class WorkspaceCodingService {
       responseCount: parseInt(row.responseCount, 10)
     }));
 
-    this.logger.log(`Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResult.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`);
+    this.logger.log(
+      `Found ${
+        rawResults.length
+      } CODING_INCOMPLETE variable groups, filtered to ${
+        filteredResult.length
+      } valid variables${unitName ? ` for unit ${unitName}` : ''}`
+    );
 
     return result;
   }
@@ -1456,7 +1892,9 @@ export class WorkspaceCodingService {
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(
+      `Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`
+    );
   }
 
   /**
@@ -1466,7 +1904,8 @@ export class WorkspaceCodingService {
   async getVariableCasesInJobs(
     workspaceId: number
   ): Promise<Map<string, number>> {
-    const rawResults = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const rawResults = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
@@ -1484,7 +1923,9 @@ export class WorkspaceCodingService {
       casesInJobsMap.set(key, parseInt(row.casesInJobs, 10));
     });
 
-    this.logger.log(`Found cases in jobs for ${casesInJobsMap.size} variables in workspace ${workspaceId}`);
+    this.logger.log(
+      `Found cases in jobs for ${casesInJobsMap.size} variables in workspace ${workspaceId}`
+    );
 
     return casesInJobsMap;
   }
@@ -1513,11 +1954,18 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    const result = await this.externalCodingImportService.importExternalCodingWithProgress(workspaceId, body, progressCallback);
+    const result =
+      await this.externalCodingImportService.importExternalCodingWithProgress(
+        workspaceId,
+        body,
+        progressCallback
+      );
 
     if (result.updatedRows > 0) {
       await this.invalidateIncompleteVariablesCache(workspaceId);
-      this.logger.log(`Invalidated incomplete variables cache for workspace ${workspaceId} after importing ${result.updatedRows} external coding results`);
+      this.logger.log(
+        `Invalidated incomplete variables cache for workspace ${workspaceId} after importing ${result.updatedRows} external coding results`
+      );
     }
 
     return result;
@@ -1546,7 +1994,10 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
-    return this.externalCodingImportService.importExternalCoding(workspaceId, body);
+    return this.externalCodingImportService.importExternalCoding(
+      workspaceId,
+      body
+    );
   }
 
   async getResponsesByStatus(
@@ -1566,7 +2017,10 @@ export class WorkspaceCodingService {
       if (statusNumber === null) {
         this.logger.warn(`Invalid status string: ${status}`);
         return {
-          data: [], total: 0, page, limit
+          data: [],
+          total: 0,
+          page,
+          limit
         };
       }
 
@@ -1584,9 +2038,14 @@ export class WorkspaceCodingService {
       selectFields.push('response.code_v1', 'response.score_v1');
       selectFields.push('response.code_v2', 'response.score_v2');
       selectFields.push('response.code_v3', 'response.score_v3');
-      selectFields.push('response.status_v1', 'response.status_v2', 'response.status_v3');
+      selectFields.push(
+        'response.status_v1',
+        'response.status_v2',
+        'response.status_v3'
+      );
 
-      const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      const queryBuilder = this.responseRepository
+        .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
@@ -1597,16 +2056,24 @@ export class WorkspaceCodingService {
 
       switch (version) {
         case 'v1':
-          queryBuilder.andWhere('response.status_v1 = :status', { status: statusNumber });
+          queryBuilder.andWhere('response.status_v1 = :status', {
+            status: statusNumber
+          });
           break;
         case 'v2':
-          queryBuilder.andWhere('response.status_v2 = :status', { status: statusNumber });
+          queryBuilder.andWhere('response.status_v2 = :status', {
+            status: statusNumber
+          });
           break;
         case 'v3':
-          queryBuilder.andWhere('response.status_v3 = :status', { status: statusNumber });
+          queryBuilder.andWhere('response.status_v3 = :status', {
+            status: statusNumber
+          });
           break;
         default:
-          queryBuilder.andWhere('response.status_v1 = :status', { status: statusNumber });
+          queryBuilder.andWhere('response.status_v1 = :status', {
+            status: statusNumber
+          });
           break;
       }
 
@@ -1617,7 +2084,9 @@ export class WorkspaceCodingService {
         .take(limit)
         .getMany();
 
-      this.logger.log(`Retrieved ${data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`);
+      this.logger.log(
+        `Retrieved ${data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`
+      );
 
       return {
         data,
@@ -1626,8 +2095,13 @@ export class WorkspaceCodingService {
         limit
       };
     } catch (error) {
-      this.logger.error(`Error getting responses by status: ${error.message}`, error.stack);
-      throw new Error('Could not retrieve responses. Please check the database connection or query.');
+      this.logger.error(
+        `Error getting responses by status: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not retrieve responses. Please check the database connection or query.'
+      );
     }
   }
 
@@ -1640,7 +2114,12 @@ export class WorkspaceCodingService {
     try {
       const response = await this.responseRepository.findOne({
         where: { id: responseId },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo']
+        relations: [
+          'unit',
+          'unit.booklet',
+          'unit.booklet.person',
+          'unit.booklet.bookletinfo'
+        ]
       });
 
       if (!response) {
@@ -1649,7 +2128,9 @@ export class WorkspaceCodingService {
 
       const person = response.unit?.booklet?.person;
       if (!person || person.workspace_id !== workspaceId) {
-        throw new Error(`Response ${responseId} does not belong to workspace ${workspaceId}`);
+        throw new Error(
+          `Response ${responseId} does not belong to workspace ${workspaceId}`
+        );
       }
 
       const unitName = response.unit?.name || '';
@@ -1660,11 +2141,22 @@ export class WorkspaceCodingService {
       const bookletId = response.unit?.booklet?.bookletinfo?.name || '';
 
       // Get the variable page from VOUD data
-      this.logger.log(`Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`);
-      const variablePageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
-      this.logger.log(`VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`);
+      this.logger.log(
+        `Looking up variablePage for unit '${unitName}', variable '${variableId}' in workspace ${workspaceId}`
+      );
+      const variablePageMap = await this.codingListService.getVariablePageMap(
+        unitName,
+        workspaceId
+      );
+      this.logger.log(
+        `VOUD lookup result: variablePageMap has ${variablePageMap.size} entries for unit '${unitName}'`
+      );
       const variablePage = variablePageMap.get(variableId) || '0';
-      this.logger.log(`Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(variableId)})`);
+      this.logger.log(
+        `Variable '${variableId}' resolved to page '${variablePage}' (found in map: ${variablePageMap.has(
+          variableId
+        )})`
+      );
 
       const replayUrl = generateReplayUrl({
         serverUrl,
@@ -1678,20 +2170,48 @@ export class WorkspaceCodingService {
         authToken
       });
 
-      this.logger.log(`Generated replay URL for response ${responseId} in workspace ${workspaceId}`);
+      this.logger.log(
+        `Generated replay URL for response ${responseId} in workspace ${workspaceId}`
+      );
 
       return { replayUrl };
     } catch (error) {
-      this.logger.error(`Error generating replay URL for response ${responseId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error generating replay URL for response ${responseId}: ${error.message}`,
+        error.stack
+      );
       throw error;
     }
   }
 
   async generateReplayUrlsForItems(
     workspaceId: number,
-    items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>,
+    items: Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+    }>,
     serverUrl: string
-  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }>> {
+  ): Promise<
+    Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      replayUrl: string;
+    }>
+    > {
     const itemsWithUrls = await Promise.all(
       items.map(async item => {
         try {
@@ -1707,7 +2227,9 @@ export class WorkspaceCodingService {
             replayUrl: replayUrlWithoutAuth
           };
         } catch (error) {
-          this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+          this.logger.warn(
+            `Failed to generate replay URL for response ${item.responseId}: ${error.message}`
+          );
           return {
             ...item,
             replayUrl: ''
@@ -1718,18 +2240,26 @@ export class WorkspaceCodingService {
     return itemsWithUrls;
   }
 
-  async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
-    success: boolean;
-    updatedResponsesCount: number;
-    skippedReviewCount: number;
-    messageKey: string;
-    messageParams?: Record<string, unknown>;
-  }> {
-    const result = await this.codingResultsService.applyCodingResults(workspaceId, codingJobId);
+  async applyCodingResults(
+    workspaceId: number,
+    codingJobId: number
+  ): Promise<{
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      messageKey: string;
+      messageParams?: Record<string, unknown>;
+    }> {
+    const result = await this.codingResultsService.applyCodingResults(
+      workspaceId,
+      codingJobId
+    );
 
     if (result.success && result.updatedResponsesCount > 0) {
       await this.invalidateIncompleteVariablesCache(workspaceId);
-      this.logger.log(`Invalidated incomplete variables cache for workspace ${workspaceId} after applying ${result.updatedResponsesCount} coding results`);
+      this.logger.log(
+        `Invalidated incomplete variables cache for workspace ${workspaceId} after applying ${result.updatedResponsesCount} coding results`
+      );
     }
 
     return result;
@@ -1739,7 +2269,11 @@ export class WorkspaceCodingService {
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: {
+        id: number;
+        name: string;
+        variables: { unitName: string; variableId: string }[];
+      }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
@@ -1751,7 +2285,15 @@ export class WorkspaceCodingService {
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      doubleCodingInfo: Record<
+      string,
+      {
+        totalCases: number;
+        doubleCodedCases: number;
+        singleCodedCasesAssigned: number;
+        doubleCodedCasesPerCoder: Record<string, number>;
+      }
+      >;
       jobs: {
         coderId: number;
         coderName: string;
@@ -1761,15 +2303,36 @@ export class WorkspaceCodingService {
         caseCount: number;
       }[];
     }> {
-    return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+    return this.codingJobService.createDistributedCodingJobs(
+      workspaceId,
+      request
+    );
   }
 
-  async exportCodingResultsAggregated(workspaceId: number, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsAggregated(workspaceId, outputCommentsInsteadOfCodes);
+  async exportCodingResultsAggregated(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false
+  ): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsAggregated(
+      workspaceId,
+      outputCommentsInsteadOfCodes
+    );
   }
 
-  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false): Promise<Buffer> {
-    return this.codingExportService.exportCodingResultsByVariable(workspaceId, includeModalValue, includeDoubleCoded, includeComments, outputCommentsInsteadOfCodes);
+  async exportCodingResultsByVariable(
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false
+  ): Promise<Buffer> {
+    return this.codingExportService.exportCodingResultsByVariable(
+      workspaceId,
+      includeModalValue,
+      includeDoubleCoded,
+      includeComments,
+      outputCommentsInsteadOfCodes
+    );
   }
 
   async bulkApplyCodingResults(workspaceId: number): Promise<{
@@ -1791,7 +2354,9 @@ export class WorkspaceCodingService {
       };
     }>;
   }> {
-    this.logger.log(`Starting bulk apply coding results for workspace ${workspaceId}`);
+    this.logger.log(
+      `Starting bulk apply coding results for workspace ${workspaceId}`
+    );
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
@@ -1849,7 +2414,9 @@ export class WorkspaceCodingService {
           jobsProcessed += 1;
         }
       } catch (error) {
-        this.logger.error(`Error applying results for job ${job.id}: ${error.message}`);
+        this.logger.error(
+          `Error applying results for job ${job.id}: ${error.message}`
+        );
         results.push({
           jobId: job.id,
           jobName: job.name,
@@ -1865,7 +2432,9 @@ export class WorkspaceCodingService {
       }
     }
 
-    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${results.filter(r => r.hasIssues).length} jobs skipped due to coding issues.`;
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${
+      results.filter(r => r.hasIssues).length
+    } jobs skipped due to coding issues.`;
 
     this.logger.log(message);
 
@@ -1884,11 +2453,14 @@ export class WorkspaceCodingService {
     completedCases: number;
     completionPercentage: number;
   }> {
-    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+    const totalCasesToCode = await this.responseRepository
+      .createQueryBuilder('response')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .getCount();
@@ -1903,7 +2475,8 @@ export class WorkspaceCodingService {
       }
     });
 
-    const completionPercentage = totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
+    const completionPercentage =
+      totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
 
     return {
       totalCasesToCode,
@@ -1920,47 +2493,60 @@ export class WorkspaceCodingService {
     unassignedCases: number;
     coveragePercentage: number;
   }> {
-    const totalCasesToCode = await this.responseRepository.createQueryBuilder('response')
+    const totalCasesToCode = await this.responseRepository
+      .createQueryBuilder('response')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .getCount();
 
-    const casesInJobs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const casesInJobs = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
       .innerJoin('cju.response', 'response')
       .leftJoin('cju.coding_job', 'coding_job')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .getCount();
 
-    const uniqueCasesInJobsResult = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const uniqueCasesInJobsResult = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
       .innerJoin('cju.response', 'response')
       .leftJoin('cju.coding_job', 'coding_job')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .where('response.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
       .select('COUNT(DISTINCT cju.response_id)', 'count')
       .getRawOne();
 
-    const uniqueCasesInJobs = parseInt(uniqueCasesInJobsResult?.count || '0', 10);
+    const uniqueCasesInJobs = parseInt(
+      uniqueCasesInJobsResult?.count || '0',
+      10
+    );
 
     const doubleCodedCases = casesInJobs - uniqueCasesInJobs;
 
     const singleCodedCases = uniqueCasesInJobs;
     const unassignedCases = totalCasesToCode - uniqueCasesInJobs;
-    const coveragePercentage = totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
+    const coveragePercentage =
+      totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
 
     return {
       totalCasesToCode,
@@ -1983,7 +2569,11 @@ export class WorkspaceCodingService {
     partiallyAbgedeckteVariablen: number;
     fullyAbgedeckteVariablen: number;
     coveragePercentage: number;
-    variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[];
+    variableCaseCounts: {
+      unitName: string;
+      variableId: string;
+      caseCount: number;
+    }[];
     coverageByStatus: {
       draft: string[];
       pending_review: string[];
@@ -1998,16 +2588,21 @@ export class WorkspaceCodingService {
     };
   }> {
     try {
-      this.logger.log(`Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`);
+      this.logger.log(
+        `Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`
+      );
 
-      const incompleteVariablesResult = await this.responseRepository.createQueryBuilder('response')
+      const incompleteVariablesResult = await this.responseRepository
+        .createQueryBuilder('response')
         .select('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
         .addSelect('COUNT(response.id)', 'caseCount')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
-        .where('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+        .where('response.status_v1 = :status', {
+          status: statusStringToNumber('CODING_INCOMPLETE')
+        })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
         .groupBy('unit.name')
@@ -2015,7 +2610,11 @@ export class WorkspaceCodingService {
         .getRawMany();
 
       const variablesNeedingCoding = new Set<string>();
-      const variableCaseCounts: { unitName: string; variableId: string; caseCount: number }[] = [];
+      const variableCaseCounts: {
+        unitName: string;
+        variableId: string;
+        caseCount: number;
+      }[] = [];
 
       incompleteVariablesResult.forEach(row => {
         const variableKey = `${row.unitName}:${row.variableId}`;
@@ -2038,7 +2637,10 @@ export class WorkspaceCodingService {
         approved: new Set<string>()
       };
 
-      const variableToDefinitions = new Map<string, Array<{ id: number; status: string }>>();
+      const variableToDefinitions = new Map<
+      string,
+      Array<{ id: number; status: string }>
+      >();
 
       for (const definition of jobDefinitions) {
         const definitionVariables = new Set<string>();
@@ -2053,7 +2655,9 @@ export class WorkspaceCodingService {
         }
 
         if (definition.assigned_variable_bundles) {
-          const bundleIds = definition.assigned_variable_bundles.map(bundle => bundle.id);
+          const bundleIds = definition.assigned_variable_bundles.map(
+            bundle => bundle.id
+          );
           const variableBundles = await this.variableBundleRepository.find({
             where: { id: In(bundleIds) }
           });
@@ -2086,7 +2690,10 @@ export class WorkspaceCodingService {
 
       const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
 
-      const conflictedVariables = new Map<string, Array<{ id: number; status: string }>>();
+      const conflictedVariables = new Map<
+      string,
+      Array<{ id: number; status: string }>
+      >();
       variableToDefinitions.forEach((definitions, variableKey) => {
         if (definitions.length > 1) {
           // Only report as conflict if there aren't enough available cases
@@ -2096,7 +2703,10 @@ export class WorkspaceCodingService {
           );
 
           if (variableCaseInfo) {
-            const casesInJobs = casesInJobsMap.get(`${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`) || 0;
+            const casesInJobs =
+              casesInJobsMap.get(
+                `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+              ) || 0;
             const availableCases = variableCaseInfo.caseCount - casesInJobs;
 
             // Only mark as conflict if there are no available cases left
@@ -2123,7 +2733,10 @@ export class WorkspaceCodingService {
         );
 
         if (variableCaseInfo) {
-          const casesInJobs = casesInJobsMap.get(`${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`) || 0;
+          const casesInJobs =
+            casesInJobsMap.get(
+              `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+            ) || 0;
 
           if (casesInJobs >= variableCaseInfo.caseCount) {
             fullyAbgedeckteVariablen.add(variableKey);
@@ -2142,9 +2755,14 @@ export class WorkspaceCodingService {
       const missingCount = missingVariables.size;
       const partiallyAbgedeckteCount = partiallyAbgedeckteVariablen.size;
       const fullyAbgedeckteCount = fullyAbgedeckteVariablen.size;
-      const coveragePercentage = totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
+      const coveragePercentage =
+        totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
 
-      this.logger.log(`Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(1)}%) - Draft: ${draftCount}, Pending: ${pendingReviewCount}, Approved: ${approvedCount}, Conflicted: ${conflictCount}, Fully covered: ${fullyAbgedeckteCount}, Partially covered: ${partiallyAbgedeckteCount}`);
+      this.logger.log(
+        `Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(
+          1
+        )}%) - Draft: ${draftCount}, Pending: ${pendingReviewCount}, Approved: ${approvedCount}, Conflicted: ${conflictCount}, Fully covered: ${fullyAbgedeckteCount}, Partially covered: ${partiallyAbgedeckteCount}`
+      );
 
       return {
         totalVariables,
@@ -2162,15 +2780,22 @@ export class WorkspaceCodingService {
           draft: Array.from(coverageByStatus.draft),
           pending_review: Array.from(coverageByStatus.pending_review),
           approved: Array.from(coverageByStatus.approved),
-          conflicted: Array.from(conflictedVariables.entries()).map(([variableKey, definitions]) => ({
-            variableKey,
-            conflictingDefinitions: definitions
-          }))
+          conflicted: Array.from(conflictedVariables.entries()).map(
+            ([variableKey, definitions]) => ({
+              variableKey,
+              conflictingDefinitions: definitions
+            })
+          )
         }
       };
     } catch (error) {
-      this.logger.error(`Error getting variable coverage overview: ${error.message}`, error.stack);
-      throw new Error('Could not get variable coverage overview. Please check the database connection.');
+      this.logger.error(
+        `Error getting variable coverage overview: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get variable coverage overview. Please check the database connection.'
+      );
     }
   }
 
@@ -2202,7 +2827,9 @@ export class WorkspaceCodingService {
       limit: number;
     }> {
     try {
-      this.logger.log(`Getting double-coded variables for review in workspace ${workspaceId}`);
+      this.logger.log(
+        `Getting double-coded variables for review in workspace ${workspaceId}`
+      );
       const doubleCodedResponseIds = await this.codingJobUnitRepository
         .createQueryBuilder('cju')
         .select('cju.response_id', 'responseId')
@@ -2232,10 +2859,20 @@ export class WorkspaceCodingService {
 
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: { response_id: In(paginatedResponseIds) },
-        relations: ['coding_job', 'coding_job.codingJobCoders', 'coding_job.codingJobCoders.user', 'response', 'response.unit', 'response.unit.booklet', 'response.unit.booklet.person']
+        relations: [
+          'coding_job',
+          'coding_job.codingJobCoders',
+          'coding_job.codingJobCoders.user',
+          'response',
+          'response.unit',
+          'response.unit.booklet',
+          'response.unit.booklet.person'
+        ]
       });
 
-      const responseGroups = new Map<number, {
+      const responseGroups = new Map<
+      number,
+      {
         responseId: number;
         unitName: string;
         variableId: string;
@@ -2252,7 +2889,8 @@ export class WorkspaceCodingService {
           notes: string | null;
           codedAt: Date;
         }>;
-      }>();
+      }
+      >();
 
       for (const unit of codingJobUnits) {
         const responseId = unit.response_id;
@@ -2288,7 +2926,9 @@ export class WorkspaceCodingService {
 
       const data = Array.from(responseGroups.values());
 
-      this.logger.log(`Found ${total} double-coded variables for review in workspace ${workspaceId}, returning page ${page} with ${data.length} items`);
+      this.logger.log(
+        `Found ${total} double-coded variables for review in workspace ${workspaceId}, returning page ${page} with ${data.length} items`
+      );
 
       return {
         data,
@@ -2297,14 +2937,23 @@ export class WorkspaceCodingService {
         limit
       };
     } catch (error) {
-      this.logger.error(`Error getting double-coded variables for review: ${error.message}`, error.stack);
-      throw new Error('Could not get double-coded variables for review. Please check the database connection.');
+      this.logger.error(
+        `Error getting double-coded variables for review: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get double-coded variables for review. Please check the database connection.'
+      );
     }
   }
 
   async applyDoubleCodedResolutions(
     workspaceId: number,
-    decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>
+    decisions: Array<{
+      responseId: number;
+      selectedJobId: number;
+      resolutionComment?: string;
+    }>
   ): Promise<{
       success: boolean;
       appliedCount: number;
@@ -2313,7 +2962,9 @@ export class WorkspaceCodingService {
       message: string;
     }> {
     try {
-      this.logger.log(`Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`);
+      this.logger.log(
+        `Applying ${decisions.length} double-coded resolutions in workspace ${workspaceId}`
+      );
 
       let appliedCount = 0;
       let failedCount = 0;
@@ -2322,36 +2973,46 @@ export class WorkspaceCodingService {
       for (const decision of decisions) {
         try {
           // Get the selected coder's coding_job_unit entry
-          const selectedCodingJobUnit = await this.codingJobUnitRepository.findOne({
-            where: {
-              response_id: decision.responseId,
-              coding_job_id: decision.selectedJobId
-            },
-            relations: ['response', 'coding_job']
-          });
+          const selectedCodingJobUnit =
+            await this.codingJobUnitRepository.findOne({
+              where: {
+                response_id: decision.responseId,
+                coding_job_id: decision.selectedJobId
+              },
+              relations: ['response', 'coding_job']
+            });
 
           if (!selectedCodingJobUnit) {
-            this.logger.warn(`Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`);
+            this.logger.warn(
+              `Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`
+            );
             skippedCount += 1;
             continue;
           }
 
           if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
-            this.logger.warn(`Workspace mismatch for responseId ${decision.responseId}`);
+            this.logger.warn(
+              `Workspace mismatch for responseId ${decision.responseId}`
+            );
             skippedCount += 1;
             continue;
           }
 
           const response = selectedCodingJobUnit.response;
           if (!response) {
-            this.logger.warn(`Could not find response for responseId ${decision.responseId}`);
+            this.logger.warn(
+              `Could not find response for responseId ${decision.responseId}`
+            );
             skippedCount += 1;
             continue;
           }
 
           let updatedValue = response.value || '';
           if (decision.resolutionComment && decision.resolutionComment.trim()) {
-            const timestamp = new Date().toISOString().replace('T', ' ').substring(0, 16);
+            const timestamp = new Date()
+              .toISOString()
+              .replace('T', ' ')
+              .substring(0, 16);
             const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
             updatedValue = resolutionNote + updatedValue;
           }
@@ -2364,14 +3025,21 @@ export class WorkspaceCodingService {
           await this.responseRepository.save(response);
           appliedCount += 1;
 
-          this.logger.debug(`Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`);
+          this.logger.debug(
+            `Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`
+          );
         } catch (error) {
-          this.logger.error(`Error applying resolution for responseId ${decision.responseId}: ${error.message}`, error.stack);
+          this.logger.error(
+            `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
+            error.stack
+          );
           failedCount += 1;
         }
       }
 
-      const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''} ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
+      const message = `Applied ${appliedCount} resolutions successfully. ${
+        failedCount > 0 ? `${failedCount} failed.` : ''
+      } ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
       this.logger.log(message);
 
       return {
@@ -2382,8 +3050,13 @@ export class WorkspaceCodingService {
         message
       };
     } catch (error) {
-      this.logger.error(`Error applying double-coded resolutions: ${error.message}`, error.stack);
-      throw new Error('Could not apply double-coded resolutions. Please check the database connection.');
+      this.logger.error(
+        `Error applying double-coded resolutions: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not apply double-coded resolutions. Please check the database connection.'
+      );
     }
   }
 
@@ -2392,7 +3065,9 @@ export class WorkspaceCodingService {
     incompleteVariables: { unitName: string; variableId: string }[]
   ): Promise<number> {
     try {
-      this.logger.log(`Getting applied results count for ${incompleteVariables.length} CODING_INCOMPLETE variables in workspace ${workspaceId}`);
+      this.logger.log(
+        `Getting applied results count for ${incompleteVariables.length} CODING_INCOMPLETE variables in workspace ${workspaceId}`
+      );
 
       if (incompleteVariables.length === 0) {
         return 0;
@@ -2403,8 +3078,17 @@ export class WorkspaceCodingService {
       for (let i = 0; i < incompleteVariables.length; i += batchSize) {
         const batch = incompleteVariables.slice(i, i + batchSize);
 
-        const conditions = batch.map(variable => `(unit.name = '${variable.unitName.replace(/'/g, "''")}' AND response.variableid = '${variable.variableId.replace(/'/g, "''")}')`
-        ).join(' OR ');
+        const conditions = batch
+          .map(
+            variable => `(unit.name = '${variable.unitName.replace(
+              /'/g,
+              "''"
+            )}' AND response.variableid = '${variable.variableId.replace(
+              /'/g,
+              "''"
+            )}')`
+          )
+          .join(' OR ');
 
         const query = `
           SELECT COUNT(response.id) as applied_count
@@ -2430,43 +3114,58 @@ export class WorkspaceCodingService {
         const batchCount = parseInt(result[0]?.applied_count || '0', 10);
         totalAppliedCount += batchCount;
 
-        this.logger.debug(`Batch ${Math.floor(i / batchSize) + 1}: ${batchCount} applied results`);
+        this.logger.debug(
+          `Batch ${
+            Math.floor(i / batchSize) + 1
+          }: ${batchCount} applied results`
+        );
       }
 
-      this.logger.log(`Total applied results count for workspace ${workspaceId}: ${totalAppliedCount}`);
+      this.logger.log(
+        `Total applied results count for workspace ${workspaceId}: ${totalAppliedCount}`
+      );
       return totalAppliedCount;
     } catch (error) {
-      this.logger.error(`Error getting applied results count: ${error.message}`, error.stack);
-      throw new Error('Could not get applied results count. Please check the database connection.');
+      this.logger.error(
+        `Error getting applied results count: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        'Could not get applied results count. Please check the database connection.'
+      );
     }
   }
 
-  async getWorkspaceCohensKappaSummary(
-    workspaceId: number
-  ): Promise<{
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalSharedResponses: number;
-        validPairs: number;
-        interpretation: string;
-      }>;
-      workspaceSummary: {
-        totalDoubleCodedResponses: number;
-        totalCoderPairs: number;
-        averageKappa: number | null;
-        variablesIncluded: number;
-        codersIncluded: number;
-      };
-    }> {
+  async getWorkspaceCohensKappaSummary(workspaceId: number): Promise<{
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      kappa: number | null;
+      agreement: number;
+      totalSharedResponses: number;
+      validPairs: number;
+      interpretation: string;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+    };
+  }> {
     try {
-      this.logger.log(`Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`);
+      this.logger.log(
+        `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`
+      );
 
-      const doubleCodedData = await this.getDoubleCodedVariablesForReview(workspaceId, 1, 10000); // Get all data
+      const doubleCodedData = await this.getDoubleCodedVariablesForReview(
+        workspaceId,
+        1,
+        10000
+      ); // Get all data
 
       if (doubleCodedData.total === 0) {
         return {
@@ -2481,13 +3180,16 @@ export class WorkspaceCodingService {
         };
       }
 
-      const coderPairData = new Map<string, {
+      const coderPairData = new Map<
+      string,
+      {
         coder1Id: number;
         coder1Name: string;
         coder2Id: number;
         coder2Name: string;
         codes: Array<{ code1: number | null; code2: number | null }>;
-      }>();
+      }
+      >();
 
       const uniqueVariables = new Set<string>();
       const uniqueCoders = new Set<number>();
@@ -2504,16 +3206,29 @@ export class WorkspaceCodingService {
             uniqueCoders.add(coder1.coderId);
             uniqueCoders.add(coder2.coderId);
 
-            const pairKey = coder1.coderId < coder2.coderId ?
-              `${coder1.coderId}-${coder2.coderId}` :
-              `${coder2.coderId}-${coder1.coderId}`;
+            const pairKey =
+              coder1.coderId < coder2.coderId ?
+                `${coder1.coderId}-${coder2.coderId}` :
+                `${coder2.coderId}-${coder1.coderId}`;
 
             if (!coderPairData.has(pairKey)) {
               coderPairData.set(pairKey, {
-                coder1Id: coder1.coderId < coder2.coderId ? coder1.coderId : coder2.coderId,
-                coder1Name: coder1.coderId < coder2.coderId ? coder1.coderName : coder2.coderName,
-                coder2Id: coder1.coderId < coder2.coderId ? coder2.coderId : coder1.coderId,
-                coder2Name: coder1.coderId < coder2.coderId ? coder2.coderName : coder1.coderName,
+                coder1Id:
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderId :
+                    coder2.coderId,
+                coder1Name:
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderName :
+                    coder2.coderName,
+                coder2Id:
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderId :
+                    coder1.coderId,
+                coder2Name:
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderName :
+                    coder1.coderName,
                 codes: []
               });
             }
@@ -2539,7 +3254,9 @@ export class WorkspaceCodingService {
       let validKappaCount = 0;
 
       for (const pair of coderPairData.values()) {
-        const kappaResults = this.codingStatisticsService.calculateCohensKappa([pair]);
+        const kappaResults = this.codingStatisticsService.calculateCohensKappa([
+          pair
+        ]);
 
         if (kappaResults.length > 0) {
           const result = kappaResults[0];
@@ -2552,7 +3269,8 @@ export class WorkspaceCodingService {
         }
       }
 
-      const averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+      const averageKappa =
+        validKappaCount > 0 ? totalKappa / validKappaCount : null;
 
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
@@ -2562,15 +3280,22 @@ export class WorkspaceCodingService {
         codersIncluded: uniqueCoders.size
       };
 
-      this.logger.log(`Calculated workspace-wide Cohen's Kappa: ${coderPairs.length} coder pairs, ${uniqueVariables.size} variables, ${uniqueCoders.size} coders, average kappa: ${averageKappa}`);
+      this.logger.log(
+        `Calculated workspace-wide Cohen's Kappa: ${coderPairs.length} coder pairs, ${uniqueVariables.size} variables, ${uniqueCoders.size} coders, average kappa: ${averageKappa}`
+      );
 
       return {
         coderPairs,
         workspaceSummary
       };
     } catch (error) {
-      this.logger.error(`Error calculating workspace-wide Cohen's Kappa: ${error.message}`, error.stack);
-      throw new Error('Could not calculate workspace-wide Cohen\'s Kappa. Please check the database connection.');
+      this.logger.error(
+        `Error calculating workspace-wide Cohen's Kappa: ${error.message}`,
+        error.stack
+      );
+      throw new Error(
+        "Could not calculate workspace-wide Cohen's Kappa. Please check the database connection."
+      );
     }
   }
 
@@ -2586,7 +3311,9 @@ export class WorkspaceCodingService {
     }> {
     try {
       this.logger.log(
-        `Starting reset for version ${version} in workspace ${workspaceId}, filters: units=${unitFilters?.join(',')}, variables=${variableFilters?.join(',')}`
+        `Starting reset for version ${version} in workspace ${workspaceId}, filters: units=${unitFilters?.join(
+          ','
+        )}, variables=${variableFilters?.join(',')}`
       );
 
       // Determine which versions to reset
@@ -2595,7 +3322,8 @@ export class WorkspaceCodingService {
         versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
       }
 
-      const baseQueryBuilder = this.responseRepository.createQueryBuilder('response')
+      const baseQueryBuilder = this.responseRepository
+        .createQueryBuilder('response')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
@@ -2603,11 +3331,15 @@ export class WorkspaceCodingService {
         .andWhere('person.consider = :consider', { consider: true });
 
       if (unitFilters && unitFilters.length > 0) {
-        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', { unitNames: unitFilters });
+        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', {
+          unitNames: unitFilters
+        });
       }
 
       if (variableFilters && variableFilters.length > 0) {
-        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', { variableIds: variableFilters });
+        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', {
+          variableIds: variableFilters
+        });
       }
 
       const countQueryBuilder = baseQueryBuilder.clone();
@@ -2633,7 +3365,8 @@ export class WorkspaceCodingService {
       let offset = 0;
 
       for (;;) {
-        const batchQueryBuilder = baseQueryBuilder.clone()
+        const batchQueryBuilder = baseQueryBuilder
+          .clone()
           .select(['response.id'])
           .orderBy('response.id', 'ASC')
           .skip(offset)
@@ -2656,13 +3389,17 @@ export class WorkspaceCodingService {
       }
 
       this.logger.log(
-        `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(', ')}`
+        `Reset successful: ${affectedResponseCount} responses cleared for version(s) ${versionsToReset.join(
+          ', '
+        )}`
       );
 
       return {
         affectedResponseCount,
         cascadeResetVersions: version === 'v2' ? ['v3'] : [],
-        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${version === 'v2' ? ' and v3 (cascade)' : ''}`
+        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${
+          version === 'v2' ? ' and v3 (cascade)' : ''
+        }`
       };
     } catch (error) {
       this.logger.error(
@@ -2682,11 +3419,17 @@ export class WorkspaceCodingService {
    */
   async getResponseAnalysis(workspaceId: number): Promise<ResponseAnalysisDto> {
     try {
-      this.logger.log(`Starting response analysis for workspace ${workspaceId}`);
+      this.logger.log(
+        `Starting response analysis for workspace ${workspaceId}`
+      );
 
       // Get response matching flags from settings
-      const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-      this.logger.log(`Response matching flags: ${JSON.stringify(matchingFlags)}`);
+      const matchingFlags = await this.codingJobService.getResponseMatchingMode(
+        workspaceId
+      );
+      this.logger.log(
+        `Response matching flags: ${JSON.stringify(matchingFlags)}`
+      );
 
       // Get all persons in the workspace that should be considered
       const persons = await this.personsRepository.find({
@@ -2708,11 +3451,15 @@ export class WorkspaceCodingService {
       });
 
       if (booklets.length === 0) {
-        this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
+        this.logger.warn(
+          `No booklets found for persons in workspace ${workspaceId}`
+        );
         return this.createEmptyAnalysisResult(matchingFlags);
       }
 
-      const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
+      const bookletMap = new Map(
+        booklets.map(booklet => [booklet.id, booklet])
+      );
 
       // Get all units for these booklets
       const batchSize = 1000;
@@ -2728,7 +3475,9 @@ export class WorkspaceCodingService {
       }
 
       if (allUnits.length === 0) {
-        this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
+        this.logger.warn(
+          `No units found for booklets in workspace ${workspaceId}`
+        );
         return this.createEmptyAnalysisResult(matchingFlags);
       }
 
@@ -2750,16 +3499,23 @@ export class WorkspaceCodingService {
       }
 
       if (allResponses.length === 0) {
-        this.logger.warn(`No manual coding responses (CODING_INCOMPLETE) found for units in workspace ${workspaceId}`);
+        this.logger.warn(
+          `No manual coding responses (CODING_INCOMPLETE) found for units in workspace ${workspaceId}`
+        );
         return this.createEmptyAnalysisResult(matchingFlags);
       }
 
-      this.logger.log(`Found ${allResponses.length} responses requiring manual coding in workspace ${workspaceId}`);
+      this.logger.log(
+        `Found ${allResponses.length} responses requiring manual coding in workspace ${workspaceId}`
+      );
 
       // Analyze empty responses
       const emptyResponses: EmptyResponseDto[] = [];
       for (const response of allResponses) {
-        const isEmptyValue = response.value === null || response.value === '' || response.value === undefined;
+        const isEmptyValue =
+          response.value === null ||
+          response.value === '' ||
+          response.value === undefined;
         if (isEmptyValue) {
           const unit = unitMap.get(response.unitid);
           if (!unit) continue;
@@ -2796,12 +3552,18 @@ export class WorkspaceCodingService {
       const responsesByUnitVariable = new Map<string, ResponseEntity[]>();
       for (const response of allResponses) {
         // Skip empty responses for duplicate analysis
-        if (response.value === null || response.value === '' || response.value === undefined) {
+        if (
+          response.value === null ||
+          response.value === '' ||
+          response.value === undefined
+        ) {
           continue;
         }
 
         const unit = unitMap.get(response.unitid);
-        const key = unit ? `${unit.name}_${response.variableid}` : `${response.unitid}_${response.variableid}`;
+        const key = unit ?
+          `${unit.name}_${response.variableid}` :
+          `${response.unitid}_${response.variableid}`;
         if (!responsesByUnitVariable.has(key)) {
           responsesByUnitVariable.set(key, []);
         }
@@ -2814,7 +3576,10 @@ export class WorkspaceCodingService {
         // Group by normalized value
         const valueGroups = new Map<string, ResponseEntity[]>();
         for (const response of responses) {
-          const normalizedValue = this.codingJobService.normalizeValue(response.value, matchingFlags);
+          const normalizedValue = this.codingJobService.normalizeValue(
+            response.value,
+            matchingFlags
+          );
           if (!valueGroups.has(normalizedValue)) {
             valueGroups.set(normalizedValue, []);
           }
@@ -2831,7 +3596,9 @@ export class WorkspaceCodingService {
 
           const occurrences = groupResponses.map(response => {
             const responseUnit = unitMap.get(response.unitid);
-            const booklet = responseUnit ? bookletMap.get(responseUnit.bookletid) : null;
+            const booklet = responseUnit ?
+              bookletMap.get(responseUnit.bookletid) :
+              null;
             const person = booklet ? personMap.get(booklet.personid) : null;
 
             return {
@@ -2883,12 +3650,17 @@ export class WorkspaceCodingService {
         analysisTimestamp: new Date().toISOString()
       };
     } catch (error) {
-      this.logger.error(`Error analyzing responses for workspace ${workspaceId}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error analyzing responses for workspace ${workspaceId}: ${error.message}`,
+        error.stack
+      );
       throw new Error(`Failed to analyze responses: ${error.message}`);
     }
   }
 
-  private createEmptyAnalysisResult(matchingFlags: string[]): ResponseAnalysisDto {
+  private createEmptyAnalysisResult(
+    matchingFlags: string[]
+  ): ResponseAnalysisDto {
     return {
       emptyResponses: {
         total: 0,

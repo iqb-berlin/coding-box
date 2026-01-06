@@ -19,10 +19,6 @@ export class AuthenticationService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {
     return this.http
       .post<ServerResponse>(`${this.serverUrl}tc_authentication`, {

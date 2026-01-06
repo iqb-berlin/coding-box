@@ -23,5 +23,6 @@ export default {
   moduleNameMapper: {
     '^@swimlane/ngx-charts$': '<rootDir>/src/test-setup.ts',
     '^keycloak-js$': '<rootDir>/src/mocks/keycloak-js.mock.ts'
-  }
+  },
+  coverageDirectory: '../../coverage/apps/frontend'
 };

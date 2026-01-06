@@ -45,6 +45,8 @@ import { PersonService } from '../../database/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CacheService } from '../../cache/cache.service';
+import { JobQueueService } from '../../job-queue/job-queue.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -53,8 +55,29 @@ export class WorkspaceFilesController {
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
-    private readonly workspaceCodingService: WorkspaceCodingService
+    private readonly workspaceCodingService: WorkspaceCodingService,
+    private readonly cacheService: CacheService,
+    private readonly jobQueueService: JobQueueService
   ) {}
+
+  private async invalidateFlatResponseFilterOptionsCache(
+    workspaceId: number
+  ): Promise<void> {
+    const versionKey =
+      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+        workspaceId
+      );
+    const nextVersion = await this.cacheService.incr(versionKey);
+    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+      workspaceId,
+      60000,
+      {
+        jobId: `flat-response-filter-options:${workspaceId}:v${nextVersion}:thr60000`,
+        removeOnComplete: true,
+        removeOnFail: true
+      }
+    );
+  }
 
   @Get(':workspace_id/files')
   @ApiTags('admin workspace')
@@ -1018,7 +1041,14 @@ export class WorkspaceFilesController {
       @Query('responseIds') responseIds: string
   ): Promise<number> {
     const ids = responseIds.split(',').map(id => parseInt(id, 10));
-    return this.workspaceFilesService.deleteInvalidResponses(workspace_id, ids);
+    const count = await this.workspaceFilesService.deleteInvalidResponses(
+      workspace_id,
+      ids
+    );
+    if (count > 0) {
+      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+    }
+    return count;
   }
 
   @Delete(':workspace_id/files/all-invalid-responses')
@@ -1049,10 +1079,14 @@ export class WorkspaceFilesController {
       @Query('validationType')
                            validationType: 'variables' | 'variableTypes' | 'responseStatus'
   ): Promise<number> {
-    return this.workspaceFilesService.deleteAllInvalidResponses(
+    const count = await this.workspaceFilesService.deleteAllInvalidResponses(
       workspace_id,
       validationType
     );
+    if (count > 0) {
+      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+    }
+    return count;
   }
 
   @Post(':workspace_id/files/create-dummy-testtaker')

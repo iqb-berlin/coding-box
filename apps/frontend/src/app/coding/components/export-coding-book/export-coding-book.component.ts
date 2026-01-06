@@ -162,7 +162,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       this.backendService.getUnitsWithFileIds(workspaceId).subscribe({
         next: units => {
           if (units && units.length > 0) {
-            this.availableUnits = units.map(unit => ({
+            this.availableUnits = units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
               unitId: unit.id,
               unitName: unit.fileName,
               unitAlias: null
@@ -222,7 +222,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.backendService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
-          this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map(profile => ({ id: profile.id ?? 0, label: profile.label }))];
+          this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
           this.selectedMissingsProfile = 0;
           this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
         },

@@ -194,7 +194,7 @@ export class TestCenterImportComponent {
   }
 
   selectAllImportOptions(): void {
-    let optionControls: string[] = [];
+    let optionControls: string[];
 
     if (this.data.importType === 'testResults') {
       // For results import, only responses and logs are relevant
@@ -298,7 +298,7 @@ export class TestCenterImportComponent {
         })
       )
       .subscribe(response => {
-        if (!response) {
+        if (!response || !response.token || !response.claims) {
           this.authenticationError = true;
           return;
         }
@@ -374,62 +374,6 @@ export class TestCenterImportComponent {
   goBackToOptions(): void {
     this.showTestGroups = false;
     this.selectedRows = [];
-  }
-
-  startNewImport(): void {
-    this.uploadData = null;
-    this.firstTestFilesImportData = null;
-    this.showTestGroups = false;
-    this.selectedRows = [];
-
-    if (this.data.importType === 'testResults') {
-      this.getTestGroups();
-    }
-  }
-
-  goBackToTestGroups(): void {
-    this.uploadData = null;
-    this.firstTestFilesImportData = null;
-    this.selectedRows = [];
-    this.showTestGroups = true;
-  }
-
-  refreshTestGroups(): void {
-    const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || ''
-    };
-
-    const server =
-      this.workspaceAdminService.getLastServer() ||
-      formValues.testCenter?.toString();
-    const url =
-      this.workspaceAdminService.getLastUrl() ||
-      formValues.testCenterIndividual;
-
-    const tempIsUploadingTestResults = this.isUploadingTestResults;
-    this.isUploadingTestResults = true;
-
-    this.backendService
-      .importTestcenterGroups(
-        this.appService.selectedWorkspaceId,
-        formValues.workspace,
-        server,
-        url,
-        this.authToken
-      )
-      .subscribe({
-        next: response => {
-          this.isUploadingTestResults = tempIsUploadingTestResults;
-          this.workspaceAdminService.setTestGroups(response);
-          this.testGroups = response;
-        },
-        error: () => {
-          this.isUploadingTestResults = tempIsUploadingTestResults;
-        }
-      });
   }
 
   private hasSelectedGroupsWithLogs(): boolean {
@@ -554,10 +498,7 @@ export class TestCenterImportComponent {
           }
 
           if (this.data.importType === 'testFiles') {
-            const initial = data as unknown as {
-              testFilesUploadResult?: TestFilesUploadResultDto;
-            };
-            const initialResult = initial.testFilesUploadResult;
+            const initialResult = data.testFilesUploadResult;
             const initialConflicts = initialResult?.conflicts || [];
 
             if (!overwriteFileIds && initialConflicts.length > 0) {
@@ -600,14 +541,8 @@ export class TestCenterImportComponent {
 
             // Second call: overwrite-only import. Merge with previous (stored in uploadData).
             if (overwriteFileIds && this.firstTestFilesImportData) {
-              const first = this.firstTestFilesImportData as unknown as {
-                testFilesUploadResult?: TestFilesUploadResultDto;
-              };
-              const firstResult = first.testFilesUploadResult;
-              const second = data as unknown as {
-                testFilesUploadResult?: TestFilesUploadResultDto;
-              };
-              const secondResult = second.testFilesUploadResult;
+              const firstResult = this.firstTestFilesImportData.testFilesUploadResult;
+              const secondResult = data.testFilesUploadResult;
 
               const mergedUploadedFiles = [
                 ...(firstResult?.uploadedFiles || []),

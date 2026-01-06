@@ -508,7 +508,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
       if (result && result.success) {
         if (creationResult) {
-          const updatePromises = result.jobs.map(job => firstValueFrom(
+          const updatePromises = result.jobs.map((job: { jobId: number }) => firstValueFrom(
             this.backendService.updateCodingJob(workspaceId, job.jobId, {
               showScore: creationResult.showScore,
               allowComments: creationResult.allowComments,

@@ -48,15 +48,13 @@ export class AppService {
   backendUnavailable = false;
   needsReAuthentication = false;
 
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   constructor() {
     this.loadLogoSettings();
   }
 
   createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
-      { headers: this.authHeader }
+      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`
     );
   }
 
@@ -67,7 +65,6 @@ export class AppService {
         map(loginToken => {
           if (typeof loginToken === 'string') {
             localStorage.setItem('id_token', loginToken);
-            this.authHeader = { Authorization: `Bearer ${loginToken}` };
             return this.getAuthData(user.identity || '')
               .pipe(
                 map(authData => {
@@ -90,8 +87,7 @@ export class AppService {
 
   getAuthData(id: string): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      `${this.serverUrl}auth-data?identity=${id}`,
-      { headers: this.authHeader }
+      `${this.serverUrl}auth-data?identity=${id}`
     );
   }
 
@@ -120,6 +116,14 @@ export class AppService {
 
   get authData$() {
     return this.authDataSubject.asObservable();
+  }
+
+  get authData(): AuthDataDto {
+    return this.authDataSubject.value;
+  }
+
+  get userId(): number {
+    return this.authDataSubject.value.userId;
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {

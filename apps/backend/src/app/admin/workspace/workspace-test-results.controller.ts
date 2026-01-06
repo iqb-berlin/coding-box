@@ -83,6 +83,25 @@ export class WorkspaceTestResultsController {
     private cacheService: CacheService
   ) {}
 
+  private async invalidateFlatResponseFilterOptionsCache(
+    workspaceId: number
+  ): Promise<void> {
+    const versionKey =
+      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+        workspaceId
+      );
+    const nextVersion = await this.cacheService.incr(versionKey);
+    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+      workspaceId,
+      60000,
+      {
+        jobId: `flat-response-filter-options:${workspaceId}:v${nextVersion}:thr60000`,
+        removeOnComplete: true,
+        removeOnFail: true
+      }
+    );
+  }
+
   @Get(':workspace_id/test-results/overview')
   @ApiOperation({
     summary: 'Get workspace-wide test results overview',
@@ -107,6 +126,18 @@ export class WorkspaceTestResultsController {
         responseStatusCounts: {
           type: 'object',
           additionalProperties: { type: 'number' }
+        },
+        sessionBrowserCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        sessionOsCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        sessionScreenCounts: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
         }
       }
     }
@@ -123,6 +154,9 @@ export class WorkspaceTestResultsController {
         uniqueUnits: number;
         uniqueResponses: number;
         responseStatusCounts: Record<string, number>;
+        sessionBrowserCounts: Record<string, number>;
+        sessionOsCounts: Record<string, number>;
+        sessionScreenCounts: Record<string, number>;
       }> {
     try {
       return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
@@ -265,11 +299,15 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteUnit(
+    const result = await this.workspaceTestResultsService.deleteUnit(
       workspaceId,
       unitId,
       req.user.id
     );
+    if (result?.success) {
+      await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+    }
+    return result;
   }
 
   @Get(':workspace_id/test-results/flat-responses')
@@ -349,6 +387,123 @@ export class WorkspaceTestResultsController {
     description: 'Filter by unit tag (ILIKE)',
     type: String
   })
+  @ApiQuery({
+    name: 'geogebra',
+    required: false,
+    description:
+      'If true, only include responses from units that contain at least one GeoGebra response (response.value starts with "UEsD")',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLow',
+    required: false,
+    description:
+      'If true, only include audio responses (response.variableid starts with "audio") with numeric response.value below the given threshold',
+    type: String
+  })
+  @ApiQuery({
+    name: 'hasValue',
+    required: false,
+    description:
+      'If true, only include responses with a non-empty value (not "" and not "[]")',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLowThreshold',
+    required: false,
+    description: 'Numeric threshold used together with audioLow (default: 0.9)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessing',
+    required: false,
+    description:
+      'If true, only include responses from booklets with short processing time (derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessingThresholdMs',
+    required: false,
+    description:
+      'Threshold in milliseconds for shortProcessing (default: 60000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoading',
+    required: false,
+    description:
+      'If true, only include responses from units with long loading times (derived from unit logs STARTED -> ENDED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoadingThresholdMs',
+    required: false,
+    description: 'Threshold in milliseconds for longLoading (default: 5000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'processingDurations',
+    required: false,
+    description:
+      'Comma-separated list of processing duration labels (MM:SS) derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED',
+    type: String
+  })
+  @ApiQuery({
+    name: 'processingDurationThresholdMs',
+    required: false,
+    description:
+      'Threshold in milliseconds for bucketing processing duration into short/long (default: 60000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'processingDurationMin',
+    required: false,
+    description:
+      'Minimum processing duration (mm:ss) derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED (inclusive)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'processingDurationMax',
+    required: false,
+    description:
+      'Maximum processing duration (mm:ss) derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED (inclusive)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'unitProgress',
+    required: false,
+    description:
+      'Comma-separated list of unit progress values (complete,incomplete) derived from booklet logs CURRENT_UNIT_ID vs unit aliases',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionBrowsers',
+    required: false,
+    description:
+      'Comma-separated list of session browsers to match (any session in booklet)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionOs',
+    required: false,
+    description:
+      'Comma-separated list of session OS values to match (any session in booklet)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionScreens',
+    required: false,
+    description:
+      'Comma-separated list of session screen size values to match (any session in booklet)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionIds',
+    required: false,
+    description:
+      'Comma-separated list of session IDs to match (any session in booklet)',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Flat responses retrieved successfully.',
     schema: {
@@ -381,7 +536,25 @@ export class WorkspaceTestResultsController {
                            @Query('response') response?: string,
                            @Query('responseStatus') responseStatus?: string,
                            @Query('responseValue') responseValue?: string,
-                           @Query('tags') tags?: string
+                           @Query('tags') tags?: string,
+                           @Query('geogebra') geogebra?: string,
+                           @Query('audioLow') audioLow?: string,
+                           @Query('hasValue') hasValue?: string,
+                           @Query('audioLowThreshold') audioLowThreshold?: string,
+                           @Query('shortProcessing') shortProcessing?: string,
+                           @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
+                           @Query('longLoading') longLoading?: string,
+                           @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string,
+                           @Query('processingDurations') processingDurations?: string,
+      @Query('processingDurationThresholdMs')
+                           processingDurationThresholdMs?: string,
+                           @Query('processingDurationMin') processingDurationMin?: string,
+                           @Query('processingDurationMax') processingDurationMax?: string,
+                           @Query('unitProgress') unitProgress?: string,
+                           @Query('sessionBrowsers') sessionBrowsers?: string,
+                           @Query('sessionOs') sessionOs?: string,
+                           @Query('sessionScreens') sessionScreens?: string,
+                           @Query('sessionIds') sessionIds?: string
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
@@ -395,7 +568,24 @@ export class WorkspaceTestResultsController {
         response,
         responseStatus,
         responseValue,
-        tags
+        tags,
+        geogebra,
+        audioLow,
+        hasValue,
+        audioLowThreshold,
+        shortProcessing,
+        shortProcessingThresholdMs,
+        longLoading,
+        longLoadingThresholdMs,
+        processingDurations,
+        processingDurationThresholdMs,
+        processingDurationMin,
+        processingDurationMax,
+        unitProgress,
+        sessionBrowsers,
+        sessionOs,
+        sessionScreens,
+        sessionIds
       });
     return {
       data,
@@ -549,6 +739,88 @@ export class WorkspaceTestResultsController {
     description: 'Filter by unit tag (ILIKE)',
     type: String
   })
+  @ApiQuery({
+    name: 'geogebra',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from units that contain at least one GeoGebra response (response.value starts with "UEsD")',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLow',
+    required: false,
+    description:
+      'If true, only include filter options based on audio responses (response.variableid starts with "audio") with numeric response.value below the given threshold',
+    type: String
+  })
+  @ApiQuery({
+    name: 'audioLowThreshold',
+    required: false,
+    description: 'Numeric threshold used together with audioLow (default: 0.9)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessing',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from booklets with short processing time (derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'shortProcessingThresholdMs',
+    required: false,
+    description:
+      'Threshold in milliseconds for shortProcessing (default: 60000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoading',
+    required: false,
+    description:
+      'If true, only include filter options based on responses from units with long loading times (derived from unit logs STARTED -> ENDED)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'longLoadingThresholdMs',
+    required: false,
+    description: 'Threshold in milliseconds for longLoading (default: 5000)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'processingDurations',
+    required: false,
+    description:
+      'Comma-separated list of processing duration labels (MM:SS) derived from booklet logs CONTROLLER/RUNNING -> CONTROLLER/TERMINATED',
+    type: String
+  })
+  @ApiQuery({
+    name: 'unitProgress',
+    required: false,
+    description:
+      'Comma-separated list of unit progress values (complete,incomplete) derived from booklet logs CURRENT_UNIT_ID vs unit aliases',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionBrowsers',
+    required: false,
+    description:
+      'Comma-separated list of session browsers to match (any session in booklet)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionOs',
+    required: false,
+    description:
+      'Comma-separated list of session OS values to match (any session in booklet)',
+    type: String
+  })
+  @ApiQuery({
+    name: 'sessionScreens',
+    required: false,
+    description:
+      'Comma-separated list of session screen size values to match (any session in booklet)',
+    type: String
+  })
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
@@ -561,7 +833,22 @@ export class WorkspaceTestResultsController {
       @Query('response') response?: string,
       @Query('responseStatus') responseStatus?: string,
       @Query('responseValue') responseValue?: string,
-      @Query('tags') tags?: string
+      @Query('tags') tags?: string,
+      @Query('geogebra') geogebra?: string,
+      @Query('audioLow') audioLow?: string,
+      @Query('audioLowThreshold') audioLowThreshold?: string,
+      @Query('shortProcessing') shortProcessing?: string,
+      @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
+      @Query('longLoading') longLoading?: string,
+      @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string,
+      @Query('processingDurations') processingDurations?: string,
+      @Query('processingDurationThresholdMs')
+                           processingDurationThresholdMs?: string,
+                           @Query('unitProgress') unitProgress?: string,
+                           @Query('sessionBrowsers') sessionBrowsers?: string,
+                           @Query('sessionOs') sessionOs?: string,
+                           @Query('sessionScreens') sessionScreens?: string,
+                           @Query('sessionIds') sessionIds?: string
   ): Promise<{
         codes: string[];
         groups: string[];
@@ -571,21 +858,127 @@ export class WorkspaceTestResultsController {
         responses: string[];
         responseStatuses: string[];
         tags: string[];
+        processingDurations: string[];
+        unitProgresses: string[];
+        sessionBrowsers: string[];
+        sessionOs: string[];
+        sessionScreens: string[];
+        sessionIds: string[];
       }> {
-    return this.workspaceTestResultsService.findFlatResponseFilterOptions(
-      workspace_id,
-      {
-        code,
-        group,
-        login,
-        booklet,
-        unit,
-        response,
-        responseStatus,
-        responseValue,
-        tags
+    const isEmpty = (v?: string) => !String(v || '').trim();
+    const thresholdRaw = String(processingDurationThresholdMs || '').trim();
+    const thresholdParsed = Number(thresholdRaw || 60000);
+    const threshold = Number.isFinite(thresholdParsed) ?
+      thresholdParsed :
+      60000;
+
+    const audioLowEnabled = !isEmpty(audioLow);
+    const shortProcessingEnabled = !isEmpty(shortProcessing);
+    const longLoadingEnabled = !isEmpty(longLoading);
+
+    const isNoFilterRequest =
+      isEmpty(code) &&
+      isEmpty(group) &&
+      isEmpty(login) &&
+      isEmpty(booklet) &&
+      isEmpty(unit) &&
+      isEmpty(response) &&
+      isEmpty(responseStatus) &&
+      isEmpty(responseValue) &&
+      isEmpty(tags) &&
+      isEmpty(geogebra) &&
+      isEmpty(audioLow) &&
+      (!audioLowEnabled || isEmpty(audioLowThreshold)) &&
+      isEmpty(shortProcessing) &&
+      (!shortProcessingEnabled || isEmpty(shortProcessingThresholdMs)) &&
+      isEmpty(longLoading) &&
+      (!longLoadingEnabled || isEmpty(longLoadingThresholdMs)) &&
+      isEmpty(processingDurations) &&
+      isEmpty(unitProgress) &&
+      isEmpty(sessionBrowsers) &&
+      isEmpty(sessionOs) &&
+      isEmpty(sessionScreens) &&
+      isEmpty(sessionIds);
+
+    if (isNoFilterRequest) {
+      const versionKey =
+        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+          workspace_id
+        );
+      const version = await this.cacheService.getNumber(versionKey, 1);
+      const cacheKey =
+        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
+          workspace_id,
+          version,
+          threshold
+        );
+      const cached = await this.cacheService.get<{
+        codes: string[];
+        groups: string[];
+        logins: string[];
+        booklets: string[];
+        units: string[];
+        responses: string[];
+        responseStatuses: string[];
+        tags: string[];
+        processingDurations: string[];
+        unitProgresses: string[];
+        sessionBrowsers: string[];
+        sessionOs: string[];
+        sessionScreens: string[];
+        sessionIds: string[];
+      }>(cacheKey);
+      if (cached) {
+        return cached;
       }
-    );
+    }
+
+    const result =
+      await this.workspaceTestResultsService.findFlatResponseFilterOptions(
+        workspace_id,
+        {
+          code,
+          group,
+          login,
+          booklet,
+          unit,
+          response,
+          responseStatus,
+          responseValue,
+          tags,
+          geogebra,
+          audioLow,
+          audioLowThreshold,
+          shortProcessing,
+          shortProcessingThresholdMs,
+          longLoading,
+          longLoadingThresholdMs,
+          processingDurations,
+          processingDurationThresholdMs,
+          unitProgress,
+          sessionBrowsers,
+          sessionOs,
+          sessionScreens,
+          sessionIds
+        }
+      );
+
+    if (isNoFilterRequest) {
+      const versionKey =
+        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+          workspace_id
+        );
+      const version = await this.cacheService.getNumber(versionKey, 1);
+      const cacheKey =
+        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
+          workspace_id,
+          version,
+          threshold
+        );
+      await this.cacheService.set(cacheKey, result, 0);
+    }
+
+    return result;
   }
 
   @Get(':workspace_id/units/:unitId/logs')
@@ -875,11 +1268,15 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteResponse(
+    const result = await this.workspaceTestResultsService.deleteResponse(
       workspaceId,
       responseId,
       req.user.id
     );
+    if (result?.success) {
+      await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+    }
+    return result;
   }
 
   @Post(':workspace_id/responses/resolve-duplicates')
@@ -980,11 +1377,15 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteBooklet(
+    const result = await this.workspaceTestResultsService.deleteBooklet(
       workspaceId,
       bookletId,
       req.user.id
     );
+    if (result?.success) {
+      await this.invalidateFlatResponseFilterOptionsCache(workspaceId);
+    }
+    return result;
   }
 
   @Get(':workspace_id/responses')
@@ -1751,7 +2152,7 @@ export class WorkspaceTestResultsController {
       ).includes(finalScope) ?
         (finalScope as UploadScope) :
         'person';
-      return await this.uploadResults.uploadTestResults(
+      const result = await this.uploadResults.uploadTestResults(
         workspace_id,
         files,
         resultType,
@@ -1767,6 +2168,8 @@ export class WorkspaceTestResultsController {
           subform
         }
       );
+      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+      return result;
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException(
