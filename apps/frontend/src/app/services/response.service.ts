@@ -32,6 +32,12 @@ export class ResponseService {
       { headers });
   }
 
+  getResponsesForWorkspace(workspaceId: number): Observable<ResponseDto[]> {
+    return this.http.get<ResponseDto[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses`,
+      { headers: this.authHeader });
+  }
+
   deleteTestPersons(workspace_id: number, testPersonIds: number[]): Observable<boolean> {
     const params = new HttpParams().set('testPersons', testPersonIds.join(','));
     return this.http

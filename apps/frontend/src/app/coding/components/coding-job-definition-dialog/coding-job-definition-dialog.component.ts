@@ -377,7 +377,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         next: bundles => {
           const enrichedBundles = bundles.map(bundle => ({
             ...bundle,
-            variables: bundle.variables.map(bundleVar => {
+            variables: bundle.variables.map((bundleVar: Variable) => {
               const matchingVar = this.variables.find(v => v.unitName === bundleVar.unitName && v.variableId === bundleVar.variableId);
               return {
                 ...bundleVar,
@@ -566,14 +566,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     // Disable variables that are included in currently selected variable bundles
-    const isInSelectedBundle = this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    return this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
     )
     );
-
-    if (isInSelectedBundle) {
-      return true; // Disable variables in selected bundles
-    }
-    return false;
   }
 
   getVariableDisabledReason(variable: Variable): string {

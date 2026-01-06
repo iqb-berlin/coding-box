@@ -27,7 +27,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { BackendService, CodingJobItem, BulkApplyResultItem } from '../../../services/backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
@@ -150,7 +150,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.backendService.getCodingJobs(workspaceId).subscribe({
           next: async response => {
             this.coderNamesByJobId.clear();
-            const processedData = response.data.map(job => ({
+            const processedData = response.data.map((job: CodingJob) => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
               updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
@@ -196,7 +196,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         this.backendService.getCodingJobs(workspaceId).subscribe({
           next: async response => {
             this.coderNamesByJobId.clear();
-            const processedData = response.data.map(job => ({
+            const processedData = response.data.map((job: CodingJob) => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
               updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
@@ -499,7 +499,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         }
 
         // Map responses to a booklet-like structure so we can reuse the Replay booklet navigation
-        const units = startResult.items.map((item, idx) => ({
+        const units = startResult.items.map((item: CodingJobItem, idx: number) => ({
           id: idx,
           name: item.unitAlias || item.unitName,
           alias: item.unitAlias || null,
@@ -718,7 +718,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   return;
                 }
 
-                const units = restartResult.items.map((item, idx) => ({
+                const units = restartResult.items.map((item: CodingJobItem, idx: number) => ({
                   id: idx,
                   name: item.unitAlias || item.unitName,
                   alias: item.unitAlias || null,
@@ -972,7 +972,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       next: result => {
         loadingSnack.dismiss();
         if (result.success) {
-          const skippedCount = result.results.filter(r => r.skipped).length;
+          const skippedCount = result.results.filter((r: BulkApplyResultItem) => r.skipped).length;
           const processedCount = result.jobsProcessed;
           this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
