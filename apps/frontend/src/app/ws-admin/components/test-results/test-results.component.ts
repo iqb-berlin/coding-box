@@ -59,6 +59,7 @@ import { TestResultsImportDialogComponent } from './test-results-import-dialog.c
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
 import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 import { BackendService } from '../../../services/backend.service';
+import { TestResultExportJob } from '../../../services/test-result-backend.service';
 import { AppService } from '../../../services/app.service';
 import {
   TestResultService,
@@ -293,7 +294,6 @@ string,
     MatIconButton,
     MatDivider,
     MatTooltipModule,
-    SessionDistributionsDialogComponent,
     TestResultsFlatTableComponent
   ]
 })
@@ -599,7 +599,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: notesByUnitId => {
           Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-            this.unitNotesMap.set(Number(unitId), notes);
+            this.unitNotesMap.set(Number(unitId), notes as UnitNoteDto[]);
           });
         },
         error: () => {
@@ -1882,13 +1882,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.backendService
       .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: jobs => {
+        next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
-            j => j.exportType === 'test-results' || j.exportType === 'test-logs'
+            (j: TestResultExportJob) => j.exportType === 'test-results' || j.exportType === 'test-logs'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(
-            j => j.status === 'active' ||
+            (j: TestResultExportJob) => j.status === 'active' ||
               j.status === 'waiting' ||
               j.status === 'delayed'
           );
@@ -1914,7 +1914,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.backendService
         .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
         .subscribe({
-          next: jobs => {
+          next: (jobs: TestResultExportJob[]) => {
             const job = jobs.find(j => j.jobId === jobId);
             if (job) {
               this.exportJobStatus = job.status;

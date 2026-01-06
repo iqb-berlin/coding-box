@@ -498,23 +498,13 @@ implements OnInit, AfterViewInit, OnDestroy {
   // Chart configuration
   colorScheme = 'vivid';
 
-  /**
-   * Format milliseconds to a more readable format
-   * @param milliseconds The duration in milliseconds
-   * @returns Formatted string (e.g., "5.00 s" for 5000 milliseconds)
-   */
   formatMilliseconds(milliseconds: number): string {
     // Convert to seconds with 2 decimal places for better readability
     return `${(milliseconds / 1000).toFixed(2)} s`;
   }
 
-  /**
-   * Format X-axis labels to handle long unit names
-   * @param value The label value
-   * @returns Truncated label if too long
-   */
   formatXAxisLabel(value: string): string {
-    if (true && value.length > 20) {
+    if (value.length > 20) {
       return `${value.substring(0, 17)}...`;
     }
     return value;
@@ -687,7 +677,7 @@ implements OnInit, AfterViewInit, OnDestroy {
           this.durationDistributionData = Object.entries(data.distribution).map(
             ([range, count]) => ({
               name: range,
-              value: count
+              value: count as number
             })
           );
 

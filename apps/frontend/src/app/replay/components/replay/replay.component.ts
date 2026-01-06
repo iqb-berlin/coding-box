@@ -410,7 +410,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return of([]);
     }
     return this.backendService
-      .getResponses(workspace, this.testPerson, this.unitId, authToken);
+      .getResponsesForUnit(workspace, this.testPerson, this.unitId, authToken);
   }
 
   private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
@@ -423,14 +423,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return this.backendService.getUnit(workspace, this.unitId, authToken);
   }
 
-  private getVocs(workspace: number, authToken?:string): Observable<FilesDto[]> {
+  private getVocs(workspace: number): Observable<FilesDto[]> {
     if (this.lastVocs.id && this.lastVocs.data && this.lastVocs.id === this.unitId.toUpperCase()) {
       return of([{
         data: this.lastVocs.data,
         file_id: `${this.lastVocs.id}.vocs`
       }]);
     }
-    return this.backendService.getVocs(workspace, this.unitId, authToken);
+    return this.backendService.getVocs(workspace, this.unitId);
   }
 
   private getPlayer(
@@ -460,7 +460,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       combineLatest([
         this.getUnitDef(workspace, authToken),
         this.getResponses(workspace, authToken).pipe(catchError(() => of([]))),
-        this.getVocs(workspace, authToken).pipe(catchError(() => of([]))),
+        this.getVocs(workspace).pipe(catchError(() => of([]))),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);

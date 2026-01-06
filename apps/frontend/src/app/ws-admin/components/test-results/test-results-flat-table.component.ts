@@ -28,6 +28,7 @@ import { AppService } from '../../../services/app.service';
 import {
   FlatResponseFilterOptionsResponse,
   FlatResponseFrequencyItem,
+  BookletLogsForUnitResponse,
   FlatResponseFrequencyRequestCombo,
   FlatResponseFrequenciesResponse,
   TestResultService
@@ -453,14 +454,6 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.onFlatFilterChanged();
   }
 
-  onProcessingDurationsChanged(): void {
-    this.onFlatFilterChanged();
-  }
-
-  onUnitProgressChanged(): void {
-    this.onFlatFilterChanged();
-  }
-
   private parseCsv(raw: string): string {
     return String(raw || '')
       .split(',')
@@ -749,7 +742,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: result => {
+        next: (result: BookletLogsForUnitResponse | null) => {
           if (!result || !result.logs || result.logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für dieses Testheft vorhanden',
@@ -764,7 +757,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             data: {
               logs: result.logs,
               sessions: result.sessions,
-              units: (result.units || []).map(u => ({
+              units: (result.units || []).map((u: BookletLogsForUnitResponse['units'][number]) => ({
                 ...u,
                 results: []
               }))
