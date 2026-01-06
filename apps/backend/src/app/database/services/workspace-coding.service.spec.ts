@@ -178,8 +178,51 @@ describe('WorkspaceCodingService', () => {
     filename: `${fileId}.xml`
   });
 
+  interface MockQueryBuilder {
+    select: jest.Mock;
+    addSelect: jest.Mock;
+    leftJoin: jest.Mock;
+    leftJoinAndSelect: jest.Mock;
+    innerJoin: jest.Mock;
+    innerJoinAndSelect: jest.Mock;
+    where: jest.Mock;
+    andWhere: jest.Mock;
+    groupBy: jest.Mock;
+    addGroupBy: jest.Mock;
+    orderBy: jest.Mock;
+    skip: jest.Mock;
+    take: jest.Mock;
+    getRawMany: jest.Mock;
+    getCount: jest.Mock;
+    getMany: jest.Mock;
+    getRawOne: jest.Mock;
+  }
+
+  // Make mockQueryBuilder accessible to tests so they can configure response data
+  let mockQueryBuilder: MockQueryBuilder;
+
   beforeEach(async () => {
     jest.clearAllMocks();
+
+    mockQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      leftJoin: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      groupBy: jest.fn().mockReturnThis(),
+      addGroupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      skip: jest.fn().mockReturnThis(),
+      take: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn(),
+      getCount: jest.fn(),
+      getMany: jest.fn().mockResolvedValue([]),
+      getRawOne: jest.fn()
+    };
 
     const mockQueryRunner = {
       connect: jest.fn(),
@@ -188,7 +231,10 @@ describe('WorkspaceCodingService', () => {
       rollbackTransaction: jest.fn(),
       release: jest.fn(),
       manager: {
-        update: jest.fn().mockResolvedValue({ affected: 1 })
+        update: jest.fn().mockResolvedValue({ affected: 1 }),
+        getRepository: jest.fn().mockReturnValue({
+          createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+        })
       }
     };
 
@@ -331,11 +377,16 @@ describe('WorkspaceCodingService', () => {
         createMockUnit(2, 2, 'TEST_UNIT_2', 'ALIAS_2')
       ]);
 
-      responseRepository.find = jest.fn().mockResolvedValue([
+      const mockResponses = [
         createMockResponse(1, 1, 'var1'),
         createMockResponse(2, 2, 'var2')
-      ]);
+      ];
 
+      // Configure the query builder to return responses
+      mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
+
+      // The service converts unit names to uppercase when building the validVariableSets map
+      // Unit names in test data are 'TEST_UNIT_1' and 'TEST_UNIT_2'
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
         new Map([
           ['TEST_UNIT_1', new Set(['var1'])],
@@ -412,7 +463,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should handle no responses found', async () => {
-      responseRepository.find = jest.fn().mockResolvedValue([]);
+      mockQueryBuilder.getMany.mockResolvedValue([]);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 
@@ -421,7 +472,7 @@ describe('WorkspaceCodingService', () => {
     });
 
     it('should filter out invalid variables not defined in unit schema', async () => {
-      responseRepository.find = jest.fn().mockResolvedValue([
+      mockQueryBuilder.getMany.mockResolvedValue([
         createMockResponse(1, 1, 'var1'), // valid
         createMockResponse(2, 1, 'invalid_var'), // invalid
         createMockResponse(3, 2, 'var2'), // valid
@@ -458,7 +509,7 @@ describe('WorkspaceCodingService', () => {
       responsesWithV2[0].status_v2 = 2;
       responsesWithV2[1].status_v2 = 1;
 
-      responseRepository.find = jest.fn().mockResolvedValue(responsesWithV2);
+      mockQueryBuilder.getMany.mockResolvedValue(responsesWithV2);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
 
@@ -837,13 +888,13 @@ describe('WorkspaceCodingService', () => {
     ];
 
     const setupValidationQueryBuilderMock = (count: number) => {
-      const mockQueryBuilder = {
+      const qb = {
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         getCount: jest.fn().mockResolvedValue(count)
       };
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(qb);
     };
 
     beforeEach(() => {
@@ -957,7 +1008,7 @@ describe('WorkspaceCodingService', () => {
     it('should query database when cache miss', async () => {
       mockCacheService.get = jest.fn().mockResolvedValue(null);
 
-      const mockQueryBuilder = {
+      const qb = {
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
         leftJoin: jest.fn().mockReturnThis(),
@@ -970,7 +1021,7 @@ describe('WorkspaceCodingService', () => {
         ])
       };
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(qb);
       mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
         new Map([['UNIT_1', new Set(['var1'])]])
       );
@@ -992,7 +1043,7 @@ describe('WorkspaceCodingService', () => {
     it('should filter out variables not in unit schema', async () => {
       mockCacheService.get = jest.fn().mockResolvedValue(null);
 
-      const mockQueryBuilder = {
+      const qb = {
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
         leftJoin: jest.fn().mockReturnThis(),
@@ -1006,7 +1057,7 @@ describe('WorkspaceCodingService', () => {
         ])
       };
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(qb);
       mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
         new Map([['UNIT_1', new Set(['var1'])]]) // Only var1 is valid
       );
@@ -1020,7 +1071,7 @@ describe('WorkspaceCodingService', () => {
     it('should handle unit name filtering', async () => {
       mockCacheService.get = jest.fn().mockResolvedValue(null);
 
-      const mockQueryBuilder = {
+      const qb = {
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
         leftJoin: jest.fn().mockReturnThis(),
@@ -1033,7 +1084,7 @@ describe('WorkspaceCodingService', () => {
         ])
       };
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(qb);
       mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
         new Map([['SPECIFIC_UNIT', new Set(['var1'])]])
       );
@@ -1413,7 +1464,7 @@ describe('WorkspaceCodingService', () => {
         createMockResponse(2, 2, 'var2')
       ];
 
-      const mockQueryBuilder = {
+      const qb = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -1425,7 +1476,7 @@ describe('WorkspaceCodingService', () => {
         getMany: jest.fn().mockResolvedValue(mockResponses)
       };
 
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(mockQueryBuilder);
+      responseRepository.createQueryBuilder = jest.fn().mockReturnValue(qb);
 
       const result = await service.getResponsesByStatus(workspaceId, status, version, 1, 10);
 
