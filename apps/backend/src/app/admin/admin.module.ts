@@ -3,6 +3,9 @@ import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
+import { UsersModule } from '../users/users.module';
+import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { CodingModule } from '../coding/coding.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceFilesController } from './workspace/workspace-files.controller';
@@ -22,8 +25,6 @@ import { ValidationTaskController } from './workspace/validation-task.controller
 import { BookletInfoController } from './workspace/booklet-info.controller';
 import { UnitInfoController } from './workspace/unit-info.controller';
 import { MissingsProfilesController } from './workspace/missings-profiles.controller';
-import { BookletInfoService } from '../database/services/booklet-info.service';
-import { UnitInfoService } from '../database/services/unit-info.service';
 import FileUpload from '../database/entities/file_upload.entity';
 import { Setting } from '../database/entities/setting.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
@@ -39,6 +40,9 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
 @Module({
   imports: [
     DatabaseModule,
+    UsersModule,
+    WorkspacesModule,
+    CodingModule,
     AuthModule,
     HttpModule,
     TypeOrmModule.forFeature([FileUpload, Setting]),
@@ -72,8 +76,6 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     DatabaseAdminController
   ],
   providers: [
-    BookletInfoService,
-    UnitInfoService,
     DatabaseExportService,
     AccessRightsMatrixService
   ]

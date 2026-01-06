@@ -7,7 +7,9 @@ import { CodingStatisticsProcessor } from './processors/coding-statistics.proces
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
 // eslint-disable-next-line import/no-cycle
-import { DatabaseModule } from '../database/database.module';
+import { CodingModule } from '../coding/coding.module';
+// eslint-disable-next-line import/no-cycle
+import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { CacheModule } from '../cache/cache.module';
 
 @Module({
@@ -35,7 +37,8 @@ import { CacheModule } from '../cache/cache.module';
     BullModule.registerQueue({
       name: 'flat-response-filter-options'
     }),
-    forwardRef(() => DatabaseModule),
+    forwardRef(() => CodingModule),
+    forwardRef(() => WorkspacesModule),
     CacheModule
   ],
   providers: [
