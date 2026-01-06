@@ -1,17 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, IsNull, Not, Repository
 } from 'typeorm';
 import {
-  VariableCodingData,
   CodingScheme
 } from '@iqbspecs/coding-scheme';
-import * as Autocoder from '@iqb/responses';
-import * as cheerio from 'cheerio';
 import * as crypto from 'crypto';
 import {
-  statusNumberToString,
   statusStringToNumber
 } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
@@ -49,23 +47,16 @@ import {
   ExternalCodingImportService,
   ExternalCodingImportBody
 } from './external-coding-import.service';
-import { BullJobManagementService } from './bull-job-management.service';
+
 import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
 import { CodingListService } from './coding-list.service';
 import { generateReplayUrl } from '../../utils/replay-url.util';
-
-interface CodedResponse {
-  id: number;
-  code_v1?: number;
-  status_v1?: string;
-  score_v1?: number;
-  code_v3?: number;
-  status_v3?: string;
-  score_v3?: number;
-}
+import { CodingFileCache } from './coding-file-cache.service';
+import { CodingJobManager } from './coding-job-manager.service';
+import { CodingProcessor, CodedResponse } from './coding-processor.service';
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -91,33 +82,22 @@ export class WorkspaceCodingService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private jobQueueService: JobQueueService,
+    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
     private codingStatisticsService: CodingStatisticsService,
     private variableAnalysisReplayService: VariableAnalysisReplayService,
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
-    private bullJobManagementService: BullJobManagementService,
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,
     private codingExportService: CodingExportService,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private codingFileCache: CodingFileCache,
+    private codingJobManager: CodingJobManager,
+    private codingProcessor: CodingProcessor
   ) {}
-
-  private codingSchemeCache: Map<
-  string,
-  { scheme: CodingScheme; timestamp: number }
-  > = new Map();
-
-  private readonly SCHEME_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes cache TTL
-
-  private testFileCache: Map<
-  number,
-  { files: Map<string, FileUpload>; timestamp: number }
-  > = new Map();
-
-  private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
   private generateExpectedCombinationsHash(
     expectedCombinations: ExpectedCombinationDto[]
@@ -140,112 +120,14 @@ export class WorkspaceCodingService {
     workspace_id: number,
     unitAliasesArray: string[]
   ): Promise<Map<string, FileUpload>> {
-    const cacheEntry = this.testFileCache.get(workspace_id);
-    const now = Date.now();
-
-    if (
-      cacheEntry &&
-      now - cacheEntry.timestamp < this.TEST_FILE_CACHE_TTL_MS
-    ) {
-      this.logger.log(`Using cached test files for workspace ${workspace_id}`);
-      const missingAliases = unitAliasesArray.filter(
-        alias => !cacheEntry.files.has(alias)
-      );
-      if (missingAliases.length === 0) {
-        return cacheEntry.files;
-      }
-
-      this.logger.log(
-        `Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`
-      );
-      const missingFiles = await this.fileUploadRepository.find({
-        where: { workspace_id, file_id: In(missingAliases) },
-        select: ['file_id', 'data', 'filename']
-      });
-
-      missingFiles.forEach(file => {
-        cacheEntry.files.set(file.file_id, file);
-      });
-
-      cacheEntry.timestamp = now;
-
-      return cacheEntry.files;
-    }
-
-    this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
-    const testFiles = await this.fileUploadRepository.find({
-      where: { workspace_id, file_id: In(unitAliasesArray) },
-      select: ['file_id', 'data', 'filename']
-    });
-
-    const fileMap = new Map<string, FileUpload>();
-    testFiles.forEach(file => {
-      fileMap.set(file.file_id, file);
-    });
-
-    this.testFileCache.set(workspace_id, { files: fileMap, timestamp: now });
-    return fileMap;
-  }
-
-  private async getCodingSchemesWithCache(
-    codingSchemeRefs: string[]
-  ): Promise<Map<string, CodingScheme>> {
-    const now = Date.now();
-    const result = new Map<string, CodingScheme>();
-    const emptyScheme = new CodingScheme({});
-
-    const missingSchemeRefs = codingSchemeRefs.filter(ref => {
-      const cacheEntry = this.codingSchemeCache.get(ref);
-      if (cacheEntry && now - cacheEntry.timestamp < this.SCHEME_CACHE_TTL_MS) {
-        result.set(ref, cacheEntry.scheme);
-        return false;
-      }
-      return true;
-    });
-
-    if (missingSchemeRefs.length === 0) {
-      this.logger.log('Using all cached coding schemes');
-      return result;
-    }
-
-    this.logger.log(
-      `Fetching ${missingSchemeRefs.length} missing coding schemes`
+    return this.codingFileCache.getTestFilesWithCache(
+      workspace_id,
+      unitAliasesArray
     );
-    const codingSchemeFiles = await this.fileUploadRepository.find({
-      where: { file_id: In(missingSchemeRefs) },
-      select: ['file_id', 'data', 'filename']
-    });
-
-    codingSchemeFiles.forEach(file => {
-      try {
-        const data =
-          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = new CodingScheme(data);
-        result.set(file.file_id, scheme);
-        this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
-      } catch (error) {
-        this.logger.error(
-          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
-        );
-        result.set(file.file_id, emptyScheme);
-      }
-    });
-
-    return result;
   }
 
   private cleanupCaches(): void {
-    const now = Date.now();
-    for (const [key, entry] of this.codingSchemeCache.entries()) {
-      if (now - entry.timestamp > this.SCHEME_CACHE_TTL_MS) {
-        this.codingSchemeCache.delete(key);
-      }
-    }
-    for (const [key, entry] of this.testFileCache.entries()) {
-      if (now - entry.timestamp > this.TEST_FILE_CACHE_TTL_MS) {
-        this.testFileCache.delete(key);
-      }
-    }
+    this.codingFileCache.cleanupCaches();
   }
 
   async getJobStatus(
@@ -262,172 +144,29 @@ export class WorkspaceCodingService {
       result?: CodingStatistics;
       error?: string;
     } | null> {
-    try {
-      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-
-      if (!bullJob) {
-        bullJob = (await this.jobQueueService.getCodingStatisticsJob(
-          jobId
-        )) as never;
-      }
-
-      if (bullJob) {
-        const state = await bullJob.getState();
-        const progress = (await bullJob.progress()) || 0;
-
-        const status = this.bullJobManagementService.mapJobStateToStatus(state);
-        const { result, error } =
-          this.bullJobManagementService.extractJobResult(bullJob, state);
-
-        return {
-          status,
-          progress: typeof progress === 'number' ? progress : 0,
-          result,
-          error
-        };
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error(
-        `Error getting job status: ${error.message}`,
-        error.stack
-      );
-      return null;
-    }
+    return this.codingJobManager.getJobStatus(jobId);
   }
 
   async createCodingStatisticsJob(
     workspaceId: number
   ): Promise<{ jobId: string; message: string }> {
-    try {
-      const cacheKey = `coding-statistics:${workspaceId}`;
-      const cachedResult = await this.cacheService.get<CodingStatistics>(
-        cacheKey
-      );
-      if (cachedResult) {
-        this.logger.log(
-          `Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`
-        );
-        return { jobId: '', message: 'Using cached coding statistics' };
-      }
-      await this.cacheService.delete(cacheKey); // Clear any stale cache
-      this.logger.log(
-        `No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`
-      );
-
-      const job = await this.jobQueueService.addCodingStatisticsJob(
-        workspaceId
-      );
-      this.logger.log(
-        `Created coding statistics job ${job.id} for workspace ${workspaceId}`
-      );
-      return {
-        jobId: job.id.toString(),
-        message: 'Created coding statistics job - no cache available'
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error creating coding statistics job: ${error.message}`,
-        error.stack
-      );
-      throw error;
-    }
+    return this.codingJobManager.createCodingStatisticsJob(workspaceId);
   }
 
   async cancelJob(
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      const state = await bullJob.getState();
-      if (state === 'completed' || state === 'failed') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} cannot be cancelled because it is already ${state}`
-        };
-      }
-
-      if (state === 'active') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.`
-        };
-      }
-
-      const result = await this.jobQueueService.cancelTestPersonCodingJob(
-        jobId
-      );
-      if (result) {
-        this.logger.log(`Job ${jobId} has been cancelled successfully`);
-        return {
-          success: true,
-          message: `Job ${jobId} has been cancelled successfully`
-        };
-      }
-      return { success: false, message: `Failed to cancel job ${jobId}` };
-    } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
-      return {
-        success: false,
-        message: `Error cancelling job: ${error.message}`
-      };
-    }
+    return this.codingJobManager.cancelJob(jobId);
   }
 
   async deleteJob(
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      const result = await this.jobQueueService.deleteTestPersonCodingJob(
-        jobId
-      );
-      if (result) {
-        this.logger.log(`Job ${jobId} has been deleted successfully`);
-        return {
-          success: true,
-          message: `Job ${jobId} has been deleted successfully`
-        };
-      }
-      return { success: false, message: `Failed to delete job ${jobId}` };
-    } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
-      return {
-        success: false,
-        message: `Error deleting job: ${error.message}`
-      };
-    }
+    return this.codingJobManager.deleteJob(jobId);
   }
 
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
-    try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(
-        jobId.toString()
-      );
-      if (bullJob) {
-        if (bullJob.data.isPaused) {
-          return true;
-        }
-        const state = await bullJob.getState();
-        return state === 'paused';
-      }
-      return false;
-    } catch (error) {
-      this.logger.error(
-        `Error checking job cancellation or pause: ${error.message}`,
-        error.stack
-      );
-      return false;
-    }
+    return this.codingJobManager.isJobCancelled(jobId);
   }
 
   private async updateResponsesInDatabase(
@@ -437,143 +176,7 @@ export class WorkspaceCodingService {
     progressCallback?: (progress: number) => void,
     metrics?: { [key: string]: number }
   ): Promise<boolean> {
-    if (allCodedResponses.length === 0) {
-      await queryRunner.release();
-      return true;
-    }
-    const updateStart = Date.now();
-    try {
-      const updateBatchSize = 500;
-      const batches: CodedResponse[][] = [];
-      for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
-        batches.push(allCodedResponses.slice(i, i + updateBatchSize));
-      }
-
-      this.logger.log(
-        `Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`
-      );
-
-      for (let index = 0; index < batches.length; index++) {
-        const batch = batches[index];
-        this.logger.log(
-          `Starte Aktualisierung für Batch #${index + 1} (Größe: ${
-            batch.length
-          }).`
-        );
-
-        if (jobId && (await this.isJobCancelled(jobId))) {
-          this.logger.log(
-            `Job ${jobId} was cancelled or paused before updating batch #${
-              index + 1
-            }`
-          );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
-        }
-
-        try {
-          if (batch.length > 0) {
-            const updatePromises = batch.map(response => {
-              const updateData: Partial<
-              Pick<
-              ResponseEntity,
-              | 'code_v1'
-              | 'status_v1'
-              | 'score_v1'
-              | 'code_v3'
-              | 'status_v3'
-              | 'score_v3'
-              >
-              > = {};
-
-              if (response.code_v1 !== undefined) {
-                updateData.code_v1 = response.code_v1;
-              }
-              if (response.status_v1 !== undefined) {
-                updateData.status_v1 = statusStringToNumber(response.status_v1);
-              }
-              if (response.score_v1 !== undefined) {
-                updateData.score_v1 = response.score_v1;
-              }
-
-              if (response.code_v3 !== undefined) {
-                updateData.code_v3 = response.code_v3;
-              }
-              if (response.status_v3 !== undefined) {
-                const statusNumber = statusStringToNumber(response.status_v3);
-                updateData.status_v3 = statusNumber;
-                this.logger.debug(
-                  `Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`
-                );
-              }
-              if (response.score_v3 !== undefined) {
-                updateData.score_v3 = response.score_v3;
-              }
-
-              if (Object.keys(updateData).length > 0) {
-                return queryRunner.manager.update(
-                  ResponseEntity,
-                  response.id,
-                  updateData
-                );
-              }
-              return Promise.resolve();
-            });
-
-            await Promise.all(updatePromises);
-          }
-
-          this.logger.log(
-            `Batch #${index + 1} (Größe: ${
-              batch.length
-            }) erfolgreich aktualisiert.`
-          );
-
-          if (progressCallback) {
-            const batchProgress = 95 + 5 * ((index + 1) / batches.length);
-            progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
-          }
-        } catch (error) {
-          this.logger.error(
-            `Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${
-              batch.length
-            }):`,
-            error.message
-          );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
-        }
-      }
-
-      await queryRunner.commitTransaction();
-      this.logger.log(
-        `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
-      );
-
-      if (metrics) {
-        metrics.update = Date.now() - updateStart;
-      }
-
-      await queryRunner.release();
-      return true;
-    } catch (error) {
-      this.logger.error(
-        'Fehler beim Aktualisieren der Responses:',
-        error.message
-      );
-      try {
-        await queryRunner.rollbackTransaction();
-      } catch (rollbackError) {
-        this.logger.error(
-          'Fehler beim Rollback der Transaktion:',
-          rollbackError.message
-        );
-      }
-      await queryRunner.release();
-      return false;
-    }
+    return this.codingProcessor.updateResponsesInDatabase(allCodedResponses, queryRunner, jobId, progressCallback, metrics);
   }
 
   private async processAndCodeResponses(
@@ -591,105 +194,18 @@ export class WorkspaceCodingService {
       allCodedResponses: CodedResponse[];
       statistics: CodingStatistics;
     }> {
-    const allCodedResponses = [];
-    allCodedResponses.length = allResponses.length;
-    let responseIndex = 0;
-    const batchSize = 50;
-    const emptyScheme = new CodingScheme({});
-
-    for (let i = 0; i < units.length; i += batchSize) {
-      const unitBatch = units.slice(i, i + batchSize);
-
-      for (const unit of unitBatch) {
-        const responses = unitToResponsesMap.get(unit.id) || [];
-        if (responses.length === 0) continue;
-
-        statistics.totalResponses += responses.length;
-        const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
-        const scheme = codingSchemeRef ?
-          fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
-          emptyScheme;
-
-        const variableAliasToIdMap = new Map<string, string>();
-        if (Array.isArray(scheme.variableCodings)) {
-          scheme.variableCodings.forEach((vc: VariableCodingData) => {
-            const key = (vc.alias ?? vc.id) as string | undefined;
-            const value = vc.id as string | undefined;
-            if (key && value) {
-              variableAliasToIdMap.set(key, value);
-            }
-          });
-        }
-
-        for (const response of responses) {
-          let inputStatus = response.status;
-          if (autoCoderRun === 2) {
-            inputStatus =
-              response.status_v2 || response.status_v1 || response.status;
-          }
-
-          const variableAlias = String(response.variableid);
-          const resolvedVariableId =
-            variableAliasToIdMap.get(variableAlias) ?? variableAlias;
-
-          const variableCoding = Array.isArray(scheme.variableCodings) ?
-            scheme.variableCodings.find((vc: VariableCodingData) => {
-              const key = (vc.alias ?? vc.id) as string | undefined;
-              return key === variableAlias || key === resolvedVariableId;
-            }) :
-            undefined;
-
-          const codedResult = Autocoder.CodingFactory.code(
-            {
-              id: response.variableid,
-              value: response.value,
-              status: statusNumberToString(inputStatus) || 'UNSET'
-            },
-            variableCoding
-          );
-          const codedStatus = codedResult?.status;
-          if (!statistics.statusCounts[codedStatus]) {
-            statistics.statusCounts[codedStatus] = 0;
-          }
-          statistics.statusCounts[codedStatus] += 1;
-
-          const codedResponse: CodedResponse = {
-            id: response.id
-          };
-
-          if (autoCoderRun === 1) {
-            codedResponse.code_v1 = codedResult?.code;
-            codedResponse.status_v1 = codedStatus;
-            codedResponse.score_v1 = codedResult?.score;
-          } else if (autoCoderRun === 2) {
-            codedResponse.code_v3 = codedResult?.code;
-            codedResponse.status_v3 = codedStatus;
-            codedResponse.score_v3 = codedResult?.score;
-          }
-
-          allCodedResponses[responseIndex] = codedResponse;
-          responseIndex += 1;
-        }
-      }
-
-      if (jobId && (await this.isJobCancelled(jobId))) {
-        this.logger.log(
-          `Job ${jobId} was cancelled or paused during response processing`
-        );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
-        return { allCodedResponses, statistics };
-      }
-    }
-
-    allCodedResponses.length = responseIndex;
-
-    if (progressCallback) {
-      progressCallback(95);
-    }
-
-    return { allCodedResponses, statistics };
+    return this.codingProcessor.processAndCodeResponses(
+      units,
+      unitToResponsesMap,
+      unitToCodingSchemeRefMap,
+      fileIdToCodingSchemeMap,
+      allResponses,
+      statistics,
+      autoCoderRun,
+      jobId,
+      queryRunner,
+      progressCallback
+    );
   }
 
   private async getCodingSchemeFiles(
@@ -697,20 +213,7 @@ export class WorkspaceCodingService {
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
   ): Promise<Map<string, CodingScheme>> {
-    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([
-      ...codingSchemeRefs
-    ]);
-    if (jobId && (await this.isJobCancelled(jobId))) {
-      this.logger.log(
-        `Job ${jobId} was cancelled or paused after getting coding scheme files`
-      );
-      if (queryRunner) {
-        await queryRunner.release();
-      }
-      return fileIdToCodingSchemeMap;
-    }
-
-    return fileIdToCodingSchemeMap;
+    return this.codingProcessor.getCodingSchemeFiles(codingSchemeRefs, jobId, queryRunner);
   }
 
   private async extractCodingSchemeReferences(
@@ -722,48 +225,7 @@ export class WorkspaceCodingService {
       codingSchemeRefs: Set<string>;
       unitToCodingSchemeRefMap: Map<number, string>;
     }> {
-    const codingSchemeRefs = new Set<string>();
-    const unitToCodingSchemeRefMap = new Map<number, string>();
-    const batchSize = 50;
-
-    for (let i = 0; i < units.length; i += batchSize) {
-      const unitBatch = units.slice(i, i + batchSize);
-
-      for (const unit of unitBatch) {
-        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
-        if (!testFile) continue;
-
-        try {
-          const $ = cheerio.load(testFile.data);
-          const codingSchemeRefText = $('codingSchemeRef').text();
-          if (codingSchemeRefText) {
-            const codingSchemeRefUpper = codingSchemeRefText.toUpperCase();
-            codingSchemeRefs.add(codingSchemeRefUpper);
-            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
-            this.logger.debug(
-              `Extracted coding scheme mapping: unitId=${
-                unit.id
-              }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
-            );
-          }
-        } catch (error) {
-          this.logger.error(
-            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${error.message}`
-          );
-        }
-      }
-      if (jobId && (await this.isJobCancelled(jobId))) {
-        this.logger.log(
-          `Job ${jobId} was cancelled or paused during scheme extraction`
-        );
-        if (queryRunner) {
-          await queryRunner.release();
-        }
-        return { codingSchemeRefs, unitToCodingSchemeRefMap };
-      }
-    }
-
-    return { codingSchemeRefs, unitToCodingSchemeRefMap };
+    return this.codingProcessor.extractCodingSchemeReferences(units, fileIdToTestFileMap, jobId, queryRunner);
   }
 
   async processTestPersonsBatch(
@@ -1475,19 +937,19 @@ export class WorkspaceCodingService {
   async pauseJob(
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.pauseJob(jobId);
+    return this.codingJobManager.pauseJob(jobId);
   }
 
   async resumeJob(
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.bullJobManagementService.resumeJob(jobId);
+    return this.codingJobManager.resumeJob(jobId);
   }
 
   async restartJob(
     jobId: string
   ): Promise<{ success: boolean; message: string; jobId?: string }> {
-    return this.bullJobManagementService.restartJob(jobId);
+    return this.codingJobManager.restartJob(jobId);
   }
 
   async getBullJobs(workspaceId: number): Promise<
@@ -1510,7 +972,7 @@ export class WorkspaceCodingService {
     completedAt?: Date;
   }[]
   > {
-    return this.bullJobManagementService.getBullJobs(workspaceId);
+    return this.codingJobManager.getBullJobs(workspaceId);
   }
 
   async getVariableAnalysis(
@@ -2212,7 +1674,7 @@ export class WorkspaceCodingService {
       replayUrl: string;
     }>
     > {
-    const itemsWithUrls = await Promise.all(
+    return Promise.all(
       items.map(async item => {
         try {
           const result = await this.generateReplayUrlForResponse(
@@ -2237,7 +1699,6 @@ export class WorkspaceCodingService {
         }
       })
     );
-    return itemsWithUrls;
   }
 
   async applyCodingResults(

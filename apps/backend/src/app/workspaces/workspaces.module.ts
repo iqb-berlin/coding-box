@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 import { UsersModule } from '../users/users.module';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
+// eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -61,7 +62,7 @@ import { ExportValidationResultsService } from '../database/services/export-vali
 @Module({
   imports: [
     HttpModule,
-    CacheModule,
+    forwardRef(() => CacheModule),
     UsersModule,
     forwardRef(() => CodingModule),
     forwardRef(() => JobQueueModule),

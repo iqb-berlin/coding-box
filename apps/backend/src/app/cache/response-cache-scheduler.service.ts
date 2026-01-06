@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -13,6 +15,7 @@ export class ResponseCacheSchedulerService {
 
   constructor(
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     @InjectRepository(Persons)
     private readonly personsRepository: Repository<Persons>,

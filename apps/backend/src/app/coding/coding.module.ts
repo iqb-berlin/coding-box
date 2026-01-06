@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
+// eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
@@ -42,11 +43,14 @@ import { CodingResultsService } from '../database/services/coding-results.servic
 import { CodingExportService } from '../database/services/coding-export.service';
 import { VariableBundleService } from '../database/services/variable-bundle.service';
 import { VariableAnalysisService } from '../database/services/variable-analysis.service';
+import { CodingFileCache } from '../database/services/coding-file-cache.service';
+import { CodingJobManager } from '../database/services/coding-job-manager.service';
+import { CodingProcessor } from '../database/services/coding-processor.service';
 
 @Module({
   imports: [
     HttpModule,
-    CacheModule,
+    forwardRef(() => CacheModule),
     forwardRef(() => JobQueueModule),
     forwardRef(() => WorkspacesModule),
     TypeOrmModule.forFeature([
@@ -72,6 +76,9 @@ import { VariableAnalysisService } from '../database/services/variable-analysis.
   providers: [
     CodingJobService,
     WorkspaceCodingService,
+    CodingFileCache,
+    CodingJobManager,
+    CodingProcessor,
     CodingStatisticsService,
     MissingsProfilesService,
     JobDefinitionService,
@@ -88,6 +95,9 @@ import { VariableAnalysisService } from '../database/services/variable-analysis.
   exports: [
     CodingJobService,
     WorkspaceCodingService,
+    CodingFileCache,
+    CodingJobManager,
+    CodingProcessor,
     CodingStatisticsService,
     MissingsProfilesService,
     JobDefinitionService,

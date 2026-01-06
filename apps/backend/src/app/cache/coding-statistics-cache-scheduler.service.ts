@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  Injectable, Logger, OnModuleInit, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
@@ -12,6 +14,7 @@ export class CodingStatisticsCacheSchedulerService implements OnModuleInit {
 
   constructor(
     private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => CodingStatisticsService))
     private readonly codingStatisticsService: CodingStatisticsService,
     @InjectRepository(Persons)
     private readonly personsRepository: Repository<Persons>

@@ -62,6 +62,7 @@ export class WorkspaceTestResultsService {
     private readonly connection: DataSource,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
+    @Inject(forwardRef(() => CacheService))
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => CodingListService))
     private readonly codingListService: CodingListService
