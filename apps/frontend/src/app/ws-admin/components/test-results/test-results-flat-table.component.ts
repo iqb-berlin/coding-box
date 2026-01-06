@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
+import { MatSelectModule } from '@angular/material/select';
 import {
   Observable,
   Subject,
@@ -27,6 +28,7 @@ import { AppService } from '../../../services/app.service';
 import {
   FlatResponseFilterOptionsResponse,
   FlatResponseFrequencyItem,
+  BookletLogsForUnitResponse,
   FlatResponseFrequencyRequestCombo,
   FlatResponseFrequenciesResponse,
   TestResultService
@@ -41,6 +43,10 @@ import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
+import {
+  TestResultsFlatTableSettingsDialogComponent,
+  TestResultsFlatTableSettingsDialogResult
+} from './test-results-flat-table-settings-dialog.component';
 
 interface FlatResponseRow {
   responseId: number;
@@ -112,7 +118,8 @@ interface BookletFromPersonTestResults {
     MatDividerModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
-    MatAutocompleteModule
+    MatAutocompleteModule,
+    MatSelectModule
   ],
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
@@ -123,6 +130,30 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+
+  private readonly AUDIO_LOW_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-audio-low-threshold';
+
+  private readonly SHORT_PROCESSING_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-short-processing-threshold-ms';
+
+  private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-long-loading-threshold-ms';
+
+  private readonly PROCESSING_DURATION_MIN_STORAGE_KEY =
+    'coding-box-test-results-processing-duration-min';
+
+  private readonly PROCESSING_DURATION_MAX_STORAGE_KEY =
+    'coding-box-test-results-processing-duration-max';
+
+  private readonly SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-browsers-allowlist';
+
+  private readonly SESSION_OS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-os-allowlist';
+
+  private readonly SESSION_SCREENS_ALLOWLIST_STORAGE_KEY =
+    'coding-box-test-results-session-screens-allowlist';
 
   private unitIdsWithNotes = new Set<number>();
 
@@ -170,6 +201,12 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     responseStatus: string;
     responseValue: string;
     tags: string;
+    geogebra: boolean;
+    audioLow: boolean;
+    nonEmptyResponse: boolean;
+    sessionFilter: boolean;
+    shortProcessing: boolean;
+    longLoading: boolean;
   } = {
       code: '',
       group: '',
@@ -179,8 +216,43 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       response: '',
       responseStatus: '',
       responseValue: '',
-      tags: ''
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      nonEmptyResponse: false,
+      sessionFilter: false,
+      shortProcessing: false,
+      longLoading: false
     };
+
+  mediaFilters: Array<
+  | 'geogebra'
+  | 'audioLow'
+  | 'nonEmptyResponse'
+  | 'sessionFilter'
+  | 'shortProcessing'
+  | 'longLoading'
+  | 'processingDuration'
+  | 'unitProgressComplete'
+  > = [];
+
+  processingDurationEnabled: boolean = false;
+
+  processingDurationsFilters: string[] = [];
+  unitProgressFilters: string[] = [];
+
+  audioLowThreshold: number = 0.9;
+
+  shortProcessingThresholdMs: number = 60000;
+
+  longLoadingThresholdMs: number = 5000;
+
+  processingDurationMin: string = '00:00';
+  processingDurationMax: string = '99:59';
+
+  sessionBrowsersAllowlist: string = '';
+  sessionOsAllowlist: string = '';
+  sessionScreensAllowlist: string = '';
 
   flatFilterOptions: FlatResponseFilterOptionsResponse = {
     codes: [],
@@ -190,25 +262,204 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     units: [],
     responses: [],
     responseStatuses: [],
-    tags: []
+    tags: [],
+    processingDurations: [],
+    unitProgresses: [],
+    sessionBrowsers: [],
+    sessionOs: [],
+    sessionScreens: [],
+    sessionIds: []
   };
 
   private flatSearchSubject = new Subject<void>();
   private flatSearchSubscription: Subscription;
+  private workspaceCacheInvalidatedSubscription: Subscription;
   private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
+
+  private refreshFilterOptionsTimeoutIds: number[] = [];
 
   private suppressNextFlatFilterChange = false;
 
   constructor() {
+    try {
+      const raw = localStorage.getItem(this.AUDIO_LOW_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.audioLowThreshold = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY
+      );
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.shortProcessingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.LONG_LOADING_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.longLoadingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const rawMin = localStorage.getItem(
+        this.PROCESSING_DURATION_MIN_STORAGE_KEY
+      );
+      if (rawMin != null && String(rawMin).trim()) {
+        this.processingDurationMin = String(rawMin);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const rawMax = localStorage.getItem(
+        this.PROCESSING_DURATION_MAX_STORAGE_KEY
+      );
+      if (rawMax != null && String(rawMax).trim()) {
+        this.processingDurationMax = String(rawMax);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY
+      );
+      if (raw != null) {
+        this.sessionBrowsersAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.SESSION_OS_ALLOWLIST_STORAGE_KEY);
+      if (raw != null) {
+        this.sessionOsAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(
+        this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY
+      );
+      if (raw != null) {
+        this.sessionScreensAllowlist = String(raw);
+      }
+    } catch {
+      // ignore
+    }
+
     this.flatSearchSubscription = this.flatSearchSubject
       .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
       .subscribe(() => {
         this.fetchFlatResponses(0, this.flatPageSize);
-        this.fetchFlatResponseFilterOptions();
       });
+
+    this.workspaceCacheInvalidatedSubscription =
+      this.testResultService.workspaceCacheInvalidated$.subscribe(
+        workspaceId => {
+          if (!this.appService.selectedWorkspaceId) {
+            return;
+          }
+          if (workspaceId !== this.appService.selectedWorkspaceId) {
+            return;
+          }
+          this.refreshFlatResponseFilterOptionsWithRetry();
+          this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+        }
+      );
 
     this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
+
+    this.syncMediaFiltersFromFlatFilters();
+  }
+
+  private syncMediaFiltersFromFlatFilters(): void {
+    const next: Array<
+    | 'geogebra'
+    | 'audioLow'
+    | 'nonEmptyResponse'
+    | 'sessionFilter'
+    | 'shortProcessing'
+    | 'longLoading'
+    | 'processingDuration'
+    | 'unitProgressComplete'
+    > = [];
+    if (this.flatFilters.geogebra) {
+      next.push('geogebra');
+    }
+    if (this.flatFilters.audioLow) {
+      next.push('audioLow');
+    }
+    if (this.flatFilters.nonEmptyResponse) {
+      next.push('nonEmptyResponse');
+    }
+    if (this.flatFilters.sessionFilter) {
+      next.push('sessionFilter');
+    }
+    if (this.flatFilters.shortProcessing) {
+      next.push('shortProcessing');
+    }
+    if (this.flatFilters.longLoading) {
+      next.push('longLoading');
+    }
+    if (this.processingDurationEnabled) {
+      next.push('processingDuration');
+    }
+    if (this.unitProgressFilters.includes('Vollständig')) {
+      next.push('unitProgressComplete');
+    }
+    this.mediaFilters = next;
+  }
+
+  onMediaFiltersChanged(): void {
+    const selected = new Set(this.mediaFilters || []);
+    this.flatFilters.geogebra = selected.has('geogebra');
+    this.flatFilters.audioLow = selected.has('audioLow');
+    this.flatFilters.nonEmptyResponse = selected.has('nonEmptyResponse');
+    this.flatFilters.sessionFilter = selected.has('sessionFilter');
+    this.flatFilters.shortProcessing = selected.has('shortProcessing');
+    this.flatFilters.longLoading = selected.has('longLoading');
+
+    this.processingDurationEnabled = selected.has('processingDuration');
+
+    if (selected.has('unitProgressComplete')) {
+      if (!this.unitProgressFilters.includes('Vollständig')) {
+        this.unitProgressFilters = ['Vollständig'];
+      }
+    } else {
+      this.unitProgressFilters = this.unitProgressFilters.filter(
+        f => f !== 'Vollständig'
+      );
+    }
+
+    this.onFlatFilterChanged();
+  }
+
+  private parseCsv(raw: string): string {
+    return String(raw || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean)
+      .join(',');
   }
 
   private loadFrequenciesForCurrentPage(): void {
@@ -227,10 +478,10 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       if (!unitKey || !variableId) {
         return;
       }
+
       const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
         variableId
       )}`;
-
       const cached = this.frequenciesByComboKey.get(key);
       const alreadyHave =
         !!cached &&
@@ -312,7 +563,6 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.suppressNextFlatFilterChange = true;
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
-    this.fetchFlatResponseFilterOptions();
   }
 
   private filterOptions(options: string[], value: string): string[] {
@@ -492,7 +742,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.backendService
       .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
-        next: result => {
+        next: (result: BookletLogsForUnitResponse | null) => {
           if (!result || !result.logs || result.logs.length === 0) {
             this.snackBar.open(
               'Keine Logs für dieses Testheft vorhanden',
@@ -507,7 +757,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             data: {
               logs: result.logs,
               sessions: result.sessions,
-              units: (result.units || []).map(u => ({
+              units: (result.units || []).map((u: BookletLogsForUnitResponse['units'][number]) => ({
                 ...u,
                 results: []
               }))
@@ -591,6 +841,21 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.flatSearchSubscription.unsubscribe();
+    this.workspaceCacheInvalidatedSubscription.unsubscribe();
+    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
+    );
+    this.refreshFilterOptionsTimeoutIds = [];
+  }
+
+  private refreshFlatResponseFilterOptionsWithRetry(): void {
+    this.fetchFlatResponseFilterOptions();
+
+    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
+    );
+    this.refreshFilterOptionsTimeoutIds = [
+      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 1000),
+      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 3000)
+    ];
   }
 
   private getPersonTestResults(
@@ -654,11 +919,181 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       response: '',
       responseStatus: '',
       responseValue: '',
-      tags: ''
+      tags: '',
+      geogebra: false,
+      audioLow: false,
+      nonEmptyResponse: false,
+      sessionFilter: false,
+      shortProcessing: false,
+      longLoading: false
     };
+    this.syncMediaFiltersFromFlatFilters();
+
+    this.processingDurationEnabled = false;
+    this.processingDurationsFilters = [];
+    this.unitProgressFilters = [];
+
     this.flatPageIndex = 0;
     this.fetchFlatResponses(0, this.flatPageSize);
     this.fetchFlatResponseFilterOptions();
+  }
+
+  onAudioLowThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
+        String(this.audioLowThreshold)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onShortProcessingThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
+        String(this.shortProcessingThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onLongLoadingThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
+        String(this.longLoadingThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  openFlatSettings(): void {
+    if (!this.appService.selectedWorkspaceId) {
+      return;
+    }
+
+    this.testResultService
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
+      .subscribe(opts => {
+        const currentBrowsers = this.sessionBrowsersAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
+        const currentOs = this.sessionOsAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
+        const currentScreens = this.sessionScreensAllowlist
+          .split(',')
+          .map(v => v.trim())
+          .filter(Boolean);
+
+        const ref = this.dialog.open<
+        TestResultsFlatTableSettingsDialogComponent,
+        {
+          audioLowThreshold: number;
+          shortProcessingThresholdMs: number;
+          longLoadingThresholdMs: number;
+          processingDurationMin: string;
+          processingDurationMax: string;
+          sessionBrowsersAllowlist: string[];
+          sessionOsAllowlist: string[];
+          sessionScreensAllowlist: string[];
+          availableSessionBrowsers: string[];
+          availableSessionOs: string[];
+          availableSessionScreens: string[];
+        },
+        TestResultsFlatTableSettingsDialogResult | undefined
+        >(TestResultsFlatTableSettingsDialogComponent, {
+          width: '720px',
+          maxWidth: '95vw',
+          height: '560px',
+          maxHeight: '90vh',
+          data: {
+            audioLowThreshold: this.audioLowThreshold,
+            shortProcessingThresholdMs: this.shortProcessingThresholdMs,
+            longLoadingThresholdMs: this.longLoadingThresholdMs,
+            processingDurationMin: this.processingDurationMin,
+            processingDurationMax: this.processingDurationMax,
+            sessionBrowsersAllowlist:
+              currentBrowsers.length > 0 ? currentBrowsers : [],
+            sessionOsAllowlist: currentOs.length > 0 ? currentOs : [],
+            sessionScreensAllowlist:
+              currentScreens.length > 0 ? currentScreens : [],
+            availableSessionBrowsers: opts.sessionBrowsers || [],
+            availableSessionOs: opts.sessionOs || [],
+            availableSessionScreens: opts.sessionScreens || []
+          }
+        });
+
+        ref.afterClosed().subscribe(result => {
+          if (!result) {
+            return;
+          }
+          this.audioLowThreshold = result.audioLowThreshold;
+
+          this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
+          this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+
+          this.processingDurationMin = String(
+            result.processingDurationMin ?? ''
+          );
+          this.processingDurationMax = String(
+            result.processingDurationMax ?? ''
+          );
+          this.sessionBrowsersAllowlist = Array.isArray(
+            result.sessionBrowsersAllowlist
+          ) ?
+            result.sessionBrowsersAllowlist.join(',') :
+            '';
+          this.sessionOsAllowlist = Array.isArray(result.sessionOsAllowlist) ?
+            result.sessionOsAllowlist.join(',') :
+            '';
+          this.sessionScreensAllowlist = Array.isArray(
+            result.sessionScreensAllowlist
+          ) ?
+            result.sessionScreensAllowlist.join(',') :
+            '';
+
+          this.onAudioLowThresholdChanged();
+          this.onShortProcessingThresholdChanged();
+          this.onLongLoadingThresholdChanged();
+
+          try {
+            localStorage.setItem(
+              this.PROCESSING_DURATION_MIN_STORAGE_KEY,
+              String(this.processingDurationMin)
+            );
+            localStorage.setItem(
+              this.PROCESSING_DURATION_MAX_STORAGE_KEY,
+              String(this.processingDurationMax)
+            );
+            localStorage.setItem(
+              this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionBrowsersAllowlist)
+            );
+            localStorage.setItem(
+              this.SESSION_OS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionOsAllowlist)
+            );
+            localStorage.setItem(
+              this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY,
+              String(this.sessionScreensAllowlist)
+            );
+          } catch {
+            // ignore
+          }
+
+          this.onFlatFilterChanged();
+        });
+      });
   }
 
   private fetchFlatResponseFilterOptions(): void {
@@ -667,17 +1102,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {
-        code: this.flatFilters.code,
-        group: this.flatFilters.group,
-        login: this.flatFilters.login,
-        booklet: this.flatFilters.booklet,
-        unit: this.flatFilters.unit,
-        response: this.flatFilters.response,
-        responseStatus: this.flatFilters.responseStatus,
-        responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags
-      })
+      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {})
       .subscribe(opts => {
         this.flatFilterOptions = opts;
       });
@@ -696,6 +1121,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     const validPage = Math.max(0, page);
     this.isLoadingFlat = true;
 
+    const sessionFilterActive = this.flatFilters.sessionFilter;
     this.testResultService
       .getFlatResponses(this.appService.selectedWorkspaceId, {
         page: validPage + 1,
@@ -708,7 +1134,38 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         response: this.flatFilters.response,
         responseStatus: this.flatFilters.responseStatus,
         responseValue: this.flatFilters.responseValue,
-        tags: this.flatFilters.tags
+        tags: this.flatFilters.tags,
+        geogebra: this.flatFilters.geogebra ? 'true' : '',
+        audioLow: this.flatFilters.audioLow ? 'true' : '',
+        hasValue: this.flatFilters.nonEmptyResponse ? 'true' : '',
+        audioLowThreshold: this.flatFilters.audioLow ?
+          String(this.audioLowThreshold) :
+          '',
+        shortProcessing: this.flatFilters.shortProcessing ? 'true' : '',
+        shortProcessingThresholdMs: this.flatFilters.shortProcessing ?
+          String(this.shortProcessingThresholdMs) :
+          '',
+        longLoading: this.flatFilters.longLoading ? 'true' : '',
+        longLoadingThresholdMs: this.flatFilters.longLoading ?
+          String(this.longLoadingThresholdMs) :
+          '',
+        processingDurations: '',
+        processingDurationMin: this.processingDurationEnabled ?
+          String(this.processingDurationMin) :
+          '',
+        processingDurationMax: this.processingDurationEnabled ?
+          String(this.processingDurationMax) :
+          '',
+        unitProgress: (this.unitProgressFilters || []).join(','),
+        sessionBrowsers: sessionFilterActive ?
+          this.parseCsv(this.sessionBrowsersAllowlist) :
+          '',
+        sessionOs: sessionFilterActive ?
+          this.parseCsv(this.sessionOsAllowlist) :
+          '',
+        sessionScreens: sessionFilterActive ?
+          this.parseCsv(this.sessionScreensAllowlist) :
+          ''
       })
       .subscribe(resp => {
         this.isLoadingFlat = false;

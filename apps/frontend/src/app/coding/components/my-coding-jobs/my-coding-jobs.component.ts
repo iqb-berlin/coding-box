@@ -215,7 +215,15 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
 
-        const units = result.items.map((item, idx) => ({
+        const units = result.items.map((item: {
+          unitAlias?: string | null;
+          unitName: string;
+          personLogin: string;
+          personCode: string;
+          bookletName: string;
+          variableId: string;
+          variableAnchor?: string;
+        }, idx: number) => ({
           id: idx,
           name: item.unitAlias || item.unitName,
           alias: item.unitAlias || null,

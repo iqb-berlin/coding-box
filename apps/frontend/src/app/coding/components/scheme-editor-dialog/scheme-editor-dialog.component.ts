@@ -88,7 +88,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     const raw = this.unitScheme?.scheme ?? '';
     if (!raw) return '';
     try {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const parsed = JSON.parse(raw);
       return JSON.stringify(parsed, null, 2);
     } catch {
       return raw.toString?.() ?? String(raw);
@@ -148,8 +148,7 @@ export class SchemeEditorDialogComponent implements OnInit {
               .subscribe({
                 next: fileDownload => {
                   try {
-                    const decodedContent = atob(fileDownload.base64Data);
-                    this.schemerHtml = decodedContent;
+                    this.schemerHtml = atob(fileDownload.base64Data);
                     this.isLoading = false;
                   } catch (error) {
                     this.snackBar.open('Failed to decode schemer HTML', 'Error', { duration: 3000 });

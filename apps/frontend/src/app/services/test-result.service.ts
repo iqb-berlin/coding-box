@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { catchError, Observable, of } from 'rxjs';
+import {
+  catchError, Observable, of, Subject
+} from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
@@ -54,6 +56,12 @@ export interface FlatResponseFilterOptionsResponse {
   responses: string[];
   responseStatuses: string[];
   tags: string[];
+  processingDurations: string[];
+  unitProgresses: string[];
+  sessionBrowsers: string[];
+  sessionOs: string[];
+  sessionScreens: string[];
+  sessionIds: string[];
 }
 
 export interface FlatResponseFrequencyRequestCombo {
@@ -117,6 +125,9 @@ export interface TestResultsOverviewResponse {
   uniqueUnits: number;
   uniqueResponses: number;
   responseStatusCounts: Record<string, number>;
+  sessionBrowserCounts: Record<string, number>;
+  sessionOsCounts: Record<string, number>;
+  sessionScreenCounts: Record<string, number>;
 }
 
 @Injectable({
@@ -127,14 +138,14 @@ export class TestResultService {
   private http = inject(HttpClient);
   private cacheService = inject(TestResultCacheService);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
+  private workspaceCacheInvalidatedSubject = new Subject<number>();
+  readonly workspaceCacheInvalidated$ =
+    this.workspaceCacheInvalidatedSubject.asObservable();
 
   getTestPersons(workspaceId: number): Observable<number[]> {
     return this.http.get<number[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
-      { headers: this.authHeader }
+      {}
     );
   }
 
@@ -165,7 +176,7 @@ export class TestResultService {
     return this.http
       .get<TestResultsOverviewResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of(null)));
   }
@@ -178,7 +189,7 @@ export class TestResultService {
       .post<FlatResponseFrequenciesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
       { combos },
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of({} as FlatResponseFrequenciesResponse)));
   }
@@ -197,6 +208,23 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      hasValue?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      processingDurationMin?: string;
+      processingDurationMax?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
@@ -219,11 +247,31 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    addIf('geogebra', options.geogebra);
+    addIf('audioLow', options.audioLow);
+    addIf('hasValue', options.hasValue);
+    addIf('audioLowThreshold', options.audioLowThreshold);
+    addIf('shortProcessing', options.shortProcessing);
+    addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
+    addIf('longLoading', options.longLoading);
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('processingDurations', options.processingDurations);
+    addIf(
+      'processingDurationThresholdMs',
+      options.processingDurationThresholdMs
+    );
+    addIf('processingDurationMin', options.processingDurationMin);
+    addIf('processingDurationMax', options.processingDurationMax);
+    addIf('unitProgress', options.unitProgress);
+    addIf('sessionBrowsers', options.sessionBrowsers);
+    addIf('sessionOs', options.sessionOs);
+    addIf('sessionScreens', options.sessionScreens);
+    addIf('sessionIds', options.sessionIds);
 
     return this.http
       .get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -248,6 +296,20 @@ export class TestResultService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Observable<FlatResponseFilterOptionsResponse> {
     let params = new HttpParams();
@@ -268,11 +330,28 @@ export class TestResultService {
     addIf('responseStatus', options.responseStatus);
     addIf('responseValue', options.responseValue);
     addIf('tags', options.tags);
+    addIf('geogebra', options.geogebra);
+    addIf('audioLow', options.audioLow);
+    addIf('audioLowThreshold', options.audioLowThreshold);
+    addIf('shortProcessing', options.shortProcessing);
+    addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
+    addIf('longLoading', options.longLoading);
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('processingDurations', options.processingDurations);
+    addIf(
+      'processingDurationThresholdMs',
+      options.processingDurationThresholdMs
+    );
+    addIf('unitProgress', options.unitProgress);
+    addIf('sessionBrowsers', options.sessionBrowsers);
+    addIf('sessionOs', options.sessionOs);
+    addIf('sessionScreens', options.sessionScreens);
+    addIf('sessionIds', options.sessionIds);
 
     return this.http
       .get<FlatResponseFilterOptionsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -283,7 +362,13 @@ export class TestResultService {
           units: [],
           responses: [],
           responseStatuses: [],
-          tags: []
+          tags: [],
+          processingDurations: [],
+          unitProgresses: [],
+          sessionBrowsers: [],
+          sessionOs: [],
+          sessionScreens: [],
+          sessionIds: []
         })
         )
       );
@@ -293,7 +378,7 @@ export class TestResultService {
     return this.http
       .get<UnitLogRow[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of([])));
   }
@@ -305,13 +390,14 @@ export class TestResultService {
     return this.http
       .get<BookletLogsForUnitResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of(null)));
   }
 
   invalidateCache(workspaceId: number): void {
     this.cacheService.invalidateWorkspaceCache(workspaceId);
+    this.workspaceCacheInvalidatedSubject.next(workspaceId);
   }
 
   searchBookletsByName(
@@ -362,7 +448,6 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`, {
-      headers: this.authHeader,
       params
     })
       .pipe(
@@ -449,7 +534,6 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/search`, {
-      headers: this.authHeader,
       params
     })
       .pipe(
@@ -477,9 +561,7 @@ export class TestResultService {
         deletedUnit: number | null;
         warnings: string[];
       };
-    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {
-      headers: this.authHeader
-    })
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {})
       .pipe(
         catchError(() => {
           logger.error(`Error deleting unit with ID: ${unitId}`);
@@ -510,7 +592,7 @@ export class TestResultService {
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => {

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
-import { CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import { CodingScheme } from '@iqbspecs/coding-scheme';
 import * as cheerio from 'cheerio';
 import { ResponseEntity } from '../entities/response.entity';
 import Persons from '../entities/persons.entity';

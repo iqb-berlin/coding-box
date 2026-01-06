@@ -122,6 +122,16 @@
         }
       </div>
     </div>
+
+    <div class="overview-distributions">
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="openSessionDistributionsDialog()"
+      >
+        Sitzungs-Verteilungen anzeigen
+      </button>
+    </div>
     } @if (!isLoadingOverview && !overview) {
     <div class="empty-state-container" style="max-width: unset">
       <mat-icon class="empty-state-icon">info</mat-icon>

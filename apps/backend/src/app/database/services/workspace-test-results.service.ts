@@ -74,6 +74,9 @@ export class WorkspaceTestResultsService {
     uniqueUnits: number;
     uniqueResponses: number;
     responseStatusCounts: Record<string, number>;
+    sessionBrowserCounts: Record<string, number>;
+    sessionOsCounts: Record<string, number>;
+    sessionScreenCounts: Record<string, number>;
   }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -139,13 +142,64 @@ export class WorkspaceTestResultsService {
       responseStatusCounts[label] = Number(r.count) || 0;
     });
 
+    const mapSessionCounts = (
+      rows: Array<{ value: string | null; count: string | number }>
+    ): Record<string, number> => {
+      const out: Record<string, number> = {};
+      (rows || []).forEach(r => {
+        const key = String((r.value || '').trim() || 'unknown');
+        out[key] = Number(r.count) || 0;
+      });
+      return out;
+    };
+
+    const [browserRows, osRows, screenRows] = await Promise.all([
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.browser', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.browser')
+        .getRawMany<{ value: string | null; count: string | number }>(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.os', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.os')
+        .getRawMany<{ value: string | null; count: string | number }>(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .select('session.screen', 'value')
+        .addSelect('COUNT(session.id)', 'count')
+        .groupBy('session.screen')
+        .getRawMany<{ value: string | null; count: string | number }>()
+    ]);
+
+    const sessionBrowserCounts = mapSessionCounts(browserRows);
+    const sessionOsCounts = mapSessionCounts(osRows);
+    const sessionScreenCounts = mapSessionCounts(screenRows);
+
     return {
       testPersons,
       testGroups,
       uniqueBooklets,
       uniqueUnits,
       uniqueResponses,
-      responseStatusCounts
+      responseStatusCounts,
+      sessionBrowserCounts,
+      sessionOsCounts,
+      sessionScreenCounts
     };
   }
 
@@ -571,6 +625,23 @@ export class WorkspaceTestResultsService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      hasValue?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      processingDurationMin?: string;
+      processingDurationMax?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Promise<
     [
@@ -612,6 +683,126 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const geogebra = String(options.geogebra || '')
+      .trim()
+      .toLowerCase();
+    const geogebraOnly =
+      geogebra === 'true' || geogebra === '1' || geogebra === 'yes';
+    const audioLow = String(options.audioLow || '')
+      .trim()
+      .toLowerCase();
+    const audioLowOnly =
+      audioLow === 'true' || audioLow === '1' || audioLow === 'yes';
+
+    const hasValue = String(options.hasValue || '')
+      .trim()
+      .toLowerCase();
+    const hasValueOnly =
+      hasValue === 'true' || hasValue === '1' || hasValue === 'yes';
+    const audioLowThresholdRaw = String(options.audioLowThreshold || '').trim();
+    const audioLowThresholdParsed = Number(audioLowThresholdRaw || 0.9);
+    const audioLowThreshold = Number.isFinite(audioLowThresholdParsed) ?
+      audioLowThresholdParsed :
+      0.9;
+
+    const shortProcessing = String(options.shortProcessing || '')
+      .trim()
+      .toLowerCase();
+    const shortProcessingOnly =
+      shortProcessing === 'true' ||
+      shortProcessing === '1' ||
+      shortProcessing === 'yes';
+    const shortProcessingThresholdRaw = String(
+      options.shortProcessingThresholdMs || ''
+    ).trim();
+    const shortProcessingThresholdParsed = Number(
+      shortProcessingThresholdRaw || 60000
+    );
+    const shortProcessingThresholdMs = Number.isFinite(
+      shortProcessingThresholdParsed
+    ) ?
+      shortProcessingThresholdParsed :
+      60000;
+
+    const longLoading = String(options.longLoading || '')
+      .trim()
+      .toLowerCase();
+    const longLoadingOnly =
+      longLoading === 'true' || longLoading === '1' || longLoading === 'yes';
+    const longLoadingThresholdRaw = String(
+      options.longLoadingThresholdMs || ''
+    ).trim();
+    const longLoadingThresholdParsed = Number(longLoadingThresholdRaw || 5000);
+    const longLoadingThresholdMs = Number.isFinite(longLoadingThresholdParsed) ?
+      longLoadingThresholdParsed :
+      5000;
+
+    const processingDurationThresholdRaw = String(
+      options.processingDurationThresholdMs || ''
+    ).trim();
+    const processingDurationThresholdParsed = Number(
+      processingDurationThresholdRaw || 60000
+    );
+    const processingDurationThresholdMs = Number.isFinite(
+      processingDurationThresholdParsed
+    ) ?
+      processingDurationThresholdParsed :
+      60000;
+
+    const parseMmSsToMs = (raw: string | undefined): number | null => {
+      const v = String(raw || '').trim();
+      if (!v) {
+        return null;
+      }
+      const m = v.match(/^(\d+):(\d{1,2})$/);
+      if (!m) {
+        return null;
+      }
+      const minutes = Number(m[1]);
+      const seconds = Number(m[2]);
+      if (!Number.isFinite(minutes) || !Number.isFinite(seconds)) {
+        return null;
+      }
+      if (seconds < 0 || seconds >= 60 || minutes < 0) {
+        return null;
+      }
+      return (minutes * 60 + seconds) * 1000;
+    };
+
+    const processingDurationMinMs = parseMmSsToMs(
+      options.processingDurationMin
+    );
+    const processingDurationMaxMs = parseMmSsToMs(
+      options.processingDurationMax
+    );
+
+    const parseCsv = (raw: string | undefined): string[] => String(raw || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+
+    const processingDurations = parseCsv(options.processingDurations);
+
+    const unitProgressRaw = parseCsv(options.unitProgress);
+    const unitProgress = unitProgressRaw
+      .map(v => v.toLowerCase())
+      .map(v => {
+        if (v === 'vollständig') {
+          return 'complete';
+        }
+        if (v === 'unvollständig') {
+          return 'incomplete';
+        }
+        return v;
+      })
+      .filter(v => v === 'complete' || v === 'incomplete');
+
+    const sessionBrowsers = parseCsv(options.sessionBrowsers);
+    const sessionOs = parseCsv(options.sessionOs);
+    const sessionScreens = parseCsv(options.sessionScreens);
+    const sessionIds = parseCsv(options.sessionIds)
+      .map(v => Number(v))
+      .filter(v => Number.isFinite(v) && v > 0);
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -677,6 +868,188 @@ export class WorkspaceTestResultsService {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
 
+    if (geogebraOnly) {
+      qb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      qb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      qb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      qb.andWhere('(response.value::double precision) < :audioLowThreshold', {
+        audioLowThreshold
+      });
+    }
+
+    if (hasValueOnly) {
+      qb.andWhere(
+        "BTRIM(COALESCE(response.value, '')) <> '' AND BTRIM(COALESCE(response.value, '')) <> '[]'"
+      );
+    }
+
+    if (shortProcessingOnly) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (processingDurations.length > 0) {
+      qb.andWhere(
+        `(
+          CASE
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) IS NULL THEN 'Unbekannt'
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) < :processingDurationThresholdMs THEN 'Kurz'
+            ELSE 'Lang'
+          END
+        ) IN (:...processingDurations)`,
+        { processingDurations, processingDurationThresholdMs }
+      );
+    }
+
+    if (processingDurationMinMs !== null || processingDurationMaxMs !== null) {
+      const minMs = processingDurationMinMs ?? 0;
+      const maxMs = processingDurationMaxMs ?? Number.MAX_SAFE_INTEGER;
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) >= :processingDurationMinMs
+            AND (bl_terminated.ts - bl_running.ts) <= :processingDurationMaxMs
+        )`,
+        {
+          processingDurationMinMs: minMs,
+          processingDurationMaxMs: maxMs
+        }
+      );
+    }
+
+    if (unitProgress.length > 0) {
+      qb.andWhere(
+        `(
+          CASE
+            WHEN EXISTS (
+              SELECT 1 FROM unit u2
+              WHERE u2.bookletid = "bookletEntity"."id"
+                AND u2.alias IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM unit u3
+              WHERE u3.bookletid = "bookletEntity"."id"
+                AND u3.alias IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM bookletlog bl
+                  WHERE bl.bookletid = "bookletEntity"."id"
+                    AND bl.key = 'CURRENT_UNIT_ID'
+                    AND bl.parameter = u3.alias
+                )
+            )
+            THEN 'complete'
+            ELSE 'incomplete'
+          END
+        ) IN (:...unitProgress)`,
+        { unitProgress }
+      );
+    }
+
+    if (sessionBrowsers.length > 0) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.browser IN (:...sessionBrowsers)
+        )`,
+        { sessionBrowsers }
+      );
+    }
+    if (sessionOs.length > 0) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.os IN (:...sessionOs)
+        )`,
+        { sessionOs }
+      );
+    }
+    if (sessionScreens.length > 0) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.screen IN (:...sessionScreens)
+        )`,
+        { sessionScreens }
+      );
+    }
+    if (sessionIds.length > 0) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.id IN (:...sessionIds)
+        )`,
+        { sessionIds }
+      );
+    }
+
+    if (longLoadingOnly) {
+      qb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
+    }
+
     const countQb = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
@@ -728,6 +1101,154 @@ export class WorkspaceTestResultsService {
       countQb.leftJoin('unit.tags', 'unitTag');
       countQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
+
+    if (geogebraOnly) {
+      countQb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      countQb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      countQb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      countQb.andWhere(
+        '(response.value::double precision) < :audioLowThreshold',
+        {
+          audioLowThreshold
+        }
+      );
+    }
+
+    if (shortProcessingOnly) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (longLoadingOnly) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
+    }
+
+    if (processingDurations.length > 0) {
+      countQb.andWhere(
+        `(
+          CASE
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) IS NULL THEN 'Unbekannt'
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) < :processingDurationThresholdMs THEN 'Kurz'
+            ELSE 'Lang'
+          END
+        ) IN (:...processingDurations)`,
+        { processingDurations, processingDurationThresholdMs }
+      );
+    }
+
+    if (unitProgress.length > 0) {
+      countQb.andWhere(
+        `(
+          CASE
+            WHEN EXISTS (
+              SELECT 1 FROM unit u2
+              WHERE u2.bookletid = "bookletEntity"."id"
+                AND u2.alias IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM unit u3
+              WHERE u3.bookletid = "bookletEntity"."id"
+                AND u3.alias IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM bookletlog bl
+                  WHERE bl.bookletid = "bookletEntity"."id"
+                    AND bl.key = 'CURRENT_UNIT_ID'
+                    AND bl.parameter = u3.alias
+                )
+            )
+            THEN 'complete'
+            ELSE 'incomplete'
+          END
+        ) IN (:...unitProgress)`,
+        { unitProgress }
+      );
+    }
+
+    if (sessionBrowsers.length > 0) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.browser IN (:...sessionBrowsers)
+        )`,
+        { sessionBrowsers }
+      );
+    }
+    if (sessionOs.length > 0) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.os IN (:...sessionOs)
+        )`,
+        { sessionOs }
+      );
+    }
+    if (sessionScreens.length > 0) {
+      countQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.screen IN (:...sessionScreens)
+        )`,
+        { sessionScreens }
+      );
+    }
+
+    // Note: Session filters above are applied as separate EXISTS per dimension.
 
     const total = await countQb
       .select('COUNT(DISTINCT response.id)', 'cnt')
@@ -978,6 +1499,20 @@ export class WorkspaceTestResultsService {
       responseStatus?: string;
       responseValue?: string;
       tags?: string;
+      geogebra?: string;
+      audioLow?: string;
+      audioLowThreshold?: string;
+      shortProcessing?: string;
+      shortProcessingThresholdMs?: string;
+      longLoading?: string;
+      longLoadingThresholdMs?: string;
+      processingDurations?: string;
+      processingDurationThresholdMs?: string;
+      unitProgress?: string;
+      sessionBrowsers?: string;
+      sessionOs?: string;
+      sessionScreens?: string;
+      sessionIds?: string;
     }
   ): Promise<{
       codes: string[];
@@ -988,6 +1523,12 @@ export class WorkspaceTestResultsService {
       responses: string[];
       responseStatuses: string[];
       tags: string[];
+      processingDurations: string[];
+      unitProgresses: string[];
+      sessionBrowsers: string[];
+      sessionOs: string[];
+      sessionScreens: string[];
+      sessionIds: string[];
     }> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -1004,6 +1545,65 @@ export class WorkspaceTestResultsService {
     const responseStatus = (options.responseStatus || '').trim();
     const responseValue = (options.responseValue || '').trim();
     const tags = (options.tags || '').trim();
+    const geogebra = String(options.geogebra || '')
+      .trim()
+      .toLowerCase();
+    const geogebraOnly =
+      geogebra === 'true' || geogebra === '1' || geogebra === 'yes';
+    const audioLow = String(options.audioLow || '')
+      .trim()
+      .toLowerCase();
+    const audioLowOnly =
+      audioLow === 'true' || audioLow === '1' || audioLow === 'yes';
+    const audioLowThresholdRaw = String(options.audioLowThreshold || '').trim();
+    const audioLowThresholdParsed = Number(audioLowThresholdRaw || 0.9);
+    const audioLowThreshold = Number.isFinite(audioLowThresholdParsed) ?
+      audioLowThresholdParsed :
+      0.9;
+
+    const shortProcessing = String(options.shortProcessing || '')
+      .trim()
+      .toLowerCase();
+    const shortProcessingOnly =
+      shortProcessing === 'true' ||
+      shortProcessing === '1' ||
+      shortProcessing === 'yes';
+    const shortProcessingThresholdRaw = String(
+      options.shortProcessingThresholdMs || ''
+    ).trim();
+    const shortProcessingThresholdParsed = Number(
+      shortProcessingThresholdRaw || 60000
+    );
+    const shortProcessingThresholdMs = Number.isFinite(
+      shortProcessingThresholdParsed
+    ) ?
+      shortProcessingThresholdParsed :
+      60000;
+
+    const longLoading = String(options.longLoading || '')
+      .trim()
+      .toLowerCase();
+    const longLoadingOnly =
+      longLoading === 'true' || longLoading === '1' || longLoading === 'yes';
+    const longLoadingThresholdRaw = String(
+      options.longLoadingThresholdMs || ''
+    ).trim();
+    const longLoadingThresholdParsed = Number(longLoadingThresholdRaw || 5000);
+    const longLoadingThresholdMs = Number.isFinite(longLoadingThresholdParsed) ?
+      longLoadingThresholdParsed :
+      5000;
+
+    const processingDurationThresholdRaw = String(
+      options.processingDurationThresholdMs || ''
+    ).trim();
+    const processingDurationThresholdParsed = Number(
+      processingDurationThresholdRaw || 60000
+    );
+    const processingDurationThresholdMs = Number.isFinite(
+      processingDurationThresholdParsed
+    ) ?
+      processingDurationThresholdParsed :
+      60000;
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -1069,6 +1669,179 @@ export class WorkspaceTestResultsService {
       baseQb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     }
 
+    if (geogebraOnly) {
+      baseQb.andWhere(
+        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+        { ggPrefix: 'UEsD%' }
+      );
+    }
+
+    if (audioLowOnly) {
+      baseQb.andWhere('response.variableid ILIKE :audioPrefix', {
+        audioPrefix: 'audio%'
+      });
+      baseQb.andWhere("response.value ~ '^\\s*-?\\d+(\\.\\d+)?\\s*$'");
+      baseQb.andWhere(
+        '(response.value::double precision) < :audioLowThreshold',
+        {
+          audioLowThreshold
+        }
+      );
+    }
+
+    if (shortProcessingOnly) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = "bookletEntity"."id"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+            AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        )`,
+        { shortProcessingThresholdMs }
+      );
+    }
+
+    if (longLoadingOnly) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM unitlog ul_started
+          JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+          WHERE ul_started.unitid = unit.id
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+        )`,
+        { longLoadingThresholdMs }
+      );
+    }
+
+    const parseCsv = (raw: string | undefined): string[] => String(raw || '')
+      .split(',')
+      .map(v => v.trim())
+      .filter(Boolean);
+
+    const processingDurations = parseCsv(options.processingDurations);
+
+    const unitProgressRaw = parseCsv(options.unitProgress);
+    const unitProgress = unitProgressRaw
+      .map(v => v.toLowerCase())
+      .map(v => {
+        if (v === 'vollständig') {
+          return 'complete';
+        }
+        if (v === 'unvollständig') {
+          return 'incomplete';
+        }
+        return v;
+      })
+      .filter(v => v === 'complete' || v === 'incomplete');
+
+    const sessionBrowsers = parseCsv(options.sessionBrowsers);
+    const sessionOs = parseCsv(options.sessionOs);
+    const sessionScreens = parseCsv(options.sessionScreens);
+
+    if (processingDurations.length > 0) {
+      baseQb.andWhere(
+        `(
+          CASE
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) IS NULL THEN 'Unbekannt'
+            WHEN (
+              SELECT (bl_terminated.ts - bl_running.ts)
+              FROM bookletlog bl_running
+              JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+              WHERE bl_running.bookletid = "bookletEntity"."id"
+                AND bl_running.key = 'CONTROLLER'
+                AND bl_running.parameter = 'RUNNING'
+                AND bl_terminated.key = 'CONTROLLER'
+                AND bl_terminated.parameter = 'TERMINATED'
+              ORDER BY bl_running.id ASC, bl_terminated.id ASC
+              LIMIT 1
+            ) < :processingDurationThresholdMs THEN 'Kurz'
+            ELSE 'Lang'
+          END
+        ) IN (:...processingDurations)`,
+        { processingDurations, processingDurationThresholdMs }
+      );
+    }
+
+    if (unitProgress.length > 0) {
+      baseQb.andWhere(
+        `(
+          CASE
+            WHEN EXISTS (
+              SELECT 1 FROM unit u2
+              WHERE u2.bookletid = "bookletEntity"."id"
+                AND u2.alias IS NOT NULL
+            )
+            AND NOT EXISTS (
+              SELECT 1 FROM unit u3
+              WHERE u3.bookletid = "bookletEntity"."id"
+                AND u3.alias IS NOT NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM bookletlog bl
+                  WHERE bl.bookletid = "bookletEntity"."id"
+                    AND bl.key = 'CURRENT_UNIT_ID'
+                    AND bl.parameter = u3.alias
+                )
+            )
+            THEN 'complete'
+            ELSE 'incomplete'
+          END
+        ) IN (:...unitProgress)`,
+        { unitProgress }
+      );
+    }
+
+    if (sessionBrowsers.length > 0) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.browser IN (:...sessionBrowsers)
+        )`,
+        { sessionBrowsers }
+      );
+    }
+    if (sessionOs.length > 0) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.os IN (:...sessionOs)
+        )`,
+        { sessionOs }
+      );
+    }
+    if (sessionScreens.length > 0) {
+      baseQb.andWhere(
+        `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND s.screen IN (:...sessionScreens)
+        )`,
+        { sessionScreens }
+      );
+    }
+
+    // Note: Session filters above are applied as separate EXISTS per dimension.
+
     const [
       codeRows,
       groupRows,
@@ -1077,7 +1850,13 @@ export class WorkspaceTestResultsService {
       unitRows,
       responseRows,
       responseStatusRows,
-      tagRows
+      tagRows,
+      processingDurationRows,
+      unitProgressRows,
+      sessionBrowserRows,
+      sessionOsRows,
+      sessionScreenRows,
+      sessionIdRows
     ] = await Promise.all([
       baseQb
         .clone()
@@ -1127,6 +1906,109 @@ export class WorkspaceTestResultsService {
         .where('unitTag.tag IS NOT NULL')
         .orderBy('unitTag.tag', 'ASC')
         .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .select(
+          `DISTINCT (
+            CASE
+              WHEN (
+                SELECT (bl_terminated.ts - bl_running.ts)
+                FROM bookletlog bl_running
+                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+                WHERE bl_running.bookletid = "bookletEntity"."id"
+                  AND bl_running.key = 'CONTROLLER'
+                  AND bl_running.parameter = 'RUNNING'
+                  AND bl_terminated.key = 'CONTROLLER'
+                  AND bl_terminated.parameter = 'TERMINATED'
+                ORDER BY bl_running.id ASC, bl_terminated.id ASC
+                LIMIT 1
+              ) IS NULL THEN 'Unbekannt'
+              WHEN (
+                SELECT (bl_terminated.ts - bl_running.ts)
+                FROM bookletlog bl_running
+                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
+                WHERE bl_running.bookletid = "bookletEntity"."id"
+                  AND bl_running.key = 'CONTROLLER'
+                  AND bl_running.parameter = 'RUNNING'
+                  AND bl_terminated.key = 'CONTROLLER'
+                  AND bl_terminated.parameter = 'TERMINATED'
+                ORDER BY bl_running.id ASC, bl_terminated.id ASC
+                LIMIT 1
+              ) < :processingDurationThresholdMs THEN 'Kurz'
+              ELSE 'Lang'
+            END
+          )`,
+          'v'
+        )
+        .orderBy('v', 'ASC')
+        .limit(MAX_OPTIONS)
+        .setParameter(
+          'processingDurationThresholdMs',
+          processingDurationThresholdMs
+        )
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .select(
+          `DISTINCT (
+            CASE
+              WHEN EXISTS (
+                SELECT 1 FROM unit u2
+                WHERE u2.bookletid = "bookletEntity"."id"
+                  AND u2.alias IS NOT NULL
+              )
+              AND NOT EXISTS (
+                SELECT 1 FROM unit u3
+                WHERE u3.bookletid = "bookletEntity"."id"
+                  AND u3.alias IS NOT NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM bookletlog bl
+                    WHERE bl.bookletid = "bookletEntity"."id"
+                      AND bl.key = 'CURRENT_UNIT_ID'
+                      AND bl.parameter = u3.alias
+                  )
+              )
+              THEN 'complete'
+              ELSE 'incomplete'
+            END
+          )`,
+          'v'
+        )
+        .orderBy('v', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .leftJoin('bookletEntity.sessions', 'session')
+        .select('DISTINCT session.browser', 'v')
+        .where('session.browser IS NOT NULL')
+        .orderBy('session.browser', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .leftJoin('bookletEntity.sessions', 'session')
+        .select('DISTINCT session.os', 'v')
+        .where('session.os IS NOT NULL')
+        .orderBy('session.os', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .leftJoin('bookletEntity.sessions', 'session')
+        .select('DISTINCT session.screen', 'v')
+        .where('session.screen IS NOT NULL')
+        .orderBy('session.screen', 'ASC')
+        .limit(MAX_OPTIONS)
+        .getRawMany<{ v: string }>(),
+      baseQb
+        .clone()
+        .leftJoin('bookletEntity.sessions', 'session')
+        .select('DISTINCT session.id', 'v')
+        .where('session.id IS NOT NULL')
+        .orderBy('session.id', 'ASC')
+        .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>()
     ]);
 
@@ -1143,6 +2025,14 @@ export class WorkspaceTestResultsService {
       )
     );
 
+    const processingDurationsOut = mapVals(processingDurationRows);
+
+    const unitProgressesOut = Array.from(
+      new Set(mapVals(unitProgressRows).map(v => v.toLowerCase()))
+    )
+      .filter(v => v === 'complete' || v === 'incomplete')
+      .map(v => (v === 'complete' ? 'Vollständig' : 'Unvollständig'));
+
     return {
       codes: mapVals(codeRows),
       groups: mapVals(groupRows),
@@ -1151,7 +2041,13 @@ export class WorkspaceTestResultsService {
       units: mapVals(unitRows),
       responses: mapVals(responseRows),
       responseStatuses,
-      tags: mapVals(tagRows)
+      tags: mapVals(tagRows),
+      processingDurations: processingDurationsOut,
+      unitProgresses: unitProgressesOut,
+      sessionBrowsers: mapVals(sessionBrowserRows),
+      sessionOs: mapVals(sessionOsRows),
+      sessionScreens: mapVals(sessionScreenRows),
+      sessionIds: mapVals(sessionIdRows)
     };
   }
 
@@ -2589,20 +3485,6 @@ export class WorkspaceTestResultsService {
       stream.on('finish', () => resolve());
       stream.on('error', reject);
     });
-  }
-
-  async exportTestLogs(
-    workspaceId: number,
-    res: Response,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    }
-  ): Promise<void> {
-    this.logger.log(`Exporting test logs for workspace ${workspaceId}`);
-    await this.exportTestLogsToStream(workspaceId, res, filters);
   }
 
   async exportTestLogsToFile(

@@ -27,8 +27,6 @@ export class JournalService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-
   /**
    * Get journal entries for a workspace
    * @param workspaceId The ID of the workspace
@@ -39,7 +37,7 @@ export class JournalService {
   getJournalEntries(workspaceId: number, page: number = 1, limit: number = 20): Observable<PaginatedJournalEntries> {
     return this.http.get<PaginatedJournalEntries>(
       `${this.serverUrl}admin/workspace/${workspaceId}/journal?page=${page}&limit=${limit}`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(() => of({
         data: [],
@@ -74,7 +72,7 @@ export class JournalService {
         entity_id: entityId,
         details
       },
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(() => of({
         id: 0,
@@ -97,7 +95,6 @@ export class JournalService {
     return this.http.get(
       `${this.serverUrl}admin/workspace/${workspaceId}/journal/csv`,
       {
-        headers: this.authHeader,
         responseType: 'blob'
       }
     ).pipe(

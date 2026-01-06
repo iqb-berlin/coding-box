@@ -14,11 +14,10 @@ import {
   debounceTime,
   distinctUntilChanged,
   switchMap,
-  takeUntil,
-  takeWhile
+  takeUntil
 } from 'rxjs/operators';
 import {
-  of, Subject, timer, forkJoin
+  of, Subject
 } from 'rxjs';
 import {
   MatCell,
@@ -61,7 +60,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
-import { BackendService } from '../../../services/backend.service';
+import { BackendService, SearchResponseItem } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -78,6 +77,7 @@ import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/var
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
 import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
+import { CodingManagementService, StatisticsVersion } from '../../services/coding-management.service';
 
 @Component({
   selector: 'app-coding-management',
@@ -126,6 +126,7 @@ implements AfterViewInit, OnInit, OnDestroy {
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
+  private codingManagementService = inject(CodingManagementService);
 
   private responseStatusMap = new Map(
     responseStatesNumericMap.map(entry => [entry.key, entry.value])
@@ -161,21 +162,19 @@ implements AfterViewInit, OnInit, OnDestroy {
   isDownloadInProgress = false;
   showManualCoding = false;
 
+  // Statistics state is now managed by the service
+  codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
+  referenceStatistics: CodingStatistics | null = null;
+  referenceVersion: StatisticsVersion | null = null;
   statisticsLoaded = false;
+
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500, 1000];
-  pageSize = 1000;
+  pageSize = 100;
   totalRecords = 0;
   pageIndex = 0;
   filterTextChanged = new Subject<Event>();
   private destroy$ = new Subject<void>();
-  codingStatistics: CodingStatistics = {
-    totalResponses: 0,
-    statusCounts: {}
-  };
-
-  referenceStatistics: CodingStatistics | null = null;
-  referenceVersion: 'v1' | 'v2' | null = null;
 
   selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
 
@@ -236,6 +235,32 @@ implements AfterViewInit, OnInit, OnDestroy {
         });
     }
 
+    // Subscribe to service state
+    this.codingManagementService.codingStatistics$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(stats => {
+        this.codingStatistics = stats;
+        this.statisticsLoaded = true;
+      });
+
+    this.codingManagementService.referenceStatistics$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(stats => {
+        this.referenceStatistics = stats;
+      });
+
+    this.codingManagementService.referenceVersion$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(version => {
+        this.referenceVersion = version;
+      });
+
+    this.codingManagementService.isLoadingStatistics$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(isLoading => {
+        this.isLoadingStatistics = isLoading;
+      });
+
     this.filterTextChanged
       .pipe(
         debounceTime(300),
@@ -254,215 +279,7 @@ implements AfterViewInit, OnInit, OnDestroy {
   }
 
   fetchCodingStatistics(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    this.isLoadingStatistics = true;
-    this.referenceStatistics = null;
-    this.referenceVersion = null;
-
-    this.backendService
-      .createCodingStatisticsJob(workspaceId)
-      .pipe(
-        catchError(() => of({
-          jobId: '' as string,
-          message: this.translateService.instant(
-            'coding-management.loading.creating-coding-statistics'
-          )
-        })
-        )
-      )
-      .subscribe(({ jobId }) => {
-        if (!jobId) {
-          if (this.selectedStatisticsVersion === 'v2') {
-            // v2 compares to v1
-            forkJoin({
-              current: this.backendService.getCodingStatistics(
-                workspaceId,
-                'v2'
-              ),
-              reference: this.backendService.getCodingStatistics(
-                workspaceId,
-                'v1'
-              )
-            })
-              .pipe(
-                catchError(() => {
-                  this.snackBar.open(
-                    this.translateService.instant(
-                      'coding-management.descriptions.error-statistics'
-                    ),
-                    this.translateService.instant('close'),
-                    {
-                      duration: 5000,
-                      panelClass: ['error-snackbar']
-                    }
-                  );
-                  return of({
-                    current: { totalResponses: 0, statusCounts: {} },
-                    reference: { totalResponses: 0, statusCounts: {} }
-                  });
-                }),
-                finalize(() => {
-                  this.isLoadingStatistics = false;
-                })
-              )
-              .subscribe(({ current, reference }) => {
-                this.codingStatistics = current;
-                this.referenceStatistics = reference;
-                this.referenceVersion = 'v1';
-                this.statisticsLoaded = true;
-              });
-          } else if (this.selectedStatisticsVersion === 'v3') {
-            // v3 compares to v2 if v2 has data, otherwise to v1
-            forkJoin({
-              current: this.backendService.getCodingStatistics(
-                workspaceId,
-                'v3'
-              ),
-              v2Stats: this.backendService.getCodingStatistics(
-                workspaceId,
-                'v2'
-              ),
-              v1Stats: this.backendService.getCodingStatistics(
-                workspaceId,
-                'v1'
-              )
-            })
-              .pipe(
-                catchError(() => {
-                  this.snackBar.open(
-                    this.translateService.instant(
-                      'coding-management.descriptions.error-statistics'
-                    ),
-                    this.translateService.instant('close'),
-                    {
-                      duration: 5000,
-                      panelClass: ['error-snackbar']
-                    }
-                  );
-                  return of({
-                    current: { totalResponses: 0, statusCounts: {} },
-                    v2Stats: { totalResponses: 0, statusCounts: {} },
-                    v1Stats: { totalResponses: 0, statusCounts: {} }
-                  });
-                }),
-                finalize(() => {
-                  this.isLoadingStatistics = false;
-                })
-              )
-              .subscribe(({ current, v2Stats, v1Stats }) => {
-                this.codingStatistics = current;
-                // Use v2 as reference if v2 differs from v1 (manual coding was done), otherwise use v1
-                if (this.statisticsDiffer(v2Stats, v1Stats)) {
-                  this.referenceStatistics = v2Stats;
-                  this.referenceVersion = 'v2';
-                } else {
-                  this.referenceStatistics = v1Stats;
-                  this.referenceVersion = 'v1';
-                }
-                this.statisticsLoaded = true;
-              });
-          } else {
-            this.backendService
-              .getCodingStatistics(workspaceId, this.selectedStatisticsVersion)
-              .pipe(
-                catchError(() => {
-                  this.snackBar.open(
-                    this.translateService.instant(
-                      'coding-management.descriptions.error-statistics'
-                    ),
-                    this.translateService.instant('close'),
-                    {
-                      duration: 5000,
-                      panelClass: ['error-snackbar']
-                    }
-                  );
-                  return of({
-                    totalResponses: 0,
-                    statusCounts: {}
-                  });
-                }),
-                finalize(() => {
-                  this.isLoadingStatistics = false;
-                })
-              )
-              .subscribe(statistics => {
-                this.codingStatistics = statistics;
-                this.statisticsLoaded = true;
-              });
-          }
-          return;
-        }
-
-        timer(0, 2000)
-          .pipe(
-            takeUntil(this.destroy$),
-            switchMap(() => this.backendService.getCodingJobStatus(workspaceId, jobId)
-            ),
-            takeWhile(
-              status => ['pending', 'processing'].includes(status.status),
-              true
-            ),
-            finalize(() => {
-              this.isLoadingStatistics = false;
-            })
-          )
-          .subscribe(status => {
-            if (status.status === 'completed' && status.result) {
-              this.codingStatistics = status.result;
-              this.statisticsLoaded = true;
-              // Fetch reference statistics
-              if (this.selectedStatisticsVersion === 'v2') {
-                this.backendService
-                  .getCodingStatistics(workspaceId, 'v1')
-                  .pipe(
-                    catchError(() => of({ totalResponses: 0, statusCounts: {} })
-                    )
-                  )
-                  .subscribe(ref => {
-                    this.referenceStatistics = ref;
-                    this.referenceVersion = 'v1';
-                  });
-              } else if (this.selectedStatisticsVersion === 'v3') {
-                // For v3, check if v2 has data, otherwise use v1
-                forkJoin({
-                  v2Stats: this.backendService.getCodingStatistics(
-                    workspaceId,
-                    'v2'
-                  ),
-                  v1Stats: this.backendService.getCodingStatistics(
-                    workspaceId,
-                    'v1'
-                  )
-                })
-                  .pipe(
-                    catchError(() => of({
-                      v2Stats: { totalResponses: 0, statusCounts: {} },
-                      v1Stats: { totalResponses: 0, statusCounts: {} }
-                    })
-                    )
-                  )
-                  .subscribe(({ v2Stats, v1Stats }) => {
-                    // Use v2 as reference if v2 differs from v1 (manual coding was done), otherwise use v1
-                    if (this.statisticsDiffer(v2Stats, v1Stats)) {
-                      this.referenceStatistics = v2Stats;
-                      this.referenceVersion = 'v2';
-                    } else {
-                      this.referenceStatistics = v1Stats;
-                      this.referenceVersion = 'v1';
-                    }
-                  });
-              }
-            } else if (
-              ['failed', 'cancelled', 'paused'].includes(status.status)
-            ) {
-              this.snackBar.open(
-                `Statistik-Job ${status.status}`,
-                'Schließen',
-                { duration: 5000, panelClass: ['error-snackbar'] }
-              );
-            }
-          });
-      });
+    this.codingManagementService.fetchCodingStatistics(this.selectedStatisticsVersion);
   }
 
   onStatisticsVersionChange(): void {
@@ -546,27 +363,7 @@ implements AfterViewInit, OnInit, OnDestroy {
     return '±0';
   }
 
-  private statisticsDiffer(
-    stats1: CodingStatistics,
-    stats2: CodingStatistics
-  ): boolean {
-    if (stats1.totalResponses !== stats2.totalResponses) {
-      return true;
-    }
-    const allStatuses = new Set([
-      ...Object.keys(stats1.statusCounts),
-      ...Object.keys(stats2.statusCounts)
-    ]);
-    for (const status of allStatuses) {
-      if (
-        (stats1.statusCounts[status] || 0) !==
-        (stats2.statusCounts[status] || 0)
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
+  // Method removed as it's now internal to the service
 
   getStatusPercentage(status: string): number {
     if (
@@ -587,85 +384,54 @@ implements AfterViewInit, OnInit, OnDestroy {
     page: number = 1,
     limit: number = this.pageSize
   ): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
     this.currentStatusFilter = status;
 
-    this.backendService
-      .getResponsesByStatus(
-        workspaceId,
-        status,
-        this.selectedStatisticsVersion,
-        page,
-        limit
-      )
-      .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open(
-            `Fehler beim Abrufen der Antworten mit Status ${status}`,
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return of({
-            data: [],
-            total: 0,
-            page,
-            limit
-          });
-        }),
-        finalize(() => {
-          this.isLoading = false;
-        })
-      )
-      .subscribe(response => {
-        this.data = response.data.map((item: ResponseEntity) => {
-          const codeKey =
-            `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
-          const scoreKey =
-            `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+    this.codingManagementService.fetchResponsesByStatus(
+      status,
+      this.selectedStatisticsVersion,
+      page,
+      limit
+    ).pipe(
+      finalize(() => {
+        this.isLoading = false;
+      })
+    ).subscribe(response => {
+      this.data = response.data.map((item: ResponseEntity) => {
+        const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+        const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
 
-          return {
-            id: item.id,
-            unitid: item.unitId,
-            variableid: item.variableid || '',
-            status: item.status || '',
-            value: item.value || '',
-            subform: item.subform || '',
-            code: (item[codeKey] as number)?.toString() || null,
-            score: (item[scoreKey] as number)?.toString() || null,
-            unit: item.unit,
-            codedstatus: item.status_v1 || '',
-            unitname: item.unit?.name || '',
-            login_name: item.unit?.booklet?.person?.login || '',
-            login_group:
-              (
-                item.unit?.booklet?.person as {
-                  login: string;
-                  code: string;
-                  group?: string;
-                }
-              )?.group || '',
-            login_code: item.unit?.booklet?.person?.code || '',
-            booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
-          };
-        });
-        this.dataSource.data = this.data;
-        this.totalRecords = response.total;
-
-        if (this.data.length === 0) {
-          this.snackBar.open(
-            `Keine Antworten mit Status ${status} gefunden.`,
-            'Schließen',
-            {
-              duration: 5000
-            }
-          );
-        }
+        return {
+          id: item.id,
+          unitid: item.unitId,
+          variableid: item.variableid || '',
+          status: item.status || '',
+          value: item.value || '',
+          subform: item.subform || '',
+          code: (item[codeKey] as number)?.toString() || null,
+          score: (item[scoreKey] as number)?.toString() || null,
+          unit: item.unit,
+          codedstatus: item.status_v1 || '',
+          unitname: item.unit?.name || '',
+          login_name: item.unit?.booklet?.person?.login || '',
+          login_group: (item.unit?.booklet?.person as { group?: string } | undefined)?.group || '',
+          login_code: item.unit?.booklet?.person?.code || '',
+          booklet_id: item.unit?.booklet?.bookletinfo?.name || ''
+        } as Success;
       });
+      this.dataSource.data = this.data;
+      this.totalRecords = response.total;
+
+      if (this.data.length === 0) {
+        this.snackBar.open(
+          `Keine Antworten mit Status ${status} gefunden.`,
+          'Schließen',
+          {
+            duration: 5000
+          }
+        );
+      }
+    });
   }
 
   onFilterChange(): void {
@@ -715,7 +481,6 @@ implements AfterViewInit, OnInit, OnDestroy {
   }
 
   fetchResponsesWithFilters(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
     this.isLoading = true;
 
     const hasActiveFilters = Object.values(this.filterParams).some(
@@ -730,42 +495,26 @@ implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
-      .searchResponses(
-        workspaceId,
-        this.filterParams,
-        this.pageIndex + 1,
-        this.pageSize
-      )
+    this.codingManagementService.searchResponses(
+      this.filterParams,
+      this.pageIndex + 1,
+      this.pageSize
+    )
       .pipe(
-        catchError(() => {
-          this.isLoading = false;
-          this.snackBar.open(
-            'Fehler beim Filtern der Kodierdaten',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return of<{ data: unknown[]; total: number }>({ data: [], total: 0 });
-        }),
         finalize(() => {
           this.isLoading = false;
         })
       )
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .subscribe((response: { data: any[]; total: number }) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.data = response.data.map((item: any) => ({
+      .subscribe((response: { data: SearchResponseItem[]; total: number }) => {
+        this.data = response.data.map((item: SearchResponseItem) => ({
           id: item.responseId,
           unitid: item.unitId,
           variableid: item.variableId || '',
           status: item.status || '',
           value: item.value || '',
           subform: '',
-          code: item.code,
-          score: item.score,
+          code: item.code?.toString() || null,
+          score: item.score?.toString() || null,
           unit: { name: item.unitName },
           codedstatus: item.codedStatus || '',
           unitname: item.unitName || '',
@@ -911,223 +660,13 @@ implements AfterViewInit, OnInit, OnDestroy {
     });
 
     dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
-      if (!format) {
-        return;
-      }
-
-      const workspaceId = this.appService.selectedWorkspaceId;
-
-      switch (format) {
-        case 'csv':
-          this.downloadCodingListAsCsvBackground(workspaceId);
-          break;
-        case 'excel':
-          this.downloadCodingListAsExcelBackground(workspaceId);
-          break;
-        case 'json':
-          this.downloadCodingListAsJsonBackground(workspaceId);
-          break;
-        default:
-          this.snackBar.open(`Unbekanntes Format: ${format}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-          break;
+      if (format) {
+        this.codingManagementService.downloadCodingList(format);
       }
     });
   }
 
-  downloadCodingListAsJsonBackground(workspaceId: number): void {
-    this.snackBar.open(
-      'Kodierliste wird im Hintergrund erstellt...',
-      'Schließen',
-      {
-        duration: 3000
-      }
-    );
-    this.backendService
-      .getCodingListAsCsv(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.snackBar.open(
-            'Fehler beim Abrufen der Kodierliste (JSON)',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return of(null);
-        })
-      )
-      .subscribe(async (blob: Blob | null) => {
-        if (!blob) return;
-        try {
-          const text = await blob.text();
-          const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-          if (lines.length === 0) {
-            this.snackBar.open(
-              'Keine Einträge in der Kodierliste gefunden.',
-              'Schließen',
-              { duration: 5000 }
-            );
-            return;
-          }
-          const headerLine = lines[0].replace(/^\uFEFF/, '');
-          const delimiter = headerLine.includes(';') ? ';' : ',';
-          const splitRegex =
-            delimiter === ';' ?
-              /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ :
-              /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
-          const headers = headerLine
-            .split(splitRegex)
-            .map(h => h.replace(/^"|"$/g, ''));
-          const data = lines.slice(1).map(line => {
-            const cleanLine = line.replace(/^\uFEFF/, '');
-            const values = cleanLine
-              .split(splitRegex)
-              .map(v => v.replace(/^"|"$/g, ''));
-            const obj: Record<string, unknown> = {};
-            headers.forEach((h, i) => {
-              obj[h] = values[i] ?? '';
-            });
-            return obj;
-          });
-
-          const jsonData = JSON.stringify(data, null, 2);
-          const jsonBlob = new Blob([jsonData], { type: 'application/json' });
-          const url = window.URL.createObjectURL(jsonBlob);
-
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `coding-list-${new Date()
-            .toISOString()
-            .slice(0, 10)}.json`;
-          document.body.appendChild(a);
-          a.click();
-
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-
-          this.snackBar.open(
-            'Kodierliste wurde als JSON erfolgreich heruntergeladen.',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['success-snackbar']
-            }
-          );
-        } catch (e) {
-          this.snackBar.open(
-            'Fehler beim Umwandeln der CSV-Daten in JSON',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-        }
-      });
-  }
-
-  downloadCodingListAsCsvBackground(workspaceId: number): void {
-    this.snackBar.open(
-      'Kodierliste wird im Hintergrund erstellt...',
-      'Schließen',
-      {
-        duration: 3000
-      }
-    );
-    this.backendService
-      .getCodingListAsCsv(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.snackBar.open(
-            'Fehler beim Herunterladen der Kodierliste als CSV',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return of(null);
-        })
-      )
-      .subscribe(response => {
-        if (!response) {
-          return;
-        }
-        const blob = response as Blob;
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `coding-list-${new Date().toISOString().slice(0, 10)}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        this.snackBar.open(
-          'Kodierliste wurde als CSV erfolgreich heruntergeladen.',
-          'Schließen',
-          {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          }
-        );
-      });
-  }
-
-  downloadCodingListAsExcelBackground(workspaceId: number): void {
-    this.snackBar.open(
-      'Kodierliste wird im Hintergrund erstellt...',
-      'Schließen',
-      {
-        duration: 3000
-      }
-    );
-    this.backendService
-      .getCodingListAsExcel(workspaceId)
-      .pipe(
-        catchError(() => {
-          this.snackBar.open(
-            'Fehler beim Herunterladen der Kodierliste als Excel',
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return of(null);
-        })
-      )
-      .subscribe(response => {
-        if (!response) {
-          return;
-        }
-
-        const blob = response as Blob;
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `coding-list-${new Date()
-          .toISOString()
-          .slice(0, 10)}.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-
-        this.snackBar.open(
-          'Kodierliste wurde als Excel erfolgreich heruntergeladen.',
-          'Schließen',
-          {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          }
-        );
-      });
-  }
+  // Removed downloadCodingListAsJsonBackground, downloadCodingListAsCsvBackground, downloadCodingListAsExcelBackground
 
   getCodingSchemeRefFromUnit(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -1355,12 +894,8 @@ implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) return;
-
     this.isLoading = true;
-    this.backendService
-      .resetCodingVersion(workspaceId, version)
+    this.codingManagementService.resetCodingVersion(version)
       .pipe(
         finalize(() => {
           this.isLoading = false;
@@ -1368,15 +903,16 @@ implements AfterViewInit, OnInit, OnDestroy {
       )
       .subscribe({
         next: result => {
-          this.snackBar.open(
-            result.message,
-            this.translateService.instant('close'),
-            {
-              duration: 5000,
-              panelClass: ['success-snackbar']
-            }
-          );
-
+          if (result) {
+            this.snackBar.open(
+              result.message,
+              this.translateService.instant('close'),
+              {
+                duration: 5000,
+                panelClass: ['success-snackbar']
+              }
+            );
+          }
           // Refresh statistics after reset
           this.fetchCodingStatistics();
         },
@@ -1437,260 +973,10 @@ implements AfterViewInit, OnInit, OnDestroy {
     format: ExportFormat,
     includeReplayUrls: boolean = false
   ): void {
-    this.performBackgroundDownload(
-      workspaceId,
-      version,
-      format,
-      includeReplayUrls
-    );
-  }
-
-  private async performBackgroundDownload(
-    workspaceId: number,
-    version: 'v1' | 'v2' | 'v3',
-    format: ExportFormat,
-    includeReplayUrls: boolean = false
-  ): Promise<void> {
-    this.isDownloadInProgress = true;
-
-    const snackBarRef = this.snackBar.open(
-      this.translateService.instant(
-        'coding-management.download-dialog.download-started',
-        { version, format }
-      ),
-      this.translateService.instant('close'),
-      {
-        duration: 0, // Keep open until we dismiss it
-        panelClass: ['info-snackbar']
-      }
-    );
-
-    try {
-      switch (format) {
-        case 'csv':
-          await this.downloadCodingResultsAsCsvBackground(
-            workspaceId,
-            version,
-            includeReplayUrls
-          );
-          break;
-        case 'excel':
-          await this.downloadCodingResultsAsExcelBackground(
-            workspaceId,
-            version,
-            includeReplayUrls
-          );
-          break;
-        case 'json':
-          await this.downloadCodingResultsAsJsonBackground(
-            workspaceId,
-            version,
-            includeReplayUrls
-          );
-          break;
-        default:
-          snackBarRef.dismiss();
-          this.snackBar.open(
-            this.translateService.instant(
-              'coding-management.download-dialog.error-unknown-format'
-            ),
-            this.translateService.instant('close'),
-            {
-              duration: 5000,
-              panelClass: ['error-snackbar']
-            }
-          );
-          return;
-      }
-
-      snackBarRef.dismiss();
-      this.snackBar.open(
-        this.translateService.instant(
-          'coding-management.download-dialog.download-complete',
-          { version, format }
-        ),
-        this.translateService.instant('close'),
-        {
-          duration: 5000,
-          panelClass: ['success-snackbar']
-        }
-      );
-    } catch (error) {
-      snackBarRef.dismiss();
-      this.snackBar.open(
-        this.translateService.instant(
-          'coding-management.download-dialog.download-failed'
-        ),
-        this.translateService.instant('close'),
-        {
-          duration: 5000,
-          panelClass: ['error-snackbar']
-        }
-      );
-    } finally {
-      this.isDownloadInProgress = false;
-    }
-  }
-
-  private downloadCodingResultsAsJsonBackground(
-    workspaceId: number,
-    version: 'v1' | 'v2' | 'v3',
-    includeReplayUrls: boolean = false
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.backendService
-        .getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-        .pipe(
-          catchError(() => {
-            reject(new Error('Failed to fetch JSON data'));
-            return of(null);
-          })
-        )
-        .subscribe(async (blob: Blob | null) => {
-          if (!blob) {
-            reject(new Error('No data received'));
-            return;
-          }
-          try {
-            const text = await blob.text();
-            const lines = text
-              .split(/\r?\n/)
-              .filter(l => l.trim().length > 0);
-            if (lines.length === 0) {
-              reject(new Error('No entries found'));
-              return;
-            }
-            const headerLine = lines[0].replace(/^\uFEFF/, '');
-            const delimiter = headerLine.includes(';') ? ';' : ',';
-            const splitRegex =
-              delimiter === ';' ?
-                /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ :
-                /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
-            const headers = headerLine
-              .split(splitRegex)
-              .map(h => h.replace(/^"|"$/g, ''));
-            const data = lines.slice(1).map(line => {
-              const cleanLine = line.replace(/^\uFEFF/, '');
-              const values = cleanLine
-                .split(splitRegex)
-                .map(v => v.replace(/^"|"$/g, ''));
-              const obj: Record<string, unknown> = {};
-              headers.forEach((h, i) => {
-                obj[h] = values[i] ?? '';
-              });
-              return obj;
-            });
-
-            const jsonData = JSON.stringify(data, null, 2);
-            const jsonBlob = new Blob([jsonData], { type: 'application/json' });
-            const url = window.URL.createObjectURL(jsonBlob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `coding-results-${version}-${new Date()
-              .toISOString()
-              .slice(0, 10)}.json`;
-            document.body.appendChild(a);
-            a.click();
-
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-        });
-    });
-  }
-
-  private downloadCodingResultsAsCsvBackground(
-    workspaceId: number,
-    version: 'v1' | 'v2' | 'v3',
-    includeReplayUrls: boolean = false
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.backendService
-        .getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-        .pipe(
-          catchError(() => {
-            reject(new Error('Failed to fetch CSV data'));
-            return of(null);
-          })
-        )
-        .subscribe(response => {
-          if (!response) {
-            reject(new Error('No data received'));
-            return;
-          }
-          try {
-            const blob = response as Blob;
-            const url = window.URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `coding-results-${version}-${new Date()
-              .toISOString()
-              .slice(0, 10)}.csv`;
-            document.body.appendChild(a);
-            a.click();
-
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-        });
-    });
-  }
-
-  private downloadCodingResultsAsExcelBackground(
-    workspaceId: number,
-    version: 'v1' | 'v2' | 'v3',
-    includeReplayUrls: boolean = false
-  ): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.backendService
-        .getCodingResultsByVersionAsExcel(
-          workspaceId,
-          version,
-          includeReplayUrls
-        )
-        .pipe(
-          catchError(() => {
-            reject(new Error('Failed to fetch Excel data'));
-            return of(null);
-          })
-        )
-        .subscribe(response => {
-          if (!response) {
-            reject(new Error('No data received'));
-            return;
-          }
-
-          try {
-            const blob = response as Blob;
-            const url = window.URL.createObjectURL(blob);
-
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `coding-results-${version}-${new Date()
-              .toISOString()
-              .slice(0, 10)}.xlsx`;
-            document.body.appendChild(a);
-            a.click();
-
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            resolve();
-          } catch (e) {
-            reject(e);
-          }
-        });
-    });
+    this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls)
+      .finally(() => {
+        this.isDownloadInProgress = false;
+      });
   }
 
   protected readonly Number = Number;

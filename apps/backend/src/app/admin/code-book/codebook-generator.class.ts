@@ -1,7 +1,7 @@
 import {
   ToTextFactory, CodeAsText
 } from '@iqb/responses';
-import { VariableCodingData, CodeData, CodingScheme } from '@iqbspecs/coding-scheme/coding-scheme.interface';
+import { VariableCodingData, CodeData, CodingScheme } from '@iqbspecs/coding-scheme';
 
 import {
   BookVariable,
