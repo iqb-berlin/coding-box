@@ -10,6 +10,7 @@ import { of } from 'rxjs';
 import {
   Component, EventEmitter, Input, Output
 } from '@angular/core';
+import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { SchemeEditorDialogComponent, SchemeEditorDialogData } from './scheme-editor-dialog.component';
 import { BackendService } from '../../../services/backend.service';
@@ -152,4 +153,57 @@ describe('SchemeEditorDialogComponent', () => {
 
     expect(mockSnackBar.open).toHaveBeenCalledWith('Failed to save scheme', 'Error', expect.any(Object));
   }));
+
+  it('should handle save when file does not exist initially', fakeAsync(() => {
+    component.hasChanges = true;
+    component.unitScheme = { scheme: '{"new": true}', schemeType: 'type1' };
+
+    // Mock getFilesList for Resource to NOT find existing file
+    (mockBackendService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
+
+    component.save();
+    tick();
+
+    expect(mockBackendService.deleteFiles).not.toHaveBeenCalled();
+    expect(mockBackendService.uploadTestFiles).toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith('Scheme saved successfully', 'Success', expect.any(Object));
+    expect(mockDialogRef.close).toHaveBeenCalledWith(true);
+  }));
+
+  it('should show error via snackbar on schemer error', () => {
+    const errorMsg = 'Something went wrong';
+    component.onError(errorMsg);
+    expect(mockSnackBar.open).toHaveBeenCalledWith(`Schemer error: ${errorMsg}`, 'Error', { duration: 3000 });
+  });
+
+  it('should pretty print JSON scheme', () => {
+    component.unitScheme = { scheme: '{"a":1}', schemeType: 'test' };
+    expect(component.prettyScheme).toContain('{\n  "a": 1\n}');
+  });
+
+  it('should return raw string if pretty print fails', () => {
+    component.unitScheme = { scheme: 'invalid-json', schemeType: 'test' };
+    expect(component.prettyScheme).toBe('invalid-json');
+  });
+
+  it('should merge variables when scheme changes if new scheme has none', () => {
+    const originalVariables: VariableInfo[] = [{
+      id: 'v1',
+      type: 'string',
+      format: '',
+      multiple: false,
+      nullable: true,
+      values: [],
+      valuePositionLabels: []
+    }];
+    component.unitScheme = { scheme: '{}', schemeType: 'test', variables: originalVariables };
+
+    // New scheme without variables
+    const newScheme: UnitScheme = { scheme: '{"updated":true}', schemeType: 'test' };
+
+    component.onSchemeChanged(newScheme);
+
+    expect(component.unitScheme.variables).toBe(originalVariables);
+    expect(component.hasChanges).toBe(true);
+  });
 });

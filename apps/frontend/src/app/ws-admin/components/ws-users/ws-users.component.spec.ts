@@ -1,7 +1,7 @@
 import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -14,6 +14,10 @@ import { WsUsersComponent } from './ws-users.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
+import { MessageDialogComponent, MessageType } from '../../../shared/dialogs/message-dialog.component';
+import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';
+import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
+import { WorkspaceAccessRightsDialogComponent } from '../../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 describe('WsUsersComponent', () => {
   let component: WsUsersComponent;
@@ -21,6 +25,7 @@ describe('WsUsersComponent', () => {
   let mockBackendService: Partial<BackendService>;
   let mockAppService: Partial<AppService>;
   let mockDialog: Partial<MatDialog>;
+  let mockTranslateService: Partial<TranslateService>;
 
   const mockUsers: (UserFullDto & { name: string })[] = [
     {
@@ -47,6 +52,10 @@ describe('WsUsersComponent', () => {
       open: jest.fn().mockReturnValue({ afterClosed: () => of(true) })
     };
 
+    mockTranslateService = {
+      instant: jest.fn().mockImplementation((key: string) => key)
+    };
+
     await TestBed.configureTestingModule({
       imports: [
         WsUsersComponent,
@@ -62,13 +71,16 @@ describe('WsUsersComponent', () => {
         { provide: BackendService, useValue: mockBackendService },
         { provide: AppService, useValue: mockAppService },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: { open: jest.fn() } }
+        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: TranslateService, useValue: mockTranslateService }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(WsUsersComponent);
     component = fixture.componentInstance;
-    // We need to wait for the setTimeout in ngOnInit
+    // Initialize properties that are normally set by inputs or other means if necessary
+    component.selectedRows = [];
+    component.checkedRows = [];
   });
 
   it('should create', () => {
@@ -105,18 +117,55 @@ describe('WsUsersComponent', () => {
     expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
   }));
 
-  it('should handle delete users confirmation', fakeAsync(() => {
-    fixture.detectChanges();
-    tick();
-    component.checkedRows = [mockUsers[0]];
-    component.selectedRows = [];
+  describe('Dialogs', () => {
+    beforeEach(() => {
+      // Reset dialog spy
+      (mockDialog.open as jest.Mock).mockClear();
+    });
 
-    (mockDialog.open as jest.Mock).mockReturnValue({ afterClosed: () => of(true) });
-    component.deleteUsers();
+    it('editUser should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.editUser();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
 
-    expect(mockDialog.open).toHaveBeenCalled();
-    // In the component, deleteUsers only opens the dialog currently,
-    // it doesn't call backendservice.deleteUsers in the afterClosed subscription yet (it's commented out)
-    // Actually let's check the component code again.
-  }));
+    it('editUser should open EditUserComponent if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.editUser();
+      expect(mockDialog.open).toHaveBeenCalledWith(EditUserComponent, expect.anything());
+    });
+
+    it('deleteUsers should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.deleteUsers();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
+
+    it('deleteUsers should open ConfirmDialog if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.deleteUsers();
+      expect(mockDialog.open).toHaveBeenCalledWith(ConfirmDialogComponent, expect.anything());
+    });
+
+    it('setUserWorkspaceAccessRight should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.setUserWorkspaceAccessRight();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
+
+    it('setUserWorkspaceAccessRight should open WorkspaceAccessRightsDialogComponent if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.setUserWorkspaceAccessRight();
+      expect(mockDialog.open).toHaveBeenCalledWith(WorkspaceAccessRightsDialogComponent, expect.anything());
+    });
+  });
 });

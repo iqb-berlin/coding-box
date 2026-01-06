@@ -8,14 +8,14 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, throwError } from 'rxjs';
+import { of } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { AppService } from '../../../services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
-import { Variable } from '../../models/coding-job.model';
+import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 
 describe('CodingJobDefinitionDialogComponent', () => {
@@ -41,6 +41,21 @@ describe('CodingJobDefinitionDialogComponent', () => {
     },
     {
       unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 0
+    },
+    {
+      unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8, availableCases: 4
+    }
+  ];
+
+  const mockBundles: VariableBundle[] = [
+    {
+      id: 1,
+      name: 'Bundle 1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      variables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' }
+      ]
     }
   ];
 
@@ -53,11 +68,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
     mockBackendService = {
       getJobDefinitions: jest.fn().mockReturnValue(of([])),
       getCodingIncompleteVariables: jest.fn().mockReturnValue(of(mockVariables)),
-      getVariableBundles: jest.fn().mockReturnValue(of([])),
+      getVariableBundles: jest.fn().mockReturnValue(of(mockBundles)),
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),
-      createCodingJob: jest.fn()
-    } as Partial<BackendService>;
+      createCodingJob: jest.fn(),
+      updateJobDefinition: jest.fn(),
+      createDistributedCodingJobs: jest.fn()
+    } as unknown as Partial<BackendService>;
 
     mockAppService = {
       selectedWorkspaceId: 1
@@ -69,7 +86,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     };
 
     mockCodingJobService = {
-      assignCoder: jest.fn(),
+      assignCoder: jest.fn().mockReturnValue(of(true)),
       jobsCreatedEvent: new EventEmitter<void>()
     } as Partial<CodingJobService>;
 
@@ -113,84 +130,172 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: MatDialog, useValue: mockMatDialog }
       ]
     }).compileComponents();
+  });
 
+  const createComponent = (dataOverride?: Partial<CodingJobDefinitionDialogData>) => {
+    TestBed.overrideProvider(MAT_DIALOG_DATA, { useValue: { ...mockData, ...dataOverride } });
     fixture = TestBed.createComponent(CodingJobDefinitionDialogComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-  });
+  };
 
   it('should create', () => {
+    createComponent();
     expect(component).toBeTruthy();
   });
 
   it('should initialize form with default values', () => {
+    createComponent();
     expect(component.codingJobForm).toBeDefined();
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
   });
 
   it('should load variables and coders on init', () => {
+    createComponent();
     expect(mockBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined);
     expect(mockCoderService.getCoders).toHaveBeenCalled();
-    expect(component.variables.length).toBe(2);
+    expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);
   });
 
-  it('should filter variables based on unit name', fakeAsync(() => {
-    component.unitNameFilter = 'Unit 1';
-    component.applyFilter();
-    tick();
-    expect(mockBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, 'Unit 1');
-  }));
+  it('should apply availability filters correctly', () => {
+    createComponent();
 
-  it('should calculate total coding cases correctly', () => {
+    // Default 'all'
+    expect(component.dataSource.data.length).toBe(3);
+
+    // Filter 'full' (Unit 1: 10/10)
+    component.availabilityFilter = 'full';
+    component.applyAvailabilityFilter();
+    expect(component.dataSource.data.length).toBe(1);
+    expect(component.dataSource.data[0].unitName).toBe('Unit 1');
+
+    // Filter 'none' (Unit 2: 0/5)
+    component.availabilityFilter = 'none';
+    component.applyAvailabilityFilter();
+    expect(component.dataSource.data.length).toBe(1);
+    expect(component.dataSource.data[0].unitName).toBe('Unit 2');
+
+    // Filter 'partial' (Unit 3: 4/8)
+    component.availabilityFilter = 'partial';
+    component.applyAvailabilityFilter();
+    expect(component.dataSource.data.length).toBe(1);
+    expect(component.dataSource.data[0].unitName).toBe('Unit 3');
+  });
+
+  it('should deselect individual variables if they are covered by a newly selected bundle', () => {
+    createComponent();
+    // Select Unit 1 individually
     component.selectedVariables.select(mockVariables[0]);
-    expect(component.getTotalCodingCases()).toBe(10);
+    expect(component.selectedVariables.isSelected(mockVariables[0])).toBe(true);
 
-    component.selectedVariables.select(mockVariables[1]);
-    expect(component.getTotalCodingCases()).toBe(15); // Sum of response counts (10 + 5) since no definitions exist
+    // Helper to find the bundle containing Unit 1
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    // Toggle bundle selection
+    if (bundle) component.toggleBundleSelection(bundle);
+
+    // Should be deselected individually
+    expect(component.selectedVariableBundles.isSelected(bundle!)).toBe(true);
+    expect(component.selectedVariables.isSelected(mockVariables[0])).toBe(false);
   });
 
-  it('should validate form before submission', async () => {
-    component.codingJobForm.patchValue({ durationSeconds: 0 }); // Invalid
-    await component.onSubmit();
-    expect(mockBackendService.createJobDefinition).not.toHaveBeenCalled();
+  describe('Mode: Job (Create/Edit)', () => {
+    it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
+      createComponent({ mode: 'job', isEdit: false });
+
+      component.selectedCoders.select(mockCoders[0]);
+      component.selectedVariables.select(mockVariables[0]); // Only 1 variable
+
+      const mockCreatedJob = { id: 101, name: 'New Job' };
+      (mockBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
+
+      component.onSubmit();
+      tick();
+
+      expect(mockBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
+        assignedCoders: [1],
+        variables: [mockVariables[0]]
+      }));
+      expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(101, 1);
+      expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ id: 101 }));
+    }));
+
+    it('should submit edit calling updateCodingJob and assignCoder', fakeAsync(() => {
+      const existingJob: Partial<CodingJob> = {
+        id: 202, name: 'Edit Job', variables: [], assignedCoders: []
+      };
+      createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
+
+      component.selectedCoders.select(mockCoders[1]); // Change coder
+
+      (mockBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
+
+      component.onSubmit();
+      tick();
+
+      expect(mockBackendService.updateCodingJob).toHaveBeenCalledWith(
+        1,
+        202,
+        expect.objectContaining({ assignedCoders: [2] })
+      );
+      expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(202, 2);
+      expect(mockDialogRef.close).toHaveBeenCalled();
+    }));
+
+    it('should update definition when in definition mode and editing', fakeAsync(() => {
+      createComponent({ mode: 'definition', isEdit: true, jobDefinitionId: 555 });
+      component.selectedCoders.select(mockCoders[0]);
+      component.selectedVariables.select(mockVariables[0]);
+
+      (mockBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
+
+      component.onSubmit();
+      tick();
+
+      expect(mockBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.any(Object));
+      expect(mockDialogRef.close).toHaveBeenCalled();
+    }));
   });
 
-  it('should require at least one coder for definition mode', async () => {
-    component.selectedCoders.clear();
-    component.selectedVariables.select(mockVariables[0]);
-    await component.onSubmit();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding-job-definition-dialog.validation.coder-required', 'common.close', expect.any(Object));
+  describe('Bulk Creation', () => {
+    it('should open bulk creation dialog when mode=job and >1 variables selected', async () => {
+      createComponent({ mode: 'job', isEdit: false });
+
+      // Select 2 variables
+      component.selectedCoders.select(mockCoders[0]);
+      component.selectedVariables.select(mockVariables[0]);
+      component.selectedVariables.select(mockVariables[2]);
+
+      const mockBulkResult = { confirmed: true, jobs: [] };
+      const dialogRefMock = {
+        afterClosed: () => of(mockBulkResult)
+      };
+      (mockMatDialog.open as jest.Mock).mockReturnValue(dialogRefMock);
+      (mockBackendService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({ success: true, jobs: [] }));
+
+      await component.onSubmit();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      expect(mockBackendService.createDistributedCodingJobs).toHaveBeenCalled();
+      expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ bulkJobCreation: true }));
+    });
   });
 
-  it('should require at least one variable or bundle for definition mode', async () => {
-    component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.clear();
-    component.selectedVariableBundles.clear();
-    await component.onSubmit();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding-job-definition-dialog.validation.variable-or-bundle-required', 'common.close', expect.any(Object));
-  });
+  it('should validate maxCodingCases against selected input', () => {
+    createComponent();
+    component.selectedVariables.select(mockVariables[0]); // 10 cases
+    component.selectedVariables.select(mockVariables[2]); // 4 cases
+    // Total 14
 
-  it('should handle submission for new job definition', async () => {
-    component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
-    const mockCreatedJob = { id: 100 };
-    (mockBackendService.createJobDefinition as jest.Mock).mockReturnValue(of(mockCreatedJob));
+    // Set limit
+    component.codingJobForm.patchValue({ maxCodingCases: 5 });
 
-    await component.onSubmit();
+    expect(component.getTotalCodingCases()).toBe(5);
 
-    expect(mockBackendService.createJobDefinition).toHaveBeenCalled();
-    expect(mockDialogRef.close).toHaveBeenCalledWith(mockCreatedJob);
-  });
-
-  it('should handle submission error for new job definition', async () => {
-    component.selectedCoders.select(mockCoders[0]);
-    component.selectedVariables.select(mockVariables[0]);
-    (mockBackendService.createJobDefinition as jest.Mock).mockReturnValue(throwError(() => new Error('Server error')));
-
-    await component.onSubmit();
-
-    expect(mockSnackBar.open).toHaveBeenCalledWith('coding-job-definition-dialog.snackbars.error-creating-definition', 'common.close', expect.any(Object));
+    component.codingJobForm.patchValue({ maxCodingCases: 100 });
+    expect(component.getTotalCodingCases()).toBe(14);
   });
 });

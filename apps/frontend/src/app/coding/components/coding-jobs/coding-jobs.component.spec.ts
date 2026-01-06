@@ -145,15 +145,94 @@ describe('CodingJobsComponent', () => {
     expect(component.getStatusClass('unknown')).toBe('');
   });
 
-  it('should filter jobs by status', () => {
+  it('should filter jobs by status, coder, and job name', () => {
+    component.originalData = [...mockCodingJobs as CodingJob[]];
+
+    // Filter by Coder
+    component.selectedCoderId = 1;
+    component.onCoderFilterChange();
+    expect(component.dataSource.data.length).toBe(1);
+    expect(component.dataSource.data[0].id).toBe(1);
+
+    // Reset Coder, Filter by Job Name
+    component.selectedCoderId = null;
+    component.selectedJobName = 'Job 2';
+    component.onJobNameFilterChange();
+    expect(component.dataSource.data.length).toBe(1);
+    expect(component.dataSource.data[0].id).toBe(2);
+
+    // Reset Name, Filter by Status
+    component.selectedJobName = null;
     component.selectedStatus = 'active';
     component.onStatusFilterChange();
     expect(component.dataSource.data.length).toBe(1);
     expect(component.dataSource.data[0].id).toBe(1);
+  });
 
-    component.selectedStatus = 'all';
-    component.onStatusFilterChange();
+  it('should handle fallback when loading coding jobs fails initially', fakeAsync(() => {
+    // Initial fail
+    (backendServiceMock.getCodingJobs as jest.Mock).mockReturnValueOnce(throwError(() => new Error('Error')));
+
+    // Fallback success
+    (backendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(of({ data: mockCodingJobs }));
+
+    component.loadCodingJobs();
+    tick();
+
+    expect(backendServiceMock.getCodingJobs).toHaveBeenCalledTimes(2); // Initial try + retry
     expect(component.dataSource.data.length).toBe(2);
+  }));
+
+  it('should view coding results', () => {
+    const job = mockCodingJobs[0] as CodingJob;
+    const dialogRefSpyObj = { afterClosed: jest.fn().mockReturnValue(of({ resultsApplied: true })) };
+    (matDialogMock.open as jest.Mock).mockReturnValue(dialogRefSpyObj);
+    const loadSpy = jest.spyOn(component, 'loadCodingJobs');
+
+    component.viewCodingResults(job);
+
+    expect(matDialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      data: expect.objectContaining({ codingJob: job })
+    }));
+    expect(loadSpy).toHaveBeenCalled();
+  });
+
+  it('should not delete if confirmation cancelled', () => {
+    const job = mockCodingJobs[0] as CodingJob;
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of(false)
+    });
+
+    component.deleteCodingJob(job);
+    expect(backendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('should format variable lists correctly', () => {
+    const jobWithManyVars = {
+      assignedVariables: [
+        { unitName: 'U1', variableId: 'V1' },
+        { unitName: 'U2', variableId: 'V2' },
+        { unitName: 'U3', variableId: 'V3' },
+        { unitName: 'U4', variableId: 'V4' }
+      ]
+    } as CodingJob;
+
+    const formatted = component.getVariables(jobWithManyVars);
+    expect(formatted).toContain('U1_V1');
+    expect(formatted).toContain('U2_V2');
+    expect(formatted).toContain('U3_V3');
+    expect(formatted).toContain('+1 weitere');
+  });
+
+  it('should format bundle lists correctly', () => {
+    const jobWithManyBundles = {
+      assignedVariableBundles: [
+        { name: 'B1' }, { name: 'B2' }, { name: 'B3' }
+      ]
+    } as CodingJob;
+
+    const formatted = component.getVariableBundles(jobWithManyBundles);
+    expect(formatted).toContain('3 (B1, B2, +1 weitere)');
   });
 
   it('should return correct progress string', () => {
