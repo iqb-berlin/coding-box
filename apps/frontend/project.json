@@ -102,6 +102,19 @@
         "jestConfig": "apps/frontend/jest.config.ts",
         "passWithNoTests": true
       }
+    },
+    "e2e": {
+      "executor": "@nx/cypress:cypress",
+      "options": {
+        "cypressConfig": "cypress.config.ts",
+        "testingType": "e2e",
+        "devServerTarget": "frontend:serve"
+      },
+      "configurations": {
+        "production": {
+          "devServerTarget": "frontend:serve:production"
+        }
+      }
     }
   }
 }
