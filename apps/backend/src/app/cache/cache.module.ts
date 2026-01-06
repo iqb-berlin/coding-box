@@ -10,8 +10,6 @@ import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 // eslint-disable-next-line import/no-cycle
-import { DatabaseModule } from '../database/database.module';
-// eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
@@ -32,7 +30,6 @@ import { CodingModule } from '../coding/coding.module';
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Persons, Unit]),
-    forwardRef(() => DatabaseModule),
     forwardRef(() => WorkspacesModule),
     forwardRef(() => CodingModule)
   ],

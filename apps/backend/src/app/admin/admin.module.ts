@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
-import { DatabaseModule } from '../database/database.module';
 import { UsersModule } from '../users/users.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { CodingModule } from '../coding/coding.module';
@@ -39,7 +38,6 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
 
 @Module({
   imports: [
-    DatabaseModule,
     UsersModule,
     WorkspacesModule,
     CodingModule,
