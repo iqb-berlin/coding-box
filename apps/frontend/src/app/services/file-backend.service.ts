@@ -12,14 +12,8 @@ export class FileBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   getVocs(workspaceId: number, vocs: string): Observable<FilesDto[]> {
-    return this.http.get<FilesDto[]>(`${this.serverUrl}admin/workspace/${workspaceId}/vocs/${vocs}`, {
-      headers: this.authHeader
-    });
+    return this.http.get<FilesDto[]>(`${this.serverUrl}admin/workspace/${workspaceId}/vocs/${vocs}`, {});
   }
 
   downloadWorkspaceFilesAsZip(
@@ -29,15 +23,12 @@ export class FileBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/download-zip`;
     const body = fileTypes && fileTypes.length > 0 ? { fileTypes } : {};
     return this.http.post(url, body, {
-      responseType: 'blob',
-      headers: this.authHeader
+      responseType: 'blob'
     });
   }
 
   getUnitVariables(workspaceId: number): Observable<UnitVariableDetailsDto[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/unit-variables`;
-    return this.http.get<UnitVariableDetailsDto[]>(url, {
-      headers: this.authHeader
-    });
+    return this.http.get<UnitVariableDetailsDto[]>(url, {});
   }
 }

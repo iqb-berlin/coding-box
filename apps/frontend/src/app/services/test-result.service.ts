@@ -142,14 +142,10 @@ export class TestResultService {
   readonly workspaceCacheInvalidated$ =
     this.workspaceCacheInvalidatedSubject.asObservable();
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   getTestPersons(workspaceId: number): Observable<number[]> {
     return this.http.get<number[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
-      { headers: this.authHeader }
+      {}
     );
   }
 
@@ -180,7 +176,7 @@ export class TestResultService {
     return this.http
       .get<TestResultsOverviewResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/overview`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of(null)));
   }
@@ -193,7 +189,7 @@ export class TestResultService {
       .post<FlatResponseFrequenciesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/frequencies`,
       { combos },
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of({} as FlatResponseFrequenciesResponse)));
   }
@@ -275,7 +271,7 @@ export class TestResultService {
     return this.http
       .get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -355,7 +351,7 @@ export class TestResultService {
     return this.http
       .get<FlatResponseFilterOptionsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses/filter-options`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -382,7 +378,7 @@ export class TestResultService {
     return this.http
       .get<UnitLogRow[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/logs`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of([])));
   }
@@ -394,7 +390,7 @@ export class TestResultService {
     return this.http
       .get<BookletLogsForUnitResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}/booklet-logs`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(catchError(() => of(null)));
   }
@@ -452,7 +448,6 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/booklets/search`, {
-      headers: this.authHeader,
       params
     })
       .pipe(
@@ -539,7 +534,6 @@ export class TestResultService {
       }[];
       total: number;
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/search`, {
-      headers: this.authHeader,
       params
     })
       .pipe(
@@ -567,9 +561,7 @@ export class TestResultService {
         deletedUnit: number | null;
         warnings: string[];
       };
-    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {
-      headers: this.authHeader
-    })
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {})
       .pipe(
         catchError(() => {
           logger.error(`Error deleting unit with ID: ${unitId}`);
@@ -600,7 +592,7 @@ export class TestResultService {
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/booklets/${bookletId}`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => {

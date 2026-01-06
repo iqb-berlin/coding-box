@@ -19,14 +19,10 @@ export class WorkspaceBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
     return this.http
       .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
-      { headers: this.authHeader })
+      {})
       .pipe(
         catchError(() => {
           const defaultResponse: PaginatedWorkspacesDto = {
@@ -43,7 +39,7 @@ export class WorkspaceBackendService {
   getWorkspaceUsers(workspaceId: number): Observable<PaginatedWorkspaceUserDto> {
     return this.http
       .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
-      { headers: this.authHeader })
+      {})
       .pipe(
         catchError(() => of({
           data: [],
@@ -56,7 +52,7 @@ export class WorkspaceBackendService {
 
   addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
     return this.http
-      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, {})
       .pipe(
         catchError(() => of(false))
       );
@@ -66,7 +62,6 @@ export class WorkspaceBackendService {
     const params = new HttpParams().set('ids', ids.join(';'));
     return this.http
       .delete(`${this.serverUrl}admin/workspace`, {
-        headers: this.authHeader,
         params
       })
       .pipe(
@@ -77,7 +72,7 @@ export class WorkspaceBackendService {
 
   changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
     return this.http
-      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, {})
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -88,6 +83,6 @@ export class WorkspaceBackendService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/users/`,
       userIds,
-      { headers: this.authHeader });
+      {});
   }
 }

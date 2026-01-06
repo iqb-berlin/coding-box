@@ -31,10 +31,6 @@ export class ValidationService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
     const params = new HttpParams()
       .set('page', page.toString())
@@ -42,7 +38,7 @@ export class ValidationService {
 
     return this.http.get<PaginatedResponse<InvalidVariableDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of({
         data: [],
@@ -60,7 +56,7 @@ export class ValidationService {
 
     return this.http.get<PaginatedResponse<InvalidVariableDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of({
         data: [],
@@ -78,7 +74,7 @@ export class ValidationService {
 
     return this.http.get<PaginatedResponse<InvalidVariableDto>>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of({
         data: [],
@@ -92,7 +88,7 @@ export class ValidationService {
   validateTestTakers(workspaceId: number): Observable<TestTakersValidationDto> {
     return this.http.get<TestTakersValidationDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(() => of({
         testTakersFound: false,
@@ -125,7 +121,7 @@ export class ValidationService {
       limit: number;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of({
         testTakersFound: false,
@@ -145,7 +141,7 @@ export class ValidationService {
 
     return this.http.get<DuplicateResponsesResultDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-duplicate-responses`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of({
         data: [],
@@ -163,7 +159,7 @@ export class ValidationService {
     return this.http.post<ResolveDuplicateResponsesResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/resolve-duplicates`,
       resolutionData,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(() => of({
         resolvedCount: 0,
@@ -176,7 +172,7 @@ export class ValidationService {
     const params = new HttpParams().set('responseIds', responseIds.join(','));
     return this.http.delete<number>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of(0))
     );
@@ -186,7 +182,7 @@ export class ValidationService {
     const params = new HttpParams().set('validationType', validationType);
     return this.http.delete<number>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(() => of(0))
     );
@@ -225,7 +221,7 @@ export class ValidationService {
     return this.http.post<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
       null,
-      { headers: this.authHeader, params }
+      { params }
     ).pipe(
       catchError(error => {
         throw error;
@@ -262,7 +258,7 @@ export class ValidationService {
   getValidationTask(workspaceId: number, taskId: number): Observable<ValidationTaskDto> {
     return this.http.get<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(error => {
         throw error;
@@ -273,7 +269,7 @@ export class ValidationService {
   getValidationTasks(workspaceId: number): Observable<ValidationTaskDto[]> {
     return this.http.get<ValidationTaskDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(error => {
         // Error occurred while getting validation tasks
@@ -285,7 +281,7 @@ export class ValidationService {
   getValidationResults(workspaceId: number, taskId: number): Observable<unknown> {
     return this.http.get<unknown>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}/results`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(error => {
         throw error;

@@ -41,10 +41,6 @@ export class ImportService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   importWorkspaceFiles(
     workspace_id: number,
     testCenterWorkspace: string,
@@ -87,7 +83,7 @@ export class ImportService {
     return this.http
       .get<Result>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -126,7 +122,7 @@ export class ImportService {
     return this.http
       .get<TestGroupsInfoDto[]>(
       `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/testGroups`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(catchError(() => of([])));
   }
