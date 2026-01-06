@@ -127,12 +127,10 @@ export class ExportComponent {
       });
 
     tokenObservable.subscribe(authToken => {
-      const userId = loggedUser?.id || 0;
-
       // Prepare export configuration
       const exportConfig = {
         exportType: this.selectedFormat,
-        userId,
+        userId: this.appService.userId,
         outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
         includeReplayUrl: this.includeReplayUrl,
         anonymizeCoders: this.anonymizeCoders,
