@@ -16,10 +16,6 @@ export class UnitService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   deleteUnit(workspaceId: number, unitId: number): Observable<{
     success: boolean;
     report: {
@@ -35,7 +31,7 @@ export class UnitService {
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`,
-      { headers: this.authHeader }
+      {}
     ).pipe(
       catchError(() => of({ success: false, report: { deletedUnit: null, warnings: ['Failed to delete unit'] } }))
     );

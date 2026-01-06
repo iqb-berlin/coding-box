@@ -20,27 +20,23 @@ export class UserBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   getUsers(workspaceId: number): Observable<UserInListDto[]> {
     return this.http
-      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, { headers: this.authHeader });
+      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {});
   }
 
   saveUsers(workspaceId: number, users: UserWorkspaceAccessDto[]): Observable<UserWorkspaceAccessDto[]> {
     return this.http
       .patch<UserWorkspaceAccessDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`,
       users,
-      { headers: this.authHeader });
+      {});
   }
 
   getUsersFull(): Observable<UserFullDto[]> {
     return this.http
       .get<UserFullDto[]>(
       `${this.serverUrl}admin/users/full`,
-      { headers: this.authHeader })
+      {})
       .pipe(
         catchError(() => of([]))
       );
@@ -51,7 +47,7 @@ export class UserBackendService {
       .post(
         `${this.serverUrl}admin/users`,
         newUser,
-        { headers: this.authHeader }
+        {}
       )
       .pipe(
         catchError(() => of(false)),
@@ -64,7 +60,7 @@ export class UserBackendService {
       .patch(
         `${this.serverUrl}admin/users/${userId}`,
         newData,
-        { headers: this.authHeader })
+        {})
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -74,7 +70,7 @@ export class UserBackendService {
   deleteUsers(users: number[]): Observable<boolean> {
     return this.http
       .delete(`${this.serverUrl}admin/users/${users.join(';')}`,
-        { headers: this.authHeader })
+        {})
       .pipe(
         catchError(() => of(false)),
         map(() => true)
@@ -84,7 +80,7 @@ export class UserBackendService {
   getWorkspacesByUserList(userId: number): Observable<number[]> {
     return this.http
       .get<number[]>(`${this.serverUrl}admin/users/${userId}/workspaces`,
-      { headers: this.authHeader })
+      {})
       .pipe(
         catchError(() => of([]))
       );
@@ -94,7 +90,7 @@ export class UserBackendService {
     return this.http.post<boolean>(
       `${this.serverUrl}admin/users/${userId}/workspaces/`,
       workspaceIds,
-      { headers: this.authHeader });
+      {});
   }
 
   authenticate(username: string, password: string, server: string, url: string): Observable<ServerResponse> {

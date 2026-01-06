@@ -11,8 +11,6 @@ export class LogoService {
   private http = inject(HttpClient);
   readonly serverUrl = inject(SERVER_URL);
 
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-
   /**
    * Uploads a logo file to the server
    * @param file The logo file to upload
@@ -22,7 +20,7 @@ export class LogoService {
     const formData = new FormData();
     formData.append('logo', file);
 
-    return this.http.post<{ path: string }>(`${this.serverUrl}/admin/logo/upload`, formData, { headers: this.authHeader });
+    return this.http.post<{ path: string }>(`${this.serverUrl}/admin/logo/upload`, formData, {});
   }
 
   /**
@@ -30,7 +28,7 @@ export class LogoService {
    * @returns An Observable with the success status
    */
   deleteLogo(): Observable<{ success: boolean }> {
-    return this.http.delete<{ success: boolean }>(`${this.serverUrl}/admin/logo`, { headers: this.authHeader });
+    return this.http.delete<{ success: boolean }>(`${this.serverUrl}/admin/logo`, {});
   }
 
   /**
@@ -39,7 +37,7 @@ export class LogoService {
    * @returns An Observable with the success status
    */
   saveLogoSettings(logoSettings: AppLogoDto): Observable<{ success: boolean }> {
-    return this.http.put<{ success: boolean }>(`${this.serverUrl}/admin/logo/settings`, logoSettings, { headers: this.authHeader });
+    return this.http.put<{ success: boolean }>(`${this.serverUrl}/admin/logo/settings`, logoSettings, {});
   }
 
   /**
@@ -47,6 +45,6 @@ export class LogoService {
    * @returns An Observable with the logo settings
    */
   getLogoSettings(): Observable<AppLogoDto> {
-    return this.http.get<AppLogoDto>(`${this.serverUrl}/admin/logo/settings`, { headers: this.authHeader });
+    return this.http.get<AppLogoDto>(`${this.serverUrl}/admin/logo/settings`, {});
   }
 }

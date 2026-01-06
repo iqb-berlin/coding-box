@@ -18,10 +18,6 @@ export class TestResultBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   getExportOptions(workspaceId: number): Observable<{
     testPersons: {
       id: number;
@@ -44,9 +40,7 @@ export class TestResultBackendService {
       groups: string[];
       booklets: string[];
       units: string[];
-    }>(url, {
-      headers: this.authHeader
-    });
+    }>(url, {});
   }
 
   startExportTestResultsJob(
@@ -62,9 +56,7 @@ export class TestResultBackendService {
     return this.http.post<{ jobId: string; message: string }>(
       url,
       filters || {},
-      {
-        headers: this.authHeader
-      }
+      {}
     );
   }
 
@@ -81,17 +73,13 @@ export class TestResultBackendService {
     return this.http.post<{ jobId: string; message: string }>(
       url,
       filters || {},
-      {
-        headers: this.authHeader
-      }
+      {}
     );
   }
 
   getExportTestResultsJobs(workspaceId: number): Observable<TestResultExportJob[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs`;
-    return this.http.get<TestResultExportJob[]>(url, {
-      headers: this.authHeader
-    });
+    return this.http.get<TestResultExportJob[]>(url, {});
   }
 
   downloadExportTestResultsJob(
@@ -100,8 +88,7 @@ export class TestResultBackendService {
   ): Observable<Blob> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}/download`;
     return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
+      responseType: 'blob'
     });
   }
 
@@ -110,8 +97,6 @@ export class TestResultBackendService {
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${jobId}`;
-    return this.http.delete<{ success: boolean; message: string }>(url, {
-      headers: this.authHeader
-    });
+    return this.http.delete<{ success: boolean; message: string }>(url, {});
   }
 }

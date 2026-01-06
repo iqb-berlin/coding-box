@@ -29,10 +29,6 @@ export class CodingService {
   private http = inject(HttpClient);
   private appService = inject(AppService);
 
-  get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
-  }
-
   codeTestPersons(workspace_id: number, testPersonIds: number[]): Observable<{
     totalResponses: number;
     statusCounts: {
@@ -52,7 +48,7 @@ export class CodingService {
       message?: string;
     }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
-      { headers: this.authHeader, params })
+      { params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
@@ -82,7 +78,7 @@ export class CodingService {
       error?: string;
     }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/job/${jobId}`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of({
@@ -104,7 +100,6 @@ export class CodingService {
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
           {
-            headers: this.authHeader,
             params,
             responseType: 'blob' as 'json'
           }
@@ -124,7 +119,6 @@ export class CodingService {
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
           {
-            headers: this.authHeader,
             params,
             responseType: 'blob' as 'json'
           }
@@ -146,7 +140,6 @@ export class CodingService {
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
-            headers: this.authHeader,
             params,
             responseType: 'blob' as 'json'
           }
@@ -168,7 +161,6 @@ export class CodingService {
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
-            headers: this.authHeader,
             params,
             responseType: 'blob' as 'json'
           }
@@ -182,7 +174,7 @@ export class CodingService {
     return this.http
       .get<CodingStatistics>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
-      { headers: this.authHeader, params })
+      { params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
@@ -193,7 +185,7 @@ export class CodingService {
       .post<{ jobId: string; message: string }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
       {},
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of({ jobId: '', message: 'Failed to create job' }))
@@ -209,7 +201,7 @@ export class CodingService {
     return this.http
       .get<PaginatedResponse<ResponseEntity>>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/responses/${status}`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({
@@ -227,7 +219,7 @@ export class CodingService {
     return this.http
       .get<{ replayUrl: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/responses/${responseId}/replay-url`,
-      { headers: this.authHeader, params }
+      { params }
     )
       .pipe(
         catchError(() => of({ replayUrl: '' }))
@@ -238,7 +230,7 @@ export class CodingService {
     return this.http
       .get<{ label: string; id: number }[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/missings-profiles`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of([]))
@@ -249,7 +241,7 @@ export class CodingService {
     return this.http
       .get<MissingsProfilesDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${id}`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of(null))
@@ -261,7 +253,7 @@ export class CodingService {
       .post<MissingsProfilesDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles`,
       profile,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of(null))
@@ -273,7 +265,7 @@ export class CodingService {
       .put<MissingsProfilesDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
       profile,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of(null))
@@ -284,7 +276,7 @@ export class CodingService {
     return this.http
       .delete<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/missings-profiles/${encodeURIComponent(label)}`,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of(false))
@@ -308,7 +300,6 @@ export class CodingService {
         `${this.serverUrl}admin/workspace/${workspaceId}/coding/codebook`,
         payload,
         {
-          headers: this.authHeader,
           responseType: 'blob'
         }
       )
@@ -350,7 +341,7 @@ export class CodingService {
         return this.http
           .get<PaginatedResponse<VariableAnalysisItemDto>>(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/variable-analysis`,
-          { headers: this.authHeader, params }
+          { params }
         )
           .pipe(
             catchError(() => of({
@@ -418,7 +409,7 @@ export class CodingService {
         caseOrderingMode,
         maxCodingCases
       },
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of({
@@ -478,7 +469,7 @@ export class CodingService {
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
       body,
-      { headers: this.authHeader }
+      {}
     )
       .pipe(
         catchError(() => of({
@@ -513,7 +504,7 @@ export class CodingService {
           unitFilters: unitFilters || [],
           variableFilters: variableFilters || []
         },
-        { headers: this.authHeader }
+        {}
         )
       .pipe(
         catchError(() => of({

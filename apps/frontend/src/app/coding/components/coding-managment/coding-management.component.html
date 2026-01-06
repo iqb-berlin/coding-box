@@ -1,7 +1,7 @@
-<div class="fx-column-start-start fx-gap-10 coding-container">
+<div class="coding-main-container">
 
   <div>
-    <div class="fx-row-center-center-stretch fx-gap-20 action-buttons">
+    <div class="action-buttons-toolbar">
       @if (!showManualCoding) {
         <a mat-raised-button color="primary" (click)="onAutoCode()">
           <mat-icon>auto_fix_high</mat-icon>
@@ -45,8 +45,8 @@
   @if (!showManualCoding) {
 
 
-    <div class="fx-column-start-start">
-      <div class="content-row fx-column-start-start fx-gap-20">
+    <div class="coding-content-area">
+      <div class="content-row-container">
         <div class="statistics-section">
           @if (!statisticsLoaded && !isLoadingStatistics) {
             <div class="statistics-placeholder">
