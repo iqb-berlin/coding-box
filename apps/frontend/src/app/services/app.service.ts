@@ -122,6 +122,14 @@ export class AppService {
     return this.authDataSubject.asObservable();
   }
 
+  get authData(): AuthDataDto {
+    return this.authDataSubject.value;
+  }
+
+  get userId(): number {
+    return this.authDataSubject.value.userId;
+  }
+
   updateAuthData(newAuthData: AuthDataDto): void {
     this.authDataSubject.next(newAuthData);
   }
