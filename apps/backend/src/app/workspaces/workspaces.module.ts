@@ -129,11 +129,6 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
   exports: [
     WorkspaceCoreService,
     WorkspaceFilesService,
-    WorkspaceXmlSchemaValidationService,
-    WorkspaceFileStorageService,
-    WorkspaceFileParsingService,
-    WorkspaceResponseValidationService,
-    WorkspaceTestFilesValidationService,
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspacePlayerService,

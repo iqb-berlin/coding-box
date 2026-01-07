@@ -141,14 +141,9 @@ import { ExportJobProcessor } from './processors/export-job.processor';
 
     // AdminModule/WorkspaceModule may need these
     CodingJobService,
-    CodingExportService,
-    CodingListService,
     VariableAnalysisService,
     MissingsProfilesService,
-    BullJobManagementService,
-
-    // Keep TypeOrmModule export for potential forFeature usage elsewhere
-    TypeOrmModule
+    BullJobManagementService
   ]
 })
 export class CodingModule {}
