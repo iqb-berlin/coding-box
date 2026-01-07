@@ -24,15 +24,6 @@ import { CoderTraining } from './entities/coder-training.entity';
 import { VariableBundle } from './entities/variable-bundle.entity';
 import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
-
-// Shared Entities needed by Coding Services (from other modules)
-import FileUpload from '../workspaces/entities/file_upload.entity';
-import Persons from '../workspaces/entities/persons.entity';
-import { Unit } from '../workspaces/entities/unit.entity';
-import { Booklet } from '../workspaces/entities/booklet.entity';
-import { ResponseEntity } from '../workspaces/entities/response.entity';
-import { Job } from '../workspaces/entities/job.entity';
-
 // Coding Services
 import { CodingJobService } from './services/coding-job.service';
 import { WorkspaceCodingService } from './services/workspace-coding.service';
@@ -93,14 +84,8 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
       CoderTraining,
       VariableBundle,
       VariableAnalysisJob,
-      TestPersonCodingJob,
-      // Shared entities used by coding services
-      FileUpload,
-      Persons,
-      Unit,
-      Booklet,
-      ResponseEntity,
-      Job
+      TestPersonCodingJob
+      // Shared entities used by coding services are now accessed via WorkspacesFacadeService
     ])
   ],
   controllers: [

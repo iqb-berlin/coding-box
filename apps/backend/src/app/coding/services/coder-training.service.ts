@@ -6,8 +6,7 @@ import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { CoderTraining } from '../entities/coder-training.entity';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -59,8 +58,7 @@ export class CoderTrainingService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(CoderTraining)
     private coderTrainingRepository: Repository<CoderTraining>,
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   private sampleResponses(
@@ -94,39 +92,7 @@ export class CoderTrainingService {
 
       this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
 
-      const responses = await this.responseRepository.find({
-        where: {
-          status_v1: statusStringToNumber('CODING_INCOMPLETE'),
-          variableid: variableId
-        },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
-        select: {
-          id: true,
-          value: true,
-          variableid: true,
-          status_v1: true,
-          code_v1: true,
-          score_v1: true,
-          unit: {
-            id: true,
-            name: true,
-            alias: true,
-            booklet: {
-              id: true,
-              person: {
-                id: true,
-                login: true,
-                code: true,
-                group: true
-              },
-              bookletinfo: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      });
+      const responses = await this.workspacesFacadeService.findIncompleteResponsesForVariableConfig(variableId);
 
       const unitResponses = responses.filter(r => r.unit?.alias === unitId);
       this.logger.log(`Found ${unitResponses.length} CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);

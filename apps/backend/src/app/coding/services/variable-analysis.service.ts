@@ -1,21 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import { Unit } from '../../workspaces/entities/unit.entity';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import { VariableAnalysisResultDto } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisJob } from '../entities/variable-analysis-job.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
 @Injectable()
 export class VariableAnalysisService {
   private readonly logger = new Logger(VariableAnalysisService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
+    private workspacesFacadeService: WorkspacesFacadeService,
     @InjectRepository(VariableAnalysisJob)
     private jobRepository: Repository<VariableAnalysisJob>
   ) {}
@@ -127,44 +123,9 @@ export class VariableAnalysisService {
     unitId?: number,
     variableId?: string
   ): Promise<VariableAnalysisResultDto> {
-    // Build the query
-    const query = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
+    const rawResults = await this.workspacesFacadeService.getVariableFrequencies(workspaceId, unitId, variableId);
 
-    // Add filters
-    if (unitId) {
-      query.andWhere('unit.id = :unitId', { unitId });
-    }
-
-    if (variableId) {
-      query.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableId}%` });
-    }
-
-    // Get distinct combinations of unit name and variable ID
-    const variableCombosQuery = query.clone()
-      .select('unit.id', 'unitId')
-      .addSelect('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .distinct(true)
-      .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableid', 'ASC');
-
-    // Execute the query to get variable combinations
-    const variableCombosResult = await variableCombosQuery.getRawMany();
-    const variableCombos = variableCombosResult.map(result => ({
-      unitId: Number(result.unitId),
-      unitName: result.unitName,
-      variableId: result.variableId
-    }));
-
-    // If no variable combinations found, return empty result
-    if (variableCombos.length === 0) {
+    if (rawResults.length === 0) {
       return {
         variableCombos: [],
         frequencies: {},
@@ -172,48 +133,31 @@ export class VariableAnalysisService {
       };
     }
 
-    // Get total count of distinct variable combinations
-    const totalQuery = query.clone()
-      .select("COUNT(DISTINCT CONCAT(unit.id, ':', response.variableid))", 'count');
-    const totalResult = await totalQuery.getRawOne();
-    const total = parseInt(totalResult.count, 10);
+    const variableCombos = rawResults.map(r => ({
+      unitId: Number(r.unitId),
+      unitName: r.unitName,
+      variableId: r.variableId
+    }));
 
-    // Get frequencies for each variable combination
     const frequencies: { [key: string]: VariableFrequencyDto[] } = {};
+    rawResults.forEach(r => {
+      const comboKey = `${r.unitId}:${r.variableId}`;
+      const totalResponses = r.values.reduce((sum, val) => sum + parseInt(val.count, 10), 0);
 
-    // Process each variable combination
-    for (const combo of variableCombos) {
-      // Create a unique key for this combination
-      const comboKey = `${combo.unitId}:${combo.variableId}`;
-
-      // Get all values for this variable combination
-      const valuesQuery = query.clone()
-        .select('response.value', 'value')
-        .addSelect('COUNT(*)', 'count')
-        .andWhere('unit.id = :unitId', { unitId: combo.unitId })
-        .andWhere('response.variableid = :varId', { varId: combo.variableId })
-        .groupBy('response.value')
-        .orderBy('count', 'DESC');
-
-      const valuesResult = await valuesQuery.getRawMany();
-
-      const totalResponses = valuesResult.reduce((sum, result) => sum + parseInt(result.count, 10), 0);
-
-      // Map to DTOs
-      frequencies[comboKey] = valuesResult.map(result => ({
-        unitId: combo.unitId,
-        unitName: combo.unitName,
-        variableId: combo.variableId,
-        value: result.value || '',
-        count: parseInt(result.count, 10),
-        percentage: (parseInt(result.count, 10) / totalResponses) * 100
+      frequencies[comboKey] = r.values.map(val => ({
+        unitId: Number(r.unitId),
+        unitName: r.unitName,
+        variableId: r.variableId,
+        value: val.value || '',
+        count: parseInt(val.count, 10),
+        percentage: (parseInt(val.count, 10) / totalResponses) * 100
       }));
-    }
+    });
 
     return {
       variableCombos,
       frequencies,
-      total
+      total: variableCombos.length
     };
   }
 }

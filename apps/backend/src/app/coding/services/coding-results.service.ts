@@ -1,11 +1,9 @@
 import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 
@@ -14,8 +12,7 @@ export class CodingResultsService {
   private readonly logger = new Logger(CodingResultsService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
+    private workspacesFacadeService: WorkspacesFacadeService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
@@ -129,34 +126,8 @@ export class CodingResultsService {
       };
     }
 
-    const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction('READ COMMITTED');
-
     try {
-      const batchSize = 500;
-      let totalUpdated = 0;
-
-      for (let i = 0; i < responsesToUpdate.length; i += batchSize) {
-        const batch = responsesToUpdate.slice(i, i + batchSize);
-
-        const updatePromises = batch.map(responseUpdate => queryRunner.manager.update(
-          ResponseEntity,
-          responseUpdate.responseId,
-          {
-            code_v2: responseUpdate.code_v2,
-            score_v2: responseUpdate.score_v2,
-            status_v2: responseUpdate.status_v2
-          }
-        ));
-
-        await Promise.all(updatePromises);
-        totalUpdated += batch.length;
-
-        this.logger.log(`Updated batch of ${batch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
-      }
-
-      await queryRunner.commitTransaction();
+      await this.workspacesFacadeService.updateResponsesV2(responsesToUpdate);
 
       // Update coding job status to 'results_applied' after successful application
       await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
@@ -172,11 +143,8 @@ export class CodingResultsService {
         messageParams: { count: responsesToUpdate.length, skipped: skippedReviewCount }
       };
     } catch (error) {
-      await queryRunner.rollbackTransaction();
       this.logger.error(`Error updating responses: ${error.message}`, error.stack);
       throw error;
-    } finally {
-      await queryRunner.release();
     }
   }
 

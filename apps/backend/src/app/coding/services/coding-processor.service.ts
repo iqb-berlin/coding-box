@@ -1,6 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import {
   CodingScheme,
   VariableCodingData
@@ -33,8 +31,6 @@ export class CodingProcessor {
   private readonly logger = new Logger(CodingProcessor.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
     private codingFileCache: CodingFileCache,
     private codingJobManager: CodingJobManager
   ) {}

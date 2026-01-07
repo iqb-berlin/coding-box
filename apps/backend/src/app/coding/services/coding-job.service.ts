@@ -3,9 +3,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Not, IsNull, Connection, EntityManager
+  Repository, In, Not, IsNull, EntityManager, DataSource
 } from 'typeorm';
-import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { SaveCodingProgressDto } from '../dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
@@ -17,8 +17,6 @@ import { CreateCodingJobDto } from '../dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
-import { Setting } from '../../workspaces/entities/setting.entity';
 import { CacheService } from '../../cache/cache.service';
 
 function isSafeKey(key: string): boolean {
@@ -78,14 +76,11 @@ export class CodingJobService {
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Setting)
-    private settingRepository: Repository<Setting>,
-    private connection: Connection,
+    private workspacesFacadeService: WorkspacesFacadeService,
+    private dataSource: DataSource,
     private cacheService: CacheService
+    // Note: Removed direct repo injections for ResponseEntity, FileUpload, Setting.
+    // Removed Connection (use DataSource).
   ) {}
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -286,7 +281,7 @@ export class CodingJobService {
     workspaceId: number,
     createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
+    return this.dataSource.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
       const codingJob = codingJobRepo.create({
         workspace_id: workspaceId,
@@ -536,7 +531,6 @@ export class CodingJobService {
   async getResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<ResponseEntity[]> {
     const variableRepo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
     const bundleRepo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
-    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
 
     const codingJobVariables = await variableRepo.find({
       where: { coding_job_id: codingJobId }
@@ -547,16 +541,16 @@ export class CodingJobService {
       relations: ['variable_bundle']
     });
 
-    const allVariables: { unit_name: string; variable_id: string }[] = codingJobVariables.map(v => ({
-      unit_name: v.unit_name,
-      variable_id: v.variable_id
+    const allVariables: { unitName: string; variableId: string }[] = codingJobVariables.map(v => ({
+      unitName: v.unit_name,
+      variableId: v.variable_id
     }));
     codingJobVariableBundles.forEach(bundle => {
       if (bundle.variable_bundle?.variables) {
         bundle.variable_bundle.variables.forEach(variable => {
           allVariables.push({
-            unit_name: variable.unitName,
-            variable_id: variable.variableId
+            unitName: variable.unitName,
+            variableId: variable.variableId
           });
         });
       }
@@ -566,30 +560,7 @@ export class CodingJobService {
       return [];
     }
 
-    const queryBuilder = responseRepo.createQueryBuilder('response')
-      .leftJoinAndSelect('response.unit', 'unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-      .leftJoinAndSelect('booklet.person', 'person');
-
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    allVariables.forEach((variable, index) => {
-      const unitParam = `unitName${index}`;
-      const variableParam = `variableId${index}`;
-      conditions.push(`(unit.name = :${unitParam} AND response.variableid = :${variableParam})`);
-      parameters[unitParam] = variable.unit_name;
-      parameters[variableParam] = variable.variable_id;
-    });
-
-    if (conditions.length > 0) {
-      queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
-    }
-
-    return queryBuilder
-      .orderBy('response.id', 'ASC')
-      .getMany();
+    return this.workspacesFacadeService.findResponsesForVariables(allVariables);
   }
 
   async saveCodingProgress(
@@ -872,13 +843,7 @@ export class CodingJobService {
       return codingSchemes;
     }
 
-    const codingSchemeFiles = await this.fileUploadRepository.find({
-      where: {
-        workspace_id: workspaceId,
-        file_id: In(codingSchemeRefs)
-      },
-      select: ['file_id', 'data']
-    });
+    const codingSchemeFiles = await this.workspacesFacadeService.findFilesByFileIds(workspaceId, codingSchemeRefs);
 
     for (const file of codingSchemeFiles) {
       try {
@@ -914,7 +879,7 @@ export class CodingJobService {
     createCodingJobDto: CreateCodingJobDto,
     unitSubset: number[]
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
+    return this.dataSource.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
       const codingJob = codingJobRepo.create({
         workspace_id: workspaceId,
@@ -962,11 +927,7 @@ export class CodingJobService {
   }
 
   private async saveCodingJobUnitsSubset(codingJobId: number, responseIds: number[], manager?: EntityManager): Promise<void> {
-    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
-    const responses = await responseRepo.find({
-      where: { id: In(responseIds) },
-      relations: ['unit', 'unit.booklet', 'unit.booklet.bookletinfo', 'unit.booklet.person']
-    });
+    const responses = await this.workspacesFacadeService.findResponsesByIdsWithRelations(responseIds);
 
     if (responses.length === 0) {
       return;
@@ -1068,9 +1029,7 @@ export class CodingJobService {
 
   async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
     const settingKey = `workspace-${workspaceId}-response-matching-mode`;
-    const setting = await this.settingRepository.findOne({
-      where: { key: settingKey }
-    });
+    const setting = await this.workspacesFacadeService.findSettingByKey(settingKey);
 
     if (!setting) {
       return []; // Default: exact match (no flags)
@@ -1134,34 +1093,7 @@ export class CodingJobService {
     if (variables.length === 0) {
       return [];
     }
-
-    const queryBuilder = this.responseRepository.createQueryBuilder('response')
-      .leftJoinAndSelect('response.unit', 'unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-      .leftJoinAndSelect('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
-
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    variables.forEach((variable, index) => {
-      const unitParam = `unitName${index}`;
-      const variableParam = `variableId${index}`;
-      conditions.push(`(unit.name = :${unitParam} AND response.variableid = :${variableParam})`);
-      parameters[unitParam] = variable.unitName;
-      parameters[variableParam] = variable.variableId;
-    });
-
-    if (conditions.length > 0) {
-      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
-    }
-
-    return queryBuilder
-      .orderBy('response.id', 'ASC')
-      .getMany();
+    return this.workspacesFacadeService.findCodingIncompleteResponsesForVariables(workspaceId, variables);
   }
 
   async calculateDistribution(
@@ -1414,8 +1346,7 @@ export class CodingJobService {
 
       // After applying the global cap, update totalCases in the doubleCodingInfo
       // so that the summary reflects the actually distributed (capped) cases
-      const cappedTotalCasesForItem = Object.values(distribution[itemKey]).reduce((sum, value) => sum + value, 0);
-      doubleCodingInfo[itemKey].totalCases = cappedTotalCasesForItem;
+      doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey]).reduce((sum, value) => sum + value, 0);
     }
 
     return {

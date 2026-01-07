@@ -57,6 +57,7 @@ import { BookletInfoService } from './services/booklet-info.service';
 import { UnitInfoService } from './services/unit-info.service';
 import { ExportValidationResultsService } from './services/export-validation-results.service';
 import { WorkspaceEventsService } from './services/workspace-events.service';
+import { WorkspacesFacadeService } from './services/workspaces-facade.service';
 
 @Module({
   imports: [
@@ -114,7 +115,8 @@ import { WorkspaceEventsService } from './services/workspace-events.service';
     BookletInfoService,
     UnitInfoService,
     ExportValidationResultsService,
-    WorkspaceEventsService
+    WorkspaceEventsService,
+    WorkspacesFacadeService
   ],
   exports: [
     WorkspaceCoreService,
@@ -140,8 +142,8 @@ import { WorkspaceEventsService } from './services/workspace-events.service';
     BookletInfoService,
     UnitInfoService,
     ExportValidationResultsService,
-    TypeOrmModule,
-    WorkspaceEventsService
+    WorkspaceEventsService,
+    WorkspacesFacadeService
   ]
 })
 export class WorkspacesModule {}

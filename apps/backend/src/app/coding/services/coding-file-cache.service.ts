@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
 @Injectable()
 export class CodingFileCache {
@@ -23,8 +22,7 @@ export class CodingFileCache {
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
   constructor(
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>
+    private readonly workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   async getTestFilesWithCache(
@@ -49,10 +47,7 @@ export class CodingFileCache {
       this.logger.log(
         `Fetching ${missingAliases.length} missing test files for workspace ${workspace_id}`
       );
-      const missingFiles = await this.fileUploadRepository.find({
-        where: { workspace_id, file_id: In(missingAliases) },
-        select: ['file_id', 'data', 'filename']
-      });
+      const missingFiles = await this.workspacesFacadeService.findFilesByFileIds(workspace_id, missingAliases);
 
       missingFiles.forEach(file => {
         cacheEntry.files.set(file.file_id, file);
@@ -64,10 +59,7 @@ export class CodingFileCache {
     }
 
     this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
-    const testFiles = await this.fileUploadRepository.find({
-      where: { workspace_id, file_id: In(unitAliasesArray) },
-      select: ['file_id', 'data', 'filename']
-    });
+    const testFiles = await this.workspacesFacadeService.findFilesByFileIds(workspace_id, unitAliasesArray);
 
     const fileMap = new Map<string, FileUpload>();
     testFiles.forEach(file => {
@@ -102,10 +94,7 @@ export class CodingFileCache {
     this.logger.log(
       `Fetching ${missingSchemeRefs.length} missing coding schemes`
     );
-    const codingSchemeFiles = await this.fileUploadRepository.find({
-      where: { file_id: In(missingSchemeRefs) },
-      select: ['file_id', 'data', 'filename']
-    });
+    const codingSchemeFiles = await this.workspacesFacadeService.findFilesByFileIds(undefined, missingSchemeRefs);
 
     codingSchemeFiles.forEach(file => {
       try {

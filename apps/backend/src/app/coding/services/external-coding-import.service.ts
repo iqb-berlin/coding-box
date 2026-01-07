@@ -1,19 +1,14 @@
 import {
   Injectable, Logger
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import * as cheerio from 'cheerio';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import Persons from '../../workspaces/entities/persons.entity';
 import { Unit } from '../../workspaces/entities/unit.entity';
-import { Booklet } from '../../workspaces/entities/booklet.entity';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../../workspaces/utils/response-status-converter';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -35,32 +30,12 @@ export interface ExternalCodingImportBody {
   previewOnly?: boolean; // if true, only preview without applying changes
 }
 
-interface QueryParameters {
-  unitAlias?: string;
-  unitName?: string;
-  variableId: string;
-  workspaceId: number;
-  personCode?: string;
-  personLogin?: string;
-  personGroup?: string;
-  bookletName?: string;
-}
-
 @Injectable()
 export class ExternalCodingImportService {
   private readonly logger = new Logger(ExternalCodingImportService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Persons)
-    private personRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>,
+    private workspacesFacadeService: WorkspacesFacadeService,
     private cacheService: CacheService
   ) {}
 
@@ -196,58 +171,18 @@ export class ExternalCodingImportService {
               continue;
             }
 
-            const queryBuilder = this.responseRepository
-              .createQueryBuilder('response')
-              .leftJoinAndSelect('response.unit', 'unit')
-              .leftJoinAndSelect('unit.booklet', 'booklet')
-              .leftJoinAndSelect('booklet.person', 'person')
-              .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
-
-            // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
-            if (unitKey) {
-              queryBuilder.andWhere('unit.name = :unitIdentifier', { unitIdentifier });
-            } else {
-              queryBuilder.andWhere('unit.alias = :unitIdentifier', { unitIdentifier });
-            }
-
-            queryBuilder
-              .andWhere('response.variableid = :variableId', { variableId })
-              .andWhere('person.workspace_id = :workspaceId', { workspaceId });
-
-            if (personCode) {
-              queryBuilder.andWhere('person.code = :personCode', { personCode });
-            }
-            if (personLogin) {
-              queryBuilder.andWhere('person.login = :personLogin', { personLogin });
-            }
-            if (personGroup) {
-              queryBuilder.andWhere('person.group = :personGroup', { personGroup });
-            }
-            if (bookletName) {
-              queryBuilder.andWhere('bookletinfo.name = :bookletName', { bookletName });
-            }
-
-            const queryParameters: QueryParameters = {
-              unitAlias: unitAlias || unitKey,
-              unitName: unitKey || unitAlias,
+            const responsesToUpdate = await this.workspacesFacadeService.findResponsesForImport(
+              workspaceId,
+              unitIdentifier,
+              !!unitKey,
               variableId,
-              workspaceId
-            };
-
-            if (personCode) {
-              queryParameters.personCode = personCode;
-            }
-            if (personLogin) {
-              queryParameters.personLogin = personLogin;
-            }
-            if (personGroup) {
-              queryParameters.personGroup = personGroup;
-            }
-            if (bookletName) {
-              queryParameters.bookletName = bookletName;
-            }
-
-            const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
+              {
+                personCode,
+                personLogin,
+                personGroup,
+                bookletName
+              }
+            );
 
             if (responsesToUpdate.length > 0) {
               // Validate code against coding scheme for each response
@@ -273,16 +208,14 @@ export class ExternalCodingImportService {
               if (!body.previewOnly) {
                 // Update each response with validated status and score
                 for (const validation of validationResults) {
-                  await this.responseRepository
-                    .createQueryBuilder()
-                    .update(ResponseEntity)
-                    .set({
+                  await this.workspacesFacadeService.updateResponseStatus(
+                    validation.responseId,
+                    {
                       status_v2: statusStringToNumber(validation.validatedStatus) || null,
                       code_v2: validation.validatedCode,
                       score_v2: validation.validatedScore
-                    })
-                    .where('id = :responseId', { responseId: validation.responseId })
-                    .execute();
+                    }
+                  );
                 }
               }
 
@@ -393,9 +326,11 @@ export class ExternalCodingImportService {
   private async getCodingSchemeForUnit(unit: Unit): Promise<CodingScheme | null> {
     try {
       // Get the unit's test file to access the coding scheme reference
-      const testFile = await this.fileUploadRepository.findOne({
-        where: { file_id: unit.alias.toUpperCase() }
-      });
+      const testFile = await this.workspacesFacadeService.findFileSpecific(
+        unit.booklet?.person?.workspace_id || 0, // Need workspaceId if possible, or refactor findFileSpecific
+        'Unit',
+        unit.alias.toUpperCase()
+      );
 
       if (!testFile) {
         this.logger.warn(`Test file not found for unit: ${unit.alias}`);
@@ -413,9 +348,11 @@ export class ExternalCodingImportService {
       const codingSchemeRef = codingSchemeRefText.toUpperCase();
 
       // Get the coding scheme file from the database
-      const codingSchemeFile = await this.fileUploadRepository.findOne({
-        where: { file_id: codingSchemeRef }
-      });
+      const codingSchemeFile = await this.workspacesFacadeService.findFileSpecific(
+        testFile.workspace_id,
+        'Resource',
+        codingSchemeRef
+      );
 
       if (!codingSchemeFile) {
         this.logger.warn(`Coding scheme file not found: ${codingSchemeRef}`);

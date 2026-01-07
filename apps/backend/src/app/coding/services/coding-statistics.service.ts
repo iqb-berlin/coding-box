@@ -1,10 +1,7 @@
 import {
   Injectable, Logger, OnApplicationBootstrap, Inject, forwardRef
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingStatistics } from '../../workspaces/shared-types';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
@@ -18,8 +15,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
+    private workspacesFacadeService: WorkspacesFacadeService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private workspaceEventsService: WorkspaceEventsService
@@ -51,17 +47,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   private async getWorkspaceIdsWithResponses(): Promise<number[]> {
     const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
-    const result = await this.responseRepository.query(`
-      SELECT DISTINCT person.workspace_id
-      FROM response
-      INNER JOIN unit ON response.unitid = unit.id
-      INNER JOIN booklet ON unit.bookletid = booklet.id
-      INNER JOIN persons person ON booklet.personid = person.id
-      WHERE response.status = ANY($1)
-        AND person.consider = $2
-    `, [codedStatuses, true]);
-
-    return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
+    return this.workspacesFacadeService.getWorkspaceIdsWithResponses(codedStatuses);
   }
 
   async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
@@ -106,21 +92,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
       }
 
-      const statusCountResults = await this.responseRepository.query(`
-        SELECT
-          ${statusColumn} as "statusValue",
-          COUNT(response.id) as count
-        FROM response
-        INNER JOIN unit ON response.unitid = unit.id
-        INNER JOIN booklet ON unit.bookletid = booklet.id
-        INNER JOIN persons person ON booklet.personid = person.id
-        WHERE response.status = ANY($1)
-          AND ${whereCondition}
-          AND person.workspace_id = $2
-          AND person.consider = $3
-          AND unit.name = ANY($4)
-        GROUP BY ${statusColumn}
-      `, [codedStatuses, workspace_id, true, unitsWithVariables]);
+      const statusCountResults = await this.workspacesFacadeService.getResponseStatusCounts(
+        workspace_id,
+        codedStatuses,
+        statusColumn,
+        whereCondition,
+        unitsWithVariables
+      );
 
       let totalResponses = 0;
       statusCountResults.forEach(result => {
@@ -146,10 +124,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   private async getUnitVariables(workspace_id: number): Promise<Record<string, string[]>> {
-    const fileUploadRepository = this.responseRepository.manager.getRepository(FileUpload);
-    const unitFiles = await fileUploadRepository.find({
-      where: { workspace_id, file_type: 'Unit' }
-    });
+    const unitFiles = await this.workspacesFacadeService.findFilesByType(workspace_id, 'Unit');
 
     const unitVariables: Record<string, string[]> = {};
 

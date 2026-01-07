@@ -1,13 +1,11 @@
 import {
   Injectable, Logger
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import {
-  statusStringToNumber,
   statusNumberToString
 } from '../../workspaces/utils/response-status-converter';
 import { VocsService } from './vocs.service';
@@ -37,8 +35,7 @@ export class CodingListService {
   private readonly logger = new Logger(CodingListService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private readonly responseRepository: Repository<ResponseEntity>,
+    private readonly workspacesFacadeService: WorkspacesFacadeService,
     private readonly vocsService: VocsService,
     private readonly voudService: VoudService
   ) {}
@@ -123,20 +120,8 @@ export class CodingListService {
       const server = serverUrl;
 
       // 1) Query all coding incomplete responses
-      const queryBuilder = this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', {
-          status: statusStringToNumber('CODING_INCOMPLETE')
-        })
-        .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .andWhere('person.consider = :consider', { consider: true })
-        .orderBy('response.id', 'ASC');
-
-      const [responses, total] = await queryBuilder.getManyAndCount();
+      // 1) Query all coding incomplete responses
+      const [responses, total] = await this.workspacesFacadeService.findCodingIncompleteResponsesAndCount(workspace_id);
 
       // 2) Preload VOUD files map for found units
       const uniqueUnitNames = [...new Set(responses.map(r => r.unit?.name).filter(n => !!n))];
@@ -228,21 +213,11 @@ export class CodingListService {
         let totalWritten = 0;
 
         for (;;) {
-          const responses = await this.responseRepository
-            .createQueryBuilder('response')
-            .leftJoinAndSelect('response.unit', 'unit')
-            .leftJoinAndSelect('unit.booklet', 'booklet')
-            .leftJoinAndSelect('booklet.person', 'person')
-            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-            .where('response.status_v1 = :status', {
-              status: statusStringToNumber('CODING_INCOMPLETE')
-            })
-            .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-            .andWhere('person.consider = :consider', { consider: true })
-            .andWhere('response.id > :lastId', { lastId })
-            .orderBy('response.id', 'ASC')
-            .take(batchSize)
-            .getMany();
+          const responses = await this.workspacesFacadeService.findCodingIncompleteResponses(
+            workspace_id,
+            lastId,
+            batchSize
+          );
 
           if (!responses.length) break;
 
@@ -335,20 +310,11 @@ export class CodingListService {
       let totalWritten = 0;
 
       for (;;) {
-        const responses = await this.responseRepository
-          .createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', {
-            status: statusStringToNumber('CODING_INCOMPLETE')
-          })
-          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-          .andWhere('response.id > :lastId', { lastId })
-          .orderBy('response.id', 'ASC')
-          .take(batchSize)
-          .getMany();
+        const responses = await this.workspacesFacadeService.findCodingIncompleteResponses(
+          workspace_id,
+          lastId,
+          batchSize
+        );
 
         if (!responses.length) break;
 
@@ -442,20 +408,11 @@ export class CodingListService {
       let lastId = 0;
 
       for (;;) {
-        const responses = await this.responseRepository
-          .createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('response.status_v1 = :status', {
-            status: statusStringToNumber('CODING_INCOMPLETE')
-          })
-          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-          .andWhere('response.id > :lastId', { lastId })
-          .orderBy('response.id', 'ASC')
-          .take(batchSize)
-          .getMany();
+        const responses = await this.workspacesFacadeService.findCodingIncompleteResponses(
+          workspace_id,
+          lastId,
+          batchSize
+        );
 
         if (!responses.length) break;
 
@@ -499,58 +456,7 @@ export class CodingListService {
   async getCodingListVariables(
     workspaceId: number
   ): Promise<Array<{ unitName: string; variableId: string }>> {
-    const queryBuilder = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .distinct(true)
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      });
-
-    const excludedPairs = await this.vocsService.getAllExclusions(workspaceId);
-
-    if (excludedPairs.size > 0) {
-      const exclusionConditions: string[] = [];
-      const exclusionParams: Record<string, string> = {};
-
-      Array.from(excludedPairs).forEach((pair, index) => {
-        const [unitKey, varId] = pair.split('||');
-        const unitParam = `unit${index}`;
-        const varParam = `var${index}`;
-        exclusionConditions.push(
-          `NOT (unit.name = :${unitParam} AND response.variableid = :${varParam})`
-        );
-        exclusionParams[unitParam] = unitKey;
-        exclusionParams[varParam] = varId;
-      });
-
-      queryBuilder.andWhere(
-        `(${exclusionConditions.join(' AND ')})`,
-        exclusionParams
-      );
-    }
-
-    // Exclude media variables and derived variables
-    queryBuilder.andWhere(
-      `response.variableid NOT LIKE 'image%'
-       AND response.variableid NOT LIKE 'text%'
-       AND response.variableid NOT LIKE 'audio%'
-       AND response.variableid NOT LIKE 'frame%'
-       AND response.variableid NOT LIKE 'video%'
-       AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
-    );
-
-    queryBuilder.andWhere(
-      "(response.value IS NOT NULL AND response.value != '')"
-    );
-
-    const rawResults = await queryBuilder.getRawMany();
+    const rawResults = await this.workspacesFacadeService.findCodingIncompleteVariables(workspaceId);
 
     const unitVariableMap = await this.voudService.getUnitVariableMap(
       workspaceId
@@ -596,18 +502,12 @@ export class CodingListService {
         let totalWritten = 0;
 
         for (;;) {
-          const responses = await this.responseRepository
-            .createQueryBuilder('response')
-            .leftJoinAndSelect('response.unit', 'unit')
-            .leftJoinAndSelect('unit.booklet', 'booklet')
-            .leftJoinAndSelect('booklet.person', 'person')
-            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-            .where(`response.status_${version} IS NOT NULL`)
-            .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-            .andWhere('response.id > :lastId', { lastId })
-            .orderBy('response.id', 'ASC')
-            .take(batchSize)
-            .getMany();
+          const responses = await this.workspacesFacadeService.findResponsesByVersion(
+            workspace_id,
+            version,
+            lastId,
+            batchSize
+          );
 
           if (!responses.length) break;
 
@@ -717,18 +617,12 @@ export class CodingListService {
 
     try {
       for (;;) {
-        const responses = await this.responseRepository
-          .createQueryBuilder('response')
-          .leftJoinAndSelect('response.unit', 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where(`response.status_${version} IS NOT NULL`)
-          .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-          .andWhere('response.id > :lastId', { lastId })
-          .orderBy('response.id', 'ASC')
-          .take(batchSize)
-          .getMany();
+        const responses = await this.workspacesFacadeService.findResponsesByVersion(
+          workspace_id,
+          version,
+          lastId,
+          batchSize
+        );
 
         if (!responses.length) break;
 

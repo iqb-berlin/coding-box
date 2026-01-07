@@ -7,33 +7,22 @@ import {
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
-import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 import { CodingListService } from './coding-list.service';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
-import Persons from '../../workspaces/entities/persons.entity';
-import { Unit } from '../../workspaces/entities/unit.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
 @Injectable()
 export class CodingExportService {
   private readonly logger = new Logger(CodingExportService.name);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobCoder)
@@ -47,7 +36,8 @@ export class CodingExportService {
     private missingsProfilesService: MissingsProfilesService,
     @Inject(forwardRef(() => WorkspaceFilesService))
     private workspaceFilesService: WorkspaceFilesService,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
@@ -995,36 +985,7 @@ export class CodingExportService {
 
           if (unitIds.length === 0 || variableIds.length === 0) continue;
 
-          const responses = await this.responseRepository.find({
-            where: {
-              unitid: In(unitIds),
-              variableid: In(variableIds)
-            },
-            relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
-            select: {
-              id: true,
-              variableid: true,
-              code_v1: true,
-              score_v1: true,
-              code_v2: true,
-              score_v2: true,
-              code_v3: true,
-              score_v3: true,
-              unit: {
-                id: true,
-                name: true,
-                booklet: {
-                  id: true,
-                  person: {
-                    id: true,
-                    login: true,
-                    code: true,
-                    group: true
-                  }
-                }
-              }
-            }
-          });
+          const responses = await this.workspacesFacadeService.findResponsesByUnitsAndVariables(unitIds, variableIds);
 
           for (const response of responses) {
             const person = response.unit?.booklet?.person;
@@ -1191,20 +1152,7 @@ export class CodingExportService {
     }
 
     // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
-    const unitVariableResults = await this.responseRepository
-      .createQueryBuilder('response')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
-      .groupBy('unit.name')
-      .addGroupBy('response.variableid')
-      .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableid', 'ASC')
-      .getRawMany();
+    const unitVariableResults = await this.workspacesFacadeService.findCodingIncompleteVariables(workspaceId);
 
     // Filter to only include variables that are in the incomplete set
     const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)

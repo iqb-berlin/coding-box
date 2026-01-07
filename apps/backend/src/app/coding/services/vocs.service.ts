@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import FileUpload from '../../workspaces/entities/file_upload.entity';
 import { LRUCache } from '../../utils/lru-cache';
 
@@ -14,8 +13,7 @@ export class VocsService {
   private vocsCache = new LRUCache<Set<string>>(50);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private readonly fileUploadRepository: Repository<FileUpload>
+    private readonly workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   clearCache() {
@@ -33,13 +31,11 @@ export class VocsService {
     }
 
     exclusions = new Set<string>();
-    const vocsFile = await this.fileUploadRepository.findOne({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: `${unitName}.VOCS`
-      }
-    });
+    const vocsFile = await this.workspacesFacadeService.findFileSpecific(
+      workspaceId,
+      'Resource',
+      `${unitName}.VOCS`
+    );
 
     if (vocsFile) {
       this.parseVocsContent(vocsFile, exclusions, unitName);
@@ -50,14 +46,11 @@ export class VocsService {
   }
 
   async getAllExclusions(workspaceId: number): Promise<Set<string>> {
-    const vocsFiles = await this.fileUploadRepository.find({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: Like('%.VOCS')
-      },
-      select: ['file_id', 'data']
-    });
+    const vocsFiles = await this.workspacesFacadeService.findFilesByPattern(
+      workspaceId,
+      'Resource',
+      '%.VOCS'
+    );
 
     const excludedPairs = new Set<string>();
     for (const file of vocsFiles) {

@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, IsNull, Not, Repository
+  In, IsNull, Not, Repository, DataSource
 } from 'typeorm';
 import {
   CodingScheme
@@ -15,10 +15,9 @@ import {
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import FileUpload from '../../workspaces/entities/file_upload.entity';
-import Persons from '../../workspaces/entities/persons.entity';
 import { Unit } from '../../workspaces/entities/unit.entity';
-import { Booklet } from '../../workspaces/entities/booklet.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
@@ -63,16 +62,8 @@ export class WorkspaceCodingService {
   private readonly logger = new Logger(WorkspaceCodingService.name);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
+    private dataSource: DataSource,
+    private workspacesFacadeService: WorkspacesFacadeService,
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobUnit)
@@ -259,17 +250,14 @@ export class WorkspaceCodingService {
     }
 
     const queryRunner =
-      this.responseRepository.manager.connection.createQueryRunner();
+      this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction('READ COMMITTED');
 
     try {
       // Step 1: Get persons - 10% progress
       const personsQueryStart = Date.now();
-      const persons = await this.personsRepository.find({
-        where: { workspace_id, id: In(personIds) },
-        select: ['id', 'group', 'login', 'code', 'uploaded_at']
-      });
+      const persons = await this.workspacesFacadeService.findPersonsByIds(workspace_id, personIds);
       metrics.personsQuery = Date.now() - personsQueryStart;
 
       if (!persons || persons.length === 0) {
@@ -295,10 +283,7 @@ export class WorkspaceCodingService {
       // Step 2: Get booklets - 20% progress
       const personIdsArray = persons.map(person => person.id);
       const bookletQueryStart = Date.now();
-      const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIdsArray) },
-        select: ['id', 'personid'] // Only select needed fields
-      });
+      const booklets = await this.workspacesFacadeService.findBookletsByPersonIds(personIdsArray);
       metrics.bookletQuery = Date.now() - bookletQueryStart;
 
       if (!booklets || booklets.length === 0) {
@@ -326,10 +311,7 @@ export class WorkspaceCodingService {
       // Step 3: Get units - 30% progress
       const bookletIds = booklets.map(booklet => booklet.id);
       const unitQueryStart = Date.now();
-      const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'bookletid', 'name', 'alias'] // Only select needed fields
-      });
+      const units = await this.workspacesFacadeService.findUnitsByBookletIds(bookletIds);
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
@@ -387,31 +369,7 @@ export class WorkspaceCodingService {
 
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
-      const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
-      const allResponses = await responseRepo
-        .createQueryBuilder('ResponseEntity')
-        .select([
-          'ResponseEntity.id',
-          'ResponseEntity.unitid',
-          'ResponseEntity.variableid',
-          'ResponseEntity.value',
-          'ResponseEntity.status',
-          'ResponseEntity.status_v1',
-          'ResponseEntity.status_v2'
-        ])
-        .where('ResponseEntity.unitid = ANY(:unitIds)', {
-          unitIds: unitIdsArray
-        })
-        .andWhere(
-          new Brackets(qb => {
-            qb.where('ResponseEntity.status IN (:...statuses)', {
-              statuses: [3, 2, 1]
-            }).orWhere('ResponseEntity.status_v1 = :derivePending', {
-              derivePending: statusStringToNumber('DERIVE_PENDING') as number
-            });
-          })
-        )
-        .getMany();
+      const allResponses = await this.workspacesFacadeService.findResponsesByUnitIds(unitIdsArray);
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
@@ -690,14 +648,7 @@ export class WorkspaceCodingService {
       this.logger.log(`Fetching persons for groups: ${groupsOrIds.join(', ')}`);
 
       try {
-        const persons = await this.personsRepository.find({
-          where: {
-            workspace_id,
-            group: In(groupsOrIds),
-            consider: true
-          },
-          select: ['id']
-        });
+        const persons = await this.workspacesFacadeService.findPersonsByGroup(workspace_id, groupsOrIds);
 
         personIds = persons.map(person => person.id.toString());
         this.logger.log(
@@ -761,9 +712,7 @@ export class WorkspaceCodingService {
     );
 
     try {
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspace_id, consider: true }
-      });
+      const persons = await this.workspacesFacadeService.findConsideringPersons(workspace_id);
 
       if (!persons.length) {
         this.logger.log(`No persons found for workspace_id = ${workspace_id}.`);
@@ -784,10 +733,7 @@ export class WorkspaceCodingService {
 
       const personIdsArray = filteredPersons.map(person => person.id);
 
-      const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIdsArray) },
-        select: ['id']
-      });
+      const booklets = await this.workspacesFacadeService.findBookletsByPersonIds(personIdsArray);
 
       const bookletIds = booklets.map(booklet => booklet.id);
 
@@ -800,10 +746,7 @@ export class WorkspaceCodingService {
         return [];
       }
 
-      const units = await this.unitRepository.find({
-        where: { bookletid: In(bookletIds) },
-        select: ['id', 'name']
-      });
+      const units = await this.workspacesFacadeService.findUnitsByBookletIds(bookletIds);
 
       const unitIdToNameMap = new Map(
         units.map(unit => [unit.id, unit.name])
@@ -819,17 +762,7 @@ export class WorkspaceCodingService {
         return [];
       }
 
-      const responses = await this.responseRepository.find({
-        where: {
-          unitid: In(unitIds),
-          status_v1: In([
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE'),
-            statusStringToNumber('CODE_SELECTION_PENDING'),
-            statusStringToNumber('CODING_ERROR')
-          ])
-        }
-      });
+      const responses = await this.workspacesFacadeService.findIncompleteResponsesByUnitIds(unitIds);
 
       const enrichedResponses = responses.map(response => ({
         ...response,
@@ -872,9 +805,7 @@ export class WorkspaceCodingService {
       this.logger.log(
         `Generating codebook for workspace ${workspaceId} with ${unitIds.length} units`
       );
-      const units = await this.fileUploadRepository.findBy({
-        id: In(unitIds)
-      });
+      const units = await this.workspacesFacadeService.findFilesByIds(unitIds);
 
       if (!units || units.length === 0) {
         this.logger.warn(
@@ -1070,30 +1001,16 @@ export class WorkspaceCodingService {
         );
 
         for (const expected of batch) {
-          const responseExists = await this.responseRepository
-            .createQueryBuilder('response')
-            .innerJoin('response.unit', 'unit')
-            .innerJoin('unit.booklet', 'booklet')
-            .innerJoin('booklet.person', 'person')
-            .innerJoin('booklet.bookletinfo', 'bookletinfo')
-            .where('unit.alias = :unitKey', { unitKey: expected.unit_key })
-            .andWhere('person.login = :loginName', {
-              loginName: expected.login_name
-            })
-            .andWhere('person.code = :loginCode', {
-              loginCode: expected.login_code
-            })
-            .andWhere('bookletinfo.name = :bookletId', {
-              bookletId: expected.booklet_id
-            })
-            .andWhere('response.variableid = :variableId', {
-              variableId: expected.variable_id
-            })
-            .andWhere('response.value IS NOT NULL')
-            .andWhere('response.value != :empty', { empty: '' })
-            .getCount();
+          const responseExists = await this.workspacesFacadeService.checkResponseExists(
+            expected.unit_key,
+            expected.login_name,
+            expected.login_code,
+            expected.booklet_id,
+            expected.variable_id
+          );
+          const count = responseExists ? 1 : 0;
 
-          const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
+          const status = count > 0 ? 'EXISTS' : 'MISSING';
           if (status === 'MISSING') {
             totalMissingCount += 1;
           }
@@ -1292,29 +1209,9 @@ export class WorkspaceCodingService {
   ): Promise<
     { unitName: string; variableId: string; responseCount: number }[]
     > {
-    const queryBuilder = this.responseRepository
-      .createQueryBuilder('response')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('COUNT(response.id)', 'responseCount')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      })
-      .andWhere('person.workspace_id = :workspace_id', {
-        workspace_id: workspaceId
-      })
-      .andWhere('person.consider = :consider', { consider: true });
+    const validRows = await this.workspacesFacadeService.findCodingIncompleteVariablesWithCounts(workspaceId, unitName);
 
-    if (unitName) {
-      queryBuilder.andWhere('unit.name = :unitName', { unitName });
-    }
-
-    queryBuilder.groupBy('unit.name').addGroupBy('response.variableid');
-
-    const rawResults = await queryBuilder.getRawMany();
+    const rawResults = validRows; // API matches, maybe different types for count? Facade returns string count usually from raw query.
 
     const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
       workspaceId
@@ -1489,72 +1386,20 @@ export class WorkspaceCodingService {
       }
 
       const offset = (page - 1) * limit;
-
-      const selectFields = [
-        'response.id',
-        'response.unitId',
-        'response.variableid',
-        'response.value',
-        'response.status',
-        'response.codedstatus'
-      ];
-
-      selectFields.push('response.code_v1', 'response.score_v1');
-      selectFields.push('response.code_v2', 'response.score_v2');
-      selectFields.push('response.code_v3', 'response.score_v3');
-      selectFields.push(
-        'response.status_v1',
-        'response.status_v2',
-        'response.status_v3'
+      const result = await this.workspacesFacadeService.findResponsesByStatus(
+        workspaceId,
+        statusNumber,
+        version,
+        offset,
+        limit
       );
-
-      const queryBuilder = this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .select(selectFields)
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true });
-
-      switch (version) {
-        case 'v1':
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v2':
-          queryBuilder.andWhere('response.status_v2 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v3':
-          queryBuilder.andWhere('response.status_v3 = :status', {
-            status: statusNumber
-          });
-          break;
-        default:
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-      }
-
-      const total = await queryBuilder.getCount();
-      const data = await queryBuilder
-        .orderBy('response.id', 'ASC')
-        .skip(offset)
-        .take(limit)
-        .getMany();
-
       this.logger.log(
-        `Retrieved ${data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`
+        `Retrieved ${result.data.length} responses with status ${status} for version ${version} in workspace ${workspaceId}`
       );
 
       return {
-        data,
-        total,
+        data: result.data,
+        total: result.total,
         page,
         limit
       };
@@ -1576,15 +1421,7 @@ export class WorkspaceCodingService {
     authToken: string
   ): Promise<{ replayUrl: string }> {
     try {
-      const response = await this.responseRepository.findOne({
-        where: { id: responseId },
-        relations: [
-          'unit',
-          'unit.booklet',
-          'unit.booklet.person',
-          'unit.booklet.bookletinfo'
-        ]
-      });
+      const response = await this.workspacesFacadeService.findResponseByIdWithRelations(responseId);
 
       if (!response) {
         throw new Error(`Response with id ${responseId} not found`);
@@ -1916,17 +1753,7 @@ export class WorkspaceCodingService {
     completedCases: number;
     completionPercentage: number;
   }> {
-    const totalCasesToCode = await this.responseRepository
-      .createQueryBuilder('response')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .getCount();
+    const totalCasesToCode = await this.workspacesFacadeService.countCodingIncompleteResponses(workspaceId);
 
     const completedCases = await this.codingJobUnitRepository.count({
       where: {
@@ -1956,17 +1783,7 @@ export class WorkspaceCodingService {
     unassignedCases: number;
     coveragePercentage: number;
   }> {
-    const totalCasesToCode = await this.responseRepository
-      .createQueryBuilder('response')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      })
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .getCount();
+    const totalCasesToCode = await this.workspacesFacadeService.countCodingIncompleteResponses(workspaceId);
 
     const casesInJobs = await this.codingJobUnitRepository
       .createQueryBuilder('cju')
@@ -2055,22 +1872,12 @@ export class WorkspaceCodingService {
         `Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`
       );
 
-      const incompleteVariablesResult = await this.responseRepository
-        .createQueryBuilder('response')
-        .select('unit.name', 'unitName')
-        .addSelect('response.variableid', 'variableId')
-        .addSelect('COUNT(response.id)', 'caseCount')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('response.status_v1 = :status', {
-          status: statusStringToNumber('CODING_INCOMPLETE')
-        })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .groupBy('unit.name')
-        .addGroupBy('response.variableid')
-        .getRawMany();
+      const rawResult = await this.workspacesFacadeService.findCodingIncompleteVariablesWithCounts(workspaceId);
+      const incompleteVariablesResult = rawResult.map(row => ({
+        unitName: row.unitName,
+        variableId: row.variableId,
+        caseCount: row.responseCount
+      }));
 
       const variablesNeedingCoding = new Set<string>();
       const variableCaseCounts: {
@@ -2485,7 +2292,7 @@ export class WorkspaceCodingService {
           response.score_v2 = selectedCodingJobUnit.score;
           response.value = updatedValue;
 
-          await this.responseRepository.save(response);
+          await this.workspacesFacadeService.saveResponse(response);
           appliedCount += 1;
 
           this.logger.debug(
@@ -2566,7 +2373,7 @@ export class WorkspaceCodingService {
             AND response.status_v2 IN ($3, $4, $5)
         `;
 
-        const result = await this.responseRepository.query(query, [
+        const result = await this.workspacesFacadeService.queryResponses(query, [
           workspaceId,
           statusStringToNumber('CODING_INCOMPLETE'), // status_v1 = CODING_INCOMPLETE
           statusStringToNumber('CODING_COMPLETE'), // status_v2 = CODING_COMPLETE
@@ -2785,28 +2592,12 @@ export class WorkspaceCodingService {
         versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
       }
 
-      const baseQueryBuilder = this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true });
-
-      if (unitFilters && unitFilters.length > 0) {
-        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', {
-          unitNames: unitFilters
-        });
-      }
-
-      if (variableFilters && variableFilters.length > 0) {
-        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', {
-          variableIds: variableFilters
-        });
-      }
-
-      const countQueryBuilder = baseQueryBuilder.clone();
-      const affectedResponseCount = await countQueryBuilder.getCount();
+      const responseIds = await this.workspacesFacadeService.findResponseIdsForReset(
+        workspaceId,
+        unitFilters,
+        variableFilters
+      );
+      const affectedResponseCount = responseIds.length;
 
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
@@ -2825,30 +2616,10 @@ export class WorkspaceCodingService {
       });
 
       const batchSize = 5000;
-      let offset = 0;
 
-      for (;;) {
-        const batchQueryBuilder = baseQueryBuilder
-          .clone()
-          .select(['response.id'])
-          .orderBy('response.id', 'ASC')
-          .skip(offset)
-          .take(batchSize);
-
-        const batchResponses = await batchQueryBuilder.getMany();
-        if (batchResponses.length === 0) {
-          break;
-        }
-
-        const batchIds = batchResponses.map(r => r.id);
-        await this.responseRepository.update(
-          {
-            id: In(batchIds)
-          },
-          updateObj
-        );
-
-        offset += batchSize;
+      for (let i = 0; i < responseIds.length; i += batchSize) {
+        const batchIds = responseIds.slice(i, i + batchSize);
+        await this.workspacesFacadeService.resetResponseValues(batchIds, updateObj);
       }
 
       this.logger.log(
@@ -2895,9 +2666,7 @@ export class WorkspaceCodingService {
       );
 
       // Get all persons in the workspace that should be considered
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
-      });
+      const persons = await this.workspacesFacadeService.findConsideringPersons(workspaceId);
 
       if (persons.length === 0) {
         this.logger.warn(`No persons found for workspace ${workspaceId}`);
@@ -2908,10 +2677,7 @@ export class WorkspaceCodingService {
       const personMap = new Map(persons.map(person => [person.id, person]));
 
       // Get all booklets for these persons
-      const booklets = await this.bookletRepository.find({
-        where: { personid: In(personIds) },
-        relations: ['bookletinfo']
-      });
+      const booklets = await this.workspacesFacadeService.findBookletsWithInfoByPersonIds(personIds);
 
       if (booklets.length === 0) {
         this.logger.warn(
@@ -2931,9 +2697,7 @@ export class WorkspaceCodingService {
 
       for (let i = 0; i < bookletIds.length; i += batchSize) {
         const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
-        const unitsBatch = await this.unitRepository.find({
-          where: { bookletid: In(bookletIdsBatch) }
-        });
+        const unitsBatch = await this.workspacesFacadeService.findUnitsByBookletIds(bookletIdsBatch);
         allUnits = [...allUnits, ...unitsBatch];
       }
 
@@ -2952,12 +2716,7 @@ export class WorkspaceCodingService {
       let allResponses: ResponseEntity[] = [];
       for (let i = 0; i < unitIds.length; i += batchSize) {
         const unitIdsBatch = unitIds.slice(i, i + batchSize);
-        const responsesBatch = await this.responseRepository.find({
-          where: {
-            unitid: In(unitIdsBatch),
-            status_v1: codingIncompleteStatus
-          }
-        });
+        const responsesBatch = await this.workspacesFacadeService.findResponsesByUnitIdsAndStatus(unitIdsBatch, codingIncompleteStatus);
         allResponses = [...allResponses, ...responsesBatch];
       }
 
