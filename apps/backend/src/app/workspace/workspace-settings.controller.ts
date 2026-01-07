@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Setting } from '../database/entities/setting.entity';
+import { Setting } from '../workspaces/entities/setting.entity';
 
 @Controller('workspace/:workspaceId/settings')
 export class WorkspaceSettingsController {

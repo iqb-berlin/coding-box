@@ -13,8 +13,8 @@ import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
-import WorkspaceUser from '../../database/entities/workspace_user.entity';
-import { WorkspaceUsersService } from '../../database/services/workspace-users.service';
+import WorkspaceUser from '../../workspaces/entities/workspace_user.entity';
+import { WorkspaceUsersService } from '../../workspaces/services/workspace-users.service';
 import { WorkspaceId } from './workspace.decorator';
 
 @ApiTags('Admin Workspace Users')

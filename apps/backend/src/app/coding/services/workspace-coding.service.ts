@@ -11,19 +11,19 @@ import {
 import * as crypto from 'crypto';
 import {
   statusStringToNumber
-} from '../../database/utils/response-status-converter';
+} from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
-import FileUpload from '../../database/entities/file_upload.entity';
-import Persons from '../../database/entities/persons.entity';
-import { Unit } from '../../database/entities/unit.entity';
-import { Booklet } from '../../database/entities/booklet.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import Persons from '../../workspaces/entities/persons.entity';
+import { Unit } from '../../workspaces/entities/unit.entity';
+import { Booklet } from '../../workspaces/entities/booklet.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { CodingStatistics, CodingStatisticsWithJob } from '../../database/services/shared-types';
+import { CodingStatistics, CodingStatisticsWithJob } from '../../workspaces/shared-types';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import {
   CodeBookContentSetting,
@@ -42,13 +42,13 @@ import {
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
-import { ExportValidationResultsService } from '../../database/services/export-validation-results.service';
+import { ExportValidationResultsService } from '../../workspaces/services/export-validation-results.service';
 import {
   ExternalCodingImportService,
   ExternalCodingImportBody
 } from './external-coding-import.service';
 
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';

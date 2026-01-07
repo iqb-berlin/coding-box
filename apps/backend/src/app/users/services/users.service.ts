@@ -6,7 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import User from '../entities/user.entity';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
-import WorkspaceUser from '../entities/workspace_user.entity';
+import WorkspaceUser from '../../workspaces/entities/workspace_user.entity';
 import { WorkspaceUserInListDto } from '../../../../../../api-dto/user/workspace-user-in-list-dto';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 

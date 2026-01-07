@@ -23,8 +23,8 @@ import { ValidationTaskController } from './workspace/validation-task.controller
 import { BookletInfoController } from './workspace/booklet-info.controller';
 import { UnitInfoController } from './workspace/unit-info.controller';
 import { MissingsProfilesController } from './workspace/missings-profiles.controller';
-import FileUpload from '../database/entities/file_upload.entity';
-import { Setting } from '../database/entities/setting.entity';
+import FileUpload from '../workspaces/entities/file_upload.entity';
+import { Setting } from '../workspaces/entities/setting.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 import { VariableBundleModule } from './variable-bundle/variable-bundle.module';
 import { VariableBundleController } from './variable-bundle/variable-bundle.controller';

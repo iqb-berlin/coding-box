@@ -8,10 +8,10 @@ import { CodingJobVariableBundle } from '../../coding/entities/coding-job-variab
 import { CodingJobUnit } from '../../coding/entities/coding-job-unit.entity';
 import { JobDefinition } from '../../coding/entities/job-definition.entity';
 import { VariableBundle } from '../../coding/entities/variable-bundle.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import { Unit } from '../../database/entities/unit.entity';
-import FileUpload from '../../database/entities/file_upload.entity';
-import { Setting } from '../../database/entities/setting.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { Unit } from '../../workspaces/entities/unit.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { Setting } from '../../workspaces/entities/setting.entity';
 import { AuthModule } from '../../auth/auth.module';
 import { CacheModule } from '../../cache/cache.module';
 import { CodingModule } from '../../coding/coding.module';

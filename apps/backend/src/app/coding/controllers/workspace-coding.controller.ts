@@ -20,7 +20,7 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { CodingStatistics } from '../../workspaces/shared-types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../../admin/workspace/access-level.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
@@ -31,7 +31,7 @@ import {
   CodingListService,
   CodingItem
 } from '../services/coding-list.service';
-import { PersonService } from '../../database/services/person.service';
+import { PersonService } from '../../workspaces/services/person.service';
 import { CodingJobService } from '../services/coding-job.service';
 import { CodingExportService } from '../services/coding-export.service';
 import { CodingStatisticsService } from '../services/coding-statistics.service';
@@ -41,7 +41,7 @@ import {
   ExportJobResult
 } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
@@ -50,7 +50,7 @@ import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/cod
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 import { MissingsProfilesService } from '../services/missings-profiles.service';
 import { JobDefinitionService } from '../services/job-definition.service';
-import { JournalService } from '../../database/services/journal.service';
+import { JournalService } from '../../workspaces/services/journal.service';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CreateJobDefinitionDto } from '../dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../dto/update-job-definition.dto';

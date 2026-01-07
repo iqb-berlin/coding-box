@@ -8,7 +8,7 @@ import {
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
-import User from '../../database/entities/user.entity';
+import User from '../../users/entities/user.entity';
 
 /**
  * Entity for coding job coders (relation between coding jobs and users)

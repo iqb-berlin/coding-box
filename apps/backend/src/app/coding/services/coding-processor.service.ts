@@ -10,13 +10,13 @@ import * as cheerio from 'cheerio';
 import {
   statusNumberToString,
   statusStringToNumber
-} from '../../database/utils/response-status-converter';
-import { Unit } from '../../database/entities/unit.entity';
-import { ResponseEntity } from '../../database/entities/response.entity'; // CodingStatistics needs to be imported or redefined
-import { CodingStatistics } from '../../database/services/shared-types';
+} from '../../workspaces/utils/response-status-converter';
+import { Unit } from '../../workspaces/entities/unit.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity'; // CodingStatistics needs to be imported or redefined
+import { CodingStatistics } from '../../workspaces/shared-types';
 import { CodingFileCache } from './coding-file-cache.service';
 import { CodingJobManager } from './coding-job-manager.service';
-import FileUpload from '../../database/entities/file_upload.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
 
 export interface CodedResponse {
   id: number;

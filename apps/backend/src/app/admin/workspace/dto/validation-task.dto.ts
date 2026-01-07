@@ -1,4 +1,4 @@
-import { ValidationTask } from '../../../database/entities/validation-task.entity';
+import { ValidationTask } from '../../../workspaces/entities/validation-task.entity';
 
 export class ValidationTaskDto {
   id: number;

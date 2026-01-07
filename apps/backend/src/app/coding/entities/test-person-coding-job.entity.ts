@@ -2,7 +2,7 @@ import {
   Column,
   ChildEntity
 } from 'typeorm';
-import { Job } from '../../database/entities/job.entity';
+import { Job } from '../../workspaces/entities/job.entity';
 
 /**
  * Entity for test person coding jobs

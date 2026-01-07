@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { CodingJobService } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 

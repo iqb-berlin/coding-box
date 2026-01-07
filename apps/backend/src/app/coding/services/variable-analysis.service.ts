@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import { Unit } from '../../database/entities/unit.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { Unit } from '../../workspaces/entities/unit.entity';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import { VariableAnalysisResultDto } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisJob } from '../entities/variable-analysis-job.entity';

@@ -6,7 +6,7 @@ import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
 import { WorkspaceCodingService } from '../coding/services/workspace-coding.service';
-import Persons from '../database/entities/persons.entity';
+import Persons from '../workspaces/entities/persons.entity';
 
 @Injectable()
 export class CodingIncompleteCacheSchedulerService implements OnModuleInit {

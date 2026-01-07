@@ -5,9 +5,9 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CacheService } from './cache.service';
-import Persons from '../database/entities/persons.entity';
-import { Unit } from '../database/entities/unit.entity';
-import { WorkspaceTestResultsService } from '../database/services/workspace-test-results.service';
+import Persons from '../workspaces/entities/persons.entity';
+import { Unit } from '../workspaces/entities/unit.entity';
+import { WorkspaceTestResultsService } from '../workspaces/services/workspace-test-results.service';
 
 @Injectable()
 export class ResponseCacheSchedulerService {

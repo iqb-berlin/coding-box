@@ -6,8 +6,8 @@ import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { CoderTraining } from '../entities/coder-training.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 
 interface CoderTrainingResponse {
   responseId: number;

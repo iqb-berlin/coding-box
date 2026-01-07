@@ -5,7 +5,7 @@ import 'multer';
 import * as csv from 'fast-csv';
 import { Readable } from 'stream';
 import { FileIo } from '../../admin/workspace/file-io.interface';
-import { Log, Person, Response } from './shared-types';
+import { Log, Person, Response } from '../shared-types';
 import { PersonService } from './person.service';
 import {
   TestResultsUploadIssueDto,

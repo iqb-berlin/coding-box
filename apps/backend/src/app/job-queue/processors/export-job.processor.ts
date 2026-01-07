@@ -11,7 +11,7 @@ import {
   JobQueueService
 } from '../job-queue.service';
 import { CodingExportService } from '../../coding/services/coding-export.service';
-import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { WorkspaceTestResultsService } from '../../workspaces/services/workspace-test-results.service';
 import { CacheService } from '../../cache/cache.service';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
 

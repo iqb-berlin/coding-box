@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
-import FileUpload from '../../database/entities/file_upload.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
 
 @Injectable()
 export class CodingFileCache {

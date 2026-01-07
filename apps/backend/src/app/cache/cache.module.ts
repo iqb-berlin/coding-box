@@ -7,8 +7,8 @@ import { CacheService } from './cache.service';
 import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
 import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache-scheduler.service';
 import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
-import Persons from '../database/entities/persons.entity';
-import { Unit } from '../database/entities/unit.entity';
+import Persons from '../workspaces/entities/persons.entity';
+import { Unit } from '../workspaces/entities/unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 // eslint-disable-next-line import/no-cycle

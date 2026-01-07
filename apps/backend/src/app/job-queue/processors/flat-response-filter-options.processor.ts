@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { CacheService } from '../../cache/cache.service';
-import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { WorkspaceTestResultsService } from '../../workspaces/services/workspace-test-results.service';
 
 export interface FlatResponseFilterOptionsJobData {
   workspaceId: number;

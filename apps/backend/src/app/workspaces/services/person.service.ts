@@ -22,7 +22,7 @@ import {
   TcMergeResponse,
   TcMergeSubForms,
   TcMergeUnit, Response
-} from './shared-types';
+} from '../shared-types';
 import { TestResultsUploadStatsDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
 @Injectable()

@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, Not, IsNull, Connection, EntityManager
 } from 'typeorm';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { SaveCodingProgressDto } from '../dto/save-coding-progress.dto';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
@@ -16,9 +16,9 @@ import { JobDefinition } from '../entities/job-definition.entity';
 import { CreateCodingJobDto } from '../dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import FileUpload from '../../database/entities/file_upload.entity';
-import { Setting } from '../../database/entities/setting.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { Setting } from '../../workspaces/entities/setting.entity';
 import { CacheService } from '../../cache/cache.service';
 
 function isSafeKey(key: string): boolean {

@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { BullJobManagementService } from './bull-job-management.service';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { CodingStatistics } from '../../workspaces/shared-types';
 
 @Injectable()
 export class CodingJobManager {

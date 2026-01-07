@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../users/services/users.service';
 
 describe('AccessLevelGuard (Backend)', () => {
   let guard: AccessLevelGuard;

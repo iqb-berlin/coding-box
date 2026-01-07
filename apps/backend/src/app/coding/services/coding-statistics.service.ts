@@ -1,11 +1,11 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import FileUpload from '../../database/entities/file_upload.entity';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { CodingStatistics } from '../../workspaces/shared-types';
 import { CacheService } from '../../cache/cache.service';
-import { statusStringToNumber } from '../../database/utils/response-status-converter';
+import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {

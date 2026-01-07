@@ -5,13 +5,13 @@ import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import * as cheerio from 'cheerio';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import Persons from '../../database/entities/persons.entity';
-import { Unit } from '../../database/entities/unit.entity';
-import { Booklet } from '../../database/entities/booklet.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import Persons from '../../workspaces/entities/persons.entity';
+import { Unit } from '../../workspaces/entities/unit.entity';
+import { Booklet } from '../../workspaces/entities/booklet.entity';
 import { CacheService } from '../../cache/cache.service';
-import { statusStringToNumber, statusNumberToString } from '../../database/utils/response-status-converter';
-import FileUpload from '../../database/entities/file_upload.entity';
+import { statusStringToNumber, statusNumberToString } from '../../workspaces/utils/response-status-converter';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
 
 interface ExternalCodingRow {
   unit_key?: string;

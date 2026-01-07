@@ -11,7 +11,7 @@ import {
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
-import Workspace from '../../database/entities/workspace.entity';
+import Workspace from '../../workspaces/entities/workspace.entity';
 
 export type JobDefinitionStatus = 'draft' | 'pending_review' | 'approved';
 export type CaseOrderingMode = 'continuous' | 'alternating';

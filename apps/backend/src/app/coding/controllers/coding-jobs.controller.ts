@@ -19,7 +19,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CodingJobService } from '../services/coding-job.service';
 import { CodingJobDto } from '../dto/coding-job.dto';
-import { statusNumberToString } from '../../database/utils/response-status-converter';
+import { statusNumberToString } from '../../workspaces/utils/response-status-converter';
 
 @ApiTags('Admin Coding Jobs (Direct)')
 @Controller('admin/coding-jobs')

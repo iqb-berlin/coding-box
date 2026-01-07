@@ -7,10 +7,10 @@ import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth/service/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
-import { UsersService } from './database/services/users.service';
+import { UsersService } from './users/services/users.service';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
-import { TestcenterService } from './database/services/testcenter.service';
-import { WorkspaceUsersService } from './database/services/workspace-users.service';
+import { TestcenterService } from './workspaces/services/testcenter.service';
+import { WorkspaceUsersService } from './workspaces/services/workspace-users.service';
 
 @Controller()
 export class AppController {

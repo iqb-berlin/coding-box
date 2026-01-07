@@ -3,15 +3,15 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
-import FileUpload from '../../database/entities/file_upload.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import {
   statusStringToNumber,
   statusNumberToString
-} from '../../database/utils/response-status-converter';
-import { LRUCache } from '../../database/services/lru-cache';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+} from '../../workspaces/utils/response-status-converter';
+import { LRUCache } from '../../utils/lru-cache';
+import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 
 export interface CodingItem {
   unit_key: string;

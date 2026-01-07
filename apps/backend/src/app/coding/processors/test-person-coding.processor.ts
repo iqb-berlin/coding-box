@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { TestPersonCodingJobData } from '../../job-queue/job-queue.service';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { CodingStatistics } from '../../workspaces/shared-types';
 import { WorkspaceCodingService } from '../services/workspace-coding.service';
 
 @Injectable()

@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
-import FileUpload from '../../database/entities/file_upload.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 import { CodingListService } from './coding-list.service';
 
 @Injectable()

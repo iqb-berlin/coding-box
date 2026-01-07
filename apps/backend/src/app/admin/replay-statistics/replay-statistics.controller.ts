@@ -19,8 +19,8 @@ import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../workspace/access-level.guard';
-import { ReplayStatisticsService } from '../../database/services/replay-statistics.service';
-import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
+import { ReplayStatisticsService } from '../../workspaces/services/replay-statistics.service';
+import { ReplayStatistics } from '../../workspaces/entities/replay-statistics.entity';
 
 /**
  * Controller for managing replay statistics

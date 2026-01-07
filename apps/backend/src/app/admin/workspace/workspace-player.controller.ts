@@ -8,12 +8,12 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
-import FileUpload from '../../database/entities/file_upload.entity';
+import FileUpload from '../../workspaces/entities/file_upload.entity';
 import {
   WorkspacePlayerService,
   BookletUnit
-} from '../../database/services/workspace-player.service';
-import { ResponseEntity } from '../../database/entities/response.entity';
+} from '../../workspaces/services/workspace-player.service';
+import { ResponseEntity } from '../../workspaces/entities/response.entity';
 
 @ApiTags('Admin Workspace Player')
 @Controller('admin/workspace')

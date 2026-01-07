@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { JobQueueService, TestPersonCodingJobData } from '../../job-queue/job-queue.service';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { CodingStatistics } from '../../workspaces/shared-types';
 
 @Injectable()
 export class BullJobManagementService {

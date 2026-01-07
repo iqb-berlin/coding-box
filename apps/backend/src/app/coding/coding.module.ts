@@ -24,12 +24,12 @@ import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
 // Shared Entities needed by Coding Services (from other modules)
-import FileUpload from '../database/entities/file_upload.entity';
-import Persons from '../database/entities/persons.entity';
-import { Unit } from '../database/entities/unit.entity';
-import { Booklet } from '../database/entities/booklet.entity';
-import { ResponseEntity } from '../database/entities/response.entity';
-import { Job } from '../database/entities/job.entity';
+import FileUpload from '../workspaces/entities/file_upload.entity';
+import Persons from '../workspaces/entities/persons.entity';
+import { Unit } from '../workspaces/entities/unit.entity';
+import { Booklet } from '../workspaces/entities/booklet.entity';
+import { ResponseEntity } from '../workspaces/entities/response.entity';
+import { Job } from '../workspaces/entities/job.entity';
 
 // Coding Services
 import { CodingJobService } from './services/coding-job.service';
