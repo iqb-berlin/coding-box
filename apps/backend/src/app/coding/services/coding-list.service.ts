@@ -1,18 +1,17 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import {
   statusStringToNumber,
   statusNumberToString
 } from '../../workspaces/utils/response-status-converter';
-import { LRUCache } from '../../utils/lru-cache';
-import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
+import { VocsService } from './vocs.service';
+import { VoudService } from './voud.service';
 
 export interface CodingItem {
   unit_key: string;
@@ -36,78 +35,26 @@ interface JsonStream {
 @Injectable()
 export class CodingListService {
   private readonly logger = new Logger(CodingListService.name);
-  private voudCache = new LRUCache<Map<string, string>>(50);
-  private vocsCache = new LRUCache<Set<string>>(50);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
-    @Inject(forwardRef(() => WorkspaceFilesService))
-    private readonly workspaceFilesService: WorkspaceFilesService
+    private readonly vocsService: VocsService,
+    private readonly voudService: VoudService
   ) {}
 
   private async loadVocsExclusions(
     unitName: string,
     workspaceId: number
   ): Promise<Set<string>> {
-    const cacheKey = `${workspaceId}:${unitName}`;
-
-    let exclusions = this.vocsCache.get(cacheKey);
-    if (exclusions) {
-      return exclusions;
-    }
-
-    exclusions = new Set<string>();
-
-    const vocsFile = await this.fileUploadRepository.findOne({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: `${unitName}.VOCS`
-      }
-    });
-
-    if (vocsFile) {
-      try {
-        interface VocsScheme {
-          variableCodings?: { id: string; sourceType?: string }[];
-        }
-
-        const data =
-          typeof vocsFile.data === 'string' ?
-            JSON.parse(vocsFile.data) :
-            vocsFile.data;
-        const scheme = data as VocsScheme;
-        const vars = scheme?.variableCodings || [];
-
-        for (const vc of vars) {
-          if (
-            vc &&
-            vc.id &&
-            vc.sourceType &&
-            vc.sourceType === 'BASE_NO_VALUE'
-          ) {
-            exclusions.add(`${unitName}||${vc.id}`);
-          }
-        }
-      } catch (error) {
-        this.logger.debug(
-          `Error parsing VOCS file for unit ${unitName}: ${error.message}`
-        );
-      }
-    }
-
-    this.vocsCache.set(cacheKey, exclusions);
-    return exclusions;
+    return this.vocsService.getExclusions(unitName, workspaceId);
   }
 
   async getVariablePageMap(
     unitName: string,
     workspaceId: number
   ): Promise<Map<string, string>> {
-    return this.workspaceFilesService.getVariablePageMap(unitName, workspaceId);
+    return this.voudService.getVariablePageMap(unitName, workspaceId);
   }
 
   private async processResponseItem(
@@ -193,58 +140,10 @@ export class CodingListService {
 
       // 2) Preload VOUD files map for found units
       const uniqueUnitNames = [...new Set(responses.map(r => r.unit?.name).filter(n => !!n))];
-      const variablePageMap = new Map<string, Map<string, string>>();
-
-      for (const unitName of uniqueUnitNames) {
-        try {
-          const map = await this.workspaceFilesService.getVariablePageMap(
-            unitName,
-            workspace_id
-          );
-          variablePageMap.set(unitName, map);
-        } catch (error) {
-          this.logger.warn(`Could not load VOUD map for unit ${unitName}: ${error.message}`);
-        }
-      }
+      const variablePageMap = await this.voudService.getVariablePageMaps(uniqueUnitNames, workspace_id);
 
       // 3) Build exclusion Set from VOCS files where sourceType == BASE_NO_VALUE
-      interface VocsScheme {
-        variableCodings?: { id: string; sourceType?: string }[];
-      }
-
-      const vocsFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id,
-          file_type: 'Resource',
-          file_id: Like('%.VOCS')
-        },
-        select: ['file_id', 'data']
-      });
-
-      const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
-      for (const file of vocsFiles) {
-        try {
-          const unitKey = file.file_id.replace('.VOCS', '');
-          const data =
-            typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-          const scheme = data as VocsScheme;
-          const vars = scheme?.variableCodings || [];
-          for (const vc of vars) {
-            if (
-              vc &&
-              vc.id &&
-              vc.sourceType &&
-              vc.sourceType === 'BASE_NO_VALUE'
-            ) {
-              excludedPairs.add(`${unitKey}||${vc.id}`);
-            }
-          }
-        } catch (e) {
-          this.logger.error(
-            `Error parsing VOCS file ${file.file_id}: ${e.message}`
-          );
-        }
-      }
+      const excludedPairs = await this.vocsService.getAllExclusions(workspace_id);
 
       // 4) Map responses to output and filter by excludedPairs, variable id substrings, and empty values
       const filtered = responses.filter(r => {
@@ -318,8 +217,8 @@ export class CodingListService {
     this.logger.log(
       `Memory-efficient CSV export for workspace ${workspace_id}`
     );
-    this.voudCache.clear();
-    this.vocsCache.clear();
+    this.voudService.clearCache();
+    this.vocsService.clearCache();
     const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
 
     (async () => {
@@ -395,8 +294,8 @@ export class CodingListService {
         csvStream.emit('error', error);
       } finally {
         // Clear caches after export to free memory
-        this.voudCache.clear();
-        this.vocsCache.clear();
+        this.voudService.clearCache();
+        this.vocsService.clearCache();
       }
     })();
 
@@ -411,8 +310,8 @@ export class CodingListService {
     this.logger.log(
       `Memory-efficient Excel export for workspace ${workspace_id}`
     );
-    this.voudCache.clear();
-    this.vocsCache.clear();
+    this.voudService.clearCache();
+    this.vocsService.clearCache();
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Coding List');
@@ -489,8 +388,8 @@ export class CodingListService {
       throw error;
     } finally {
       // Clear caches after export to free memory
-      this.voudCache.clear();
-      this.vocsCache.clear();
+      this.voudService.clearCache();
+      this.vocsService.clearCache();
     }
   }
 
@@ -502,8 +401,8 @@ export class CodingListService {
     this.logger.log(
       `Memory-efficient JSON stream export for workspace ${workspace_id}`
     );
-    this.voudCache.clear();
-    this.vocsCache.clear();
+    this.voudService.clearCache();
+    this.vocsService.clearCache();
 
     return {
       on: (
@@ -587,8 +486,8 @@ export class CodingListService {
         this.endListener();
       }
 
-      this.voudCache.clear();
-      this.vocsCache.clear();
+      this.voudService.clearCache();
+      this.vocsService.clearCache();
     } catch (error) {
       this.logger.error(`Error during JSON stream export: ${error.message}`);
       if (this.errorListener) {
@@ -614,43 +513,7 @@ export class CodingListService {
         status: statusStringToNumber('CODING_INCOMPLETE')
       });
 
-    interface VocsScheme {
-      variableCodings?: { id: string; sourceType?: string }[];
-    }
-
-    const vocsFiles = await this.fileUploadRepository.find({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: Like('%.VOCS')
-      },
-      select: ['file_id', 'data']
-    });
-
-    const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
-    for (const file of vocsFiles) {
-      try {
-        const unitKey = file.file_id.replace('.VOCS', '');
-        const data =
-          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = data as VocsScheme;
-        const vars = scheme?.variableCodings || [];
-        for (const vc of vars) {
-          if (
-            vc &&
-            vc.id &&
-            vc.sourceType &&
-            vc.sourceType === 'BASE_NO_VALUE'
-          ) {
-            excludedPairs.add(`${unitKey}||${vc.id}`);
-          }
-        }
-      } catch (e) {
-        this.logger.error(
-          `Error parsing VOCS file ${file.file_id}: ${e.message}`
-        );
-      }
-    }
+    const excludedPairs = await this.vocsService.getAllExclusions(workspaceId);
 
     if (excludedPairs.size > 0) {
       const exclusionConditions: string[] = [];
@@ -689,7 +552,7 @@ export class CodingListService {
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
+    const unitVariableMap = await this.voudService.getUnitVariableMap(
       workspaceId
     );
 
@@ -722,8 +585,8 @@ export class CodingListService {
     this.logger.log(
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
     );
-    this.voudCache.clear();
-    this.vocsCache.clear();
+    this.voudService.clearCache();
+    this.vocsService.clearCache();
     const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
 
     (async () => {
@@ -802,8 +665,8 @@ export class CodingListService {
         csvStream.emit('error', error);
       } finally {
         // Clear caches after export to free memory
-        this.voudCache.clear();
-        this.vocsCache.clear();
+        this.voudService.clearCache();
+        this.vocsService.clearCache();
       }
     })();
 
@@ -820,8 +683,8 @@ export class CodingListService {
     this.logger.log(
       `Starting Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
     );
-    this.voudCache.clear();
-    this.vocsCache.clear();
+    this.voudService.clearCache();
+    this.vocsService.clearCache();
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Coding Results');
@@ -902,8 +765,8 @@ export class CodingListService {
       );
       throw error;
     } finally {
-      this.voudCache.clear();
-      this.vocsCache.clear();
+      this.voudService.clearCache();
+      this.vocsService.clearCache();
     }
   }
 

@@ -12,6 +12,8 @@ import { UsersModule } from '../users/users.module';
 
 // Coding Entities
 import { CodingJob } from './entities/coding-job.entity';
+import { VocsService } from './services/vocs.service';
+import { VoudService } from './services/voud.service';
 import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
@@ -118,6 +120,8 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
     CodingResultsService,
     CodingExportService,
     CodingListService,
+    VocsService,
+    VoudService,
 
     // Supporting services
     MissingsProfilesService,
