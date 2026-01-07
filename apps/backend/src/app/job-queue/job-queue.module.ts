@@ -2,8 +2,6 @@ import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JobQueueService } from './job-queue.service';
-import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
-import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
 // eslint-disable-next-line import/no-cycle
@@ -43,8 +41,6 @@ import { CacheModule } from '../cache/cache.module';
   ],
   providers: [
     JobQueueService,
-    TestPersonCodingProcessor,
-    CodingStatisticsProcessor,
     ExportJobProcessor,
     FlatResponseFilterOptionsProcessor
   ],

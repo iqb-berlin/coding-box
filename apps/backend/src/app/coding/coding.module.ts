@@ -7,53 +7,80 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { AuthModule } from '../auth/auth.module';
+import { UsersModule } from '../users/users.module';
 
-// Entities
-import { CodingJob } from '../database/entities/coding-job.entity';
-import { CodingJobCoder } from '../database/entities/coding-job-coder.entity';
-import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
-import { CodingJobVariableBundle } from '../database/entities/coding-job-variable-bundle.entity';
-import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
-import { JobDefinition } from '../database/entities/job-definition.entity';
-import { MissingsProfile } from '../database/entities/missings-profile.entity';
-import { CoderTraining } from '../database/entities/coder-training.entity';
-import { VariableBundle } from '../database/entities/variable-bundle.entity';
-import { VariableAnalysisJob } from '../database/entities/variable-analysis-job.entity';
+// Coding Entities
+import { CodingJob } from './entities/coding-job.entity';
+import { CodingJobCoder } from './entities/coding-job-coder.entity';
+import { CodingJobVariable } from './entities/coding-job-variable.entity';
+import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
+import { CodingJobUnit } from './entities/coding-job-unit.entity';
+import { JobDefinition } from './entities/job-definition.entity';
+import { MissingsProfile } from './entities/missings-profile.entity';
+import { CoderTraining } from './entities/coder-training.entity';
+import { VariableBundle } from './entities/variable-bundle.entity';
+import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
-// Shared Entities needed by Coding Services
+// Shared Entities needed by Coding Services (from other modules)
 import FileUpload from '../database/entities/file_upload.entity';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 import { ResponseEntity } from '../database/entities/response.entity';
-import { Job } from '../database/entities/job.entity'; // For generic job access?
+import { Job } from '../database/entities/job.entity';
 
-// Services
-import { CodingJobService } from '../database/services/coding-job.service';
-import { WorkspaceCodingService } from '../database/services/workspace-coding.service';
-import { CodingStatisticsService } from '../database/services/coding-statistics.service';
-import { MissingsProfilesService } from '../database/services/missings-profiles.service';
-import { JobDefinitionService } from '../database/services/job-definition.service';
-import { CoderTrainingService } from '../database/services/coder-training.service';
-import { CodingListService } from '../database/services/coding-list.service';
-import { VariableAnalysisReplayService } from '../database/services/variable-analysis-replay.service';
-import { ExternalCodingImportService } from '../database/services/external-coding-import.service';
-import { BullJobManagementService } from '../database/services/bull-job-management.service';
-import { CodingResultsService } from '../database/services/coding-results.service';
-import { CodingExportService } from '../database/services/coding-export.service';
-import { VariableBundleService } from '../database/services/variable-bundle.service';
-import { VariableAnalysisService } from '../database/services/variable-analysis.service';
-import { CodingFileCache } from '../database/services/coding-file-cache.service';
-import { CodingJobManager } from '../database/services/coding-job-manager.service';
-import { CodingProcessor } from '../database/services/coding-processor.service';
+// Coding Services
+import { CodingJobService } from './services/coding-job.service';
+import { WorkspaceCodingService } from './services/workspace-coding.service';
+import { CodingStatisticsService } from './services/coding-statistics.service';
+import { MissingsProfilesService } from './services/missings-profiles.service';
+import { JobDefinitionService } from './services/job-definition.service';
+import { CoderTrainingService } from './services/coder-training.service';
+import { CodingListService } from './services/coding-list.service';
+import { VariableAnalysisReplayService } from './services/variable-analysis-replay.service';
+import { ExternalCodingImportService } from './services/external-coding-import.service';
+import { CodingResultsService } from './services/coding-results.service';
+import { CodingExportService } from './services/coding-export.service';
+import { VariableBundleService } from './services/variable-bundle.service';
+import { VariableAnalysisService } from './services/variable-analysis.service';
+import { CodingFileCache } from './services/coding-file-cache.service';
+import { CodingJobManager } from './services/coding-job-manager.service';
+import { CodingProcessor } from './services/coding-processor.service';
+import { BullJobManagementService } from './services/bull-job-management.service';
 
+// Coding Controllers
+import { CodingJobController } from './controllers/coding-job.controller';
+import { CodingJobsController } from './controllers/coding-jobs.controller';
+import { WorkspaceCodingController } from './controllers/workspace-coding.controller';
+
+// Coding Processors (Bull Queue)
+import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
+import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
+
+/**
+ * CodingModule - Feature Module for Coding Functionality
+ *
+ * This module encapsulates all coding-related functionality:
+ * - Coding jobs and their management
+ * - Coding statistics and exports
+ * - Variable analysis and bundles
+ * - Coder training
+ * - Job definitions and missings profiles
+ *
+ * Only essential services are exported for use by other modules.
+ */
 @Module({
   imports: [
     HttpModule,
     forwardRef(() => CacheModule),
     forwardRef(() => JobQueueModule),
     forwardRef(() => WorkspacesModule),
+    AuthModule,
+    UsersModule,
     TypeOrmModule.forFeature([
+      // Coding-specific entities
       CodingJob,
       CodingJobCoder,
       CodingJobVariable,
@@ -64,7 +91,8 @@ import { CodingProcessor } from '../database/services/coding-processor.service';
       CoderTraining,
       VariableBundle,
       VariableAnalysisJob,
-      // Shared entities often used in coding
+      TestPersonCodingJob,
+      // Shared entities used by coding services
       FileUpload,
       Persons,
       Unit,
@@ -73,43 +101,51 @@ import { CodingProcessor } from '../database/services/coding-processor.service';
       Job
     ])
   ],
+  controllers: [
+    CodingJobController,
+    CodingJobsController,
+    WorkspaceCodingController
+  ],
   providers: [
+    // Core services
     CodingJobService,
     WorkspaceCodingService,
     CodingFileCache,
     CodingJobManager,
     CodingProcessor,
+    BullJobManagementService,
     CodingStatisticsService,
+    CodingResultsService,
+    CodingExportService,
+    CodingListService,
+
+    // Supporting services
     MissingsProfilesService,
     JobDefinitionService,
     CoderTrainingService,
-    CodingListService,
     VariableAnalysisReplayService,
-    ExternalCodingImportService,
-    BullJobManagementService,
-    CodingResultsService,
-    CodingExportService,
+    VariableAnalysisService,
     VariableBundleService,
-    VariableAnalysisService
+    ExternalCodingImportService,
+
+    // Processors
+    CodingStatisticsProcessor,
+    TestPersonCodingProcessor
   ],
   exports: [
-    CodingJobService,
-    WorkspaceCodingService,
-    CodingFileCache,
-    CodingJobManager,
-    CodingProcessor,
+    // Only export services that are distinctively needed by other modules
+    // CacheModule needs these for cache invalidation
     CodingStatisticsService,
-    MissingsProfilesService,
-    JobDefinitionService,
-    CoderTrainingService,
-    CodingListService,
-    VariableAnalysisReplayService,
-    ExternalCodingImportService,
-    BullJobManagementService,
-    CodingResultsService,
+    WorkspaceCodingService,
+
+    // AdminModule/WorkspaceModule may need these
+    CodingJobService,
     CodingExportService,
-    VariableBundleService,
+    CodingListService,
     VariableAnalysisService,
+    MissingsProfilesService,
+
+    // Keep TypeOrmModule export for potential forFeature usage elsewhere
     TypeOrmModule
   ]
 })

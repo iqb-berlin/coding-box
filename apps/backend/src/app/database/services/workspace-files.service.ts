@@ -30,7 +30,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../entities/persons.entity';
-import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';

@@ -25,7 +25,7 @@ import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
-import { CodingListService } from './coding-list.service';
+import { CodingListService } from '../../coding/services/coding-list.service';
 import { Chunk, TcMergeResponse } from './shared-types';
 
 interface PersonWhere {

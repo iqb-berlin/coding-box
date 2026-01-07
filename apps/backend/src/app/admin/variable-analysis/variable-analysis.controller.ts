@@ -22,7 +22,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { VariableAnalysisService } from '../../database/services/variable-analysis.service';
+import { VariableAnalysisService } from '../../coding/services/variable-analysis.service';
 import { VariableAnalysisResultDto } from './dto/variable-analysis-result.dto';
 import { VariableAnalysisJobDto } from './dto/variable-analysis-job.dto';
 

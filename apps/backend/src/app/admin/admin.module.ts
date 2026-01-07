@@ -10,7 +10,6 @@ import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceFilesController } from './workspace/workspace-files.controller';
 import { WorkspaceTestResultsController } from './workspace/workspace-test-results.controller';
 import { WorkspaceUsersController } from './workspace/workspace-users.controller';
-import { WorkspaceCodingController } from './workspace/workspace-coding.controller';
 import { WorkspaceTestCenterController } from './workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from './workspace/workspace-player.controller';
 import { LogoController } from './logo/logo.controller';
@@ -29,7 +28,6 @@ import { Setting } from '../database/entities/setting.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 import { VariableBundleModule } from './variable-bundle/variable-bundle.module';
 import { VariableBundleController } from './variable-bundle/variable-bundle.controller';
-import { CodingJobsController } from './coding-jobs/coding-jobs.controller';
 import { DatabaseAdminController } from './database/database-admin.controller';
 import { DatabaseExportService } from './database/database-export.service';
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -54,7 +52,6 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     WorkspaceFilesController,
     WorkspaceTestResultsController,
     WorkspaceUsersController,
-    WorkspaceCodingController,
     WorkspaceTestCenterController,
     WorkspacePlayerController,
     LogoController,
@@ -70,7 +67,6 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     MissingsProfilesController,
     ReplayStatisticsController,
     VariableBundleController,
-    CodingJobsController,
     DatabaseAdminController
   ],
   providers: [

@@ -29,12 +29,12 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
-import { CodingJobService } from '../../database/services/coding-job.service';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
-import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
-import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
-import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
-import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
+import { CodingJobService } from '../../coding/services/coding-job.service';
+import { WorkspaceCodingService } from '../../coding/services/workspace-coding.service';
+import { CodingJobDto } from '../../coding/dto/coding-job.dto';
+import { CreateCodingJobDto } from '../../coding/dto/create-coding-job.dto';
+import { UpdateCodingJobDto } from '../../coding/dto/update-coding-job.dto';
+import { SaveCodingProgressDto } from '../../coding/dto/save-coding-progress.dto';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')

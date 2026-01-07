@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
-import { WorkspaceCodingService } from '../database/services/workspace-coding.service';
+import { WorkspaceCodingService } from '../coding/services/workspace-coding.service';
 import Persons from '../database/entities/persons.entity';
 
 @Injectable()

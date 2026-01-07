@@ -2,7 +2,7 @@ import { Repository } from 'typeorm';
 import FileUpload from '../entities/file_upload.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { WorkspaceFilesService } from './workspace-files.service';
-import { CodingListService } from './coding-list.service';
+import { CodingListService } from '../../coding/services/coding-list.service';
 
 type CodingListServiceHeaderGetter = {
   getHeadersForVersion: (version: 'v1' | 'v2' | 'v3') => string[];

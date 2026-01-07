@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { VariableBundle } from '../../../database/entities/variable-bundle.entity';
+import { VariableBundle } from '../../../coding/entities/variable-bundle.entity';
 import { VariableDto } from './variable.dto';
 
 export class VariableBundleDto {

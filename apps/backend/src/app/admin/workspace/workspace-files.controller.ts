@@ -43,8 +43,8 @@ import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/dup
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
-import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
+import { WorkspaceCodingService } from '../../coding/services/workspace-coding.service';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
