@@ -5,6 +5,7 @@ import { AuthService } from './auth/service/auth.service';
 import { UsersService } from './users/services/users.service';
 import { TestcenterService } from './workspaces/services/testcenter.service';
 import { WorkspaceUsersService } from './workspaces/services/workspace-users.service';
+import { WorkspacesAdminFacade } from './workspaces/services/workspaces-admin-facade.service';
 
 describe('AppController', () => {
   beforeEach(async () => {
@@ -26,6 +27,10 @@ describe('AppController', () => {
         {
           provide: WorkspaceUsersService,
           useValue: createMock<WorkspaceUsersService>()
+        },
+        {
+          provide: WorkspacesAdminFacade,
+          useValue: createMock<WorkspacesAdminFacade>()
         }
       ]
     }).compile();

@@ -31,7 +31,6 @@ import { CodingListService } from './coding-list.service';
 import { CodingFileCache } from './coding-file-cache.service';
 import { CodingJobManager } from './coding-job-manager.service';
 import { WorkspaceCodingFacade } from './workspace-coding-facade.service';
-import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 
 const mockCodingFactory = { code: jest.fn() };
 
@@ -157,7 +156,25 @@ describe('WorkspaceCodingService', () => {
   const mockWorkspaceCodingFacade = {
     processTestPersonsBatch: jest.fn().mockResolvedValue({ totalResponses: 0, statusCounts: {} }),
     codeTestPersons: jest.fn().mockResolvedValue({ totalResponses: 0, statusCounts: {} }),
-    getManualTestPersons: jest.fn().mockResolvedValue([])
+    getManualTestPersons: jest.fn().mockResolvedValue([]),
+    validateCodingCompleteness: jest.fn(),
+    getCodingIncompleteVariables: jest.fn(),
+    getCodingProgressOverview: jest.fn(),
+    getCaseCoverageOverview: jest.fn(),
+    getVariableCoverageOverview: jest.fn(),
+    getResponseAnalysis: jest.fn(),
+    invalidateIncompleteVariablesCache: jest.fn(),
+    getDoubleCodedVariablesForReview: jest.fn(),
+    applyDoubleCodedResolutions: jest.fn(),
+    getAppliedResultsCount: jest.fn(),
+    getWorkspaceCohensKappaSummary: jest.fn(),
+    applyCodingResults: jest.fn(),
+    bulkApplyCodingResults: jest.fn(),
+    generateReplayUrlForResponse: jest.fn(),
+    generateReplayUrlsForItems: jest.fn(),
+    generateCodebook: jest.fn(),
+    resetCodingVersion: jest.fn(),
+    getResponsesByStatus: jest.fn()
   };
 
   const createMockPerson = (id: number, workspaceId: number = 1) => ({
@@ -912,129 +929,41 @@ describe('WorkspaceCodingService', () => {
 
   describe('validateCodingCompleteness', () => {
     const workspaceId = 1;
-    const expectedCombinations = [
-      {
-        unit_key: 'UNIT_1',
-        login_name: 'test_person_1',
-        login_code: 'code_1',
-        booklet_id: 'booklet_1',
-        variable_id: 'var1'
-      }
-    ];
-
-    beforeEach(() => {
-      mockCacheService.generateValidationCacheKey = jest.fn().mockReturnValue('cache-key-123');
-      mockCacheService.getPaginatedValidationResults = jest.fn();
-      mockCacheService.storeValidationResults = jest.fn().mockResolvedValue(true);
-    });
-
-    it('should return cached results when available', async () => {
-      const cachedResults = {
-        results: [{ combination: expectedCombinations[0], status: 'EXISTS' }],
-        metadata: {
-          total: 1,
-          missing: 0,
-          currentPage: 1,
-          pageSize: 50,
-          totalPages: 1,
-          hasNextPage: false,
-          hasPreviousPage: false
+    it('should delegate to facade', async () => {
+      const expectedCombinations = [
+        {
+          unit_key: 'UNIT_1',
+          login_name: 'test_person_1',
+          login_code: 'code_1',
+          booklet_id: 'booklet_1',
+          variable_id: 'var1'
         }
+      ];
+      const expectedResult = {
+        results: [],
+        total: 0,
+        missing: 0,
+        currentPage: 1,
+        pageSize: 50,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPreviousPage: false
       };
 
-      mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(cachedResults);
+      mockWorkspaceCodingFacade.validateCodingCompleteness.mockResolvedValue(expectedResult);
 
       const result = await service.validateCodingCompleteness(workspaceId, expectedCombinations);
 
-      expect(result.results).toEqual(cachedResults.results);
-      expect(result.total).toBe(1);
-      expect(result.missing).toBe(0);
-    });
-
-    it('should process validation when cache miss', async () => {
-      mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.checkResponseExists = jest.fn().mockResolvedValue(true);
-
-      const result = await service.validateCodingCompleteness(workspaceId, expectedCombinations);
-
-      expect(result.results).toHaveLength(1);
-      expect(result.results[0].status).toBe('EXISTS');
-      expect(result.total).toBe(1);
-      expect(result.missing).toBe(0);
-      expect(mockCacheService.storeValidationResults).toHaveBeenCalled();
-    });
-
-    it('should handle missing responses', async () => {
-      mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.checkResponseExists = jest.fn().mockResolvedValue(false);
-
-      const result = await service.validateCodingCompleteness(workspaceId, expectedCombinations);
-
-      expect(result.results[0].status).toBe('MISSING');
-      expect(result.missing).toBe(1);
-    });
-
-    it('should handle pagination correctly', async () => {
-      const largeCombinations = Array.from({ length: 100 }, (_, i) => ({
-        unit_key: `UNIT_${i}`,
-        login_name: `test_person_${i}`,
-        login_code: `code_${i}`,
-        booklet_id: `booklet_${i}`,
-        variable_id: `var${i}`
-      }));
-
-      mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.checkResponseExists = jest.fn().mockResolvedValue(true);
-
-      const result = await service.validateCodingCompleteness(workspaceId, largeCombinations, 2, 25);
-
-      expect(result.currentPage).toBe(2);
-      expect(result.pageSize).toBe(25);
-      expect(result.results).toHaveLength(25);
-    });
-
-    it('should handle database errors gracefully', async () => {
-      mockCacheService.getPaginatedValidationResults = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.checkResponseExists = jest.fn().mockRejectedValue(new Error('Database connection failed'));
-
-      await expect(service.validateCodingCompleteness(workspaceId, expectedCombinations))
-        .rejects.toThrow('Could not validate coding completeness');
+      expect(mockWorkspaceCodingFacade.validateCodingCompleteness).toHaveBeenCalledWith(workspaceId, expectedCombinations, 1, 50);
+      expect(result).toEqual(expectedResult);
     });
   });
 
   describe('getCodingIncompleteVariables', () => {
     const workspaceId = 1;
 
-    beforeEach(() => {
-      mockCacheService.get = jest.fn();
-      mockCacheService.set = jest.fn().mockResolvedValue(true);
-    });
-
-    it('should return cached results when available', async () => {
-      const cachedData = [
-        { unitName: 'UNIT_1', variableId: 'var1', responseCount: 5 }
-      ];
-
-      mockCacheService.get = jest.fn().mockResolvedValue(cachedData);
-
-      const result = await service.getCodingIncompleteVariables(workspaceId);
-
-      expect(result).toEqual(cachedData);
-      expect(mockCacheService.get).toHaveBeenCalledWith('coding_incomplete_variables:1');
-    });
-
-    it('should query database when cache miss', async () => {
-      mockCacheService.get = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.findCodingIncompleteVariablesWithCounts = jest.fn().mockResolvedValue([
-        { unitName: 'UNIT_1', variableId: 'var1', responseCount: '3' }
-      ]);
-      mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
-        new Map([['UNIT_1', new Set(['var1'])]])
-      );
-
-      const result = await service.getCodingIncompleteVariables(workspaceId);
-
-      expect(result).toEqual([
+    it('should delegate to facade', async () => {
+      const expectedResult = [
         {
           unitName: 'UNIT_1',
           variableId: 'var1',
@@ -1042,39 +971,14 @@ describe('WorkspaceCodingService', () => {
           casesInJobs: 0,
           availableCases: 3
         }
-      ]);
-      expect(mockCacheService.set).toHaveBeenCalled();
-    });
+      ];
 
-    it('should filter out variables not in unit schema', async () => {
-      mockCacheService.get = jest.fn().mockResolvedValue(null);
-      mockWorkspacesFacadeService.findCodingIncompleteVariablesWithCounts = jest.fn().mockResolvedValue([
-        { unitName: 'UNIT_1', variableId: 'var1', responseCount: '3' },
-        { unitName: 'UNIT_1', variableId: 'invalid_var', responseCount: '2' }
-      ]);
-      mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
-        new Map([['UNIT_1', new Set(['var1'])]]) // Only var1 is valid
-      );
+      mockWorkspaceCodingFacade.getCodingIncompleteVariables.mockResolvedValue(expectedResult);
 
-      const result = await service.getCodingIncompleteVariables(workspaceId);
+      const result = await service.getCodingIncompleteVariables(workspaceId, 'UNIT_1');
 
-      expect(result).toHaveLength(1);
-      expect(result[0].variableId).toBe('var1');
-    });
-
-    it('should handle unit name filtering', async () => {
-      mockWorkspacesFacadeService.findCodingIncompleteVariablesWithCounts = jest.fn().mockResolvedValue([
-        { unitName: 'SPECIFIC_UNIT', variableId: 'var1', responseCount: '5' }
-      ]);
-      mockWorkspaceFilesService.getUnitVariableMap = jest.fn().mockResolvedValue(
-        new Map([['SPECIFIC_UNIT', new Set(['var1'])]])
-      );
-
-      const result = await service.getCodingIncompleteVariables(workspaceId, 'SPECIFIC_UNIT');
-
-      expect(result).toHaveLength(1);
-      expect(result[0].unitName).toBe('SPECIFIC_UNIT');
-      expect(mockCacheService.get).not.toHaveBeenCalled(); // Should not use cache for specific unit queries
+      expect(mockWorkspaceCodingFacade.getCodingIncompleteVariables).toHaveBeenCalledWith(workspaceId, 'UNIT_1');
+      expect(result).toEqual(expectedResult);
     });
   });
 
@@ -1362,44 +1266,14 @@ describe('WorkspaceCodingService', () => {
     };
     const unitIds = [1, 2];
 
-    it('should successfully generate codebook', async () => {
+    it('should delegate to facade', async () => {
       const mockCodebook = Buffer.from('mock codebook data');
-      (CodebookGenerator.generateCodebook as jest.Mock).mockResolvedValue(mockCodebook);
-
-      mockWorkspacesFacadeService.findFilesByIds = jest.fn().mockResolvedValue([
-        {
-          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
-        },
-        {
-          id: 2, file_id: 'unit2', filename: 'unit2.vocs', data: 'unit data 2'
-        }
-      ]);
+      mockWorkspaceCodingFacade.generateCodebook.mockResolvedValue(mockCodebook);
 
       const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
 
+      expect(mockWorkspaceCodingFacade.generateCodebook).toHaveBeenCalledWith(workspaceId, missingsProfile, contentOptions, unitIds);
       expect(result).toEqual(mockCodebook);
-    });
-
-    it('should return null when no units found', async () => {
-      mockWorkspacesFacadeService.findFilesByIds = jest.fn().mockResolvedValue([]);
-
-      const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
-
-      expect(result).toBeNull();
-    });
-
-    it('should handle codebook generation errors', async () => {
-      (CodebookGenerator.generateCodebook as jest.Mock).mockRejectedValue(new Error('Generation failed'));
-
-      mockWorkspacesFacadeService.findFilesByIds = jest.fn().mockResolvedValue([
-        {
-          id: 1, file_id: 'unit1', filename: 'unit1.vocs', data: 'unit data 1'
-        }
-      ]);
-
-      const result = await service.generateCodebook(workspaceId, missingsProfile, contentOptions, unitIds);
-
-      expect(result).toBeNull();
     });
   });
 
@@ -1408,37 +1282,18 @@ describe('WorkspaceCodingService', () => {
     const status = 'CODING_INCOMPLETE';
     const version = 'v1';
 
-    it('should return responses filtered by status', async () => {
-      const mockResponses = [
-        createMockResponse(1, 1, 'var1'),
-        createMockResponse(2, 2, 'var2')
-      ];
+    it('should delegate to facade', async () => {
+      const mockResponses = {
+        data: [],
+        total: 0
+      };
 
-      mockWorkspacesFacadeService.findResponsesByStatus.mockResolvedValue({
-        data: mockResponses,
-        total: 2
-      });
+      mockWorkspaceCodingFacade.getResponsesByStatus.mockResolvedValue(mockResponses);
 
       const result = await service.getResponsesByStatus(workspaceId, status, version, 1, 10);
 
-      expect(result.data).toEqual(mockResponses);
-      expect(result.total).toBe(2);
-      expect(result.page).toBe(1);
-      expect(result.limit).toBe(10);
-    });
-
-    it('should handle invalid status string', async () => {
-      const result = await service.getResponsesByStatus(workspaceId, 'INVALID_STATUS', version);
-
-      expect(result.data).toEqual([]);
-      expect(result.total).toBe(0);
-    });
-
-    it('should handle database errors', async () => {
-      mockWorkspacesFacadeService.findResponsesByStatus.mockRejectedValue(new Error('Database error'));
-
-      await expect(service.getResponsesByStatus(workspaceId, status, version))
-        .rejects.toThrow('Could not retrieve responses');
+      expect(mockWorkspaceCodingFacade.getResponsesByStatus).toHaveBeenCalledWith(workspaceId, status, version, 1, 10);
+      expect(result).toEqual(mockResponses);
     });
   });
 
@@ -1446,7 +1301,7 @@ describe('WorkspaceCodingService', () => {
     const workspaceId = 1;
     const codingJobId = 123;
 
-    it('should delegate to CodingResultsService', async () => {
+    it('should delegate to facade', async () => {
       const expectedResult = {
         success: true,
         updatedResponsesCount: 50,
@@ -1454,11 +1309,11 @@ describe('WorkspaceCodingService', () => {
         message: 'Results applied successfully'
       };
 
-      mockCodingResultsService.applyCodingResults = jest.fn().mockResolvedValue(expectedResult);
+      mockWorkspaceCodingFacade.applyCodingResults.mockResolvedValue(expectedResult);
 
       const result = await service.applyCodingResults(workspaceId, codingJobId);
 
-      expect(mockCodingResultsService.applyCodingResults).toHaveBeenCalledWith(workspaceId, codingJobId);
+      expect(mockWorkspaceCodingFacade.applyCodingResults).toHaveBeenCalledWith(workspaceId, codingJobId);
       expect(result).toEqual(expectedResult);
     });
   });
@@ -1522,7 +1377,7 @@ describe('WorkspaceCodingService', () => {
       it('should delete cache entry for workspace', async () => {
         await service.invalidateIncompleteVariablesCache(1);
 
-        expect(mockCacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables:1');
+        expect(mockWorkspaceCodingFacade.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(1);
       });
     });
   });

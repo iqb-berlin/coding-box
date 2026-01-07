@@ -3,6 +3,8 @@ import { WorkspaceTestResultsFacade } from './workspace-test-results-facade.serv
 import { WorkspaceTestResultsOverviewService } from './workspace-test-results-overview.service';
 import { WorkspaceTestResultsQueryService } from './workspace-test-results-query.service';
 import { DuplicateResponseService } from './duplicate-response.service';
+import { FlatResponseService } from './flat-response.service';
+import { ResponseExportService } from './response-export.service';
 import { Unit } from '../../common';
 
 describe('WorkspaceTestResultsFacade', () => {

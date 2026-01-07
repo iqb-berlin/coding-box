@@ -8,6 +8,7 @@ import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
 import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
+import { JournalService } from './journal.service';
 
 describe('WorkspaceTestResultsQueryService', () => {
   let service: WorkspaceTestResultsQueryService;
