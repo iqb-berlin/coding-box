@@ -2,9 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { ResourcePackageController } from './resource-package.controller';
 import { AuthService } from '../../auth/service/auth.service';
-import { ResourcePackageService } from '../../database/services/resource-package.service';
+import { ResourcePackageService } from '../../workspaces/services/resource-package.service';
 import { AccessLevelGuard } from '../workspace/access-level.guard';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../users/services/users.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 
 describe('ResourcePackageController', () => {
   let controller: ResourcePackageController;
@@ -25,6 +26,10 @@ describe('ResourcePackageController', () => {
         {
           provide: UsersService,
           useValue: createMock<UsersService>()
+        },
+        {
+          provide: WorkspacesAdminFacade,
+          useValue: createMock<WorkspacesAdminFacade>()
         }
       ]
     }).compile();

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { JournalEntry } from '../../../database/entities/journal-entry.entity';
+import { JournalEntry } from '../../../workspaces/entities/journal-entry.entity';
 
 /**
  * DTO for paginated journal entries response

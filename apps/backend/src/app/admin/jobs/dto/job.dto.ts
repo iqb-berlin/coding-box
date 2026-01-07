@@ -1,4 +1,4 @@
-import { Job } from '../../../database/entities/job.entity';
+import { Job } from '../../../common';
 
 export class JobDto {
   id: number;

@@ -34,12 +34,12 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { UploadResultsService } from '../../database/services/upload-results.service';
-import Persons from '../../database/entities/persons.entity';
-import { ResponseEntity } from '../../database/entities/response.entity';
-import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { Persons, ResponseEntity } from '../../common';
+import { WorkspaceTestResultsFacade } from '../../workspaces/services/workspace-test-results-facade.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
+import { BullJobManagementService } from '../../coding/services/bull-job-management.service';
 import { DatabaseExportService } from '../database/database-export.service';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
@@ -76,10 +76,11 @@ interface FlatResponseFrequenciesRequest {
 @Controller('admin/workspace')
 export class WorkspaceTestResultsController {
   constructor(
-    private workspaceTestResultsService: WorkspaceTestResultsService,
-    private uploadResults: UploadResultsService,
+    private workspaceTestResultsFacade: WorkspaceTestResultsFacade,
+    private workspacesAdminFacade: WorkspacesAdminFacade,
+    private bullJobManagementService: BullJobManagementService,
     private databaseExportService: DatabaseExportService,
-    private jobQueueService: JobQueueService,
+    private workspaceBullQueueService: WorkspaceBullQueueService,
     private cacheService: CacheService
   ) {}
 
@@ -91,7 +92,7 @@ export class WorkspaceTestResultsController {
         workspaceId
       );
     const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+    await this.workspaceBullQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {
@@ -159,7 +160,7 @@ export class WorkspaceTestResultsController {
         sessionScreenCounts: Record<string, number>;
       }> {
     try {
-      return await this.workspaceTestResultsService.getWorkspaceTestResultsOverview(
+      return await this.workspaceTestResultsFacade.getWorkspaceTestResultsOverview(
         workspaceId
       );
     } catch (error) {
@@ -219,7 +220,7 @@ export class WorkspaceTestResultsController {
                            @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] =
-      await this.workspaceTestResultsService.findTestResults(workspace_id, {
+      await this.workspaceTestResultsFacade.findTestResults(workspace_id, {
         page,
         limit,
         searchText
@@ -246,7 +247,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    return this.workspaceTestResultsService.deleteTestPersons(
+    return this.workspaceTestResultsFacade.deleteTestPersons(
       Number(workspaceId),
       testPersonIds,
       req.user.id
@@ -299,7 +300,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    const result = await this.workspaceTestResultsService.deleteUnit(
+    const result = await this.workspaceTestResultsFacade.deleteUnit(
       workspaceId,
       unitId,
       req.user.id
@@ -557,7 +558,7 @@ export class WorkspaceTestResultsController {
                            @Query('sessionIds') sessionIds?: string
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
-      await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
+      await this.workspaceTestResultsFacade.findFlatResponses(workspace_id, {
         page,
         limit,
         code,
@@ -663,7 +664,7 @@ export class WorkspaceTestResultsController {
       >
       > {
     try {
-      return await this.workspaceTestResultsService.findFlatResponseFrequencies(
+      return await this.workspaceTestResultsFacade.findFlatResponseFrequencies(
         workspaceId,
         body?.combos || []
       );
@@ -934,7 +935,7 @@ export class WorkspaceTestResultsController {
     }
 
     const result =
-      await this.workspaceTestResultsService.findFlatResponseFilterOptions(
+      await this.workspaceTestResultsFacade.findFlatResponseFilterOptions(
         workspace_id,
         {
           code,
@@ -1021,7 +1022,7 @@ export class WorkspaceTestResultsController {
   ): Promise<
       { id: number; unitid: number; ts: string; key: string; parameter: string }[]
       > {
-    return this.workspaceTestResultsService.findUnitLogs(workspace_id, unitId);
+    return this.workspaceTestResultsFacade.findUnitLogs(workspace_id, unitId);
   }
 
   @Get(':workspace_id/units/:unitId/booklet-logs')
@@ -1087,7 +1088,7 @@ export class WorkspaceTestResultsController {
           }[];
         }[];
       }> {
-    return this.workspaceTestResultsService.findBookletLogsByUnitId(
+    return this.workspaceTestResultsFacade.findBookletLogsByUnitId(
       workspace_id,
       unitId
     );
@@ -1216,7 +1217,7 @@ export class WorkspaceTestResultsController {
         }[];
       }[]
       > {
-    return this.workspaceTestResultsService.findPersonTestResults(
+    return this.workspaceTestResultsFacade.findPersonTestResults(
       personId,
       workspace_id
     );
@@ -1268,7 +1269,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    const result = await this.workspaceTestResultsService.deleteResponse(
+    const result = await this.workspaceTestResultsFacade.deleteResponse(
       workspaceId,
       responseId,
       req.user.id
@@ -1319,7 +1320,7 @@ export class WorkspaceTestResultsController {
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     try {
-      return await this.workspaceTestResultsService.resolveDuplicateResponses(
+      return await this.workspaceTestResultsFacade.resolveDuplicateResponses(
         workspaceId,
         body?.resolutionMap || {},
         req.user.id
@@ -1377,7 +1378,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    const result = await this.workspaceTestResultsService.deleteBooklet(
+    const result = await this.workspaceTestResultsFacade.deleteBooklet(
       workspaceId,
       bookletId,
       req.user.id
@@ -1429,7 +1430,7 @@ export class WorkspaceTestResultsController {
         limit: number;
       }> {
     const [responses, total] =
-      await this.workspaceTestResultsService.findWorkspaceResponses(id, {
+      await this.workspaceTestResultsFacade.findWorkspaceResponses(id, {
         page,
         limit
       });
@@ -1454,7 +1455,7 @@ export class WorkspaceTestResultsController {
           content: { id: string; value: string; status: string }[];
         }[];
       }> {
-    return this.workspaceTestResultsService.findUnitResponse(
+    return this.workspaceTestResultsFacade.findUnitResponse(
       id,
       testPerson,
       unitId
@@ -1505,7 +1506,7 @@ export class WorkspaceTestResultsController {
         limit: number;
       }> {
     const [responses, total] =
-      await this.workspaceTestResultsService.getResponsesByStatus(
+      await this.workspaceTestResultsFacade.getResponsesByStatus(
         workspace_id,
         status,
         { page, limit }
@@ -1695,7 +1696,7 @@ export class WorkspaceTestResultsController {
     }
 
     try {
-      return await this.workspaceTestResultsService.searchResponses(
+      return await this.workspaceTestResultsFacade.searchResponses(
         workspace_id,
         {
           value,
@@ -1830,7 +1831,7 @@ export class WorkspaceTestResultsController {
     }
 
     try {
-      return await this.workspaceTestResultsService.findBookletsByName(
+      return await this.workspaceTestResultsFacade.findBookletsByName(
         workspace_id,
         bookletName,
         { page, limit }
@@ -2006,7 +2007,7 @@ export class WorkspaceTestResultsController {
     }
 
     try {
-      return await this.workspaceTestResultsService.findUnitsByName(
+      return await this.workspaceTestResultsFacade.findUnitsByName(
         workspace_id,
         unitName,
         { page, limit }
@@ -2152,7 +2153,7 @@ export class WorkspaceTestResultsController {
       ).includes(finalScope) ?
         (finalScope as UploadScope) :
         'person';
-      const result = await this.uploadResults.uploadTestResults(
+      const result = await this.workspacesAdminFacade.uploadTestResults(
         workspace_id,
         files,
         resultType,
@@ -2266,7 +2267,7 @@ export class WorkspaceTestResultsController {
         }.csv`
       );
 
-      await this.workspaceTestResultsService.exportTestResults(
+      await this.workspaceTestResultsFacade.exportTestResults(
         workspace_id,
         response
       );
@@ -2324,7 +2325,7 @@ export class WorkspaceTestResultsController {
     booklets: string[];
     units: string[];
   }> {
-    return this.workspaceTestResultsService.getExportOptions(
+    return this.workspaceTestResultsFacade.getExportOptions(
       Number(workspace_id)
     );
   }
@@ -2377,7 +2378,7 @@ export class WorkspaceTestResultsController {
                              personIds?: number[];
                            }
   ): Promise<{ jobId: string; message: string }> {
-    const job = await this.jobQueueService.addExportJob({
+    const job = await this.bullJobManagementService.addExportJob({
       workspaceId: Number(workspace_id),
       userId: Number(req.user.id),
       exportType: 'test-results',
@@ -2439,7 +2440,7 @@ export class WorkspaceTestResultsController {
                              personIds?: number[];
                            }
   ): Promise<{ jobId: string; message: string }> {
-    const job = await this.jobQueueService.addExportJob({
+    const job = await this.bullJobManagementService.addExportJob({
       workspaceId: Number(workspace_id),
       userId: Number(req.user.id),
       exportType: 'test-logs',
@@ -2485,7 +2486,7 @@ export class WorkspaceTestResultsController {
   async getExportJobs(
     @Param('workspace_id') workspace_id: number
   ): Promise<ExportJobStatus[]> {
-    const jobs = await this.jobQueueService.getExportJobs(Number(workspace_id));
+    const jobs = await this.bullJobManagementService.getExportJobs(Number(workspace_id));
 
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
@@ -2560,7 +2561,7 @@ export class WorkspaceTestResultsController {
   async deleteExportJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    const success = await this.jobQueueService.deleteExportJob(jobId);
+    const success = await this.bullJobManagementService.deleteExportJob(jobId);
     if (!success) {
       throw new BadRequestException('Failed to delete job');
     }

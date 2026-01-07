@@ -1,17 +1,16 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { ScheduleModule } from '@nestjs/schedule';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheService } from './cache.service';
-import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
-import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache-scheduler.service';
-import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
-import Persons from '../database/entities/persons.entity';
-import { Unit } from '../database/entities/unit.entity';
-// eslint-disable-next-line import/no-cycle
-import { DatabaseModule } from '../database/database.module';
 
+/**
+ * CacheModule - Generic Infrastructure Module for Redis Caching
+ *
+ * This module provides a generic CacheService for Redis-based caching.
+ * It is designed to be a global infrastructure module that does not
+ * depend on feature modules.
+ */
 @Module({
   imports: [
     RedisModule.forRootAsync({
@@ -26,11 +25,13 @@ import { DatabaseModule } from '../database/database.module';
         }
       })
     }),
-    ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Persons, Unit]),
-    forwardRef(() => DatabaseModule)
+    ScheduleModule.forRoot()
   ],
-  providers: [CacheService, ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService, CodingStatisticsCacheSchedulerService],
-  exports: [CacheService]
+  providers: [
+    CacheService
+  ],
+  exports: [
+    CacheService
+  ]
 })
 export class CacheModule {}

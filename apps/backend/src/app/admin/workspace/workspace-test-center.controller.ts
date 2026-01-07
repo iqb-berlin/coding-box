@@ -9,24 +9,22 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
-import {
-  TestcenterService,
-  Result
-} from '../../database/services/testcenter.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
+import { Result } from '../../workspaces/services/testcenter.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
 import { CacheService } from '../../cache/cache.service';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 
 @ApiTags('Admin Workspace Test Center')
 @Controller('admin/workspace')
 export class WorkspaceTestCenterController {
   constructor(
-    private testCenterService: TestcenterService,
+    private workspacesAdminFacade: WorkspacesAdminFacade,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private workspaceBullQueueService: WorkspaceBullQueueService
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -37,7 +35,7 @@ export class WorkspaceTestCenterController {
         workspaceId
       );
     const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+    await this.workspaceBullQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {
@@ -157,21 +155,7 @@ export class WorkspaceTestCenterController {
       .map(s => s.trim())
       .filter(Boolean);
 
-    const result = await (
-      this.testCenterService as unknown as {
-        importWorkspaceFiles: (
-          workspaceId: string,
-          tcWorkspace: string,
-          serverId: string,
-          tcUrl: string,
-          authToken: string,
-          opts: ImportOptions,
-          groups: string,
-          overwriteExistingLogs: boolean,
-          overwriteFileIds?: string[]
-        ) => Promise<Result>;
-      }
-    ).importWorkspaceFiles(
+    const result = await this.workspacesAdminFacade.importWorkspaceFiles(
       workspace_id,
       tc_workspace,
       server,
@@ -232,7 +216,7 @@ export class WorkspaceTestCenterController {
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string
   ): Promise<TestGroupsInfoDto[]> {
-    return this.testCenterService.getTestgroups(
+    return this.workspacesAdminFacade.getTestgroups(
       workspace_id,
       tc_workspace,
       server,

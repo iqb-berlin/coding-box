@@ -2,13 +2,14 @@ import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
-import { DatabaseModule } from '../database/database.module';
+import { UsersModule } from '../users/users.module';
+import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { CodingModule } from '../coding/coding.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceFilesController } from './workspace/workspace-files.controller';
 import { WorkspaceTestResultsController } from './workspace/workspace-test-results.controller';
 import { WorkspaceUsersController } from './workspace/workspace-users.controller';
-import { WorkspaceCodingController } from './workspace/workspace-coding.controller';
 import { WorkspaceTestCenterController } from './workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from './workspace/workspace-player.controller';
 import { LogoController } from './logo/logo.controller';
@@ -22,14 +23,11 @@ import { ValidationTaskController } from './workspace/validation-task.controller
 import { BookletInfoController } from './workspace/booklet-info.controller';
 import { UnitInfoController } from './workspace/unit-info.controller';
 import { MissingsProfilesController } from './workspace/missings-profiles.controller';
-import { BookletInfoService } from '../database/services/booklet-info.service';
-import { UnitInfoService } from '../database/services/unit-info.service';
-import FileUpload from '../database/entities/file_upload.entity';
-import { Setting } from '../database/entities/setting.entity';
+import { FileUpload } from '../common';
+import { Setting } from '../workspaces/entities/setting.entity';
 import { ReplayStatisticsController } from './replay-statistics/replay-statistics.controller';
 import { VariableBundleModule } from './variable-bundle/variable-bundle.module';
 import { VariableBundleController } from './variable-bundle/variable-bundle.controller';
-import { CodingJobsController } from './coding-jobs/coding-jobs.controller';
 import { DatabaseAdminController } from './database/database-admin.controller';
 import { DatabaseExportService } from './database/database-export.service';
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -38,7 +36,9 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
 
 @Module({
   imports: [
-    DatabaseModule,
+    UsersModule,
+    WorkspacesModule,
+    CodingModule,
     AuthModule,
     HttpModule,
     TypeOrmModule.forFeature([FileUpload, Setting]),
@@ -52,7 +52,6 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     WorkspaceFilesController,
     WorkspaceTestResultsController,
     WorkspaceUsersController,
-    WorkspaceCodingController,
     WorkspaceTestCenterController,
     WorkspacePlayerController,
     LogoController,
@@ -68,12 +67,9 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     MissingsProfilesController,
     ReplayStatisticsController,
     VariableBundleController,
-    CodingJobsController,
     DatabaseAdminController
   ],
   providers: [
-    BookletInfoService,
-    UnitInfoService,
     DatabaseExportService,
     AccessRightsMatrixService
   ]

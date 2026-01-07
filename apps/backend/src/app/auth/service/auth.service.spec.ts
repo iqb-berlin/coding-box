@@ -3,7 +3,7 @@ import { createMock } from '@golevelup/ts-jest';
 import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { AuthService } from './auth.service';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../users/services/users.service';
 
 describe('AuthService', () => {
   let service: AuthService;
