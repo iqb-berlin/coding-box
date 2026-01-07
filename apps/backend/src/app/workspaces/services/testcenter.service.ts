@@ -422,14 +422,7 @@ export class TestcenterService {
 
       const dbEntries = this.createDatabaseEntries(fetchedFiles, workspace_id);
 
-      const dbImportResult = await (
-        this.workspaceFilesService as unknown as {
-          testCenterImport: (
-            entries: Record<string, unknown>[],
-            overwriteFileIds?: string[]
-          ) => Promise<TestFilesUploadResultDto>;
-        }
-      ).testCenterImport(dbEntries, overwriteFileIds);
+      const dbImportResult = await this.workspaceFilesService.testCenterImport(dbEntries, overwriteFileIds);
       const uploadResult: TestFilesUploadResultDto = {
         total: Number(dbImportResult.total || 0) + failedFiles.length,
         uploaded: Number(

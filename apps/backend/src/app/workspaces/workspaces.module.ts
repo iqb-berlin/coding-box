@@ -60,6 +60,22 @@ import { ExportValidationResultsService } from './services/export-validation-res
 import { WorkspaceEventsService } from './services/workspace-events.service';
 import { WorkspacesFacadeService } from './services/workspaces-facade.service';
 
+// Refactored Test Results Services
+import { WorkspaceTestResultsOverviewService } from './services/workspace-test-results-overview.service';
+import { WorkspaceTestResultsQueryService } from './services/workspace-test-results-query.service';
+import { DuplicateResponseService } from './services/duplicate-response.service';
+import { FlatResponseService } from './services/flat-response.service';
+import { ResponseExportService } from './services/response-export.service';
+import { WorkspaceTestResultsFacade } from './services/workspace-test-results-facade.service';
+import { FileQueryService } from './services/file-query.service';
+import { FileDownloadService } from './services/file-download.service';
+import { FileValidationService } from './services/file-validation.service';
+import { FileUploadService } from './services/file-upload.service';
+import { WorkspaceFilesFacade } from './services/workspace-files-facade.service';
+import { XmlFileHandler } from './services/handlers/xml-file.handler';
+import { HtmlFileHandler } from './services/handlers/html-file.handler';
+import { OctetStreamFileHandler } from './services/handlers/octet-stream-file.handler';
+
 @Module({
   imports: [
     HttpModule,
@@ -123,7 +139,22 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
     WorkspacesFacadeService,
     FlatResponseFilterOptionsProcessor,
     WorkspaceBullQueueService,
-    ResponseCacheSchedulerService
+    ResponseCacheSchedulerService,
+    // Refactored Test Results Services
+    WorkspaceTestResultsOverviewService,
+    WorkspaceTestResultsQueryService,
+    DuplicateResponseService,
+    FlatResponseService,
+    ResponseExportService,
+    WorkspaceTestResultsFacade,
+    FileQueryService,
+    FileDownloadService,
+    FileValidationService,
+    FileUploadService,
+    WorkspaceFilesFacade,
+    XmlFileHandler,
+    HtmlFileHandler,
+    OctetStreamFileHandler
   ],
   exports: [
     WorkspaceCoreService,
@@ -146,7 +177,9 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
     ExportValidationResultsService,
     WorkspaceEventsService,
     WorkspacesFacadeService,
-    WorkspaceBullQueueService
+    WorkspaceBullQueueService,
+    WorkspaceFilesFacade,
+    WorkspaceTestResultsFacade
   ]
 })
 export class WorkspacesModule {}

@@ -4,7 +4,6 @@ import { HttpModule } from '@nestjs/axios';
 import { BullModule } from '@nestjs/bull';
 import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
-// eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
@@ -13,6 +12,7 @@ import { UsersModule } from '../users/users.module';
 import { CodingJob } from './entities/coding-job.entity';
 import { VocsService } from './services/vocs.service';
 import { VoudService } from './services/voud.service';
+import { FileUpload } from '../common';
 import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
@@ -53,6 +53,9 @@ import { WorkspaceCodingController } from './controllers/workspace-coding.contro
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { ExportJobProcessor } from './processors/export-job.processor';
+
+import { TestPersonCodingService } from './services/test-person-coding.service';
+import { WorkspaceCodingFacade } from './services/workspace-coding-facade.service';
 
 /**
  * CodingModule - Feature Module for Coding Functionality
@@ -95,7 +98,8 @@ import { ExportJobProcessor } from './processors/export-job.processor';
       CoderTraining,
       VariableBundle,
       VariableAnalysisJob,
-      TestPersonCodingJob
+      TestPersonCodingJob,
+      FileUpload
       // Shared entities used by coding services are now accessed via WorkspacesFacadeService
     ])
   ],
@@ -108,6 +112,8 @@ import { ExportJobProcessor } from './processors/export-job.processor';
     // Core services
     CodingJobService,
     WorkspaceCodingService,
+    TestPersonCodingService,
+    WorkspaceCodingFacade,
     CodingFileCache,
     CodingJobManager,
     CodingProcessor,

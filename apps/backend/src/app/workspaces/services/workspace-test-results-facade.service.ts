@@ -1,62 +1,45 @@
-import {
-  Injectable
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { Injectable } from '@nestjs/common';
 import { Response } from 'express';
 import { Writable } from 'stream';
+import { Persons, ResponseEntity } from '../../common';
+import { WorkspaceTestResultsOverviewService } from './workspace-test-results-overview.service';
 import {
-  Persons, ResponseEntity, Unit
-} from '../../common';
-import { Booklet } from '../entities/booklet.entity';
-import { UnitTagService } from './unit-tag.service';
-import { JournalService } from './journal.service';
-import { CacheService } from '../../cache/cache.service';
-import { WorkspaceFilesService } from './workspace-files.service';
-import {
+  WorkspaceTestResultsQueryService,
   SearchResponseItem,
   BookletSearchItem,
   UnitSearchItem
 } from './workspace-test-results-query.service';
-import { WorkspaceTestResultsFacade } from './workspace-test-results-facade.service';
+import { DuplicateResponseService } from './duplicate-response.service';
+import { FlatResponseService } from './flat-response.service';
+import { ResponseExportService } from './response-export.service';
 
 /**
- * WorkspaceTestResultsService
+ * WorkspaceTestResultsFacade
  *
- * LEGACY SERVICE - Being gradually migrated to use WorkspaceTestResultsFacade
- *
- * This service is being refactored. Methods are being delegated to specialized services:
+ * Facade service that coordinates between specialized test results services.
+ * This service maintains backward compatibility while delegating to focused services:
  * - WorkspaceTestResultsOverviewService: Statistics and overview
- * - WorkspaceTestResultsQueryService: Data querying
+ * - WorkspaceTestResultsQueryService: Data querying and retrieval
  * - DuplicateResponseService: Duplicate resolution
  * - FlatResponseService: Complex flat response queries
  * - ResponseExportService: Export functionality
  *
- * New code should use WorkspaceTestResultsFacade directly.
+ * This facade allows gradual migration from the monolithic WorkspaceTestResultsService
+ * without breaking existing consumers.
  */
 @Injectable()
-export class WorkspaceTestResultsService {
+export class WorkspaceTestResultsFacade {
   constructor(
-    @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(Booklet)
-    private bookletRepository: Repository<Booklet>,
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
-    private readonly connection: DataSource,
-    private readonly unitTagService: UnitTagService,
-    private readonly journalService: JournalService,
-    private readonly cacheService: CacheService,
-    private readonly workspaceFilesService: WorkspaceFilesService,
-    // Facade for delegating to refactored services
-    private readonly facade: WorkspaceTestResultsFacade
+    private readonly overviewService: WorkspaceTestResultsOverviewService,
+    private readonly queryService: WorkspaceTestResultsQueryService,
+    private readonly duplicateService: DuplicateResponseService,
+    private readonly flatResponseService: FlatResponseService,
+    private readonly exportService: ResponseExportService
   ) {}
 
   /**
-   * Get workspace test results overview
-   * DELEGATED to WorkspaceTestResultsOverviewService via facade
+   * Get workspace test results overview with statistics
+   * Delegates to: WorkspaceTestResultsOverviewService
    */
   async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
     testPersons: number;
@@ -69,12 +52,12 @@ export class WorkspaceTestResultsService {
     sessionOsCounts: Record<string, number>;
     sessionScreenCounts: Record<string, number>;
   }> {
-    return this.facade.getWorkspaceTestResultsOverview(workspaceId);
+    return this.overviewService.getWorkspaceTestResultsOverview(workspaceId);
   }
 
   /**
    * Find comprehensive test results for a specific person
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findPersonTestResults(
     personId: number,
@@ -115,35 +98,31 @@ export class WorkspaceTestResultsService {
       }[];
     }[]
     > {
-    return this.facade.findPersonTestResults(personId, workspaceId);
+    return this.queryService.findPersonTestResults(personId, workspaceId);
   }
 
   /**
    * Find paginated test results (persons) for a workspace
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findTestResults(
     workspace_id: number,
     options: { page: number; limit: number; searchText?: string }
   ): Promise<[Persons[], number]> {
-    return this.facade.findTestResults(workspace_id, options);
+    return this.queryService.findTestResults(workspace_id, options);
   }
 
   /**
    * Find workspace responses with optional pagination
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findWorkspaceResponses(
     workspace_id: number,
     options?: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
-    return this.facade.findWorkspaceResponses(workspace_id, options);
+    return this.queryService.findWorkspaceResponses(workspace_id, options);
   }
 
-  /**
-   * Find a specific unit response for a person and booklet
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
-   */
   async findUnitResponse(
     workspaceId: number,
     connector: string,
@@ -154,23 +133,23 @@ export class WorkspaceTestResultsService {
         content: { id: string; value: string; status: string }[];
       }[];
     }> {
-    return this.facade.findUnitResponse(workspaceId, connector, unitId);
+    return this.queryService.findUnitResponse(workspaceId, connector, unitId);
   }
 
   /**
    * Find unit logs for a specific unit
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findUnitLogs(
     workspaceId: number,
     unitId: number
   ): Promise<{ id: number; unitid: number; ts: string; key: string; parameter: string }[]> {
-    return this.facade.findUnitLogs(workspaceId, unitId);
+    return this.queryService.findUnitLogs(workspaceId, unitId);
   }
 
   /**
    * Find booklet logs, sessions, and unit logs for a booklet containing the given unit
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findBookletLogsByUnitId(
     workspaceId: number,
@@ -187,24 +166,24 @@ export class WorkspaceTestResultsService {
         logs: { id: number; unitid: number; ts: string; key: string; parameter: string }[];
       }[];
     }> {
-    return this.facade.findBookletLogsByUnitId(workspaceId, unitId);
+    return this.queryService.findBookletLogsByUnitId(workspaceId, unitId);
   }
 
   /**
    * Get responses by status with pagination
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async getResponsesByStatus(
     workspaceId: number,
     status: string,
     options: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
-    return this.facade.getResponsesByStatus(workspaceId, status, options);
+    return this.queryService.getResponsesByStatus(workspaceId, status, options);
   }
 
   /**
    * Search responses by value, unit, or variable
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async searchResponses(
     workspaceId: number,
@@ -221,93 +200,101 @@ export class WorkspaceTestResultsService {
     },
     pagination: { page?: number; limit?: number }
   ): Promise<{ data: SearchResponseItem[]; total: number; page: number; limit: number }> {
-    return this.facade.searchResponses(workspaceId, criteria, pagination);
+    return this.queryService.searchResponses(workspaceId, criteria, pagination);
   }
 
   /**
    * Find booklets by name with pagination
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findBookletsByName(
     workspaceId: number,
     bookletName: string,
     options: { page?: number; limit?: number }
   ): Promise<{ data: BookletSearchItem[]; total: number; page: number; limit: number }> {
-    return this.facade.findBookletsByName(workspaceId, bookletName, options);
+    return this.queryService.findBookletsByName(workspaceId, bookletName, options);
   }
 
   /**
    * Find units by name with pagination
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async findUnitsByName(
     workspaceId: number,
     unitName: string,
     options: { page?: number; limit?: number }
   ): Promise<{ data: UnitSearchItem[]; total: number; page: number; limit: number }> {
-    return this.facade.findUnitsByName(workspaceId, unitName, options);
+    return this.queryService.findUnitsByName(workspaceId, unitName, options);
   }
 
   /**
    * Delete a single response
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async deleteResponse(
     workspaceId: number,
     responseId: number,
     userId: string
   ): Promise<{ success: boolean; report: { deletedResponse: number | null; warnings: string[] } }> {
-    return this.facade.deleteResponse(workspaceId, responseId, userId);
+    return this.queryService.deleteResponse(workspaceId, responseId, userId);
   }
 
   /**
    * Delete a booklet and all its associated units and responses
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async deleteBooklet(
     workspaceId: number,
     bookletId: number,
     userId: string
   ): Promise<{ success: boolean; report: { deletedBooklet: number | null; warnings: string[] } }> {
-    return this.facade.deleteBooklet(workspaceId, bookletId, userId);
+    return this.queryService.deleteBooklet(workspaceId, bookletId, userId);
   }
 
   /**
    * Delete multiple test persons
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async deleteTestPersons(
     workspaceId: number,
     testPersonIds: string,
     userId: string
   ): Promise<{ success: boolean; report: { deletedPersons: string[]; warnings: string[] } }> {
-    return this.facade.deleteTestPersons(workspaceId, testPersonIds, userId);
+    return this.queryService.deleteTestPersons(workspaceId, testPersonIds, userId);
   }
 
   /**
    * Delete a single unit
-   * DELEGATED to WorkspaceTestResultsQueryService via facade
+   * Delegates to: WorkspaceTestResultsQueryService
    */
   async deleteUnit(
     workspaceId: number,
     unitId: number,
     userId: string
   ): Promise<{ success: boolean; report: { deletedUnit: number | null; warnings: string[] } }> {
-    return this.facade.deleteUnit(workspaceId, unitId, userId);
+    return this.queryService.deleteUnit(workspaceId, unitId, userId);
   }
 
   /**
    * Resolve duplicate responses
-   * DELEGATED to DuplicateResponseService via facade
+   * Delegates to: DuplicateResponseService
    */
   async resolveDuplicateResponses(
     workspaceId: number,
     resolutionMap: Record<string, number>,
     userId: string
   ): Promise<{ resolvedCount: number; success: boolean }> {
-    return this.facade.resolveDuplicateResponses(workspaceId, resolutionMap, userId);
+    return this.duplicateService.resolveDuplicateResponses(
+      workspaceId,
+      resolutionMap,
+      userId
+    );
   }
 
+  /**
+   * Find flat responses with extensive filtering and pagination
+   * Delegates to: FlatResponseService
+   */
   async findFlatResponses(
     workspaceId: number,
     options: {
@@ -341,24 +328,24 @@ export class WorkspaceTestResultsService {
       sessionIds?: string;
     }
   ): Promise<[unknown[], number]> {
-    return this.facade.findFlatResponses(workspaceId, options);
+    return this.flatResponseService.findFlatResponses(workspaceId, options);
   }
 
+  /**
+   * Calculate response frequencies for specific unit/variable combinations
+   * Delegates to: FlatResponseService
+   */
   async findFlatResponseFrequencies(
     workspaceId: number,
     combos: Array<{ unitKey: string; variableId: string; values: string[] }>
-  ): Promise<
-    Record<
-    string,
-    {
-      total: number;
-      values: Array<{ value: string; count: number; p: number }>;
-    }
-    >
-    > {
-    return this.facade.findFlatResponseFrequencies(workspaceId, combos);
+  ): Promise<Record<string, { total: number; values: Array<{ value: string; count: number; p: number }> }>> {
+    return this.flatResponseService.findFlatResponseFrequencies(workspaceId, combos);
   }
 
+  /**
+   * Get available filter options based on current workspace data
+   * Delegates to: FlatResponseService
+   */
   async findFlatResponseFilterOptions(
     workspaceId: number,
     options: {
@@ -402,9 +389,13 @@ export class WorkspaceTestResultsService {
       sessionScreens: string[];
       sessionIds: string[];
     }> {
-    return this.facade.findFlatResponseFilterOptions(workspaceId, options);
+    return this.flatResponseService.findFlatResponseFilterOptions(workspaceId, options);
   }
 
+  /**
+   * Export test results to response
+   * Delegates to: ResponseExportService
+   */
   async exportTestResults(
     workspaceId: number,
     res: Response,
@@ -415,9 +406,13 @@ export class WorkspaceTestResultsService {
       personIds?: number[];
     }
   ): Promise<void> {
-    return this.facade.exportTestResults(workspaceId, res, filters);
+    return this.exportService.exportTestResults(workspaceId, res, filters);
   }
 
+  /**
+   * Export test results to file
+   * Delegates to: ResponseExportService
+   */
   async exportTestResultsToFile(
     workspaceId: number,
     filePath: string,
@@ -429,7 +424,7 @@ export class WorkspaceTestResultsService {
     },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    return this.facade.exportTestResultsToFile(
+    return this.exportService.exportTestResultsToFile(
       workspaceId,
       filePath,
       filters,
@@ -437,6 +432,10 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  /**
+   * Export test results to stream
+   * Delegates to: ResponseExportService
+   */
   async exportTestResultsToStream(
     workspaceId: number,
     stream: Writable,
@@ -448,7 +447,7 @@ export class WorkspaceTestResultsService {
     },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    return this.facade.exportTestResultsToStream(
+    return this.exportService.exportTestResultsToStream(
       workspaceId,
       stream,
       filters,
@@ -456,6 +455,10 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  /**
+   * Export test logs to file
+   * Delegates to: ResponseExportService
+   */
   async exportTestLogsToFile(
     workspaceId: number,
     filePath: string,
@@ -467,7 +470,7 @@ export class WorkspaceTestResultsService {
     },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    return this.facade.exportTestLogsToFile(
+    return this.exportService.exportTestLogsToFile(
       workspaceId,
       filePath,
       filters,
@@ -475,6 +478,10 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  /**
+   * Export test logs to stream
+   * Delegates to: ResponseExportService
+   */
   async exportTestLogsToStream(
     workspaceId: number,
     stream: Writable,
@@ -486,7 +493,7 @@ export class WorkspaceTestResultsService {
     },
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
-    return this.facade.exportTestLogsToStream(
+    return this.exportService.exportTestLogsToStream(
       workspaceId,
       stream,
       filters,
@@ -494,6 +501,10 @@ export class WorkspaceTestResultsService {
     );
   }
 
+  /**
+   * Get export options for a workspace
+   * Delegates to: ResponseExportService
+   */
   async getExportOptions(workspaceId: number): Promise<{
     testPersons: {
       id: number;
@@ -505,6 +516,6 @@ export class WorkspaceTestResultsService {
     booklets: string[];
     units: string[];
   }> {
-    return this.facade.getExportOptions(workspaceId);
+    return this.exportService.getExportOptions(workspaceId);
   }
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
+import * as cheerio from 'cheerio';
 
 import {
   FileUpload, ResponseEntity, Unit, Persons
@@ -914,6 +915,96 @@ export class WorkspaceResponseValidationService {
       this.logger.error(`Error deleting all invalid responses: ${message}`, error instanceof Error ? error.stack : undefined);
       throw new Error(`Error deleting all invalid responses: ${message}`);
     }
+  }
+
+  async validateGroupResponses(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Promise<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    if (!workspaceId) {
+      this.logger.error('Workspace ID is required');
+      return {
+        testTakersFound: false,
+        groupsWithResponses: [],
+        allGroupsHaveResponses: false,
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const testTakers = await this.filesRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: In(['TestTakers', 'Testtakers'])
+      }
+    });
+
+    if (!testTakers || testTakers.length === 0) {
+      return {
+        testTakersFound: false,
+        groupsWithResponses: [],
+        allGroupsHaveResponses: false,
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const groupNames = new Set<string>();
+    for (const testTaker of testTakers) {
+      const xmlDocument = cheerio.load(testTaker.data, { xml: true });
+      xmlDocument('Group').each((_, element) => {
+        const groupId = xmlDocument(element).attr('id');
+        if (groupId) {
+          groupNames.add(groupId);
+        }
+      });
+    }
+
+    const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
+    const sortedGroupNames = Array.from(groupNames).sort();
+
+    for (const groupName of sortedGroupNames) {
+      const count = await this.responseRepository
+        .createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.group = :groupName', { groupName })
+        .getCount();
+
+      groupsWithResponses.push({
+        group: groupName,
+        hasResponse: count > 0
+      });
+    }
+
+    const allGroupsHaveResponses = groupsWithResponses.every(g => g.hasResponse);
+
+    const validPage = Math.max(1, page);
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const paginatedData = groupsWithResponses.slice(startIndex, endIndex);
+
+    return {
+      testTakersFound: true,
+      groupsWithResponses: paginatedData,
+      allGroupsHaveResponses,
+      total: groupsWithResponses.length,
+      page: validPage,
+      limit: validLimit
+    };
   }
 
   private isValidValueForType(value: string, type: string): boolean {

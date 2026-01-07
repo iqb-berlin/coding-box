@@ -59,10 +59,12 @@ export class TestPersonCodingProcessor {
 
         const batchResult = await this.workspaceCodingService.processTestPersonsBatch(
           job.data.workspaceId,
-          batchPersonIds,
-          job.data.autoCoderRun || 1,
-          progressCallback,
-          job.id.toString()
+          {
+            personIds: batchPersonIds.map(id => Number(id)),
+            autoCoderRun: job.data.autoCoderRun || 1,
+            jobId: job.id.toString()
+          },
+          progressCallback
         );
 
         combinedResult.totalResponses += batchResult.totalResponses;
