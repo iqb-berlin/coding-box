@@ -1,6 +1,6 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
 import * as path from 'path';
@@ -18,11 +18,8 @@ export class ExportJobProcessor {
   private readonly logger = new Logger(ExportJobProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => CodingExportService))
     private codingExportService: CodingExportService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
     private workspaceTestResultsService: WorkspaceTestResultsService,
-    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private bullJobManagementService: BullJobManagementService
   ) {}

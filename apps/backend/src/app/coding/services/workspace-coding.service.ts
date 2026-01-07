@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -73,14 +73,12 @@ export class WorkspaceCodingService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private bullJobManagementService: BullJobManagementService,
-    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
     private codingStatisticsService: CodingStatisticsService,
     private variableAnalysisReplayService: VariableAnalysisReplayService,
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
-    @Inject(forwardRef(() => WorkspaceFilesService))
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,

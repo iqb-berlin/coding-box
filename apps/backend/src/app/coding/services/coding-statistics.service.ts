@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, OnApplicationBootstrap, Inject, forwardRef
+  Injectable, Logger, OnApplicationBootstrap
 } from '@nestjs/common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingStatistics } from '../../workspaces/shared-types';
@@ -16,7 +16,6 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   constructor(
     private workspacesFacadeService: WorkspacesFacadeService,
-    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private workspaceEventsService: WorkspaceEventsService
   ) {}

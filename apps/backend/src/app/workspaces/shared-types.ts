@@ -1,4 +1,6 @@
 import { ResponseStatusType, ResponseValueType } from '@iqbspecs/response/response.interface';
+import Persons from './entities/persons.entity';
+import { Unit } from './entities/unit.entity';
 
 export type Response = {
   groupname: string,
@@ -114,3 +116,5 @@ export interface CodingStatisticsWithJob extends CodingStatistics {
   jobId?: string;
   message?: string;
 }
+
+export type PersonsWithUnits = Persons & { units: Unit[] };

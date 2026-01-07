@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, BadRequestException, forwardRef, Inject
+  Injectable, NotFoundException, BadRequestException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -19,7 +19,6 @@ export class JobDefinitionService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private codingJobService: CodingJobService,
-    @Inject(forwardRef(() => WorkspaceCodingService))
     private workspaceCodingService: WorkspaceCodingService
   ) {}
 

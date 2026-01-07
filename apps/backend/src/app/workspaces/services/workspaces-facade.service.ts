@@ -54,6 +54,14 @@ export class WorkspacesFacadeService {
     });
   }
 
+  async getAllWorkspacesWithPersons(): Promise<{ workspace_id: number }[]> {
+    return this.personsRepository
+      .createQueryBuilder('person')
+      .select('DISTINCT person.workspace_id', 'workspace_id')
+      .where('person.consider = :consider', { consider: true })
+      .getRawMany();
+  }
+
   // --- Booklets ---
 
   async findBookletsByPersonIds(personIds: number[]): Promise<Booklet[]> {
@@ -252,6 +260,40 @@ export class WorkspacesFacadeService {
       where: { personid: In(personIds) },
       relations: ['bookletinfo']
     });
+  }
+
+  async findPersonsWithUnits(workspaceId: number): Promise<(Persons & { units: Unit[] })[]> {
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId, consider: true }
+    });
+
+    if (persons.length === 0) {
+      return [];
+    }
+
+    const personIds = persons.map(person => person.id);
+
+    const units = await this.unitRepository
+      .createQueryBuilder('unit')
+      .leftJoinAndSelect('unit.booklet', 'booklet')
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletInfo')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .getMany();
+
+    const unitsByPersonId = new Map<number, Unit[]>();
+    for (const unit of units) {
+      const personId = unit.booklet.personid;
+      if (!unitsByPersonId.has(personId)) {
+        unitsByPersonId.set(personId, []);
+      }
+      unitsByPersonId.get(personId).push(unit);
+    }
+
+    // Attach units to each person
+    return persons.map(person => ({
+      ...person,
+      units: unitsByPersonId.get(person.id) || []
+    })) as (Persons & { units: Unit[] })[];
   }
 
   async findResponsesByUnitIdsAndStatus(

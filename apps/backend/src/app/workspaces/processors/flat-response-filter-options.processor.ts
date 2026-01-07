@@ -1,6 +1,6 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { CacheService } from '../../cache/cache.service';
@@ -13,9 +13,7 @@ export class FlatResponseFilterOptionsProcessor {
   private readonly logger = new Logger(FlatResponseFilterOptionsProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => CacheService))
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) {}
 

@@ -1,9 +1,7 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
   Injectable,
-  Logger,
-  Inject,
-  forwardRef
+  Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { TestPersonCodingJobData } from '../interfaces/job-data.interface';
@@ -16,7 +14,6 @@ export class TestPersonCodingProcessor {
   private readonly logger = new Logger(TestPersonCodingProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => WorkspaceCodingService))
     private workspaceCodingService: WorkspaceCodingService
   ) {}
 

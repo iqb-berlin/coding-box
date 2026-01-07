@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
@@ -13,7 +13,6 @@ export class CodingResultsService {
 
   constructor(
     private workspacesFacadeService: WorkspacesFacadeService,
-    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService

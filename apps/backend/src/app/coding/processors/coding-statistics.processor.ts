@@ -4,9 +4,7 @@ import {
 } from '@nestjs/bull';
 import {
   Injectable,
-  Logger,
-  Inject,
-  forwardRef
+  Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { CodingStatistics } from '../../workspaces/shared-types';
@@ -22,7 +20,6 @@ export class CodingStatisticsProcessor {
   private readonly logger = new Logger(CodingStatisticsProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => WorkspaceCodingService))
     private workspaceCodingService: WorkspaceCodingService
   ) {}
 

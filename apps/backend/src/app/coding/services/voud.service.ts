@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 import { LRUCache } from '../../utils/lru-cache';
@@ -10,7 +10,6 @@ export class VoudService {
   private voudCache = new LRUCache<Map<string, string>>(50);
 
   constructor(
-    @Inject(forwardRef(() => WorkspaceFilesService))
     private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
 

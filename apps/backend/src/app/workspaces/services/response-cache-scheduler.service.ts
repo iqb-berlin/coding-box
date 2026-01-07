@@ -1,13 +1,11 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { CacheService } from './cache.service';
-import Persons from '../workspaces/entities/persons.entity';
-import { Unit } from '../workspaces/entities/unit.entity';
-import { WorkspaceTestResultsService } from '../workspaces/services/workspace-test-results.service';
+import { CacheService } from '../../cache/cache.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { WorkspacesFacadeService } from './workspaces-facade.service';
+import { PersonsWithUnits } from '../shared-types';
 
 @Injectable()
 export class ResponseCacheSchedulerService {
@@ -15,12 +13,8 @@ export class ResponseCacheSchedulerService {
 
   constructor(
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
-    @InjectRepository(Persons)
-    private readonly personsRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private readonly unitRepository: Repository<Unit>
+    private readonly workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_1AM)
@@ -30,7 +24,7 @@ export class ResponseCacheSchedulerService {
 
     try {
       // Get all workspaces with persons
-      const workspaces = await this.getWorkspacesWithPersons();
+      const workspaces = await this.workspacesFacadeService.getAllWorkspacesWithPersons();
       this.logger.log(`Found ${workspaces.length} workspaces with test persons`);
 
       // Process workspaces in parallel with a concurrency limit
@@ -59,7 +53,7 @@ export class ResponseCacheSchedulerService {
       const workspaceStartTime = Date.now();
 
       // Get all test persons and their units in a single query
-      const personsWithUnits = await this.getPersonsWithUnits(workspaceId);
+      const personsWithUnits = await this.workspacesFacadeService.findPersonsWithUnits(workspaceId);
       this.logger.log(`Found ${personsWithUnits.length} persons in workspace ${workspaceId}`);
 
       // Prepare all cache items to check
@@ -121,20 +115,9 @@ export class ResponseCacheSchedulerService {
   }
 
   /**
-   * Get all workspaces that have persons
-   */
-  private async getWorkspacesWithPersons(): Promise<{ workspace_id: number }[]> {
-    return this.personsRepository
-      .createQueryBuilder('person')
-      .select('DISTINCT person.workspace_id', 'workspace_id')
-      .where('person.consider = :consider', { consider: true })
-      .getRawMany();
-  }
-
-  /**
    * Create a connector string for a person and booklet
    */
-  private createConnector(person: Persons, bookletId: string): string {
+  private createConnector(person: PersonsWithUnits, bookletId: string): string {
     return `${person.login}@${person.code}@${bookletId}`;
   }
 
@@ -183,43 +166,6 @@ export class ResponseCacheSchedulerService {
         // Don't rethrow to avoid failing the entire batch
       }
     }
-  }
-
-  /**
-   * Get all persons with their units for a workspace in a single optimized query
-   */
-  private async getPersonsWithUnits(workspaceId: number): Promise<(Persons & { units: Unit[] })[]> {
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      return [];
-    }
-
-    const personIds = persons.map(person => person.id);
-
-    const units = await this.unitRepository
-      .createQueryBuilder('unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletInfo')
-      .where('booklet.personid IN (:...personIds)', { personIds })
-      .getMany();
-
-    const unitsByPersonId = new Map<number, Unit[]>();
-    for (const unit of units) {
-      const personId = unit.booklet.personid;
-      if (!unitsByPersonId.has(personId)) {
-        unitsByPersonId.set(personId, []);
-      }
-      unitsByPersonId.get(personId).push(unit);
-    }
-
-    // Attach units to each person
-    return persons.map(person => ({
-      ...person,
-      units: unitsByPersonId.get(person.id) || []
-    }));
   }
 
   /**

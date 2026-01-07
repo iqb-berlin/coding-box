@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 // BullJobManagementService now handles Bull queue interactions
 import { CacheService } from '../../cache/cache.service';
@@ -11,7 +11,6 @@ export class CodingJobManager {
   private readonly logger = new Logger(CodingJobManager.name);
 
   constructor(
-    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private bullJobManagementService: BullJobManagementService
   ) {}

@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -62,7 +62,6 @@ export class WorkspaceTestResultsService {
     private readonly connection: DataSource,
     private readonly unitTagService: UnitTagService,
     private readonly journalService: JournalService,
-    @Inject(forwardRef(() => CacheService))
     private readonly cacheService: CacheService,
     private readonly workspaceFilesService: WorkspaceFilesService
   ) {}

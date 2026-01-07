@@ -1,12 +1,11 @@
 import {
-  Injectable, Logger, OnModuleInit, Inject, forwardRef
+  Injectable, Logger, OnModuleInit
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { CacheService } from './cache.service';
-import { WorkspaceCodingService } from '../coding/services/workspace-coding.service';
-import Persons from '../workspaces/entities/persons.entity';
+import { CacheService } from '../../cache/cache.service';
+import { WorkspaceCodingService } from './workspace-coding.service';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
+import { GlobalWithGc } from '../../utils/gc-util';
 
 @Injectable()
 export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
@@ -14,10 +13,8 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
 
   constructor(
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => WorkspaceCodingService))
     private readonly workspaceCodingService: WorkspaceCodingService,
-    @InjectRepository(Persons)
-    private readonly personsRepository: Repository<Persons>
+    private readonly workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   /**
@@ -58,7 +55,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
 
     try {
       // Get all workspaces with persons (indicating they have data)
-      const workspaces = await this.getWorkspacesWithPersons();
+      const workspaces = await this.workspacesFacadeService.getAllWorkspacesWithPersons();
       this.logger.log(`Found ${workspaces.length} workspaces with test persons`);
 
       if (workspaces.length === 0) {
@@ -90,8 +87,8 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
             }
 
             // Trigger garbage collection if available
-            if (global.gc) {
-              global.gc();
+            if ((global as unknown as GlobalWithGc).gc) {
+              (global as unknown as GlobalWithGc).gc();
               const afterGcMemory = this.getMemoryUsage();
               this.logger.log(`Memory usage after GC: ${afterGcMemory}`);
             }
@@ -127,9 +124,9 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
         this.logger.error(`Memory limit exceeded while caching workspace ${workspaceId}. Memory usage: ${this.getMemoryUsage()}. Error: ${error.message}`, error.stack);
 
         // Trigger GC if available and retry once
-        if (global.gc) {
+        if ((global as unknown as GlobalWithGc).gc) {
           try {
-            global.gc();
+            (global as unknown as GlobalWithGc).gc();
             this.logger.log(`GC triggered after memory error. Retrying workspace ${workspaceId}...`);
             const afterGcMemory = this.getMemoryUsage();
             this.logger.log(`Memory usage after GC: ${afterGcMemory}`);
@@ -150,17 +147,6 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
       }
       // Don't rethrow to avoid failing other workspaces
     }
-  }
-
-  /**
-   * Get all workspaces that have persons (active workspaces)
-   */
-  private async getWorkspacesWithPersons(): Promise<{ workspace_id: number }[]> {
-    return this.personsRepository
-      .createQueryBuilder('person')
-      .select('DISTINCT person.workspace_id', 'workspace_id')
-      .where('person.consider = :consider', { consider: true })
-      .getRawMany();
   }
 
   /**

@@ -1,10 +1,8 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
-// eslint-disable-next-line import/no-cycle
 import { BullModule } from '@nestjs/bull';
 import { JobQueueModule } from '../job-queue/job-queue.module';
-// eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspacesModule } from '../workspaces/workspaces.module';
@@ -43,6 +41,8 @@ import { CodingFileCache } from './services/coding-file-cache.service';
 import { CodingJobManager } from './services/coding-job-manager.service';
 import { CodingProcessor } from './services/coding-processor.service';
 import { BullJobManagementService } from './services/bull-job-management.service';
+import { CodingIncompleteCacheSchedulerService } from './services/coding-incomplete-cache-scheduler.service';
+import { CodingStatisticsCacheSchedulerService } from './services/coding-statistics-cache-scheduler.service';
 
 // Coding Controllers
 import { CodingJobController } from './controllers/coding-job.controller';
@@ -69,9 +69,9 @@ import { ExportJobProcessor } from './processors/export-job.processor';
 @Module({
   imports: [
     HttpModule,
-    forwardRef(() => CacheModule),
-    forwardRef(() => JobQueueModule),
-    forwardRef(() => WorkspacesModule),
+    CacheModule,
+    JobQueueModule,
+    WorkspacesModule,
     BullModule.registerQueue({
       name: 'test-person-coding'
     }),
@@ -131,7 +131,11 @@ import { ExportJobProcessor } from './processors/export-job.processor';
     // Processors
     CodingStatisticsProcessor,
     TestPersonCodingProcessor,
-    ExportJobProcessor
+    ExportJobProcessor,
+
+    // Schedulers
+    CodingIncompleteCacheSchedulerService,
+    CodingStatisticsCacheSchedulerService
   ],
   exports: [
     // Only export services that are distinctively needed by other modules
