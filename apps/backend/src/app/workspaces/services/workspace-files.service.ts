@@ -30,7 +30,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../entities/persons.entity';
-import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
+import { WorkspaceEventsService } from './workspace-events.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -51,7 +51,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private unitRepository: Repository<Unit>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
-    private codingStatisticsService: CodingStatisticsService,
+    private workspaceEventsService: WorkspaceEventsService,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceFileStorageService: WorkspaceFileStorageService,
     private workspaceFileParsingService: WorkspaceFileParsingService,
@@ -78,6 +78,47 @@ export class WorkspaceFilesService implements OnModuleInit {
       );
       return [];
     }
+  }
+
+  // Very simple LRU cache for VOUD parsing
+  private voudCache = new Map<string, { data: Map<string, string>; timestamp: number }>();
+
+  async getVariablePageMap(
+    unitName: string,
+    workspaceId: number
+  ): Promise<Map<string, string>> {
+    const cacheKey = `${workspaceId}:${unitName}`;
+    const cached = this.voudCache.get(cacheKey);
+    // Cache for 5 minutes
+    if (cached && Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      return cached.data;
+    }
+
+    const voudFile = await this.fileUploadRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Resource',
+        file_id: `${unitName}.VOUD`
+      }
+    });
+
+    let variablePageMap = new Map<string, string>();
+
+    if (voudFile) {
+      variablePageMap = this.workspaceFileParsingService.extractVoudInfo(
+        voudFile.data.toString()
+      );
+    }
+
+    this.voudCache.set(cacheKey, { data: variablePageMap, timestamp: Date.now() });
+
+    // Cleanup cache if too big (simple strategy)
+    if (this.voudCache.size > 100) {
+      const oldestKey = this.voudCache.keys().next().value;
+      this.voudCache.delete(oldestKey);
+    }
+
+    return variablePageMap;
   }
 
   async findFiles(
@@ -186,8 +227,8 @@ export class WorkspaceFilesService implements OnModuleInit {
       workspace_id: workspace_id
     });
 
-    // Invalidate coding statistics cache since test files changed
-    await this.codingStatisticsService.invalidateCache(workspace_id);
+    // Notify about changes
+    this.workspaceEventsService.notifyTestFilesChanged(workspace_id);
 
     return !!res;
   }
@@ -469,10 +510,7 @@ ${bookletRefs}
         overwriteExisting,
         overwriteAllowList
       );
-      await this.codingStatisticsService.invalidateCache(workspace_id);
-      await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-        workspace_id
-      );
+      await this.workspaceEventsService.notifyTestFilesChanged(workspace_id);
       return result;
     } catch (error) {
       this.logger.error(

@@ -3,7 +3,7 @@ import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
-import { CodingListService } from '../../coding/services/coding-list.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
@@ -108,7 +108,7 @@ describe('WorkspaceTestResultsService.resolveDuplicateResponses', () => {
       {} as unknown as UnitTagService,
       journalService as unknown as JournalService,
       {} as unknown as CacheService,
-      {} as unknown as CodingListService
+      {} as unknown as WorkspaceFilesService
     );
 
     const resolutionMap = {

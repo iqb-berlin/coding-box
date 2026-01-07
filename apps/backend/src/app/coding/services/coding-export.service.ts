@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
@@ -40,8 +42,10 @@ export class CodingExportService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
     private workspaceFilesService: WorkspaceFilesService,
     private codingListService: CodingListService
   ) {}

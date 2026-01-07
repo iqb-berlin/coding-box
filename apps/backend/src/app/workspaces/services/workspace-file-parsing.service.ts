@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
+import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 
 @Injectable()
@@ -225,6 +226,27 @@ export class WorkspaceFileParsingService {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Error extracting TestTakers information: ${message}`);
       return {};
+    }
+  }
+
+  extractVoudInfo(voudContent: string): Map<string, string> {
+    try {
+      const respDefinition = { definition: voudContent };
+      const variableLocation = extractVariableLocation([respDefinition]);
+      const unitVarPages = new Map<string, string>();
+
+      if (variableLocation[0]?.variable_pages) {
+        for (const pageInfo of variableLocation[0].variable_pages) {
+          unitVarPages.set(
+            pageInfo.variable_ref,
+            pageInfo.variable_path?.pages?.toString() || '0'
+          );
+        }
+      }
+      return unitVarPages;
+    } catch (error) {
+      this.logger.error(`Error parsing VOUD content: ${error.message}`);
+      return new Map();
     }
   }
 

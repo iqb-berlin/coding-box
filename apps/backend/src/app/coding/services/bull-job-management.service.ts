@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { Job } from 'bull';
 import { JobQueueService, TestPersonCodingJobData } from '../../job-queue/job-queue.service';
 import { CodingStatistics } from '../../workspaces/shared-types';
@@ -8,6 +10,7 @@ export class BullJobManagementService {
   private readonly logger = new Logger(BullJobManagementService.name);
 
   constructor(
+    @Inject(forwardRef(() => JobQueueService))
     private jobQueueService: JobQueueService
   ) {}
 

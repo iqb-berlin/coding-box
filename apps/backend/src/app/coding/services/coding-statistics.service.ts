@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
+import {
+  Injectable, Logger, OnApplicationBootstrap, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
@@ -6,6 +8,8 @@ import FileUpload from '../../workspaces/entities/file_upload.entity';
 import { CodingStatistics } from '../../workspaces/shared-types';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
+
+import { WorkspaceEventsService } from '../../workspaces/services/workspace-events.service';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
@@ -16,10 +20,18 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private cacheService: CacheService
+    @Inject(forwardRef(() => CacheService))
+    private cacheService: CacheService,
+    private workspaceEventsService: WorkspaceEventsService
   ) {}
 
   async onApplicationBootstrap(): Promise<void> {
+    this.workspaceEventsService.testFilesChanged$.subscribe(async workspaceId => {
+      this.logger.log(`Received test files changed event for workspace ${workspaceId}`);
+      await this.invalidateCache(workspaceId);
+      await this.invalidateIncompleteVariablesCache(workspaceId);
+    });
+
     this.logger.log('Application bootstrap: Loading coding statistics for all workspaces...');
     try {
       const workspaceIds = await this.getWorkspaceIdsWithResponses();

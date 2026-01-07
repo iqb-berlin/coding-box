@@ -17,6 +17,7 @@ export class FlatResponseFilterOptionsProcessor {
   private readonly logger = new Logger(FlatResponseFilterOptionsProcessor.name);
 
   constructor(
+    @Inject(forwardRef(() => CacheService))
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private readonly workspaceTestResultsService: WorkspaceTestResultsService

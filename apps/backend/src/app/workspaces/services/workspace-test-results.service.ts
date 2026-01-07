@@ -25,7 +25,7 @@ import { UnitLastState } from '../entities/unitLastState.entity';
 import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
-import { CodingListService } from '../../coding/services/coding-list.service';
+import { WorkspaceFilesService } from './workspace-files.service';
 import { Chunk, TcMergeResponse } from '../shared-types';
 
 interface PersonWhere {
@@ -64,8 +64,7 @@ export class WorkspaceTestResultsService {
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => CacheService))
     private readonly cacheService: CacheService,
-    @Inject(forwardRef(() => CodingListService))
-    private readonly codingListService: CodingListService
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
 
   async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
@@ -2897,7 +2896,7 @@ export class WorkspaceTestResultsService {
       const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
       const variablePageMaps = new Map<string, Map<string, string>>();
       for (const unitName of uniqueUnitNames) {
-        const pageMap = await this.codingListService.getVariablePageMap(
+        const pageMap = await this.workspaceFilesService.getVariablePageMap(
           unitName,
           workspaceId
         );

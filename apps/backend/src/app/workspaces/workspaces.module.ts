@@ -3,8 +3,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { UsersModule } from '../users/users.module';
 // eslint-disable-next-line import/no-cycle
-import { CodingModule } from '../coding/coding.module';
-// eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
@@ -58,13 +56,13 @@ import { ReplayStatisticsService } from './services/replay-statistics.service';
 import { BookletInfoService } from './services/booklet-info.service';
 import { UnitInfoService } from './services/unit-info.service';
 import { ExportValidationResultsService } from './services/export-validation-results.service';
+import { WorkspaceEventsService } from './services/workspace-events.service';
 
 @Module({
   imports: [
     HttpModule,
     forwardRef(() => CacheModule),
     UsersModule,
-    forwardRef(() => CodingModule),
     forwardRef(() => JobQueueModule),
     TypeOrmModule.forFeature([
       Workspace,
@@ -115,7 +113,8 @@ import { ExportValidationResultsService } from './services/export-validation-res
     ReplayStatisticsService,
     BookletInfoService,
     UnitInfoService,
-    ExportValidationResultsService
+    ExportValidationResultsService,
+    WorkspaceEventsService
   ],
   exports: [
     WorkspaceCoreService,
@@ -141,7 +140,8 @@ import { ExportValidationResultsService } from './services/export-validation-res
     BookletInfoService,
     UnitInfoService,
     ExportValidationResultsService,
-    TypeOrmModule
+    TypeOrmModule,
+    WorkspaceEventsService
   ]
 })
 export class WorkspacesModule {}

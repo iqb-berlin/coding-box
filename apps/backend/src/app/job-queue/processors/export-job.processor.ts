@@ -25,6 +25,7 @@ export class ExportJobProcessor {
     private codingExportService: CodingExportService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
     private workspaceTestResultsService: WorkspaceTestResultsService,
+    @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
   ) {}

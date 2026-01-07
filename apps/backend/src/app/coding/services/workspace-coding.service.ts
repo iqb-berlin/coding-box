@@ -81,6 +81,7 @@ export class WorkspaceCodingService {
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
+    @Inject(forwardRef(() => JobQueueService))
     private jobQueueService: JobQueueService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
@@ -89,6 +90,7 @@ export class WorkspaceCodingService {
     private variableAnalysisReplayService: VariableAnalysisReplayService,
     private exportValidationResultsService: ExportValidationResultsService,
     private externalCodingImportService: ExternalCodingImportService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
     private workspaceFilesService: WorkspaceFilesService,
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,

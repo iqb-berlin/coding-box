@@ -37,7 +37,7 @@ import { CacheModule } from '../cache/cache.module';
     }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspacesModule),
-    CacheModule
+    forwardRef(() => CacheModule)
   ],
   providers: [
     JobQueueService,

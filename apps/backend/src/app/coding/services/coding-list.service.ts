@@ -1,11 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, Inject, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Like, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import FileUpload from '../../workspaces/entities/file_upload.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
-import { extractVariableLocation } from '../../utils/voud/extractVariableLocation';
 import {
   statusStringToNumber,
   statusNumberToString
@@ -43,51 +44,9 @@ export class CodingListService {
     private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
+    @Inject(forwardRef(() => WorkspaceFilesService))
     private readonly workspaceFilesService: WorkspaceFilesService
   ) {}
-
-  private async loadVoudData(
-    unitName: string,
-    workspaceId: number
-  ): Promise<Map<string, string>> {
-    const cacheKey = `${workspaceId}:${unitName}`;
-    let variablePageMap = this.voudCache.get(cacheKey);
-    if (variablePageMap) {
-      return variablePageMap;
-    }
-
-    const voudFile = await this.fileUploadRepository.findOne({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: `${unitName}.VOUD`
-      }
-    });
-
-    variablePageMap = new Map<string, string>();
-
-    if (voudFile) {
-      try {
-        const respDefinition = { definition: voudFile.data as string };
-        const variableLocation = extractVariableLocation([respDefinition]);
-        if (variableLocation[0]?.variable_pages) {
-          for (const pageInfo of variableLocation[0].variable_pages) {
-            variablePageMap.set(
-              pageInfo.variable_ref,
-              pageInfo.variable_path?.pages?.toString() || '0'
-            );
-          }
-        }
-      } catch (error) {
-        this.logger.debug(
-          `Error parsing VOUD file for unit ${unitName}: ${error.message}`
-        );
-      }
-    }
-
-    this.voudCache.set(cacheKey, variablePageMap);
-    return variablePageMap;
-  }
 
   private async loadVocsExclusions(
     unitName: string,
@@ -148,7 +107,7 @@ export class CodingListService {
     unitName: string,
     workspaceId: number
   ): Promise<Map<string, string>> {
-    return this.loadVoudData(unitName, workspaceId);
+    return this.workspaceFilesService.getVariablePageMap(unitName, workspaceId);
   }
 
   private async processResponseItem(
@@ -179,7 +138,7 @@ export class CodingListService {
       return null;
     }
 
-    const variablePageMap = await this.loadVoudData(unitKey, workspaceId);
+    const variablePageMap = await this.getVariablePageMap(unitKey, workspaceId);
     const variablePage = variablePageMap.get(variableId) || '0';
 
     const loginName = person?.login || '';
@@ -216,42 +175,7 @@ export class CodingListService {
     try {
       const server = serverUrl;
 
-      // 1) Preload VOUD files and build variable->page mapping
-      const voudFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id: workspace_id,
-          file_type: 'Resource',
-          filename: Like('%.voud')
-        }
-      });
-
-      this.logger.log(
-        `Found ${voudFiles.length} VOUD files for workspace ${workspace_id}`
-      );
-
-      const variablePageMap = new Map<string, Map<string, string>>();
-      for (const voudFile of voudFiles) {
-        try {
-          const respDefinition = { definition: voudFile.data };
-          const variableLocation = extractVariableLocation([respDefinition]);
-          const unitVarPages = new Map<string, string>();
-          for (const pageInfo of variableLocation[0].variable_pages) {
-            unitVarPages.set(
-              pageInfo.variable_ref,
-              pageInfo.variable_path?.pages?.toString() || '0'
-            );
-          }
-          variablePageMap.set(
-            voudFile.file_id.replace('.VOUD', ''),
-            unitVarPages
-          );
-        } catch (error) {
-          this.logger.error(
-            `Error parsing VOUD file ${voudFile.filename}: ${error.message}`
-          );
-        }
-      }
-      // 2) Query all coding incomplete responses
+      // 1) Query all coding incomplete responses
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -266,6 +190,22 @@ export class CodingListService {
         .orderBy('response.id', 'ASC');
 
       const [responses, total] = await queryBuilder.getManyAndCount();
+
+      // 2) Preload VOUD files map for found units
+      const uniqueUnitNames = [...new Set(responses.map(r => r.unit?.name).filter(n => !!n))];
+      const variablePageMap = new Map<string, Map<string, string>>();
+
+      for (const unitName of uniqueUnitNames) {
+        try {
+          const map = await this.workspaceFilesService.getVariablePageMap(
+            unitName,
+            workspace_id
+          );
+          variablePageMap.set(unitName, map);
+        } catch (error) {
+          this.logger.warn(`Could not load VOUD map for unit ${unitName}: ${error.message}`);
+        }
+      }
 
       // 3) Build exclusion Set from VOCS files where sourceType == BASE_NO_VALUE
       interface VocsScheme {
@@ -1031,7 +971,7 @@ export class CodingListService {
       const variableId = response.variableid || '';
 
       // Load variable page mapping
-      const variablePageMap = await this.loadVoudData(unitKey, workspaceId);
+      const variablePageMap = await this.getVariablePageMap(unitKey, workspaceId);
       const variablePage = variablePageMap.get(variableId) || '0';
 
       const loginName = person?.login || '';
