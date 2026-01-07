@@ -1,7 +1,7 @@
 import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+// BullJobManagementService now handles Bull queue interactions
 import { CacheService } from '../../cache/cache.service';
 import { BullJobManagementService } from './bull-job-management.service';
 import { CodingStatistics } from '../../workspaces/shared-types';
@@ -11,8 +11,6 @@ export class CodingJobManager {
   private readonly logger = new Logger(CodingJobManager.name);
 
   constructor(
-    @Inject(forwardRef(() => JobQueueService))
-    private jobQueueService: JobQueueService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private bullJobManagementService: BullJobManagementService
@@ -33,10 +31,10 @@ export class CodingJobManager {
       error?: string;
     } | null> {
     try {
-      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      let bullJob = await this.bullJobManagementService.getTestPersonCodingJob(jobId);
 
       if (!bullJob) {
-        bullJob = (await this.jobQueueService.getCodingStatisticsJob(
+        bullJob = (await this.bullJobManagementService.getCodingStatisticsJob(
           jobId
         )) as never;
       }
@@ -86,7 +84,7 @@ export class CodingJobManager {
         `No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`
       );
 
-      const job = await this.jobQueueService.addCodingStatisticsJob(
+      const job = await this.bullJobManagementService.addCodingStatisticsJob(
         workspaceId
       );
       this.logger.log(
@@ -109,7 +107,7 @@ export class CodingJobManager {
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.bullJobManagementService.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -129,7 +127,7 @@ export class CodingJobManager {
         };
       }
 
-      const result = await this.jobQueueService.cancelTestPersonCodingJob(
+      const result = await this.bullJobManagementService.cancelTestPersonCodingJob(
         jobId
       );
       if (result) {
@@ -153,12 +151,12 @@ export class CodingJobManager {
     jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.bullJobManagementService.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
 
-      const result = await this.jobQueueService.deleteTestPersonCodingJob(
+      const result = await this.bullJobManagementService.deleteTestPersonCodingJob(
         jobId
       );
       if (result) {
@@ -180,7 +178,7 @@ export class CodingJobManager {
 
   async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(
+      const bullJob = await this.bullJobManagementService.getTestPersonCodingJob(
         jobId.toString()
       );
       if (bullJob) {
@@ -238,7 +236,7 @@ export class CodingJobManager {
     completedAt?: Date;
   }[]
   > {
-    const jobs = await this.jobQueueService.getTestPersonCodingJobs(workspaceId);
+    const jobs = await this.bullJobManagementService.getTestPersonCodingJobs(workspaceId);
     const resultPromises = jobs
       .map(async job => {
         const state = await job.getState();

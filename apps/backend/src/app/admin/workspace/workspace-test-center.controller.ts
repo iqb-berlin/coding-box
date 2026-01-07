@@ -18,7 +18,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
 import { CacheService } from '../../cache/cache.service';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 
 @ApiTags('Admin Workspace Test Center')
 @Controller('admin/workspace')
@@ -26,7 +26,7 @@ export class WorkspaceTestCenterController {
   constructor(
     private testCenterService: TestcenterService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private workspaceBullQueueService: WorkspaceBullQueueService
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -37,7 +37,7 @@ export class WorkspaceTestCenterController {
         workspaceId
       );
     const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+    await this.workspaceBullQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {

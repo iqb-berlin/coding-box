@@ -4,12 +4,8 @@ import {
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { CacheService } from '../../cache/cache.service';
-import { WorkspaceTestResultsService } from '../../workspaces/services/workspace-test-results.service';
-
-export interface FlatResponseFilterOptionsJobData {
-  workspaceId: number;
-  processingDurationThresholdMs: number;
-}
+import { WorkspaceTestResultsService } from '../services/workspace-test-results.service';
+import { FlatResponseFilterOptionsJobData } from '../interfaces/job-data.interface';
 
 @Injectable()
 @Processor('flat-response-filter-options')

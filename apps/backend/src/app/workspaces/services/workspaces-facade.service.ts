@@ -92,17 +92,6 @@ export class WorkspacesFacadeService {
       .getMany();
   }
 
-  // Used by CodingJobService
-  async findResponsesExample(
-    _unitName: string,
-    _variableId: string
-  ): Promise<ResponseEntity[]> {
-    // This logic was partly in CodingJobService inside a loop.
-    // It's better to expose a more flexible query if needed, or stick to repo access via facade if it's simple.
-    // For now, let's replicate the complex query needed by CodingJobService generically.
-    return [];
-  }
-
   // Specific query for CodingJobService.getResponsesForCodingJob
   async findResponsesForVariables(variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {
     const queryBuilder = this.responseRepository.createQueryBuilder('response')

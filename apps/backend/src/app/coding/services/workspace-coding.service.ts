@@ -38,7 +38,7 @@ import {
   EmptyResponseDto,
   DuplicateValueGroupDto
 } from '../../../../../../api-dto/coding/response-analysis.dto';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { BullJobManagementService } from './bull-job-management.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
 import { ExportValidationResultsService } from '../../workspaces/services/export-validation-results.service';
@@ -72,8 +72,7 @@ export class WorkspaceCodingService {
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
-    @Inject(forwardRef(() => JobQueueService))
-    private jobQueueService: JobQueueService,
+    private bullJobManagementService: BullJobManagementService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
     private missingsProfilesService: MissingsProfilesService,
@@ -684,7 +683,7 @@ export class WorkspaceCodingService {
       `Starting job for ${personIds.length} test persons in workspace ${workspace_id}`
     );
 
-    const bullJob = await this.jobQueueService.addTestPersonCodingJob({
+    const bullJob = await this.bullJobManagementService.addTestPersonCodingJob({
       workspaceId: workspace_id,
       personIds,
       groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,

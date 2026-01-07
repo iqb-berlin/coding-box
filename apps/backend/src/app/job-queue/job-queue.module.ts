@@ -1,15 +1,15 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JobQueueService } from './job-queue.service';
-import { ExportJobProcessor } from './processors/export-job.processor';
-import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
-// eslint-disable-next-line import/no-cycle
-import { CodingModule } from '../coding/coding.module';
-// eslint-disable-next-line import/no-cycle
-import { WorkspacesModule } from '../workspaces/workspaces.module';
-import { CacheModule } from '../cache/cache.module';
 
+/**
+ * JobQueueModule - Generic Infrastructure Module for Bull Queues
+ *
+ * This module configures the Bull/Redis connection but does not
+ * register specific queues. Feature modules should register their
+ * own queues using BullModule.registerQueue().
+ */
 @Module({
   imports: [
     BullModule.forRootAsync({
@@ -22,28 +22,14 @@ import { CacheModule } from '../cache/cache.module';
         },
         prefix: configService.get('REDIS_PREFIX', 'coding-box')
       })
-    }),
-    BullModule.registerQueue({
-      name: 'test-person-coding'
-    }),
-    BullModule.registerQueue({
-      name: 'coding-statistics'
-    }),
-    BullModule.registerQueue({
-      name: 'data-export'
-    }),
-    BullModule.registerQueue({
-      name: 'flat-response-filter-options'
-    }),
-    forwardRef(() => CodingModule),
-    forwardRef(() => WorkspacesModule),
-    forwardRef(() => CacheModule)
+    })
   ],
   providers: [
-    JobQueueService,
-    ExportJobProcessor,
-    FlatResponseFilterOptionsProcessor
+    JobQueueService
   ],
-  exports: [JobQueueService]
+  exports: [
+    JobQueueService,
+    BullModule // Export BullModule so other modules can use registerQueue
+  ]
 })
 export class JobQueueModule {}

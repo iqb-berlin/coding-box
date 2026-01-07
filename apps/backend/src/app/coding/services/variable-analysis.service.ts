@@ -133,14 +133,23 @@ export class VariableAnalysisService {
       };
     }
 
-    const variableCombos = rawResults.map(r => ({
+    interface RawFrequencyResult {
+      unitId: number;
+      unitName: string;
+      variableId: string;
+      values: { value: string; count: string }[];
+    }
+
+    const typedResults = rawResults as unknown as RawFrequencyResult[];
+
+    const variableCombos = typedResults.map(r => ({
       unitId: Number(r.unitId),
       unitName: r.unitName,
       variableId: r.variableId
     }));
 
     const frequencies: { [key: string]: VariableFrequencyDto[] } = {};
-    rawResults.forEach(r => {
+    typedResults.forEach(r => {
       const comboKey = `${r.unitId}:${r.variableId}`;
       const totalResponses = r.values.reduce((sum, val) => sum + parseInt(val.count, 10), 0);
 

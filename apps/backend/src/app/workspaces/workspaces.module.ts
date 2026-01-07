@@ -1,11 +1,14 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
+import { BullModule } from '@nestjs/bull';
 import { UsersModule } from '../users/users.module';
 // eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
+import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
+import { WorkspaceBullQueueService } from './services/workspace-bull-queue.service';
 
 // Entities
 import Workspace from './entities/workspace.entity';
@@ -65,6 +68,9 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
     forwardRef(() => CacheModule),
     UsersModule,
     forwardRef(() => JobQueueModule),
+    BullModule.registerQueue({
+      name: 'flat-response-filter-options'
+    }),
     TypeOrmModule.forFeature([
       Workspace,
       WorkspaceAdmin,
@@ -116,7 +122,9 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
     UnitInfoService,
     ExportValidationResultsService,
     WorkspaceEventsService,
-    WorkspacesFacadeService
+    WorkspacesFacadeService,
+    FlatResponseFilterOptionsProcessor,
+    WorkspaceBullQueueService
   ],
   exports: [
     WorkspaceCoreService,
@@ -143,7 +151,8 @@ import { WorkspacesFacadeService } from './services/workspaces-facade.service';
     UnitInfoService,
     ExportValidationResultsService,
     WorkspaceEventsService,
-    WorkspacesFacadeService
+    WorkspacesFacadeService,
+    WorkspaceBullQueueService
   ]
 })
 export class WorkspacesModule {}

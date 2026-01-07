@@ -5,15 +5,12 @@ import {
 import { Job } from 'bull';
 import * as path from 'path';
 import * as fs from 'fs';
-import {
-  ExportJobData,
-  ExportJobResult,
-  JobQueueService
-} from '../job-queue.service';
-import { CodingExportService } from '../../coding/services/coding-export.service';
+import { CodingExportService } from '../services/coding-export.service';
 import { WorkspaceTestResultsService } from '../../workspaces/services/workspace-test-results.service';
 import { CacheService } from '../../cache/cache.service';
+import { ExportJobData, ExportJobResult } from '../interfaces/job-data.interface';
 import { ExportJobCancelledException } from '../exceptions/export-job-cancelled.exception';
+import { BullJobManagementService } from '../services/bull-job-management.service';
 
 @Injectable()
 @Processor('data-export')
@@ -27,7 +24,7 @@ export class ExportJobProcessor {
     private workspaceTestResultsService: WorkspaceTestResultsService,
     @Inject(forwardRef(() => CacheService))
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private bullJobManagementService: BullJobManagementService
   ) {}
 
   private async checkCancellation(
@@ -36,7 +33,7 @@ export class ExportJobProcessor {
   ): Promise<void> {
     if (
       job.data.isCancelled ||
-      (await this.jobQueueService.isExportJobCancelled(job.id.toString()))
+      (await this.bullJobManagementService.isExportJobCancelled(job.id.toString()))
     ) {
       this.logger.log(`Export job ${job.id} cancellation detected`);
       // Clean up partial file if it exists

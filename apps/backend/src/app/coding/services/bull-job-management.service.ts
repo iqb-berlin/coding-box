@@ -1,22 +1,235 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger
 } from '@nestjs/common';
-import { Job } from 'bull';
-import { JobQueueService, TestPersonCodingJobData } from '../../job-queue/job-queue.service';
+import { InjectQueue } from '@nestjs/bull';
+import { Queue, JobOptions, Job } from 'bull';
 import { CodingStatistics } from '../../workspaces/shared-types';
+import { TestPersonCodingJobData, ExportJobData } from '../interfaces/job-data.interface';
 
 @Injectable()
 export class BullJobManagementService {
   private readonly logger = new Logger(BullJobManagementService.name);
 
   constructor(
-    @Inject(forwardRef(() => JobQueueService))
-    private jobQueueService: JobQueueService
+    @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
+    @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
+    @InjectQueue('data-export') private dataExportQueue: Queue
   ) {}
+
+  // --- Test Person Coding Jobs ---
+
+  async addTestPersonCodingJob(
+    data: TestPersonCodingJobData,
+    options?: JobOptions
+  ): Promise<Job<TestPersonCodingJobData>> {
+    this.logger.log(
+      `Adding test person coding job for workspace ${data.workspaceId}`
+    );
+    return this.testPersonCodingQueue.add(data, options);
+  }
+
+  async getTestPersonCodingJob(
+    jobId: string
+  ): Promise<Job<TestPersonCodingJobData>> {
+    return this.testPersonCodingQueue.getJob(jobId);
+  }
+
+  async getTestPersonCodingJobs(
+    workspaceId: number
+  ): Promise<Job<TestPersonCodingJobData>[]> {
+    this.logger.log(
+      `Fetching all test person coding jobs for workspace ${workspaceId}`
+    );
+    const jobs = await this.testPersonCodingQueue.getJobs([
+      'completed',
+      'failed',
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    return jobs.filter(job => job.data.workspaceId === workspaceId);
+  }
+
+  async cancelTestPersonCodingJob(jobId: string): Promise<boolean> {
+    const job = await this.testPersonCodingQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      const state = await job.getState();
+
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        return true;
+      }
+
+      if (state === 'active') {
+        await job.discard();
+        return true;
+      }
+
+      if (state === 'completed' || state === 'failed') {
+        return true;
+      }
+
+      await job.remove();
+      return true;
+    } catch (error) {
+      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async deleteTestPersonCodingJob(jobId: string): Promise<boolean> {
+    const job = await this.testPersonCodingQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      await job.remove();
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  // --- Coding Statistics Jobs ---
+
+  async addCodingStatisticsJob(
+    workspaceId: number,
+    options?: JobOptions
+  ): Promise<Job<{ workspaceId: number }>> {
+    this.logger.log(
+      `Adding coding statistics job for workspace ${workspaceId}`
+    );
+    return this.codingStatisticsQueue.add({ workspaceId }, options);
+  }
+
+  async getCodingStatisticsJob(
+    jobId: string
+  ): Promise<Job<{ workspaceId: number }>> {
+    return this.codingStatisticsQueue.getJob(jobId);
+  }
+
+  // --- Export Jobs ---
+
+  async addExportJob(
+    data: ExportJobData,
+    options?: JobOptions
+  ): Promise<Job<ExportJobData>> {
+    this.logger.log(
+      `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
+    );
+    return this.dataExportQueue.add(data, options);
+  }
+
+  async getExportJob(jobId: string): Promise<Job<ExportJobData>> {
+    return this.dataExportQueue.getJob(jobId);
+  }
+
+  async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
+    this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
+    const jobs = await this.dataExportQueue.getJobs([
+      'completed',
+      'failed',
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    return jobs.filter(job => job.data.workspaceId === workspaceId);
+  }
+
+  async cancelExportJob(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      const state = await job.getState();
+
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        return true;
+      }
+
+      if (state === 'active') {
+        await job.discard();
+        return true;
+      }
+
+      if (state === 'completed' || state === 'failed') {
+        return true;
+      }
+
+      await job.remove();
+      return true;
+    } catch (error) {
+      this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async markExportJobCancelled(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      const updatedData = {
+        ...job.data,
+        isCancelled: true
+      };
+      await job.update(updatedData);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error marking export job as cancelled: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async isExportJobCancelled(jobId: string): Promise<boolean> {
+    try {
+      const job = await this.dataExportQueue.getJob(jobId);
+      if (!job) {
+        return false;
+      }
+      return job.data.isCancelled === true;
+    } catch (error) {
+      this.logger.error(`Error checking export job cancellation: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async deleteExportJob(jobId: string): Promise<boolean> {
+    const job = await this.dataExportQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Export job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      await job.remove();
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting export job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  // --- Original BullJobManagementService methods ---
 
   async pauseJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -46,7 +259,7 @@ export class BullJobManagementService {
 
   async resumeJob(jobId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -71,7 +284,7 @@ export class BullJobManagementService {
 
   async restartJob(jobId: string): Promise<{ success: boolean; message: string; jobId?: string }> {
     try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
+      const bullJob = await this.getTestPersonCodingJob(jobId);
       if (!bullJob) {
         return { success: false, message: `Job with ID ${jobId} not found` };
       }
@@ -84,13 +297,13 @@ export class BullJobManagementService {
         };
       }
 
-      const newJob = await this.jobQueueService.addTestPersonCodingJob({
+      const newJob = await this.addTestPersonCodingJob({
         workspaceId: bullJob.data.workspaceId,
         personIds: bullJob.data.personIds,
         groupNames: bullJob.data.groupNames
       });
 
-      await this.jobQueueService.deleteTestPersonCodingJob(jobId);
+      await this.deleteTestPersonCodingJob(jobId);
 
       this.logger.log(`Job ${jobId} has been restarted as job ${newJob.id}`);
       return {
@@ -162,7 +375,7 @@ export class BullJobManagementService {
     }[] = [];
 
     try {
-      const bullJobs = await this.jobQueueService.getTestPersonCodingJobs(workspaceId);
+      const bullJobs = await this.getTestPersonCodingJobs(workspaceId);
       for (const bullJob of bullJobs) {
         const state = await bullJob.getState();
         const progress = await bullJob.progress() || 0;

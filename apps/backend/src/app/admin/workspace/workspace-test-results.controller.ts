@@ -38,8 +38,9 @@ import { UploadResultsService } from '../../workspaces/services/upload-results.s
 import Persons from '../../workspaces/entities/persons.entity';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { WorkspaceTestResultsService } from '../../workspaces/services/workspace-test-results.service';
+import { BullJobManagementService } from '../../coding/services/bull-job-management.service';
 import { DatabaseExportService } from '../database/database-export.service';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
@@ -78,8 +79,9 @@ export class WorkspaceTestResultsController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private uploadResults: UploadResultsService,
+    private bullJobManagementService: BullJobManagementService,
     private databaseExportService: DatabaseExportService,
-    private jobQueueService: JobQueueService,
+    private workspaceBullQueueService: WorkspaceBullQueueService,
     private cacheService: CacheService
   ) {}
 
@@ -91,7 +93,7 @@ export class WorkspaceTestResultsController {
         workspaceId
       );
     const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+    await this.workspaceBullQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {
@@ -2377,7 +2379,7 @@ export class WorkspaceTestResultsController {
                              personIds?: number[];
                            }
   ): Promise<{ jobId: string; message: string }> {
-    const job = await this.jobQueueService.addExportJob({
+    const job = await this.bullJobManagementService.addExportJob({
       workspaceId: Number(workspace_id),
       userId: Number(req.user.id),
       exportType: 'test-results',
@@ -2439,7 +2441,7 @@ export class WorkspaceTestResultsController {
                              personIds?: number[];
                            }
   ): Promise<{ jobId: string; message: string }> {
-    const job = await this.jobQueueService.addExportJob({
+    const job = await this.bullJobManagementService.addExportJob({
       workspaceId: Number(workspace_id),
       userId: Number(req.user.id),
       exportType: 'test-logs',
@@ -2485,7 +2487,7 @@ export class WorkspaceTestResultsController {
   async getExportJobs(
     @Param('workspace_id') workspace_id: number
   ): Promise<ExportJobStatus[]> {
-    const jobs = await this.jobQueueService.getExportJobs(Number(workspace_id));
+    const jobs = await this.bullJobManagementService.getExportJobs(Number(workspace_id));
 
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
@@ -2560,7 +2562,7 @@ export class WorkspaceTestResultsController {
   async deleteExportJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    const success = await this.jobQueueService.deleteExportJob(jobId);
+    const success = await this.bullJobManagementService.deleteExportJob(jobId);
     if (!success) {
       throw new BadRequestException('Failed to delete job');
     }

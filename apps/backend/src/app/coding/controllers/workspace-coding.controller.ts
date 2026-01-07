@@ -35,11 +35,8 @@ import { PersonService } from '../../workspaces/services/person.service';
 import { CodingJobService } from '../services/coding-job.service';
 import { CodingExportService } from '../services/coding-export.service';
 import { CodingStatisticsService } from '../services/coding-statistics.service';
-import {
-  JobQueueService,
-  ExportJobData,
-  ExportJobResult
-} from '../../job-queue/job-queue.service';
+import { BullJobManagementService } from '../services/bull-job-management.service';
+import { ExportJobData, ExportJobResult } from '../interfaces/job-data.interface';
 import { CacheService } from '../../cache/cache.service';
 import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
@@ -79,7 +76,7 @@ export class WorkspaceCodingController {
     private codingJobService: CodingJobService,
     private codingExportService: CodingExportService,
     private codingStatisticsService: CodingStatisticsService,
-    private jobQueueService: JobQueueService,
+    private bullJobManagementService: BullJobManagementService,
     private cacheService: CacheService,
     private journalService: JournalService
   ) {}
@@ -3435,7 +3432,7 @@ export class WorkspaceCodingController {
       @Body() body: Omit<ExportJobData, 'workspaceId'>
   ): Promise<{ jobId: string; message: string }> {
     try {
-      const job = await this.jobQueueService.addExportJob({
+      const job = await this.bullJobManagementService.addExportJob({
         ...body,
         workspaceId: workspace_id
       });
@@ -3511,7 +3508,7 @@ export class WorkspaceCodingController {
   | { error: string }
   > {
     try {
-      const job = await this.jobQueueService.getExportJob(jobId);
+      const job = await this.bullJobManagementService.getExportJob(jobId);
       if (!job) {
         return { error: `Export job with ID ${jobId} not found` };
       }
@@ -3663,7 +3660,7 @@ export class WorkspaceCodingController {
   }>
   > {
     try {
-      const jobs = await this.jobQueueService.getExportJobs(workspace_id);
+      const jobs = await this.bullJobManagementService.getExportJobs(workspace_id);
 
       return await Promise.all(
         jobs.map(async job => {
@@ -3711,7 +3708,7 @@ export class WorkspaceCodingController {
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
-      const success = await this.jobQueueService.deleteExportJob(jobId);
+      const success = await this.bullJobManagementService.deleteExportJob(jobId);
 
       if (success) {
         const metadata = await this.cacheService.get<ExportJobResult>(
@@ -3771,7 +3768,7 @@ export class WorkspaceCodingController {
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
-      const job = await this.jobQueueService.getExportJob(jobId);
+      const job = await this.bullJobManagementService.getExportJob(jobId);
       if (!job) {
         return {
           success: false,
@@ -3797,10 +3794,10 @@ export class WorkspaceCodingController {
       }
 
       // Mark the job as cancelled (for active jobs to check)
-      await this.jobQueueService.markExportJobCancelled(jobId);
+      await this.bullJobManagementService.markExportJobCancelled(jobId);
 
       // Try to remove the job from queue
-      const removed = await this.jobQueueService.cancelExportJob(jobId);
+      const removed = await this.bullJobManagementService.cancelExportJob(jobId);
 
       // Clean up any cached metadata and temp files
       const metadata = await this.cacheService.get<ExportJobResult>(

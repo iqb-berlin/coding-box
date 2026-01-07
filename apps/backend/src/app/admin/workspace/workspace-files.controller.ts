@@ -46,7 +46,7 @@ import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
 import { WorkspaceCodingService } from '../../coding/services/workspace-coding.service';
 import { CacheService } from '../../cache/cache.service';
-import { JobQueueService } from '../../job-queue/job-queue.service';
+import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -57,7 +57,7 @@ export class WorkspaceFilesController {
     private readonly codingStatisticsService: CodingStatisticsService,
     private readonly workspaceCodingService: WorkspaceCodingService,
     private readonly cacheService: CacheService,
-    private readonly jobQueueService: JobQueueService
+    private readonly workspaceBullQueueService: WorkspaceBullQueueService
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -68,7 +68,7 @@ export class WorkspaceFilesController {
         workspaceId
       );
     const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
+    await this.workspaceBullQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {

@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 // eslint-disable-next-line import/no-cycle
+import { BullModule } from '@nestjs/bull';
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
 import { CacheModule } from '../cache/cache.module';
@@ -51,6 +52,7 @@ import { WorkspaceCodingController } from './controllers/workspace-coding.contro
 // Coding Processors (Bull Queue)
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
+import { ExportJobProcessor } from './processors/export-job.processor';
 
 /**
  * CodingModule - Feature Module for Coding Functionality
@@ -70,6 +72,15 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
     forwardRef(() => CacheModule),
     forwardRef(() => JobQueueModule),
     forwardRef(() => WorkspacesModule),
+    BullModule.registerQueue({
+      name: 'test-person-coding'
+    }),
+    BullModule.registerQueue({
+      name: 'coding-statistics'
+    }),
+    BullModule.registerQueue({
+      name: 'data-export'
+    }),
     AuthModule,
     UsersModule,
     TypeOrmModule.forFeature([
@@ -119,7 +130,8 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
 
     // Processors
     CodingStatisticsProcessor,
-    TestPersonCodingProcessor
+    TestPersonCodingProcessor,
+    ExportJobProcessor
   ],
   exports: [
     // Only export services that are distinctively needed by other modules
@@ -133,6 +145,7 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
     CodingListService,
     VariableAnalysisService,
     MissingsProfilesService,
+    BullJobManagementService,
 
     // Keep TypeOrmModule export for potential forFeature usage elsewhere
     TypeOrmModule
