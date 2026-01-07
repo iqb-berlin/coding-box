@@ -206,7 +206,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       coder2Name: string;
       kappa: number;
       agreement: number;
-      totalItems: number;
+      totalSharedResponses: number;
       validPairs: number;
       interpretation: string;
     }> {
@@ -226,7 +226,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           coder2Name: pair.coder2Name,
           kappa: null,
           agreement: 0,
-          totalItems: codes.length,
+          totalSharedResponses: codes.length,
           validPairs: 0,
           interpretation: 'No valid coding pairs'
         });
@@ -306,7 +306,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         coder2Name: pair.coder2Name,
         kappa: Math.round(kappa * 1000) / 1000, // Round to 3 decimal places
         agreement: Math.round(observedAgreement * 1000) / 1000,
-        totalItems: codes.length,
+        totalSharedResponses: codes.length,
         validPairs: validCodes.length,
         interpretation
       });

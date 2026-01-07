@@ -244,9 +244,9 @@ export class VariableExportService {
               }
 
               if (includeModalValue && codeValues.length > 0) {
-                 const modalResult = this.exportFormattingService.calculateModalValue(codeValues as number[]);
-                 row[MODAL_VALUE_HEADER] = modalResult.modalValue;
-                 row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
+                const modalResult = this.exportFormattingService.calculateModalValue(codeValues as number[]);
+                row[MODAL_VALUE_HEADER] = modalResult.modalValue;
+                row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
               } else if (includeModalValue) {
                 row[MODAL_VALUE_HEADER] = '';
                 row[DEVIATION_COUNT_HEADER] = '';
@@ -288,8 +288,8 @@ export class VariableExportService {
           }
         }
 
-        if ((global as any).gc) {
-          (global as any).gc();
+        if ((global as unknown as { gc?: () => void }).gc) {
+          (global as unknown as { gc?: () => void }).gc?.();
         }
       }
 

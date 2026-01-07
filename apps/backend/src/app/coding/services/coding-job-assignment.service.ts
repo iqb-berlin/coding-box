@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { EntityManager, DataSource } from 'typeorm';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
@@ -6,8 +6,6 @@ import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.
 
 @Injectable()
 export class CodingJobAssignmentService {
-  private readonly logger = new Logger(CodingJobAssignmentService.name);
-
   constructor(
     private dataSource: DataSource
   ) {}

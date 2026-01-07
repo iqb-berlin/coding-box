@@ -272,7 +272,7 @@ export class DoubleCodingService {
       coder2Name: string;
       kappa: number | null;
       agreement: number;
-      totalItems: number;
+      totalSharedResponses: number;
       validPairs: number;
       interpretation: string;
     }>;

@@ -1,6 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, IsNull, Not, Repository } from 'typeorm';
+import {
+  In, IsNull, Not, Repository
+} from 'typeorm';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
@@ -9,12 +11,9 @@ import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { SaveCodingProgressDto } from '../dto/save-coding-progress.dto';
-import { VocsService } from './vocs.service';
 
 @Injectable()
 export class CodingJobQueryService {
-  private readonly logger = new Logger(CodingJobQueryService.name);
-
   constructor(
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
@@ -26,8 +25,7 @@ export class CodingJobQueryService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
-    private workspacesFacadeService: WorkspacesFacadeService,
-    private vocsService: VocsService
+    private workspacesFacadeService: WorkspacesFacadeService
   ) {}
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -94,7 +92,7 @@ export class CodingJobQueryService {
         ...job,
         assignedCoders: job.codingJobCoders.map(c => c.user_id),
         assignedVariables: jobVariables.map(v => ({ unitName: v.unit_name, variableId: v.variable_id })),
-        assignedVariableBundles: jobBundles.map(b => ({ name: b.name, variables: b.variables as any })),
+        assignedVariableBundles: jobBundles.map(b => ({ name: b.name, variables: b.variables })),
         progress: progress.progress,
         codedUnits: progress.coded,
         totalUnits: progress.total,
@@ -126,9 +124,9 @@ export class CodingJobQueryService {
     codingJob: CodingJob;
     assignedCoders: number[];
     variables: { unitName: string; variableId: string }[];
-    variableBundles: any[];
+    variableBundles: VariableBundle[];
   }> {
-    const where: any = { id };
+    const where: Record<string, unknown> = { id };
     if (workspaceId) {
       where.workspace_id = workspaceId;
     }
@@ -201,10 +199,10 @@ export class CodingJobQueryService {
       ...job,
       assignedCoders: job.codingJobCoders.map(c => c.user_id),
       assignedVariables: assignedVariables.map(v => ({ unitName: v.unit_name, variableId: v.variable_id })),
-      assignedVariableBundles: variableBundles.map(b => ({ name: b.name, variables: b.variables as any })),
+      assignedVariableBundles: variableBundles.map(b => ({ name: b.name, variables: b.variables })),
       variables: assignedVariables.map(v => ({ unitName: v.unit_name, variableId: v.variable_id })),
-      variableBundles: variableBundles.map(b => ({ name: b.name, variables: b.variables as any }))
-    } as any;
+      variableBundles: variableBundles.map(b => ({ name: b.name, variables: b.variables }))
+    };
   }
 
   async getResponsesForCodingJob(codingJobId: number): Promise<ResponseEntity[]> {
@@ -219,15 +217,10 @@ export class CodingJobQueryService {
     const job = await this.codingJobRepository.findOneBy({ id: codingJobId });
     if (!job) return [];
 
-    const variableIds = jobVariables.map(v => v.variable_id);
-    const unitNames = [...new Set(jobVariables.map(v => v.unit_name))];
-
-    const responses = await this.workspacesFacadeService.findCodingIncompleteResponsesForVariables(
+    return this.workspacesFacadeService.findCodingIncompleteResponsesForVariables(
       job.workspace_id,
       jobVariables.map(v => ({ unitName: v.unit_name, variableId: v.variable_id }))
     );
-
-    return responses;
   }
 
   async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
@@ -239,9 +232,9 @@ export class CodingJobQueryService {
     units.forEach(unit => {
       const key = `${unit.person_login}_${unit.person_code}_${unit.response_id}_${unit.variable_id}`;
       progress[key] = {
-        code: unit.code,
-        score: unit.score
-      } as any;
+        id: unit.code || 0,
+        score: unit.score ?? undefined
+      } as SaveCodingProgressDto['selectedCode'];
     });
 
     return progress;
@@ -264,7 +257,7 @@ export class CodingJobQueryService {
   }
 
   async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null }[]> {
-    const where: any = { coding_job_id: codingJobId };
+    const where: Record<string, unknown> = { coding_job_id: codingJobId };
     if (onlyOpen) {
       where.code = IsNull();
     }
@@ -288,9 +281,9 @@ export class CodingJobQueryService {
     }));
   }
 
-  async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, any>> {
+  async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, Record<string, unknown>>> {
     const codingSchemeRefs = unitAliases.filter(alias => alias !== null);
-    const codingSchemes = new Map<string, any>();
+    const codingSchemes = new Map<string, Record<string, unknown>>();
 
     if (codingSchemeRefs.length === 0) {
       return codingSchemes;
@@ -354,9 +347,9 @@ export class CodingJobQueryService {
       }
       const key = `${unit.person_login}_${unit.person_code}_${unit.response_id}_${unit.variable_id}`;
       progress[unit.coding_job_id][key] = {
-        code: unit.code,
-        score: unit.score
-      } as any;
+        id: unit.code || 0,
+        score: unit.score ?? undefined
+      } as SaveCodingProgressDto['selectedCode'];
     });
 
     return progress;

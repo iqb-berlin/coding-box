@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { AggregatedExportService } from './aggregated-export.service';
 import { CoderExportService } from './coder-export.service';
@@ -8,8 +8,6 @@ import { CodingTimesExportService } from './coding-times-export.service';
 
 @Injectable()
 export class CodingExportFacade {
-  private readonly logger = new Logger(CodingExportFacade.name);
-
   constructor(
     private aggregatedExportService: AggregatedExportService,
     private coderExportService: CoderExportService,

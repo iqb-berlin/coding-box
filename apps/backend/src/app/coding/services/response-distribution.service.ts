@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { ResponseEntity } from '../../common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
+import type { CodingJobMutationService } from './coding-job-mutation.service';
 
 export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
@@ -33,6 +34,16 @@ export interface BundleItem {
 export interface DistributionItem {
   type: 'bundle' | 'variable';
   item: BundleItem | VariableReference;
+}
+
+export interface DistributionRequest {
+  selectedVariables: VariableReference[];
+  selectedVariableBundles?: BundleItem[];
+  selectedCoders: { id: number; name: string; username: string }[];
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
+  maxCodingCases?: number;
 }
 
 @Injectable()
@@ -212,15 +223,7 @@ export class ResponseDistributionService {
 
   async calculateDistribution(
     workspaceId: number,
-    request: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
-      selectedCoders: { id: number; name: string; username: string }[];
-      doubleCodingAbsolute?: number;
-      doubleCodingPercentage?: number;
-      caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
-    }
+    request: DistributionRequest
   ): Promise<{
       distribution: Record<string, Record<string, number>>;
       doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
@@ -291,8 +294,7 @@ export class ResponseDistributionService {
         itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
       }
 
-      const responses = allResponses.filter(response =>
-        itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
+      const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
       );
       const totalResponses = responses.length;
 
@@ -451,16 +453,8 @@ export class ResponseDistributionService {
 
   async createDistributedCodingJobs(
     workspaceId: number,
-    request: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
-      selectedCoders: { id: number; name: string; username: string }[];
-      doubleCodingAbsolute?: number;
-      doubleCodingPercentage?: number;
-      caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
-    },
-    mutationService: any
+    request: DistributionRequest,
+    mutationService: CodingJobMutationService
   ): Promise<{
       success: boolean;
       jobsCreated: number;
@@ -553,17 +547,13 @@ export class ResponseDistributionService {
           itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
         }
 
-        const responses = allResponses.filter(response =>
-          itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
+        const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
         );
         const totalResponses = responses.length;
 
         const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
         const uniqueCases = aggregatedGroups.length;
 
-        if (!aggregationInfo) {
-          (aggregationInfo as any) = {};
-        }
         aggregationInfo[itemKey] = {
           uniqueCases,
           totalResponses
@@ -693,8 +683,8 @@ export class ResponseDistributionService {
 
           const jobName = generateJobName(
             coder.name,
-            itemObj.type === 'bundle' ? itemKey : (itemObj.item as any).unitName,
-            itemObj.type === 'bundle' ? '' : (itemObj.item as any).variableId,
+            itemObj.type === 'bundle' ? itemKey : (itemObj.item as VariableReference).unitName,
+            itemObj.type === 'bundle' ? '' : (itemObj.item as VariableReference).variableId,
             caseCountForCoder
           );
 
@@ -705,7 +695,7 @@ export class ResponseDistributionService {
               assignedCoders: [coder.id],
               caseOrderingMode,
               ...(itemObj.type === 'bundle' ?
-                { variableBundleIds: [(itemObj.item as any).id] } :
+                { variableBundleIds: [(itemObj.item as BundleItem).id] } :
                 { variables: itemVariables }
               )
             },

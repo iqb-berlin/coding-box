@@ -47,6 +47,11 @@ import { CodingValidationService } from './services/coding-validation.service';
 import { CodingSchemeService } from './services/coding-scheme.service';
 import { CodingReplayService } from './services/coding-replay.service';
 import { DoubleCodingService } from './services/double-coding.service';
+import { CodingJobQueryService } from './services/coding-job-query.service';
+import { CodingJobMutationService } from './services/coding-job-mutation.service';
+import { CodingJobAssignmentService } from './services/coding-job-assignment.service';
+import { ResponseDistributionService } from './services/response-distribution.service';
+import { CodingJobFacade } from './services/coding-job-facade.service';
 
 // Coding Controllers
 import { CodingJobController } from './controllers/coding-job.controller';
@@ -60,6 +65,16 @@ import { ExportJobProcessor } from './processors/export-job.processor';
 
 import { TestPersonCodingService } from './services/test-person-coding.service';
 import { WorkspaceCodingFacade } from './services/workspace-coding-facade.service';
+
+// Export Services
+import { ExportUrlService } from './services/export-url.service';
+import { ExportFormattingService } from './services/export-formatting.service';
+import { AggregatedExportService } from './services/aggregated-export.service';
+import { CoderExportService } from './services/coder-export.service';
+import { VariableExportService } from './services/variable-export.service';
+import { DetailedExportService } from './services/detailed-export.service';
+import { CodingTimesExportService } from './services/coding-times-export.service';
+import { CodingExportFacade } from './services/coding-export-facade.service';
 
 /**
  * CodingModule - Feature Module for Coding Functionality
@@ -128,6 +143,11 @@ import { WorkspaceCodingFacade } from './services/workspace-coding-facade.servic
     CodingListService,
     VocsService,
     VoudService,
+    CodingJobQueryService,
+    CodingJobMutationService,
+    CodingJobAssignmentService,
+    ResponseDistributionService,
+    CodingJobFacade,
 
     // Supporting services
     MissingsProfilesService,
@@ -141,6 +161,16 @@ import { WorkspaceCodingFacade } from './services/workspace-coding-facade.servic
     CodingSchemeService,
     CodingReplayService,
     DoubleCodingService,
+
+    // Export services
+    ExportUrlService,
+    ExportFormattingService,
+    AggregatedExportService,
+    CoderExportService,
+    VariableExportService,
+    DetailedExportService,
+    CodingTimesExportService,
+    CodingExportFacade,
 
     // Processors
     CodingStatisticsProcessor,

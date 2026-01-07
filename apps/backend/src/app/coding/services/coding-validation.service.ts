@@ -16,7 +16,7 @@ import { ResponseAnalysisDto, DuplicateValueGroupDto } from '../../../../../../a
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
 import { ResponseEntity, Unit } from '../../common';
-import { CodingJobService } from './coding-job.service';
+import { ResponseDistributionService } from './response-distribution.service';
 
 // Re-importing Not from typeorm for completion
 
@@ -40,7 +40,7 @@ export class CodingValidationService {
     private readonly workspacesFacadeService: WorkspacesFacadeService,
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly cacheService: CacheService,
-    private readonly codingJobService: CodingJobService,
+    private readonly responseDistributionService: ResponseDistributionService,
     @InjectRepository(CodingJobUnit)
     private readonly codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(JobDefinition)
@@ -333,7 +333,7 @@ export class CodingValidationService {
     try {
       this.logger.log(`Starting response analysis for workspace ${workspaceId}`);
 
-      const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+      const matchingFlags = await this.responseDistributionService.getResponseMatchingMode(workspaceId);
       const persons = await this.workspacesFacadeService.findConsideringPersons(workspaceId);
 
       if (persons.length === 0) {
@@ -413,7 +413,7 @@ export class CodingValidationService {
 
         const valueGroups = new Map<string, ResponseEntity[]>();
         responses.forEach(r => {
-          const norm = this.codingJobService.normalizeValue(r.value, matchingFlags);
+          const norm = this.responseDistributionService.normalizeValue(r.value, matchingFlags);
           if (!valueGroups.has(norm)) valueGroups.set(norm, []);
           valueGroups.get(norm).push(r);
         });

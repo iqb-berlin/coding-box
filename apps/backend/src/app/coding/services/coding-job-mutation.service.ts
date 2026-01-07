@@ -1,6 +1,8 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource, EntityManager, In } from 'typeorm';
+import {
+  Repository, DataSource, EntityManager, In
+} from 'typeorm';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { CreateCodingJobDto } from '../dto/create-coding-job.dto';
@@ -13,11 +15,9 @@ import { ResponseEntity } from '../../common';
 
 @Injectable()
 export class CodingJobMutationService {
-  private readonly logger = new Logger(CodingJobMutationService.name);
-
   constructor(
     @InjectRepository(CodingJob)
-    public readonly codingJobRepository: Repository<CodingJob>,
+    readonly codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobUnit)
     private readonly codingJobUnitRepository: Repository<CodingJobUnit>,
     private readonly dataSource: DataSource,
@@ -72,7 +72,9 @@ export class CodingJobMutationService {
       throw new NotFoundException(`Coding job with ID ${id} not found in workspace ${workspaceId}`);
     }
 
-    const { assignedCoders, variables, variableBundleIds, ...jobUpdates } = updateCodingJobDto as any;
+    const {
+      assignedCoders, variables, variableBundleIds, ...jobUpdates
+    } = updateCodingJobDto;
 
     Object.assign(job, jobUpdates);
     const updatedJob = await this.codingJobRepository.save(job);
@@ -130,7 +132,7 @@ export class CodingJobMutationService {
       personGroup = testPersonParts[2];
     }
 
-    const whereCondition: any = {
+    const whereCondition: Record<string, unknown> = {
       coding_job_id: codingJobId,
       unit_name: progress.unitId,
       variable_id: progress.variableId,
@@ -165,7 +167,7 @@ export class CodingJobMutationService {
       if (score !== undefined) {
         codingJobUnit.score = score;
       }
-      codingJobUnit.coding_issue_option = (progress.selectedCode as any).codingIssueOption || null;
+      codingJobUnit.coding_issue_option = progress.selectedCode.codingIssueOption || null;
     }
 
     if (progress.notes !== undefined) {

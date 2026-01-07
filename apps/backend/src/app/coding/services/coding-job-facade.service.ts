@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { CodingJobQueryService } from './coding-job-query.service';
 import { CodingJobMutationService } from './coding-job-mutation.service';
-import { ResponseDistributionService } from './response-distribution.service';
+import { ResponseDistributionService, DistributionRequest } from './response-distribution.service';
 import { CodingJobAssignmentService } from './coding-job-assignment.service';
 import { CreateCodingJobDto } from '../dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../dto/update-coding-job.dto';
@@ -92,17 +92,16 @@ export class CodingJobFacade {
     return job;
   }
 
-  // Distribution Methods
-  async calculateDistribution(workspaceId: number, request: any) {
+  async calculateDistribution(workspaceId: number, request: DistributionRequest) {
     return this.distributionService.calculateDistribution(workspaceId, request);
   }
 
-  async createDistributedCodingJobs(workspaceId: number, request: any) {
+  async createDistributedCodingJobs(workspaceId: number, request: DistributionRequest) {
     // This method was originally in CodingJobService and is complex.
     // It's probably better to keep it in the facade or move it to ResponseDistributionService
     // and let it call mutationService.createCodingJobWithUnitSubset.
     // For now, I'll recommend implementing it in ResponseDistributionService.
-    return (this.distributionService as any).createDistributedCodingJobs(workspaceId, request, this.mutationService);
+    return this.distributionService.createDistributedCodingJobs(workspaceId, request, this.mutationService);
   }
 
   // Assignment Methods
@@ -119,7 +118,7 @@ export class CodingJobFacade {
     const progress = await this.queryService.getCodingJobProgress(codingJobId);
     if (progress.total > 0 && progress.progress === 100) {
       const newStatus = progress.open > 0 ? 'open' : 'completed';
-      await (this.mutationService as any).codingJobRepository.update(codingJobId, { status: newStatus });
+      await this.mutationService.codingJobRepository.update(codingJobId, { status: newStatus });
     }
   }
 }
