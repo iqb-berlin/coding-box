@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue, JobOptions, Job } from 'bull';
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { CodingStatistics } from '../../common';
 import { TestPersonCodingJobData, ExportJobData } from '../interfaces/job-data.interface';
 
 @Injectable()

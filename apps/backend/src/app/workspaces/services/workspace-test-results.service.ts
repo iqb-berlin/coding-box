@@ -8,14 +8,14 @@ import * as csv from 'fast-csv';
 import * as fs from 'fs';
 import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
-import Persons from '../entities/persons.entity';
+import {
+  Persons, Unit, ResponseEntity, Chunk, TcMergeResponse
+} from '../../common';
 import {
   statusNumberToString,
   statusStringToNumber
 } from '../utils/response-status-converter';
-import { Unit } from '../entities/unit.entity';
 import { Booklet } from '../entities/booklet.entity';
-import { ResponseEntity } from '../entities/response.entity';
 import { BookletInfo } from '../entities/bookletInfo.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
 import { UnitLog } from '../entities/unitLog.entity';
@@ -26,7 +26,6 @@ import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceFilesService } from './workspace-files.service';
-import { Chunk, TcMergeResponse } from '../shared-types';
 
 interface PersonWhere {
   code: string;

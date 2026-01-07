@@ -9,12 +9,11 @@ import {
   statusNumberToString,
   statusStringToNumber
 } from '../../workspaces/utils/response-status-converter';
-import { Unit } from '../../workspaces/entities/unit.entity';
-import { ResponseEntity } from '../../workspaces/entities/response.entity'; // CodingStatistics needs to be imported or redefined
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { Unit, FileUpload } from '../../common';
+import { ResponseEntity } from '../../common'; // CodingStatistics needs to be imported or redefined
+import { CodingStatistics } from '../../common';
 import { CodingFileCache } from './coding-file-cache.service';
 import { CodingJobManager } from './coding-job-manager.service';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
 
 export interface CodedResponse {
   id: number;

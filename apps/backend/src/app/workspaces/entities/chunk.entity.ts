@@ -2,7 +2,7 @@ import {
   Entity, Column, ManyToOne, JoinColumn, PrimaryColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
-import { Unit } from './unit.entity';
+import { Unit } from '../../common';
 
 @Entity('chunk')
 export class ChunkEntity {

@@ -7,7 +7,9 @@ import * as cheerio from 'cheerio';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import FileUpload, { StructuredFileData } from '../entities/file_upload.entity';
+import {
+  FileUpload, StructuredFileData, Unit, ResponseEntity, Persons
+} from '../../common';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
@@ -21,15 +23,12 @@ import { FileValidationResultDto } from '../../../../../../api-dto/files/file-va
 import { ResponseDto } from '../../../../../../api-dto/responses/response-dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
-import { Unit } from '../entities/unit.entity';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
-import { ResponseEntity } from '../entities/response.entity';
 import {
   MissingPersonDto,
   TestTakerLoginDto,
   TestTakersValidationDto
 } from '../../../../../../api-dto/files/testtakers-validation.dto';
-import Persons from '../entities/persons.entity';
 import { WorkspaceEventsService } from './workspace-events.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';

@@ -1,9 +1,10 @@
 import {
   Column, Entity, Index, PrimaryGeneratedColumn, Unique, OneToMany
 } from 'typeorm';
-import { TcMergeBooklet } from '../shared-types';
 // eslint-disable-next-line import/no-cycle
-import { Booklet } from './booklet.entity';
+import { TcMergeBooklet } from '../types/shared-types';
+// eslint-disable-next-line import/no-cycle
+import { Booklet } from '../../workspaces/entities/booklet.entity';
 
 @Entity()
 @Unique('persons_pk', ['code', 'group', 'login', 'workspace_id'])

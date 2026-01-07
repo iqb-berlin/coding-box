@@ -5,8 +5,7 @@ import * as cheerio from 'cheerio';
 import Ajv, { ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 
-import FileUpload from '../entities/file_upload.entity';
-import Persons from '../entities/persons.entity';
+import { FileUpload, Persons } from '../../common';
 
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';

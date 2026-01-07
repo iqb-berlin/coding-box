@@ -1,6 +1,8 @@
 import { ResponseStatusType, ResponseValueType } from '@iqbspecs/response/response.interface';
-import Persons from './entities/persons.entity';
-import { Unit } from './entities/unit.entity';
+// eslint-disable-next-line import/no-cycle
+import Persons from '../entities/persons.entity';
+// eslint-disable-next-line import/no-cycle
+import { Unit } from '../entities/unit.entity';
 
 export type Response = {
   groupname: string,

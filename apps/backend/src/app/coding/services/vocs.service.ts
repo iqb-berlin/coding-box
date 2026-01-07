@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
+import { FileUpload } from '../../common';
 import { LRUCache } from '../../utils/lru-cache';
 
 interface VocsScheme {

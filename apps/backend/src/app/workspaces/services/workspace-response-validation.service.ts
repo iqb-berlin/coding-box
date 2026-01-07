@@ -3,10 +3,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
 
-import FileUpload from '../entities/file_upload.entity';
-import { ResponseEntity } from '../entities/response.entity';
-import { Unit } from '../entities/unit.entity';
-import Persons from '../entities/persons.entity';
+import {
+  FileUpload, ResponseEntity, Unit, Persons
+} from '../../common';
 import { Booklet } from '../entities/booklet.entity';
 
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';

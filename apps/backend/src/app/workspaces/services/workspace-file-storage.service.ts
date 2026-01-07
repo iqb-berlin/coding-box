@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import AdmZip = require('adm-zip');
 import * as path from 'path';
-import FileUpload from '../entities/file_upload.entity';
+import { FileUpload } from '../../common';
 import { FileIo } from '../../admin/workspace/file-io.interface';
 
 @Injectable()

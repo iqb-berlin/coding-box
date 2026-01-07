@@ -16,7 +16,7 @@ import { JobDefinition } from '../entities/job-definition.entity';
 import { CreateCodingJobDto } from '../dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../dto/update-coding-job.dto';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { ResponseEntity } from '../../common';
 import { CacheService } from '../../cache/cache.service';
 
 function isSafeKey(key: string): boolean {

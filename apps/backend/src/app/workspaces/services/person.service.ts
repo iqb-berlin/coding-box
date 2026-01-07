@@ -2,18 +2,8 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Repository } from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
-import Persons from '../entities/persons.entity';
-import { Booklet } from '../entities/booklet.entity';
-import { Unit } from '../entities/unit.entity';
-import { UnitLastState } from '../entities/unitLastState.entity';
-import { BookletInfo } from '../entities/bookletInfo.entity';
-import { ResponseEntity } from '../entities/response.entity';
-import { ChunkEntity } from '../entities/chunk.entity';
-import { BookletLog } from '../entities/bookletLog.entity';
-import { Session } from '../entities/session.entity';
-import { UnitLog } from '../entities/unitLog.entity';
-import { statusStringToNumber } from '../utils/response-status-converter';
 import {
+  Persons, Unit, ResponseEntity,
   Chunk,
   Log,
   Person,
@@ -22,7 +12,15 @@ import {
   TcMergeResponse,
   TcMergeSubForms,
   TcMergeUnit, Response
-} from '../shared-types';
+} from '../../common';
+import { Booklet } from '../entities/booklet.entity';
+import { UnitLastState } from '../entities/unitLastState.entity';
+import { BookletInfo } from '../entities/bookletInfo.entity';
+import { ChunkEntity } from '../entities/chunk.entity';
+import { BookletLog } from '../entities/bookletLog.entity';
+import { Session } from '../entities/session.entity';
+import { UnitLog } from '../entities/unitLog.entity';
+import { statusStringToNumber } from '../utils/response-status-converter';
 import { TestResultsUploadStatsDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 
 @Injectable()

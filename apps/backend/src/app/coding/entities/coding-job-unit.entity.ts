@@ -11,7 +11,7 @@ import {
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 // eslint-disable-next-line import/no-cycle
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { ResponseEntity } from '../../common';
 
 /**
  * Entity for coding job units (responses that need to be coded for a job)

@@ -4,7 +4,7 @@ import {
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { ResponseEntity } from '../../common';
 import {
   statusNumberToString
 } from '../../workspaces/utils/response-status-converter';

@@ -9,7 +9,7 @@ import { UnitVariableDto } from '../../../../../../api-dto/unit-info/unit-variab
 import { UnitVariableValueDto } from '../../../../../../api-dto/unit-info/unit-variable-value.dto';
 import { UnitCodingSchemeRefDto } from '../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
 import { UnitDependencyDto } from '../../../../../../api-dto/unit-info/unit-dependency.dto';
-import FileUpload from '../entities/file_upload.entity';
+import { FileUpload } from '../../common';
 
 // XML element interfaces for parsing
 interface XmlAttributes {

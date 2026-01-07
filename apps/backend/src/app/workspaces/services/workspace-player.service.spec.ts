@@ -1,9 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WorkspacePlayerService } from './workspace-player.service';
-import FileUpload from '../entities/file_upload.entity';
-import Persons from '../entities/persons.entity';
-import { ResponseEntity } from '../entities/response.entity';
+import { FileUpload, Persons, ResponseEntity } from '../../common';
 
 describe('WorkspacePlayerService', () => {
   let service: WorkspacePlayerService;

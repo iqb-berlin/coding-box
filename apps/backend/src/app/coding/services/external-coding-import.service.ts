@@ -5,7 +5,7 @@ import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import * as cheerio from 'cheerio';
-import { Unit } from '../../workspaces/entities/unit.entity';
+import { Unit } from '../../common';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../../workspaces/utils/response-status-converter';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';

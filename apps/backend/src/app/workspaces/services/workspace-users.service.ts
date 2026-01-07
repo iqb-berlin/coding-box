@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import WorkspaceUser from '../entities/workspace_user.entity';
 import User from '../../users/entities/user.entity';
-import Workspace from '../entities/workspace.entity';
+import { Workspace } from '../../common';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 

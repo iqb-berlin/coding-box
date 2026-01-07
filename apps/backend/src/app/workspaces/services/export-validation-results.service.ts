@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { CacheService } from '../../cache/cache.service';
-import { ResponseEntity } from '../entities/response.entity';
+import { ResponseEntity } from '../../common';
 
 @Injectable()
 export class ExportValidationResultsService {

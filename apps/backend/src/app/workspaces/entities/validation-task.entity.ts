@@ -2,7 +2,7 @@ import {
   Column,
   ChildEntity
 } from 'typeorm';
-import { Job } from './job.entity';
+import { Job } from '../../common';
 
 /**
  * Entity for validation tasks

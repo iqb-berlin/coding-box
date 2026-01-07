@@ -14,15 +14,14 @@ import {
 } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
-import { Unit } from '../../workspaces/entities/unit.entity';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import {
+  FileUpload, Unit, ResponseEntity, CodingStatistics, CodingStatisticsWithJob
+} from '../../common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { CodingStatistics, CodingStatisticsWithJob } from '../../workspaces/shared-types';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import {
   CodeBookContentSetting,

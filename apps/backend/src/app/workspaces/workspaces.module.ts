@@ -9,15 +9,15 @@ import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-f
 import { WorkspaceBullQueueService } from './services/workspace-bull-queue.service';
 import { ResponseCacheSchedulerService } from './services/response-cache-scheduler.service';
 
-// Entities
-import Workspace from './entities/workspace.entity';
+// Entities from common module (shared across features)
+import {
+  Workspace, FileUpload, Persons, Unit, ResponseEntity, Job
+} from '../common';
+
+// Workspace-specific entities
 import WorkspaceAdmin from './entities/workspace-admin.entity';
-import FileUpload from './entities/file_upload.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
-import Persons from './entities/persons.entity';
-import { Unit } from './entities/unit.entity';
 import { Booklet } from './entities/booklet.entity';
-import { ResponseEntity } from './entities/response.entity';
 import { ChunkEntity } from './entities/chunk.entity';
 import ResourcePackage from './entities/resource-package.entity';
 import { Session } from './entities/session.entity';
@@ -32,7 +32,6 @@ import { Setting } from './entities/setting.entity';
 import { ReplayStatistics } from './entities/replay-statistics.entity';
 import Logs from './entities/logs.entity';
 import { BookletInfo } from './entities/bookletInfo.entity';
-import { Job } from './entities/job.entity';
 
 // Services
 import { WorkspaceCoreService } from './services/workspace-core.service';

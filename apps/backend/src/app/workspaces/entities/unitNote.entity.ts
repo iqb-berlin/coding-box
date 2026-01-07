@@ -9,7 +9,7 @@ import {
   UpdateDateColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
-import { Unit } from './unit.entity';
+import { Unit } from '../../common';
 
 @Entity('unit_note')
 @Index(['unitId', 'note']) // Composite index for common query patterns

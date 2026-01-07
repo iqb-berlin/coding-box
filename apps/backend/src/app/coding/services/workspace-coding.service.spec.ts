@@ -3,11 +3,10 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { WorkspaceCodingService } from './workspace-coding.service';
 import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
-import FileUpload from '../../workspaces/entities/file_upload.entity';
-import Persons from '../../workspaces/entities/persons.entity';
-import { Unit } from '../../workspaces/entities/unit.entity';
+import {
+  FileUpload, Persons, Unit, ResponseEntity
+} from '../../common';
 import { Booklet } from '../../workspaces/entities/booklet.entity';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';

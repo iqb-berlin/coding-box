@@ -5,7 +5,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { WorkspacesFacadeService } from './workspaces-facade.service';
-import { PersonsWithUnits } from '../shared-types';
+import { PersonsWithUnits } from '../../common';
 
 @Injectable()
 export class ResponseCacheSchedulerService {

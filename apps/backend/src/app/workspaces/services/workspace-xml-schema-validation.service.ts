@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import axios from 'axios';
 import * as libxmljs from 'libxmljs2';
 import { In, Repository } from 'typeorm';
-import FileUpload from '../entities/file_upload.entity';
+import { FileUpload } from '../../common';
 
 @Injectable()
 export class WorkspaceXmlSchemaValidationService {

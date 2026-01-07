@@ -20,7 +20,7 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { CodingStatistics, ResponseEntity } from '../../common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../../admin/workspace/access-level.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
@@ -38,7 +38,6 @@ import { CodingStatisticsService } from '../services/coding-statistics.service';
 import { BullJobManagementService } from '../services/bull-job-management.service';
 import { ExportJobData, ExportJobResult } from '../interfaces/job-data.interface';
 import { CacheService } from '../../cache/cache.service';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';

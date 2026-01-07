@@ -12,11 +12,9 @@ import { BookletInfo } from './bookletInfo.entity';
 // eslint-disable-next-line import/no-cycle
 import { BookletLog } from './bookletLog.entity';
 // eslint-disable-next-line import/no-cycle
-import { Unit } from './unit.entity';
+import { Unit, Persons } from '../../common';
 // eslint-disable-next-line import/no-cycle
 import { Session } from './session.entity';
-// eslint-disable-next-line import/no-cycle
-import Persons from './persons.entity';
 
 @Entity('booklet')
 @Index(['personid', 'infoid']) // Composite index for common query patterns
@@ -38,7 +36,7 @@ export class Booklet {
   @Column({ type: 'bigint', default: 0 })
     firstts: number;
 
-  @ManyToOne(() => Persons, person => person.booklets, {
+  @ManyToOne(() => Persons, person => person.booklets_relation, {
     onDelete: 'CASCADE',
     // Eager loading for person as it's frequently accessed with booklet
     eager: true

@@ -4,7 +4,7 @@ import {
 // BullJobManagementService now handles Bull queue interactions
 import { CacheService } from '../../cache/cache.service';
 import { BullJobManagementService } from './bull-job-management.service';
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { CodingStatistics } from '../../common';
 
 @Injectable()
 export class CodingJobManager {

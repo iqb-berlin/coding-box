@@ -9,7 +9,7 @@ import { BookletRestrictionDto } from '../../../../../../api-dto/booklet-info/bo
 import { BookletConfigDto } from '../../../../../../api-dto/booklet-info/booklet-config.dto';
 import { BookletConfigItemDto } from '../../../../../../api-dto/booklet-info/booklet-config-item.dto';
 import { BookletTestletDto } from '../../../../../../api-dto/booklet-info/booklet-testlet.dto';
-import FileUpload from '../entities/file_upload.entity';
+import { FileUpload } from '../../common';
 
 @Injectable()
 export class BookletInfoService {

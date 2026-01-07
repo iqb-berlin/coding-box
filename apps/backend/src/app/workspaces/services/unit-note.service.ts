@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { UnitNote } from '../entities/unitNote.entity';
-import { Unit } from '../entities/unit.entity';
+import { Unit } from '../../common';
 import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../../api-dto/unit-notes/update-unit-note.dto';
 import { UnitNoteDto } from '../../../../../../api-dto/unit-notes/unit-note.dto';

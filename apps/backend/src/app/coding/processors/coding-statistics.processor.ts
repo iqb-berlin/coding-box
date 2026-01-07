@@ -7,7 +7,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { CodingStatistics } from '../../common';
 import { WorkspaceCodingService } from '../services/workspace-coding.service';
 
 export interface CodingStatisticsJobData {

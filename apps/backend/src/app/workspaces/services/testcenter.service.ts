@@ -3,7 +3,7 @@ import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
-import { Person, Response, Log } from '../shared-types';
+import { Person, Response, Log } from '../../common';
 
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';

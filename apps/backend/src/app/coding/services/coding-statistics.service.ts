@@ -2,7 +2,7 @@ import {
   Injectable, Logger, OnApplicationBootstrap
 } from '@nestjs/common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
-import { CodingStatistics } from '../../workspaces/shared-types';
+import { CodingStatistics } from '../../common';
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 

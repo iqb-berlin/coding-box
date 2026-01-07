@@ -8,19 +8,14 @@ import {
   Index
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
-import { Booklet } from './booklet.entity';
-// eslint-disable-next-line import/no-cycle
-import { UnitLog } from './unitLog.entity';
-// eslint-disable-next-line import/no-cycle
-import { UnitLastState } from './unitLastState.entity';
-// eslint-disable-next-line import/no-cycle
-import { ChunkEntity } from './chunk.entity';
+import { Booklet } from '../../workspaces/entities/booklet.entity';
+import { UnitLog } from '../../workspaces/entities/unitLog.entity';
+import { UnitLastState } from '../../workspaces/entities/unitLastState.entity';
+import { ChunkEntity } from '../../workspaces/entities/chunk.entity';
 // eslint-disable-next-line import/no-cycle
 import { ResponseEntity } from './response.entity';
-// eslint-disable-next-line import/no-cycle
-import { UnitTag } from './unitTag.entity';
-// eslint-disable-next-line import/no-cycle
-import { UnitNote } from './unitNote.entity';
+import { UnitTag } from '../../workspaces/entities/unitTag.entity';
+import { UnitNote } from '../../workspaces/entities/unitNote.entity';
 
 @Entity('unit')
 @Index(['bookletid', 'alias']) // Composite index for common query patterns

@@ -11,7 +11,7 @@ import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
 import { CodingListService } from './coding-list.service';
-import { ResponseEntity } from '../../workspaces/entities/response.entity';
+import { ResponseEntity } from '../../common';
 import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';

@@ -1,7 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Job } from '../entities/job.entity';
+import { Job } from '../../common';
 
 @Injectable()
 export class JobService {

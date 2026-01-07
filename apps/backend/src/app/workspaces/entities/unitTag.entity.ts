@@ -8,7 +8,7 @@ import {
   CreateDateColumn
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
-import { Unit } from './unit.entity';
+import { Unit } from '../../common';
 
 @Entity('unit_tag')
 @Index(['unitId', 'tag']) // Composite index for common query patterns

@@ -2,10 +2,8 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
-import FileUpload from '../entities/file_upload.entity';
+import { FileUpload, Persons, ResponseEntity } from '../../common';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
-import Persons from '../entities/persons.entity';
-import { ResponseEntity } from '../entities/response.entity';
 
 export interface BookletUnit {
   id: number;

@@ -1,9 +1,8 @@
 import { Repository } from 'typeorm';
 import { WorkspaceResponseValidationService } from './workspace-response-validation.service';
-import FileUpload from '../entities/file_upload.entity';
-import { ResponseEntity } from '../entities/response.entity';
-import { Unit } from '../entities/unit.entity';
-import Persons from '../entities/persons.entity';
+import {
+  FileUpload, ResponseEntity, Unit, Persons
+} from '../../common';
 import { Booklet } from '../entities/booklet.entity';
 
 describe('WorkspaceResponseValidationService.validateVariables', () => {
