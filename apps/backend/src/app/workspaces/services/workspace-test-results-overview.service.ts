@@ -256,7 +256,7 @@ export class WorkspaceTestResultsOverviewService {
     const out: Record<string, number> = {};
     (rows || []).forEach(r => {
       const key = String((r.value || '').trim() || 'unknown');
-      out[key] = Number(r.count) || 0;
+      out[key] = (out[key] || 0) + (Number(r.count) || 0);
     });
     return out;
   }

@@ -43,6 +43,10 @@ import { CodingProcessor } from './services/coding-processor.service';
 import { BullJobManagementService } from './services/bull-job-management.service';
 import { CodingIncompleteCacheSchedulerService } from './services/coding-incomplete-cache-scheduler.service';
 import { CodingStatisticsCacheSchedulerService } from './services/coding-statistics-cache-scheduler.service';
+import { CodingValidationService } from './services/coding-validation.service';
+import { CodingSchemeService } from './services/coding-scheme.service';
+import { CodingReplayService } from './services/coding-replay.service';
+import { DoubleCodingService } from './services/double-coding.service';
 
 // Coding Controllers
 import { CodingJobController } from './controllers/coding-job.controller';
@@ -133,6 +137,10 @@ import { WorkspaceCodingFacade } from './services/workspace-coding-facade.servic
     VariableAnalysisService,
     VariableBundleService,
     ExternalCodingImportService,
+    CodingValidationService,
+    CodingSchemeService,
+    CodingReplayService,
+    DoubleCodingService,
 
     // Processors
     CodingStatisticsProcessor,

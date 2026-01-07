@@ -3,6 +3,7 @@ import { WorkspaceTestResultsFacade } from './workspace-test-results-facade.serv
 import { WorkspaceTestResultsOverviewService } from './workspace-test-results-overview.service';
 import { WorkspaceTestResultsQueryService } from './workspace-test-results-query.service';
 import { DuplicateResponseService } from './duplicate-response.service';
+import { Unit } from '../../common';
 
 describe('WorkspaceTestResultsFacade', () => {
   let facade: WorkspaceTestResultsFacade;
@@ -32,6 +33,25 @@ describe('WorkspaceTestResultsFacade', () => {
           provide: DuplicateResponseService,
           useValue: {
             resolveDuplicateResponses: jest.fn()
+          }
+        },
+        {
+          provide: FlatResponseService,
+          useValue: {
+            findFlatResponses: jest.fn(),
+            findFlatResponseFrequencies: jest.fn(),
+            findFlatResponseFilterOptions: jest.fn()
+          }
+        },
+        {
+          provide: ResponseExportService,
+          useValue: {
+            exportTestResults: jest.fn(),
+            exportTestResultsToFile: jest.fn(),
+            exportTestResultsToStream: jest.fn(),
+            exportTestLogsToFile: jest.fn(),
+            exportTestLogsToStream: jest.fn(),
+            getExportOptions: jest.fn()
           }
         }
       ]
@@ -104,7 +124,16 @@ describe('WorkspaceTestResultsFacade', () => {
     it('should delegate to query service with options', async () => {
       const mockResults = [
         {
-          id: 1, group: 'A', login: 'user1', code: 'code1'
+          id: 1,
+          group: 'A',
+          login: 'user1',
+          code: 'code1',
+          workspace_id: 1,
+          uploaded_at: new Date(),
+          booklets: [],
+          booklets_relation: [],
+          source: 'test',
+          consider: true
         }
       ];
       const options = { page: 1, limit: 10, searchText: 'test' };
@@ -121,7 +150,44 @@ describe('WorkspaceTestResultsFacade', () => {
 
   describe('findWorkspaceResponses', () => {
     it('should delegate to query service with pagination', async () => {
-      const mockResponses = [{ id: 1 }, { id: 2 }];
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 1,
+          variableid: 'var1',
+          status: 1,
+          value: 'test',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        },
+        {
+          id: 2,
+          unitid: 1,
+          variableid: 'var2',
+          status: 1,
+          value: 'test2',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        }
+      ];
       const options = { page: 1, limit: 10 };
 
       queryService.findWorkspaceResponses.mockResolvedValue([
@@ -139,7 +205,26 @@ describe('WorkspaceTestResultsFacade', () => {
     });
 
     it('should delegate to query service without pagination', async () => {
-      const mockResponses = [{ id: 1 }];
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 1,
+          variableid: 'var1',
+          status: 1,
+          value: 'test',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        }
+      ];
 
       queryService.findWorkspaceResponses.mockResolvedValue([mockResponses, 1]);
 

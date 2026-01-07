@@ -1,11 +1,15 @@
 import {
   Injectable, Logger
 } from '@nestjs/common';
+import { Repository } from 'typeorm';
+import { InjectRepository } from '@nestjs/typeorm';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
+
+import { CodingJob } from '../entities/coding-job.entity';
 
 @Injectable()
 export class CodingResultsService {
@@ -15,7 +19,9 @@ export class CodingResultsService {
     private workspacesFacadeService: WorkspacesFacadeService,
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    @InjectRepository(CodingJob)
+    private codingJobRepository: Repository<CodingJob>
   ) {}
 
   async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
@@ -145,6 +151,102 @@ export class CodingResultsService {
       this.logger.error(`Error updating responses: ${error.message}`, error.stack);
       throw error;
     }
+  }
+
+  async bulkApplyCodingResults(workspaceId: number): Promise<{
+    success: boolean;
+    jobsProcessed: number;
+    totalUpdatedResponses: number;
+    totalSkippedReview: number;
+    message: string;
+    results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      };
+    }>;
+  }> {
+    this.logger.log(`Starting bulk apply coding results for workspace ${workspaceId}`);
+    const codingJobs = await this.codingJobRepository.find({
+      where: { workspace_id: workspaceId },
+      select: ['id', 'name']
+    });
+
+    const results: Array<{
+      jobId: number;
+      jobName: string;
+      hasIssues: boolean;
+      skipped: boolean;
+      result?: {
+        success: boolean;
+        updatedResponsesCount: number;
+        skippedReviewCount: number;
+        message: string;
+      };
+    }> = [];
+    let totalUpdatedResponses = 0;
+    let totalSkippedReview = 0;
+    let jobsProcessed = 0;
+
+    for (const job of codingJobs) {
+      if (await this.codingJobService.hasCodingIssues(job.id)) {
+        results.push({
+          jobId: job.id, jobName: job.name, hasIssues: true, skipped: true
+        });
+        continue;
+      }
+
+      try {
+        const applyResult = await this.applyCodingResults(workspaceId, job.id);
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: false,
+          result: {
+            success: applyResult.success,
+            updatedResponsesCount: applyResult.updatedResponsesCount,
+            skippedReviewCount: applyResult.skippedReviewCount,
+            message: applyResult.messageKey || 'Apply result'
+          }
+        });
+
+        if (applyResult.success) {
+          totalUpdatedResponses += applyResult.updatedResponsesCount;
+          totalSkippedReview += applyResult.skippedReviewCount;
+          jobsProcessed += 1;
+        }
+      } catch (error) {
+        this.logger.error(`Error applying results for job ${job.id}: ${error.message}`);
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: false,
+          result: {
+            success: false, updatedResponsesCount: 0, skippedReviewCount: 0, message: `Error: ${error.message}`
+          }
+        });
+      }
+    }
+
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses.`;
+    this.logger.log(message);
+
+    return {
+      success: true,
+      jobsProcessed,
+      totalUpdatedResponses,
+      totalSkippedReview,
+      message,
+      results
+    };
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {

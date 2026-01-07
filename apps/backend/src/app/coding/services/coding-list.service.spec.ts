@@ -1,8 +1,7 @@
-import { Repository } from 'typeorm';
-import FileUpload from '../entities/file_upload.entity';
-import { ResponseEntity } from '../entities/response.entity';
-import { WorkspaceFilesService } from './workspace-files.service';
 import { CodingListService } from './coding-list.service';
+import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
+import { VocsService } from './vocs.service';
+import { VoudService } from './voud.service';
 
 type CodingListServiceHeaderGetter = {
   getHeadersForVersion: (version: 'v1' | 'v2' | 'v3') => string[];
@@ -10,16 +9,20 @@ type CodingListServiceHeaderGetter = {
 
 describe('CodingListService', () => {
   it('should use CodingItem keys as Excel headers for results-by-version export', () => {
-    const fileUploadRepository = {} as unknown as Repository<FileUpload>;
-    const responseRepository = {} as unknown as Repository<ResponseEntity>;
-    const workspaceFilesService = {
-      getUnitVariableMap: jest.fn()
-    } as unknown as WorkspaceFilesService;
+    const workspacesFacadeService = {
+      findResponsesForCoding: jest.fn()
+    } as unknown as WorkspacesFacadeService;
+    const vocsService = {
+      getExclusions: jest.fn()
+    } as unknown as VocsService;
+    const voudService = {
+      getVariablePageMap: jest.fn()
+    } as unknown as VoudService;
 
     const service = new CodingListService(
-      fileUploadRepository,
-      responseRepository,
-      workspaceFilesService
+      workspacesFacadeService,
+      vocsService,
+      voudService
     );
 
     const headersV1 = (

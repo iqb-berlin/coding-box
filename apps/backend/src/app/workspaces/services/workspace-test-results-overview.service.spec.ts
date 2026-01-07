@@ -14,7 +14,7 @@ describe('WorkspaceTestResultsOverviewService', () => {
   let responseRepository: jest.Mocked<Repository<ResponseEntity>>;
   let sessionRepository: jest.Mocked<Repository<Session>>;
 
-  const createMockQueryBuilder = (mockData: unknown) => ({
+  const createMockQueryBuilder = (mockData: unknown[], count?: number) => ({
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
@@ -22,7 +22,7 @@ describe('WorkspaceTestResultsOverviewService', () => {
     groupBy: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue(mockData),
-    getCount: jest.fn().mockResolvedValue(mockData)
+    getCount: jest.fn().mockResolvedValue(count ?? mockData.length)
   });
 
   beforeEach(async () => {
@@ -105,30 +105,33 @@ describe('WorkspaceTestResultsOverviewService', () => {
           createMockQueryBuilder([{ unitKey: 'Unit1' }, { unitKey: 'Unit2' }])
         );
 
-      // Mock unique responses count
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(50)
+      // Mock unique responses count and status counts
+      let responseCallCount = 0;
+      responseRepository.createQueryBuilder = jest.fn().mockImplementation(() => {
+        responseCallCount += 1;
+        // First call: countUniqueResponses
+        if (responseCallCount === 1) {
+          return {
+            innerJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getCount: jest.fn().mockResolvedValue(50)
+          };
+        }
+        // Second call: getResponseStatusCounts
+        return {
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          addSelect: jest.fn().mockReturnThis(),
+          groupBy: jest.fn().mockReturnThis(),
+          getRawMany: jest.fn().mockResolvedValue([
+            { status: 1, count: 30 },
+            { status: 2, count: 20 }
+          ])
+        };
       });
-
-      // Mock response status counts
-      const statusQueryBuilder = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([
-          { status: 1, count: 30 },
-          { status: 2, count: 20 }
-        ])
-      };
-      responseRepository.createQueryBuilder = jest
-        .fn()
-        .mockReturnValueOnce(statusQueryBuilder);
 
       // Mock session counts
       const sessionQueryBuilder = {
@@ -231,33 +234,74 @@ describe('WorkspaceTestResultsOverviewService', () => {
       unitRepository.createQueryBuilder = jest
         .fn()
         .mockReturnValue(createMockQueryBuilder([{ unitKey: 'U1' }]));
-      responseRepository.createQueryBuilder = jest.fn().mockReturnValue({
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        getCount: jest.fn().mockResolvedValue(10),
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([])
+
+      let responseCallCount = 0;
+      responseRepository.createQueryBuilder = jest.fn().mockImplementation(() => {
+        responseCallCount += 1;
+        if (responseCallCount === 1) {
+          // countUniqueResponses
+          return {
+            innerJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            getCount: jest.fn().mockResolvedValue(10)
+          };
+        }
+        // getResponseStatusCounts
+        return {
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          addSelect: jest.fn().mockReturnThis(),
+          groupBy: jest.fn().mockReturnThis(),
+          getRawMany: jest.fn().mockResolvedValue([])
+        };
       });
 
-      const sessionQueryBuilder = {
-        innerJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue([
-          { value: 'Chrome', count: '5' },
-          { value: null, count: '2' },
-          { value: '', count: '1' }
-        ])
-      };
-      sessionRepository.createQueryBuilder = jest
-        .fn()
-        .mockReturnValue(sessionQueryBuilder);
+      // Mock for browser, OS, and screen resolution counts
+      let callCount = 0;
+      sessionRepository.createQueryBuilder = jest.fn().mockImplementation(() => {
+        callCount += 1;
+        // First call: browser counts
+        if (callCount === 1) {
+          return {
+            innerJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            addSelect: jest.fn().mockReturnThis(),
+            groupBy: jest.fn().mockReturnThis(),
+            getRawMany: jest.fn().mockResolvedValue([
+              { value: 'Chrome', count: '5' },
+              { value: null, count: '2' },
+              { value: '', count: '1' }
+            ])
+          };
+        }
+        // Second call: OS counts
+        if (callCount === 2) {
+          return {
+            innerJoin: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            select: jest.fn().mockReturnThis(),
+            addSelect: jest.fn().mockReturnThis(),
+            groupBy: jest.fn().mockReturnThis(),
+            getRawMany: jest.fn().mockResolvedValue([])
+          };
+        }
+        // Third call: screen resolution counts
+        return {
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          addSelect: jest.fn().mockReturnThis(),
+          groupBy: jest.fn().mockReturnThis(),
+          getRawMany: jest.fn().mockResolvedValue([])
+        };
+      });
 
       const result = await service.getWorkspaceTestResultsOverview(workspaceId);
 

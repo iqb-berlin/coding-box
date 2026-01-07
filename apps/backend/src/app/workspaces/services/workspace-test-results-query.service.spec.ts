@@ -5,6 +5,8 @@ import { WorkspaceTestResultsQueryService } from './workspace-test-results-query
 import { Persons, Unit, ResponseEntity } from '../../common';
 import { Booklet } from '../entities/booklet.entity';
 import { BookletLog } from '../entities/bookletLog.entity';
+import { UnitLog } from '../entities/unitLog.entity';
+import { Session } from '../entities/session.entity';
 import { UnitTagService } from './unit-tag.service';
 
 describe('WorkspaceTestResultsQueryService', () => {
@@ -16,7 +18,7 @@ describe('WorkspaceTestResultsQueryService', () => {
   let bookletLogRepository: jest.Mocked<Repository<BookletLog>>;
   let unitTagService: jest.Mocked<UnitTagService>;
 
-  const createMockQueryBuilder = (mockData: unknown = []) => ({
+  const createMockQueryBuilder = (mockData: unknown[] = []) => ({
     select: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     innerJoinAndSelect: jest.fn().mockReturnThis(),
@@ -65,9 +67,27 @@ describe('WorkspaceTestResultsQueryService', () => {
           }
         },
         {
+          provide: getRepositoryToken(UnitLog),
+          useValue: {
+            createQueryBuilder: jest.fn()
+          }
+        },
+        {
+          provide: getRepositoryToken(Session),
+          useValue: {
+            createQueryBuilder: jest.fn()
+          }
+        },
+        {
           provide: UnitTagService,
           useValue: {
             findAllByUnitIds: jest.fn()
+          }
+        },
+        {
+          provide: JournalService,
+          useValue: {
+            createEntry: jest.fn()
           }
         }
       ]
@@ -262,8 +282,42 @@ describe('WorkspaceTestResultsQueryService', () => {
   describe('findWorkspaceResponses', () => {
     it('should return paginated responses when options provided', async () => {
       const mockResponses = [
-        { id: 1, value: 'test' },
-        { id: 2, value: 'test2' }
+        {
+          id: 1,
+          unitid: 1,
+          variableid: 'var1',
+          status: 1,
+          value: 'test',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        },
+        {
+          id: 2,
+          unitid: 1,
+          variableid: 'var2',
+          status: 1,
+          value: 'test2',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        }
       ];
 
       responseRepository.findAndCount.mockResolvedValue([
@@ -285,7 +339,44 @@ describe('WorkspaceTestResultsQueryService', () => {
     });
 
     it('should return all responses when no options provided', async () => {
-      const mockResponses = [{ id: 1 }, { id: 2 }];
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 1,
+          variableid: 'var1',
+          status: 1,
+          value: 'test',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        },
+        {
+          id: 2,
+          unitid: 1,
+          variableid: 'var2',
+          status: 1,
+          value: 'test2',
+          subform: '',
+          code_v1: null,
+          score_v1: null,
+          status_v1: 1,
+          code_v2: null,
+          score_v2: null,
+          status_v2: null,
+          code_v3: null,
+          score_v3: null,
+          status_v3: null,
+          unit: {} as Unit
+        }
+      ];
 
       responseRepository.find.mockResolvedValue(mockResponses);
 

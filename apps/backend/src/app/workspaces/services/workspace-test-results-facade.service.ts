@@ -120,7 +120,9 @@ export class WorkspaceTestResultsFacade {
     workspace_id: number,
     options?: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
-    return this.queryService.findWorkspaceResponses(workspace_id, options);
+    return options ?
+      this.queryService.findWorkspaceResponses(workspace_id, options) :
+      this.queryService.findWorkspaceResponses(workspace_id);
   }
 
   async findUnitResponse(
