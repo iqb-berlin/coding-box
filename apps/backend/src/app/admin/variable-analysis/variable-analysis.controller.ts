@@ -22,14 +22,14 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { VariableAnalysisService } from '../../coding/services/variable-analysis.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { VariableAnalysisResultDto } from './dto/variable-analysis-result.dto';
 import { VariableAnalysisJobDto } from './dto/variable-analysis-job.dto';
 
 @ApiTags('Variable Analysis')
 @Controller('admin/workspace/:workspace_id/variable-analysis')
 export class VariableAnalysisController {
-  constructor(private readonly variableAnalysisService: VariableAnalysisService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Get()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -80,7 +80,7 @@ export class VariableAnalysisController {
   })
   async getVariableFrequencies(@WorkspaceId() workspaceId: number, @Query('unitId') unitId?: number, @Query('variableId') variableId?: string): Promise<VariableAnalysisResultDto> {
     try {
-      return await this.variableAnalysisService.getVariableFrequencies(
+      return await this.workspacesAdminFacade.getVariableFrequencies(
         workspaceId,
         unitId,
         variableId
@@ -134,7 +134,7 @@ export class VariableAnalysisController {
       @Query('variableId') variableId?: string
   ): Promise<VariableAnalysisJobDto> {
     try {
-      const job = await this.variableAnalysisService.createAnalysisJob(
+      const job = await this.workspacesAdminFacade.createVariableAnalysisJob(
         workspaceId,
         unitId,
         variableId
@@ -175,7 +175,7 @@ export class VariableAnalysisController {
     @WorkspaceId() workspaceId: number
   ): Promise<VariableAnalysisJobDto[]> {
     try {
-      const jobs = await this.variableAnalysisService.getAnalysisJobs(workspaceId);
+      const jobs = await this.workspacesAdminFacade.getVariableAnalysisJobs(workspaceId);
       return jobs.map(job => VariableAnalysisJobDto.fromEntity(job));
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -219,7 +219,7 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: number
   ): Promise<VariableAnalysisJobDto> {
     try {
-      const job = await this.variableAnalysisService.getAnalysisJob(jobId, workspaceId);
+      const job = await this.workspacesAdminFacade.getVariableAnalysisJob(jobId, workspaceId);
       return VariableAnalysisJobDto.fromEntity(job);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -266,7 +266,7 @@ export class VariableAnalysisController {
       @Param('job_id') jobId: number
   ): Promise<VariableAnalysisResultDto> {
     try {
-      return await this.variableAnalysisService.getAnalysisResults(jobId, workspaceId);
+      return await this.workspacesAdminFacade.getVariableAnalysisResults(jobId, workspaceId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

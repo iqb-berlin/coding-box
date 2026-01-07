@@ -7,7 +7,7 @@ import * as crypto from 'crypto';
 import { statusStringToNumber } from '../../workspaces/utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
-import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
+import { WorkspaceFilesFacade } from '../../workspaces/services/workspace-files-facade.service';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidationResultDto } from '../../../../../../api-dto/coding/validation-result.dto';
@@ -38,7 +38,7 @@ export class CodingValidationService {
 
   constructor(
     private readonly workspacesFacadeService: WorkspacesFacadeService,
-    private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly workspaceFilesFacade: WorkspaceFilesFacade,
     private readonly cacheService: CacheService,
     private readonly responseDistributionService: ResponseDistributionService,
     @InjectRepository(CodingJobUnit)
@@ -510,7 +510,7 @@ export class CodingValidationService {
     unitName?: string
   ): Promise<{ unitName: string; variableId: string; responseCount: number }[]> {
     const rawResults = await this.workspacesFacadeService.findCodingIncompleteVariablesWithCounts(workspaceId, unitName);
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const unitVariableMap = await this.workspaceFilesFacade.getUnitVariableMap(workspaceId);
 
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables, name) => {

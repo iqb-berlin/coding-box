@@ -1,16 +1,16 @@
 import {
   Controller, Get, Post, Body, Param, Delete, Put
 } from '@nestjs/common';
-import { MissingsProfilesService } from '../../coding/services/missings-profiles.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 
 @Controller('admin/workspace/:workspaceId/missings-profiles')
 export class MissingsProfilesController {
-  constructor(private readonly missingsProfilesService: MissingsProfilesService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Get()
   async getMissingsProfiles(@Param('workspaceId') workspaceId: number) {
-    return this.missingsProfilesService.getMissingsProfiles(workspaceId);
+    return this.workspacesAdminFacade.getMissingsProfiles(workspaceId);
   }
 
   @Get(':id')
@@ -20,9 +20,9 @@ export class MissingsProfilesController {
   ) {
     const parsedId = parseInt(id, 10);
     if (!Number.isNaN(parsedId)) {
-      return this.missingsProfilesService.getMissingsProfileDetails(workspaceId, parsedId);
+      return this.workspacesAdminFacade.getMissingsProfileDetails(workspaceId, parsedId);
     }
-    return this.missingsProfilesService.getMissingsProfileByLabel(id);
+    return this.workspacesAdminFacade.getMissingsProfileByLabel(id);
   }
 
   @Post()
@@ -30,7 +30,7 @@ export class MissingsProfilesController {
   @Param('workspaceId') workspaceId: number,
     @Body() profile: MissingsProfilesDto
   ) {
-    return this.missingsProfilesService.createMissingsProfile(workspaceId, profile);
+    return this.workspacesAdminFacade.createMissingsProfile(workspaceId, profile);
   }
 
   @Put(':label')
@@ -39,7 +39,7 @@ export class MissingsProfilesController {
     @Param('label') label: string,
     @Body() profile: MissingsProfilesDto
   ) {
-    return this.missingsProfilesService.updateMissingsProfile(workspaceId, label, profile);
+    return this.workspacesAdminFacade.updateMissingsProfile(workspaceId, label, profile);
   }
 
   @Delete(':label')
@@ -47,6 +47,6 @@ export class MissingsProfilesController {
   @Param('workspaceId') workspaceId: number,
     @Param('label') label: string
   ) {
-    return this.missingsProfilesService.deleteMissingsProfile(workspaceId, label);
+    return this.workspacesAdminFacade.deleteMissingsProfile(workspaceId, label);
   }
 }

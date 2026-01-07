@@ -9,10 +9,8 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
-import {
-  TestcenterService,
-  Result
-} from '../../workspaces/services/testcenter.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
+import { Result } from '../../workspaces/services/testcenter.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
@@ -24,7 +22,7 @@ import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-b
 @Controller('admin/workspace')
 export class WorkspaceTestCenterController {
   constructor(
-    private testCenterService: TestcenterService,
+    private workspacesAdminFacade: WorkspacesAdminFacade,
     private cacheService: CacheService,
     private workspaceBullQueueService: WorkspaceBullQueueService
   ) {}
@@ -157,21 +155,7 @@ export class WorkspaceTestCenterController {
       .map(s => s.trim())
       .filter(Boolean);
 
-    const result = await (
-      this.testCenterService as unknown as {
-        importWorkspaceFiles: (
-          workspaceId: string,
-          tcWorkspace: string,
-          serverId: string,
-          tcUrl: string,
-          authToken: string,
-          opts: ImportOptions,
-          groups: string,
-          overwriteExistingLogs: boolean,
-          overwriteFileIds?: string[]
-        ) => Promise<Result>;
-      }
-    ).importWorkspaceFiles(
+    const result = await this.workspacesAdminFacade.importWorkspaceFiles(
       workspace_id,
       tc_workspace,
       server,
@@ -232,7 +216,7 @@ export class WorkspaceTestCenterController {
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string
   ): Promise<TestGroupsInfoDto[]> {
-    return this.testCenterService.getTestgroups(
+    return this.workspacesAdminFacade.getTestgroups(
       workspace_id,
       tc_workspace,
       server,

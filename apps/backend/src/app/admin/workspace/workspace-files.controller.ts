@@ -36,15 +36,14 @@ import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
-import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
+import { WorkspaceFilesFacade } from '../../workspaces/services/workspace-files-facade.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../api-dto/files/duplicate-response.dto';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { PersonService } from '../../workspaces/services/person.service';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
-import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
-import { WorkspaceCodingService } from '../../coding/services/workspace-coding.service';
+import { WorkspaceCodingFacade } from '../../coding/services/workspace-coding-facade.service';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-bull-queue.service';
 
@@ -52,10 +51,9 @@ import { WorkspaceBullQueueService } from '../../workspaces/services/workspace-b
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   constructor(
-    private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly personService: PersonService,
-    private readonly codingStatisticsService: CodingStatisticsService,
-    private readonly workspaceCodingService: WorkspaceCodingService,
+    private readonly workspaceFilesFacade: WorkspaceFilesFacade,
+    private readonly workspacesAdminFacade: WorkspacesAdminFacade,
+    private readonly workspaceCodingFacade: WorkspaceCodingFacade,
     private readonly cacheService: CacheService,
     private readonly workspaceBullQueueService: WorkspaceBullQueueService
   ) {}
@@ -169,7 +167,7 @@ export class WorkspaceFilesController {
     }
     try {
       const [files, total, fileTypes] =
-        await this.workspaceFilesService.findFiles(workspace_id, {
+        await this.workspaceFilesFacade.findFiles(workspace_id, {
           page,
           limit,
           fileType,
@@ -198,7 +196,7 @@ export class WorkspaceFilesController {
   @Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number
   ) {
-    return this.workspaceFilesService.deleteTestFiles(
+    return this.workspaceFilesFacade.deleteTestFiles(
       workspace_id,
       query.fileIds.split(';')
     );
@@ -254,14 +252,14 @@ export class WorkspaceFilesController {
       );
     }
 
-    const success = await this.personService.markPersonsAsNotConsidered(
+    const success = await this.workspacesAdminFacade.markPersonsAsNotConsidered(
       workspaceId,
       body.logins
     );
 
     if (success) {
-      await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+      await this.workspaceCodingFacade.invalidateStatisticsCache(workspaceId);
+      await this.workspaceCodingFacade.invalidateIncompleteVariablesCache(
         workspaceId
       );
     }
@@ -316,14 +314,14 @@ export class WorkspaceFilesController {
       );
     }
 
-    const success = await this.personService.markPersonsAsConsidered(
+    const success = await this.workspacesAdminFacade.markPersonsAsConsidered(
       workspaceId,
       body.logins
     );
 
     if (success) {
-      await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+      await this.workspaceCodingFacade.invalidateStatisticsCache(workspaceId);
+      await this.workspaceCodingFacade.invalidateIncompleteVariablesCache(
         workspaceId
       );
     }
@@ -359,7 +357,7 @@ export class WorkspaceFilesController {
   async validateTestFiles(
     @Param('workspace_id') workspace_id: number
   ): Promise<FileValidationResultDto> {
-    return this.workspaceFilesService.validateTestFiles(workspace_id);
+    return this.workspaceFilesFacade.validateTestFiles(workspace_id);
   }
 
   @Post(':workspace_id/upload')
@@ -419,7 +417,7 @@ export class WorkspaceFilesController {
         .split(';')
         .map(s => s.trim())
         .filter(Boolean);
-      return await this.workspaceFilesService.uploadTestFiles(
+      return await this.workspaceFilesFacade.uploadTestFiles(
         workspaceId,
         files,
         overwrite,
@@ -475,7 +473,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
     try {
-      return await this.workspaceFilesService.downloadTestFile(
+      return await this.workspaceFilesFacade.downloadTestFile(
         workspaceId,
         fileId
       );
@@ -538,7 +536,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      const content = await this.workspaceFilesService.getUnitContent(
+      const content = await this.workspaceFilesFacade.getUnitContent(
         workspace_id,
         unit_id
       );
@@ -605,7 +603,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      const content = await this.workspaceFilesService.getTestTakerContent(
+      const content = await this.workspaceFilesFacade.getTestTakerContent(
         workspace_id,
         testtaker_id
       );
@@ -669,7 +667,7 @@ export class WorkspaceFilesController {
     }
 
     try {
-      return await this.workspaceFilesService.getCodingSchemeByRef(
+      return await this.workspaceFilesFacade.getCodingSchemeByRef(
         workspace_id,
         coding_scheme_ref
       );
@@ -702,7 +700,7 @@ export class WorkspaceFilesController {
   async validateTestTakers(
     @Param('workspace_id') workspace_id: number
   ): Promise<TestTakersValidationDto> {
-    return this.workspaceFilesService.validateTestTakers(workspace_id);
+    return this.workspaceFilesFacade.validateTestTakers(workspace_id);
   }
 
   @Get(':workspace_id/files/validate-group-responses')
@@ -765,7 +763,7 @@ export class WorkspaceFilesController {
         page: number;
         limit: number;
       }> {
-    return this.workspaceFilesService.validateGroupResponses(
+    return this.workspaceFilesFacade.validateGroupResponses(
       workspace_id,
       page,
       limit
@@ -822,7 +820,7 @@ export class WorkspaceFilesController {
         page: number;
         limit: number;
       }> {
-    return this.workspaceFilesService.validateResponseStatus(
+    return this.workspaceFilesFacade.validateResponseStatus(
       workspace_id,
       page,
       limit
@@ -894,7 +892,7 @@ export class WorkspaceFilesController {
                            @Query('page') page: number = 1,
                            @Query('limit') limit: number = 10
   ): Promise<DuplicateResponsesResultDto> {
-    return this.workspaceFilesService.validateDuplicateResponses(
+    return this.workspaceFilesFacade.validateDuplicateResponses(
       workspace_id,
       page,
       limit
@@ -950,7 +948,7 @@ export class WorkspaceFilesController {
         page: number;
         limit: number;
       }> {
-    return this.workspaceFilesService.validateVariables(
+    return this.workspaceFilesFacade.validateVariables(
       workspace_id,
       page,
       limit
@@ -1007,7 +1005,7 @@ export class WorkspaceFilesController {
         page: number;
         limit: number;
       }> {
-    return this.workspaceFilesService.validateVariableTypes(
+    return this.workspaceFilesFacade.validateVariableTypes(
       workspace_id,
       page,
       limit
@@ -1041,7 +1039,7 @@ export class WorkspaceFilesController {
       @Query('responseIds') responseIds: string
   ): Promise<number> {
     const ids = responseIds.split(',').map(id => parseInt(id, 10));
-    const count = await this.workspaceFilesService.deleteInvalidResponses(
+    const count = await this.workspaceFilesFacade.deleteInvalidResponses(
       workspace_id,
       ids
     );
@@ -1079,7 +1077,7 @@ export class WorkspaceFilesController {
       @Query('validationType')
                            validationType: 'variables' | 'variableTypes' | 'responseStatus'
   ): Promise<number> {
-    const count = await this.workspaceFilesService.deleteAllInvalidResponses(
+    const count = await this.workspaceFilesFacade.deleteAllInvalidResponses(
       workspace_id,
       validationType
     );
@@ -1113,7 +1111,7 @@ export class WorkspaceFilesController {
   async createDummyTestTakerFile(
     @Param('workspace_id') workspace_id: number
   ): Promise<boolean> {
-    return this.workspaceFilesService.createDummyTestTakerFile(workspace_id);
+    return this.workspaceFilesFacade.createDummyTestTakerFile(workspace_id);
   }
 
   @Get(':workspace_id/files/units-with-file-ids')
@@ -1148,7 +1146,7 @@ export class WorkspaceFilesController {
   async getUnitsWithFileIds(
     @Param('workspace_id') workspace_id: number
   ): Promise<{ unitId: string; fileName: string }[]> {
-    return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
+    return this.workspaceFilesFacade.getUnitsWithFileIds(workspace_id);
   }
 
   @Get(':workspace_id/files/unit-variables')
@@ -1210,7 +1208,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    return this.workspaceFilesService.getUnitVariableDetails(workspace_id);
+    return this.workspaceFilesFacade.getUnitVariableDetails(workspace_id);
   }
 
   @Get(':workspace_id/files/variable-info/:scheme_file_id')
@@ -1257,7 +1255,7 @@ export class WorkspaceFilesController {
     @Param('workspace_id') workspace_id: number,
       @Param('scheme_file_id') scheme_file_id: string
   ): Promise<VariableInfo[]> {
-    return this.workspaceFilesService.getVariableInfoForScheme(
+    return this.workspaceFilesFacade.getVariableInfoForScheme(
       workspace_id,
       scheme_file_id
     );
@@ -1360,7 +1358,7 @@ export class WorkspaceFilesController {
       );
 
       const zipBuffer =
-        await this.workspaceFilesService.downloadWorkspaceFilesAsZip(
+        await this.workspaceFilesFacade.downloadWorkspaceFilesAsZip(
           workspaceIdNum,
           requestedTypes.length > 0 ? requestedTypes : undefined
         );

@@ -17,7 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { Express } from 'express';
 import 'multer';
-import { ResourcePackageService } from '../../workspaces/services/resource-package.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { ApiFile } from './api-file.decorator';
@@ -29,7 +29,7 @@ import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/r
 @Controller('admin/workspace/:workspace_id/resource-packages')
 export class ResourcePackageController {
   constructor(
-    private resourcePackageService: ResourcePackageService
+    private workspacesAdminFacade: WorkspacesAdminFacade
   ) {}
 
   @Get()
@@ -57,7 +57,7 @@ export class ResourcePackageController {
   async findResourcePackages(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<ResourcePackageDto[]> {
-    const resourcePackages = await this.resourcePackageService.findResourcePackages(workspaceId);
+    const resourcePackages = await this.workspacesAdminFacade.findResourcePackages(workspaceId);
 
     if (!resourcePackages || resourcePackages.length === 0) {
       throw new NotFoundException(`No resource packages found for workspace ${workspaceId}.`);
@@ -88,7 +88,7 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('id', ParseIntPipe) id: number
   ): Promise<void> {
-    return this.resourcePackageService.removeResourcePackage(workspaceId, id);
+    return this.workspacesAdminFacade.removeResourcePackage(workspaceId, id);
   }
 
   @Delete()
@@ -112,7 +112,7 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Query('id', new ParseArrayPipe({ items: Number, separator: ',' })) id: number[]
   ) : Promise<void> {
-    return this.resourcePackageService.removeResourcePackages(workspaceId, id);
+    return this.workspacesAdminFacade.removeResourcePackages(workspaceId, id);
   }
 
   @Get(':name')
@@ -139,7 +139,7 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Param('name') name: string
   ): Promise<StreamableFile> {
-    const file = await this.resourcePackageService.getZippedResourcePackage(workspaceId, name);
+    const file = await this.workspacesAdminFacade.getZippedResourcePackage(workspaceId, name);
     return new StreamableFile(file);
   }
 
@@ -164,6 +164,6 @@ export class ResourcePackageController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
   ): Promise<number> {
-    return this.resourcePackageService.create(workspaceId, zippedResourcePackage);
+    return this.workspacesAdminFacade.createResourcePackage(workspaceId, zippedResourcePackage);
   }
 }

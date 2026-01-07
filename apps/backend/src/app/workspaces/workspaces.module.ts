@@ -32,6 +32,8 @@ import { Setting } from './entities/setting.entity';
 import { ReplayStatistics } from './entities/replay-statistics.entity';
 import Logs from './entities/logs.entity';
 import { BookletInfo } from './entities/bookletInfo.entity';
+import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
+import { MissingsProfile } from './entities/missings-profile.entity';
 
 // Services
 import { WorkspaceCoreService } from './services/workspace-core.service';
@@ -56,9 +58,12 @@ import { ValidationTaskService } from './services/validation-task.service';
 import { ReplayStatisticsService } from './services/replay-statistics.service';
 import { BookletInfoService } from './services/booklet-info.service';
 import { UnitInfoService } from './services/unit-info.service';
-import { ExportValidationResultsService } from './services/export-validation-results.service';
+import { VariableAnalysisService } from './services/variable-analysis.service';
+import { MissingsProfilesService } from './services/missings-profiles.service';
+
 import { WorkspaceEventsService } from './services/workspace-events.service';
 import { WorkspacesFacadeService } from './services/workspaces-facade.service';
+import { WorkspacesAdminFacade } from './services/workspaces-admin-facade.service';
 
 // Refactored Test Results Services
 import { WorkspaceTestResultsOverviewService } from './services/workspace-test-results-overview.service';
@@ -108,6 +113,8 @@ import { OctetStreamFileHandler } from './services/handlers/octet-stream-file.ha
       ReplayStatistics,
       Logs,
       BookletInfo,
+      VariableAnalysisJob,
+      MissingsProfile,
       Job
     ])
   ],
@@ -134,7 +141,9 @@ import { OctetStreamFileHandler } from './services/handlers/octet-stream-file.ha
     ReplayStatisticsService,
     BookletInfoService,
     UnitInfoService,
-    ExportValidationResultsService,
+    VariableAnalysisService,
+    MissingsProfilesService,
+
     WorkspaceEventsService,
     WorkspacesFacadeService,
     FlatResponseFilterOptionsProcessor,
@@ -154,32 +163,22 @@ import { OctetStreamFileHandler } from './services/handlers/octet-stream-file.ha
     WorkspaceFilesFacade,
     XmlFileHandler,
     HtmlFileHandler,
-    OctetStreamFileHandler
+    OctetStreamFileHandler,
+    WorkspacesAdminFacade
   ],
   exports: [
-    WorkspaceCoreService,
-    WorkspaceFilesService,
-    WorkspaceTestResultsService,
-    WorkspaceUsersService,
-    WorkspacePlayerService,
-    TestcenterService,
-    UploadResultsService,
-    PersonService,
-    UnitTagService,
-    UnitNoteService,
-    ResourcePackageService,
-    JournalService,
-    JobService,
-    ValidationTaskService,
-    ReplayStatisticsService,
-    BookletInfoService,
-    UnitInfoService,
-    ExportValidationResultsService,
-    WorkspaceEventsService,
     WorkspacesFacadeService,
     WorkspaceBullQueueService,
     WorkspaceFilesFacade,
-    WorkspaceTestResultsFacade
+    WorkspaceTestResultsFacade,
+    WorkspacesAdminFacade,
+    WorkspaceCoreService,
+    VariableAnalysisService,
+    MissingsProfilesService,
+    WorkspaceEventsService,
+    WorkspaceTestResultsService,
+    PersonService,
+    JournalService
   ]
 })
 export class WorkspacesModule {}

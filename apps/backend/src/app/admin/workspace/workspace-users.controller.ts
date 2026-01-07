@@ -14,14 +14,14 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../workspaces/entities/workspace_user.entity';
-import { WorkspaceUsersService } from '../../workspaces/services/workspace-users.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { WorkspaceId } from './workspace.decorator';
 
 @ApiTags('Admin Workspace Users')
 @Controller('admin/workspace')
 export class WorkspaceUsersController {
   constructor(
-    private workspaceUsersService: WorkspaceUsersService,
+    private workspacesAdminFacade: WorkspacesAdminFacade,
     private authService: AuthService
   ) {}
 
@@ -91,7 +91,7 @@ export class WorkspaceUsersController {
                            @Query('limit') limit: number = 20
   ): Promise<{ data: WorkspaceUser[]; total: number; page: number; limit: number }> {
     try {
-      const [users, total] = await this.workspaceUsersService.findUsers(workspaceId, { page, limit });
+      const [users, total] = await this.workspacesAdminFacade.findUsers(workspaceId, { page, limit });
       return {
         data: users,
         total,
@@ -131,7 +131,7 @@ export class WorkspaceUsersController {
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
     @Param('workspaceId') workspaceId: number) {
-    return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
+    return this.workspacesAdminFacade.setWorkspaceUsers(workspaceId, userIds);
   }
 
   @Get(':workspace_id/coders')
@@ -161,7 +161,7 @@ export class WorkspaceUsersController {
     @Param('workspace_id') workspaceId: number
   ): Promise<{ data: WorkspaceUser[]; total: number }> {
     try {
-      const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
+      const [coders, total] = await this.workspacesAdminFacade.findCoders(workspaceId);
       return {
         data: coders,
         total
@@ -211,7 +211,7 @@ export class WorkspaceUsersController {
     try {
       // In a real implementation, this would filter coders by the specific job ID
       // For now, we'll return all coders for the workspace
-      const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
+      const [coders, total] = await this.workspacesAdminFacade.findCoders(workspaceId);
 
       logger.log(`Retrieved ${total} coders for workspace ${workspaceId} and coding job ${jobId}`);
 

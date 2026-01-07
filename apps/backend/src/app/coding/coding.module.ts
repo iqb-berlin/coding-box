@@ -12,22 +12,19 @@ import { UsersModule } from '../users/users.module';
 import { CodingJob } from './entities/coding-job.entity';
 import { VocsService } from './services/vocs.service';
 import { VoudService } from './services/voud.service';
-import { FileUpload } from '../common';
+import { FileUpload, ResponseEntity } from '../common';
 import { CodingJobCoder } from './entities/coding-job-coder.entity';
 import { CodingJobVariable } from './entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from './entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from './entities/coding-job-unit.entity';
 import { JobDefinition } from './entities/job-definition.entity';
-import { MissingsProfile } from './entities/missings-profile.entity';
 import { CoderTraining } from './entities/coder-training.entity';
 import { VariableBundle } from './entities/variable-bundle.entity';
-import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
 import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 // Coding Services
 import { CodingJobService } from './services/coding-job.service';
 import { WorkspaceCodingService } from './services/workspace-coding.service';
 import { CodingStatisticsService } from './services/coding-statistics.service';
-import { MissingsProfilesService } from './services/missings-profiles.service';
 import { JobDefinitionService } from './services/job-definition.service';
 import { CoderTrainingService } from './services/coder-training.service';
 import { CodingListService } from './services/coding-list.service';
@@ -36,7 +33,6 @@ import { ExternalCodingImportService } from './services/external-coding-import.s
 import { CodingResultsService } from './services/coding-results.service';
 import { CodingExportService } from './services/coding-export.service';
 import { VariableBundleService } from './services/variable-bundle.service';
-import { VariableAnalysisService } from './services/variable-analysis.service';
 import { CodingFileCache } from './services/coding-file-cache.service';
 import { CodingJobManager } from './services/coding-job-manager.service';
 import { CodingProcessor } from './services/coding-processor.service';
@@ -65,6 +61,7 @@ import { ExportJobProcessor } from './processors/export-job.processor';
 
 import { TestPersonCodingService } from './services/test-person-coding.service';
 import { WorkspaceCodingFacade } from './services/workspace-coding-facade.service';
+import { ExportValidationResultsService } from './services/export-validation-results.service';
 
 // Export Services
 import { ExportUrlService } from './services/export-url.service';
@@ -113,13 +110,12 @@ import { CodingExportFacade } from './services/coding-export-facade.service';
       CodingJobVariableBundle,
       CodingJobUnit,
       JobDefinition,
-      MissingsProfile,
       CoderTraining,
       VariableBundle,
-      VariableAnalysisJob,
       TestPersonCodingJob,
-      FileUpload
-      // Shared entities used by coding services are now accessed via WorkspacesFacadeService
+      FileUpload,
+      // Shared entities used by coding services
+      ResponseEntity
     ])
   ],
   controllers: [
@@ -150,11 +146,9 @@ import { CodingExportFacade } from './services/coding-export-facade.service';
     CodingJobFacade,
 
     // Supporting services
-    MissingsProfilesService,
     JobDefinitionService,
     CoderTrainingService,
     VariableAnalysisReplayService,
-    VariableAnalysisService,
     VariableBundleService,
     ExternalCodingImportService,
     CodingValidationService,
@@ -171,6 +165,7 @@ import { CodingExportFacade } from './services/coding-export-facade.service';
     DetailedExportService,
     CodingTimesExportService,
     CodingExportFacade,
+    ExportValidationResultsService,
 
     // Processors
     CodingStatisticsProcessor,
@@ -182,16 +177,11 @@ import { CodingExportFacade } from './services/coding-export-facade.service';
     CodingStatisticsCacheSchedulerService
   ],
   exports: [
-    // Only export services that are distinctively needed by other modules
-    // CacheModule needs these for cache invalidation
-    CodingStatisticsService,
-    WorkspaceCodingService,
-
-    // AdminModule/WorkspaceModule may need these
+    // AdminModule/WorkspaceModule/WsgAdminModule need these
+    WorkspaceCodingFacade,
     CodingJobService,
-    VariableAnalysisService,
-    MissingsProfilesService,
-    BullJobManagementService
+    BullJobManagementService,
+    WorkspaceCodingService
   ]
 })
 export class CodingModule {}

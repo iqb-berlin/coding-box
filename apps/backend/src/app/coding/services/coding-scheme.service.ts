@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
-import { MissingsProfilesService } from './missings-profiles.service';
+import { MissingsProfilesService } from '../../workspaces/services/missings-profiles.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import {
   CodeBookContentSetting,

@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
-import { MissingsProfile } from './missings-profile.entity';
+import { MissingsProfile } from '../../workspaces/entities/missings-profile.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobUnit } from './coding-job-unit.entity';
 // eslint-disable-next-line import/no-cycle

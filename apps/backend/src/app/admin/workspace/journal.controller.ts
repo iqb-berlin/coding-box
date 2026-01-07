@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { JournalService } from '../../workspaces/services/journal.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { JournalEntry } from '../../workspaces/entities/journal-entry.entity';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { PaginatedJournalEntriesDto } from './dto/paginated-journal-entries.dto';
@@ -31,7 +31,7 @@ import { PaginatedJournalEntriesDto } from './dto/paginated-journal-entries.dto'
 @ApiTags('Admin Workspace Journal')
 @Controller('admin/workspace')
 export class JournalController {
-  constructor(private readonly journalService: JournalService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Post(':workspace_id/journal')
   @ApiOperation({
@@ -59,7 +59,7 @@ export class JournalController {
       throw new Error(`Invalid entity_id: "${createJournalEntryDto.entity_id}" is not a valid number`);
     }
 
-    return this.journalService.createEntry(
+    return this.workspacesAdminFacade.createJournalEntry(
       userId,
       workspaceId,
       createJournalEntryDto.action_type,
@@ -178,7 +178,7 @@ export class JournalController {
       filters.toDate = new Date(toDate);
     }
 
-    return this.journalService.search(filters, { page, limit });
+    return this.workspacesAdminFacade.searchJournalEntries(filters, { page, limit });
   }
 
   @Get(':workspace_id/journal/entity/:entityType/:entityId')
@@ -216,7 +216,7 @@ export class JournalController {
       @Query('page') page?: number,
       @Query('limit') limit?: number
   ): Promise<{ data: JournalEntry[]; total: number }> {
-    return this.journalService.search(
+    return this.workspacesAdminFacade.searchJournalEntries(
       {
         workspaceId,
         entityType,
@@ -259,7 +259,7 @@ export class JournalController {
       @Query('page') page?: number,
       @Query('limit') limit?: number
   ): Promise<{ data: JournalEntry[]; total: number }> {
-    return this.journalService.search(
+    return this.workspacesAdminFacade.searchJournalEntries(
       {
         workspaceId,
         userId
@@ -301,7 +301,7 @@ export class JournalController {
       @Query('page') page?: number,
       @Query('limit') limit?: number
   ): Promise<{ data: JournalEntry[]; total: number }> {
-    return this.journalService.search(
+    return this.workspacesAdminFacade.searchJournalEntries(
       {
         workspaceId,
         actionType
@@ -337,7 +337,7 @@ export class JournalController {
     @WorkspaceId() workspaceId: number,
       @Res() response: Response
   ): Promise<void> {
-    const csvData = await this.journalService.generateCsv(workspaceId);
+    const csvData = await this.workspacesAdminFacade.generateJournalCsv(workspaceId);
     response.send(csvData);
   }
 }

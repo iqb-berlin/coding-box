@@ -44,7 +44,7 @@ import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/coding/export-validation-results-request.dto';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
-import { MissingsProfilesService } from '../services/missings-profiles.service';
+import { MissingsProfilesService } from '../../workspaces/services/missings-profiles.service';
 import { JobDefinitionService } from '../services/job-definition.service';
 import { JournalService } from '../../workspaces/services/journal.service';
 import { CodingJob } from '../entities/coding-job.entity';

@@ -11,14 +11,14 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { BookletInfoService } from '../../workspaces/services/booklet-info.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-info.dto';
 
 @ApiTags('Booklet Info')
 @Controller('admin/workspace/:workspaceId/booklet')
 @UseGuards(JwtAuthGuard)
 export class BookletInfoController {
-  constructor(private readonly bookletInfoService: BookletInfoService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Get(':bookletId/info')
   @ApiOperation({ summary: 'Get booklet info from XML' })
@@ -33,6 +33,6 @@ export class BookletInfoController {
     @Param('workspaceId') workspaceId: number,
       @Param('bookletId') bookletId: string
   ): Promise<BookletInfoDto> {
-    return this.bookletInfoService.getBookletInfo(workspaceId, bookletId);
+    return this.workspacesAdminFacade.getBookletInfo(workspaceId, bookletId);
   }
 }

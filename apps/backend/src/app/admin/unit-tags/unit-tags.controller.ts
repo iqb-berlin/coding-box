@@ -23,7 +23,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { UnitTagService } from '../../workspaces/services/unit-tag.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { UnitTagDto } from '../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { CreateUnitTagDto } from '../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 import { UpdateUnitTagDto } from '../../../../../../api-dto/unit-tags/update-unit-tag.dto';
@@ -31,7 +31,7 @@ import { UpdateUnitTagDto } from '../../../../../../api-dto/unit-tags/update-uni
 @ApiTags('Unit Tags')
 @Controller('admin/workspace/:workspace_id/unit-tags')
 export class UnitTagsController {
-  constructor(private readonly unitTagService: UnitTagService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -61,7 +61,7 @@ export class UnitTagsController {
       @Body() createUnitTagDto: CreateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
-      return await this.unitTagService.create(createUnitTagDto);
+      return await this.workspacesAdminFacade.createUnitTag(createUnitTagDto);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -101,7 +101,7 @@ export class UnitTagsController {
       @Param('unitId') unitId: number
   ): Promise<UnitTagDto[]> {
     try {
-      return await this.unitTagService.findAllByUnitId(unitId);
+      return await this.workspacesAdminFacade.findAllUnitTags(unitId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -141,7 +141,7 @@ export class UnitTagsController {
       @Param('id') id: number
   ): Promise<UnitTagDto> {
     try {
-      return await this.unitTagService.findOne(id);
+      return await this.workspacesAdminFacade.findOneUnitTag(id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -185,7 +185,7 @@ export class UnitTagsController {
       @Body() updateUnitTagDto: UpdateUnitTagDto
   ): Promise<UnitTagDto> {
     try {
-      return await this.unitTagService.update(id, updateUnitTagDto);
+      return await this.workspacesAdminFacade.updateUnitTag(id, updateUnitTagDto);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -225,7 +225,7 @@ export class UnitTagsController {
       @Param('id') id: number
   ): Promise<boolean> {
     try {
-      return await this.unitTagService.remove(id);
+      return await this.workspacesAdminFacade.removeUnitTag(id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

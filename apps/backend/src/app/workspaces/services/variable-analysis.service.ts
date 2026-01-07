@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import { VariableAnalysisResultDto } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableAnalysisJob } from '../entities/variable-analysis-job.entity';
-import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
+import { WorkspacesFacadeService } from './workspaces-facade.service';
 
 @Injectable()
 export class VariableAnalysisService {

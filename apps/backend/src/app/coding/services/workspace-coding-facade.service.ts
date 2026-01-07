@@ -5,6 +5,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { CodingSchemeService } from './coding-scheme.service';
 import { CodingReplayService } from './coding-replay.service';
 import { DoubleCodingService } from './double-coding.service';
+import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingStatisticsWithJob, ResponseEntity, CodingStatistics } from '../../common';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
@@ -19,7 +20,8 @@ export class WorkspaceCodingFacade {
     private readonly schemeService: CodingSchemeService,
     private readonly replayService: CodingReplayService,
     private readonly doubleCodingService: DoubleCodingService,
-    private readonly resultsService: CodingResultsService
+    private readonly resultsService: CodingResultsService,
+    private readonly statisticsService: CodingStatisticsService
   ) {}
 
   async codeTestPersons(
@@ -145,5 +147,9 @@ export class WorkspaceCodingFacade {
 
   async getWorkspaceCohensKappaSummary(workspaceId: number) {
     return this.doubleCodingService.getWorkspaceCohensKappaSummary(workspaceId);
+  }
+
+  async invalidateStatisticsCache(workspaceId: number, version?: 'v1' | 'v2' | 'v3'): Promise<void> {
+    return this.statisticsService.invalidateCache(workspaceId, version);
   }
 }

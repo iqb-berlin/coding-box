@@ -19,7 +19,7 @@ import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../workspace/access-level.guard';
-import { ReplayStatisticsService } from '../../workspaces/services/replay-statistics.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { ReplayStatistics } from '../../workspaces/entities/replay-statistics.entity';
 
 /**
@@ -29,7 +29,7 @@ import { ReplayStatistics } from '../../workspaces/entities/replay-statistics.en
 @Controller('admin/workspace/:workspace_id/replay-statistics')
 export class ReplayStatisticsController {
   constructor(
-    private readonly replayStatisticsService: ReplayStatisticsService
+    private readonly workspacesAdminFacade: WorkspacesAdminFacade
   ) {}
 
   /**
@@ -56,7 +56,7 @@ export class ReplayStatisticsController {
                              errorMessage?: string;
                            }
   ): Promise<ReplayStatistics> {
-    return this.replayStatisticsService.storeReplayStatistics({
+    return this.workspacesAdminFacade.storeReplayStatistics({
       workspaceId: Number(workspaceId),
       ...data
     });
@@ -77,7 +77,7 @@ export class ReplayStatisticsController {
   async getReplayStatistics(
     @Param('workspace_id') workspaceId: string
   ): Promise<ReplayStatistics[]> {
-    return this.replayStatisticsService.getReplayStatistics(
+    return this.workspacesAdminFacade.getReplayStatistics(
       Number(workspaceId)
     );
   }
@@ -122,7 +122,7 @@ export class ReplayStatisticsController {
       @Query('lastDays') lastDays?: string,
       @Query('limit') limit?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getReplayFrequencyByUnit(
+    return this.workspacesAdminFacade.getReplayFrequencyByUnit(
       Number(workspaceId),
       {
         from,
@@ -179,7 +179,7 @@ export class ReplayStatisticsController {
         distribution: Record<string, number>;
         unitAverages?: Record<string, number>;
       }> {
-    return this.replayStatisticsService.getReplayDurationStatistics(
+    return this.workspacesAdminFacade.getReplayDurationStatistics(
       Number(workspaceId),
       unitId,
       {
@@ -224,7 +224,7 @@ export class ReplayStatisticsController {
       @Query('to') to?: string,
       @Query('lastDays') lastDays?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getReplayDistributionByDay(
+    return this.workspacesAdminFacade.getReplayDistributionByDay(
       Number(workspaceId),
       {
         from,
@@ -268,7 +268,7 @@ export class ReplayStatisticsController {
       @Query('to') to?: string,
       @Query('lastDays') lastDays?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getReplayDistributionByHour(
+    return this.workspacesAdminFacade.getReplayDistributionByHour(
       Number(workspaceId),
       {
         from,
@@ -324,7 +324,7 @@ export class ReplayStatisticsController {
         failedReplays: number;
         commonErrors: Array<{ message: string; count: number }>;
       }> {
-    return this.replayStatisticsService.getReplayErrorStatistics(
+    return this.workspacesAdminFacade.getReplayErrorStatistics(
       Number(workspaceId),
       {
         from,
@@ -375,7 +375,7 @@ export class ReplayStatisticsController {
       @Query('lastDays') lastDays?: string,
       @Query('limit') limit?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getFailureDistributionByUnit(
+    return this.workspacesAdminFacade.getFailureDistributionByUnit(
       Number(workspaceId),
       {
         from,
@@ -420,7 +420,7 @@ export class ReplayStatisticsController {
       @Query('to') to?: string,
       @Query('lastDays') lastDays?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getFailureDistributionByDay(
+    return this.workspacesAdminFacade.getFailureDistributionByDay(
       Number(workspaceId),
       {
         from,
@@ -464,7 +464,7 @@ export class ReplayStatisticsController {
       @Query('to') to?: string,
       @Query('lastDays') lastDays?: string
   ): Promise<Record<string, number>> {
-    return this.replayStatisticsService.getFailureDistributionByHour(
+    return this.workspacesAdminFacade.getFailureDistributionByHour(
       Number(workspaceId),
       {
         from,

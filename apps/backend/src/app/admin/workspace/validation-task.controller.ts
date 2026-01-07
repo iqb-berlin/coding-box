@@ -13,7 +13,7 @@ import {
   ApiParam,
   ApiQuery
 } from '@nestjs/swagger';
-import { ValidationTaskService } from '../../workspaces/services/validation-task.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { WorkspaceId } from './workspace.decorator';
 
@@ -22,7 +22,7 @@ import { WorkspaceId } from './workspace.decorator';
 export class ValidationTaskController {
   private readonly logger = new Logger(ValidationTaskController.name);
 
-  constructor(private readonly validationTaskService: ValidationTaskService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Post()
   @ApiOperation({ summary: 'Create a new validation task' })
@@ -50,7 +50,7 @@ export class ValidationTaskController {
       });
     }
 
-    const task = await this.validationTaskService.createValidationTask(
+    const task = await this.workspacesAdminFacade.createValidationTask(
       workspaceId,
       type,
       page,
@@ -66,7 +66,7 @@ export class ValidationTaskController {
   async getValidationTasks(
     @WorkspaceId() workspaceId: number
   ): Promise<ValidationTaskDto[]> {
-    const tasks = await this.validationTaskService.getValidationTasks(workspaceId);
+    const tasks = await this.workspacesAdminFacade.getValidationTasks(workspaceId);
     return tasks.map(task => ValidationTaskDto.fromEntity(task));
   }
 
@@ -78,7 +78,7 @@ export class ValidationTaskController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) taskId: number
   ): Promise<ValidationTaskDto> {
-    const task = await this.validationTaskService.getValidationTask(taskId, workspaceId);
+    const task = await this.workspacesAdminFacade.getValidationTask(taskId, workspaceId);
     return ValidationTaskDto.fromEntity(task);
   }
 
@@ -90,6 +90,6 @@ export class ValidationTaskController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) taskId: number
   ): Promise<unknown> {
-    return this.validationTaskService.getValidationResults(taskId, workspaceId);
+    return this.workspacesAdminFacade.getValidationResults(taskId, workspaceId);
   }
 }

@@ -20,13 +20,13 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { JobService } from '../../workspaces/services/job.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { JobDto } from './dto/job.dto';
 
 @ApiTags('Jobs')
 @Controller('admin/workspace/:workspace_id/jobs')
 export class JobsController {
-  constructor(private readonly jobService: JobService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Get()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -53,7 +53,7 @@ export class JobsController {
   })
   async getJobs(@WorkspaceId() workspaceId: number): Promise<JobDto[]> {
     try {
-      const jobs = await this.jobService.getJobs(workspaceId);
+      const jobs = await this.workspacesAdminFacade.getJobs(workspaceId);
       return jobs.map(job => JobDto.fromEntity(job));
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -94,7 +94,7 @@ export class JobsController {
       @Param('job_id') jobId: number
   ): Promise<JobDto> {
     try {
-      const job = await this.jobService.getJob(jobId, workspaceId);
+      const job = await this.workspacesAdminFacade.getJob(jobId, workspaceId);
       return JobDto.fromEntity(job);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -141,8 +141,8 @@ export class JobsController {
       @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.jobService.getJob(jobId, workspaceId);
-      return await this.jobService.cancelJob(jobId);
+      await this.workspacesAdminFacade.getJob(jobId, workspaceId);
+      return await this.workspacesAdminFacade.cancelJob(jobId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -188,8 +188,8 @@ export class JobsController {
       @Param('job_id') jobId: number
   ): Promise<{ success: boolean; message: string }> {
     try {
-      await this.jobService.getJob(jobId, workspaceId);
-      return await this.jobService.deleteJob(jobId);
+      await this.workspacesAdminFacade.getJob(jobId, workspaceId);
+      return await this.workspacesAdminFacade.deleteJob(jobId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

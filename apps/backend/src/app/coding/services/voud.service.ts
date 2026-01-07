@@ -1,7 +1,7 @@
 import {
   Injectable, Logger
 } from '@nestjs/common';
-import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
+import { WorkspaceFilesFacade } from '../../workspaces/services/workspace-files-facade.service';
 import { LRUCache } from '../../utils/lru-cache';
 
 @Injectable()
@@ -10,7 +10,7 @@ export class VoudService {
   private voudCache = new LRUCache<Map<string, string>>(50);
 
   constructor(
-    private readonly workspaceFilesService: WorkspaceFilesService
+    private readonly workspaceFilesFacade: WorkspaceFilesFacade
   ) {}
 
   clearCache() {
@@ -25,7 +25,7 @@ export class VoudService {
     let map = this.voudCache.get(cacheKey);
     if (map) return map;
 
-    map = await this.workspaceFilesService.getVariablePageMap(unitName, workspaceId);
+    map = await this.workspaceFilesFacade.getVariablePageMap(unitName, workspaceId);
     this.voudCache.set(cacheKey, map);
     return map;
   }
@@ -54,6 +54,6 @@ export class VoudService {
   async getUnitVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    return this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    return this.workspaceFilesFacade.getUnitVariableMap(workspaceId);
   }
 }

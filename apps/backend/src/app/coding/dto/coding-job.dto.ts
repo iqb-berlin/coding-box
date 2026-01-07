@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../entities/coding-job.entity';
-import { MissingsProfile } from '../entities/missings-profile.entity';
+import { MissingsProfile } from '../../workspaces/entities/missings-profile.entity';
 import { VariableDto } from '../../admin/variable-bundle/dto/variable.dto';
 
 /**

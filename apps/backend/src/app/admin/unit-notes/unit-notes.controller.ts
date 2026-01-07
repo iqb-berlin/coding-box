@@ -23,7 +23,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { UnitNoteService } from '../../workspaces/services/unit-note.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
 import { UnitNoteDto } from '../../../../../../api-dto/unit-notes/unit-note.dto';
 import { CreateUnitNoteDto } from '../../../../../../api-dto/unit-notes/create-unit-note.dto';
 import { UpdateUnitNoteDto } from '../../../../../../api-dto/unit-notes/update-unit-note.dto';
@@ -31,7 +31,7 @@ import { UpdateUnitNoteDto } from '../../../../../../api-dto/unit-notes/update-u
 @ApiTags('Unit Notes')
 @Controller('admin/workspace/:workspace_id/unit-notes')
 export class UnitNotesController {
-  constructor(private readonly unitNoteService: UnitNoteService) {}
+  constructor(private readonly workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Post()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -61,7 +61,7 @@ export class UnitNotesController {
       @Body() createUnitNoteDto: CreateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
-      return await this.unitNoteService.create(createUnitNoteDto);
+      return await this.workspacesAdminFacade.createUnitNote(createUnitNoteDto);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -101,7 +101,7 @@ export class UnitNotesController {
       @Param('unitId') unitId: number
   ): Promise<UnitNoteDto[]> {
     try {
-      return await this.unitNoteService.findAllByUnitId(unitId);
+      return await this.workspacesAdminFacade.findAllUnitNotes(unitId);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -135,7 +135,7 @@ export class UnitNotesController {
       @Body() { unitIds }: { unitIds: number[] }
   ): Promise<{ [unitId: number]: UnitNoteDto[] }> {
     try {
-      return await this.unitNoteService.findAllByUnitIds(unitIds);
+      return await this.workspacesAdminFacade.findAllUnitNotesByUnitIds(unitIds);
     } catch (error) {
       throw new BadRequestException(`Failed to retrieve notes: ${error.message}`);
     }
@@ -172,7 +172,7 @@ export class UnitNotesController {
       @Param('id') id: number
   ): Promise<UnitNoteDto> {
     try {
-      return await this.unitNoteService.findOne(id);
+      return await this.workspacesAdminFacade.findOneUnitNote(id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -216,7 +216,7 @@ export class UnitNotesController {
       @Body() updateUnitNoteDto: UpdateUnitNoteDto
   ): Promise<UnitNoteDto> {
     try {
-      return await this.unitNoteService.update(id, updateUnitNoteDto);
+      return await this.workspacesAdminFacade.updateUnitNote(id, updateUnitNoteDto);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;
@@ -256,7 +256,7 @@ export class UnitNotesController {
       @Param('id') id: number
   ): Promise<boolean> {
     try {
-      return await this.unitNoteService.remove(id);
+      return await this.workspacesAdminFacade.removeUnitNote(id);
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw error;

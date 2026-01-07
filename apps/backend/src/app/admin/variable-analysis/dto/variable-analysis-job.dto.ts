@@ -1,4 +1,4 @@
-import { VariableAnalysisJob } from '../../../coding/entities/variable-analysis-job.entity';
+import { VariableAnalysisJob } from '../../../workspaces/entities/variable-analysis-job.entity';
 
 export class VariableAnalysisJobDto {
   id: number;

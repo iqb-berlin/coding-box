@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { WorkspaceFilesService } from '../../workspaces/services/workspace-files.service';
+import { WorkspaceFilesFacade } from '../../workspaces/services/workspace-files-facade.service';
 import { CodingListService } from './coding-list.service';
 import { WorkspacesFacadeService } from '../../workspaces/services/workspaces-facade.service';
 
@@ -10,7 +10,7 @@ export class VariableAnalysisReplayService {
 
   constructor(
     private workspacesFacadeService: WorkspacesFacadeService,
-    private workspaceFilesService: WorkspaceFilesService,
+    private workspaceFilesFacade: WorkspaceFilesFacade,
     private codingListService: CodingListService
   ) {}
 
@@ -34,7 +34,7 @@ export class VariableAnalysisReplayService {
       const startTime = Date.now();
 
       this.logger.log('Getting unit variables mapping...');
-      const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
+      const unitVariablesMap = await this.workspaceFilesFacade.getUnitVariableMap(workspace_id);
       this.logger.log(`Retrieved unit variables map with ${unitVariablesMap.size} units`);
 
       // Step 2: Pre-fetch all coding schemes for the workspace to get derivations and descriptions for the response

@@ -9,15 +9,13 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { FileUpload, ResponseEntity } from '../../common';
-import {
-  WorkspacePlayerService,
-  BookletUnit
-} from '../../workspaces/services/workspace-player.service';
+import { WorkspacesAdminFacade } from '../../workspaces/services/workspaces-admin-facade.service';
+import { BookletUnit } from '../../workspaces/services/workspace-player.service';
 
 @ApiTags('Admin Workspace Player')
 @Controller('admin/workspace')
 export class WorkspacePlayerController {
-  constructor(private workspacePlayerService: WorkspacePlayerService) {}
+  constructor(private workspacesAdminFacade: WorkspacesAdminFacade) {}
 
   @Get(':workspace_id/player/:playerName')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -26,7 +24,7 @@ export class WorkspacePlayerController {
     @WorkspaceId() workspaceId: number,
       @Param('playerName') playerName: string
   ): Promise<FilesDto[]> {
-    return this.workspacePlayerService.findPlayer(workspaceId, playerName);
+    return this.workspacesAdminFacade.findPlayer(workspaceId, playerName);
   }
 
   @Get(':workspace_id/units/:testPerson')
@@ -36,14 +34,14 @@ export class WorkspacePlayerController {
     @WorkspaceId() id: number,
       @Param('testPerson') testPerson: string
   ): Promise<ResponseEntity[]> {
-    return this.workspacePlayerService.findTestPersonUnits(id, testPerson);
+    return this.workspacesAdminFacade.findTestPersonUnits(id, testPerson);
   }
 
   @Get(':workspace_id/test-groups')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   async findTestPersons(@WorkspaceId() id: number): Promise<number[]> {
-    return this.workspacePlayerService.findTestPersons(id);
+    return this.workspacesAdminFacade.findTestPersons(id);
   }
 
   @Get(':workspace_id/:unit/unitDef')
@@ -54,7 +52,7 @@ export class WorkspacePlayerController {
       @Param('unit') unit: string
   ): Promise<FilesDto[]> {
     const unitIdToUpperCase = unit.toUpperCase();
-    return this.workspacePlayerService.findUnitDef(
+    return this.workspacesAdminFacade.findUnitDef(
       workspace_id,
       unitIdToUpperCase
     );
@@ -68,7 +66,7 @@ export class WorkspacePlayerController {
       @Param('unitId') unitId: string
   ): Promise<FileUpload[]> {
     const unitIdToUpperCase = unitId.toUpperCase();
-    return this.workspacePlayerService.findUnit(id, unitIdToUpperCase);
+    return this.workspacesAdminFacade.findUnit(id, unitIdToUpperCase);
   }
 
   @Get(':workspace_id/booklet/:bookletId/units')
@@ -85,6 +83,6 @@ export class WorkspacePlayerController {
     @WorkspaceId() workspaceId: number,
       @Param('bookletId') bookletId: string
   ): Promise<BookletUnit[]> {
-    return this.workspacePlayerService.getBookletUnits(workspaceId, bookletId);
+    return this.workspacesAdminFacade.getBookletUnits(workspaceId, bookletId);
   }
 }

@@ -16,7 +16,7 @@ import {
 } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { VariableAnalysisReplayService } from './variable-analysis-replay.service';
-import { ExportValidationResultsService } from '../../workspaces/services/export-validation-results.service';
+import { ExportValidationResultsService } from './export-validation-results.service';
 import {
   ExternalCodingImportService,
   ExternalCodingImportBody

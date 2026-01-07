@@ -504,16 +504,6 @@ export class TestcenterService {
     authToken: string,
     importOptions: ImportOptions,
     testGroups: string,
-    overwriteExistingLogs?: boolean
-  ): Promise<Result>;
-  async importWorkspaceFiles(
-    workspace_id: string,
-    tc_workspace: string,
-    server: string,
-    url: string,
-    authToken: string,
-    importOptions: ImportOptions,
-    testGroups: string,
     overwriteExistingLogs: boolean = true,
     overwriteFileIds?: string[]
   ): Promise<Result> {
