@@ -24,9 +24,7 @@ import { AppService } from '../services/app.service';
  */
 export function canActivateAccessLevel(minLevel: number): CanActivateFn {
   return async (
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
-  ): Promise<boolean | UrlTree> => {
+    route: ActivatedRouteSnapshot): Promise<boolean | UrlTree> => {
     const authService = inject(AuthService);
 
     if (!authService.isLoggedIn()) {

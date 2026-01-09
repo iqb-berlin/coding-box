@@ -289,8 +289,7 @@ export class CodingManagementService {
       });
   }
 
-  downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  downloadCodingResults(workspaceId: number, version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
     if (!workspaceId) return Promise.resolve();
 
     return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);

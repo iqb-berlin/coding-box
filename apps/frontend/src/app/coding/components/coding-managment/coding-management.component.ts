@@ -973,7 +973,7 @@ implements AfterViewInit, OnInit, OnDestroy {
     format: ExportFormat,
     includeReplayUrls: boolean = false
   ): void {
-    this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls)
+    this.codingManagementService.downloadCodingResults(workspaceId, version, format, includeReplayUrls)
       .finally(() => {
         this.isDownloadInProgress = false;
       });
