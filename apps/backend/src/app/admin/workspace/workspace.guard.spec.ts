@@ -2,14 +2,21 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
+import { UsersService } from '../../database/services/users.service';
+import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 
 describe('WorkspaceGuard (Backend)', () => {
   let guard: WorkspaceGuard;
   let authService: jest.Mocked<AuthService>;
+  let usersService: jest.Mocked<UsersService>;
 
   beforeEach(async () => {
     const mockAuthService = {
       canAccessWorkSpace: jest.fn()
+    };
+
+    const mockUsersService = {
+      findUserByIdentity: jest.fn()
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -18,12 +25,17 @@ describe('WorkspaceGuard (Backend)', () => {
         {
           provide: AuthService,
           useValue: mockAuthService
+        },
+        {
+          provide: UsersService,
+          useValue: mockUsersService
         }
       ]
     }).compile();
 
     guard = module.get<WorkspaceGuard>(WorkspaceGuard);
     authService = module.get(AuthService);
+    usersService = module.get(UsersService);
   });
 
   const createMockExecutionContext = (userId: number, workspaceId: string): ExecutionContext => ({
@@ -37,6 +49,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Security Validation - Workspace Access', () => {
     it('should allow access when user can access workspace', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(1, '123');
 
@@ -47,6 +60,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should deny access when user cannot access workspace', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '123');
 
@@ -55,6 +69,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should validate both user ID and workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 42 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(42, '789');
 
@@ -66,6 +81,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Security Validation - Workspace Isolation', () => {
     it('should prevent access to different workspace', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '999');
 
@@ -73,6 +89,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should verify workspace access for each request', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       const context1 = createMockExecutionContext(1, '123');
       const context2 = createMockExecutionContext(1, '456');
 
@@ -88,6 +105,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should not allow cross-user workspace access', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 2 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(2, '123');
 
@@ -165,6 +183,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Edge Cases - Workspace ID Formats', () => {
     it('should handle numeric workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(1, '123');
 
@@ -174,6 +193,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle string workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(1, 'workspace-abc');
 
@@ -183,6 +203,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle zero workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '0');
 
@@ -191,6 +212,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle negative workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '-1');
 
@@ -199,6 +221,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle very large workspace ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(1, '999999999999');
 
@@ -208,6 +231,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle workspace ID with special characters', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, 'ws-123-abc');
 
@@ -218,6 +242,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Edge Cases - User ID Formats', () => {
     it('should handle zero user ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 0 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(0, '123');
 
@@ -226,6 +251,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle negative user ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: -1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(-1, '123');
 
@@ -234,6 +260,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle very large user ID', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: Number.MAX_SAFE_INTEGER } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(Number.MAX_SAFE_INTEGER, '123');
 
@@ -245,6 +272,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Security - Service Errors', () => {
     it('should propagate auth service errors', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockRejectedValue(new Error('Database error'));
       const context = createMockExecutionContext(1, '123');
 
@@ -252,6 +280,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle auth service timeout', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockImplementation(
         () => new Promise(resolve => {
           setTimeout(() => resolve(false), 10000);
@@ -264,6 +293,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle auth service returning null', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(null as unknown as boolean);
       const context = createMockExecutionContext(1, '123');
 
@@ -271,6 +301,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should handle auth service returning undefined', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(undefined as unknown as boolean);
       const context = createMockExecutionContext(1, '123');
 
@@ -280,6 +311,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Security - Privilege Escalation Prevention', () => {
     it('should not cache workspace access between requests', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       const context1 = createMockExecutionContext(1, '123');
       const context2 = createMockExecutionContext(1, '123');
 
@@ -293,6 +325,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should always verify workspace access from auth service', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
       const context = createMockExecutionContext(1, '123');
 
@@ -304,6 +337,7 @@ describe('WorkspaceGuard (Backend)', () => {
     });
 
     it('should verify access for each unique workspace', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(true);
 
       await guard.canActivate(createMockExecutionContext(1, '123'));
@@ -319,6 +353,7 @@ describe('WorkspaceGuard (Backend)', () => {
 
   describe('Error Messages', () => {
     it('should throw UnauthorizedException for unauthorized access', async () => {
+      usersService.findUserByIdentity.mockResolvedValue({ id: 1 } as UserFullDto);
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '123');
 
