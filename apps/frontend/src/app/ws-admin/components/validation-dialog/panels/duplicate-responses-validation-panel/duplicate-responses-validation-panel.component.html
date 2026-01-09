@@ -1,0 +1,144 @@
+<mat-expansion-panel>
+  <mat-expansion-panel-header>
+    <coding-box-validation-panel-header
+      title="Duplikate-Prüfung"
+      [status]="status"
+      [badgeText]="totalDuplicates > 0 ? totalDuplicates + ' Duplikate' : undefined">
+    </coding-box-validation-panel-header>
+  </mat-expansion-panel-header>
+
+  <coding-box-validation-guidance
+    description="Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren."
+    whyText="Duplikate können zu inkonsistenten Daten und Problemen bei der Auswertung führen. Sie entstehen oft durch mehrfaches Importieren derselben Daten."
+    fixHint="Wählen Sie für jede Duplikatgruppe die zu behaltende Antwort aus oder lassen Sie das System automatisch die beste Antwort auswählen.">
+  </coding-box-validation-guidance>
+
+  <div class="validation-actions">
+    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+      Duplikate prüfen
+    </button>
+  </div>
+
+  @if (isRunning) {
+    <div class="loading-container">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Duplikate werden geprüft...</p>
+    </div>
+  }
+
+  @if (duplicateResponses.length > 0 || totalDuplicates > 0) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Prüfung fehlgeschlagen: {{ totalDuplicates }} doppelte Antworten gefunden.</span>
+    </div>
+
+    @if (duplicateResponses.length > 0) {
+      <div class="actions-container">
+        <button mat-button (click)="toggleExpansion()">
+          {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
+        </button>
+        <button mat-button color="primary" 
+                (click)="resolveSelectedDuplicates()" 
+                [disabled]="isResolvingDuplicates || !hasSelectedDuplicateResponses()">
+          @if (isResolvingDuplicates) {
+            <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+          } @else {
+            Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
+          }
+        </button>
+        <button mat-button color="warn" 
+                (click)="resolveAllDuplicates()" 
+                [disabled]="isResolvingDuplicates || duplicateResponses.length === 0">
+          @if (isResolvingDuplicates) {
+            <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+          } @else {
+            Alle automatisch auflösen ({{ totalDuplicates }})
+          }
+        </button>
+      </div>
+
+      <mat-expansion-panel [expanded]="expandedPanel">
+        <div class="duplicate-responses-container">
+          @for (duplicate of duplicateResponses; track duplicate.key) {
+            <div class="duplicate-response-item">
+              <div class="duplicate-response-header">
+                <div class="duplicate-response-info">
+                  <strong>Unit:</strong> {{ duplicate.unitName }} |
+                  <strong>Variable:</strong> {{ duplicate.variableId }} |
+                  <strong>Subform:</strong> {{ duplicate.subform }} |
+                  <strong>Testperson:</strong> {{ duplicate.testTakerLogin }} |
+                  <strong>Booklet:</strong> {{ duplicate.bookletName }}
+                </div>
+              </div>
+
+              <div class="actions-container" style="margin-top: 8px;">
+                <span>
+                  <strong>{{ getDuplicateConflictLabel(duplicate) }}</strong>
+                  @if (isDuplicateGroupTouched(duplicate)) {
+                    <span> | Auswahl gesetzt</span>
+                  } @else {
+                    <span> | Keine Auswahl gesetzt</span>
+                  }
+                </span>
+                <button mat-button 
+                        (click)="selectSuggestedDuplicateResponse(duplicate)" 
+                        [disabled]="isResolvingDuplicates">
+                  Vorschlag übernehmen
+                </button>
+                <button mat-button color="primary" 
+                        (click)="resolveDuplicateGroup(duplicate)" 
+                        [disabled]="isResolvingDuplicates || !isDuplicateGroupTouched(duplicate)">
+                  Auflösen
+                </button>
+              </div>
+
+              <div class="duplicate-response-duplicates">
+                <table class="duplicate-response-table">
+                  <thead>
+                    <tr>
+                      <th>Auswählen</th>
+                      <th>Antwort-ID</th>
+                      <th>Wert</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (responseDuplicate of duplicate.duplicates; track responseDuplicate.responseId) {
+                      <tr [ngClass]="{ 'duplicate-row-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) }">
+                        <td>
+                          <input type="radio"
+                                 name="duplicate_{{ duplicate.key }}"
+                                 [value]="responseDuplicate.responseId"
+                                 [checked]="isSelectedDuplicateResponse(duplicate, responseDuplicate.responseId)"
+                                 (change)="selectDuplicateResponse(duplicate, responseDuplicate.responseId)">
+                        </td>
+                        <td>{{ responseDuplicate.responseId }}</td>
+                        <td [ngClass]="{ 
+                          'duplicate-cell-conflict': isDuplicateValueConflicting(duplicate, responseDuplicate.responseId), 
+                          'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) 
+                        }">
+                          {{ responseDuplicate.value }}
+                        </td>
+                        <td [ngClass]="{ 
+                          'duplicate-cell-conflict': isDuplicateStatusConflicting(duplicate, responseDuplicate.responseId), 
+                          'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) 
+                        }">
+                          {{ responseDuplicate.status }}
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+        </div>
+      </mat-expansion-panel>
+    }
+  } @else if (!isRunning && duplicateResponses.length === 0 && totalDuplicates === 0 && wasRun) {
+    <div class="validation-result validation-success">
+      <mat-icon>check_circle</mat-icon>
+      <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>
+    </div>
+  }
+</mat-expansion-panel>

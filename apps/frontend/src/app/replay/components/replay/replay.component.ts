@@ -364,7 +364,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private cacheUnitDefData(unitDef: FilesDto) {
     this.lastUnitDef.data = unitDef.data;
-    this.lastUnitDef.id = unitDef.file_id.substring(0, unitDef.file_id.indexOf('.VOUD'));
+    const extensionIndex = unitDef.file_id.toUpperCase().lastIndexOf('.VOUD');
+    this.lastUnitDef.id = extensionIndex > -1 ?
+      unitDef.file_id.substring(0, extensionIndex) :
+      unitDef.file_id;
   }
 
   private cachePlayerData(playerData: FilesDto) {
@@ -374,7 +377,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private cacheVocsData(vocsData: FilesDto) {
     this.lastVocs.data = vocsData.data;
-    this.lastVocs.id = vocsData.file_id.substring(0, vocsData.file_id.indexOf('.vocs'));
+    const extensionIndex = vocsData.file_id.toLowerCase().lastIndexOf('.vocs');
+    this.lastVocs.id = extensionIndex > -1 ?
+      vocsData.file_id.substring(0, extensionIndex) :
+      vocsData.file_id;
   }
 
   static getNormalizedPlayerId(name: string): string {
