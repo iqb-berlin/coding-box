@@ -1151,6 +1151,37 @@ export class WorkspaceFilesController {
     return this.workspaceFilesService.getUnitsWithFileIds(workspace_id);
   }
 
+  @Get(':workspace_id/vocs/:vocs')
+  @ApiTags('admin workspace')
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get VOCS file content',
+    description: 'Retrieves the content of a VOCS file by its unit name'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The unique ID of the workspace'
+  })
+  @ApiParam({
+    name: 'vocs',
+    type: String,
+    required: true,
+    description: 'The unit name/ID for which to get the VOCS file'
+  })
+  @ApiOkResponse({
+    description: 'VOCS file content retrieved successfully',
+    type: [FilesDto]
+  })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getVocs(
+    @Param('workspace_id') workspace_id: number,
+      @Param('vocs') vocs: string
+  ): Promise<FilesDto[]> {
+    return this.workspaceFilesService.getVocs(workspace_id, vocs);
+  }
+
   @Get(':workspace_id/files/unit-variables')
   @ApiTags('admin workspace')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
