@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { BackendService } from './backend.service';
 import { AppService } from '../core/services/app.service';
 import { CodingFacadeService } from './facades/coding-facade.service';
@@ -167,6 +168,7 @@ describe('BackendService', () => {
     TestBed.configureTestingModule({
       providers: [
         BackendService,
+        provideHttpClient(withInterceptorsFromDi()),
         { provide: AppService, useValue: mockAppService },
         { provide: CodingFacadeService, useValue: mockCodingFacade },
         { provide: TestResultFacadeService, useValue: mockTestResultFacade },

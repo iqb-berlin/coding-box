@@ -4,7 +4,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { CodingManagementService } from './coding-management.service';
 import { BackendService, CodingJobStatus } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 
 describe('CodingManagementService', () => {

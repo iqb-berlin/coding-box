@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { VariableBundleService } from './variable-bundle.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
 
 describe('VariableBundleService', () => {

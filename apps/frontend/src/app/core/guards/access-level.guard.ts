@@ -1,6 +1,5 @@
 import {
   ActivatedRouteSnapshot,
-  RouterStateSnapshot,
   CanActivateFn,
   UrlTree,
   Router

@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { of } from 'rxjs';
 import { CodingService } from './coding.service';
-import { AppService } from './app.service';
+import { AppService } from '../core/services/app.service';
 import { SERVER_URL } from '../injection-tokens';
 
 describe('CodingService', () => {

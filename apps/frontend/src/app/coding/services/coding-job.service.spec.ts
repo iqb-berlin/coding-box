@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { CodingJobService } from './coding-job.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodingJob } from '../models/coding-job.model';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
