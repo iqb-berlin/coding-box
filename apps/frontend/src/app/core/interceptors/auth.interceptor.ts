@@ -23,7 +23,7 @@ export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService = inject(AppService);
+  const appService: AppService = inject(AppService);
   const snackBar = inject(MatSnackBar);
   const authService = inject(AuthService);
   let httpErrorInfo: AppHttpError | null = null;

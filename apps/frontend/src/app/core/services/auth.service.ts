@@ -5,7 +5,7 @@ import Keycloak, { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
   providedIn: 'root'
 })
 export class AuthService {
-  private readonly keycloak = inject(Keycloak);
+  private readonly keycloak: Keycloak = inject(Keycloak);
   getLoggedUser(): KeycloakTokenParsed | undefined {
     try {
       return this.keycloak.idTokenParsed;

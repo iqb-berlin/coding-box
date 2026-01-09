@@ -14,7 +14,7 @@ import { ResponseEntity } from '../../shared/models/response-entity.model';
 export class CodingJobService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private codingJobsSubject = new BehaviorSubject<CodingJob[]>([]);
 
   // Event emitter for auto-refresh after bulk job creation
