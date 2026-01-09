@@ -27,7 +27,7 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { UnitInfoDialogComponent } from '../../ws-admin/components/unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';

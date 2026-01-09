@@ -61,7 +61,7 @@ import { responseStatesNumericMap } from '@iqbspecs/response/response.interface'
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
 import { BackendService, SearchResponseItem } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import {
@@ -973,7 +973,7 @@ implements AfterViewInit, OnInit, OnDestroy {
     format: ExportFormat,
     includeReplayUrls: boolean = false
   ): void {
-    this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls)
+    this.codingManagementService.downloadCodingResults(workspaceId, version, format, includeReplayUrls)
       .finally(() => {
         this.isDownloadInProgress = false;
       });

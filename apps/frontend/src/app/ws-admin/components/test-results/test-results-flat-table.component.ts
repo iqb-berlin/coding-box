@@ -24,7 +24,7 @@ import {
   tap
 } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import {
   FlatResponseFilterOptionsResponse,
   FlatResponseFrequencyItem,
@@ -1241,7 +1241,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
         1
       )
       .subscribe({
-        next: token => {
+        next: (token: string | null) => {
           loadingSnackBar.dismiss();
           if (!token) {
             this.snackBar.open(

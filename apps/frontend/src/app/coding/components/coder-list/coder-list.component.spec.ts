@@ -8,7 +8,7 @@ import { CoderListComponent } from './coder-list.component';
 
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 class AppServiceMock {
   selectedWorkspaceId = 42;

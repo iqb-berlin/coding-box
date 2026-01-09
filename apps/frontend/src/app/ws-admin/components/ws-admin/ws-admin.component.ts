@@ -4,7 +4,7 @@ import {
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CodingJobsComponent } from '../../../coding/components/coding-jobs/coding-jobs.component';
 import { BackendService } from '../../../services/backend.service';
 

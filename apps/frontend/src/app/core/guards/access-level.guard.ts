@@ -1,6 +1,5 @@
 import {
   ActivatedRouteSnapshot,
-  RouterStateSnapshot,
   CanActivateFn,
   UrlTree,
   Router
@@ -13,10 +12,9 @@ import {
   filter,
   timeout
 } from 'rxjs';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../services/user.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../services/app.service';
 
 /**
  * Guard factory that creates a route guard checking for minimum access level
@@ -24,17 +22,14 @@ import { AppService } from '../../services/app.service';
  * @returns CanActivateFn that checks if user has sufficient access level
  */
 export function canActivateAccessLevel(minLevel: number): CanActivateFn {
-  const isAccessAllowed = async (
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot,
-    authData: AuthGuardData
-  ): Promise<boolean | UrlTree> => {
-    const { authenticated } = authData;
-    if (!authenticated) {
+  return async (
+    route: ActivatedRouteSnapshot): Promise<boolean | UrlTree> => {
+    const authService = inject(AuthService);
+
+    if (!authService.isLoggedIn()) {
       return false;
     }
 
-    const authService = inject(AuthService);
     const userService = inject(UserService);
     const appService = inject(AppService);
     const router = inject(Router);
@@ -101,6 +96,4 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
       return false;
     }
   };
-
-  return createAuthGuard<CanActivateFn>(isAccessAllowed);
 }

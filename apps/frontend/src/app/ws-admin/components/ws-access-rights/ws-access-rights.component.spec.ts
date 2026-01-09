@@ -8,7 +8,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('WsAccessRightsComponent', () => {
   let component: WsAccessRightsComponent;

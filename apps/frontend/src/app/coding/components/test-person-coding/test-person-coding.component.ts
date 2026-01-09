@@ -35,7 +35,7 @@ import {
   TestPersonCodingService,
   WorkspaceGroupCodingStats
 } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';

@@ -3,7 +3,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { of, throwError } from 'rxjs';
 import { TestTakersValidationService } from './test-takers-validation.service';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
 import { TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';

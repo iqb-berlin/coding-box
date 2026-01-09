@@ -25,7 +25,7 @@ import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
@@ -343,7 +343,7 @@ export class TestResultsSearchComponent implements OnInit {
     this.appService
       .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
       .subscribe({
-        next: token => {
+        next: (token: string | null) => {
           if (!token) {
             this.snackBar.open(
               'Fehler beim Erzeugen des Authentifizierungs-Tokens',

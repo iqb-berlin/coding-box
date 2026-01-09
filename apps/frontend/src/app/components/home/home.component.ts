@@ -9,7 +9,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subscription, forkJoin } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';

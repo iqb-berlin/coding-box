@@ -10,7 +10,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   BackendService, SearchResponseItem, SearchResponsesParams, CodingJobStatus
 } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
@@ -289,8 +289,7 @@ export class CodingManagementService {
       });
   }
 
-  downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
-    const workspaceId = this.appService.selectedWorkspaceId;
+  downloadCodingResults(workspaceId: number, version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
     if (!workspaceId) return Promise.resolve();
 
     return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
