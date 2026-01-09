@@ -4,20 +4,19 @@ import {
   HttpHandlerFn,
   HttpHeaders,
   HttpInterceptorFn,
-  HttpRequest
-  HttpEvent, HttpHandlerFn, HttpHeaders, HttpInterceptorFn, HttpRequest, HttpErrorResponse
+  HttpRequest,
+  HttpErrorResponse
 } from '@angular/common/http';
 import {
   finalize,
   Observable,
-  tap
+  tap,
+  catchError,
+  throwError
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import {
-  finalize, Observable, tap, catchError, throwError
-} from 'rxjs';
 import { AppHttpError } from './app-http-error.class';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 
 /**
@@ -30,7 +29,6 @@ export const authInterceptor: HttpInterceptorFn = (
   const appService = inject(AppService);
   const authService = inject(AuthService);
   const snackBar = inject(MatSnackBar);
-  const authService = inject(AuthService);
   let httpErrorInfo: AppHttpError | null = null;
 
   let modifiedReq = req;

@@ -2,7 +2,7 @@ import {
   Component, OnInit, OnDestroy, inject
 } from '@angular/core';
 import {
-  RouterLink, RouterOutlet, Router, ActivatedRoute,NavigationEnd
+  RouterLink, RouterOutlet, Router, ActivatedRoute, NavigationEnd
 } from '@angular/router';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
@@ -13,7 +13,7 @@ import { LocationStrategy, Location } from '@angular/common';
 import { filter, firstValueFrom, Subscription } from 'rxjs';
 import { UserProfile, AuthService } from './core/services/auth.service';
 
-import { AppService } from './services/app.service';
+import { AppService } from './core/services/app.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
 import { BackendService } from './services/backend.service';
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
@@ -93,11 +93,6 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     this.authService.login();
-    this.appService.keycloakLogin(user).subscribe(success => {
-      if (success) {
-        this.appService.setNeedsReAuthentication(false);
-      }
-    });
   }
 
   async ngOnInit(): Promise<void> {

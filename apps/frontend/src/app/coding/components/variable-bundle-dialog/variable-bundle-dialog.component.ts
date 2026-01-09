@@ -29,7 +29,7 @@ import {
 } from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface VariableBundleGroupDialogData {
   bundleGroup?: VariableBundle;

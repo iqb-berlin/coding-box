@@ -15,7 +15,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { MessageDialogComponent, MessageType } from '../../../shared/dialogs/message-dialog.component';
 import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';

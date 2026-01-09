@@ -16,7 +16,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/create-unit-note.dto';
 
 @Component({

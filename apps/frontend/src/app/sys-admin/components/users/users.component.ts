@@ -13,7 +13,7 @@ import { UsersSelectionComponent } from '../users-selection/users-selection.comp
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
 

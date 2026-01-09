@@ -1,3 +1,4 @@
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
@@ -101,6 +102,7 @@ interface PaginatedResponse<T> {
 })
 export class BackendService {
   appService = inject(AppService);
+  private http = inject(HttpClient);
 
   private codingFacade = inject(CodingFacadeService);
   private testResultFacade = inject(TestResultFacadeService);
@@ -109,8 +111,8 @@ export class BackendService {
 
   getAuthData(): Observable<import('../../../../../api-dto/auth-data-dto').AuthDataDto> {
     return this.http.get<import('../../../../../api-dto/auth-data-dto').AuthDataDto>(
-      `${this.serverUrl}auth-data`,
-    { headers: this.authHeader }
+      `${this.appService.serverUrl}auth-data`,
+    { headers: this.appService.authHeader }
     );
   }
 

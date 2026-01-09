@@ -33,7 +33,7 @@ import { VariableBundleService } from '../../services/variable-bundle.service';
 import { Coder } from '../../models/coder.model';
 import { VariableBundle } from '../../models/coding-job.model';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 
 export interface VariableConfig {

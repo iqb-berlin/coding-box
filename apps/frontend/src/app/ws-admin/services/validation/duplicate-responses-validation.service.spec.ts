@@ -3,7 +3,7 @@ import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { DuplicateResponsesValidationService } from './duplicate-responses-validation.service';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';

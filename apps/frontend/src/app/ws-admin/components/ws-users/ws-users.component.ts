@@ -25,7 +25,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { MatDialog } from '@angular/material/dialog';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';

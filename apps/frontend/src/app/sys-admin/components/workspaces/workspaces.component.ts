@@ -8,7 +8,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 

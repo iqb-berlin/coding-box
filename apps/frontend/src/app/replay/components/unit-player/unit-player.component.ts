@@ -12,7 +12,7 @@ import {
   combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';

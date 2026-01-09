@@ -8,7 +8,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { JournalService, JournalEntry } from '../../../services/journal.service';
 
 @Component({

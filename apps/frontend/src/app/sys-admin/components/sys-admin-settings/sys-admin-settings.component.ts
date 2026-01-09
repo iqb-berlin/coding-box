@@ -8,7 +8,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { AppService, standardLogo } from '../../../services/app.service';
+import { AppService, standardLogo } from '../../../core/services/app.service';
 import { LogoService } from '../../../services/logo.service';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
 

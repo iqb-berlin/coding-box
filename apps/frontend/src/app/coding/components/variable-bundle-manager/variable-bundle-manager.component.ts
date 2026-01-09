@@ -26,7 +26,7 @@ import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService } from '../../../services/backend.service';
 
 @Component({

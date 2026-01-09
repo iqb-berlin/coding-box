@@ -24,7 +24,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
 import { BackendService } from '../../../../services/backend.service';
-import { AppService } from '../../../../services/app.service';
+import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 

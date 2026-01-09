@@ -26,7 +26,7 @@ import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService, CodingJobItem, BulkApplyResultItem } from '../../../services/backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';

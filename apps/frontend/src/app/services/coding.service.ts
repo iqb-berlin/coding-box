@@ -8,7 +8,7 @@ import {
 } from 'rxjs';
 import { CodingStatistics } from '../../../../../api-dto/coding/coding-statistics';
 import { SERVER_URL } from '../injection-tokens';
-import { AppService } from './app.service';
+import { AppService } from '../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../api-dto/coding/codebook-content-setting';
 import { MissingsProfilesDto } from '../../../../../api-dto/coding/missings-profiles.dto';
 import { VariableAnalysisItemDto } from '../../../../../api-dto/coding/variable-analysis-item.dto';

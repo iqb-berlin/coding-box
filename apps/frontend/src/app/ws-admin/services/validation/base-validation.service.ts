@@ -1,7 +1,7 @@
 import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 

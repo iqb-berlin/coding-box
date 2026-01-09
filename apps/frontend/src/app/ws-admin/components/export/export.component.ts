@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { ExportJobService } from '../../../services/export-job.service';
 
 export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
@@ -130,7 +130,7 @@ export class ExportComponent {
       // Prepare export configuration
       const exportConfig = {
         exportType: this.selectedFormat,
-        userId: this.appService.userId,
+        userId: this.appService.authData.userId,
         outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
         includeReplayUrl: this.includeReplayUrl,
         anonymizeCoders: this.anonymizeCoders,

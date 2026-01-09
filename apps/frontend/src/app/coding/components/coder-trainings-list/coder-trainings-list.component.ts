@@ -26,7 +26,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
 import { BackendService } from '../../../services/backend.service';
 import { CoderTraining } from '../../models/coder-training.model';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';

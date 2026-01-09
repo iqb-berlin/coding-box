@@ -60,7 +60,7 @@ import { TestResultsExportDialogComponent } from './test-results-export-dialog.c
 import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 import { BackendService } from '../../../services/backend.service';
 import { TestResultExportJob } from '../../../services/test-result-backend.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import {
   TestResultService,
   TestResultsOverviewResponse
@@ -645,7 +645,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.appService.loggedUser?.sub || '',
               1
             )
-            .subscribe(token => {
+            .subscribe((token: string | null) => {
               const queryParams = {
                 auth: token,
                 mode: 'booklet',
@@ -703,7 +703,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         1
       )
       .subscribe({
-        next: token => {
+        next: (token: string | null) => {
           if (!token) {
             this.snackBar.open(
               'Fehler beim Erzeugen des Authentifizierungs-Tokens',

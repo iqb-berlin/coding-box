@@ -39,7 +39,7 @@ import { FilesValidationDialogComponent } from '../files-validation-result/files
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendService } from '../../../services/backend.service';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';

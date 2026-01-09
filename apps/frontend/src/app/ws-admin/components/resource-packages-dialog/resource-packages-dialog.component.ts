@@ -24,7 +24,7 @@ import { debounceTime } from 'rxjs/operators';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { BackendService } from '../../../services/backend.service';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface ResourcePackagesDialogData {
   // Add any data you want to pass to the dialog

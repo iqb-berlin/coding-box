@@ -7,7 +7,7 @@ import {
   HttpResponse
 } from '@angular/common/http';
 import { Observable, tap } from 'rxjs';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../services/app.service';
 
 export const journalInterceptor: HttpInterceptorFn = (
   request: HttpRequest<unknown>,

@@ -18,7 +18,7 @@ import {
   ValidateCodingCompletenessResponseDto
 } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 @Component({
   selector: 'coding-box-coding-validation-results-dialog',
