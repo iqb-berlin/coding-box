@@ -10,12 +10,12 @@ import {
   switchMap
 } from 'rxjs';
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
-import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
-import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../core/interceptors/app-http-error.class';
-import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
-import { LogoService } from './logo.service';
-import { SERVER_URL } from '../injection-tokens';
+import { AppHttpError } from '../interceptors/app-http-error.class';
+import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { LogoService } from '../../services/logo.service';
+import { SERVER_URL } from '../../injection-tokens';
 
 @Injectable({
   providedIn: 'root'

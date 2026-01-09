@@ -4,10 +4,10 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { of } from 'rxjs';
 import { KeycloakTokenParsed } from 'keycloak-js';
 import { AppService } from './app.service';
-import { LogoService } from './logo.service';
-import { SERVER_URL } from '../injection-tokens';
-import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
-import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
+import { LogoService } from '../../services/logo.service';
+import { SERVER_URL } from '../../injection-tokens';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
+import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 
 describe('AppService', () => {
   let service: AppService;
