@@ -1,7 +1,10 @@
 import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { EventEmitter } from '@angular/core';
+import {
+  TranslateModule, TranslateService, LangChangeEvent, TranslationChangeEvent, DefaultLangChangeEvent
+} from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -53,7 +56,11 @@ describe('WsUsersComponent', () => {
     };
 
     mockTranslateService = {
-      instant: jest.fn().mockImplementation((key: string) => key)
+      instant: jest.fn().mockImplementation((key: string) => key),
+      get: jest.fn().mockImplementation((key: string) => of(key)),
+      onLangChange: new EventEmitter<LangChangeEvent>(),
+      onTranslationChange: new EventEmitter<TranslationChangeEvent>(),
+      onDefaultLangChange: new EventEmitter<DefaultLangChangeEvent>()
     };
 
     await TestBed.configureTestingModule({
