@@ -351,6 +351,39 @@ ${bookletRefs}
     }
   }
 
+  async getVocs(workspaceId: number, vocs: string): Promise<FilesDto[]> {
+    try {
+      const fileId = vocs.toUpperCase().endsWith('.VOCS') ?
+        vocs.toUpperCase() :
+        `${vocs.toUpperCase()}.VOCS`;
+
+      const vocsFile = await this.fileUploadRepository.findOne({
+        where: {
+          workspace_id: workspaceId,
+          file_id: fileId
+        }
+      });
+
+      if (!vocsFile) {
+        this.logger.warn(
+          `VOCS file for ${vocs} not found in workspace ${workspaceId}`
+        );
+        return [];
+      }
+
+      return [
+        {
+          file_id: vocsFile.file_id,
+          data: vocsFile.data.toString(),
+          workspace_id: vocsFile.workspace_id
+        }
+      ];
+    } catch (error) {
+      this.logger.error(`Error retrieving VOCS file: ${error.message}`);
+      return [];
+    }
+  }
+
   async uploadTestFiles(
     workspace_id: number,
     originalFiles: FileIo[],
