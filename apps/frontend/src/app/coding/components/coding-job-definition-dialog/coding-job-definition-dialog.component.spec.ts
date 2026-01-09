@@ -3,7 +3,7 @@ import {
 } from '@angular/core/testing';
 import { EventEmitter } from '@angular/core';
 import {
-  MAT_DIALOG_DATA, MatDialog, MatDialogRef
+  MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
@@ -66,7 +66,18 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   beforeEach(async () => {
     mockBackendService = {
-      getJobDefinitions: jest.fn().mockReturnValue(of([])),
+      getJobDefinitions: jest.fn().mockReturnValue(of([
+        {
+          id: 100,
+          assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5 }],
+          maxCodingCases: 5
+        },
+        {
+          id: 101,
+          assignedVariables: [{ unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8 }],
+          maxCodingCases: 4
+        }
+      ])),
       getCodingIncompleteVariables: jest.fn().mockReturnValue(of(mockVariables)),
       getVariableBundles: jest.fn().mockReturnValue(of(mockBundles)),
       updateCodingJob: jest.fn(),
@@ -86,7 +97,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     };
 
     mockCodingJobService = {
-      assignCoder: jest.fn().mockReturnValue(of(true)),
+      assignCoder: jest.fn().mockImplementation((jobId: number, coderId: number) => of({ id: jobId, assignedCoders: [coderId] })),
       jobsCreatedEvent: new EventEmitter<void>()
     } as Partial<CodingJobService>;
 
@@ -129,6 +140,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: TranslateService, useValue: mockTranslateService },
         { provide: MatDialog, useValue: mockMatDialog }
       ]
+    }).overrideComponent(CodingJobDefinitionDialogComponent, {
+      remove: {
+        imports: [MatDialogModule]
+      }
     }).compileComponents();
   });
 

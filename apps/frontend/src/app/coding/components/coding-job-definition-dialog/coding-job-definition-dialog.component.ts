@@ -284,13 +284,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   initForm(): void {
-    const formFields: Record<string, [string | number | null | undefined, ValidatorFn[]]> = {
+    const formFields: Record<string, [string | number | boolean | null | undefined, ValidatorFn[]]> = {
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []],
       caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', []]
     };
+
+    if (this.data.mode === 'job') {
+      formFields.showScore = [this.data.codingJob?.showScore ?? true, []];
+      formFields.allowComments = [this.data.codingJob?.allowComments ?? true, []];
+      formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
+    }
 
     if (this.data.isEdit) {
       const defaultStatus = this.data.mode === 'definition' ? 'draft' : 'pending';
