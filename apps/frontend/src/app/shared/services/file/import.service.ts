@@ -3,36 +3,9 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { catchError, Observable, of } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
-import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
 
-export type ImportOptions = {
-  responses: string;
-  definitions: string;
-  units: string;
-  player: string;
-  codings: string;
-  logs: string;
-  testTakers: string;
-  booklets: string;
-};
-
-export type Result = {
-  success: boolean;
-  testFiles: number;
-  responses: number;
-  logs: number;
-  booklets: number;
-  units: number;
-  persons: number;
-  importedGroups: string[];
-  filesPlayer?: number;
-  filesUnits?: number;
-  filesDefinitions?: number;
-  filesCodings?: number;
-  filesBooklets?: number;
-  filesTestTakers?: number;
-  testFilesUploadResult?: TestFilesUploadResultDto;
-};
+export { ImportOptions, Result };
 
 @Injectable({
   providedIn: 'root'

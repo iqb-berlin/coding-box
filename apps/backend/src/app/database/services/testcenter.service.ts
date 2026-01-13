@@ -8,12 +8,15 @@ import { Person, Response, Log } from './shared-types';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from './workspace-files.service';
-import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
+import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../api-dto/files/import-options.dto';
+
 import {
   TestFilesUploadResultDto,
   TestFilesUploadUploadedDto,
   TestFilesUploadFailedDto
 } from '../../../../../../api-dto/files/test-files-upload-result.dto';
+
+export { Result };
 
 const agent = new https.Agent({
   rejectUnauthorized: false
@@ -38,24 +41,6 @@ type File = {
     description: string;
   };
   data: string;
-};
-
-export type Result = {
-  success: boolean;
-  testFiles: number;
-  responses: number;
-  logs: number;
-  booklets: number;
-  units: number;
-  persons: number;
-  importedGroups: string;
-  filesPlayer?: number;
-  filesUnits?: number;
-  filesDefinitions?: number;
-  filesCodings?: number;
-  filesBooklets?: number;
-  filesTestTakers?: number;
-  testFilesUploadResult?: TestFilesUploadResultDto;
 };
 
 @Injectable()
@@ -533,7 +518,7 @@ export class TestcenterService {
       booklets: 0,
       units: 0,
       persons: 0,
-      importedGroups: testGroups
+      importedGroups: testGroups.split(',').map(g => g.trim())
     };
 
     const promises: Promise<void>[] = [];
