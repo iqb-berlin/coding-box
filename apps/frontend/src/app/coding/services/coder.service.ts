@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { catchError, map } from 'rxjs/operators';
 import { Coder } from '../models/coder.model';
 import { SERVER_URL } from '../../injection-tokens';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { CodingJob } from '../models/coding-job.model';
 
 @Injectable({

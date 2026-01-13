@@ -16,8 +16,8 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingService } from '../../services/coding.service';
+import { AppService } from '../../../core/services/app.service';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 
 @Component({
@@ -54,11 +54,11 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<EditMissingsProfilesDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number },
-    private backendService: BackendService,
+    private codingService: CodingService,
     private appService: AppService,
     private snackBar: MatSnackBar,
     private translateService: TranslateService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.loadMissingsProfiles();
@@ -68,7 +68,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     if (workspaceId) {
       this.loading = true;
-      this.backendService.getMissingsProfiles(workspaceId).subscribe({
+      this.codingService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
           this.missingsProfiles = profiles;
           this.loading = false;
@@ -92,7 +92,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       const profile = this.missingsProfiles.find(p => p.label === label);
       if (profile) {
         this.loading = true;
-        this.backendService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
+        this.codingService.getMissingsProfileDetails(workspaceId, profile.id).subscribe({
           next: profileDetails => {
             const missingsProfile = new MissingsProfilesDto();
             if (profileDetails) {
@@ -145,7 +145,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
       const existingProfile = this.missingsProfiles.find(p => p.label === this.selectedProfile?.label);
 
       if (existingProfile) {
-        this.backendService.updateMissingsProfile(workspaceId, existingProfile.label, this.selectedProfile).subscribe({
+        this.codingService.updateMissingsProfile(workspaceId, existingProfile.label, this.selectedProfile).subscribe({
           next: profile => {
             const missingsProfile = new MissingsProfilesDto();
             if (profile) {
@@ -165,7 +165,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
           }
         });
       } else {
-        this.backendService.createMissingsProfile(workspaceId, this.selectedProfile).subscribe({
+        this.codingService.createMissingsProfile(workspaceId, this.selectedProfile).subscribe({
           next: profile => {
             // Convert plain object to MissingsProfilesDto instance
             const missingsProfile = new MissingsProfilesDto();
@@ -193,7 +193,7 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     if (workspaceId && this.selectedProfile) {
       this.saving = true;
-      this.backendService.deleteMissingsProfile(workspaceId, this.selectedProfile.label).subscribe({
+      this.codingService.deleteMissingsProfile(workspaceId, this.selectedProfile.label).subscribe({
         next: success => {
           if (success) {
             this.selectedProfile = null;

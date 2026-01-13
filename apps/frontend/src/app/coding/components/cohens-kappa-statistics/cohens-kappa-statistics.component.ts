@@ -10,7 +10,7 @@ import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/materia
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 interface KappaStatistics {
   unitName: string;

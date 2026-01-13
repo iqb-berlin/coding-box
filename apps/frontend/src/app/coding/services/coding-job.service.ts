@@ -5,7 +5,7 @@ import {
 } from 'rxjs';
 import { CodingJob } from '../models/coding-job.model';
 import { SERVER_URL } from '../../injection-tokens';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 
 @Injectable({

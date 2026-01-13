@@ -15,8 +15,8 @@ import {
 } from 'rxjs';
 import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
-import { UserService } from '../../services/user.service';
-import { AppService } from '../../services/app.service';
+import { UserService } from '../../shared/services/user/user.service';
+import { AppService } from '../services/app.service';
 
 /**
  * Guard factory that creates a route guard checking for minimum access level

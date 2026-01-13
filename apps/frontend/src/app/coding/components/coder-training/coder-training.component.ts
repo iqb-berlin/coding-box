@@ -32,8 +32,9 @@ import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { Coder } from '../../models/coder.model';
 import { VariableBundle } from '../../models/coding-job.model';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 
 export interface VariableConfig {
@@ -81,7 +82,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private coderService = inject(CoderService);
   private variableBundleService = inject(VariableBundleService);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private fb = inject(FormBuilder);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
@@ -141,7 +143,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId)
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: variables => {
@@ -364,9 +366,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   canStartTraining(): boolean {
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
     return this.selectedCoders.size > 0 &&
-           trainingLabel?.trim() &&
-           this.trainingForm.valid &&
-           (this.hasAtLeastOneVariableSelected() || this.hasBundlesSelected());
+      trainingLabel?.trim() &&
+      this.trainingForm.valid &&
+      (this.hasAtLeastOneVariableSelected() || this.hasBundlesSelected());
   }
 
   private hasBundlesSelected(): boolean {
@@ -497,7 +499,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
 
-    this.backendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
+    this.codingTrainingBackendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
       .subscribe({
         next: result => {
           this.isLoading = false;

@@ -23,8 +23,11 @@ import {
   shareReplay,
   tap
 } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
+import { CodingService } from '../../../coding/services/coding.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { AppService } from '../../../core/services/app.service';
 import {
   FlatResponseFilterOptionsResponse,
   FlatResponseFrequencyItem,
@@ -32,7 +35,7 @@ import {
   FlatResponseFrequencyRequestCombo,
   FlatResponseFrequenciesResponse,
   TestResultService
-} from '../../../services/test-result.service';
+} from '../../../shared/services/test-result/test-result.service';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData
@@ -125,7 +128,10 @@ interface BookletFromPersonTestResults {
   styleUrls: ['./test-results-flat-table.component.scss']
 })
 export class TestResultsFlatTableComponent implements OnDestroy {
-  private backendService = inject(BackendService);
+  private fileService = inject(FileService);
+  private unitNoteService = inject(UnitNoteService);
+  private codingService = inject(CodingService);
+  private responseService = inject(ResponseService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
@@ -642,7 +648,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService
+    this.fileService
       .getBookletInfo(this.appService.selectedWorkspaceId, normalizedBookletId)
       .subscribe({
         next: bookletInfo => {
@@ -699,7 +705,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
           { duration: 3000 }
         );
 
-        this.backendService
+        this.fileService
           .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
           .subscribe({
             next: unitInfo => {
@@ -739,7 +745,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.backendService
+    this.testResultService
       .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
         next: (result: BookletLogsForUnitResponse | null) => {
@@ -781,7 +787,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       duration: 3000
     });
 
-    this.backendService
+    this.unitNoteService
       .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
         next: notes => {
@@ -810,7 +816,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.backendService
+    this.testResultService
       .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId)
       .subscribe({
         next: logs => {
@@ -870,7 +876,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     const req$ = (
-      this.backendService.getPersonTestResults(
+      this.testResultService.getPersonTestResults(
         this.appService.selectedWorkspaceId,
         personId
       ) as unknown as Observable<BookletFromPersonTestResults[]>
@@ -1207,7 +1213,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
       return;
     }
 
-    this.backendService
+    this.unitNoteService
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
         next: notesByUnitId => {
@@ -1252,7 +1258,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             return;
           }
 
-          this.backendService
+          this.codingService
             .getReplayUrl(
               this.appService.selectedWorkspaceId,
               row.responseId,
@@ -1303,7 +1309,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.backendService
+        this.responseService
           .deleteResponse(this.appService.selectedWorkspaceId, row.responseId)
           .subscribe({
             next: result => {

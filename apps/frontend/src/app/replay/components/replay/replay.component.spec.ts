@@ -8,17 +8,33 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { ReplayComponent } from './replay.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { FileBackendService } from '../../../shared/services/file/file-backend.service';
+import { ReplayBackendService } from '../../services/replay-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import * as tokenUtils from '../../utils/token-utils';
 import * as domUtils from '../../utils/dom-utils';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
-class BackendServiceMock {
+class FileServiceMock {
   getUnitDef = jest.fn().mockReturnValue(of([{ data: 'unitDef data', file_id: 'UNIT-123.VOUD' }]));
-  getResponses = jest.fn().mockReturnValue(of([{ id: 1, data: 'response data' }]));
   getUnit = jest.fn().mockReturnValue(of([{ data: '<Unit><DefinitionRef player="Player-1.0"></DefinitionRef></Unit>', file_id: 'UNIT-123' }]));
   getPlayer = jest.fn().mockReturnValue(of([{ data: 'player data', file_id: 'PLAYER-1.0' }]));
+  getDirectDownloadLink = jest.fn().mockReturnValue('http://download');
+  getCodingSchemeFile = jest.fn().mockReturnValue(of(null));
+}
+
+class ResponseServiceMock {
+  getResponses = jest.fn().mockReturnValue(of([{ id: 1, data: 'response data' }]));
+}
+
+class FileBackendServiceMock {
+  getVocs = jest.fn().mockReturnValue(of([{ data: 'vocs data', file_id: 'UNIT-123.vocs' }]));
+}
+
+class ReplayBackendServiceMock {
+  storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
 }
 
 class AppServiceMock {
@@ -60,7 +76,10 @@ describe('ReplayComponent', () => {
         provideHttpClient(),
         { provide: ActivatedRoute, useValue: fakeActivatedRoute },
         { provide: SERVER_URL, useValue: environment.backendUrl },
-        { provide: BackendService, useClass: BackendServiceMock },
+        { provide: FileService, useClass: FileServiceMock },
+        { provide: ResponseService, useClass: ResponseServiceMock },
+        { provide: FileBackendService, useClass: FileBackendServiceMock },
+        { provide: ReplayBackendService, useClass: ReplayBackendServiceMock },
         { provide: AppService, useClass: AppServiceMock },
         { provide: MatSnackBar, useClass: MatSnackBarMock }
       ],
@@ -83,9 +102,9 @@ describe('ReplayComponent', () => {
 
   it('should initialise observables and default properties', () => {
     expect(component.isLoaded).toBeDefined();
-    expect(component.player).toBe('');
-    expect(component.unitDef).toBe('');
-    expect(component.responses).toBeUndefined();
+    expect(component.player).toBe('player data');
+    expect(component.unitDef).toBe('unitDef data');
+    expect(component.responses).toBeDefined();
   });
 
   it('should handle invalid testPerson in setTestPerson', () => {
@@ -102,7 +121,7 @@ describe('ReplayComponent', () => {
     snackBar.open.mockClear();
     component.checkPageError('notInList');
     expect(snackBar.open).toHaveBeenCalledWith(
-      'Keine valide Seite mit der ID "" gefunden',
+      'Keine valide Seite mit der ID "page-1" gefunden',
       'Schließen',
       { panelClass: ['snackbar-error'] }
     );

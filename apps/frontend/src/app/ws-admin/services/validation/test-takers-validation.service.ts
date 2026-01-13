@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 
 /**
@@ -19,8 +20,8 @@ export class TestTakersValidationService extends BaseValidationService<TestTaker
    */
   validate(): Observable<TestTakersValidationDto> {
     return this.createTask(this.validationType).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       switchMap(completedTask => this.getResults(completedTask.id)),
       tap(result => {
         this.saveResult(result);

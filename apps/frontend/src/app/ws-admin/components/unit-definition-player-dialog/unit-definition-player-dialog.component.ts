@@ -8,7 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import * as xml2js from 'xml2js';
-import { BackendService } from '../../../services/backend.service';
+import { FileService } from '../../../shared/services/file/file.service';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { UnitPlayerComponent } from '../../../replay/components/unit-player/unit-player.component';
 
@@ -37,8 +37,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<UnitDefinitionPlayerDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; unitId: string },
-    private backendService: BackendService
-  ) {}
+    private fileService: FileService
+  ) { }
 
   ngOnInit(): void {
     if (this.data.workspaceId && this.data.unitId) {
@@ -57,8 +57,8 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
     const workspaceId = this.data.workspaceId;
     const unitId = this.data.unitId.toUpperCase();
 
-    this.backendService.getUnit(workspaceId, unitId).subscribe({
-      next: unitFiles => {
+    this.fileService.getUnit(workspaceId, unitId).subscribe({
+      next: (unitFiles: FilesDto[]) => {
         if (!unitFiles || unitFiles.length === 0) {
           this.errorMessage = `Aufgabe ${unitId} wurde nicht gefunden.`;
           this.isLoading = false;
@@ -89,15 +89,15 @@ export class UnitDefinitionPlayerDialogComponent implements OnInit {
         const normalizedPlayerId = this.normalizePlayerId(playerRef);
 
         forkJoin({
-          def: this.backendService.getUnitDef(workspaceId, unitId),
-          player: this.backendService.getPlayer(workspaceId, normalizedPlayerId)
+          def: this.fileService.getUnitDef(workspaceId, unitId),
+          player: this.fileService.getPlayer(workspaceId, normalizedPlayerId)
         }).pipe(
           catchError(() => {
             this.errorMessage = 'Fehler beim Laden der Aufgabendefinition.';
             this.isLoading = false;
             return of({ def: [] as FilesDto[], player: [] as FilesDto[] });
           })
-        ).subscribe(result => {
+        ).subscribe((result: { def: FilesDto[]; player: FilesDto[] }) => {
           if (this.errorMessage) {
             return;
           }

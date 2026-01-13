@@ -19,7 +19,7 @@ import {
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 interface CoderResult {
   coderId: number;

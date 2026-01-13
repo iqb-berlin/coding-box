@@ -1,8 +1,8 @@
 import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { AppService } from '../../../core/services/app.service';
+import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 /**
@@ -12,7 +12,7 @@ import { ValidationTaskDto } from '../../../models/validation-task.dto';
 export abstract class BaseValidationService<TResult> {
   protected abstract validationType: string;
 
-  protected backendService = inject(BackendService);
+  protected validationService = inject(ValidationService);
   protected validationTaskStateService = inject(ValidationTaskStateService);
   protected appService = inject(AppService);
 
@@ -26,7 +26,7 @@ export abstract class BaseValidationService<TResult> {
     additionalData?: Record<string, unknown>
   ): Observable<ValidationTaskDto> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.createValidationTask(
+    return this.validationService.createValidationTask(
       workspaceId,
       type as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
       page,
@@ -40,7 +40,7 @@ export abstract class BaseValidationService<TResult> {
    */
   protected pollTask(taskId: number, pollInterval: number = 2000): Observable<ValidationTaskDto> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.pollValidationTask(workspaceId, taskId, pollInterval);
+    return this.validationService.pollValidationTask(workspaceId, taskId, pollInterval);
   }
 
   /**
@@ -48,7 +48,7 @@ export abstract class BaseValidationService<TResult> {
    */
   protected getResults(taskId: number): Observable<TResult> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.getValidationResults(workspaceId, taskId) as Observable<TResult>;
+    return this.validationService.getValidationResults(workspaceId, taskId) as Observable<TResult>;
   }
 
   /**
