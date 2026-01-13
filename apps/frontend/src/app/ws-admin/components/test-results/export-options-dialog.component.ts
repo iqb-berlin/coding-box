@@ -7,7 +7,7 @@ import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
 import { CommonModule } from '@angular/common';
-import { BackendService } from '../../../services/backend.service';
+import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 
 export interface ExportOptions {
   groupNames: string[];
@@ -127,7 +127,7 @@ export interface ExportOptions {
 })
 export class ExportOptionsDialogComponent implements OnInit {
   readonly dialogRef = inject(MatDialogRef<ExportOptionsDialogComponent>);
-  readonly backendService = inject(BackendService);
+  readonly testResultBackendService = inject(TestResultBackendService);
   readonly dialogData = inject(MAT_DIALOG_DATA);
 
   data: ExportOptions = {
@@ -151,7 +151,7 @@ export class ExportOptionsDialogComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.dialogData && this.dialogData.workspaceId) {
-      this.backendService.getExportOptions(this.dialogData.workspaceId).subscribe(options => {
+      this.testResultBackendService.getExportOptions(this.dialogData.workspaceId).subscribe((options: typeof this.availableOptions) => {
         this.availableOptions = options;
       });
     }

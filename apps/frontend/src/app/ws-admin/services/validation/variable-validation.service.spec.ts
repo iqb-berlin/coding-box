@@ -2,14 +2,14 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { VariableValidationService } from './variable-validation.service';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { AppService } from '../../../core/services/app.service';
+import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 describe('VariableValidationService', () => {
   let service: VariableValidationService;
-  let backendServiceMock: {
+  let validationServiceMock: {
     createValidationTask: jest.Mock;
     pollValidationTask: jest.Mock;
     getValidationResults: jest.Mock;
@@ -42,7 +42,7 @@ describe('VariableValidationService', () => {
   };
 
   beforeEach(() => {
-    backendServiceMock = {
+    validationServiceMock = {
       createValidationTask: jest.fn(),
       pollValidationTask: jest.fn(),
       getValidationResults: jest.fn(),
@@ -64,7 +64,7 @@ describe('VariableValidationService', () => {
       imports: [HttpClientTestingModule],
       providers: [
         VariableValidationService,
-        { provide: BackendService, useValue: backendServiceMock },
+        { provide: ValidationService, useValue: validationServiceMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: ValidationTaskStateService, useValue: stateServiceMock }
       ]
@@ -79,13 +79,13 @@ describe('VariableValidationService', () => {
 
   describe('validate', () => {
     it('should coordinate the validation process', done => {
-      backendServiceMock.createValidationTask.mockReturnValue(of(mockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
-      backendServiceMock.getValidationResults.mockReturnValue(of(mockResult));
+      validationServiceMock.createValidationTask.mockReturnValue(of(mockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
+      validationServiceMock.getValidationResults.mockReturnValue(of(mockResult));
 
       service.validate(1, 10).subscribe(result => {
         expect(result).toEqual(mockResult);
-        expect(backendServiceMock.createValidationTask).toHaveBeenCalledWith(workspaceId, 'variables', 1, 10, undefined);
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledWith(workspaceId, 'variables', 1, 10, undefined);
         done();
       });
     });
@@ -95,11 +95,11 @@ describe('VariableValidationService', () => {
     it('should coordinate deletion of selected responses', done => {
       const responseIds = [1, 2, 3];
       const deleteMockTask = { ...mockTask, validation_type: 'deleteResponses' as const };
-      backendServiceMock.createDeleteResponsesTask.mockReturnValue(of(deleteMockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.createDeleteResponsesTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
 
       service.deleteSelected(responseIds).subscribe(() => {
-        expect(backendServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIds);
+        expect(validationServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIds);
         expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', mockTask.id);
         expect(stateServiceMock.removeTaskId).toHaveBeenCalledWith(workspaceId, 'variables');
         done();
@@ -110,11 +110,11 @@ describe('VariableValidationService', () => {
   describe('deleteAll', () => {
     it('should coordinate deletion of all invalid responses', done => {
       const deleteMockTask = { ...mockTask, validation_type: 'deleteAllResponses' as const };
-      backendServiceMock.createDeleteAllResponsesTask.mockReturnValue(of(deleteMockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.createDeleteAllResponsesTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
 
       service.deleteAll().subscribe(() => {
-        expect(backendServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'variables');
+        expect(validationServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'variables');
         expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', mockTask.id);
         done();
       });

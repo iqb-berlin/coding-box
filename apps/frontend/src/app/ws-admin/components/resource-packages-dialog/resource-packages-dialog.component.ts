@@ -22,9 +22,9 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
-import { BackendService } from '../../../services/backend.service';
+import { ResourcePackageService } from '../../../shared/services/response/resource-package.service';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface ResourcePackagesDialogData {
   // Add any data you want to pass to the dialog
@@ -62,7 +62,7 @@ export interface ResourcePackagesDialogData {
 export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
   dialogRef = inject<MatDialogRef<ResourcePackagesDialogComponent>>(MatDialogRef);
   data = inject<ResourcePackagesDialogData>(MAT_DIALOG_DATA);
-  backendService = inject(BackendService);
+  resourcePackageService = inject(ResourcePackageService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
@@ -98,9 +98,9 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
    */
   loadResourcePackages(): void {
     this.isLoadingResourcePackages = true;
-    this.backendService.getResourcePackages(this.appService.selectedWorkspaceId)
+    this.resourcePackageService.getResourcePackages(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: packages => {
+        next: (packages: ResourcePackageDto[]) => {
           this.resourcePackages = packages;
           this.resourcePackageDataSource = new MatTableDataSource(packages);
           this.setupResourcePackageFilterPredicate();
@@ -179,9 +179,9 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     const packageIds = this.resourcePackageSelection.selected.map(pkg => pkg.id);
     this.isLoadingResourcePackages = true;
 
-    this.backendService.deleteResourcePackages(this.data.workspaceId, packageIds)
+    this.resourcePackageService.deleteResourcePackages(this.data.workspaceId, packageIds)
       .subscribe({
-        next: success => {
+        next: (success: boolean) => {
           this.isLoadingResourcePackages = false;
           if (success) {
             this.snackBar.open(
@@ -225,9 +225,9 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       return;
     }
     this.isLoadingResourcePackages = true;
-    this.backendService.downloadResourcePackage(this.data.workspaceId, resourcePackage.name)
+    this.resourcePackageService.downloadResourcePackage(this.data.workspaceId, resourcePackage.name)
       .subscribe({
-        next: blob => {
+        next: (blob: Blob) => {
           this.isLoadingResourcePackages = false;
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
@@ -267,9 +267,9 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
     const files = inputElement.files;
     if (files && files.length) {
       this.isLoadingResourcePackages = true;
-      this.backendService.uploadResourcePackage(this.data.workspaceId, files[0])
+      this.resourcePackageService.uploadResourcePackage(this.data.workspaceId, files[0])
         .subscribe({
-          next: id => {
+          next: (id: number) => {
             this.isLoadingResourcePackages = false;
             if (id > 0) {
               this.snackBar.open(

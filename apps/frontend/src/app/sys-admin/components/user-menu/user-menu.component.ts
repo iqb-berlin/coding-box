@@ -7,7 +7,7 @@ import { MatDivider } from '@angular/material/divider';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { AccountActionComponent } from '../account-action/account-action.component';
 import { AuthService } from '../../../core/services/auth.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
 
 @Component({

@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';

@@ -37,10 +37,10 @@ import {
   MatTable
 } from '@angular/material/table';
 import { MatTooltip } from '@angular/material/tooltip';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { ImportService, ImportOptions, Result } from '../../../shared/services/file/import.service';
+import { AppService } from '../../../core/services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
-import { ImportOptions, Result } from '../../../services/import.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import {
   ConfirmDialogComponent,
@@ -109,7 +109,8 @@ export interface ImportFormValues {
   ]
 })
 export class TestCenterImportComponent {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
+  private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
   data = inject<{
     importType: string;
@@ -289,7 +290,7 @@ export class TestCenterImportComponent {
     this.testCenterInstance = this.testCenters.filter(
       testcenter => testcenter.id === this.loginForm.get('testCenter')?.value
     );
-    this.backendService
+    this.userBackendService
       .authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url)
       .pipe(
         catchError(() => {
@@ -297,7 +298,7 @@ export class TestCenterImportComponent {
           return of();
         })
       )
-      .subscribe(response => {
+      .subscribe((response: { token?: string; claims?: { workspaceAdmin: WorkspaceAdmin[] } }) => {
         if (!response || !response.token || !response.claims) {
           this.authenticationError = true;
           return;
@@ -355,7 +356,7 @@ export class TestCenterImportComponent {
       formValues.testCenterIndividual;
 
     this.isUploadingTestResults = true;
-    this.backendService
+    this.importService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
@@ -363,7 +364,7 @@ export class TestCenterImportComponent {
         url,
         this.authToken
       )
-      .subscribe(response => {
+      .subscribe((response: TestGroupsInfoDto[]) => {
         this.isUploadingTestResults = false;
         this.workspaceAdminService.setTestGroups(response);
         this.testGroups = response;
@@ -459,7 +460,7 @@ export class TestCenterImportComponent {
     overwriteExistingLogs: boolean,
     overwriteFileIds?: string[]
   ): void {
-    this.backendService
+    this.importService
       .importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
@@ -515,7 +516,7 @@ export class TestCenterImportComponent {
                 data: { conflicts: initialConflicts }
               });
 
-              ref.afterClosed().subscribe(choice => {
+              ref.afterClosed().subscribe((choice: TestFilesUploadConflictsDialogResult | undefined) => {
                 if (
                   choice?.overwrite === true &&
                   (choice.overwriteFileIds || []).length > 0
@@ -561,7 +562,7 @@ export class TestCenterImportComponent {
               const mergedResult: TestFilesUploadResultDto = {
                 total: Number(
                   firstResult?.total ??
-                    mergedUploadedFiles.length + mergedFailedFiles.length
+                  mergedUploadedFiles.length + mergedFailedFiles.length
                 ),
                 uploaded: mergedUploadedFiles.length,
                 failed: mergedFailedFiles.length,

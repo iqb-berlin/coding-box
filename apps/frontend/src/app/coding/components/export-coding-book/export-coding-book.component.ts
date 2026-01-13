@@ -21,8 +21,9 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { CodeBookContentSetting } from '../../../../../../../api-dto/coding/codebook-content-setting';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingService } from '../../services/coding.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { AppService } from '../../../core/services/app.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 
@@ -98,11 +99,12 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   validationCacheKey: string | null = null;
 
   constructor(
-    private backendService: BackendService,
+    private codingService: CodingService,
+    private fileService: FileService,
     private appService: AppService,
     private datePipe: DatePipe,
     private validationStateService: ValidationStateService
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.workspaceChanges = this.checkWorkspaceChanges();
@@ -159,7 +161,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     if (workspaceId) {
       this.isLoading = true;
 
-      this.backendService.getUnitsWithFileIds(workspaceId).subscribe({
+      this.fileService.getUnitsWithFileIds(workspaceId).subscribe({
         next: units => {
           if (units && units.length > 0) {
             this.availableUnits = units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
@@ -220,7 +222,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.backendService.getMissingsProfiles(workspaceId).subscribe({
+      this.codingService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
           this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
           this.selectedMissingsProfile = 0;
@@ -244,7 +246,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
     this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
     this.appService.dataLoading = true;
-    this.backendService.getCodingBook(
+    this.codingService.getCodingBook(
       workspaceId,
       this.contentOptions.missingsProfile,
       this.contentOptions,

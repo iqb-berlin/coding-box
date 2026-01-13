@@ -24,9 +24,9 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CoderTraining } from '../../models/coder-training.model';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
@@ -55,7 +55,7 @@ import { BackendMessageTranslatorService } from '../../services/backend-message-
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnDestroy {
-  private backendService = inject(BackendService);
+  private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private appService = inject(AppService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -92,7 +92,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         return;
       }
 
-      this.backendService.getCoderTrainings(workspaceId)
+      this.codingTrainingBackendService.getCoderTrainings(workspaceId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
           next: (trainings: CoderTraining[]) => {
@@ -136,7 +136,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.updateCoderTrainingLabel(workspaceId, this.editingTrainingId, this.editingLabel.trim())
+    this.codingTrainingBackendService.updateCoderTrainingLabel(workspaceId, this.editingTrainingId, this.editingLabel.trim())
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {
@@ -218,7 +218,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingJobsForTraining(workspaceId, training.id)
+    this.codingTrainingBackendService.getCodingJobsForTraining(workspaceId, training.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: jobs => {
@@ -265,7 +265,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.deleteCoderTraining(workspaceId, training.id)
+    this.codingTrainingBackendService.deleteCoderTraining(workspaceId, training.id)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {

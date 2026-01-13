@@ -24,8 +24,9 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { MatDialog } from '@angular/material/dialog';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WrappedIconComponent } from '../../../shared/wrapped-icon/wrapped-icon.component';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
@@ -46,7 +47,8 @@ import {
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, MatButton, MatTooltip, WrappedIconComponent, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class WsUsersComponent implements OnInit {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
   private editUserDialog = inject(MatDialog);
   private messageDialog = inject(MatDialog);
@@ -54,12 +56,12 @@ export class WsUsersComponent implements OnInit {
   private deleteConfirmDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
 
-  selectedUsers : number[] = [];
+  selectedUsers: number[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'name', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces :WorkspaceInListDto[] = [];
+  userWorkspaces: WorkspaceInListDto[] = [];
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
   selectedUser: number[] = [];
   selectedRows!: UserFullDto[];
@@ -87,7 +89,7 @@ export class WsUsersComponent implements OnInit {
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.backendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
@@ -104,7 +106,7 @@ export class WsUsersComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }
@@ -117,7 +119,7 @@ export class WsUsersComponent implements OnInit {
 
   updateUserWorkspacesList(userId: number): void {
     if (this.tableSelectionCheckboxes.selected.length === 1) {
-      this.backendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
+      this.userBackendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
         this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
       });
     }

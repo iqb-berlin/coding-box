@@ -35,8 +35,8 @@ import {
   TestPersonCodingService,
   WorkspaceGroupCodingStats
 } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
 
@@ -72,7 +72,7 @@ export class TestPersonCodingComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
   private snackBar = inject(MatSnackBar);
   private appService = inject(AppService);
-  private backendService = inject(BackendService);
+  private testResultService = inject(TestResultService);
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
@@ -355,7 +355,7 @@ export class TestPersonCodingComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.getTestPersons(this.workspaceId)
+    this.testResultService.getTestPersons(this.workspaceId)
       .pipe(
         catchError(error => {
           this.snackBar.open(this.translateService.instant('test-person-coding.fetch-test-persons-error', { error: error.message || this.translateService.instant('error.unknown') }), this.translateService.instant('close'), { duration: 5000 });

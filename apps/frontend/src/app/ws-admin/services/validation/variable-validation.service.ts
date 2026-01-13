@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { switchMap, tap, map } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 interface VariablesValidationResult {
   data: InvalidVariableDto[];
@@ -26,8 +27,8 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    */
   validate(page: number = 1, limit: number = 10): Observable<VariablesValidationResult> {
     return this.createTask(this.validationType, page, limit).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       switchMap(completedTask => this.getResults(completedTask.id)),
       tap(result => {
         this.saveResult(result);
@@ -41,9 +42,9 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    */
   deleteSelected(responseIds: number[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+    return this.validationService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );
@@ -54,9 +55,9 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    */
   deleteAll(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'variables').pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+    return this.validationService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'variables').pipe(
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );

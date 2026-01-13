@@ -60,8 +60,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
-import { BackendService, SearchResponseItem } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { SearchResponseItem } from '../../../models/coding-interfaces';
+import { CodingService } from '../../services/coding.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import {
@@ -121,7 +123,8 @@ import { CodingManagementService, StatisticsVersion } from '../../services/codin
 })
 export class CodingManagementComponent
 implements AfterViewInit, OnInit, OnDestroy {
-  private backendService = inject(BackendService);
+  private codingService = inject(CodingService);
+  private fileService = inject(FileService);
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
@@ -375,7 +378,7 @@ implements AfterViewInit, OnInit, OnDestroy {
     return Math.round(
       (this.codingStatistics.statusCounts[status] /
         this.codingStatistics.totalResponses) *
-        100
+      100
     );
   }
 
@@ -619,7 +622,7 @@ implements AfterViewInit, OnInit, OnDestroy {
           if (!token) {
             return of({ replayUrl: '' });
           }
-          return this.backendService.getReplayUrl(
+          return this.codingService.getReplayUrl(
             workspaceId,
             response.id,
             token
@@ -671,7 +674,7 @@ implements AfterViewInit, OnInit, OnDestroy {
   getCodingSchemeRefFromUnit(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService
+    this.fileService
       .getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {
@@ -730,7 +733,7 @@ implements AfterViewInit, OnInit, OnDestroy {
   showCodingScheme(codingSchemeRef: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService
+    this.fileService
       .getCodingSchemeFile(workspaceId, codingSchemeRef)
       .pipe(
         catchError(() => {
@@ -785,7 +788,7 @@ implements AfterViewInit, OnInit, OnDestroy {
   showUnitXml(unitId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.backendService
+    this.fileService
       .getUnitContentXml(workspaceId, unitId.toString())
       .pipe(
         catchError(() => {

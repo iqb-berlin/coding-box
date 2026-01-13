@@ -7,13 +7,13 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('WsAccessRightsComponent', () => {
   let component: WsAccessRightsComponent;
   let fixture: ComponentFixture<WsAccessRightsComponent>;
-  let mockBackendService: Partial<BackendService>;
+  let mockUserBackendService: Partial<UserBackendService>;
   let mockAppService: Partial<AppService>;
   let mockSnackBar: Partial<MatSnackBar>;
 
@@ -27,7 +27,7 @@ describe('WsAccessRightsComponent', () => {
   ];
 
   beforeEach(async () => {
-    mockBackendService = {
+    mockUserBackendService = {
       getUsers: jest.fn().mockReturnValue(of(mockUsers)),
       saveUsers: jest.fn().mockReturnValue(of(true))
     };
@@ -50,7 +50,7 @@ describe('WsAccessRightsComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        { provide: BackendService, useValue: mockBackendService },
+        { provide: UserBackendService, useValue: mockUserBackendService },
         { provide: AppService, useValue: mockAppService },
         { provide: MatSnackBar, useValue: mockSnackBar }
       ]
@@ -66,7 +66,7 @@ describe('WsAccessRightsComponent', () => {
   });
 
   it('should load users on creation', () => {
-    expect(mockBackendService.getUsers).toHaveBeenCalledWith(1);
+    expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
     expect(component.workspaceUsers.entries.length).toBe(2);
     expect(component.workspaceUsers.entries[0].name).toBe('user1');
   });
@@ -89,7 +89,7 @@ describe('WsAccessRightsComponent', () => {
 
     component.save();
 
-    expect(mockBackendService.saveUsers).toHaveBeenCalled();
+    expect(mockUserBackendService.saveUsers).toHaveBeenCalled();
     expect(mockSnackBar.open).toHaveBeenCalledWith('Zugriffsrechte erfolgreich gespeichert', 'Schließen', expect.any(Object));
     expect(component.workspaceUsers.hasChanged).toBe(false);
   });

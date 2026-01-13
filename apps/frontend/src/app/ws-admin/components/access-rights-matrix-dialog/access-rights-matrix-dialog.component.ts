@@ -6,7 +6,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
-import { WorkspaceService } from '../../../services/workspace.service';
+import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { AccessLevelDto } from '../../../../../../../api-dto/workspaces/access-level-dto';
 import { FeatureCategoryDto } from '../../../../../../../api-dto/workspaces/feature-category-dto';
 import { AccessRightsMatrixDto } from '../../../../../../../api-dto/workspaces/access-rights-matrix-dto';

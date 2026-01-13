@@ -23,8 +23,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
+import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
@@ -81,12 +81,12 @@ export class BookletSearchDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<BookletSearchDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { initialSearch?: string },
-    private backendService: BackendService,
+    private testResultService: TestResultService,
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     // Set up debounced search
@@ -124,13 +124,13 @@ export class BookletSearchDialogComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.searchBookletsByName(
+    this.testResultService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
       this.currentPage,
       this.pageSize
     ).subscribe({
-      next: response => {
+      next: (response: { data: BookletSearchResult[]; total: number }) => {
         this.bookletSearchResults = response.data;
         this.totalResults = response.total;
         this.isLoading = false;
@@ -172,11 +172,11 @@ export class BookletSearchDialogComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteBooklet(
+        this.testResultService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
         ).subscribe({
-          next: response => {
+          next: (response: { success: boolean; report: { warnings: string[] } }) => {
             if (response.success) {
               // Remove the deleted booklet from the results
               this.bookletSearchResults = this.bookletSearchResults.filter(
@@ -248,11 +248,11 @@ export class BookletSearchDialogComponent implements OnInit {
             return;
           }
 
-          this.backendService.deleteBooklet(
+          this.testResultService.deleteBooklet(
             this.appService.selectedWorkspaceId,
             bookletIds[index]
           ).subscribe({
-            next: response => {
+            next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
               } else {

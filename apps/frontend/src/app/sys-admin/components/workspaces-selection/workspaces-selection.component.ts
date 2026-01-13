@@ -27,7 +27,7 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsSelectedIdPipe } from '../../../shared/pipes/isSelectedId.pipe';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { BackendService } from '../../../services/backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 
 @Component({
   selector: 'coding-box-workspaces-selection',
@@ -37,7 +37,7 @@ import { BackendService } from '../../../services/backend.service';
   imports: [SearchFilterComponent, MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, IsSelectedPipe, IsAllSelectedPipe, HasSelectionValuePipe, IsSelectedIdPipe]
 })
 export class WorkspacesSelectionComponent implements OnInit {
-  private backendService = inject(BackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
 
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
@@ -64,7 +64,7 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
-    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
       this.workspacesUpdated.emit(this.workspacesChanged());
       this.setObjectsDatasource(workspaces.data);
       this.tableSelectionCheckboxes.clear();

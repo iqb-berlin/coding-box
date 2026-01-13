@@ -3,6 +3,7 @@ import { Observable } from 'rxjs';
 import { switchMap, tap, map } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 /**
  * Service for validating duplicate responses.
@@ -19,8 +20,8 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
    */
   validate(page: number = 1, limit: number = 10): Observable<DuplicateResponsesResultDto> {
     return this.createTask(this.validationType, page, limit).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       switchMap(completedTask => this.getResults(completedTask.id)),
       tap(result => {
         this.saveResult(result);
@@ -34,9 +35,9 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
    */
   resolveDuplicateGroup(responseIdsToDelete: number[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.createDeleteResponsesTask(workspaceId, responseIdsToDelete).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+    return this.validationService.createDeleteResponsesTask(workspaceId, responseIdsToDelete).pipe(
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );
@@ -47,9 +48,9 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
    */
   resolveAllDuplicates(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.backendService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'duplicateResponses').pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+    return this.validationService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'duplicateResponses').pipe(
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );
