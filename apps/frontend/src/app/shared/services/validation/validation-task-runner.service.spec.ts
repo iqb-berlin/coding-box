@@ -105,6 +105,21 @@ describe('ValidationTaskRunnerService', () => {
         }
       });
     });
+
+    it('should throw error if task status is unknown', done => {
+      const mockCreatedTask = { id: 123 } as ValidationTaskDto;
+      const mockUnknownTask = { id: 123, status: 'canceled' } as unknown as ValidationTaskDto;
+
+      validationServiceMock.createValidationTask.mockReturnValue(of(mockCreatedTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(mockUnknownTask));
+
+      service.runTask(1, 'variables').subscribe({
+        error: err => {
+          expect(err.message).toBe('Unbekannter Task-Status');
+          done();
+        }
+      });
+    });
   });
 
   describe('runDeleteResponsesTask', () => {
@@ -123,6 +138,25 @@ describe('ValidationTaskRunnerService', () => {
 
       expect(result!.result).toEqual(mockRes);
       expect(validationServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(1, [10, 11]);
+    }));
+  });
+
+  describe('runDeleteAllResponsesTask', () => {
+    it('should run delete all task', fakeAsync(() => {
+      const mockTask = { id: 1, status: 'completed' } as ValidationTaskDto;
+      const mockRes = { deletedCount: 100 };
+
+      validationServiceMock.createDeleteAllResponsesTask.mockReturnValue(of(mockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
+      validationServiceMock.getValidationResults.mockReturnValue(of(mockRes));
+
+      let result: { createdTask: ValidationTaskDto; finalTask: ValidationTaskDto; result: unknown } | undefined;
+      service.runDeleteAllResponsesTask(1, 'variables').subscribe(r => {
+        result = r;
+      });
+
+      expect(result!.result).toEqual(mockRes);
+      expect(validationServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(1, 'variables');
     }));
   });
 });

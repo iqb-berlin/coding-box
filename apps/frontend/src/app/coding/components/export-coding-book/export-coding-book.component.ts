@@ -124,28 +124,15 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => {
-        this.validationProgress = progress;
-        this.isValidating = progress.status === 'loading' || progress.status === 'processing';
-      });
+      .subscribe(progress => this.handleValidationProgress(progress));
+
+    this.handleValidationProgress(this.validationStateService.getValidationProgress());
 
     this.validationStateService.validationResults$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(results => {
-        this.validationResults = results;
-        if (results) {
-          this.validationCacheKey = results.cacheKey || null;
-        }
-      });
+      .subscribe(results => this.handleValidationResults(results));
 
-    const currentResults = this.validationStateService.getValidationResults();
-    if (currentResults) {
-      this.validationResults = currentResults;
-    }
-
-    const currentProgress = this.validationStateService.getValidationProgress();
-    this.validationProgress = currentProgress;
-    this.isValidating = currentProgress.status === 'loading' || currentProgress.status === 'processing';
+    this.handleValidationResults(this.validationStateService.getValidationResults());
   }
 
   ngOnDestroy(): void {
@@ -219,6 +206,18 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   private checkWorkspaceChanges(): boolean {
     return false;
+  }
+
+  private handleValidationResults(results: ValidateCodingCompletenessResponseDto | null): void {
+    this.validationResults = results;
+    if (results) {
+      this.validationCacheKey = results.cacheKey || null;
+    }
+  }
+
+  private handleValidationProgress(progress: ValidationProgress): void {
+    this.validationProgress = progress;
+    this.isValidating = progress.status === 'loading' || progress.status === 'processing';
   }
 
   private loadMissingsProfiles(): void {
