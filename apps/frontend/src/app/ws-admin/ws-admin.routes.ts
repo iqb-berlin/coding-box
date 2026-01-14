@@ -27,7 +27,7 @@ export const wsAdminRoutes: Routes = [
           { path: '', redirectTo: 'management', pathMatch: 'full' },
           {
             path: 'management',
-            loadComponent: () => import('../coding/components/coding-managment/coding-management.component').then(m => m.CodingManagementComponent)
+            loadComponent: () => import('../coding/components/coding-management/coding-management.component').then(m => m.CodingManagementComponent)
           },
           {
             path: 'my-jobs',
