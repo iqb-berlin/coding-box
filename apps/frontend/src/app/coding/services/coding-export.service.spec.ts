@@ -5,6 +5,7 @@ import { of } from 'rxjs';
 import { CodingExportService } from './coding-export.service';
 import { AppService } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
 
 describe('CodingExportService', () => {
   let service: CodingExportService;
@@ -78,9 +79,9 @@ describe('CodingExportService', () => {
   });
 
   it('should get coding book', () => {
-    const mockContent: any = {
+    const mockContent = {
       unitName: true, variableId: true, variableLabel: true, variableDescription: true, value: true, valueLabel: true, valueDescription: true
-    };
+    } as unknown as CodeBookContentSetting;
     service.getCodingBook(1, 'profile1', mockContent, [1, 2]).subscribe(res => {
       expect(res).toBeDefined();
     });

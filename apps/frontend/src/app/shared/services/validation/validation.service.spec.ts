@@ -58,6 +58,129 @@ describe('ValidationService', () => {
     });
   });
 
+  describe('validateVariableTypes', () => {
+    it('should fetch variable types validation results', () => {
+      const mockResponse = {
+        data: [], total: 0, page: 1, limit: 10
+      };
+      service.validateVariableTypes(mockWorkspaceId, 1, 10).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-variable-types?page=1&limit=10`);
+      req.flush(mockResponse);
+    });
+
+    it('should return default on error', () => {
+      service.validateVariableTypes(mockWorkspaceId, 1, 10).subscribe(res => {
+        expect(res.total).toBe(0);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-variable-types?page=1&limit=10`);
+      req.error(new ErrorEvent('Network error'));
+    });
+  });
+
+  describe('validateResponseStatus', () => {
+    it('should fetch response status validation results', () => {
+      const mockResponse = {
+        data: [], total: 0, page: 1, limit: 10
+      };
+      service.validateResponseStatus(mockWorkspaceId, 1, 10).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-response-status?page=1&limit=10`);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('validateTestTakers', () => {
+    it('should fetch test takers validation results', () => {
+      const mockResponse = { testTakersFound: true, missingPersons: [] };
+      service.validateTestTakers(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-testtakers`);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('validateGroupResponses', () => {
+    it('should fetch group responses validation results', () => {
+      const mockResponse = { total: 0, allGroupsHaveResponses: true };
+      service.validateGroupResponses(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-group-responses?page=1&limit=10`);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('validateDuplicateResponses', () => {
+    it('should fetch duplicate responses validation results', () => {
+      const mockResponse = { data: [], total: 0 };
+      service.validateDuplicateResponses(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/validate-duplicate-responses?page=1&limit=10`);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('resolveDuplicateResponses', () => {
+    it('should post resolution data', () => {
+      const mockResponse = { success: true, resolvedCount: 1 };
+      service.resolveDuplicateResponses(mockWorkspaceId, { resolutionMap: {} }).subscribe(res => {
+        expect(res).toEqual(mockResponse);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/responses/resolve-duplicates`);
+      expect(req.request.method).toBe('POST');
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('deleteInvalidResponses', () => {
+    it('should send delete request with ids', () => {
+      service.deleteInvalidResponses(mockWorkspaceId, [1, 2]).subscribe(res => {
+        expect(res).toBe(2);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/invalid-responses?responseIds=1,2`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(2);
+    });
+  });
+
+  describe('deleteAllInvalidResponses', () => {
+    it('should send delete all request with type', () => {
+      service.deleteAllInvalidResponses(mockWorkspaceId, 'variables').subscribe(res => {
+        expect(res).toBe(10);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/files/all-invalid-responses?validationType=variables`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(10);
+    });
+  });
+
+  describe('getValidationTask', () => {
+    it('should fetch single task', () => {
+      const mockTask = { id: 123 };
+      service.getValidationTask(mockWorkspaceId, 123).subscribe(res => {
+        expect(res).toEqual(mockTask);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/123`);
+      req.flush(mockTask);
+    });
+  });
+
+  describe('getValidationTasks', () => {
+    it('should fetch all tasks', () => {
+      const mockTasks = [{ id: 1 }];
+      service.getValidationTasks(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual(mockTasks);
+      });
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks`);
+      req.flush(mockTasks);
+    });
+  });
+
   describe('createValidationTask', () => {
     it('should create task with parameters and additional data', () => {
       const mockTask = { id: 1, status: 'pending' } as ValidationTaskDto;
@@ -88,9 +211,6 @@ describe('ValidationService', () => {
       const taskCompleted = { id: taskId, status: 'completed' } as ValidationTaskDto;
 
       service.pollValidationTask(mockWorkspaceId, taskId, 1000).subscribe(() => {
-        // We only receive responses while the condition is true (pending or processing) OR the final one?
-        // takeWhile(..., true) emits the value that caused the condition to break.
-        // So we expect: pending -> processing -> completed.
       });
 
       // Initial tick (0s) - No request yet because interval waits
@@ -144,6 +264,14 @@ describe('ValidationService', () => {
       // 2. Get Results for the latest task (ID 2)
       const reqResult = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks/2/results`);
       reqResult.flush(mockResult);
+    });
+
+    it('should handle empty tasks list', () => {
+      service.getLastValidationResults(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual({});
+      });
+      const reqTasks = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/validation-tasks`);
+      reqTasks.flush([]);
     });
   });
 });
