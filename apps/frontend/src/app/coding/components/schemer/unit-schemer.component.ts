@@ -9,8 +9,8 @@ import {
   VosReadNotification,
   VosStartCommand
 } from './message-types.interface';
-import { PostMessageService } from '../../../services/post-message.service';
-import { SchemerMessage } from '../../../services/post-message-types';
+import { PostMessageService } from '../../../core/services/post-message.service';
+import { SchemerMessage } from '../../../core/services/post-message-types';
 
 @Component({
   selector: 'unit-schemer-standalone',

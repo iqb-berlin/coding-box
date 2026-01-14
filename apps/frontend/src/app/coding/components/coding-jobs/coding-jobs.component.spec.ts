@@ -8,8 +8,9 @@ import { MatDialog } from '@angular/material/dialog';
 import { of, throwError } from 'rxjs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { CodingJobsComponent } from './coding-jobs.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJob } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
@@ -17,7 +18,8 @@ import { Coder } from '../../models/coder.model';
 describe('CodingJobsComponent', () => {
   let component: CodingJobsComponent;
   let fixture: ComponentFixture<CodingJobsComponent>;
-  let backendServiceMock: Partial<BackendService>;
+  let codingJobBackendServiceMock: Partial<CodingJobBackendService>;
+  let codingTrainingBackendServiceMock: Partial<CodingTrainingBackendService>;
   let appServiceMock: Partial<AppService>;
   let coderServiceMock: Partial<CoderService>;
   let matSnackBarMock: Partial<MatSnackBar>;
@@ -56,11 +58,10 @@ describe('CodingJobsComponent', () => {
   ] as Coder[];
 
   beforeEach(async () => {
-    backendServiceMock = {
+    codingJobBackendServiceMock = {
       getCodingIncompleteVariables: jest.fn().mockReturnValue(of([])),
       getCodingJobs: jest.fn().mockReturnValue(of({ data: mockCodingJobs })),
       getBulkCodingProgress: jest.fn().mockReturnValue(of({})),
-      getCoderTrainings: jest.fn().mockReturnValue(of([])),
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
       restartCodingJobWithOpenUnits: jest.fn().mockReturnValue(of({})),
@@ -68,6 +69,10 @@ describe('CodingJobsComponent', () => {
       bulkApplyCodingResults: jest.fn().mockReturnValue(of({
         success: true, jobsProcessed: 0, totalUpdatedResponses: 0, results: []
       }))
+    };
+
+    codingTrainingBackendServiceMock = {
+      getCoderTrainings: jest.fn().mockReturnValue(of([]))
     };
 
     appServiceMock = {
@@ -95,7 +100,8 @@ describe('CodingJobsComponent', () => {
       ],
       providers: [
         provideNoopAnimations(),
-        { provide: BackendService, useValue: backendServiceMock },
+        { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
+        { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: CoderService, useValue: coderServiceMock },
         { provide: MatSnackBar, useValue: matSnackBarMock },
@@ -108,7 +114,8 @@ describe('CodingJobsComponent', () => {
     }).overrideComponent(CodingJobsComponent, {
       add: {
         providers: [
-          { provide: BackendService, useValue: backendServiceMock },
+          { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
+          { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
           { provide: AppService, useValue: appServiceMock },
           { provide: CoderService, useValue: coderServiceMock },
           { provide: MatSnackBar, useValue: matSnackBarMock },
@@ -127,7 +134,7 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should load coding jobs and coders on init', () => {
-    expect(backendServiceMock.getCodingJobs).toHaveBeenCalledWith(1);
+    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledWith(1);
     expect(coderServiceMock.getCoders).toHaveBeenCalled();
     expect(component.dataSource.data.length).toBe(2);
     expect(component.allCoders.length).toBe(2);
@@ -171,15 +178,15 @@ describe('CodingJobsComponent', () => {
 
   it('should handle fallback when loading coding jobs fails initially', fakeAsync(() => {
     // Initial fail
-    (backendServiceMock.getCodingJobs as jest.Mock).mockReturnValueOnce(throwError(() => new Error('Error')));
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValueOnce(throwError(() => new Error('Error')));
 
     // Fallback success
-    (backendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(of({ data: mockCodingJobs }));
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(of({ data: mockCodingJobs }));
 
     component.loadCodingJobs();
     tick();
 
-    expect(backendServiceMock.getCodingJobs).toHaveBeenCalledTimes(2); // Initial try + retry
+    expect(codingJobBackendServiceMock.getCodingJobs).toHaveBeenCalledTimes(2); // Initial try + retry
     expect(component.dataSource.data.length).toBe(2);
   }));
 
@@ -204,7 +211,7 @@ describe('CodingJobsComponent', () => {
     });
 
     component.deleteCodingJob(job);
-    expect(backendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
+    expect(codingJobBackendServiceMock.deleteCodingJob).not.toHaveBeenCalled();
   });
 
   it('should format variable lists correctly', () => {
@@ -267,7 +274,7 @@ describe('CodingJobsComponent', () => {
     component.deleteCodingJob(job);
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(backendServiceMock.deleteCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledWith(1, job.id);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('erfolgreich gelöscht'),
       'Schließen',
@@ -288,7 +295,7 @@ describe('CodingJobsComponent', () => {
     tick(); // Dialog afterClosed
     flush(); // All deletions
 
-    expect(backendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(1);
+    expect(codingJobBackendServiceMock.deleteCodingJob).toHaveBeenCalledTimes(1);
     expect(matSnackBarMock.open).toHaveBeenCalled();
   }));
 
@@ -300,7 +307,7 @@ describe('CodingJobsComponent', () => {
 
   it('should handle start coding job', () => {
     const job = mockCodingJobs[0] as CodingJob;
-    (backendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
+    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
       total: 1,
       items: [{
         unitName: 'Unit 1',
@@ -316,7 +323,7 @@ describe('CodingJobsComponent', () => {
 
     component.startCodingJob(job);
 
-    expect(backendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
     expect(appServiceMock.createToken).toHaveBeenCalled();
     expect(localStorageSpy).toHaveBeenCalledWith(
       `replay_booklet_${job.id}`,
@@ -331,8 +338,8 @@ describe('CodingJobsComponent', () => {
     (matDialogMock.open as jest.Mock).mockReturnValue({
       afterClosed: () => of(true)
     });
-    (backendServiceMock.restartCodingJobWithOpenUnits as jest.Mock).mockReturnValue(of(job));
-    (backendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
+    (codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock).mockReturnValue(of(job));
+    (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
       total: 1,
       items: [{
         unitName: 'Unit 1',
@@ -349,8 +356,8 @@ describe('CodingJobsComponent', () => {
     tick();
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(backendServiceMock.restartCodingJobWithOpenUnits).toHaveBeenCalledWith(1, job.id);
-    expect(backendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
     expect(window.open).toHaveBeenCalled();
   }));
 
@@ -365,7 +372,7 @@ describe('CodingJobsComponent', () => {
     const job = mockCodingJobs[0] as CodingJob;
     component.applyCodingResults(job);
 
-    expect(backendServiceMock.applyCodingResults).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.applyCodingResults).toHaveBeenCalledWith(1, job.id);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Ergebnisse erfolgreich angewendet'),
       'Schließen',
@@ -381,7 +388,7 @@ describe('CodingJobsComponent', () => {
     component.bulkApplyCodingResults();
 
     expect(matDialogMock.open).toHaveBeenCalled();
-    expect(backendServiceMock.bulkApplyCodingResults).toHaveBeenCalledWith(1);
+    expect(codingJobBackendServiceMock.bulkApplyCodingResults).toHaveBeenCalledWith(1);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Massenanwendung abgeschlossen'),
       'Schließen',
@@ -390,8 +397,8 @@ describe('CodingJobsComponent', () => {
   });
 
   it('should handle API errors when loading jobs', () => {
-    (backendServiceMock.getCodingIncompleteVariables as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
-    (backendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
+    (codingJobBackendServiceMock.getCodingIncompleteVariables as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
+    (codingJobBackendServiceMock.getCodingJobs as jest.Mock).mockReturnValue(throwError(() => new Error('API Error')));
 
     component.loadCodingJobs();
 

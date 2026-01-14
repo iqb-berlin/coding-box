@@ -16,7 +16,8 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
-import { ImportOptions } from '../../../../../frontend/src/app/services/import.service';
+import { ImportOptionsDto as ImportOptions } from '../../../../../../api-dto/files/import-options.dto';
+
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 

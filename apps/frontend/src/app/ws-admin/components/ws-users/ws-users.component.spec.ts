@@ -14,8 +14,9 @@ import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { MessageDialogComponent, MessageType } from '../../../shared/dialogs/message-dialog.component';
 import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';
@@ -25,7 +26,8 @@ import { WorkspaceAccessRightsDialogComponent } from '../../../sys-admin/compone
 describe('WsUsersComponent', () => {
   let component: WsUsersComponent;
   let fixture: ComponentFixture<WsUsersComponent>;
-  let mockBackendService: Partial<BackendService>;
+  let mockUserBackendService: Partial<UserBackendService>;
+  let mockWorkspaceBackendService: Partial<WorkspaceBackendService>;
   let mockAppService: Partial<AppService>;
   let mockDialog: Partial<MatDialog>;
   let mockTranslateService: Partial<TranslateService>;
@@ -40,11 +42,14 @@ describe('WsUsersComponent', () => {
   ];
 
   beforeEach(async () => {
-    mockBackendService = {
+    mockUserBackendService = {
       getUsersFull: jest.fn().mockReturnValue(of(mockUsers)),
-      getAllWorkspacesList: jest.fn().mockReturnValue(of({ data: [] })),
       getWorkspacesByUserList: jest.fn().mockReturnValue(of([])),
       deleteUsers: jest.fn().mockReturnValue(of(true))
+    };
+
+    mockWorkspaceBackendService = {
+      getAllWorkspacesList: jest.fn().mockReturnValue(of({ data: [] }))
     };
 
     mockAppService = {
@@ -75,7 +80,8 @@ describe('WsUsersComponent', () => {
         TranslateModule.forRoot()
       ],
       providers: [
-        { provide: BackendService, useValue: mockBackendService },
+        { provide: UserBackendService, useValue: mockUserBackendService },
+        { provide: WorkspaceBackendService, useValue: mockWorkspaceBackendService },
         { provide: AppService, useValue: mockAppService },
         { provide: MatDialog, useValue: mockDialog },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
@@ -97,13 +103,13 @@ describe('WsUsersComponent', () => {
   it('should load users on init', fakeAsync(() => {
     component.ngOnInit();
     tick(); // processes setTimeout
-    expect(mockBackendService.getUsersFull).toHaveBeenCalled();
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
     expect(component.userObjectsDatasource.data.length).toBe(2);
   }));
 
   it('should load users when updateUserList is called', () => {
     component.updateUserList();
-    expect(mockBackendService.getUsersFull).toHaveBeenCalled();
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
     expect(component.userObjectsDatasource.data.length).toBe(2);
   });
 

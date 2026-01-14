@@ -4,8 +4,8 @@ import {
 } from '@angular/router';
 import { BehaviorSubject } from 'rxjs';
 import { AuthService } from '../services/auth.service';
-import { UserService } from '../../services/user.service';
-import { AppService } from '../../services/app.service';
+import { UserService } from '../../shared/services/user/user.service';
+import { AppService } from '../services/app.service';
 
 describe('Access Level Guard', () => {
   let mockAuthService: jest.Mocked<AuthService>;

@@ -1,0 +1,169 @@
+import { Injectable, inject } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import {
+  BehaviorSubject,
+  catchError,
+  map,
+  Observable,
+  of,
+  tap
+} from 'rxjs';
+import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
+import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
+import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/paginated-workspaces-dto';
+import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
+import { SERVER_URL } from '../../injection-tokens';
+import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+
+@Injectable({
+  providedIn: 'root'
+})
+export class WorkspaceService {
+  readonly serverUrl = inject(SERVER_URL);
+  private http = inject(HttpClient);
+  private accessRightsMatrixCache$ = new BehaviorSubject<AccessRightsMatrixDto | null>(null);
+
+  get authHeader() {
+    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+  }
+
+  markTestTakersAsExcluded(workspaceId: number, logins: string[]): Observable<boolean> {
+    if (!workspaceId || !logins.length) {
+      return of(false);
+    }
+
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/persons/exclude`,
+      { logins },
+      { headers: this.authHeader }
+    ).pipe(
+      map(res => res),
+      catchError(() => of(false))
+    );
+  }
+
+  markTestTakersAsConsidered(workspaceId: number, logins: string[]): Observable<boolean> {
+    if (!workspaceId || !logins.length) {
+      return of(false);
+    }
+
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/persons/consider`,
+      { logins },
+      { headers: this.authHeader }
+    ).pipe(
+      map(res => res),
+      catchError(() => of(false))
+    );
+  }
+
+  getAllWorkspacesList(): Observable<PaginatedWorkspacesDto> {
+    return this.http
+      .get<PaginatedWorkspacesDto>(`${this.serverUrl}admin/workspace`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => {
+          const defaultResponse: PaginatedWorkspacesDto = {
+            data: [],
+            total: 0,
+            page: 0,
+            limit: 0
+          };
+          return of(defaultResponse);
+        })
+      );
+  }
+
+  getWorkspaceUsers(workspaceId: number): Observable<PaginatedWorkspaceUserDto> {
+    return this.http
+      .get<PaginatedWorkspaceUserDto>(`${this.serverUrl}admin/workspace/${workspaceId}/users`,
+      { headers: this.authHeader })
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page: 0,
+          limit: 0
+        }))
+      );
+  }
+
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+    return this.http
+      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .pipe(
+        catchError(() => of(false))
+      );
+  }
+
+  deleteWorkspace(ids: number[]): Observable<boolean> {
+    const params = new HttpParams().set('ids', ids.join(';'));
+    return this.http
+      .delete(`${this.serverUrl}admin/workspace`, {
+        headers: this.authHeader,
+        params
+      })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  changeWorkspace(workspaceData: WorkspaceFullDto): Observable<boolean> {
+    return this.http
+      .patch<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .pipe(
+        catchError(() => of(false)),
+        map(() => true)
+      );
+  }
+
+  setWorkspaceUsersAccessRight(workspaceId: number, userIds: number[]): Observable<boolean> {
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/users/`,
+      userIds,
+      { headers: this.authHeader });
+  }
+
+  /**
+   * Resolves duplicate test takers by keeping only the selected occurrences
+   * @param workspaceId The ID of the workspace
+   * @param resolutionMap A map of login names to selected test taker files
+   * @returns An Observable that emits true if the operation was successful, false otherwise
+   */
+  resolveDuplicateTestTakers(workspaceId: number, resolutionMap: Record<string, string>): Observable<boolean> {
+    if (!workspaceId || !Object.keys(resolutionMap).length) {
+      return of(false);
+    }
+
+    return this.http.post(
+      `${this.serverUrl}admin/workspace/${workspaceId}/testtakers/resolve-duplicates`,
+      { resolutionMap },
+      { headers: this.authHeader }
+    ).pipe(
+      map(() => true),
+      catchError(() => of(false))
+    );
+  }
+
+  getAccessRightsMatrix(): Observable<AccessRightsMatrixDto> {
+    const cached = this.accessRightsMatrixCache$.value;
+    if (cached) {
+      return of(cached);
+    }
+
+    return this.http
+      .get<AccessRightsMatrixDto>(`${this.serverUrl}admin/workspace/access-rights-matrix`,
+      { headers: this.authHeader })
+      .pipe(
+        tap(matrix => this.accessRightsMatrixCache$.next(matrix)),
+        catchError(() => {
+          const emptyMatrix: AccessRightsMatrixDto = {
+            levels: [],
+            categories: []
+          };
+          return of(emptyMatrix);
+        })
+      );
+  }
+}

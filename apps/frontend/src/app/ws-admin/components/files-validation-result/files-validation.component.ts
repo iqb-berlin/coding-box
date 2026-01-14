@@ -16,9 +16,9 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { WorkspaceService } from '../../../services/workspace.service';
-import { BackendService } from '../../../services/backend.service';
-import { TestResultService } from '../../../services/test-result.service';
+import { WorkspaceService } from '../../../workspace/services/workspace.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
@@ -122,7 +122,7 @@ export class FilesValidationDialogComponent {
   isResolvingDuplicates = false;
 
   private workspaceService = inject(WorkspaceService);
-  private backendService = inject(BackendService);
+  private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
 
@@ -251,7 +251,7 @@ export class FilesValidationDialogComponent {
 
   checkIfAllUnusedFilesSelected(): void {
     this.allUnusedFilesSelected = this.unusedTestFiles.length > 0 &&
-                                 this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
+      this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
   }
 
   deleteSelectedUnusedFiles(): void {
@@ -262,9 +262,9 @@ export class FilesValidationDialogComponent {
     this.isDeletingUnusedFiles = true;
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.backendService.deleteFiles(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFiles(this.data.workspaceId, idsToDelete)
       .subscribe({
-        next: success => {
+        next: (success: boolean) => {
           if (success) {
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
@@ -449,7 +449,7 @@ export class FilesValidationDialogComponent {
 
   checkIfAllSelected(): void {
     this.allSelected = this.knownFilteredCount > 0 &&
-                       this.selection.selected.length === this.knownFilteredCount;
+      this.selection.selected.length === this.knownFilteredCount;
   }
 
   isModeSelected(mode: string): boolean {
@@ -669,11 +669,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
+    this.fileService.getBookletInfo(
       this.data.workspaceId,
       normalizedBookletId
     ).subscribe({
-      next: bookletInfo => {
+      next: (bookletInfo: unknown) => {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
@@ -707,11 +707,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getUnitInfo(
+    this.fileService.getUnitInfo(
       this.data.workspaceId,
       unitId
     ).subscribe({
-      next: unitInfo => {
+      next: (unitInfo: unknown) => {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
@@ -745,11 +745,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getCodingSchemeFile(
+    this.fileService.getCodingSchemeFile(
       this.data.workspaceId,
       schemeId
     ).subscribe({
-      next: fileDownload => {
+      next: (fileDownload: { base64Data: string; filename: string } | null) => {
         loadingSnackBar.dismiss();
 
         if (!fileDownload) {
@@ -828,8 +828,8 @@ export class FilesValidationDialogComponent {
       return;
     }
 
-    this.backendService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
-      .subscribe(xmlContent => {
+    this.fileService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
+      .subscribe((xmlContent: string | null) => {
         if (xmlContent) {
           this.dialog.open(ContentDialogComponent, {
             width: '80%',

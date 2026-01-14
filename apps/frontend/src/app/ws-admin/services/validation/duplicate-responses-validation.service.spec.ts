@@ -2,15 +2,15 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { of } from 'rxjs';
 import { DuplicateResponsesValidationService } from './duplicate-responses-validation.service';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { AppService } from '../../../core/services/app.service';
+import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 
 describe('DuplicateResponsesValidationService', () => {
   let service: DuplicateResponsesValidationService;
-  let backendServiceMock: {
+  let validationServiceMock: {
     createValidationTask: jest.Mock;
     pollValidationTask: jest.Mock;
     getValidationResults: jest.Mock;
@@ -43,7 +43,7 @@ describe('DuplicateResponsesValidationService', () => {
   };
 
   beforeEach(() => {
-    backendServiceMock = {
+    validationServiceMock = {
       createValidationTask: jest.fn(),
       pollValidationTask: jest.fn(),
       getValidationResults: jest.fn(),
@@ -65,7 +65,7 @@ describe('DuplicateResponsesValidationService', () => {
       imports: [HttpClientTestingModule],
       providers: [
         DuplicateResponsesValidationService,
-        { provide: BackendService, useValue: backendServiceMock },
+        { provide: ValidationService, useValue: validationServiceMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: ValidationTaskStateService, useValue: stateServiceMock }
       ]
@@ -80,13 +80,13 @@ describe('DuplicateResponsesValidationService', () => {
 
   describe('validate', () => {
     it('should coordinate the validation process', done => {
-      backendServiceMock.createValidationTask.mockReturnValue(of(mockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
-      backendServiceMock.getValidationResults.mockReturnValue(of(mockResult));
+      validationServiceMock.createValidationTask.mockReturnValue(of(mockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
+      validationServiceMock.getValidationResults.mockReturnValue(of(mockResult));
 
       service.validate(1, 10).subscribe(result => {
         expect(result).toEqual(mockResult);
-        expect(backendServiceMock.createValidationTask).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', 1, 10, undefined);
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', 1, 10, undefined);
         done();
       });
     });
@@ -96,11 +96,11 @@ describe('DuplicateResponsesValidationService', () => {
     it('should coordinate resolution of a duplicate group', done => {
       const responseIdsToDelete = [1, 2];
       const deleteMockTask = { ...mockTask, validation_type: 'deleteResponses' as const };
-      backendServiceMock.createDeleteResponsesTask.mockReturnValue(of(deleteMockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.createDeleteResponsesTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
 
       service.resolveDuplicateGroup(responseIdsToDelete).subscribe(() => {
-        expect(backendServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIdsToDelete);
+        expect(validationServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIdsToDelete);
         expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', mockTask.id);
         done();
       });
@@ -110,11 +110,11 @@ describe('DuplicateResponsesValidationService', () => {
   describe('resolveAllDuplicates', () => {
     it('should coordinate automatic resolution of all duplicates', done => {
       const deleteMockTask = { ...mockTask, validation_type: 'deleteAllResponses' as const };
-      backendServiceMock.createDeleteAllResponsesTask.mockReturnValue(of(deleteMockTask));
-      backendServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.createDeleteAllResponsesTask.mockReturnValue(of(deleteMockTask));
+      validationServiceMock.pollValidationTask.mockReturnValue(of(deleteMockTask));
 
       service.resolveAllDuplicates().subscribe(() => {
-        expect(backendServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'duplicateResponses');
+        expect(validationServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'duplicateResponses');
         expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', mockTask.id);
         done();
       });

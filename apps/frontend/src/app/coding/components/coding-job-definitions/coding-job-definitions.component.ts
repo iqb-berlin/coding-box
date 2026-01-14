@@ -18,10 +18,11 @@ import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { Subject, firstValueFrom, takeUntil } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
   CodingJobDefinitionDialogComponent,
@@ -77,7 +78,8 @@ interface BulkCreationResult {
   ]
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -147,7 +149,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .getJobDefinitions(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -284,7 +286,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .updateJobDefinition(workspaceId, definition.id, {
         status: 'pending_review'
       })
@@ -324,7 +326,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .approveJobDefinition(workspaceId, definition.id, 'approved')
       .subscribe({
         next: () => {
@@ -361,7 +363,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .updateJobDefinition(workspaceId, definition.id, { status: 'draft' })
       .subscribe({
         next: () => {
@@ -399,7 +401,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .deleteJobDefinition(workspaceId, definition.id)
       .subscribe({
         next: () => {
@@ -494,7 +496,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       }));
 
       const result = await firstValueFrom(
-        this.backendService.createDistributedCodingJobs(
+        this.distributedCodingService.createDistributedCodingJobs(
           workspaceId,
           data.selectedVariables,
           mappedCoders,
@@ -509,11 +511,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       if (result && result.success) {
         if (creationResult) {
           const updatePromises = result.jobs.map((job: { jobId: number }) => firstValueFrom(
-            this.backendService.updateCodingJob(workspaceId, job.jobId, {
+            this.codingJobBackendService.updateCodingJob(workspaceId, job.jobId, {
               showScore: creationResult.showScore,
               allowComments: creationResult.allowComments,
               suppressGeneralInstructions:
-                  creationResult.suppressGeneralInstructions
+                creationResult.suppressGeneralInstructions
             })
           )
           );

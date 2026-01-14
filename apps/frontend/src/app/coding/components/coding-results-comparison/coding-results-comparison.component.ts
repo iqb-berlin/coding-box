@@ -20,7 +20,7 @@ import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BackendService } from '../../../services/backend.service';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CoderTraining } from '../../models/coder-training.model';
 
 interface TrainingComparison {
@@ -74,7 +74,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
-  private backendService = inject(BackendService);
+  private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private snackBar = inject(MatSnackBar);
 
   isLoading = false;
@@ -135,7 +135,7 @@ export class CodingResultsComparisonComponent implements OnInit {
         return;
       }
 
-      this.backendService.getCoderTrainings(workspaceId).subscribe({
+      this.codingTrainingBackendService.getCoderTrainings(workspaceId).subscribe({
         next: trainings => {
           this.availableTrainings = trainings;
           resolve();
@@ -202,7 +202,7 @@ export class CodingResultsComparisonComponent implements OnInit {
 
       this.isLoading = true;
       const trainingIds = this.selectedTrainings.selected.join(',');
-      this.backendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds).subscribe({
+      this.codingTrainingBackendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds).subscribe({
         next: data => {
           this.comparisonData = data.filter(d => this.hasAnyCode(d));
           this.dataSource.data = this.comparisonData;
@@ -222,7 +222,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       }
 
       this.isLoading = true;
-      this.backendService.compareWithinTrainingCodingResults(this.data.workspaceId, this.selectedTrainingForWithin).subscribe({
+      this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, this.selectedTrainingForWithin).subscribe({
         next: data => {
           this.withinTrainingData = data.filter(d => this.hasAnyCode(d)).map(item => ({
             unitName: item.unitName,
@@ -295,8 +295,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
     if (codes.length === 0) return true;
     const first = codes[0];
-    const res = codes.every(code => code === first);
-    return res;
+    return codes.every(code => code === first);
   }
 
   hasAnyCode(comparison: TrainingComparison | WithinTrainingComparison): boolean {

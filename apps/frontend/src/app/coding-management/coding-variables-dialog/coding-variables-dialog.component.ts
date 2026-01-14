@@ -26,8 +26,9 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
-import { BackendService } from '../../services/backend.service';
-import { AppService } from '../../services/app.service';
+import { FileService } from '../../shared/services/file/file.service';
+import { FileBackendService } from '../../shared/services/file/file-backend.service';
+import { AppService } from '../../core/services/app.service';
 import { UnitInfoDialogComponent } from '../../ws-admin/components/unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
@@ -100,11 +101,12 @@ export class CodingVariablesDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<CodingVariablesDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: CodingVariablesDialogData,
-    private backendService: BackendService,
+    private fileService: FileService,
+    private fileBackendService: FileBackendService,
     private appService: AppService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.loadData();
@@ -139,12 +141,22 @@ export class CodingVariablesDialogComponent implements OnInit {
   private loadData(): void {
     this.isLoading = true;
 
-    this.backendService.getUnitVariables(this.data.workspaceId).subscribe({
+    this.fileBackendService.getUnitVariables(this.data.workspaceId).subscribe({
       next: (unitVariableDetails: UnitVariableDetailsDto[]) => {
         const flattenedData: FlattenedVariable[] = [];
 
         unitVariableDetails.forEach(unit => {
-          unit.variables.forEach((variable: { id: string; alias: string; type: string; hasCodingScheme: boolean; codingSchemeRef?: string; codes?: CodeInfo[]; isDerived?: boolean; hasManualInstruction?: boolean; hasClosedCoding?: boolean }) => {
+          unit.variables.forEach((variable: {
+            id: string;
+            alias: string;
+            type: string;
+            hasCodingScheme: boolean;
+            codingSchemeRef?: string;
+            codes?: CodeInfo[];
+            isDerived?: boolean;
+            hasManualInstruction?: boolean;
+            hasClosedCoding?: boolean;
+          }) => {
             flattenedData.push({
               unitName: unit.unitName,
               unitId: unit.unitId,
@@ -237,7 +249,7 @@ export class CodingVariablesDialogComponent implements OnInit {
       { duration: 0 }
     );
 
-    this.backendService.getUnitInfo(this.data.workspaceId, unitId).subscribe({
+    this.fileService.getUnitInfo(this.data.workspaceId, unitId).subscribe({
       next: (unitInfo: UnitInfoDto) => {
         loadingSnackBar.dismiss();
 
@@ -265,7 +277,7 @@ export class CodingVariablesDialogComponent implements OnInit {
       { duration: 0 }
     );
 
-    this.backendService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
       next: (schemeFile: FileDownloadDto | null) => {
         loadingSnackBar.dismiss();
 

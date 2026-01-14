@@ -26,8 +26,8 @@ import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 
 @Component({
   selector: 'coding-box-variable-bundle-manager',
@@ -65,7 +65,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private appService = inject(AppService);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
 
   displayedColumns: string[] = ['actions', 'name', 'description', 'variableCount', 'createdAt', 'updatedAt'];
   dataSource = new MatTableDataSource<VariableBundle>([]);
@@ -122,7 +122,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
       next: (incompleteVariables: Variable[]) => {
         const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
@@ -159,7 +159,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
       next: (incompleteVariables: Variable[]) => {
         const dialogRef = this.dialog.open(VariableBundleDialogComponent, {
           width: '900px',
