@@ -12,8 +12,8 @@ import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
-import { AppService } from '../../../services/app.service';
-import { ExportJobService } from '../../../services/export-job.service';
+import { AppService } from '../../../core/services/app.service';
+import { ExportJobService } from '../../../shared/services/file/export-job.service';
 
 export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
 

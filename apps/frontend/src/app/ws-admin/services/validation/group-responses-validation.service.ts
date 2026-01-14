@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { switchMap, tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 interface GroupResponsesValidationResult {
   testTakersFound: boolean;
@@ -27,8 +28,8 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
    */
   validate(page: number = 1, limit: number = 10): Observable<GroupResponsesValidationResult> {
     return this.createTask(this.validationType, page, limit).pipe(
-      tap(task => this.storeTaskId(task.id)),
-      switchMap(task => this.pollTask(task.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
       switchMap(completedTask => this.getResults(completedTask.id)),
       tap(result => {
         this.saveResult(result);

@@ -24,11 +24,15 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
+import { FileService } from '../../../shared/services/file/file.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 interface UnitSearchResult {
@@ -140,13 +144,17 @@ export class TestResultsSearchComponent implements OnInit {
   constructor(
     private dialogRef: MatDialogRef<TestResultsSearchComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { title: string },
-    private backendService: BackendService,
+    private testResultService: TestResultService,
+    private unitService: UnitService,
+    private responseService: ResponseService,
+    private statisticsService: CodingStatisticsService,
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
     private snackBar: MatSnackBar,
-    private translateService: TranslateService
-  ) {}
+    private translateService: TranslateService,
+    private fileService: FileService
+  ) { }
 
   ngOnInit(): void {
     this.unitSearchSubject.pipe(
@@ -247,13 +255,13 @@ export class TestResultsSearchComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.searchUnitsByName(
+    this.testResultService.searchUnitsByName(
       this.appService.selectedWorkspaceId,
       unitName,
       this.pageIndex + 1,
       this.pageSize
     ).subscribe({
-      next: response => {
+      next: (response: { data: UnitSearchResult[]; total: number }) => {
         this.unitSearchResults = response.data;
         this.totalItems = response.total;
         this.isLoading = false;
@@ -268,13 +276,13 @@ export class TestResultsSearchComponent implements OnInit {
 
   searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' }): void {
     this.isLoading = true;
-    this.backendService.searchResponses(
+    this.responseService.searchResponses(
       this.appService.selectedWorkspaceId,
       searchParams,
       this.pageIndex + 1,
       this.pageSize
     ).subscribe({
-      next: response => {
+      next: (response: { data: ResponseSearchResult[]; total: number }) => {
         this.responseSearchResults = response.data;
         this.totalItems = response.total;
         this.isLoading = false;
@@ -296,13 +304,13 @@ export class TestResultsSearchComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.searchBookletsByName(
+    this.testResultService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
       this.pageIndex + 1,
       this.pageSize
     ).subscribe({
-      next: response => {
+      next: (response: { data: BookletSearchResult[]; total: number }) => {
         this.bookletSearchResults = response.data;
         this.totalItems = response.total;
         this.isLoading = false;
@@ -354,7 +362,7 @@ export class TestResultsSearchComponent implements OnInit {
           }
 
           if ('responseId' in item && item.responseId) {
-            this.backendService.getReplayUrl(
+            this.statisticsService.getReplayUrl(
               workspaceId,
               item.responseId,
               token
@@ -421,11 +429,11 @@ export class TestResultsSearchComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteUnit(
+        this.unitService.deleteUnit(
           this.appService.selectedWorkspaceId,
           unit.unitId
         ).subscribe({
-          next: response => {
+          next: (response: { success: boolean; report: { deletedUnit: number | null; warnings: string[] } }) => {
             this.isLoading = false;
             if (response.success) {
               this.unitSearchResults = this.unitSearchResults.filter(u => u.unitId !== unit.unitId);
@@ -470,11 +478,11 @@ export class TestResultsSearchComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteResponse(
+        this.responseService.deleteResponse(
           this.appService.selectedWorkspaceId,
           response.responseId
         ).subscribe({
-          next: apiResponse => {
+          next: (apiResponse: { success: boolean; report: { deletedResponse: number | null; warnings: string[] } }) => {
             this.isLoading = false;
             if (apiResponse.success) {
               this.responseSearchResults = this.responseSearchResults.filter(r => r.responseId !== response.responseId);
@@ -531,11 +539,11 @@ export class TestResultsSearchComponent implements OnInit {
         this.isLoading = true;
         const unitIds = this.unitSearchResults.map(unit => unit.unitId);
 
-        this.backendService.deleteMultipleUnits(
+        this.unitService.deleteMultipleUnits(
           this.appService.selectedWorkspaceId,
           unitIds
         ).subscribe({
-          next: response => {
+          next: (response: { success: boolean; report: { deletedUnits: number[]; warnings: string[] } }) => {
             this.isLoading = false;
             if (response.success) {
               const deletedCount = response.report.deletedUnits.length;
@@ -616,11 +624,11 @@ export class TestResultsSearchComponent implements OnInit {
             return;
           }
 
-          this.backendService.deleteResponse(
+          this.responseService.deleteResponse(
             this.appService.selectedWorkspaceId,
             responseIds[index]
           ).subscribe({
-            next: response => {
+            next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
               } else {
@@ -646,7 +654,7 @@ export class TestResultsSearchComponent implements OnInit {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
+    this.fileService.getBookletInfo(
       this.appService.selectedWorkspaceId,
       booklet.bookletName
     ).subscribe({
@@ -687,11 +695,11 @@ export class TestResultsSearchComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteBooklet(
+        this.testResultService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
         ).subscribe({
-          next: response => {
+          next: (response: { success: boolean; report: { warnings: string[] } }) => {
             if (response.success) {
               this.bookletSearchResults = this.bookletSearchResults.filter(
                 b => b.bookletId !== booklet.bookletId
@@ -763,11 +771,11 @@ export class TestResultsSearchComponent implements OnInit {
             return;
           }
 
-          this.backendService.deleteBooklet(
+          this.testResultService.deleteBooklet(
             this.appService.selectedWorkspaceId,
             bookletIds[index]
           ).subscribe({
-            next: response => {
+            next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
               } else {

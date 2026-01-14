@@ -20,20 +20,23 @@ import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material
 import { HttpErrorResponse } from '@angular/common/http';
 import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { FileBackendService } from '../../../shared/services/file/file-backend.service';
+import { ReplayBackendService } from '../../services/replay-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { scrollToElementByAlias, highlightAspectSectionWithAnchor } from '../../utils/dom-utils';
-import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
+import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
-import { ReplayCodingService } from '../../../services/replay-coding.service';
+import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
   providers: [ReplayCodingService],
@@ -57,7 +60,10 @@ import { ReplayCodingService } from '../../../services/replay-coding.service';
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
-  private backendService = inject(BackendService);
+  private fileService = inject(FileService);
+  private responseService = inject(ResponseService);
+  private fileBackendService = inject(FileBackendService);
+  private replayBackendService = inject(ReplayBackendService);
   private appService = inject(AppService);
   private route = inject(ActivatedRoute);
   private errorSnackBar = inject(MatSnackBar);
@@ -401,32 +407,32 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return '';
   }
 
-  private getUnitDef(workspace: number, authToken?:string): Observable<FilesDto[]> {
+  private getUnitDef(workspace: number, authToken?: string): Observable<FilesDto[]> {
     if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId.toUpperCase()) {
       return of([{
         data: this.lastUnitDef.data,
         file_id: `${this.lastUnitDef.id}.VOUD`
       }]);
     }
-    return this.backendService.getUnitDef(workspace, this.unitId, authToken);
+    return this.fileService.getUnitDef(workspace, this.unitId, authToken);
   }
 
-  private getResponses(workspace: number, authToken?:string): Observable<ResponseDto[]> {
+  private getResponses(workspace: number, authToken?: string): Observable<ResponseDto[]> {
     if (this.isPrintMode) {
       return of([]);
     }
-    return this.backendService
-      .getResponsesForUnit(workspace, this.testPerson, this.unitId, authToken);
+    return this.responseService
+      .getResponses(workspace, this.testPerson, this.unitId, authToken);
   }
 
-  private getUnit(workspace: number, authToken?:string): Observable<FilesDto[]> {
+  private getUnit(workspace: number, authToken?: string): Observable<FilesDto[]> {
     if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId.toUpperCase()) {
       return of([{
         data: this.lastUnit.data,
         file_id: this.lastUnit.id
       }]);
     }
-    return this.backendService.getUnit(workspace, this.unitId, authToken);
+    return this.fileService.getUnit(workspace, this.unitId, authToken);
   }
 
   private getVocs(workspace: number): Observable<FilesDto[]> {
@@ -436,16 +442,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         file_id: `${this.lastVocs.id}.vocs`
       }]);
     }
-    return this.backendService.getVocs(workspace, this.unitId);
+    return this.fileBackendService.getVocs(workspace, this.unitId);
   }
 
   private getPlayer(
-    workspace: number, player: string, authToken?:string
+    workspace: number, player: string, authToken?: string
   ): Observable<FilesDto[]> {
     if (this.lastPlayer.id && this.lastPlayer.data && this.lastPlayer.id === player) {
       return of([{ data: this.lastPlayer.data, file_id: this.lastPlayer.id }]);
     }
-    return this.backendService.getPlayer(
+    return this.fileService.getPlayer(
       workspace,
       player,
       authToken);
@@ -471,7 +477,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);
             let player = '';
-            xml2js.parseString(unitFile[0].data, (err:any, result:any) => {
+            xml2js.parseString(unitFile[0].data, (err: any, result: any) => {
               player = result?.Unit.DefinitionRef[0].$.player;
             });
             return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
@@ -502,7 +508,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspaceId) {
                 const replayUrl = window.location.href;
 
-                this.backendService.storeReplayStatistics(workspaceId, {
+                this.replayBackendService.storeReplayStatistics(workspaceId, {
                   unitId: this.unitId,
                   bookletId,
                   testPersonLogin,
@@ -599,7 +605,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       }
       const replayUrl = window.location.href;
 
-      this.backendService.storeReplayStatistics(workspaceId, {
+      this.replayBackendService.storeReplayStatistics(workspaceId, {
         unitId: this.unitId || 'unknown',
         bookletId,
         testPersonLogin,
@@ -866,7 +872,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const codingSchemeRef = this.extractCodingSchemeRefFromXml(this.unitDef);
     if (codingSchemeRef) {
-      this.backendService.getCodingSchemeFile(this.workspaceId, codingSchemeRef)
+      this.fileService.getCodingSchemeFile(this.workspaceId, codingSchemeRef)
         .pipe(catchError(() => of(null)))
         .subscribe(fileData => {
           if (fileData && fileData.base64Data) {

@@ -26,8 +26,8 @@ import { DatePipe, NgClass, NgFor } from '@angular/common';
 import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingJob, Variable } from '../../models/coding-job.model';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 
@@ -65,7 +65,7 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
 })
 export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   appService = inject(AppService);
-  backendService = inject(BackendService);
+  codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
   private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
@@ -126,7 +126,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.currentWorkspaces = workspaces || [];
     this.isLoading = true;
     if (workspaces) {
-      const workspaceJobsObservables = workspaces.map(workspace => this.backendService.getCodingJobs(workspace.id).pipe(
+      const workspaceJobsObservables = workspaces.map(workspace => this.codingJobBackendService.getCodingJobs(workspace.id).pipe(
         map(response => response.data)
       )
       );
@@ -187,7 +187,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const sendingMessage = this.translateService.instant('coding.my-coding-jobs.sending-to-review', { name: job.name });
     const loadingSnack = this.snackBar.open(sendingMessage, '', { duration: 3000 });
 
-    this.backendService.updateCodingJob(job.workspace_id, job.id, { status: 'review' }).subscribe({
+    this.codingJobBackendService.updateCodingJob(job.workspace_id, job.id, { status: 'review' }).subscribe({
       next: () => {
         loadingSnack.dismiss();
         const sentMessage = this.translateService.instant('coding.my-coding-jobs.sent-to-review', { name: job.name });
@@ -206,7 +206,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const startingMessage = this.translateService.instant('coding.my-coding-jobs.starting-job', { name: job.name });
     const loadingSnack = this.snackBar.open(startingMessage, '', { duration: 3000 });
 
-    this.backendService.startCodingJob(job.workspace_id, job.id).subscribe({
+    this.codingJobBackendService.startCodingJob(job.workspace_id, job.id).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (!result || result.total === 0) {

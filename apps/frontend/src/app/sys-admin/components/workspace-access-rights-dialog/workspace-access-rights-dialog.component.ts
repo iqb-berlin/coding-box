@@ -6,7 +6,7 @@ import {
 } from '@angular/material/dialog';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
-import { BackendService } from '../../../services/backend.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 
 @Component({
@@ -21,13 +21,13 @@ export class WorkspaceAccessRightsDialogComponent {
     selectedUser: UserFullDto[];
   }>(MAT_DIALOG_DATA);
 
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
 
   selectedWorkspacesIds!: number[];
   result: number[] = [];
   constructor() {
     if (this.data && this.data.selectedUser && Array.isArray(this.data.selectedUser) && this.data.selectedUser.length > 0) {
-      this.backendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
+      this.userBackendService.getWorkspacesByUserList(this.data.selectedUser[0].id).subscribe(workspaces => {
         this.selectedWorkspacesIds = workspaces || [];
       });
     }

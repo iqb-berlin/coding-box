@@ -30,8 +30,9 @@ import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import {
   ValidationProgress,
   ValidationStateService
@@ -71,7 +72,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     codingJobDefinitionsComponent?: CodingJobDefinitionsComponent;
 
   private testPersonCodingService = inject(TestPersonCodingService);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
@@ -241,9 +243,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         if (progress.status === 'error') {
           this.showError(
             progress.error ||
-              this.translateService.instant(
-                'coding-management-manual.errors.validation-failed'
-              )
+            this.translateService.instant(
+              'coding-management-manual.errors.validation-failed'
+            )
           );
         }
       });
@@ -587,7 +589,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.codingJobBackendService
       .getCodingIncompleteVariables(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -614,7 +616,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.statisticsService
       .getCodingStatistics(workspaceId, 'v1')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
@@ -647,7 +649,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       );
       const workspaceId = this.appService.selectedWorkspaceId;
       if (workspaceId) {
-        this.backendService
+        this.codingJobBackendService
           .getAppliedResultsCount(workspaceId, this.codingIncompleteVariables)
           .pipe(takeUntil(this.destroy$))
           .subscribe({

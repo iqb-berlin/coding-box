@@ -33,8 +33,9 @@ import {
 } from 'rxjs';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
+import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
@@ -111,7 +112,8 @@ interface CreationResults {
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
@@ -162,7 +164,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   constructor(
     public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: CodingJobDefinitionDialogData
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined && this.data.codingJob.doubleCodingAbsolute > 0) {
@@ -243,7 +245,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
       next: definitions => {
         // When editing an existing job definition, exclude the current job definition
         // from the list to prevent its variables from being incorrectly disabled
@@ -330,7 +332,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
       next: variables => {
         this.variables = variables;
         this.applyJobDefinitionUsage();
@@ -379,7 +381,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
-      this.backendService.getVariableBundles(workspaceId).subscribe({
+      this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
         next: bundles => {
           const enrichedBundles = bundles.map(bundle => ({
             ...bundle,
@@ -773,7 +775,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    this.backendService.updateCodingJob(workspaceId, this.data.codingJob!.id!, codingJob).subscribe({
+    this.codingJobBackendService.updateCodingJob(workspaceId, this.data.codingJob!.id!, codingJob).subscribe({
       next: updatedJob => {
         if (updatedJob?.id && selectedCoderIds.length > 0) {
           const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(updatedJob.id!, id));
@@ -827,7 +829,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
+    this.codingJobBackendService.createCodingJob(workspaceId, codingJob).subscribe({
       next: createdJob => {
         if (createdJob?.id && selectedCoderIds.length > 0) {
           const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id));
@@ -919,7 +921,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         name: coder.name,
         username: coder.name
       }));
-      const result = await firstValueFrom(this.backendService.createDistributedCodingJobs(
+      const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
         mappedCoders,
@@ -1024,7 +1026,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
-    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+    this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -1064,7 +1066,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       jobDefinition.status = this.codingJobForm.value.status;
     }
 
-    this.backendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
+    this.codingJobBackendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
       next: updatedDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -1125,7 +1127,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
-    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+    this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-submitted-review'), this.translateService.instant('common.close'), { duration: 3000 });

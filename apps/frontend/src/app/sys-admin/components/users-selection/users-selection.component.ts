@@ -27,7 +27,8 @@ import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { BackendService } from '../../../services/backend.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 
 @Component({
@@ -37,13 +38,14 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
   imports: [MatTable, MatSort, MatColumnDef, MatHeaderCellDef, MatHeaderCell, MatCheckbox, MatCellDef, MatCell, MatSortHeader, MatHeaderRowDef, MatHeaderRow, MatRowDef, MatRow, FormsModule, TranslateModule, HasSelectionValuePipe, IsSelectedPipe, IsAllSelectedPipe, SearchFilterComponent]
 })
 export class UsersSelectionComponent implements OnInit {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
 
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   displayedUserColumns = ['selectCheckbox', 'username', 'displayName'];
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces :WorkspaceInListDto[] = [];
+  userWorkspaces: WorkspaceInListDto[] = [];
   filteredUserWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
@@ -73,7 +75,7 @@ export class UsersSelectionComponent implements OnInit {
   }
 
   updateUserList(): void {
-    this.backendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
@@ -87,13 +89,13 @@ export class UsersSelectionComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }
 
   setCheckboxes(): void {
-    const foundUserIds:UserFullDto[] = [];
+    const foundUserIds: UserFullDto[] = [];
     this.selectedUserIds()?.forEach(userId => {
       const foundUserId = this.userObjectsDatasource.data.find(user => user.id === userId);
       if (foundUserId) {
@@ -113,7 +115,7 @@ export class UsersSelectionComponent implements OnInit {
 
   updateUserWorkspacesList(userId: number): void {
     if (this.tableSelectionCheckboxes.selected.length === 1) {
-      this.backendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
+      this.userBackendService.getWorkspacesByUserList(userId).subscribe(workspaces => {
         this.filteredUserWorkspaces = this.userWorkspaces.filter(workspace => workspaces.includes(workspace.id));
       });
     }

@@ -8,8 +8,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
-import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
-import { ReplayCodingService } from '../../../services/replay-coding.service';
+import { UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
+import { ReplayCodingService } from '../../services/replay-coding.service';
 
 @Component({
   selector: 'coding-box-units-replay',

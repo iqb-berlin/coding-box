@@ -13,8 +13,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UnitsReplay, UnitsReplayUnit } from '../../../services/units-replay.service';
-import { ReplayCodingService } from '../../../services/replay-coding.service';
+import { UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
+import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
   Code,
   CodeSelectedEvent,
@@ -64,7 +64,7 @@ export class CodeSelectorComponent implements OnChanges {
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   variableManualInstruction: string | null = null;
-  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) {}
+  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) { }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId || changes.missings) {

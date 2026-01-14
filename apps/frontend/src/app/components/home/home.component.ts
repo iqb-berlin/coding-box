@@ -9,11 +9,11 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subscription, forkJoin } from 'rxjs';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
-import { BackendService } from '../../services/backend.service';
+import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
 
 @Component({
   selector: 'coding-box-home',
@@ -35,7 +35,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
-  private backendService = inject(BackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
 
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
@@ -70,7 +70,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
 
     const workspaceIds = this.workspaces.map(workspace => workspace.id);
-    const observables = workspaceIds.map(workspaceId => this.backendService.getWorkspaceUsers(workspaceId));
+    const observables = workspaceIds.map(workspaceId => this.workspaceBackendService.getWorkspaceUsers(workspaceId));
 
     forkJoin(observables).subscribe(responses => {
       for (const response of responses) {
