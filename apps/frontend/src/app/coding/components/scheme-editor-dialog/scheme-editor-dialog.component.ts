@@ -9,7 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { FileService } from '../../../shared/services/file/file.service';
-import { CodingService } from '../../services/coding.service';
+
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 
 export interface SchemeEditorDialogData {
@@ -101,7 +101,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
     private snackBar: MatSnackBar,
     private fileService: FileService,
-    private codingService: CodingService,
+
     private dialog: MatDialog
   ) { }
 

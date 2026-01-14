@@ -23,7 +23,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import { CodingService } from '../../services/coding.service';
+import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
@@ -88,7 +88,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisDialogData,
-    private codingService: CodingService,
+    private statisticsService: CodingStatisticsService,
     private appService: AppService,
     private snackBar: MatSnackBar
   ) { }
@@ -119,7 +119,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
     const unitId = this.unitIdFilter.trim() || undefined;
     const variableId = this.variableIdFilter.trim() || undefined;
 
-    this.codingService.getVariableAnalysis(
+    this.statisticsService.getVariableAnalysis(
       workspaceId,
       page,
       limit,

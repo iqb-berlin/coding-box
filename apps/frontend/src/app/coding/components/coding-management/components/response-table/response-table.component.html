@@ -16,7 +16,7 @@
                 {{ 'coding-management.statistics.uncoded-responses-title' | translate }}
                 } @else {
                 {{ 'coding-management.statistics.responses-with-status-title' | translate:{status:
-                mapStatusToString(Number(currentStatusFilter))} }}
+                getFilterStatusLabel()} }}
                 }
             </h3>
         </div>

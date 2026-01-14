@@ -32,7 +32,7 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
-import { CodingService } from '../../services/coding.service';
+import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import {
   ValidationProgress,
   ValidationStateService
@@ -73,7 +73,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private testPersonCodingService = inject(TestPersonCodingService);
   private codingJobBackendService = inject(CodingJobBackendService);
-  private codingService = inject(CodingService);
+  private statisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
@@ -616,7 +616,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.codingService
+    this.statisticsService
       .getCodingStatistics(workspaceId, 'v1')
       .pipe(takeUntil(this.destroy$))
       .subscribe({

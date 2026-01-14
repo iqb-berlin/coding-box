@@ -21,7 +21,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { CodeBookContentSetting } from '../../../../../../../api-dto/coding/codebook-content-setting';
-import { CodingService } from '../../services/coding.service';
+import { CodingExportService } from '../../services/coding-export.service';
+import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
@@ -99,7 +100,8 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   validationCacheKey: string | null = null;
 
   constructor(
-    private codingService: CodingService,
+    private exportService: CodingExportService,
+    private missingsProfileService: MissingsProfileService,
     private fileService: FileService,
     private appService: AppService,
     private datePipe: DatePipe,
@@ -222,7 +224,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   private loadMissingsProfiles(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (workspaceId) {
-      this.codingService.getMissingsProfiles(workspaceId).subscribe({
+      this.missingsProfileService.getMissingsProfiles(workspaceId).subscribe({
         next: profiles => {
           this.missingsProfiles = [{ id: 0, label: '' }, ...profiles.map((profile: { label: string; id: number }) => ({ id: profile.id ?? 0, label: profile.label }))];
           this.selectedMissingsProfile = 0;
@@ -246,7 +248,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
     this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
     this.appService.dataLoading = true;
-    this.codingService.getCodingBook(
+    this.exportService.getCodingBook(
       workspaceId,
       this.contentOptions.missingsProfile,
       this.contentOptions,

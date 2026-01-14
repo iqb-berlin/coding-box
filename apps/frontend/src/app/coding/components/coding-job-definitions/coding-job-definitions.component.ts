@@ -22,7 +22,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
-import { CodingService } from '../../services/coding.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
   CodingJobDefinitionDialogComponent,
@@ -79,7 +79,7 @@ interface BulkCreationResult {
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private codingJobBackendService = inject(CodingJobBackendService);
-  private codingService = inject(CodingService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -496,7 +496,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       }));
 
       const result = await firstValueFrom(
-        this.codingService.createDistributedCodingJobs(
+        this.distributedCodingService.createDistributedCodingJobs(
           workspaceId,
           data.selectedVariables,
           mappedCoders,
