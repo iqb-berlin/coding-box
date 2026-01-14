@@ -4,9 +4,9 @@ import {
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { CodingJobsComponent } from '../../../coding/components/coding-jobs/coding-jobs.component';
-import { BackendService } from '../../../services/backend.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 
 @Component({
   selector: 'coding-box-ws-admin',
@@ -26,7 +26,7 @@ export class WsAdminComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   appService = inject(AppService);
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
 
   private allNavLinks: string[] = ['test-files', 'test-results', 'coding', 'cleaning', 'export', 'settings'];
   navLinks: string[] = [];
@@ -59,7 +59,7 @@ export class WsAdminComponent implements OnInit {
       this.authData = authData;
 
       if (authData.userId > 0) {
-        this.backendService.getUsers(this.appService.selectedWorkspaceId).subscribe(users => {
+        this.userBackendService.getUsers(this.appService.selectedWorkspaceId).subscribe(users => {
           const currentUser = users.find(user => user.id === authData.userId);
           if (currentUser) {
             this.accessLevel = currentUser.accessLevel;

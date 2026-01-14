@@ -13,7 +13,7 @@ import {
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 
 /**

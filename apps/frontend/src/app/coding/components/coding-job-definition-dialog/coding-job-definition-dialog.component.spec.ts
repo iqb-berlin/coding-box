@@ -11,8 +11,9 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
+import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
@@ -21,7 +22,8 @@ import { Coder } from '../../models/coder.model';
 describe('CodingJobDefinitionDialogComponent', () => {
   let component: CodingJobDefinitionDialogComponent;
   let fixture: ComponentFixture<CodingJobDefinitionDialogComponent>;
-  let mockBackendService: Partial<BackendService>;
+  let mockCodingJobBackendService: Partial<CodingJobBackendService>;
+  let mockDistributedCodingService: Partial<DistributedCodingService>;
   let mockAppService: Partial<AppService>;
   let mockCoderService: Partial<CoderService>;
   let mockCodingJobService: Partial<CodingJobService>;
@@ -65,7 +67,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   ];
 
   beforeEach(async () => {
-    mockBackendService = {
+    mockCodingJobBackendService = {
       getJobDefinitions: jest.fn().mockReturnValue(of([
         {
           id: 100,
@@ -83,9 +85,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),
       createCodingJob: jest.fn(),
-      updateJobDefinition: jest.fn(),
+      updateJobDefinition: jest.fn()
+    } as unknown as Partial<CodingJobBackendService>;
+
+    mockDistributedCodingService = {
       createDistributedCodingJobs: jest.fn()
-    } as unknown as Partial<BackendService>;
+    } as unknown as Partial<DistributedCodingService>;
 
     mockAppService = {
       selectedWorkspaceId: 1
@@ -130,7 +135,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       ],
       providers: [
         FormBuilder,
-        { provide: BackendService, useValue: mockBackendService },
+        { provide: CodingJobBackendService, useValue: mockCodingJobBackendService },
+        { provide: DistributedCodingService, useValue: mockDistributedCodingService },
         { provide: AppService, useValue: mockAppService },
         { provide: CoderService, useValue: mockCoderService },
         { provide: CodingJobService, useValue: mockCodingJobService },
@@ -168,7 +174,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should load variables and coders on init', () => {
     createComponent();
-    expect(mockBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined);
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined);
     expect(mockCoderService.getCoders).toHaveBeenCalled();
     expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);
@@ -225,12 +231,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
       component.selectedVariables.select(mockVariables[0]); // Only 1 variable
 
       const mockCreatedJob = { id: 101, name: 'New Job' };
-      (mockBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
+      (mockCodingJobBackendService.createCodingJob as jest.Mock).mockReturnValue(of(mockCreatedJob));
 
       component.onSubmit();
       tick();
 
-      expect(mockBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
+      expect(mockCodingJobBackendService.createCodingJob).toHaveBeenCalledWith(1, expect.objectContaining({
         assignedCoders: [1],
         variables: [mockVariables[0]]
       }));
@@ -246,12 +252,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
       component.selectedCoders.select(mockCoders[1]); // Change coder
 
-      (mockBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
+      (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
 
       component.onSubmit();
       tick();
 
-      expect(mockBackendService.updateCodingJob).toHaveBeenCalledWith(
+      expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
         1,
         202,
         expect.objectContaining({ assignedCoders: [2] })
@@ -265,12 +271,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
       component.selectedCoders.select(mockCoders[0]);
       component.selectedVariables.select(mockVariables[0]);
 
-      (mockBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
+      (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
 
       component.onSubmit();
       tick();
 
-      expect(mockBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.any(Object));
+      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.any(Object));
       expect(mockDialogRef.close).toHaveBeenCalled();
     }));
   });
@@ -289,12 +295,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
         afterClosed: () => of(mockBulkResult)
       };
       (mockMatDialog.open as jest.Mock).mockReturnValue(dialogRefMock);
-      (mockBackendService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({ success: true, jobs: [] }));
+      (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({ success: true, jobs: [] }));
 
       await component.onSubmit();
 
       expect(mockMatDialog.open).toHaveBeenCalled();
-      expect(mockBackendService.createDistributedCodingJobs).toHaveBeenCalled();
+      expect(mockDistributedCodingService.createDistributedCodingJobs).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ bulkJobCreation: true }));
     });
   });

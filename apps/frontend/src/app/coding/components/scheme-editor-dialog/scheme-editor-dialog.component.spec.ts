@@ -13,7 +13,8 @@ import {
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { SchemeEditorDialogComponent, SchemeEditorDialogData } from './scheme-editor-dialog.component';
-import { BackendService } from '../../../services/backend.service';
+import { FileService } from '../../../shared/services/file/file.service';
+
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 
@@ -32,7 +33,8 @@ class MockStandaloneUnitSchemerComponent {
 describe('SchemeEditorDialogComponent', () => {
   let component: SchemeEditorDialogComponent;
   let fixture: ComponentFixture<SchemeEditorDialogComponent>;
-  let mockBackendService: Partial<BackendService>;
+  let mockFileService: Partial<FileService>;
+
   let mockDialogRef: Partial<MatDialogRef<SchemeEditorDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockDialog: Partial<MatDialog>;
@@ -45,12 +47,12 @@ describe('SchemeEditorDialogComponent', () => {
   };
 
   beforeEach(async () => {
-    mockBackendService = {
-      getVariableInfoForScheme: jest.fn().mockReturnValue(of([])),
+    mockFileService = {
       getFilesList: jest.fn().mockReturnValue(of({ data: [{ id: 's1', filename: 'schemer.html', created_at: new Date() }] })),
       downloadFile: jest.fn().mockReturnValue(of({ base64Data: btoa('<html lang="en"></html>') })),
       deleteFiles: jest.fn().mockReturnValue(of(true)),
-      uploadTestFiles: jest.fn().mockReturnValue(of({ failed: 0, conflicts: [] }))
+      uploadTestFiles: jest.fn().mockReturnValue(of({ failed: 0, conflicts: [] })),
+      getVariableInfoForScheme: jest.fn().mockReturnValue(of([]))
     };
 
     mockDialogRef = {
@@ -71,7 +73,8 @@ describe('SchemeEditorDialogComponent', () => {
         NoopAnimationsModule
       ],
       providers: [
-        { provide: BackendService, useValue: mockBackendService },
+        { provide: FileService, useValue: mockFileService },
+
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
@@ -94,9 +97,9 @@ describe('SchemeEditorDialogComponent', () => {
   });
 
   it('should load schemer HTML and variable info on init', () => {
-    expect(mockBackendService.getVariableInfoForScheme).toHaveBeenCalledWith(1, 'test-scheme.json');
-    expect(mockBackendService.getFilesList).toHaveBeenCalledWith(1, 1, 10000, 'Schemer');
-    expect(mockBackendService.downloadFile).toHaveBeenCalledWith(1, 's1');
+    expect(mockFileService.getVariableInfoForScheme).toHaveBeenCalledWith(1, 'test-scheme.json');
+    expect(mockFileService.getFilesList).toHaveBeenCalledWith(1, 1, 10000, 'Schemer');
+    expect(mockFileService.downloadFile).toHaveBeenCalledWith(1, 's1');
     expect(component.schemerHtml).toBe('<html lang="en"></html>');
     expect(component.isLoading).toBe(false);
   });
@@ -130,23 +133,23 @@ describe('SchemeEditorDialogComponent', () => {
     component.unitScheme = { scheme: '{"updated": true}', schemeType: 'type1' };
 
     // Mock getFilesList for Resource to find existing file
-    (mockBackendService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }] }));
+    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }] }));
 
     component.save();
     tick();
 
-    expect(mockBackendService.deleteFiles).toHaveBeenCalledWith(1, ['r1']);
-    expect(mockBackendService.uploadTestFiles).toHaveBeenCalled();
+    expect(mockFileService.deleteFiles).toHaveBeenCalledWith(1, ['r1']);
+    expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
     expect(mockSnackBar.open).toHaveBeenCalledWith('Scheme saved successfully', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));
 
   it('should handle save error', fakeAsync(() => {
     component.hasChanges = true;
-    (mockBackendService.uploadTestFiles as jest.Mock).mockReturnValue(of({ failed: 1, conflicts: [] }));
+    (mockFileService.uploadTestFiles as jest.Mock).mockReturnValue(of({ failed: 1, conflicts: [] }));
 
     // Mock getFilesList for Resource to NOT find existing file
-    (mockBackendService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
+    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
 
     component.save();
     tick();
@@ -159,13 +162,13 @@ describe('SchemeEditorDialogComponent', () => {
     component.unitScheme = { scheme: '{"new": true}', schemeType: 'type1' };
 
     // Mock getFilesList for Resource to NOT find existing file
-    (mockBackendService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
+    (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
 
     component.save();
     tick();
 
-    expect(mockBackendService.deleteFiles).not.toHaveBeenCalled();
-    expect(mockBackendService.uploadTestFiles).toHaveBeenCalled();
+    expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
+    expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
     expect(mockSnackBar.open).toHaveBeenCalledWith('Scheme saved successfully', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));

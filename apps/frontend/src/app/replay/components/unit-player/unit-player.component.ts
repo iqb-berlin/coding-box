@@ -12,8 +12,8 @@ import {
   combineLatest, debounceTime, fromEvent, Observable, Subject, Subscription, takeUntil
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { PageData } from '../../models/page-data.model';
@@ -31,7 +31,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
-  private backendService = inject(BackendService);
+  private fileService = inject(FileService);
 
   @Input() unitDef: string | undefined;
   readonly unitPlayer = input<string>();
@@ -343,7 +343,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         playerConfig: {
           stateReportPolicy: 'eager',
           ...(this.printMode() ? { pagingMode: 'concat-scroll' } : { pagingMode: 'buttons' }),
-          directDownloadUrl: this.backendService.getDirectDownloadLink(),
+          directDownloadUrl: this.fileService.getDirectDownloadLink(),
           startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || '',
           ...(this.printMode() ? { printMode: 'on' } : {})
         }

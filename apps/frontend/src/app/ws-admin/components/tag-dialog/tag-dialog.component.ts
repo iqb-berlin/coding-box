@@ -15,8 +15,8 @@ import { FormsModule } from '@angular/forms';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UnitTagService } from '../../../shared/services/unit/unit-tag.service';
+import { AppService } from '../../../core/services/app.service';
 import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-unit-tag.dto';
 
 @Component({
@@ -230,7 +230,7 @@ export class TagDialogComponent implements OnInit {
     title?: string;
   }>(MAT_DIALOG_DATA);
 
-  private backendService = inject(BackendService);
+  private unitTagService = inject(UnitTagService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
 
@@ -259,7 +259,7 @@ export class TagDialogComponent implements OnInit {
       tag: this.newTagText.trim()
     };
 
-    this.backendService.createUnitTag(
+    this.unitTagService.createUnitTag(
       this.appService.selectedWorkspaceId,
       createTagDto
     ).subscribe({
@@ -288,7 +288,7 @@ export class TagDialogComponent implements OnInit {
    * @param tagId The ID of the tag to delete
    */
   deleteTag(tagId: number): void {
-    this.backendService.deleteUnitTag(
+    this.unitTagService.deleteUnitTag(
       this.appService.selectedWorkspaceId,
       tagId
     ).subscribe({

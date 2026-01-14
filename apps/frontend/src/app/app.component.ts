@@ -12,10 +12,10 @@ import { MatButton } from '@angular/material/button';
 import { LocationStrategy } from '@angular/common';
 import { KeycloakProfile } from 'keycloak-js';
 import { Subscription, filter } from 'rxjs';
-import { AppService } from './services/app.service';
+import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
 import { CreateUserDto } from '../../../../api-dto/user/create-user-dto';
-import { BackendService } from './services/backend.service';
+
 import { WrappedIconComponent } from './shared/wrapped-icon/wrapped-icon.component';
 import { UserMenuComponent } from './sys-admin/components/user-menu/user-menu.component';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
@@ -32,7 +32,7 @@ import { ErrorMessageDisplayComponent } from './shared/components/error-message-
 export class AppComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
   authService = inject(AuthService);
-  backendService = inject(BackendService);
+
   url = inject(LocationStrategy);
   private router = inject(Router);
 

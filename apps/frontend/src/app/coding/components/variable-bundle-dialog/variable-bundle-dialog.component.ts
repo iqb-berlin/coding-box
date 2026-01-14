@@ -28,8 +28,8 @@ import {
   takeUntil, fromEvent
 } from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { AppService } from '../../../core/services/app.service';
 
 export interface VariableBundleGroupDialogData {
   bundleGroup?: VariableBundle;
@@ -67,7 +67,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   @ViewChild('variableIdFilterInput') variableIdFilterInput!: ElementRef;
 
   private fb = inject(FormBuilder);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
   private appService = inject(AppService);
   private destroy$ = new Subject<void>();
 
@@ -95,7 +95,7 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
   constructor(
     public dialogRef: MatDialogRef<VariableBundleDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: VariableBundleGroupDialogData
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.initForm();
@@ -199,11 +199,11 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(
+    this.codingJobBackendService.getCodingIncompleteVariables(
       workspaceId,
       unitNameFilter || undefined
     ).subscribe({
-      next: variables => {
+      next: (variables: Variable[]) => {
         this.availableVariables = variables;
         this.dataSource.data = this.availableVariables;
         this.processVariableSelection();

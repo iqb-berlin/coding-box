@@ -12,9 +12,9 @@ import {
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ValidationDialogComponent } from './validation-dialog.component';
-import { AppService } from '../../../services/app.service';
-import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
-import { ValidationBatchRunnerService } from '../../../services/validation-batch-runner.service';
+import { AppService } from '../../../core/services/app.service';
+import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
+import { ValidationBatchRunnerService } from '../../../shared/services/validation/validation-batch-runner.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import {

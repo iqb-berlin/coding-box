@@ -15,7 +15,8 @@ import { A11yModule } from '@angular/cdk/a11y';
 import { firstValueFrom } from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
-import { BackendService } from '../../../services/backend.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
+import { AppService } from '../../../core/services/app.service';
 
 interface JobCreationWarning {
   unitName: string;
@@ -107,7 +108,8 @@ interface DistributionMatrixRow {
 })
 export class CodingJobBulkCreationDialogComponent {
   private fb = inject(FormBuilder);
-  private backendService = inject(BackendService);
+  private distributedCodingService = inject(DistributedCodingService);
+  private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   displayOptionsForm!: FormGroup;
   jobPreviews: JobPreview[] = [];
@@ -129,21 +131,21 @@ export class CodingJobBulkCreationDialogComponent {
     } else if (this.data.creationResults) {
       this.initializeFromCreationResults();
     } else {
-      this.calculateDistributionWithBackend().catch(() => {});
+      this.calculateDistributionWithBackend().catch(() => { });
     }
   }
 
   private async calculateDistributionWithBackend(): Promise<void> {
     this.isLoading = true;
     try {
-      const workspaceId = (this.backendService as { appService?: { selectedWorkspaceId?: number } }).appService?.selectedWorkspaceId;
+      const workspaceId = this.appService.selectedWorkspaceId;
       if (!workspaceId) {
         this.snackBar.open('No workspace selected', 'Close', { duration: 3000 });
         this.isLoading = false;
         return;
       }
 
-      const result = await firstValueFrom(this.backendService.calculateDistribution(
+      const result = await firstValueFrom(this.distributedCodingService.calculateDistribution(
         workspaceId,
         this.data.selectedVariables,
         this.data.selectedCoders.map(coder => ({ ...coder, username: coder.name })),

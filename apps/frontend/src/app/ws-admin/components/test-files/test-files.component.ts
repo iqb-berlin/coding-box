@@ -39,8 +39,9 @@ import { FilesValidationDialogComponent } from '../files-validation-result/files
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { FileBackendService } from '../../../shared/services/file/file-backend.service';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
@@ -67,7 +68,7 @@ import {
 } from './test-files-zip-export-options-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
-import { Result } from '../../../services/import.service';
+import { Result } from '../../../shared/services/file/import.service';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -109,7 +110,8 @@ import { Result } from '../../../services/import.service';
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
-  backendService = inject(BackendService);
+  fileService = inject(FileService);
+  private fileBackendService = inject(FileBackendService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
@@ -229,7 +231,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   loadTestFiles(): void {
     this.isLoading = true;
     this.isValidating = false;
-    this.backendService
+    this.fileService
       .getFilesList(
         this.appService.selectedWorkspaceId,
         this.page,
@@ -345,7 +347,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.isUploading = true;
         const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
           .length;
-        this.backendService
+        this.fileService
           .uploadTestFiles(
             workspaceId,
             files,
@@ -412,7 +414,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.isUploading = true;
       const workspaceId = this.appService.selectedWorkspaceId;
-      this.backendService
+      this.fileService
         .uploadTestFiles(workspaceId, files, false)
         .pipe(
           finalize(() => {
@@ -509,7 +511,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   deleteFiles(): void {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
     this.isDeleting = true;
-    this.backendService
+    this.fileService
       .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
       .pipe(
         finalize(() => {
@@ -531,7 +533,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   downloadFile(row: FilesInListDto): void {
-    this.backendService
+    this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
         next: (res: FileDownloadDto) => {
@@ -577,7 +579,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
 
       this.isDownloadingAllFiles = true;
-      this.backendService
+      this.fileBackendService
         .downloadWorkspaceFilesAsZip(
           this.appService.selectedWorkspaceId,
           result.fileTypes
@@ -615,7 +617,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   validateFiles(): void {
     this.isLoading = true;
     this.isValidating = true;
-    this.backendService
+    this.fileService
       .validateFiles(this.appService.selectedWorkspaceId)
       .subscribe({
         next: respOk => {
@@ -674,7 +676,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         confirmRef.afterClosed().subscribe(result => {
           if (result === true) {
             this.isLoading = true;
-            this.backendService
+            this.fileService
               .createDummyTestTakerFile(this.appService.selectedWorkspaceId)
               .subscribe({
                 next: success => {
@@ -771,7 +773,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   showFileContent(file: FilesInListDto): void {
-    this.backendService
+    this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
       .subscribe(fileData => {
         const decodedContent = atob(fileData.base64Data);

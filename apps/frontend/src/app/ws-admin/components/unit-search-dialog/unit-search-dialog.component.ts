@@ -23,8 +23,11 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
+import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
@@ -137,12 +140,15 @@ export class UnitSearchDialogComponent implements OnInit {
   constructor(
     private dialogRef: MatDialogRef<UnitSearchDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { title: string },
-    private backendService: BackendService,
+    private fileService: FileService,
+    private unitService: UnitService,
+    private responseService: ResponseService,
+    private testResultService: TestResultService,
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.unitSearchSubject.pipe(
@@ -237,7 +243,7 @@ export class UnitSearchDialogComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.searchUnitsByName(
+    this.testResultService.searchUnitsByName(
       this.appService.selectedWorkspaceId,
       unitName,
       this.pageIndex + 1,
@@ -258,14 +264,26 @@ export class UnitSearchDialogComponent implements OnInit {
 
   searchResponses(searchParams: { value?: string; variableId?: string; unitName?: string; status?: string; codedStatus?: string; group?: string; code?: string }): void {
     this.isLoading = true;
-    this.backendService.searchResponses(
+    this.testResultService.getFlatResponses(
       this.appService.selectedWorkspaceId,
-      searchParams,
-      this.pageIndex + 1,
-      this.pageSize
+      { ...searchParams, page: this.pageIndex + 1, limit: this.pageSize }
     ).subscribe({
       next: response => {
-        this.responseSearchResults = response.data;
+        this.responseSearchResults = response.data.map(r => ({
+          responseId: r.responseId,
+          variableId: r.response,
+          value: r.responseValue,
+          status: r.responseStatus,
+          unitId: r.unitId,
+          unitName: r.unit,
+          unitAlias: null, // Alias not available in flat response row
+          bookletId: 0, // Booklet ID not available
+          bookletName: r.booklet,
+          personId: r.personId,
+          personLogin: r.login,
+          personCode: r.code,
+          personGroup: r.group
+        }));
         this.totalItems = response.total;
         this.isLoading = false;
       },
@@ -286,7 +304,7 @@ export class UnitSearchDialogComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.backendService.searchBookletsByName(
+    this.testResultService.searchBookletsByName(
       this.appService.selectedWorkspaceId,
       bookletName,
       this.pageIndex + 1,
@@ -340,7 +358,7 @@ export class UnitSearchDialogComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteUnit(
+        this.unitService.deleteUnit(
           this.appService.selectedWorkspaceId,
           unit.unitId
         ).subscribe({
@@ -389,7 +407,7 @@ export class UnitSearchDialogComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteResponse(
+        this.responseService.deleteResponse(
           this.appService.selectedWorkspaceId,
           response.responseId
         ).subscribe({
@@ -449,7 +467,7 @@ export class UnitSearchDialogComponent implements OnInit {
         this.isLoading = true;
         const unitIds = this.unitSearchResults.map(unit => unit.unitId);
 
-        this.backendService.deleteMultipleUnits(
+        this.unitService.deleteMultipleUnits(
           this.appService.selectedWorkspaceId,
           unitIds
         ).subscribe({
@@ -531,7 +549,7 @@ export class UnitSearchDialogComponent implements OnInit {
             return;
           }
 
-          this.backendService.deleteResponse(
+          this.responseService.deleteResponse(
             this.appService.selectedWorkspaceId,
             responseIds[index]
           ).subscribe({
@@ -561,7 +579,7 @@ export class UnitSearchDialogComponent implements OnInit {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
+    this.fileService.getBookletInfo(
       this.appService.selectedWorkspaceId,
       booklet.bookletName
     ).subscribe({
@@ -602,11 +620,11 @@ export class UnitSearchDialogComponent implements OnInit {
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
         this.isLoading = true;
-        this.backendService.deleteBooklet(
+        this.testResultService.deleteBooklet(
           this.appService.selectedWorkspaceId,
           booklet.bookletId
         ).subscribe({
-          next: response => {
+          next: (response: { success: boolean; report: { warnings: string[] } }) => {
             if (response.success) {
               this.bookletSearchResults = this.bookletSearchResults.filter(
                 b => b.bookletId !== booklet.bookletId
@@ -678,11 +696,11 @@ export class UnitSearchDialogComponent implements OnInit {
             return;
           }
 
-          this.backendService.deleteBooklet(
+          this.testResultService.deleteBooklet(
             this.appService.selectedWorkspaceId,
             bookletIds[index]
           ).subscribe({
-            next: response => {
+            next: (response: { success: boolean }) => {
               if (response.success) {
                 successCount += 1;
               } else {
