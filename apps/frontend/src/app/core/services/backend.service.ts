@@ -2,7 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { SERVER_URL } from '../../injection-tokens';
 
 /**
- * @deprecated Use specific services instead (CodingService, ResponseService, etc.)
+ * @deprecated Use specific services instead (CodingExecutionService, ResponseService, etc.)
  */
 @Injectable({
   providedIn: 'root'

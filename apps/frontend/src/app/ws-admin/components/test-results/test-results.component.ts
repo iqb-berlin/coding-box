@@ -64,7 +64,7 @@ import { ValidationService } from '../../../shared/services/validation/validatio
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
-import { CodingService } from '../../../coding/services/coding.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
 import {
@@ -312,7 +312,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private fileService = inject(FileService);
   private responseService = inject(ResponseService);
   private unitService = inject(UnitService);
-  private codingService = inject(CodingService);
+  private statisticsService = inject(CodingStatisticsService);
   private variableAnalysisService = inject(VariableAnalysisService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
@@ -727,7 +727,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             return;
           }
 
-          this.codingService
+          this.statisticsService
             .getReplayUrl(
               this.appService.selectedWorkspaceId,
               firstResponse.id,

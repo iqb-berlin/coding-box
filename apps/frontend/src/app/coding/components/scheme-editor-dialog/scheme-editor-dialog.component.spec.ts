@@ -14,7 +14,7 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { SchemeEditorDialogComponent, SchemeEditorDialogData } from './scheme-editor-dialog.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { CodingService } from '../../services/coding.service';
+
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 
@@ -34,7 +34,7 @@ describe('SchemeEditorDialogComponent', () => {
   let component: SchemeEditorDialogComponent;
   let fixture: ComponentFixture<SchemeEditorDialogComponent>;
   let mockFileService: Partial<FileService>;
-  let mockCodingService: Partial<CodingService>;
+
   let mockDialogRef: Partial<MatDialogRef<SchemeEditorDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockDialog: Partial<MatDialog>;
@@ -53,10 +53,6 @@ describe('SchemeEditorDialogComponent', () => {
       deleteFiles: jest.fn().mockReturnValue(of(true)),
       uploadTestFiles: jest.fn().mockReturnValue(of({ failed: 0, conflicts: [] })),
       getVariableInfoForScheme: jest.fn().mockReturnValue(of([]))
-    };
-
-    mockCodingService = {
-      // Any other methods if needed
     };
 
     mockDialogRef = {
@@ -78,7 +74,7 @@ describe('SchemeEditorDialogComponent', () => {
       ],
       providers: [
         { provide: FileService, useValue: mockFileService },
-        { provide: CodingService, useValue: mockCodingService },
+
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },

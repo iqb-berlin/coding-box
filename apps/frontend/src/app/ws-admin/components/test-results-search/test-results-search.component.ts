@@ -27,7 +27,7 @@ import { responseStatesNumericMap } from '@iqbspecs/response/response.interface'
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
-import { CodingService } from '../../../coding/services/coding.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
@@ -147,7 +147,7 @@ export class TestResultsSearchComponent implements OnInit {
     private testResultService: TestResultService,
     private unitService: UnitService,
     private responseService: ResponseService,
-    private codingService: CodingService,
+    private statisticsService: CodingStatisticsService,
     private appService: AppService,
     private router: Router,
     private dialog: MatDialog,
@@ -362,7 +362,7 @@ export class TestResultsSearchComponent implements OnInit {
           }
 
           if ('responseId' in item && item.responseId) {
-            this.codingService.getReplayUrl(
+            this.statisticsService.getReplayUrl(
               workspaceId,
               item.responseId,
               token

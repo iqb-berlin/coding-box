@@ -70,4 +70,18 @@ describe('ResponseTableComponent', () => {
     expect(component.getStatusString('200')).toBeTruthy();
     expect(component.getStatusString('')).toBe('');
   });
+
+  it('should return correct label for filter status', () => {
+    component.currentStatusFilter = '200';
+    expect(component.getFilterStatusLabel()).toBeTruthy();
+
+    component.currentStatusFilter = 'null';
+    expect(component.getFilterStatusLabel()).toBe('');
+
+    component.currentStatusFilter = null;
+    expect(component.getFilterStatusLabel()).toBe('');
+
+    component.currentStatusFilter = 'invalid';
+    expect(component.getFilterStatusLabel()).toBe('invalid');
+  });
 });

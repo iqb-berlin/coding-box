@@ -25,7 +25,7 @@ import {
 } from 'rxjs';
 import { FileService } from '../../../shared/services/file/file.service';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
-import { CodingService } from '../../../coding/services/coding.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { AppService } from '../../../core/services/app.service';
 import {
@@ -130,7 +130,7 @@ interface BookletFromPersonTestResults {
 export class TestResultsFlatTableComponent implements OnDestroy {
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
-  private codingService = inject(CodingService);
+  private statisticsService = inject(CodingStatisticsService);
   private responseService = inject(ResponseService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
@@ -1258,7 +1258,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
             return;
           }
 
-          this.codingService
+          this.statisticsService
             .getReplayUrl(
               this.appService.selectedWorkspaceId,
               row.responseId,

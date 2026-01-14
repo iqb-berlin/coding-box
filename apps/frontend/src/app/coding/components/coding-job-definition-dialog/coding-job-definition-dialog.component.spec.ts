@@ -12,7 +12,7 @@ import { of } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
-import { CodingService } from '../../services/coding.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
@@ -23,7 +23,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   let component: CodingJobDefinitionDialogComponent;
   let fixture: ComponentFixture<CodingJobDefinitionDialogComponent>;
   let mockCodingJobBackendService: Partial<CodingJobBackendService>;
-  let mockCodingService: Partial<CodingService>;
+  let mockDistributedCodingService: Partial<DistributedCodingService>;
   let mockAppService: Partial<AppService>;
   let mockCoderService: Partial<CoderService>;
   let mockCodingJobService: Partial<CodingJobService>;
@@ -88,9 +88,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
       updateJobDefinition: jest.fn()
     } as unknown as Partial<CodingJobBackendService>;
 
-    mockCodingService = {
+    mockDistributedCodingService = {
       createDistributedCodingJobs: jest.fn()
-    } as unknown as Partial<CodingService>;
+    } as unknown as Partial<DistributedCodingService>;
 
     mockAppService = {
       selectedWorkspaceId: 1
@@ -136,7 +136,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       providers: [
         FormBuilder,
         { provide: CodingJobBackendService, useValue: mockCodingJobBackendService },
-        { provide: CodingService, useValue: mockCodingService },
+        { provide: DistributedCodingService, useValue: mockDistributedCodingService },
         { provide: AppService, useValue: mockAppService },
         { provide: CoderService, useValue: mockCoderService },
         { provide: CodingJobService, useValue: mockCodingJobService },
@@ -295,12 +295,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
         afterClosed: () => of(mockBulkResult)
       };
       (mockMatDialog.open as jest.Mock).mockReturnValue(dialogRefMock);
-      (mockCodingService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({ success: true, jobs: [] }));
+      (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({ success: true, jobs: [] }));
 
       await component.onSubmit();
 
       expect(mockMatDialog.open).toHaveBeenCalled();
-      expect(mockCodingService.createDistributedCodingJobs).toHaveBeenCalled();
+      expect(mockDistributedCodingService.createDistributedCodingJobs).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ bulkJobCreation: true }));
     });
   });

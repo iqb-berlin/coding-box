@@ -5,14 +5,14 @@ import { of } from 'rxjs';
 import { CodingManagementUiService } from './coding-management-ui.service';
 import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
-import { CodingService } from '../../../services/coding.service';
+import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
 
 describe('CodingManagementUiService', () => {
   let service: CodingManagementUiService;
   let mockAppService: jest.Mocked<Partial<AppService>>;
   let mockFileService: jest.Mocked<Partial<FileService>>;
-  let mockCodingService: jest.Mocked<Partial<CodingService>>;
+  let mockStatisticsService: jest.Mocked<Partial<CodingStatisticsService>>;
   let mockDialog: jest.Mocked<Partial<MatDialog>>;
   let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
 
@@ -26,9 +26,9 @@ describe('CodingManagementUiService', () => {
       getUnitContentXml: jest.fn(),
       getCodingSchemeFile: jest.fn()
     } as unknown as jest.Mocked<Partial<FileService>>;
-    mockCodingService = {
+    mockStatisticsService = {
       getReplayUrl: jest.fn()
-    } as unknown as jest.Mocked<Partial<CodingService>>;
+    } as unknown as jest.Mocked<Partial<CodingStatisticsService>>;
     mockDialog = {
       open: jest.fn()
     } as unknown as jest.Mocked<Partial<MatDialog>>;
@@ -41,7 +41,7 @@ describe('CodingManagementUiService', () => {
         CodingManagementUiService,
         { provide: AppService, useValue: mockAppService },
         { provide: FileService, useValue: mockFileService },
-        { provide: CodingService, useValue: mockCodingService },
+        { provide: CodingStatisticsService, useValue: mockStatisticsService },
         { provide: MatDialog, useValue: mockDialog },
         { provide: MatSnackBar, useValue: mockSnackBar }
       ]
@@ -68,7 +68,7 @@ describe('CodingManagementUiService', () => {
   it('should open replay URL in new window', done => {
     const response = { id: 123 } as Success;
     (mockAppService.createToken as jest.Mock).mockReturnValue(of('test-token'));
-    (mockCodingService.getReplayUrl as jest.Mock).mockReturnValue(of({ replayUrl: 'http://test.com' }));
+    (mockStatisticsService.getReplayUrl as jest.Mock).mockReturnValue(of({ replayUrl: 'http://test.com' }));
 
     service.openReplayForResponse(response).subscribe(url => {
       expect(url).toBe('http://test.com');

@@ -6,7 +6,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
-import { CodingService } from '../../../services/coding.service';
+import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
 import { ContentDialogComponent } from '../../../../shared/dialogs/content-dialog/content-dialog.component';
 
@@ -16,7 +16,7 @@ import { ContentDialogComponent } from '../../../../shared/dialogs/content-dialo
 export class CodingManagementUiService {
   private appService = inject(AppService);
   private fileService = inject(FileService);
-  private codingService = inject(CodingService);
+  private statisticsService = inject(CodingStatisticsService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
@@ -52,7 +52,7 @@ export class CodingManagementUiService {
           if (!token) {
             return of('');
           }
-          return this.codingService.getReplayUrl(workspaceId, response.id, token).pipe(
+          return this.statisticsService.getReplayUrl(workspaceId, response.id, token).pipe(
             switchMap(result => {
               if (!result.replayUrl) {
                 this.snackBar.open(

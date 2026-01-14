@@ -7,7 +7,10 @@ import {
 } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { CodingService } from './coding.service';
+import { CodingExecutionService } from './coding-execution.service';
+import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingVersionService } from './coding-version.service';
+import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
   SearchResponseItem, SearchResponsesParams, CodingJobStatus
@@ -33,7 +36,10 @@ export interface FilterParams {
   providedIn: 'root'
 })
 export class CodingManagementService {
-  private codingService = inject(CodingService);
+  private executionService = inject(CodingExecutionService);
+  private statisticsService = inject(CodingStatisticsService);
+  private versionService = inject(CodingVersionService);
+  private exportService = inject(CodingExportService);
   private responseService = inject(ResponseService);
   private appService = inject(AppService);
   private translateService = inject(TranslateService);
@@ -66,7 +72,7 @@ export class CodingManagementService {
     this._referenceStatistics.next(null);
     this._referenceVersion.next(null);
 
-    this.codingService.createCodingStatisticsJob(workspaceId)
+    this.executionService.createCodingStatisticsJob(workspaceId)
       .pipe(
         catchError(() => of({
           jobId: '' as string,
@@ -86,8 +92,8 @@ export class CodingManagementService {
     if (version === 'v2') {
       // v2 compares to v1
       forkJoin({
-        current: this.codingService.getCodingStatistics(workspaceId, 'v2'),
-        reference: this.codingService.getCodingStatistics(workspaceId, 'v1')
+        current: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
+        reference: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         this.handleStatisticsError({ current: this.emptyStats, reference: this.emptyStats }),
         finalize(() => this._isLoadingStatistics.next(false))
@@ -100,9 +106,9 @@ export class CodingManagementService {
     } else if (version === 'v3') {
       // v3 compares to v2 if v2 has data, otherwise to v1
       forkJoin({
-        current: this.codingService.getCodingStatistics(workspaceId, 'v3'),
-        v2Stats: this.codingService.getCodingStatistics(workspaceId, 'v2'),
-        v1Stats: this.codingService.getCodingStatistics(workspaceId, 'v1')
+        current: this.statisticsService.getCodingStatistics(workspaceId, 'v3'),
+        v2Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
+        v1Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         this.handleStatisticsError({
           current: this.emptyStats,
@@ -122,7 +128,7 @@ export class CodingManagementService {
         }
       });
     } else {
-      this.codingService.getCodingStatistics(workspaceId, version)
+      this.statisticsService.getCodingStatistics(workspaceId, version)
         .pipe(
           catchError(() => {
             this.showErrorSnackbar('coding-management.descriptions.error-statistics');
@@ -138,7 +144,7 @@ export class CodingManagementService {
 
   private pollStatisticsJob(workspaceId: number, jobId: string, version: StatisticsVersion): void {
     timer(0, 2000).pipe(
-      switchMap(() => this.codingService.getCodingJobStatus(workspaceId, jobId)),
+      switchMap(() => this.executionService.getCodingJobStatus(workspaceId, jobId)),
       takeWhile(status => ['pending', 'processing'].includes(status.status), true),
       finalize(() => this._isLoadingStatistics.next(false))
     ).subscribe((status: CodingJobStatus) => {
@@ -153,7 +159,7 @@ export class CodingManagementService {
 
   private fetchReferenceStatisticsAfterJob(workspaceId: number, version: StatisticsVersion): void {
     if (version === 'v2') {
-      this.codingService.getCodingStatistics(workspaceId, 'v1')
+      this.statisticsService.getCodingStatistics(workspaceId, 'v1')
         .pipe(catchError(() => of({ totalResponses: 0, statusCounts: {} })))
         .subscribe(ref => {
           this._referenceStatistics.next(ref);
@@ -161,8 +167,8 @@ export class CodingManagementService {
         });
     } else if (version === 'v3') {
       forkJoin({
-        v2Stats: this.codingService.getCodingStatistics(workspaceId, 'v2'),
-        v1Stats: this.codingService.getCodingStatistics(workspaceId, 'v1')
+        v2Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v2'),
+        v1Stats: this.statisticsService.getCodingStatistics(workspaceId, 'v1')
       }).pipe(
         catchError(() => of({
           v2Stats: { totalResponses: 0, statusCounts: {} },
@@ -190,7 +196,7 @@ export class CodingManagementService {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of({ data: [], total: 0 });
 
-    return this.codingService.getResponsesByStatus(workspaceId, status, version, page, limit)
+    return this.statisticsService.getResponsesByStatus(workspaceId, status, version, page, limit)
       .pipe(
         catchError(() => {
           this.snackBar.open(`Fehler beim Abrufen der Antworten mit Status ${status}`, 'Schließen', {
@@ -238,7 +244,7 @@ export class CodingManagementService {
   resetCodingVersion(version: StatisticsVersion): Observable<{ affectedResponseCount: number; cascadeResetVersions: ('v2' | 'v3')[]; message: string } | null> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return of(null);
-    return this.codingService.resetCodingVersion(workspaceId, version);
+    return this.versionService.resetCodingVersion(workspaceId, version);
   }
 
   // --- Download Helpers ---
@@ -264,21 +270,21 @@ export class CodingManagementService {
 
   private downloadCodingListAsCsvBackground(workspaceId: number): void {
     this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.codingService.getCodingListAsCsv(workspaceId)
+    this.exportService.getCodingListAsCsv(workspaceId)
       .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als CSV'))
       .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.csv`, 'Kodierliste wurde als CSV nicht erfolgreich heruntergeladen.'));
   }
 
   private downloadCodingListAsExcelBackground(workspaceId: number): void {
     this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.codingService.getCodingListAsExcel(workspaceId)
+    this.exportService.getCodingListAsExcel(workspaceId)
       .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als Excel'))
       .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.xlsx`, 'Kodierliste wurde als Excel nicht erfolgreich heruntergeladen.'));
   }
 
   private downloadCodingListAsJsonBackground(workspaceId: number): void {
     this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.codingService.getCodingListAsCsv(workspaceId)
+    this.exportService.getCodingListAsCsv(workspaceId)
       .pipe(this.handleDownloadError('Fehler beim Abrufen der Kodierliste (JSON)'))
       .subscribe(async (blob: Blob | null) => {
         if (!blob) return;
@@ -331,10 +337,10 @@ export class CodingManagementService {
   private downloadResultsGeneric(workspaceId: number, version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
       if (format === 'csv') {
-        this.codingService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
+        this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
           .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.csv`); resolve(); }, error: reject });
       } else if (format === 'excel') {
-        this.codingService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
+        this.exportService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
           .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.xlsx`); resolve(); }, error: reject });
       }
     });
@@ -342,7 +348,7 @@ export class CodingManagementService {
 
   private downloadResultsAsJson(workspaceId: number, version: StatisticsVersion, includeReplayUrls: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.codingService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
+      this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
         .pipe(catchError(() => { reject(new Error('Failed')); return of(null); }))
         .subscribe(async blob => {
           if (!blob) { reject(new Error('No data')); return; }

@@ -15,7 +15,7 @@ import { A11yModule } from '@angular/cdk/a11y';
 import { firstValueFrom } from 'rxjs';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
-import { CodingService } from '../../services/coding.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 
 interface JobCreationWarning {
@@ -108,7 +108,7 @@ interface DistributionMatrixRow {
 })
 export class CodingJobBulkCreationDialogComponent {
   private fb = inject(FormBuilder);
-  private codingService = inject(CodingService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   displayOptionsForm!: FormGroup;
@@ -145,7 +145,7 @@ export class CodingJobBulkCreationDialogComponent {
         return;
       }
 
-      const result = await firstValueFrom(this.codingService.calculateDistribution(
+      const result = await firstValueFrom(this.distributedCodingService.calculateDistribution(
         workspaceId,
         this.data.selectedVariables,
         this.data.selectedCoders.map(coder => ({ ...coder, username: coder.name })),

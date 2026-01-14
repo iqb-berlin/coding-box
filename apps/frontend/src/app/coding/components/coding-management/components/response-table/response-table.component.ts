@@ -143,4 +143,12 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
   onShowUnitXml(unitName: number): void {
     this.showUnitXml.emit(unitName);
   }
+
+  getFilterStatusLabel(): string {
+    if (!this.currentStatusFilter || this.currentStatusFilter === 'null') {
+      return '';
+    }
+    const num = parseInt(this.currentStatusFilter, 10);
+    return Number.isNaN(num) ? this.currentStatusFilter : this.mapStatusToString(num);
+  }
 }

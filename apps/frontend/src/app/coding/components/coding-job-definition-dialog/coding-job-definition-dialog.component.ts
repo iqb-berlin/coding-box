@@ -34,7 +34,7 @@ import {
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
-import { CodingService } from '../../services/coding.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
@@ -113,7 +113,7 @@ interface CreationResults {
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
   private codingJobBackendService = inject(CodingJobBackendService);
-  private codingService = inject(CodingService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
@@ -921,7 +921,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         name: coder.name,
         username: coder.name
       }));
-      const result = await firstValueFrom(this.codingService.createDistributedCodingJobs(
+      const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
         mappedCoders,

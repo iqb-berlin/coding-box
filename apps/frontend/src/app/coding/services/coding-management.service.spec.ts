@@ -6,14 +6,20 @@ import { CodingManagementService } from './coding-management.service';
 import {
   CodingJobStatus
 } from '../../models/coding-interfaces';
-import { CodingService } from './coding.service';
+import { CodingExecutionService } from './coding-execution.service';
+import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingExportService } from './coding-export.service';
+import { CodingVersionService } from './coding-version.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import { AppService } from '../../core/services/app.service';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 
 describe('CodingManagementService', () => {
   let service: CodingManagementService;
-  let codingServiceMock: jest.Mocked<CodingService>;
+  let executionServiceMock: jest.Mocked<CodingExecutionService>;
+  let statisticsServiceMock: jest.Mocked<CodingStatisticsService>;
+  let exportServiceMock: jest.Mocked<CodingExportService>;
+  let versionServiceMock: jest.Mocked<CodingVersionService>;
   let responseServiceMock: jest.Mocked<ResponseService>;
   let appServiceMock: jest.Mocked<AppService>;
   let translateServiceMock: jest.Mocked<TranslateService>;
@@ -29,17 +35,26 @@ describe('CodingManagementService', () => {
 
   beforeEach(() => {
     // Create mocks
-    codingServiceMock = {
+    executionServiceMock = {
       createCodingStatisticsJob: jest.fn(),
+      getCodingJobStatus: jest.fn()
+    } as unknown as jest.Mocked<CodingExecutionService>;
+
+    statisticsServiceMock = {
       getCodingStatistics: jest.fn(),
-      getCodingJobStatus: jest.fn(),
-      getResponsesByStatus: jest.fn(),
-      resetCodingVersion: jest.fn(),
+      getResponsesByStatus: jest.fn()
+    } as unknown as jest.Mocked<CodingStatisticsService>;
+
+    exportServiceMock = {
       getCodingListAsCsv: jest.fn(),
       getCodingListAsExcel: jest.fn(),
       getCodingResultsByVersion: jest.fn(),
       getCodingResultsByVersionAsExcel: jest.fn()
-    } as unknown as jest.Mocked<CodingService>;
+    } as unknown as jest.Mocked<CodingExportService>;
+
+    versionServiceMock = {
+      resetCodingVersion: jest.fn()
+    } as unknown as jest.Mocked<CodingVersionService>;
 
     responseServiceMock = {
       searchResponses: jest.fn()
@@ -60,7 +75,10 @@ describe('CodingManagementService', () => {
     TestBed.configureTestingModule({
       providers: [
         CodingManagementService,
-        { provide: CodingService, useValue: codingServiceMock },
+        { provide: CodingExecutionService, useValue: executionServiceMock },
+        { provide: CodingStatisticsService, useValue: statisticsServiceMock },
+        { provide: CodingExportService, useValue: exportServiceMock },
+        { provide: CodingVersionService, useValue: versionServiceMock },
         { provide: ResponseService, useValue: responseServiceMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: TranslateService, useValue: translateServiceMock },
@@ -79,37 +97,37 @@ describe('CodingManagementService', () => {
     it('should create a job and poll for results when workspaceId is present', fakeAsync(() => {
       // Arrange
       const jobId = 'job-123';
-      codingServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
 
       // First poll: processing
-      codingServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
         status: 'processing',
         progress: 50,
         result: undefined
       } as CodingJobStatus));
 
       // Second poll: completed
-      codingServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
         status: 'completed',
         progress: 100,
         result: mockCodingStatistics
       } as CodingJobStatus));
 
       // Mock reference stats calls (v1 is default fallback)
-      codingServiceMock.getCodingStatistics.mockReturnValue(of({ totalResponses: 0, statusCounts: {} }));
+      statisticsServiceMock.getCodingStatistics.mockReturnValue(of({ totalResponses: 0, statusCounts: {} }));
 
       // Act
       service.fetchCodingStatistics('v1');
 
       // Assert
-      expect(codingServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1);
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1);
 
       // Advance time for polling (timer(0, 2000))
       tick(0); // initial
-      expect(codingServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(1);
+      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(1);
 
       tick(2000); // next poll
-      expect(codingServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(2);
+      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(2);
 
       // Check if statistics were emitted
       let currentStats: CodingStatistics | undefined;
@@ -122,24 +140,24 @@ describe('CodingManagementService', () => {
     it('should handle missing workspaceId', () => {
       Object.defineProperty(appServiceMock, 'selectedWorkspaceId', { get: () => null });
       service.fetchCodingStatistics('v1');
-      expect(codingServiceMock.createCodingStatisticsJob).not.toHaveBeenCalled();
+      expect(executionServiceMock.createCodingStatisticsJob).not.toHaveBeenCalled();
     });
 
     it('should handle failure to create job', () => {
-      codingServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
+      executionServiceMock.createCodingStatisticsJob.mockReturnValue(throwError(() => new Error('Failed')));
       // Expect it to call handleNoJobIdStatistics -> getCodingStatistics
-      codingServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
+      statisticsServiceMock.getCodingStatistics.mockReturnValue(of(mockCodingStatistics));
 
       service.fetchCodingStatistics('v1');
 
-      expect(codingServiceMock.getCodingStatistics).toHaveBeenCalledWith(1, 'v1');
+      expect(statisticsServiceMock.getCodingStatistics).toHaveBeenCalledWith(1, 'v1');
     });
   });
 
   describe('downloadCodingList', () => {
     it('should download CSV', () => {
       const mockBlob = new Blob(['csv data'], { type: 'text/csv' });
-      codingServiceMock.getCodingListAsCsv.mockReturnValue(of(mockBlob));
+      exportServiceMock.getCodingListAsCsv.mockReturnValue(of(mockBlob));
 
       // Spy on saveBlob (private method, but effectively testing side effect via window)
       // Since saveBlob creates a URL and clicks an anchor, it's hard to test in non-browser env without mocking DOM.
@@ -151,19 +169,19 @@ describe('CodingManagementService', () => {
 
       service.downloadCodingList('csv');
 
-      expect(codingServiceMock.getCodingListAsCsv).toHaveBeenCalledWith(1);
+      expect(exportServiceMock.getCodingListAsCsv).toHaveBeenCalledWith(1);
     });
 
     it('should download Excel', () => {
       const mockBlob = new Blob(['excel data'], { type: 'application/xlsx' });
-      codingServiceMock.getCodingListAsExcel.mockReturnValue(of(mockBlob));
+      exportServiceMock.getCodingListAsExcel.mockReturnValue(of(mockBlob));
 
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
       service.downloadCodingList('excel');
 
-      expect(codingServiceMock.getCodingListAsExcel).toHaveBeenCalledWith(1);
+      expect(exportServiceMock.getCodingListAsExcel).toHaveBeenCalledWith(1);
     });
   });
 });

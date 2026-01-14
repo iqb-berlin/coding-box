@@ -16,7 +16,6 @@ import {
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { TranslateModule } from '@ngx-translate/core';
-import { CodingService } from '../../services/coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -59,7 +58,6 @@ import { SearchResponseItem } from '../../../models/coding-interfaces';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
-  private codingService = inject(CodingService);
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
