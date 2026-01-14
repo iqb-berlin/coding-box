@@ -1,0 +1,63 @@
+<div class="filter-controls">
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.coded-status' | translate }}</mat-label>
+        <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onFilterChange()">
+            <mat-option></mat-option>
+            @for (status of availableStatuses; track status) {
+            <mat-option [value]="status">
+                @if (status === 'null') {
+                {{ 'coding-management.statistics.uncoded-responses' | translate }}
+                } @else {
+                {{ mapStatusToString(status) }}
+                }
+            </mat-option>
+            }
+        </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.unitName" (input)="onFilterChange()"
+            placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.run' | translate }}</mat-label>
+        <mat-select [(ngModel)]="filterParams.version" (selectionChange)="onFilterChange()">
+            @for (option of codingRunOptions; track option.value) {
+            <mat-option [value]="option.value">
+                {{ option.label | translate }}
+            </mat-option>
+            }
+        </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.code" (input)="onFilterChange()"
+            placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.person-group' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.group" (input)="onFilterChange()"
+            placeholder="{{ 'coding-management.filters.person-group-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.booklet-name' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.bookletName" (input)="onFilterChange()"
+            placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
+        <input matInput [(ngModel)]="filterParams.variableId" (input)="onFilterChange()"
+            placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
+    </mat-form-field>
+
+    <button mat-button (click)="onClearFilters()" [disabled]="isLoading">
+        <mat-icon>clear</mat-icon>
+        {{ 'coding-management.filters.clear' | translate }}
+    </button>
+</div>
