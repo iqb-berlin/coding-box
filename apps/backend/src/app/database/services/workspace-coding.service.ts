@@ -25,7 +25,13 @@ import { CodingJob } from '../entities/coding-job.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { CodingStatistics, CodingStatisticsWithJob } from './shared-types';
+import {
+  CodedResponse,
+  CodingStatistics,
+  CodingStatisticsWithJob
+} from './shared-types';
+import { ResponseManagementService } from './response-management.service';
+import { generateReplayUrl } from '../../utils/replay-url.util';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import {
   CodeBookContentSetting,
@@ -55,17 +61,6 @@ import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
 import { CodingListService } from './coding-list.service';
-import { generateReplayUrl } from '../../utils/replay-url.util';
-
-interface CodedResponse {
-  id: number;
-  code_v1?: number;
-  status_v1?: string;
-  score_v1?: number;
-  code_v3?: number;
-  status_v3?: string;
-  score_v3?: number;
-}
 
 @Injectable()
 export class WorkspaceCodingService {
@@ -102,8 +97,9 @@ export class WorkspaceCodingService {
     private codingResultsService: CodingResultsService,
     private codingJobService: CodingJobService,
     private codingExportService: CodingExportService,
-    private codingListService: CodingListService
-  ) {}
+    private codingListService: CodingListService,
+    private responseManagementService: ResponseManagementService
+  ) { }
 
   private codingSchemeCache: Map<
   string,
@@ -248,166 +244,6 @@ export class WorkspaceCodingService {
     }
   }
 
-  async getJobStatus(
-    jobId: string
-  ): Promise<{
-      status:
-      | 'pending'
-      | 'processing'
-      | 'completed'
-      | 'failed'
-      | 'cancelled'
-      | 'paused';
-      progress: number;
-      result?: CodingStatistics;
-      error?: string;
-    } | null> {
-    try {
-      let bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-
-      if (!bullJob) {
-        bullJob = (await this.jobQueueService.getCodingStatisticsJob(
-          jobId
-        )) as never;
-      }
-
-      if (bullJob) {
-        const state = await bullJob.getState();
-        const progress = (await bullJob.progress()) || 0;
-
-        const status = this.bullJobManagementService.mapJobStateToStatus(state);
-        const { result, error } =
-          this.bullJobManagementService.extractJobResult(bullJob, state);
-
-        return {
-          status,
-          progress: typeof progress === 'number' ? progress : 0,
-          result,
-          error
-        };
-      }
-
-      return null;
-    } catch (error) {
-      this.logger.error(
-        `Error getting job status: ${error.message}`,
-        error.stack
-      );
-      return null;
-    }
-  }
-
-  async createCodingStatisticsJob(
-    workspaceId: number
-  ): Promise<{ jobId: string; message: string }> {
-    try {
-      const cacheKey = `coding-statistics:${workspaceId}`;
-      const cachedResult = await this.cacheService.get<CodingStatistics>(
-        cacheKey
-      );
-      if (cachedResult) {
-        this.logger.log(
-          `Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`
-        );
-        return { jobId: '', message: 'Using cached coding statistics' };
-      }
-      await this.cacheService.delete(cacheKey); // Clear any stale cache
-      this.logger.log(
-        `No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`
-      );
-
-      const job = await this.jobQueueService.addCodingStatisticsJob(
-        workspaceId
-      );
-      this.logger.log(
-        `Created coding statistics job ${job.id} for workspace ${workspaceId}`
-      );
-      return {
-        jobId: job.id.toString(),
-        message: 'Created coding statistics job - no cache available'
-      };
-    } catch (error) {
-      this.logger.error(
-        `Error creating coding statistics job: ${error.message}`,
-        error.stack
-      );
-      throw error;
-    }
-  }
-
-  async cancelJob(
-    jobId: string
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      const state = await bullJob.getState();
-      if (state === 'completed' || state === 'failed') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} cannot be cancelled because it is already ${state}`
-        };
-      }
-
-      if (state === 'active') {
-        return {
-          success: false,
-          message: `Job with ID ${jobId} is currently being processed and cannot be cancelled. Please wait for it to complete or use pause instead.`
-        };
-      }
-
-      const result = await this.jobQueueService.cancelTestPersonCodingJob(
-        jobId
-      );
-      if (result) {
-        this.logger.log(`Job ${jobId} has been cancelled successfully`);
-        return {
-          success: true,
-          message: `Job ${jobId} has been cancelled successfully`
-        };
-      }
-      return { success: false, message: `Failed to cancel job ${jobId}` };
-    } catch (error) {
-      this.logger.error(`Error cancelling job: ${error.message}`, error.stack);
-      return {
-        success: false,
-        message: `Error cancelling job: ${error.message}`
-      };
-    }
-  }
-
-  async deleteJob(
-    jobId: string
-  ): Promise<{ success: boolean; message: string }> {
-    try {
-      const bullJob = await this.jobQueueService.getTestPersonCodingJob(jobId);
-      if (!bullJob) {
-        return { success: false, message: `Job with ID ${jobId} not found` };
-      }
-
-      const result = await this.jobQueueService.deleteTestPersonCodingJob(
-        jobId
-      );
-      if (result) {
-        this.logger.log(`Job ${jobId} has been deleted successfully`);
-        return {
-          success: true,
-          message: `Job ${jobId} has been deleted successfully`
-        };
-      }
-      return { success: false, message: `Failed to delete job ${jobId}` };
-    } catch (error) {
-      this.logger.error(`Error deleting job: ${error.message}`, error.stack);
-      return {
-        success: false,
-        message: `Error deleting job: ${error.message}`
-      };
-    }
-  }
-
   private async isJobCancelled(jobId: string | number): Promise<boolean> {
     try {
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(
@@ -426,152 +262,6 @@ export class WorkspaceCodingService {
         `Error checking job cancellation or pause: ${error.message}`,
         error.stack
       );
-      return false;
-    }
-  }
-
-  private async updateResponsesInDatabase(
-    allCodedResponses: CodedResponse[],
-    queryRunner: import('typeorm').QueryRunner,
-    jobId?: string,
-    progressCallback?: (progress: number) => void,
-    metrics?: { [key: string]: number }
-  ): Promise<boolean> {
-    if (allCodedResponses.length === 0) {
-      await queryRunner.release();
-      return true;
-    }
-    const updateStart = Date.now();
-    try {
-      const updateBatchSize = 500;
-      const batches: CodedResponse[][] = [];
-      for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
-        batches.push(allCodedResponses.slice(i, i + updateBatchSize));
-      }
-
-      this.logger.log(
-        `Starte die Aktualisierung von ${allCodedResponses.length} Responses in ${batches.length} Batches (sequential).`
-      );
-
-      for (let index = 0; index < batches.length; index++) {
-        const batch = batches[index];
-        this.logger.log(
-          `Starte Aktualisierung für Batch #${index + 1} (Größe: ${
-            batch.length
-          }).`
-        );
-
-        if (jobId && (await this.isJobCancelled(jobId))) {
-          this.logger.log(
-            `Job ${jobId} was cancelled or paused before updating batch #${
-              index + 1
-            }`
-          );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
-        }
-
-        try {
-          if (batch.length > 0) {
-            const updatePromises = batch.map(response => {
-              const updateData: Partial<
-              Pick<
-              ResponseEntity,
-              | 'code_v1'
-              | 'status_v1'
-              | 'score_v1'
-              | 'code_v3'
-              | 'status_v3'
-              | 'score_v3'
-              >
-              > = {};
-
-              if (response.code_v1 !== undefined) {
-                updateData.code_v1 = response.code_v1;
-              }
-              if (response.status_v1 !== undefined) {
-                updateData.status_v1 = statusStringToNumber(response.status_v1);
-              }
-              if (response.score_v1 !== undefined) {
-                updateData.score_v1 = response.score_v1;
-              }
-
-              if (response.code_v3 !== undefined) {
-                updateData.code_v3 = response.code_v3;
-              }
-              if (response.status_v3 !== undefined) {
-                const statusNumber = statusStringToNumber(response.status_v3);
-                updateData.status_v3 = statusNumber;
-                this.logger.debug(
-                  `Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`
-                );
-              }
-              if (response.score_v3 !== undefined) {
-                updateData.score_v3 = response.score_v3;
-              }
-
-              if (Object.keys(updateData).length > 0) {
-                return queryRunner.manager.update(
-                  ResponseEntity,
-                  response.id,
-                  updateData
-                );
-              }
-              return Promise.resolve();
-            });
-
-            await Promise.all(updatePromises);
-          }
-
-          this.logger.log(
-            `Batch #${index + 1} (Größe: ${
-              batch.length
-            }) erfolgreich aktualisiert.`
-          );
-
-          if (progressCallback) {
-            const batchProgress = 95 + 5 * ((index + 1) / batches.length);
-            progressCallback(Math.round(Math.min(batchProgress, 99))); // Cap at 99% until fully complete and round to integer
-          }
-        } catch (error) {
-          this.logger.error(
-            `Fehler beim Aktualisieren von Batch #${index + 1} (Größe: ${
-              batch.length
-            }):`,
-            error.message
-          );
-          await queryRunner.rollbackTransaction();
-          await queryRunner.release();
-          return false;
-        }
-      }
-
-      await queryRunner.commitTransaction();
-      this.logger.log(
-        `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
-      );
-
-      if (metrics) {
-        metrics.update = Date.now() - updateStart;
-      }
-
-      await queryRunner.release();
-      return true;
-    } catch (error) {
-      this.logger.error(
-        'Fehler beim Aktualisieren der Responses:',
-        error.message
-      );
-      try {
-        await queryRunner.rollbackTransaction();
-      } catch (rollbackError) {
-        this.logger.error(
-          'Fehler beim Rollback der Transaktion:',
-          rollbackError.message
-        );
-      }
-      await queryRunner.release();
       return false;
     }
   }
@@ -741,8 +431,7 @@ export class WorkspaceCodingService {
             codingSchemeRefs.add(codingSchemeRefUpper);
             unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
             this.logger.debug(
-              `Extracted coding scheme mapping: unitId=${
-                unit.id
+              `Extracted coding scheme mapping: unitId=${unit.id
               }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
             );
           }
@@ -991,10 +680,8 @@ export class WorkspaceCodingService {
       });
 
       this.logger.log(
-        `Filtered responses: ${allResponses.length} -> ${
-          filteredResponses.length
-        } (removed ${
-          allResponses.length - filteredResponses.length
+        `Filtered responses: ${allResponses.length} -> ${filteredResponses.length
+        } (removed ${allResponses.length - filteredResponses.length
         } invalid variable responses)`
       );
 
@@ -1135,13 +822,15 @@ export class WorkspaceCodingService {
       }
 
       // Step 12: Update responses in database - 100% progress
-      const updateSuccess = await this.updateResponsesInDatabase(
-        allCodedResponses,
-        queryRunner,
-        jobId,
-        progressCallback,
-        metrics
-      );
+      const updateSuccess =
+        await this.responseManagementService.updateResponsesInDatabase(
+          allCodedResponses,
+          queryRunner,
+          jobId,
+          this.isJobCancelled.bind(this),
+          progressCallback,
+          metrics
+        );
 
       if (!updateSuccess) {
         return statistics;
@@ -1291,8 +980,7 @@ export class WorkspaceCodingService {
     personIds?: string
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
     this.logger.log(
-      `Fetching responses for workspace_id = ${workspace_id} ${
-        personIds ? `and personIds = ${personIds}` : ''
+      `Fetching responses for workspace_id = ${workspace_id} ${personIds ? `and personIds = ${personIds}` : ''
       }.`
     );
 
@@ -1671,8 +1359,7 @@ export class WorkspaceCodingService {
 
       const endTime = Date.now();
       this.logger.log(
-        `Validation completed in ${endTime - startTime}ms. Processed all ${
-          expectedCombinations.length
+        `Validation completed in ${endTime - startTime}ms. Processed all ${expectedCombinations.length
         } combinations with ${totalMissingCount} missing responses.`
       );
 
@@ -1875,10 +1562,8 @@ export class WorkspaceCodingService {
     }));
 
     this.logger.log(
-      `Found ${
-        rawResults.length
-      } CODING_INCOMPLETE variable groups, filtered to ${
-        filteredResult.length
+      `Found ${rawResults.length
+      } CODING_INCOMPLETE variable groups, filtered to ${filteredResult.length
       } valid variables${unitName ? ` for unit ${unitName}` : ''}`
     );
 
@@ -2432,8 +2117,7 @@ export class WorkspaceCodingService {
       }
     }
 
-    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${
-      results.filter(r => r.hasIssues).length
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${results.filter(r => r.hasIssues).length
     } jobs skipped due to coding issues.`;
 
     this.logger.log(message);
@@ -3037,8 +2721,7 @@ export class WorkspaceCodingService {
         }
       }
 
-      const message = `Applied ${appliedCount} resolutions successfully. ${
-        failedCount > 0 ? `${failedCount} failed.` : ''
+      const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''
       } ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
       this.logger.log(message);
 
@@ -3115,8 +2798,7 @@ export class WorkspaceCodingService {
         totalAppliedCount += batchCount;
 
         this.logger.debug(
-          `Batch ${
-            Math.floor(i / batchSize) + 1
+          `Batch ${Math.floor(i / batchSize) + 1
           }: ${batchCount} applied results`
         );
       }
@@ -3364,7 +3046,7 @@ export class WorkspaceCodingService {
       const batchSize = 5000;
       let offset = 0;
 
-      for (;;) {
+      for (; ;) {
         const batchQueryBuilder = baseQueryBuilder
           .clone()
           .select(['response.id'])
@@ -3397,8 +3079,7 @@ export class WorkspaceCodingService {
       return {
         affectedResponseCount,
         cascadeResetVersions: version === 'v2' ? ['v3'] : [],
-        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${
-          version === 'v2' ? ' and v3 (cascade)' : ''
+        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${version === 'v2' ? ' and v3 (cascade)' : ''
         }`
       };
     } catch (error) {

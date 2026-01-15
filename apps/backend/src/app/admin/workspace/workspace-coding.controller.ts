@@ -27,10 +27,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CoderTrainingService } from '../../database/services/coder-training.service';
-import {
-  CodingListService,
-  CodingItem
-} from '../../database/services/coding-list.service';
+import { CodingListService } from '../../database/services/coding-list.service';
 import { PersonService } from '../../database/services/person.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { CodingExportService } from '../../database/services/coding-export.service';
@@ -82,7 +79,7 @@ export class WorkspaceCodingController {
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
     private journalService: JournalService
-  ) {}
+  ) { }
 
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -146,23 +143,12 @@ export class WorkspaceCodingController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingListCsvStream(
+    return this.codingExportService.exportCodingListAsCsv(
       workspace_id,
-      authToken || '',
-      serverUrl || ''
+      authToken,
+      serverUrl,
+      res
     );
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-list-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
-    res.setHeader('Cache-Control', 'no-cache');
-
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
   }
 
   @Get(':workspace_id/coding/coding-list/excel')
@@ -198,23 +184,12 @@ export class WorkspaceCodingController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    const excelData = await this.codingListService.getCodingListAsExcel(
+    return this.codingExportService.exportCodingListAsExcel(
       workspace_id,
-      authToken || '',
-      serverUrl || ''
+      authToken,
+      serverUrl,
+      res
     );
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-list-${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx"`
-    );
-    res.send(excelData);
   }
 
   @Get(':workspace_id/coding/coding-list/json')
@@ -264,60 +239,12 @@ export class WorkspaceCodingController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    this.logger.log(`Starting JSON export for workspace ${workspace_id}`);
-
-    res.setHeader('Content-Type', 'application/json');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-list-${new Date()
-        .toISOString()
-        .slice(0, 10)}.json"`
+    return this.codingExportService.exportCodingListAsJson(
+      workspace_id,
+      authToken,
+      serverUrl,
+      res
     );
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    try {
-      res.write('[');
-      const stream = await this.codingListService.getCodingListJsonStream(
-        workspace_id,
-        authToken || '',
-        serverUrl || ''
-      );
-      let first = true;
-      stream.on('data', (item: CodingItem) => {
-        if (!first) {
-          res.write(',');
-        } else {
-          first = false;
-        }
-        res.write(JSON.stringify(item));
-
-        // Force garbage collection hint
-        if (global.gc) {
-          global.gc();
-        }
-      });
-
-      stream.on('end', () => {
-        res.write(']');
-        res.end();
-        this.logger.log(`JSON export completed for workspace ${workspace_id}`);
-      });
-
-      stream.on('error', (error: Error) => {
-        this.logger.error(`Error during JSON export: ${error.message}`);
-        if (!res.headersSent) {
-          res.status(500).json({ error: 'Export failed' });
-        } else {
-          res.end();
-        }
-      });
-    } catch (error) {
-      this.logger.error(`Failed to start JSON export: ${error.message}`);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Export initialization failed' });
-      }
-    }
   }
 
   @Get(':workspace_id/coding/results-by-version')
@@ -368,27 +295,14 @@ export class WorkspaceCodingController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const includeReplay = includeReplayUrls ?? false;
-    const csvStream =
-      await this.codingListService.getCodingResultsByVersionCsvStream(
-        workspace_id,
-        version,
-        authToken || '',
-        serverUrl || '',
-        includeReplay
-      );
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
+    return this.codingExportService.exportCodingResultsByVersionAsCsv(
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      res
     );
-    res.setHeader('Cache-Control', 'no-cache');
-
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
@@ -439,27 +353,14 @@ export class WorkspaceCodingController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const includeReplay = includeReplayUrls ?? false;
-    const excelData =
-      await this.codingListService.getCodingResultsByVersionAsExcel(
-        workspace_id,
-        version,
-        authToken || '',
-        serverUrl || '',
-        includeReplay
-      );
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    return this.codingExportService.exportCodingResultsByVersionAsExcel(
+      workspace_id,
+      version,
+      authToken,
+      serverUrl,
+      includeReplayUrls,
+      res
     );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx"`
-    );
-    res.send(excelData);
   }
 
   @Get(':workspace_id/coding/statistics')
@@ -503,7 +404,7 @@ export class WorkspaceCodingController {
   async createCodingStatisticsJob(
     @WorkspaceId() workspace_id: number
   ): Promise<{ jobId: string; message: string }> {
-    return this.workspaceCodingService.createCodingStatisticsJob(workspace_id);
+    return this.codingStatisticsService.createCodingStatisticsJob(workspace_id);
   }
 
   @Get(':workspace_id/coding/job/:jobId')
@@ -564,7 +465,7 @@ export class WorkspaceCodingController {
   }
   | { error: string }
   > {
-    const status = await this.workspaceCodingService.getJobStatus(jobId);
+    const status = await this.codingStatisticsService.getJobStatus(jobId);
     if (!status) {
       return { error: `Job with ID ${jobId} not found` };
     }
@@ -600,7 +501,7 @@ export class WorkspaceCodingController {
   async cancelJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.workspaceCodingService.cancelJob(jobId);
+    return this.codingStatisticsService.cancelJob(jobId);
   }
 
   @Get(':workspace_id/coding/job/:jobId/delete')
@@ -631,7 +532,7 @@ export class WorkspaceCodingController {
   async deleteJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.workspaceCodingService.deleteJob(jobId);
+    return this.codingStatisticsService.deleteJob(jobId);
   }
 
   @Get(':workspace_id/coding/jobs')
@@ -2452,8 +2353,7 @@ export class WorkspaceCodingController {
       }> {
     try {
       this.logger.log(
-        `Calculating Cohen's Kappa for workspace ${workspace_id}${
-          unitName ? `, unit: ${unitName}` : ''
+        `Calculating Cohen's Kappa for workspace ${workspace_id}${unitName ? `, unit: ${unitName}` : ''
         }${variableId ? `, variable: ${variableId}` : ''}`
       );
 
