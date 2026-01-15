@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingVersionService } from '../../database/services/coding-version.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
 import { JournalService } from '../../database/services/journal.service';
 
@@ -33,7 +33,7 @@ interface RequestWithUser extends Request {
 @Controller('admin/workspace')
 export class WorkspaceCodingVersionController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService,
+    private codingVersionService: CodingVersionService,
     private codingStatisticsService: CodingStatisticsService,
     private journalService: JournalService
   ) { }
@@ -108,7 +108,7 @@ export class WorkspaceCodingVersionController {
         cascadeResetVersions: ('v2' | 'v3')[];
         message: string;
       }> {
-    const result = await this.workspaceCodingService.resetCodingVersion(
+    const result = await this.codingVersionService.resetCodingVersion(
       workspace_id,
       body.version,
       body.unitFilters,

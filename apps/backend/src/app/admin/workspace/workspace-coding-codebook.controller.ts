@@ -15,13 +15,13 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodebookGenerationService } from '../../database/services/codebook-generation.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingCodebookController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private codebookGenerationService: CodebookGenerationService
   ) { }
 
   @Post(':workspace_id/coding/codebook')
@@ -94,7 +94,7 @@ export class WorkspaceCodingCodebookController {
   ): Promise<void> {
     const { missingsProfile, contentOptions, unitList } = body;
 
-    const codebook = await this.workspaceCodingService.generateCodebook(
+    const codebook = await this.codebookGenerationService.generateCodebook(
       workspace_id,
       missingsProfile,
       contentOptions,
@@ -107,9 +107,9 @@ export class WorkspaceCodingCodebookController {
     }
 
     const contentType =
-            contentOptions.exportFormat === 'docx' ?
-              'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
-              'application/json';
+      contentOptions.exportFormat === 'docx' ?
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' :
+        'application/json';
 
     res.setHeader('Content-Type', contentType);
     res.setHeader(

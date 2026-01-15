@@ -16,13 +16,13 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingReplayService } from '../../database/services/coding-replay.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingReplayController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private codingReplayService: CodingReplayService
   ) { }
 
   @Get(':workspace_id/coding/responses/:responseId/replay-url')
@@ -56,7 +56,7 @@ export class WorkspaceCodingReplayController {
       @Req() req: Request
   ): Promise<{ replayUrl: string }> {
     const serverUrl = `${req.protocol}://${req.get('host')}`;
-    return this.workspaceCodingService.generateReplayUrlForResponse(
+    return this.codingReplayService.generateReplayUrlForResponse(
       workspace_id,
       responseId,
       serverUrl,

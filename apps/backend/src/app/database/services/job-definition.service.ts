@@ -1,5 +1,5 @@
 import {
-  Injectable, NotFoundException, BadRequestException, forwardRef, Inject
+  Injectable, NotFoundException, BadRequestException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
@@ -9,7 +9,7 @@ import { CodingJobService } from './coding-job.service';
 import { CreateJobDefinitionDto } from '../../admin/coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../../admin/coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../../admin/coding-job/dto/approve-job-definition.dto';
-import { WorkspaceCodingService } from './workspace-coding.service';
+import { CodingValidationService } from './coding-validation.service';
 
 @Injectable()
 export class JobDefinitionService {
@@ -19,9 +19,8 @@ export class JobDefinitionService {
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private codingJobService: CodingJobService,
-    @Inject(forwardRef(() => WorkspaceCodingService))
-    private workspaceCodingService: WorkspaceCodingService
-  ) {}
+    private codingValidationService: CodingValidationService
+  ) { }
 
   private async checkVariableConflicts(
     workspaceId: number,
@@ -54,7 +53,7 @@ export class JobDefinitionService {
     }
 
     // Get available cases for all variables
-    const incompleteVariables = await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
+    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
 
     const unavailableVariables: string[] = [];
 
@@ -273,7 +272,7 @@ export class JobDefinitionService {
     }
 
     // Get current availability for all variables
-    const incompleteVariables = await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
+    const incompleteVariables = await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
 
     const unavailableVariables: string[] = [];
 

@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
-import { WorkspaceCodingService } from '../database/services/workspace-coding.service';
+import { CodingValidationService } from '../database/services/coding-validation.service';
 import Persons from '../database/entities/persons.entity';
 
 @Injectable()
@@ -12,10 +12,10 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
 
   constructor(
     private readonly cacheService: CacheService,
-    private readonly workspaceCodingService: WorkspaceCodingService,
+    private readonly codingValidationService: CodingValidationService,
     @InjectRepository(Persons)
     private readonly personsRepository: Repository<Persons>
-  ) {}
+  ) { }
 
   /**
    * Run on module initialization to pre-cache all CODING_INCOMPLETE variables
@@ -115,7 +115,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
       this.logger.debug(`Caching CODING_INCOMPLETE variables for workspace ${workspaceId}`);
 
       // Call the getCodingIncompleteVariables method which will fill the cache
-      await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
+      await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
 
       this.logger.debug(`Successfully cached CODING_INCOMPLETE variables for workspace ${workspaceId}`);
     } catch (error) {
@@ -132,7 +132,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
             this.logger.log(`Memory usage after GC: ${afterGcMemory}`);
 
             // Retry once with reduced scope if possible
-            await this.workspaceCodingService.getCodingIncompleteVariables(workspaceId);
+            await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
             this.logger.log(`Successfully recovered and cached workspace ${workspaceId} after GC`);
             return;
           } catch (retryError) {

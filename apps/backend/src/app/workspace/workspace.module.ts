@@ -61,6 +61,15 @@ import { ResponseManagementService } from '../database/services/response-managem
 import { CodingListExportService } from '../database/services/coding-list-export.service';
 import { CodingResultsExportService } from '../database/services/coding-results-export.service';
 import { CodingTimesExportService } from '../database/services/coding-times-export.service';
+import { CodingValidationService } from '../database/services/coding-validation.service';
+import { CodingReviewService } from '../database/services/coding-review.service';
+import { CodingAnalysisService } from '../database/services/coding-analysis.service';
+import { CodingProgressService } from '../database/services/coding-progress.service';
+import { CodingReplayService } from '../database/services/coding-replay.service';
+import { CodingVersionService } from '../database/services/coding-version.service';
+import { CodingJobOperationsService } from '../database/services/coding-job-operations.service';
+import { CodebookGenerationService } from '../database/services/codebook-generation.service';
+import { CodingResponseQueryService } from '../database/services/coding-response-query.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
@@ -137,7 +146,16 @@ import { CodingModule } from '../coding/coding.module';
     ResponseManagementService,
     CodingListExportService,
     CodingResultsExportService,
-    CodingTimesExportService
+    CodingTimesExportService,
+    CodingValidationService,
+    CodingReviewService,
+    CodingAnalysisService,
+    CodingProgressService,
+    CodingReplayService,
+    CodingVersionService,
+    CodingJobOperationsService,
+    CodebookGenerationService,
+    CodingResponseQueryService
   ],
   exports: [
     WorkspaceCoreService,
@@ -163,7 +181,16 @@ import { CodingModule } from '../coding/coding.module';
     ResponseManagementService,
     CodingListExportService,
     CodingResultsExportService,
-    CodingTimesExportService
+    CodingTimesExportService,
+    CodingValidationService,
+    CodingReviewService,
+    CodingAnalysisService,
+    CodingProgressService,
+    CodingReplayService,
+    CodingVersionService,
+    CodingJobOperationsService,
+    CodebookGenerationService,
+    CodingResponseQueryService
   ]
 })
 export class WorkspaceModule { }
