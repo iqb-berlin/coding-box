@@ -3,6 +3,9 @@ import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users/users.controller';
 import { DatabaseModule } from '../database/database.module';
+import { UserModule } from '../user/user.module';
+import { CodingModule } from '../coding/coding.module';
+import { WorkspaceModule } from '../workspace/workspace.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceFilesController } from './workspace/workspace-files.controller';
@@ -61,6 +64,9 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
 @Module({
   imports: [
     DatabaseModule,
+    UserModule,
+    CodingModule,
+    WorkspaceModule,
     AuthModule,
     HttpModule,
     TypeOrmModule.forFeature([FileUpload, Setting]),
