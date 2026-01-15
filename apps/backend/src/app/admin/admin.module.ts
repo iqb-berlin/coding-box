@@ -9,6 +9,14 @@ import { WorkspaceFilesController } from './workspace/workspace-files.controller
 import { WorkspaceTestResultsController } from './workspace/workspace-test-results.controller';
 import { WorkspaceUsersController } from './workspace/workspace-users.controller';
 import { WorkspaceCodingController } from './workspace/workspace-coding.controller';
+import { WorkspaceCodingExportController } from './workspace/workspace-coding-export.controller';
+import { WorkspaceCodingJobController } from './workspace/workspace-coding-job.controller';
+import { WorkspaceCodingStatisticsController } from './workspace/workspace-coding-statistics.controller';
+import { WorkspaceCodingAnalysisController } from './workspace/workspace-coding-analysis.controller';
+import { WorkspaceCodingCodebookController } from './workspace/workspace-coding-codebook.controller';
+import { WorkspaceCoderTrainingController } from './workspace/workspace-coder-training.controller';
+import { WorkspaceCodingJobDefinitionController } from './workspace/workspace-coding-job-definition.controller';
+import { WorkspaceCodingResultsController } from './workspace/workspace-coding-results.controller';
 import { WorkspaceTestCenterController } from './workspace/workspace-test-center.controller';
 import { WorkspacePlayerController } from './workspace/workspace-player.controller';
 import { LogoController } from './logo/logo.controller';
@@ -53,6 +61,14 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     WorkspaceTestResultsController,
     WorkspaceUsersController,
     WorkspaceCodingController,
+    WorkspaceCodingExportController,
+    WorkspaceCodingJobController,
+    WorkspaceCodingStatisticsController,
+    WorkspaceCodingAnalysisController,
+    WorkspaceCodingCodebookController,
+    WorkspaceCoderTrainingController,
+    WorkspaceCodingJobDefinitionController,
+    WorkspaceCodingResultsController,
     WorkspaceTestCenterController,
     WorkspacePlayerController,
     LogoController,
@@ -78,4 +94,4 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     AccessRightsMatrixService
   ]
 })
-export class AdminModule {}
+export class AdminModule { }
