@@ -30,6 +30,7 @@ import { VariableBundle } from '../database/entities/variable-bundle.entity';
 import User from '../database/entities/user.entity';
 import { CodingJob } from '../database/entities/coding-job.entity';
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
+import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
 import { WorkspaceCoreService } from '../database/services/workspace-core.service';
 import { WorkspaceFilesService } from '../database/services/workspace-files.service';
@@ -57,6 +58,9 @@ import { VariableAnalysisReplayService } from '../database/services/variable-ana
 import { ExportValidationResultsService } from '../database/services/export-validation-results.service';
 import { BullJobManagementService } from '../database/services/bull-job-management.service';
 import { ResponseManagementService } from '../database/services/response-management.service';
+import { CodingListExportService } from '../database/services/coding-list-export.service';
+import { CodingResultsExportService } from '../database/services/coding-results-export.service';
+import { CodingTimesExportService } from '../database/services/coding-times-export.service';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
@@ -95,6 +99,7 @@ import { CodingModule } from '../coding/coding.module';
       User,
       CodingJob,
       CodingJobUnit,
+      CodingJobVariable,
       JobDefinition
     ]),
     HttpModule,
@@ -129,7 +134,10 @@ import { CodingModule } from '../coding/coding.module';
     VariableAnalysisReplayService,
     ExportValidationResultsService,
     BullJobManagementService,
-    ResponseManagementService
+    ResponseManagementService,
+    CodingListExportService,
+    CodingResultsExportService,
+    CodingTimesExportService
   ],
   exports: [
     WorkspaceCoreService,
@@ -152,7 +160,10 @@ import { CodingModule } from '../coding/coding.module';
     VariableAnalysisReplayService,
     ExportValidationResultsService,
     BullJobManagementService,
-    ResponseManagementService
+    ResponseManagementService,
+    CodingListExportService,
+    CodingResultsExportService,
+    CodingTimesExportService
   ]
 })
 export class WorkspaceModule { }
