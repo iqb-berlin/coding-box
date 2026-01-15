@@ -114,3 +114,13 @@ export interface CodingStatisticsWithJob extends CodingStatistics {
   jobId?: string;
   message?: string;
 }
+
+export interface CodedResponse {
+  id: number;
+  code_v1?: number;
+  status_v1?: string;
+  score_v1?: number;
+  code_v3?: number;
+  status_v3?: string;
+  score_v3?: number;
+}

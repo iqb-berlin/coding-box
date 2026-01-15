@@ -4,12 +4,12 @@ import {
   In, IsNull, Not, Repository
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { statusStringToNumber } from '../utils/response-status-converter';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { WorkspaceFilesService } from './workspace-files.service';
-import { CodingListService } from './coding-list.service';
+import { CodingListService, CodingItem } from './coding-list.service';
 import FileUpload from '../entities/file_upload.entity';
 import Persons from '../entities/persons.entity';
 import { Unit } from '../entities/unit.entity';
@@ -44,7 +44,7 @@ export class CodingExportService {
     private missingsProfilesService: MissingsProfilesService,
     private workspaceFilesService: WorkspaceFilesService,
     private codingListService: CodingListService
-  ) {}
+  ) { }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
   private currentWorkspaceId: number | null = null;
@@ -95,6 +95,168 @@ export class CodingExportService {
     const encodedAuthToken = encodeURIComponent(authToken || '');
 
     return `${baseUrl}/#/replay/${encodedLoginName}@${encodedLoginCode}@${encodedGroup}@${encodedBookletId}/${encodedUnitName}/${encodedVariablePage}/${encodedVariableId}?auth=${encodedAuthToken}`;
+  }
+
+  async exportCodingListAsCsv(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    res: Response
+  ): Promise<void> {
+    const csvStream = await this.codingListService.getCodingListCsvStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || ''
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv"`
+    );
+
+    // Excel compatibility: UTF-8 BOM
+    res.write('\uFEFF');
+    csvStream.pipe(res);
+  }
+
+  async exportCodingListAsExcel(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    res: Response
+  ): Promise<void> {
+    const excelData = await this.codingListService.getCodingListAsExcel(
+      workspaceId,
+      authToken || '',
+      serverUrl || ''
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx"`
+    );
+
+    res.send(excelData);
+  }
+
+  async exportCodingListAsJson(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    res: Response
+  ): Promise<void> {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-list-${new Date()
+        .toISOString()
+        .slice(0, 10)}.json"`
+    );
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    res.write('[');
+    const stream = await this.codingListService.getCodingListJsonStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || ''
+    );
+
+    let first = true;
+    stream.on('data', (item: CodingItem) => {
+      if (!first) {
+        res.write(',');
+      } else {
+        first = false;
+      }
+      res.write(JSON.stringify(item));
+
+      if (global.gc) {
+        global.gc();
+      }
+    });
+
+    stream.on('end', () => {
+      res.write(']');
+      res.end();
+    });
+
+    stream.on('error', (error: Error) => {
+      this.logger.error(`Error during JSON export: ${error.message}`);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Export failed' });
+      } else {
+        res.end();
+      }
+    });
+  }
+
+  async exportCodingResultsByVersionAsCsv(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    res: Response
+  ): Promise<void> {
+    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv"`
+    );
+
+    // Excel compatibility: UTF-8 BOM
+    res.write('\uFEFF');
+    csvStream.pipe(res);
+  }
+
+  async exportCodingResultsByVersionAsExcel(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    authToken: string,
+    serverUrl: string,
+    includeReplayUrls: boolean,
+    res: Response
+  ): Promise<void> {
+    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(
+      workspaceId,
+      version,
+      authToken || '',
+      serverUrl || '',
+      includeReplayUrls
+    );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx"`
+    );
+
+    res.send(excelData);
   }
 
   private async generateReplayUrlWithPageLookup(

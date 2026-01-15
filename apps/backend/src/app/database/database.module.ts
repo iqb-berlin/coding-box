@@ -76,6 +76,7 @@ import { ExternalCodingImportService } from './services/external-coding-import.s
 import { BullJobManagementService } from './services/bull-job-management.service';
 import { CodingResultsService } from './services/coding-results.service';
 import { CodingExportService } from './services/coding-export.service';
+import { ResponseManagementService } from './services/response-management.service';
 
 @Module({
   imports: [
@@ -188,7 +189,8 @@ import { CodingExportService } from './services/coding-export.service';
     ExternalCodingImportService,
     BullJobManagementService,
     CodingResultsService,
-    CodingExportService
+    CodingExportService,
+    ResponseManagementService
   ],
   exports: [
     User,
@@ -228,7 +230,8 @@ import { CodingExportService } from './services/coding-export.service';
     ExternalCodingImportService,
     BullJobManagementService,
     CodingResultsService,
-    CodingExportService
+    CodingExportService,
+    ResponseManagementService
   ]
 })
-export class DatabaseModule {}
+export class DatabaseModule { }

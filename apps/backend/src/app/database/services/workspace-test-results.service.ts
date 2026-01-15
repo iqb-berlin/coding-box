@@ -26,6 +26,7 @@ import { UnitTagService } from './unit-tag.service';
 import { JournalService } from './journal.service';
 import { CacheService } from '../../cache/cache.service';
 import { CodingListService } from './coding-list.service';
+import { ResponseManagementService } from './response-management.service';
 import { Chunk, TcMergeResponse } from './shared-types';
 
 interface PersonWhere {
@@ -64,8 +65,9 @@ export class WorkspaceTestResultsService {
     private readonly journalService: JournalService,
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => CodingListService))
-    private readonly codingListService: CodingListService
-  ) {}
+    private readonly codingListService: CodingListService,
+    private readonly responseManagementService: ResponseManagementService
+  ) { }
 
   async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
     testPersons: number;
@@ -512,103 +514,11 @@ export class WorkspaceTestResultsService {
     resolutionMap: Record<string, number>,
     userId: string
   ): Promise<{ resolvedCount: number; success: boolean }> {
-    if (!workspaceId || workspaceId <= 0) {
-      throw new Error('Invalid workspaceId provided');
-    }
-
-    if (
-      !resolutionMap ||
-      typeof resolutionMap !== 'object' ||
-      Object.keys(resolutionMap).length === 0
-    ) {
-      return { resolvedCount: 0, success: true };
-    }
-
-    return this.connection.transaction(async manager => {
-      let resolvedCount = 0;
-
-      for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
-        if (!selectedResponseId) {
-          continue;
-        }
-
-        const parts = key.split('|');
-        if (parts.length !== 4) {
-          this.logger.warn(`Invalid duplicate resolution key: ${key}`);
-          continue;
-        }
-
-        const unitId = Number(parts[0]);
-        const variableId = decodeURIComponent(parts[1] || '');
-        const subform = decodeURIComponent(parts[2] || '');
-        const testTakerLogin = decodeURIComponent(parts[3] || '');
-
-        if (!unitId || Number.isNaN(unitId) || !variableId || !testTakerLogin) {
-          this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
-          continue;
-        }
-
-        const responses = await manager
-          .createQueryBuilder(ResponseEntity, 'response')
-          .innerJoin('response.unit', 'unit')
-          .innerJoin('unit.booklet', 'booklet')
-          .innerJoin('booklet.person', 'person')
-          .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('person.consider = :consider', { consider: true })
-          .andWhere('person.login = :testTakerLogin', { testTakerLogin })
-          .andWhere('unit.id = :unitId', { unitId })
-          .andWhere('response.variableid = :variableId', { variableId })
-          .andWhere("COALESCE(response.subform, '') = :subform", {
-            subform: subform || ''
-          })
-          .select(['response.id'])
-          .getMany();
-
-        const ids = (responses || []).map(r => r.id);
-        if (ids.length <= 1) {
-          continue;
-        }
-
-        if (!ids.includes(selectedResponseId)) {
-          this.logger.warn(
-            `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
-          );
-          continue;
-        }
-
-        const deleteIds = ids.filter(id => id !== selectedResponseId);
-        if (deleteIds.length === 0) {
-          continue;
-        }
-
-        const deleteResult = await manager
-          .createQueryBuilder()
-          .delete()
-          .from(ResponseEntity)
-          .where('id IN (:...deleteIds)', { deleteIds })
-          .execute();
-
-        resolvedCount += deleteResult.affected || 0;
-
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'response',
-          selectedResponseId,
-          {
-            duplicateGroupKey: key,
-            keptResponseId: selectedResponseId,
-            deletedResponseIds: deleteIds
-          }
-        );
-      }
-
-      return {
-        resolvedCount,
-        success: true
-      };
-    });
+    return this.responseManagementService.resolveDuplicateResponses(
+      workspaceId,
+      resolutionMap,
+      userId
+    );
   }
 
   async findFlatResponses(
@@ -2632,68 +2542,11 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedResponse: null,
-        warnings: []
-      };
-
-      const response = await manager
-        .createQueryBuilder(ResponseEntity, 'response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.id = :responseId', { responseId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
-
-      if (!response) {
-        const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
-
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(ResponseEntity)
-        .where('id = :responseId', { responseId })
-        .execute();
-
-      report.deletedResponse = responseId;
-
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'response',
-          responseId,
-          {
-            responseId,
-            unitId: response.unit.id,
-            unitName: response.unit.name,
-            variableId: response.variableid,
-            value: response.value,
-            bookletId: response.unit.booklet?.id,
-            personId: response.unit.booklet?.person?.id,
-            personLogin: response.unit.booklet?.person?.login,
-            personCode: response.unit.booklet?.person?.code,
-            personGroup: response.unit.booklet?.person?.group,
-            personSource: response.unit.booklet?.person?.source,
-            personUploadedAt: response.unit.booklet?.person?.uploaded_at,
-            message: 'Response deleted'
-          }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for deleting response ${responseId}: ${error.message}`
-        );
-      }
-
-      return { success: true, report };
-    });
+    return this.responseManagementService.deleteResponse(
+      workspaceId,
+      responseId,
+      userId
+    );
   }
 
   async deleteBooklet(

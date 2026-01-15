@@ -38,6 +38,7 @@ import { UploadResultsService } from '../../database/services/upload-results.ser
 import Persons from '../../database/entities/persons.entity';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { ResponseManagementService } from '../../database/services/response-management.service';
 import { DatabaseExportService } from '../database/database-export.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
@@ -80,8 +81,9 @@ export class WorkspaceTestResultsController {
     private uploadResults: UploadResultsService,
     private databaseExportService: DatabaseExportService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService
-  ) {}
+    private cacheService: CacheService,
+    private responseManagementService: ResponseManagementService
+  ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
@@ -1268,7 +1270,7 @@ export class WorkspaceTestResultsController {
           warnings: string[];
         };
       }> {
-    const result = await this.workspaceTestResultsService.deleteResponse(
+    const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
       req.user.id
@@ -1319,7 +1321,7 @@ export class WorkspaceTestResultsController {
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
     try {
-      return await this.workspaceTestResultsService.resolveDuplicateResponses(
+      return await this.responseManagementService.resolveDuplicateResponses(
         workspaceId,
         body?.resolutionMap || {},
         req.user.id
@@ -2211,8 +2213,7 @@ export class WorkspaceTestResultsController {
       response.setHeader('Content-Type', 'application/x-sqlite3');
       response.setHeader(
         'Content-Disposition',
-        `attachment; filename=workspace-${workspace_id}-export-${
-          new Date().toISOString().split('T')[0]
+        `attachment; filename=workspace-${workspace_id}-export-${new Date().toISOString().split('T')[0]
         }.sqlite`
       );
 
@@ -2261,8 +2262,7 @@ export class WorkspaceTestResultsController {
       response.setHeader('Content-Type', 'text/csv');
       response.setHeader(
         'Content-Disposition',
-        `attachment; filename=workspace-${workspace_id}-results-${
-          new Date().toISOString().split('T')[0]
+        `attachment; filename=workspace-${workspace_id}-results-${new Date().toISOString().split('T')[0]
         }.csv`
       );
 
