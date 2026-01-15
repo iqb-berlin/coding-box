@@ -13,13 +13,13 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingJobOperationsService } from '../../database/services/coding-job-operations.service';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')
 export class WorkspaceCodingResultsController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private codingJobOperationsService: CodingJobOperationsService
   ) { }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
@@ -69,7 +69,7 @@ export class WorkspaceCodingResultsController {
         messageKey: string;
         messageParams?: Record<string, unknown>;
       }> {
-    return this.workspaceCodingService.applyCodingResults(workspace_id, jobId);
+    return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId);
   }
 
   @Post(':workspace_id/coding/jobs/bulk-apply-results')
@@ -153,6 +153,6 @@ export class WorkspaceCodingResultsController {
       };
     }>;
   }> {
-    return this.workspaceCodingService.bulkApplyCodingResults(workspace_id);
+    return this.codingJobOperationsService.bulkApplyCodingResults(workspace_id);
   }
 }

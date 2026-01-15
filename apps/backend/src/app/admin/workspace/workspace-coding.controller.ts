@@ -15,15 +15,17 @@ import { CodingStatistics } from '../../database/services/shared-types';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
+import { CodingProcessService } from '../../database/services/coding-process.service';
+import { CodingResponseQueryService } from '../../database/services/coding-response-query.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService,
+    private codingProcessService: CodingProcessService,
+    private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService
   ) { }
 
@@ -47,7 +49,7 @@ export class WorkspaceCodingController {
       @Query('autoCoderRun') autoCoderRun: string
   ): Promise<CodingStatistics> {
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
-    return this.workspaceCodingService.codeTestPersons(
+    return this.codingProcessService.codeTestPersons(
       workspace_id,
       testPersons,
       autoCoderRunNumber
@@ -62,7 +64,7 @@ export class WorkspaceCodingController {
       @WorkspaceId() /* eslint-disable-next-line @typescript-eslint/no-unused-vars */
                           workspace_id: number
   ): Promise<Array<ResponseEntity & { unitname: string }>> {
-    return this.workspaceCodingService.getManualTestPersons(
+    return this.codingResponseQueryService.getManualTestPersons(
       workspace_id,
       testPersons
     );
@@ -142,7 +144,7 @@ export class WorkspaceCodingController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
-    return this.workspaceCodingService.getResponsesByStatus(
+    return this.codingResponseQueryService.getResponsesByStatus(
       workspace_id,
       status,
       version,

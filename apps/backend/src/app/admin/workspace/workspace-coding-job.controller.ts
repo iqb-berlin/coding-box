@@ -12,7 +12,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { BullJobManagementService } from '../../database/services/bull-job-management.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
 import { CodingStatistics } from '../../database/services/shared-types';
 
@@ -20,7 +20,7 @@ import { CodingStatistics } from '../../database/services/shared-types';
 @Controller('admin/workspace')
 export class WorkspaceCodingJobController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService,
+    private bullJobManagementService: BullJobManagementService,
     private codingStatisticsService: CodingStatisticsService
   ) { }
 
@@ -57,7 +57,7 @@ export class WorkspaceCodingJobController {
         result: {
           type: 'object',
           description:
-                        'Result of the job (only available when status is completed)',
+            'Result of the job (only available when status is completed)',
           properties: {
             totalResponses: { type: 'number' },
             statusCounts: {
@@ -110,7 +110,7 @@ export class WorkspaceCodingJobController {
         message: {
           type: 'string',
           description:
-                        'Message describing the result of the cancellation request'
+            'Message describing the result of the cancellation request'
         }
       }
     }
@@ -186,7 +186,7 @@ export class WorkspaceCodingJobController {
           result: {
             type: 'object',
             description:
-                            'Result of the job (only available when status is completed)',
+              'Result of the job (only available when status is completed)',
             properties: {
               totalResponses: { type: 'number' },
               statusCounts: {
@@ -233,7 +233,7 @@ export class WorkspaceCodingJobController {
     autoCoderRun?: number;
   }[]
   > {
-    return this.workspaceCodingService.getBullJobs(workspace_id);
+    return this.bullJobManagementService.getBullJobs(workspace_id);
   }
 
   @Get(':workspace_id/coding/bull-jobs')
@@ -270,7 +270,7 @@ export class WorkspaceCodingJobController {
           result: {
             type: 'object',
             description:
-                            'Result of the job (only available when status is completed)',
+              'Result of the job (only available when status is completed)',
             properties: {
               totalResponses: { type: 'number' },
               statusCounts: {
@@ -329,7 +329,7 @@ export class WorkspaceCodingJobController {
     completedAt?: Date;
   }[]
   > {
-    return this.workspaceCodingService.getBullJobs(workspace_id);
+    return this.bullJobManagementService.getBullJobs(workspace_id);
   }
 
   @Get(':workspace_id/coding/job/:jobId/pause')
@@ -360,7 +360,7 @@ export class WorkspaceCodingJobController {
   async pauseJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.workspaceCodingService.pauseJob(jobId);
+    return this.bullJobManagementService.pauseJob(jobId);
   }
 
   @Get(':workspace_id/coding/job/:jobId/resume')
@@ -391,7 +391,7 @@ export class WorkspaceCodingJobController {
   async resumeJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
-    return this.workspaceCodingService.resumeJob(jobId);
+    return this.bullJobManagementService.resumeJob(jobId);
   }
 
   @Get(':workspace_id/coding/job/:jobId/restart')
@@ -426,6 +426,6 @@ export class WorkspaceCodingJobController {
   async restartJob(
     @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string; jobId?: string }> {
-    return this.workspaceCodingService.restartJob(jobId);
+    return this.bullJobManagementService.restartJob(jobId);
   }
 }

@@ -16,7 +16,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingReviewService } from '../../database/services/coding-review.service';
 import {
   CohensKappaSummary,
   DoubleCodedReviewResponse,
@@ -27,7 +27,7 @@ import {
 @Controller('admin/workspace')
 export class WorkspaceCodingReviewController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private codingReviewService: CodingReviewService
   ) { }
 
   @Get(':workspace_id/coding/cohens-kappa')
@@ -139,7 +139,7 @@ export class WorkspaceCodingReviewController {
   async getCohensKappa(
     @WorkspaceId() workspace_id: number
   ): Promise<CohensKappaSummary> {
-    return this.workspaceCodingService.getWorkspaceCohensKappaSummary(workspace_id);
+    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspace_id);
   }
 
   @Get(':workspace_id/coding/double-coded-review')
@@ -230,7 +230,7 @@ export class WorkspaceCodingReviewController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
 
-    return this.workspaceCodingService.getDoubleCodedVariablesForReview(
+    return this.codingReviewService.getDoubleCodedVariablesForReview(
       workspace_id,
       validPage,
       validLimit
@@ -305,7 +305,7 @@ export class WorkspaceCodingReviewController {
                      }>;
                    }
   ): Promise<DoubleCodedResolutionResponse> {
-    return this.workspaceCodingService.applyDoubleCodedResolutions(
+    return this.codingReviewService.applyDoubleCodedResolutions(
       workspace_id,
       body.decisions
     );

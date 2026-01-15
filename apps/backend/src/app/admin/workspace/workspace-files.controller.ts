@@ -35,7 +35,7 @@ import { WorkspaceFilesService } from '../../database/services/workspace-files.s
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/person.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingValidationService } from '../../database/services/coding-validation.service';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
@@ -44,7 +44,7 @@ export class WorkspaceFilesController {
     private readonly workspaceFilesService: WorkspaceFilesService,
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
-    private readonly workspaceCodingService: WorkspaceCodingService
+    private readonly codingValidationService: CodingValidationService
   ) { }
 
   @Get(':workspace_id/files')
@@ -184,7 +184,7 @@ export class WorkspaceFilesController {
 
     if (success) {
       await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+      await this.codingValidationService.invalidateIncompleteVariablesCache(
         workspaceId
       );
     }
@@ -232,7 +232,7 @@ export class WorkspaceFilesController {
 
     if (success) {
       await this.codingStatisticsService.invalidateCache(workspaceId);
-      await this.workspaceCodingService.invalidateIncompleteVariablesCache(
+      await this.codingValidationService.invalidateIncompleteVariablesCache(
         workspaceId
       );
     }

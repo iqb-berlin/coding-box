@@ -20,7 +20,8 @@ import { Booklet } from '../entities/booklet.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import {
   CodedResponse,
-  CodingStatistics
+  CodingStatistics,
+  CodingStatisticsWithJob
 } from './shared-types';
 import { ResponseManagementService } from './response-management.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -60,6 +61,103 @@ export class CodingProcessService {
 
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
 
+  async codeTestPersons(
+    workspace_id: number,
+    testPersonIdsOrGroups: string,
+    autoCoderRun: number = 1
+  ): Promise<CodingStatisticsWithJob> {
+    if (
+      !workspace_id ||
+      !testPersonIdsOrGroups ||
+      testPersonIdsOrGroups.trim() === ''
+    ) {
+      this.logger.warn(
+        'Ungültige Eingabeparameter: workspace_id oder testPersonIdsOrGroups fehlen.'
+      );
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
+    const groupsOrIds = testPersonIdsOrGroups
+      .split(',')
+      .filter(item => item.trim() !== '');
+    if (groupsOrIds.length === 0) {
+      this.logger.warn('Keine gültigen Gruppen oder Personen-IDs angegeben.');
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
+    const areAllNumbers = groupsOrIds.every(
+      item => !Number.isNaN(Number(item))
+    );
+
+    let personIds: string[] = [];
+
+    if (areAllNumbers) {
+      personIds = groupsOrIds;
+      this.logger.log(`Using provided person IDs: ${personIds.length} persons`);
+    } else {
+      this.logger.log(`Fetching persons for groups: ${groupsOrIds.join(', ')}`);
+
+      try {
+        const persons = await this.personsRepository.find({
+          where: {
+            workspace_id,
+            group: In(groupsOrIds),
+            consider: true
+          },
+          select: ['id']
+        });
+
+        personIds = persons.map(person => person.id.toString());
+        this.logger.log(
+          `Found ${personIds.length} persons in the specified groups`
+        );
+
+        if (personIds.length === 0) {
+          this.logger.warn(
+            `No persons found in groups: ${groupsOrIds.join(', ')}`
+          );
+          return {
+            totalResponses: 0,
+            statusCounts: {},
+            message: `No persons found in the selected groups: ${groupsOrIds.join(
+              ', '
+            )}`
+          };
+        }
+      } catch (error) {
+        this.logger.error(
+          `Error fetching persons for groups: ${error.message}`,
+          error.stack
+        );
+        return {
+          totalResponses: 0,
+          statusCounts: {},
+          message: `Error fetching persons for groups: ${error.message}`
+        };
+      }
+    }
+
+    this.logger.log(
+      `Starting job for ${personIds.length} test persons in workspace ${workspace_id}`
+    );
+
+    const bullJob = await this.jobQueueService.addTestPersonCodingJob({
+      workspaceId: workspace_id,
+      personIds,
+      groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
+      autoCoderRun
+    });
+
+    this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
+
+    return {
+      totalResponses: 0,
+      statusCounts: {},
+      jobId: bullJob.id.toString(),
+      message: `Processing ${personIds.length} test persons in the background. Check job status with jobId: ${bullJob.id}`
+    };
+  }
+
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
@@ -89,7 +187,7 @@ export class CodingProcessService {
     }
 
     const queryRunner =
-            this.responseRepository.manager.connection.createQueryRunner();
+      this.responseRepository.manager.connection.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction('READ COMMITTED');
 
@@ -298,12 +396,12 @@ export class CodingProcessService {
       // Step 9: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
       const { codingSchemeRefs, unitToCodingSchemeRefMap } =
-                await this.extractCodingSchemeReferences(
-                  units,
-                  fileIdToTestFileMap,
-                  jobId,
-                  queryRunner
-                );
+        await this.extractCodingSchemeReferences(
+          units,
+          fileIdToTestFileMap,
+          jobId,
+          queryRunner
+        );
       metrics.schemeExtract = Date.now() - schemeExtractStart;
 
       // Report progress after step 9
@@ -379,14 +477,14 @@ export class CodingProcessService {
 
       // Step 12: Update responses in database - 100% progress
       const updateSuccess =
-                await this.responseManagementService.updateResponsesInDatabase(
-                  allCodedResponses,
-                  queryRunner,
-                  jobId,
-                  this.isJobCancelled.bind(this),
-                  progressCallback,
-                  metrics
-                );
+        await this.responseManagementService.updateResponsesInDatabase(
+          allCodedResponses,
+          queryRunner,
+          jobId,
+          this.isJobCancelled.bind(this),
+          progressCallback,
+          metrics
+        );
 
       if (!updateSuccess) {
         return statistics;
@@ -511,7 +609,7 @@ export class CodingProcessService {
 
     if (
       cacheEntry &&
-            now - cacheEntry.timestamp < this.TEST_FILE_CACHE_TTL_MS
+      now - cacheEntry.timestamp < this.TEST_FILE_CACHE_TTL_MS
     ) {
       this.logger.log(`Using cached test files for workspace ${workspace_id}`);
       const missingAliases = unitAliasesArray.filter(
@@ -585,7 +683,7 @@ export class CodingProcessService {
     codingSchemeFiles.forEach(file => {
       try {
         const data =
-                    typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
+          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
         this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
@@ -686,12 +784,12 @@ export class CodingProcessService {
           let inputStatus = response.status;
           if (autoCoderRun === 2) {
             inputStatus =
-                            response.status_v2 || response.status_v1 || response.status;
+              response.status_v2 || response.status_v1 || response.status;
           }
 
           const variableAlias = String(response.variableid);
           const resolvedVariableId =
-                        variableAliasToIdMap.get(variableAlias) ?? variableAlias;
+            variableAliasToIdMap.get(variableAlias) ?? variableAlias;
 
           const variableCoding = Array.isArray(scheme.variableCodings) ?
             scheme.variableCodings.find((vc: VariableCodingData) => {

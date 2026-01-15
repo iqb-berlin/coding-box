@@ -26,6 +26,15 @@ import { BullJobManagementService } from './bull-job-management.service';
 import { CodingResultsService } from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
+import { CodebookGenerationService } from './codebook-generation.service';
+import { CodingAnalysisService } from './coding-analysis.service';
+import { CodingJobOperationsService } from './coding-job-operations.service';
+import { CodingProgressService } from './coding-progress.service';
+import { CodingReplayService } from './coding-replay.service';
+import { CodingResponseQueryService } from './coding-response-query.service';
+import { CodingReviewService } from './coding-review.service';
+import { CodingValidationService } from './coding-validation.service';
+import { CodingVersionService } from './coding-version.service';
 import { CodingListService } from './coding-list.service';
 import { ResponseManagementService } from './response-management.service';
 import { CodingProcessService } from './coding-process.service';
@@ -135,6 +144,54 @@ describe('WorkspaceCodingService', () => {
     updateResponsesInDatabase: jest.fn(),
     resolveDuplicateResponses: jest.fn(),
     deleteResponse: jest.fn()
+  };
+
+  const mockCodingValidationService = {
+    validateCodingCompleteness: jest.fn(),
+    getCodingIncompleteVariables: jest.fn(),
+    invalidateIncompleteVariablesCache: jest.fn()
+  };
+
+  const mockCodingReviewService = {
+    getCohensKappaStatistics: jest.fn(),
+    getWorkspaceCohensKappaSummary: jest.fn()
+  };
+
+  const mockCodingAnalysisService = {
+    getVariableAnalysis: jest.fn()
+  };
+
+  const mockCodingProgressService = {
+    getCodingProgressOverview: jest.fn(),
+    getVariableCoverageOverview: jest.fn()
+  };
+
+  const mockCodingReplayService = {
+    generateReplayUrlForResponse: jest.fn()
+  };
+
+  const mockCodingVersionService = {
+    resetCodingVersion: jest.fn()
+  };
+
+  const mockCodingJobOperationsService = {
+    applyCodingResults: jest.fn(),
+    bulkApplyCodingResults: jest.fn(),
+    createDistributedCodingJobs: jest.fn()
+  };
+
+  const mockCodebookGenerationService = {
+    generateCodebook: jest.fn()
+  };
+
+  const mockCodingResponseQueryService = {
+    getManualTestPersons: jest.fn(),
+    getResponsesByStatus: jest.fn().mockResolvedValue({
+      data: [],
+      total: 0,
+      page: 1,
+      limit: 10
+    })
   };
 
   const createMockPerson = (id: number, workspaceId: number = 1) => ({
@@ -346,7 +403,20 @@ describe('WorkspaceCodingService', () => {
         },
         { provide: getRepositoryToken(JobDefinition), useValue: {} },
         { provide: getRepositoryToken(VariableBundle), useValue: {} },
+        { provide: CodingResultsService, useValue: mockCodingResultsService },
+        { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: CodingExportService, useValue: mockCodingExportService },
+        { provide: CodingListService, useValue: mockCodingListService },
         { provide: ResponseManagementService, useValue: mockResponseManagementService },
+        { provide: CodingValidationService, useValue: mockCodingValidationService },
+        { provide: CodingReviewService, useValue: mockCodingReviewService },
+        { provide: CodingAnalysisService, useValue: mockCodingAnalysisService },
+        { provide: CodingProgressService, useValue: mockCodingProgressService },
+        { provide: CodingReplayService, useValue: mockCodingReplayService },
+        { provide: CodingVersionService, useValue: mockCodingVersionService },
+        { provide: CodingJobOperationsService, useValue: mockCodingJobOperationsService },
+        { provide: CodebookGenerationService, useValue: mockCodebookGenerationService },
+        { provide: CodingResponseQueryService, useValue: mockCodingResponseQueryService },
         { provide: CodingProcessService, useValue: mockCodingProcessService }
       ]
     }).compile();
@@ -1134,10 +1204,11 @@ describe('WorkspaceCodingService', () => {
 
   describe('Cache Management', () => {
     describe('invalidateIncompleteVariablesCache', () => {
-      it('should delete cache entry for workspace', async () => {
-        await (service as any).invalidateIncompleteVariablesCache(1);
+      it('should delegate cache invalidation to CodingValidationService', async () => {
+        const privateService = service as unknown as { invalidateIncompleteVariablesCache: (id: number) => Promise<void> };
+        await privateService.invalidateIncompleteVariablesCache(1);
 
-        expect(mockCacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables:1');
+        expect(mockCodingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(1);
       });
     });
   });

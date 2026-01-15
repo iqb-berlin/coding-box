@@ -16,14 +16,14 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { ExternalCodingImportService } from '../../database/services/external-coding-import.service';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingImportController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService
+    private externalCodingImportService: ExternalCodingImportService
   ) { }
 
   @Post(':workspace_id/coding/external-coding-import/stream')
@@ -33,7 +33,7 @@ export class WorkspaceCodingImportController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
     description:
-            'External coding file upload (CSV/Excel) with streaming progress',
+      'External coding file upload (CSV/Excel) with streaming progress',
     type: ExternalCodingImportDto
   })
   @ApiOkResponse({
@@ -59,13 +59,13 @@ export class WorkspaceCodingImportController {
 
     try {
       const result =
-                await this.workspaceCodingService.importExternalCodingWithProgress(
-                  workspace_id,
-                  body,
-                  (progress: number, message: string) => {
-                    res.write(`data: ${JSON.stringify({ progress, message })}\n\n`);
-                  }
-                );
+        await this.externalCodingImportService.importExternalCodingWithProgress(
+          workspace_id,
+          body,
+          (progress: number, message: string) => {
+            res.write(`data: ${JSON.stringify({ progress, message })}\n\n`);
+          }
+        );
 
       // Send final result
       res.write(
@@ -120,6 +120,6 @@ export class WorkspaceCodingImportController {
           updatedScore: number | null;
         }>;
       }> {
-    return this.workspaceCodingService.importExternalCoding(workspace_id, body);
+    return this.externalCodingImportService.importExternalCoding(workspace_id, body);
   }
 }

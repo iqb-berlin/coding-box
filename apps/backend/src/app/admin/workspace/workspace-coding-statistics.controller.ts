@@ -17,10 +17,11 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
 import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
 import { CodingJobService } from '../../database/services/coding-job.service';
 import { PersonService } from '../../database/services/person.service';
+import { CodingProgressService } from '../../database/services/coding-progress.service';
+import { CodingReviewService } from '../../database/services/coding-review.service';
 import { CodingStatistics } from '../../database/services/shared-types';
 
 @ApiTags('Admin Workspace Coding')
@@ -28,10 +29,11 @@ import { CodingStatistics } from '../../database/services/shared-types';
 export class WorkspaceCodingStatisticsController {
   private readonly logger = new Logger(WorkspaceCodingStatisticsController.name);
   constructor(
-    private workspaceCodingService: WorkspaceCodingService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService,
-    private personService: PersonService
+    private personService: PersonService,
+    private codingProgressService: CodingProgressService,
+    private codingReviewService: CodingReviewService
   ) { }
 
   @Get(':workspace_id/coding/statistics')
@@ -52,7 +54,7 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
                    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<CodingStatistics> {
-    return this.workspaceCodingService.getCodingStatistics(
+    return this.codingStatisticsService.getCodingStatistics(
       workspace_id,
       version
     );
@@ -84,7 +86,7 @@ export class WorkspaceCodingStatisticsController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description:
-            'List of all test person groups in the workspace retrieved successfully.',
+      'List of all test person groups in the workspace retrieved successfully.',
     schema: {
       type: 'array',
       items: {
@@ -105,7 +107,7 @@ export class WorkspaceCodingStatisticsController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description:
-            'List of all test person groups in the workspace with coding statistics.',
+      'List of all test person groups in the workspace with coding statistics.',
     schema: {
       type: 'array',
       items: {
@@ -119,7 +121,7 @@ export class WorkspaceCodingStatisticsController {
           responsesToCode: {
             type: 'number',
             description:
-                            'Number of responses that still need to be coded for this group'
+              'Number of responses that still need to be coded for this group'
           }
         }
       }
@@ -149,7 +151,7 @@ export class WorkspaceCodingStatisticsController {
         completedCases: {
           type: 'number',
           description:
-                        'Number of cases that have been completed through coding jobs'
+            'Number of cases that have been completed through coding jobs'
         },
         completionPercentage: {
           type: 'number',
@@ -165,7 +167,7 @@ export class WorkspaceCodingStatisticsController {
         completedCases: number;
         completionPercentage: number;
       }> {
-    return this.workspaceCodingService.getCodingProgressOverview(workspace_id);
+    return this.codingProgressService.getCodingProgressOverview(workspace_id);
   }
 
   @Get(':workspace_id/coding/case-coverage-overview')
@@ -212,7 +214,7 @@ export class WorkspaceCodingStatisticsController {
     unassignedCases: number;
     coveragePercentage: number;
   }> {
-    return this.workspaceCodingService.getCaseCoverageOverview(workspace_id);
+    return this.codingProgressService.getCaseCoverageOverview(workspace_id);
   }
 
   @Get(':workspace_id/coding/variable-coverage-overview')
@@ -239,7 +241,7 @@ export class WorkspaceCodingStatisticsController {
         coveredByPendingReview: {
           type: 'number',
           description:
-                        'Number of variables covered by pending review job definitions'
+            'Number of variables covered by pending review job definitions'
         },
         coveredByApproved: {
           type: 'number',
@@ -248,7 +250,7 @@ export class WorkspaceCodingStatisticsController {
         conflictedVariables: {
           type: 'number',
           description:
-                        'Number of variables assigned to multiple job definitions'
+            'Number of variables assigned to multiple job definitions'
         },
         missingVariables: {
           type: 'number',
@@ -327,7 +329,7 @@ export class WorkspaceCodingStatisticsController {
                 }
               },
               description:
-                                'Variables assigned to multiple definitions with conflict details'
+                'Variables assigned to multiple definitions with conflict details'
             }
           },
           description: 'Coverage breakdown by job definition status'
@@ -366,7 +368,7 @@ export class WorkspaceCodingStatisticsController {
           }>;
         };
       }> {
-    return this.workspaceCodingService.getVariableCoverageOverview(
+    return this.codingProgressService.getVariableCoverageOverview(
       workspace_id
     );
   }
@@ -389,7 +391,7 @@ export class WorkspaceCodingStatisticsController {
   })
   @ApiOkResponse({
     description:
-            "Cohen's Kappa statistics for double-coded variables with workspace summary.",
+      "Cohen's Kappa statistics for double-coded variables with workspace summary.",
     schema: {
       type: 'object',
       properties: {
@@ -469,11 +471,11 @@ export class WorkspaceCodingStatisticsController {
 
       // Get all double-coded data
       const doubleCodedData =
-                await this.workspaceCodingService.getDoubleCodedVariablesForReview(
-                  workspace_id,
-                  1,
-                  10000
-                ); // Get all data
+        await this.codingReviewService.getDoubleCodedVariablesForReview(
+          workspace_id,
+          1,
+          10000
+        ); // Get all data
 
       // Group by unit and variable
       const groupedData = new Map<
@@ -578,7 +580,7 @@ export class WorkspaceCodingStatisticsController {
         if (coderPairs.length > 0) {
           // Calculate Cohen's Kappa for all pairs
           const kappaResults =
-                        this.codingStatisticsService.calculateCohensKappa(coderPairs);
+            this.codingStatisticsService.calculateCohensKappa(coderPairs);
 
           // Collect all kappa results for later averaging
           allKappaResults.push(...kappaResults);
@@ -603,9 +605,9 @@ export class WorkspaceCodingStatisticsController {
 
       // Calculate workspace summary - return 0 instead of null when no valid kappa values
       const averageKappa =
-                validKappaCount > 0 ?
-                  Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
-                  0;
+        validKappaCount > 0 ?
+          Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
+          0;
 
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
@@ -640,7 +642,7 @@ export class WorkspaceCodingStatisticsController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description:
-            "Workspace-wide Cohen's Kappa statistics for double-coded incomplete variables.",
+      "Workspace-wide Cohen's Kappa statistics for double-coded incomplete variables.",
     schema: {
       type: 'object',
       properties: {
@@ -677,7 +679,7 @@ export class WorkspaceCodingStatisticsController {
             }
           },
           description:
-                        "Cohen's Kappa statistics for each coder pair across all double-coded work"
+            "Cohen's Kappa statistics for each coder pair across all double-coded work"
         },
         workspaceSummary: {
           type: 'object',
@@ -731,7 +733,7 @@ export class WorkspaceCodingStatisticsController {
           codersIncluded: number;
         };
       }> {
-    return this.workspaceCodingService.getWorkspaceCohensKappaSummary(
+    return this.codingReviewService.getWorkspaceCohensKappaSummary(
       workspace_id
     );
   }

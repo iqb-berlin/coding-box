@@ -18,7 +18,10 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingValidationService } from '../../database/services/coding-validation.service';
+import { CodingAnalysisService } from '../../database/services/coding-analysis.service';
+import { VariableAnalysisReplayService } from '../../database/services/variable-analysis-replay.service';
+import { ExportValidationResultsService } from '../../database/services/export-validation-results.service';
 import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
@@ -29,7 +32,10 @@ import { ExportValidationResultsRequestDto } from '../../../../../../api-dto/cod
 @Controller('admin/workspace')
 export class WorkspaceCodingAnalysisController {
   constructor(
-    private workspaceCodingService: WorkspaceCodingService,
+    private variableAnalysisReplayService: VariableAnalysisReplayService,
+    private exportValidationResultsService: ExportValidationResultsService,
+    private codingValidationService: CodingValidationService,
+    private codingAnalysisService: CodingAnalysisService,
     private missingsProfilesService: MissingsProfilesService
   ) { }
 
@@ -97,7 +103,7 @@ export class WorkspaceCodingAnalysisController {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 500); // Set maximum limit to 500
 
-    return this.workspaceCodingService.getVariableAnalysis(
+    return this.variableAnalysisReplayService.getVariableAnalysis(
       workspace_id,
       authToken,
       serverUrl,
@@ -129,7 +135,7 @@ export class WorkspaceCodingAnalysisController {
     const page = Math.max(1, request.page || 1);
     const pageSize = Math.min(Math.max(1, request.pageSize || 50), 500); // Max 500 items per page
 
-    return this.workspaceCodingService.validateCodingCompleteness(
+    return this.codingValidationService.validateCodingCompleteness(
       workspace_id,
       request.expectedCombinations,
       page,
@@ -162,10 +168,10 @@ export class WorkspaceCodingAnalysisController {
       @Res() res: Response
   ): Promise<void> {
     const excelData =
-            await this.workspaceCodingService.exportValidationResultsAsExcel(
-              workspace_id,
-              request.cacheKey
-            );
+      await this.exportValidationResultsService.exportValidationResultsAsExcel(
+        workspace_id,
+        request.cacheKey
+      );
 
     const timestamp = new Date().toISOString().slice(0, 10);
     const filename = `validation-results-${timestamp}.xlsx`;
@@ -204,7 +210,7 @@ export class WorkspaceCodingAnalysisController {
           casesInJobs: {
             type: 'number',
             description:
-                            'Number of unique cases already assigned to coding jobs'
+              'Number of unique cases already assigned to coding jobs'
           },
           availableCases: {
             type: 'number',
@@ -226,7 +232,7 @@ export class WorkspaceCodingAnalysisController {
         availableCases: number;
       }[]
       > {
-    return this.workspaceCodingService.getCodingIncompleteVariables(
+    return this.codingValidationService.getCodingIncompleteVariables(
       workspace_id,
       unitName
     );
@@ -238,7 +244,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
     description:
-            'List of CODING_INCOMPLETE variables to check for applied results',
+      'List of CODING_INCOMPLETE variables to check for applied results',
     schema: {
       type: 'object',
       properties: {
@@ -262,7 +268,7 @@ export class WorkspaceCodingAnalysisController {
     schema: {
       type: 'number',
       description:
-                'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
+        'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
     }
   })
   async getAppliedResultsCount(
@@ -270,7 +276,7 @@ export class WorkspaceCodingAnalysisController {
       @Body()
                    body: { incompleteVariables: { unitName: string; variableId: string }[] }
   ): Promise<number> {
-    return this.workspaceCodingService.getAppliedResultsCount(
+    return this.codingValidationService.getAppliedResultsCount(
       workspace_id,
       body.incompleteVariables
     );
@@ -307,7 +313,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiOkResponse({
     description:
-            'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
+      'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
     schema: {
       type: 'object',
       properties: {
@@ -387,6 +393,6 @@ export class WorkspaceCodingAnalysisController {
     }
   })
   async getResponseAnalysis(@WorkspaceId() workspace_id: number) {
-    return this.workspaceCodingService.getResponseAnalysis(workspace_id);
+    return this.codingAnalysisService.getResponseAnalysis(workspace_id);
   }
 }
