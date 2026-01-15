@@ -24,6 +24,10 @@ import { WorkspaceCodingJobController } from './workspace/workspace-coding-job.c
 import { WorkspaceCodingStatisticsController } from './workspace/workspace-coding-statistics.controller';
 import { WorkspaceCodingAnalysisController } from './workspace/workspace-coding-analysis.controller';
 import { WorkspaceCodingCodebookController } from './workspace/workspace-coding-codebook.controller';
+import { WorkspaceCodingImportController } from './workspace/workspace-coding-import.controller';
+import { WorkspaceCodingReviewController } from './workspace/workspace-coding-review.controller';
+import { WorkspaceCodingReplayController } from './workspace/workspace-coding-replay.controller';
+import { WorkspaceCodingVersionController } from './workspace/workspace-coding-version.controller';
 import { WorkspaceCoderTrainingController } from './workspace/workspace-coder-training.controller';
 import { WorkspaceCodingJobDefinitionController } from './workspace/workspace-coding-job-definition.controller';
 import { WorkspaceCodingResultsController } from './workspace/workspace-coding-results.controller';
@@ -86,6 +90,10 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     WorkspaceCodingStatisticsController,
     WorkspaceCodingAnalysisController,
     WorkspaceCodingCodebookController,
+    WorkspaceCodingImportController,
+    WorkspaceCodingReviewController,
+    WorkspaceCodingReplayController,
+    WorkspaceCodingVersionController,
     WorkspaceCoderTrainingController,
     WorkspaceCodingJobDefinitionController,
     WorkspaceCodingResultsController,
