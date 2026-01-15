@@ -28,7 +28,9 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingExportService } from '../../database/services/coding-export.service';
+import { CodingListExportService } from '../../database/services/coding-list-export.service';
+import { CodingResultsExportService } from '../../database/services/coding-results-export.service';
+import { CodingTimesExportService } from '../../database/services/coding-times-export.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -36,7 +38,9 @@ export class WorkspaceCodingExportController {
   private readonly logger = new Logger(WorkspaceCodingExportController.name);
 
   constructor(
-    private codingExportService: CodingExportService,
+    private codingListExportService: CodingListExportService,
+    private codingResultsExportService: CodingResultsExportService,
+    private codingTimesExportService: CodingTimesExportService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
@@ -62,7 +66,7 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    return this.codingExportService.exportCodingListAsCsv(
+    return this.codingListExportService.exportCodingListAsCsv(
       workspace_id,
       authToken,
       serverUrl,
@@ -103,7 +107,7 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    return this.codingExportService.exportCodingListAsExcel(
+    return this.codingListExportService.exportCodingListAsExcel(
       workspace_id,
       authToken,
       serverUrl,
@@ -158,7 +162,7 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Res() res: Response
   ): Promise<void> {
-    return this.codingExportService.exportCodingListAsJson(
+    return this.codingListExportService.exportCodingListAsJson(
       workspace_id,
       authToken,
       serverUrl,
@@ -214,7 +218,7 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    return this.codingExportService.exportCodingResultsByVersionAsCsv(
+    return this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
       workspace_id,
       version,
       authToken,
@@ -272,7 +276,7 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    return this.codingExportService.exportCodingResultsByVersionAsExcel(
+    return this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
       workspace_id,
       version,
       authToken,
@@ -309,7 +313,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Anonymize coder names (rename to K1, K2, etc. in random order)'
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -340,7 +344,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Aggregated coding results exported as Excel',
@@ -374,28 +378,28 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const doubleCodingMethodParam =
-                (doubleCodingMethod as
-                    | 'new-row-per-variable'
-                    | 'new-column-per-coder'
-                    | 'most-frequent') || 'most-frequent';
+        (doubleCodingMethod as
+          | 'new-row-per-variable'
+          | 'new-column-per-coder'
+          | 'most-frequent') || 'most-frequent';
       const includeCommentsParam = includeComments === 'true';
       const includeModalValueParam = includeModalValue === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
 
       const buffer =
-                await this.codingExportService.exportCodingResultsAggregated(
-                  workspace_id,
-                  outputCommentsParam,
-                  includeReplayUrlParam,
-                  anonymizeCodersParam,
-                  usePseudoCodersParam,
-                  doubleCodingMethodParam,
-                  includeCommentsParam,
-                  includeModalValueParam,
-                  authToken || '',
-                  req,
-                  excludeAutoCodedParam
-                );
+        await this.codingResultsExportService.exportCodingResultsAggregated(
+          workspace_id,
+          outputCommentsParam,
+          includeReplayUrlParam,
+          anonymizeCodersParam,
+          usePseudoCodersParam,
+          doubleCodingMethodParam,
+          includeCommentsParam,
+          includeModalValueParam,
+          authToken || '',
+          req,
+          excludeAutoCodedParam
+        );
 
       res.setHeader(
         'Content-Type',
@@ -440,7 +444,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Anonymize coder names (rename to K1, K2, etc. in random order)'
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -453,7 +457,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding results by coder exported as Excel',
@@ -484,7 +488,7 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsByCoder(
+      const buffer = await this.codingResultsExportService.exportCodingResultsByCoder(
         workspace_id,
         outputCommentsParam,
         includeReplayUrlParam,
@@ -556,7 +560,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Anonymize coder names (rename to K1, K2, etc. in random order)'
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -569,7 +573,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding results by variable exported as Excel',
@@ -607,19 +611,19 @@ export class WorkspaceCodingExportController {
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
       const buffer =
-                await this.codingExportService.exportCodingResultsByVariable(
-                  workspace_id,
-                  includeModal,
-                  includeDouble,
-                  includeCommentsParam,
-                  outputCommentsParam,
-                  includeReplayUrlParam,
-                  anonymizeCodersParam,
-                  usePseudoCodersParam,
-                  authToken || '',
-                  req,
-                  excludeAutoCodedParam
-                );
+        await this.codingResultsExportService.exportCodingResultsByVariable(
+          workspace_id,
+          includeModal,
+          includeDouble,
+          includeCommentsParam,
+          outputCommentsParam,
+          includeReplayUrlParam,
+          anonymizeCodersParam,
+          usePseudoCodersParam,
+          authToken || '',
+          req,
+          excludeAutoCodedParam
+        );
       res.setHeader(
         'Content-Type',
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -663,7 +667,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Anonymize coder names (rename to K1, K2, etc. in random order)'
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -676,7 +680,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Detailed coding results exported as CSV',
@@ -707,7 +711,7 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(
+      const buffer = await this.codingResultsExportService.exportCodingResultsDetailed(
         workspace_id,
         outputCommentsParam,
         includeReplayUrlParam,
@@ -740,7 +744,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Anonymize coder names (rename to K1, K2, etc. in random order)'
+      'Anonymize coder names (rename to K1, K2, etc. in random order)'
   })
   @ApiQuery({
     name: 'usePseudoCoders',
@@ -753,7 +757,7 @@ export class WorkspaceCodingExportController {
     required: false,
     type: Boolean,
     description:
-            'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
+      'Exclude automatically coded variables, limiting export to manually coded (CODING_INCOMPLETE) variables only. Default: false'
   })
   @ApiOkResponse({
     description: 'Coding times report exported as Excel',
@@ -776,7 +780,7 @@ export class WorkspaceCodingExportController {
     const anonymizeCodersParam = anonymizeCoders === 'true';
     const usePseudoCodersParam = usePseudoCoders === 'true';
     const excludeAutoCodedParam = excludeAutoCoded === 'true';
-    const buffer = await this.codingExportService.exportCodingTimesReport(
+    const buffer = await this.codingTimesExportService.exportCodingTimesReport(
       workspace_id,
       anonymizeCodersParam,
       usePseudoCodersParam,
@@ -904,7 +908,7 @@ export class WorkspaceCodingExportController {
         result: {
           type: 'object',
           description:
-                        'Export metadata (only available when status is completed)'
+            'Export metadata (only available when status is completed)'
         },
         error: {
           type: 'string',
@@ -1029,8 +1033,8 @@ export class WorkspaceCodingExportController {
       }
 
       const isCsv =
-                metadata.fileName.toLowerCase().endsWith('.csv') ||
-                metadata.exportType === 'detailed';
+        metadata.fileName.toLowerCase().endsWith('.csv') ||
+        metadata.exportType === 'detailed';
       res.setHeader(
         'Content-Type',
         isCsv ?
@@ -1250,7 +1254,7 @@ export class WorkspaceCodingExportController {
       return {
         success: true,
         message:
-                    'Export job cancellation requested (job will stop at next checkpoint)'
+          'Export job cancellation requested (job will stop at next checkpoint)'
       };
     } catch (error) {
       this.logger.error(
