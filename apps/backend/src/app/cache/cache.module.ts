@@ -10,7 +10,9 @@ import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 // eslint-disable-next-line import/no-cycle
-import { DatabaseModule } from '../database/database.module';
+import { WorkspaceModule } from '../workspace/workspace.module';
+// eslint-disable-next-line import/no-cycle
+import { CodingModule } from '../coding/coding.module';
 
 @Module({
   imports: [
@@ -28,9 +30,10 @@ import { DatabaseModule } from '../database/database.module';
     }),
     ScheduleModule.forRoot(),
     TypeOrmModule.forFeature([Persons, Unit]),
-    forwardRef(() => DatabaseModule)
+    forwardRef(() => WorkspaceModule),
+    forwardRef(() => CodingModule)
   ],
   providers: [CacheService, ResponseCacheSchedulerService, CodingIncompleteCacheSchedulerService, CodingStatisticsCacheSchedulerService],
   exports: [CacheService]
 })
-export class CacheModule {}
+export class CacheModule { }
