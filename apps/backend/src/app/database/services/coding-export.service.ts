@@ -6,16 +6,14 @@ import {
 import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
 import { statusStringToNumber } from '../utils/response-status-converter';
-import { CacheService } from '../../cache/cache.service';
-import { MissingsProfilesService } from './missings-profiles.service';
-import { WorkspaceFilesService } from './workspace-files.service';
+import { generateReplayUrlFromRequest } from '../../utils/replay-url.util';
+import {
+  calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping
+} from '../../utils/coding-utils';
+import { generateUniqueWorksheetName } from '../../utils/excel-utils';
 import { CodingListService, CodingItem } from './coding-list.service';
-import FileUpload from '../entities/file_upload.entity';
-import Persons from '../entities/persons.entity';
-import { Unit } from '../entities/unit.entity';
 import { ResponseEntity } from '../entities/response.entity';
 import { CodingJob } from '../entities/coding-job.entity';
-import { CodingJobCoder } from '../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 
@@ -24,25 +22,14 @@ export class CodingExportService {
   private readonly logger = new Logger(CodingExportService.name);
 
   constructor(
-    @InjectRepository(FileUpload)
-    private fileUploadRepository: Repository<FileUpload>,
-    @InjectRepository(Persons)
-    private personsRepository: Repository<Persons>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJob)
     private codingJobRepository: Repository<CodingJob>,
-    @InjectRepository(CodingJobCoder)
-    private codingJobCoderRepository: Repository<CodingJobCoder>,
     @InjectRepository(CodingJobVariable)
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private cacheService: CacheService,
-    private missingsProfilesService: MissingsProfilesService,
-    private workspaceFilesService: WorkspaceFilesService,
     private codingListService: CodingListService
   ) { }
 
@@ -66,35 +53,6 @@ export class CodingExportService {
     }
 
     return this.variablePageMapsCache.get(unitName)?.get(variableId) || '0';
-  }
-
-  private generateReplayUrl(
-    req: Request,
-    loginName: string,
-    loginCode: string,
-    group: string,
-    bookletId: string,
-    unitName: string,
-    variableId: string,
-    variablePage: string,
-    authToken: string
-  ): string {
-    if (!loginName || !loginCode || !bookletId || !unitName || !variableId) {
-      return '';
-    }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    const encodedLoginName = encodeURIComponent(loginName);
-    const encodedLoginCode = encodeURIComponent(loginCode);
-    const encodedGroup = encodeURIComponent(group || '');
-    const encodedBookletId = encodeURIComponent(bookletId);
-    const encodedUnitName = encodeURIComponent(unitName);
-    const encodedVariablePage = encodeURIComponent(variablePage || '0');
-    const encodedVariableId = encodeURIComponent(variableId);
-    const encodedAuthToken = encodeURIComponent(authToken || '');
-
-    return `${baseUrl}/#/replay/${encodedLoginName}@${encodedLoginCode}@${encodedGroup}@${encodedBookletId}/${encodedUnitName}/${encodedVariablePage}/${encodedVariableId}?auth=${encodedAuthToken}`;
   }
 
   async exportCodingListAsCsv(
@@ -271,69 +229,16 @@ export class CodingExportService {
     authToken: string
   ): Promise<string> {
     const variablePage = await this.getVariablePage(unitName, variableId, workspaceId);
-    return this.generateReplayUrl(req, loginName, loginCode, group, bookletId, unitName, variableId, variablePage, authToken);
-  }
-
-  private getLatestCode(response: ResponseEntity): { code: number | null; score: number | null; version: string } {
-    // Priority: v3 > v2 > v1
-    if (response.code_v3 !== null && response.code_v3 !== undefined) {
-      return { code: response.code_v3, score: response.score_v3, version: 'v3' };
-    }
-    if (response.code_v2 !== null && response.code_v2 !== undefined) {
-      return { code: response.code_v2, score: response.score_v2, version: 'v2' };
-    }
-    return { code: response.code_v1, score: response.score_v1, version: 'v1' };
-  }
-
-  private generateUniqueWorksheetName(workbook: ExcelJS.Workbook, baseName: string): string {
-    // Clean the base name and limit to 20 characters initially
-    // First decode any URL encoding, then replace special characters with underscores
-    let cleanName = decodeURIComponent(baseName).replace(/[^a-zA-Z0-9\s\-_]/g, '_').substring(0, 20).trim();
-
-    // If empty after cleaning, use a default
-    if (!cleanName) {
-      cleanName = 'Sheet';
-    }
-
-    let finalName = cleanName;
-    let counter = 1;
-
-    // Keep trying until we find a unique name
-    while (workbook.getWorksheet(finalName)) {
-      const suffix = `_${counter}`;
-      const availableLength = 31 - suffix.length; // Excel limit is 31 chars
-      finalName = cleanName.substring(0, availableLength) + suffix;
-      counter += 1;
-
-      // Safety check to prevent infinite loop
-      if (counter > 1000) {
-        finalName = `Sheet_${Date.now()}`;
-        break;
-      }
-    }
-
-    return finalName;
-  }
-
-  private buildCoderNameMapping(coders: string[], usePseudo: boolean): Map<string, string> {
-    const mapping = new Map<string, string>();
-
-    if (usePseudo) {
-      // For pseudo mode: always use K1 and K2 for any pair of coders
-      // Sort alphabetically for deterministic assignment
-      const sortedCoders = [...coders].sort();
-      sortedCoders.forEach((coder, index) => {
-        mapping.set(coder, `K${index + 1}`);
-      });
-    } else {
-      // For regular anonymization: shuffle and assign K1, K2, K3, etc.
-      const shuffledCoders = [...coders].sort(() => Math.random() - 0.5);
-      shuffledCoders.forEach((coder, index) => {
-        mapping.set(coder, `K${index + 1}`);
-      });
-    }
-
-    return mapping;
+    return generateReplayUrlFromRequest(req, {
+      loginName,
+      loginCode,
+      loginGroup: group,
+      bookletId,
+      unitId: unitName,
+      variablePage,
+      variableAnchor: variableId,
+      authToken
+    });
   }
 
   async exportCodingResultsAggregated(
@@ -478,7 +383,7 @@ export class CodingExportService {
 
         for (const [variableKey, codes] of variableCodes.entries()) {
           if (codes.length > 0) {
-            const modalResult = this.calculateModalValue(codes);
+            const modalResult = calculateModalValue(codes);
             testPersonModalValues.get(testPersonKey)!.set(variableKey, modalResult);
           } else {
             testPersonModalValues.get(testPersonKey)!.set(variableKey, { modalValue: null, deviationCount: 0 });
@@ -622,7 +527,7 @@ export class CodingExportService {
 
       let coderMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
-        coderMapping = this.buildCoderMapping(codingJobUnits, usePseudoCoders);
+        coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
       for (const unit of codingJobUnits) {
@@ -643,7 +548,6 @@ export class CodingExportService {
         }
 
         const compositeVariableKey = `${unitName}_${variableId}`;
-        const rowKey = `${testPersonKey}_${compositeVariableKey}`;
 
         // Get coder name from the job's assigned coders (take first coder for the job)
         const coder = unit.coding_job?.codingJobCoders?.[0];
@@ -668,6 +572,8 @@ export class CodingExportService {
         if (!variableUnitNames.has(compositeVariableKey)) {
           variableUnitNames.set(compositeVariableKey, unitName || '');
         }
+
+        const rowKey = `${testPersonKey}_${compositeVariableKey}`;
 
         // Store coding data
         if (!dataMap.has(rowKey)) {
@@ -751,7 +657,7 @@ export class CodingExportService {
 
           // Add modal value
           if (includeModalValue && codes.length > 0) {
-            const modalResult = this.calculateModalValue(codes);
+            const modalResult = calculateModalValue(codes);
             row[MODAL_VALUE_HEADER] = modalResult.modalValue;
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
           } else if (includeModalValue) {
@@ -855,7 +761,7 @@ export class CodingExportService {
       // Build coder mapping for anonymization
       let coderMapping: Map<string, string> | null = null;
       if (anonymizeCoders) {
-        coderMapping = this.buildCoderMapping(codingJobUnits, usePseudoCoders);
+        coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
       // Process all coding job units
@@ -979,7 +885,7 @@ export class CodingExportService {
 
         // Add modal value
         if (includeModalValue && allCodes.length > 0) {
-          const modalResult = this.calculateModalValue(allCodes);
+          const modalResult = calculateModalValue(allCodes);
           row[MODAL_VALUE_HEADER] = modalResult.modalValue;
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
         } else if (includeModalValue) {
@@ -1009,59 +915,6 @@ export class CodingExportService {
       this.logger.error(`Error exporting aggregated (new-column-per-coder): ${error.message}`, error.stack);
       throw new Error(`Could not export aggregated results: ${error.message}`);
     }
-  }
-
-  private buildCoderMapping(codingJobUnits: CodingJobUnit[], usePseudo = false): Map<string, string> {
-    const coderMapping = new Map<string, string>();
-    const allCoders = new Set<string>();
-
-    for (const unit of codingJobUnits) {
-      const coder = unit.coding_job?.codingJobCoders?.[0];
-      const coderName = coder?.user?.username || `Job ${unit.coding_job_id}`;
-      allCoders.add(coderName);
-    }
-
-    let codersList: string[];
-    if (usePseudo) {
-      codersList = Array.from(allCoders).sort();
-    } else {
-      codersList = Array.from(allCoders).sort(() => Math.random() - 0.5);
-    }
-
-    codersList.forEach((coderName, index) => {
-      coderMapping.set(coderName, `K${index + 1}`);
-    });
-
-    return coderMapping;
-  }
-
-  private calculateModalValue(codes: number[]): { modalValue: number; deviationCount: number } {
-    if (codes.length === 0) {
-      return { modalValue: 0, deviationCount: 0 };
-    }
-
-    const frequency = new Map<number, number>();
-    codes.forEach(code => {
-      frequency.set(code, (frequency.get(code) || 0) + 1);
-    });
-
-    let maxFrequency = 0;
-    const modalCodes: number[] = [];
-
-    frequency.forEach((count, code) => {
-      if (count > maxFrequency) {
-        maxFrequency = count;
-        modalCodes.length = 0;
-        modalCodes.push(code);
-      } else if (count === maxFrequency) {
-        modalCodes.push(code);
-      }
-    });
-
-    const modalValue = modalCodes[Math.floor(Math.random() * modalCodes.length)];
-    const deviationCount = codes.length - maxFrequency;
-
-    return { modalValue, deviationCount };
   }
 
   async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
@@ -1127,13 +980,13 @@ export class CodingExportService {
       }
 
       const coderNameMapping = anonymizeCoders ?
-        this.buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
+        buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
         null;
 
       for (const [coderKey, jobs] of coderJobs) {
         const [coderName] = coderKey.split('_');
         const displayName = anonymizeCoders && coderNameMapping ? coderNameMapping.get(coderName) || coderName : coderName;
-        const worksheetName = this.generateUniqueWorksheetName(workbook, displayName);
+        const worksheetName = generateUniqueWorksheetName(workbook, displayName);
         const worksheet = workbook.addWorksheet(worksheetName);
 
         // Collect all variables and testpersons for this coder
@@ -1190,7 +1043,7 @@ export class CodingExportService {
             const variableId = response.variableid;
             const unitName = response.unit?.name;
             const compositeKey = unitName ? `${unitName}_${variableId}` : variableId;
-            const latestCoding = this.getLatestCode(response);
+            const latestCoding = getLatestCode(response);
 
             // Store person group and booklet
             if (!personGroups.has(testPersonKey)) {
@@ -1419,7 +1272,7 @@ export class CodingExportService {
 
             if (codingJobUnits.length === 0) continue;
 
-            const worksheetName = this.generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
+            const worksheetName = generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
             const worksheet = workbook.addWorksheet(worksheetName);
 
             const testPersonMap = new Map<string, Map<string, number | null>>();
@@ -1467,9 +1320,9 @@ export class CodingExportService {
             const coderList = Array.from(coderSet).sort();
             let coderNameMapping: Map<string, string> | null;
             if (anonymizeCoders && usePseudoCoders) {
-              coderNameMapping = this.buildCoderNameMapping(coderList, true); // Pseudo mode: deterministic K1/K2 per variable
+              coderNameMapping = buildCoderNameMapping(coderList, true); // Pseudo mode: deterministic K1/K2 per variable
             } else if (anonymizeCoders) {
-              coderNameMapping = this.buildCoderNameMapping(coderList, false); // Regular: random mapping
+              coderNameMapping = buildCoderNameMapping(coderList, false); // Regular: random mapping
             } else {
               coderNameMapping = null;
             }
@@ -1703,7 +1556,7 @@ export class CodingExportService {
               allCoders.add(coderName);
             }
           }
-          coderNameMapping = this.buildCoderNameMapping(Array.from(allCoders), false);
+          coderNameMapping = buildCoderNameMapping(Array.from(allCoders), false);
         }
       }
 
@@ -1900,7 +1753,7 @@ export class CodingExportService {
             allCoders.add(coderName);
           }
         }
-        coderNameMapping = this.buildCoderNameMapping(Array.from(allCoders), usePseudoCoders);
+        coderNameMapping = buildCoderNameMapping(Array.from(allCoders), usePseudoCoders);
       }
 
       if (codingJobUnits.length > 0) {

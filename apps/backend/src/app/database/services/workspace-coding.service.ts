@@ -9,7 +9,6 @@ import {
 } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
-import * as crypto from 'crypto';
 import {
   statusNumberToString,
   statusStringToNumber
@@ -32,6 +31,7 @@ import {
 } from './shared-types';
 import { ResponseManagementService } from './response-management.service';
 import { generateReplayUrl } from '../../utils/replay-url.util';
+import { generateExpectedCombinationsHash } from '../../utils/coding-utils';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import {
   CodeBookContentSetting,
@@ -114,23 +114,6 @@ export class WorkspaceCodingService {
   > = new Map();
 
   private readonly TEST_FILE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache TTL
-
-  private generateExpectedCombinationsHash(
-    expectedCombinations: ExpectedCombinationDto[]
-  ): string {
-    const sortedData = expectedCombinations
-      .map(
-        combo => `${combo.unit_key}|${combo.login_name}|${combo.login_code}|${combo.booklet_id}|${combo.variable_id}`
-      )
-      .sort()
-      .join('||');
-
-    return crypto
-      .createHash('sha256')
-      .update(sortedData)
-      .digest('hex')
-      .substring(0, 16);
-  }
 
   private async getTestFilesWithCache(
     workspace_id: number,
@@ -1250,8 +1233,7 @@ export class WorkspaceCodingService {
       );
       const startTime = Date.now();
 
-      const combinationsHash =
-        this.generateExpectedCombinationsHash(expectedCombinations);
+      const combinationsHash = generateExpectedCombinationsHash(expectedCombinations);
       const cacheKey = this.cacheService.generateValidationCacheKey(
         workspaceId,
         combinationsHash
@@ -1861,10 +1843,12 @@ export class WorkspaceCodingService {
 
       return { replayUrl };
     } catch (error) {
-      this.logger.error(
-        `Error generating replay URL for response ${responseId}: ${error.message}`,
-        error.stack
-      );
+      if (!(error instanceof Error && (error.message.includes('not found') || error.message.includes('does not belong')))) {
+        this.logger.error(
+          `Error generating replay URL for response ${responseId}: ${error.message}`,
+          error.stack
+        );
+      }
       throw error;
     }
   }
@@ -1897,7 +1881,7 @@ export class WorkspaceCodingService {
       replayUrl: string;
     }>
     > {
-    const itemsWithUrls = await Promise.all(
+    return Promise.all(
       items.map(async item => {
         try {
           const result = await this.generateReplayUrlForResponse(
@@ -1922,7 +1906,6 @@ export class WorkspaceCodingService {
         }
       })
     );
-    return itemsWithUrls;
   }
 
   async applyCodingResults(
