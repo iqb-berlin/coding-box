@@ -6,7 +6,17 @@ import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
 import { WorkspaceController } from './workspace/workspace.controller';
 import { WorkspaceFilesController } from './workspace/workspace-files.controller';
+import { WorkspaceFilesValidationController } from './workspace/workspace-files-validation.controller';
+import { WorkspaceFilesContentController } from './workspace/workspace-files-content.controller';
+import { WorkspaceFilesInfoController } from './workspace/workspace-files-info.controller';
 import { WorkspaceTestResultsController } from './workspace/workspace-test-results.controller';
+import { WorkspaceTestResultsStatisticsController } from './workspace/workspace-test-results-statistics.controller';
+import { WorkspaceTestResultsManagementController } from './workspace/workspace-test-results-management.controller';
+import { WorkspaceTestResultsLogsController } from './workspace/workspace-test-results-logs.controller';
+import { WorkspaceTestResultsResponseController } from './workspace/workspace-test-results-response.controller';
+import { WorkspaceTestResultsAnalysisController } from './workspace/workspace-test-results-analysis.controller';
+import { WorkspaceTestResultsImportController } from './workspace/workspace-test-results-import.controller';
+import { WorkspaceTestResultsExportController } from './workspace/workspace-test-results-export.controller';
 import { WorkspaceUsersController } from './workspace/workspace-users.controller';
 import { WorkspaceCodingController } from './workspace/workspace-coding.controller';
 import { WorkspaceCodingExportController } from './workspace/workspace-coding-export.controller';
@@ -58,7 +68,17 @@ import { AccessRightsMatrixService } from './workspace/access-rights-matrix.serv
     UsersController,
     WorkspaceController,
     WorkspaceFilesController,
+    WorkspaceFilesValidationController,
+    WorkspaceFilesContentController,
+    WorkspaceFilesInfoController,
     WorkspaceTestResultsController,
+    WorkspaceTestResultsStatisticsController,
+    WorkspaceTestResultsManagementController,
+    WorkspaceTestResultsLogsController,
+    WorkspaceTestResultsResponseController,
+    WorkspaceTestResultsAnalysisController,
+    WorkspaceTestResultsImportController,
+    WorkspaceTestResultsExportController,
     WorkspaceUsersController,
     WorkspaceCodingController,
     WorkspaceCodingExportController,
