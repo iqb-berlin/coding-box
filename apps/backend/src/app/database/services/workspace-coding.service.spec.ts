@@ -15,7 +15,6 @@ import { CodingJobVariableBundle } from '../entities/coding-job-variable-bundle.
 import { CodingJobUnit } from '../entities/coding-job-unit.entity';
 import { JobDefinition } from '../entities/job-definition.entity';
 import { VariableBundle } from '../entities/variable-bundle.entity';
-import { Setting } from '../entities/setting.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
 import { MissingsProfilesService } from './missings-profiles.service';
@@ -29,10 +28,9 @@ import { CodingJobService } from './coding-job.service';
 import { CodingExportService } from './coding-export.service';
 import { CodingListService } from './coding-list.service';
 import { ResponseManagementService } from './response-management.service';
+import { CodingProcessService } from './coding-process.service';
 import { CodebookGenerator } from '../../admin/code-book/codebook-generator.class';
 import { statusStringToNumber } from '../utils/response-status-converter';
-
-const mockCodingFactory = { code: jest.fn() };
 
 jest.mock('@iqb/responses', () => ({
   CodingFactory: {
@@ -126,6 +124,13 @@ describe('WorkspaceCodingService', () => {
     getCodingListCsvStream: jest.fn()
   };
 
+  const mockCodingProcessService = {
+    processTestPersonsBatch: jest.fn().mockResolvedValue({
+      totalResponses: 10,
+      statusCounts: { VALID: 10 }
+    })
+  };
+
   const mockResponseManagementService = {
     updateResponsesInDatabase: jest.fn(),
     resolveDuplicateResponses: jest.fn(),
@@ -177,12 +182,6 @@ describe('WorkspaceCodingService', () => {
     score_v3: null,
     subform: '',
     unit: undefined
-  });
-
-  const createMockFileUpload = (fileId: string, data: string) => ({
-    file_id: fileId,
-    data,
-    filename: `${fileId}.xml`
   });
 
   interface MockQueryBuilder {
@@ -347,7 +346,8 @@ describe('WorkspaceCodingService', () => {
         },
         { provide: getRepositoryToken(JobDefinition), useValue: {} },
         { provide: getRepositoryToken(VariableBundle), useValue: {} },
-        { provide: getRepositoryToken(Setting), useValue: {} }
+        { provide: ResponseManagementService, useValue: mockResponseManagementService },
+        { provide: CodingProcessService, useValue: mockCodingProcessService }
       ]
     }).compile();
 
@@ -369,184 +369,22 @@ describe('WorkspaceCodingService', () => {
     const autoCoderRun = 1;
     const jobId = 'test-job-id';
 
-    beforeEach(() => {
-      personsRepository.find = jest.fn().mockResolvedValue([
-        createMockPerson(1),
-        createMockPerson(2)
-      ]);
-
-      bookletRepository.find = jest.fn().mockResolvedValue([
-        createMockBooklet(1, '1'),
-        createMockBooklet(2, '2')
-      ]);
-
-      unitRepository.find = jest.fn().mockResolvedValue([
-        createMockUnit(1, 1, 'TEST_UNIT_1', 'ALIAS_1'),
-        createMockUnit(2, 2, 'TEST_UNIT_2', 'ALIAS_2')
-      ]);
-
-      const mockResponses = [
-        createMockResponse(1, 1, 'var1'),
-        createMockResponse(2, 2, 'var2')
-      ];
-
-      // Configure the query builder to return responses
-      mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
-
-      // The service converts unit names to uppercase when building the validVariableSets map
-      // Unit names in test data are 'TEST_UNIT_1' and 'TEST_UNIT_2'
-      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
-        new Map([
-          ['TEST_UNIT_1', new Set(['var1'])],
-          ['TEST_UNIT_2', new Set(['var2'])]
-        ])
-      );
-
-      fileUploadRepository.find = jest.fn()
-        .mockResolvedValueOnce([ // coding schemes
-          createMockFileUpload('SCHEME_1', '<codingScheme><variableCodings><variableCoding id="var1"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>'),
-          createMockFileUpload('SCHEME_2', '<codingScheme><variableCodings><variableCoding id="var2"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>')
-        ])
-        .mockResolvedValueOnce([ // test files
-          createMockFileUpload('ALIAS_1', '<xml><codingSchemeRef>SCHEME_1</codingSchemeRef></xml>'),
-          createMockFileUpload('ALIAS_2', '<xml><codingSchemeRef>SCHEME_2</codingSchemeRef></xml>')
-        ])
-        .mockResolvedValueOnce([]); // coding schemes again
-
-      fileUploadRepository.findOne = jest.fn().mockImplementation(options => {
-        if (options.where.file_id === 'SCHEME_1') {
-          return Promise.resolve(createMockFileUpload('SCHEME_1', '<codingScheme><variableCodings><variableCoding id="var1"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>'));
-        }
-        if (options.where.file_id === 'SCHEME_2') {
-          return Promise.resolve(createMockFileUpload('SCHEME_2', '<codingScheme><variableCodings><variableCoding id="var2"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>'));
-        }
-        return Promise.resolve(null);
-      });
-
-      mockCodingFactory.code.mockReturnValue({
-        code: 1,
-        status: 'VALUE_PROVIDED',
-        score: 85
-      });
-    });
-
-    it('should handle an empty person IDs array', async () => {
-      // Override mocks to ensure no data is returned for empty array
-      personsRepository.find = jest.fn().mockResolvedValue([]);
-      bookletRepository.find = jest.fn().mockResolvedValue([]);
-      unitRepository.find = jest.fn().mockResolvedValue([]);
-      responseRepository.find = jest.fn().mockResolvedValue([]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, [], autoCoderRun);
-
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
-    });
-
-    it('should handle no persons found', async () => {
-      personsRepository.find = jest.fn().mockResolvedValue([]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
-
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
-    });
-
-    it('should handle no booklets found', async () => {
-      bookletRepository.find = jest.fn().mockResolvedValue([]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
-
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
-    });
-
-    it('should handle no units found', async () => {
-      unitRepository.find = jest.fn().mockResolvedValue([]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
-
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
-    });
-
-    it('should handle no responses found', async () => {
-      mockQueryBuilder.getMany.mockResolvedValue([]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
-
-      expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts).toEqual({});
-    });
-
-    it('should filter out invalid variables not defined in unit schema', async () => {
-      mockQueryBuilder.getMany.mockResolvedValue([
-        createMockResponse(1, 1, 'var1'), // valid
-        createMockResponse(2, 1, 'invalid_var'), // invalid
-        createMockResponse(3, 2, 'var2'), // valid
-        createMockResponse(4, 2, 'another_invalid') // invalid
-      ]);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
-
-      expect(result.totalResponses).toBe(2); // Only valid variables processed
-    });
-
-    it('should handle job cancellation during processing', async () => {
-      mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
-        getState: jest.fn().mockResolvedValue('paused'),
-        data: { isPaused: true }
-      });
+    it('should delegate to CodingProcessService', async () => {
+      const expectedResult = {
+        totalResponses: 10,
+        statusCounts: { VALID: 10 }
+      };
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun, undefined, jobId);
 
-      expect(result.totalResponses).toBe(0); // Processing stopped early
-    });
-
-    it.skip('should handle database transaction rollback on error', async () => {
-      // Skipped due to complex transaction mock setup
-      // Core error handling is tested through other test cases
-      expect(true).toBe(true);
-    });
-
-    it('should use v2 status for autoCoderRun = 2', async () => {
-      const responsesWithV2 = [
-        createMockResponse(1, 1, 'var1'),
-        createMockResponse(2, 2, 'var2')
-      ];
-      responsesWithV2[0].status_v2 = 2;
-      responsesWithV2[1].status_v2 = 1;
-
-      mockQueryBuilder.getMany.mockResolvedValue(responsesWithV2);
-
-      const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
-
-      expect(result.totalResponses).toBe(2);
-    });
-
-    it.skip('should call progress callback at appropriate intervals', async () => {
-      mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
-        getState: jest.fn().mockResolvedValue('active'),
-        data: { isPaused: false }
-      });
-
-      const progressCallback = jest.fn();
-
-      await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun, progressCallback, jobId);
-
-      expect(progressCallback).toHaveBeenCalledWith(0);
-      expect(progressCallback).toHaveBeenCalledWith(10);
-      expect(progressCallback).toHaveBeenCalledWith(20);
-      expect(progressCallback).toHaveBeenCalledWith(30);
-      expect(progressCallback).toHaveBeenCalledWith(40);
-      expect(progressCallback).toHaveBeenCalledWith(50);
-      expect(progressCallback).toHaveBeenCalledWith(60);
-      expect(progressCallback).toHaveBeenCalledWith(70);
-      expect(progressCallback).toHaveBeenCalledWith(80);
-      expect(progressCallback).toHaveBeenCalledWith(85);
-      expect(progressCallback).toHaveBeenCalledWith(90);
-      expect(progressCallback).toHaveBeenCalledWith(95);
-      expect(progressCallback).toHaveBeenCalledWith(100);
+      expect(mockCodingProcessService.processTestPersonsBatch).toHaveBeenCalledWith(
+        workspaceId,
+        personIds,
+        autoCoderRun,
+        undefined,
+        jobId
+      );
+      expect(result).toEqual(expectedResult);
     });
   });
 
@@ -1297,7 +1135,7 @@ describe('WorkspaceCodingService', () => {
   describe('Cache Management', () => {
     describe('invalidateIncompleteVariablesCache', () => {
       it('should delete cache entry for workspace', async () => {
-        await service.invalidateIncompleteVariablesCache(1);
+        await (service as any).invalidateIncompleteVariablesCache(1);
 
         expect(mockCacheService.delete).toHaveBeenCalledWith('coding_incomplete_variables:1');
       });
