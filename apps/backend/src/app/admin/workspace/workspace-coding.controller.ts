@@ -11,13 +11,11 @@ import {
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
-import { CodingStatistics } from '../../database/services/shared-types';
+import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingJobService } from '../../database/services/coding-job.service';
-import { CodingProcessService } from '../../database/services/coding-process.service';
-import { CodingResponseQueryService } from '../../database/services/coding-response-query.service';
+import { CodingJobService, CodingProcessService, CodingResponseQueryService } from '../../database/services/coding';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Coding')

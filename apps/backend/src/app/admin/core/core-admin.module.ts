@@ -3,7 +3,9 @@ import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseModule } from '../../database/database.module';
 import { UserModule } from '../../user/user.module';
+import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
+import { CodingModule } from '../../coding/coding.module';
 import { JobQueueModule } from '../../job-queue/job-queue.module';
 import { VariableBundleModule } from '../variable-bundle/variable-bundle.module';
 import { UsersController } from '../users/users.controller';
@@ -24,7 +26,9 @@ import { Setting } from '../../database/entities/setting.entity';
   imports: [
     DatabaseModule,
     UserModule,
+    WorkspaceModule,
     AuthModule,
+    CodingModule,
     HttpModule,
     TypeOrmModule.forFeature([Setting]),
     VariableBundleModule,

@@ -16,7 +16,7 @@ import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingReplayService } from '../../database/services/coding-replay.service';
+import { CodingReplayService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')

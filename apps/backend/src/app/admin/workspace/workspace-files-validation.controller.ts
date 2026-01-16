@@ -18,7 +18,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../database/services/workspace';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { InvalidVariableDto } from '../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../api-dto/files/testtakers-validation.dto';

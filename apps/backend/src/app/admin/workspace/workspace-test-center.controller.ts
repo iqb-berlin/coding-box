@@ -12,7 +12,7 @@ import {
 import {
   TestcenterService,
   Result
-} from '../../database/services/testcenter.service';
+} from '../../database/services/test-results';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';

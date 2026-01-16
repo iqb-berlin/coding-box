@@ -16,7 +16,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { WorkspaceTestResultsService } from '../../database/services/workspace-test-results.service';
+import { WorkspaceTestResultsService } from '../../database/services/test-results';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')

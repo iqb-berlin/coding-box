@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { CacheService } from './cache.service';
-import { CodingValidationService } from '../database/services/coding-validation.service';
+import { CodingValidationService } from '../database/services/coding';
 import Persons from '../database/entities/persons.entity';
 
 @Injectable()

@@ -18,7 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../database/services/workspace';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 
 @ApiTags('Admin Workspace Files - Content')

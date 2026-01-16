@@ -5,8 +5,8 @@ import {
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { TestPersonCodingJobData } from '../job-queue.service';
-import { CodingStatistics } from '../../database/services/shared-types';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingStatistics } from '../../database/services/shared';
+import { WorkspaceCodingService } from '../../database/services/workspace';
 
 @Injectable()
 @Processor('test-person-coding')

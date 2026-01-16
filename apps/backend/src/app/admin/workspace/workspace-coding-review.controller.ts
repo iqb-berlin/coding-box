@@ -16,7 +16,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingReviewService } from '../../database/services/coding-review.service';
+import { CodingReviewService } from '../../database/services/coding';
 import {
   CohensKappaSummary,
   DoubleCodedReviewResponse,

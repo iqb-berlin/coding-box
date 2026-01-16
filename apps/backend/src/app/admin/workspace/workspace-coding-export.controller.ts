@@ -28,9 +28,7 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingListExportService } from '../../database/services/coding-list-export.service';
-import { CodingResultsExportService } from '../../database/services/coding-results-export.service';
-import { CodingTimesExportService } from '../../database/services/coding-times-export.service';
+import { CodingListExportService, CodingResultsExportService, CodingTimesExportService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')

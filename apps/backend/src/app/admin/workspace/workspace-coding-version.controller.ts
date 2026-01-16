@@ -16,9 +16,8 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingVersionService } from '../../database/services/coding-version.service';
-import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { JournalService } from '../../database/services/journal.service';
+import { CodingVersionService, CodingStatisticsService } from '../../database/services/coding';
+import { JournalService } from '../../database/services/shared';
 
 interface RequestWithUser extends Request {
   user: {

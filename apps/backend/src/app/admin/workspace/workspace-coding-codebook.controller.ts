@@ -15,7 +15,7 @@ import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodebookGenerationService } from '../../database/services/codebook-generation.service';
+import { CodebookGenerationService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
