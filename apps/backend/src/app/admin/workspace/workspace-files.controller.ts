@@ -31,11 +31,10 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { PersonService } from '../../database/services/person.service';
-import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { CodingValidationService } from '../../database/services/coding-validation.service';
+import { PersonService } from '../../database/services/test-results';
+import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')

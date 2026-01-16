@@ -16,7 +16,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { ExternalCodingImportService } from '../../database/services/external-coding-import.service';
+import { ExternalCodingImportService } from '../../database/services/coding';
 import { ExternalCodingImportDto } from '../../../../../../api-dto/coding/external-coding-import.dto';
 
 @ApiTags('Admin Workspace Coding')

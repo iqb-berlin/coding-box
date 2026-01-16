@@ -5,6 +5,7 @@ import { CodingModule } from '../../coding/coding.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
 import { JobQueueModule } from '../../job-queue/job-queue.module';
+import { CacheModule } from '../../cache/cache.module';
 import { WorkspaceCodingController } from '../workspace/workspace-coding.controller';
 import { WorkspaceCodingExportController } from '../workspace/workspace-coding-export.controller';
 import { WorkspaceCodingJobController } from '../workspace/workspace-coding-job.controller';
@@ -28,7 +29,8 @@ import { WorkspacePlayerController } from '../workspace/workspace-player.control
     WorkspaceModule,
     AuthModule,
     JobQueueModule,
-    HttpModule
+    HttpModule,
+    CacheModule
   ],
   controllers: [
     WorkspaceCodingController,

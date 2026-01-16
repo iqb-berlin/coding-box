@@ -11,7 +11,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { BookletInfoService } from '../../database/services/booklet-info.service';
+import { BookletInfoService } from '../../database/services/workspace';
 import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-info.dto';
 
 @ApiTags('Booklet Info')

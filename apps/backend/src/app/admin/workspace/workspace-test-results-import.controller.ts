@@ -24,7 +24,7 @@ import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { UploadResultsService } from '../../database/services/upload-results.service';
+import { UploadResultsService } from '../../database/services/test-results';
 import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';

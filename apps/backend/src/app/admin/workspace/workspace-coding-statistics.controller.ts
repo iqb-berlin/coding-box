@@ -17,12 +17,11 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingStatisticsService } from '../../database/services/coding-statistics.service';
-import { CodingJobService } from '../../database/services/coding-job.service';
-import { PersonService } from '../../database/services/person.service';
-import { CodingProgressService } from '../../database/services/coding-progress.service';
-import { CodingReviewService } from '../../database/services/coding-review.service';
-import { CodingStatistics } from '../../database/services/shared-types';
+import {
+  CodingStatisticsService, CodingJobService, CodingProgressService, CodingReviewService
+} from '../../database/services/coding';
+import { PersonService } from '../../database/services/test-results';
+import { CodingStatistics } from '../../database/services/shared';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')

@@ -13,7 +13,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { CodingJobOperationsService } from '../../database/services/coding-job-operations.service';
+import { CodingJobOperationsService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')

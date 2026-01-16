@@ -18,7 +18,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { JobDefinitionService } from '../../database/services/job-definition.service';
+import { JobDefinitionService } from '../../database/services/jobs';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { CodingJob } from '../../database/entities/coding-job.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';

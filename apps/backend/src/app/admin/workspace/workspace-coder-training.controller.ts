@@ -19,7 +19,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CoderTrainingService } from '../../database/services/coder-training.service';
+import { CoderTrainingService } from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')

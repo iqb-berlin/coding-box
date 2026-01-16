@@ -16,7 +16,7 @@ import {
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
-import { WorkspaceFilesService } from '../../database/services/workspace-files.service';
+import { WorkspaceFilesService } from '../../database/services/workspace';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 

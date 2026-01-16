@@ -29,8 +29,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
-import { CodingJobService } from '../../database/services/coding-job.service';
-import { CodingReplayService } from '../../database/services/coding-replay.service';
+import { CodingJobService, CodingReplayService } from '../../database/services/coding';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';

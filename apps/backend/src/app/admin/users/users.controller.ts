@@ -6,7 +6,7 @@ import {
   ApiBadRequestResponse, ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiMethodNotAllowedResponse,
   ApiNotFoundResponse, ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';

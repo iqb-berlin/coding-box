@@ -16,16 +16,18 @@ import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 
-import { CodingJobService } from '../database/services/coding-job.service';
-import { CodingListService } from '../database/services/coding-list.service';
-import { CodingStatisticsService } from '../database/services/coding-statistics.service';
-import { CodingResultsService } from '../database/services/coding-results.service';
-import { CodingExportService } from '../database/services/coding-export.service';
-import { CodingProcessService } from '../database/services/coding-process.service';
-import { CoderTrainingService } from '../database/services/coder-training.service';
-import { JobDefinitionService } from '../database/services/job-definition.service';
-import { MissingsProfilesService } from '../database/services/missings-profiles.service';
-import { ExternalCodingImportService } from '../database/services/external-coding-import.service';
+import {
+  CodingJobService,
+  CodingListService,
+  CodingStatisticsService,
+  CodingResultsService,
+  CodingExportService,
+  CodingProcessService,
+  CoderTrainingService,
+  MissingsProfilesService,
+  ExternalCodingImportService
+} from '../database/services/coding';
+import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
 import { JobQueueModule } from '../job-queue/job-queue.module';
 // eslint-disable-next-line import/no-cycle
