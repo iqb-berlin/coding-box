@@ -24,6 +24,7 @@ import {
   TcMergeUnit, Response
 } from '../shared';
 import { TestResultsUploadStatsDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { PersonQueryService } from './person-query.service';
 
 @Injectable()
 export class PersonService {
@@ -47,158 +48,33 @@ export class PersonService {
     @InjectRepository(Session)
     private bookletSessionRepository: Repository<Session>,
     @InjectRepository(UnitLog)
-    private unitLogRepository: Repository<UnitLog>
+    private unitLogRepository: Repository<UnitLog>,
+    private readonly personQueryService: PersonQueryService
   ) {
   }
 
   logger = new Logger(PersonService.name);
 
   async getWorkspaceGroups(workspaceId: number): Promise<string[]> {
-    try {
-      const result = await this.personsRepository
-        .createQueryBuilder('person')
-        .select('DISTINCT person.group', 'group')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-
-      return result.map(item => item.group);
-    } catch (error) {
-      this.logger.error(`Error fetching groups for workspace ${workspaceId}: ${error.message}`);
-      return [];
-    }
+    return this.personQueryService.getWorkspaceGroups(workspaceId);
   }
 
   async getWorkspaceUploadStats(workspaceId: number): Promise<TestResultsUploadStatsDto> {
-    try {
-      const testPersons = await this.personsRepository.count({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
-      const groupRows = await this.personsRepository
-        .createQueryBuilder('person')
-        .select('DISTINCT person.group', 'group')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const testGroups = groupRows.length;
-
-      const bookletRows = await this.bookletRepository
-        .createQueryBuilder('booklet')
-        .innerJoin('booklet.person', 'person')
-        .innerJoin('booklet.bookletinfo', 'bookletinfo')
-        .select('DISTINCT bookletinfo.name', 'name')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const uniqueBooklets = bookletRows.length;
-
-      const unitRows = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getRawMany();
-      const uniqueUnits = unitRows.length;
-
-      const uniqueResponses = await this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getCount();
-
-      return {
-        testPersons,
-        testGroups,
-        uniqueBooklets,
-        uniqueUnits,
-        uniqueResponses
-      };
-    } catch (error) {
-      this.logger.error(`Error fetching workspace upload stats: ${error.message}`);
-      return {
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0
-      };
-    }
+    return this.personQueryService.getWorkspaceUploadStats(workspaceId);
   }
 
   async getWorkspaceGroupCodingStats(
     workspaceId: number
   ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
-    try {
-      const derivePending = statusStringToNumber('DERIVE_PENDING') as number | null;
-
-      const rawResults = await this.responseRepository
-        .createQueryBuilder('response')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere(new Brackets(qb => {
-          qb.where('response.status IN (:...statuses)', { statuses: [1, 2, 3] });
-          if (derivePending !== null && !Number.isNaN(derivePending)) {
-            qb.orWhere('response.status_v1 = :derivePending', { derivePending });
-          }
-        }))
-        .select('person.group', 'groupName')
-        .addSelect('COUNT(DISTINCT person.id)', 'testPersonCount')
-        .addSelect('COUNT(response.id)', 'responsesToCode')
-        .groupBy('person.group')
-        .getRawMany();
-
-      return rawResults.map(item => ({
-        groupName: item.groupName,
-        testPersonCount: Number(item.testPersonCount) || 0,
-        responsesToCode: Number(item.responsesToCode) || 0
-      }));
-    } catch (error) {
-      this.logger.error(`Error fetching workspace group coding stats: ${error.message}`);
-      return [];
-    }
+    return this.personQueryService.getWorkspaceGroupCodingStats(workspaceId);
   }
 
   async hasBookletLogsForGroup(workspaceId: number, groupName: string): Promise<boolean> {
-    try {
-      const count = await this.bookletLogRepository
-        .createQueryBuilder('bookletlog')
-        .innerJoin('bookletlog.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.group = :groupName', { groupName })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getCount();
-
-      return count > 0;
-    } catch (error) {
-      this.logger.error(`Error checking booklet logs for group ${groupName}: ${error.message}`);
-      return false;
-    }
+    return this.personQueryService.hasBookletLogsForGroup(workspaceId, groupName);
   }
 
   async getGroupsWithBookletLogs(workspaceId: number): Promise<Map<string, boolean>> {
-    try {
-      const groups = await this.getWorkspaceGroups(workspaceId);
-      const groupsWithLogs = new Map<string, boolean>();
-      for (const group of groups) {
-        const hasLogs = await this.hasBookletLogsForGroup(workspaceId, group);
-        groupsWithLogs.set(group, hasLogs);
-      }
-
-      return groupsWithLogs;
-    } catch (error) {
-      this.logger.error(`Error getting groups with booklet logs: ${error.message}`);
-      return new Map<string, boolean>();
-    }
+    return this.personQueryService.getGroupsWithBookletLogs(workspaceId);
   }
 
   async markPersonsAsNotConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
@@ -252,39 +128,7 @@ export class PersonService {
     booklets: number;
     units: number;
   }> {
-    try {
-      const personsCount = await this.personsRepository.count({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
-      const bookletsCount = await this.bookletRepository
-        .createQueryBuilder('booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getCount();
-
-      const unitsCount = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .getCount();
-
-      return {
-        persons: personsCount,
-        booklets: bookletsCount,
-        units: unitsCount
-      };
-    } catch (error) {
-      this.logger.error(`Error fetching import statistics: ${error.message}`);
-      return {
-        persons: 0,
-        booklets: 0,
-        units: 0
-      };
-    }
+    return this.personQueryService.getImportStatistics(workspaceId);
   }
 
   async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
