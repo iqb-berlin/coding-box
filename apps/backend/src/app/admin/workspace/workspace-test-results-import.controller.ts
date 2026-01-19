@@ -6,7 +6,8 @@ import {
   Query,
   UseGuards,
   UseInterceptors,
-  UploadedFiles
+  UploadedFiles,
+  ParseIntPipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -133,7 +134,7 @@ export class WorkspaceTestResultsImportController {
   @ApiQuery({ name: 'variableId', required: false })
   @ApiQuery({ name: 'subform', required: false })
   async addTestResults(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Param('resultType') resultType: 'logs' | 'responses',
       @UploadedFiles() files: Express.Multer.File[],
       @Query('overwriteExisting') overwriteExisting?: string,

@@ -8,7 +8,8 @@ import {
   Post,
   Req,
   Res,
-  UseGuards
+  UseGuards,
+  ParseIntPipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -68,7 +69,7 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async exportWorkspaceToSqlite(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Res() response: Response
   ): Promise<void> {
     try {
@@ -117,7 +118,7 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async exportTestResults(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Res() response: Response
   ): Promise<void> {
     try {
@@ -158,15 +159,15 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestResultsJob(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
       @Body()
-                           filters?: {
-                             groupNames?: string[];
-                             bookletNames?: string[];
-                             unitNames?: string[];
-                             personIds?: number[];
-                           }
+                                         filters?: {
+                                           groupNames?: string[];
+                                           bookletNames?: string[];
+                                           unitNames?: string[];
+                                           personIds?: number[];
+                                         }
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -201,15 +202,15 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async startExportTestLogsJob(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser,
       @Body()
-                           filters?: {
-                             groupNames?: string[];
-                             bookletNames?: string[];
-                             unitNames?: string[];
-                             personIds?: number[];
-                           }
+                                         filters?: {
+                                           groupNames?: string[];
+                                           bookletNames?: string[];
+                                           unitNames?: string[];
+                                           personIds?: number[];
+                                         }
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({
       workspaceId: Number(workspace_id),
@@ -241,7 +242,7 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getExportJobs(
-    @Param('workspace_id') workspace_id: number
+    @Param('workspace_id', ParseIntPipe) workspace_id: number
   ): Promise<ExportJobStatus[]> {
     const jobs = await this.jobQueueService.getExportJobs(Number(workspace_id));
 
@@ -279,7 +280,7 @@ export class WorkspaceTestResultsExportController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async downloadExportJobResult(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Param('jobId') jobId: string,
       @Res() res: Response
   ): Promise<void> {

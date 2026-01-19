@@ -6,7 +6,8 @@ import {
   Query,
   Req,
   UseGuards,
-  ParseIntPipe
+  ParseIntPipe,
+  DefaultValuePipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -100,10 +101,10 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findTestResults(
-    @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 20,
-                           @Query('searchText') searchText?: string
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20,
+                                         @Query('searchText') searchText?: string
   ): Promise<{ data: Persons[]; total: number; page: number; limit: number }> {
     const [data, total] =
             await this.workspaceTestResultsService.findTestResults(workspace_id, {
@@ -176,8 +177,8 @@ export class WorkspaceTestResultsManagementController {
   @ApiBadRequestResponse({ description: 'Failed to delete unit' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteUnit(
-    @Param('workspace_id') workspaceId: number,
-      @Param('unitId') unitId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('unitId', ParseIntPipe) unitId: number,
       @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
@@ -216,7 +217,7 @@ export class WorkspaceTestResultsManagementController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findPersonTestResults(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Param('personId', ParseIntPipe) personId: number
   ): Promise<PersonTestResult[]> {
     return this.workspaceTestResultsService.findPersonTestResults(
@@ -261,8 +262,8 @@ export class WorkspaceTestResultsManagementController {
   @ApiBadRequestResponse({ description: 'Failed to delete booklet' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteBooklet(
-    @Param('workspace_id') workspaceId: number,
-      @Param('bookletId') bookletId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('bookletId', ParseIntPipe) bookletId: number,
       @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
@@ -305,10 +306,10 @@ export class WorkspaceTestResultsManagementController {
   @ApiBadRequestResponse({ description: 'Failed to search for booklets' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findBookletsByName(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Query('bookletName') bookletName: string,
-      @Query('page') page?: number,
-      @Query('limit') limit?: number
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<BookletSearchResult> {
     return this.workspaceTestResultsService.findBookletsByName(
       workspace_id,
@@ -340,10 +341,10 @@ export class WorkspaceTestResultsManagementController {
   @ApiBadRequestResponse({ description: 'Failed to search for units' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async findUnitsByName(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Query('unitName') unitName: string,
-      @Query('page') page?: number,
-      @Query('limit') limit?: number
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<UnitSearchResult> {
     return this.workspaceTestResultsService.findUnitsByName(
       workspace_id,
@@ -368,7 +369,7 @@ export class WorkspaceTestResultsManagementController {
   })
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  async getExportOptions(@Param('workspace_id') workspace_id: number): Promise<{
+  async getExportOptions(@Param('workspace_id', ParseIntPipe) workspace_id: number): Promise<{
     testPersons: {
       id: number;
       code: string;
