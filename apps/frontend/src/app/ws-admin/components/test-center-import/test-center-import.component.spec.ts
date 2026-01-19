@@ -186,7 +186,8 @@ describe('TestCenterImportComponent', () => {
       didImport: true,
       resultType: 'responses',
       importedResponses: true,
-      importedLogs: false
+      importedLogs: false,
+      uploadResult: mockImportResult
     });
   });
 

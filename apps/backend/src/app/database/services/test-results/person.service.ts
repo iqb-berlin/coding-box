@@ -9,7 +9,10 @@ import {
   TcMergeSubForms,
   TcMergeUnit, Response
 } from '../shared';
-import { TestResultsUploadStatsDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  TestResultsUploadIssueDto,
+  TestResultsUploadStatsDto
+} from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { PersonQueryService } from './person-query.service';
 import { PersonPersistenceService } from './person-persistence.service';
 
@@ -61,6 +64,15 @@ export class PersonService {
     return this.personQueryService.getImportStatistics(workspaceId);
   }
 
+  async getLogCoverageStats(workspaceId: number): Promise<{
+    bookletsWithLogs: number;
+    totalBooklets: number;
+    unitsWithLogs: number;
+    totalUnits: number;
+  }> {
+    return this.personQueryService.getLogCoverageStats(workspaceId);
+  }
+
   async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid input: rows must be an array');
@@ -100,7 +112,7 @@ export class PersonService {
     return Array.from(personMap.values());
   }
 
-  async assignBookletsToPerson(person: Person, rows: Response[]): Promise<Person> {
+  async assignBookletsToPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = []): Promise<Person> {
     const logger = new Logger('assignBookletsToPerson');
     const bookletIds = new Set<string>();
     const booklets: TcMergeBooklet[] = [];
@@ -109,7 +121,9 @@ export class PersonService {
       try {
         if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
           if (!row.bookletname) {
-            logger.warn(`Missing booklet name in row: ${JSON.stringify(row)}`);
+            const msg = `Missing booklet name in row: ${JSON.stringify(row)}`;
+            logger.warn(msg);
+            issues.push({ level: 'warning', message: msg, category: 'other' });
             continue;
           }
           if (!bookletIds.has(row.bookletname)) {
@@ -123,9 +137,9 @@ export class PersonService {
           }
         }
       } catch (error) {
-        logger.error(
-          `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${error.message}`
-        );
+        const msg = `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${error.message}`;
+        logger.error(msg);
+        issues.push({ level: 'error', message: msg, category: 'other' });
       }
     }
     person.booklets = booklets;
@@ -133,7 +147,7 @@ export class PersonService {
     return person;
   }
 
-  assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
+  assignBookletLogsToPerson(person: Person, rows: Log[], issues?: TestResultsUploadIssueDto[], filename?: string): Person {
     const booklets: TcMergeBooklet[] = [];
     const bookletMap = new Map<string, TcMergeBooklet>();
 
@@ -153,16 +167,23 @@ export class PersonService {
             return;
           }
 
-          const [logEntryKey, logEntryValueRaw] = logentry.split(' : ');
-          const logEntryKeyTrimmed = logEntryKey?.trim();
-          const logEntryValue = logEntryValueRaw?.trim()?.replace(/"/g, '');
+          const parsedLog = this.parseLogEntry(logentry);
 
-          if (!logEntryKeyTrimmed) {
+          if (!parsedLog) {
             this.logger.warn(
-              `Invalid log key detected at index ${index} for person: ${person.login}`
+              `Invalid log entry format at index ${index} for person: ${person.login}: ${logentry}`
             );
+            issues?.push({
+              level: 'warning',
+              category: 'log_format',
+              message: `Invalid log entry format: "${logentry}". Expected format: KEY:VALUE or KEY=VALUE (e.g., "CONTROLLER:RUNNING" or "CURRENT_UNIT_ID:u1"). Keys and values may be quoted.`,
+              rowIndex: index,
+              fileName: filename
+            });
             return;
           }
+
+          const { key, value } = parsedLog;
 
           let booklet = bookletMap.get(bookletname);
           if (!booklet) {
@@ -176,8 +197,8 @@ export class PersonService {
             bookletMap.set(bookletname, booklet);
           }
 
-          if (logEntryKeyTrimmed === 'LOADCOMPLETE' && logEntryValue) {
-            const parsedResult = this.parseLoadCompleteLog(logEntryValue);
+          if (key === 'LOADCOMPLETE' && value) {
+            const parsedResult = this.parseLoadCompleteLog(value);
             if (parsedResult) {
               booklet.sessions.push({
                 browser: `${parsedResult.browserName} ${parsedResult.browserVersion}`.trim(),
@@ -190,13 +211,19 @@ export class PersonService {
               this.logger.warn(
                 `Failed to parse LOADCOMPLETE entry at index ${index} for person: ${person.login}`
               );
+              issues?.push({
+                level: 'warning',
+                message: `Failed to parse LOADCOMPLETE entry: ${value}`,
+                rowIndex: index,
+                fileName: filename
+              });
             }
           }
-          if (logEntryKeyTrimmed !== 'LOADCOMPLETE') {
+          if (key !== 'LOADCOMPLETE') {
             booklet.logs.push({
               ts: timestamp,
-              key: logEntryKeyTrimmed || 'UNKNOWN',
-              parameter: logEntryValue || ''
+              key: key || 'UNKNOWN',
+              parameter: value || ''
             });
           }
         }
@@ -211,6 +238,30 @@ export class PersonService {
 
     person.booklets = booklets;
     return person;
+  }
+
+  private parseLogEntry(logentry: string): { key: string; value: string } | null {
+    if (!logentry) return null;
+
+    const separatorIndex = logentry.indexOf(':') !== -1 ? logentry.indexOf(':') : logentry.indexOf('=');
+    if (separatorIndex === -1) return null;
+
+    let key = logentry.substring(0, separatorIndex).trim();
+    let value = logentry.substring(separatorIndex + 1).trim();
+
+    // Handle quoted keys
+    if (key.startsWith('"') && key.endsWith('"')) {
+      key = key.substring(1, key.length - 1);
+    }
+
+    // Handle quoted values
+    if (value.startsWith('"') && value.endsWith('"')) {
+      value = value.substring(1, value.length - 1);
+      // Unescape double backslashes and escaped quotes
+      value = value.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+    }
+
+    return { key, value };
   }
 
   private parseLoadCompleteLog(logEntry: string): {
@@ -245,13 +296,19 @@ export class PersonService {
     }
   }
 
-  async assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Promise<Person> {
+  async assignUnitsToBookletAndPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = []): Promise<Person> {
     for (const row of rows) {
       try {
         if (!this.doesRowMatchPerson(row, person)) continue;
 
         const booklet = person.booklets.find(b => b.id === row.bookletname);
-        if (!booklet) continue;
+        if (!booklet) {
+          // Warning: Booklet not found for unit (should have been assigned)
+          // However, assignBookletsToPerson runs first. If booklet is missing there, it won't be here.
+          // But if row refers to a booklet not in the list (filtered out?), then...
+          // We can add a warning if we think it's notable, but maybe noisy.
+          continue;
+        }
 
         const parsedResponses = this.parseResponses(row.responses);
         const subforms = this.extractSubforms(parsedResponses);
@@ -263,7 +320,9 @@ export class PersonService {
           b)
         );
       } catch (error) {
-        this.logger.error(`Error processing row for person ${person.login}: ${error.message}`, error.stack);
+        const msg = `Error processing row for person ${person.login}: ${error.message}`;
+        this.logger.error(msg, error.stack);
+        issues.push({ level: 'error', message: msg, category: 'other' });
       }
     }
     return person;
@@ -362,12 +421,14 @@ export class PersonService {
     personList: Person[],
     workspace_id: number,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
-    scope: 'person' | 'workspace' = 'person'
+    scope: 'person' | 'workspace' = 'person',
+    issues: TestResultsUploadIssueDto[] = []
   ): Promise<void> {
-    return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope);
+    // We could pass issues to persistence service if we update it
+    return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
   }
 
-  assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
+  assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[], issues?: TestResultsUploadIssueDto[], filename?: string): TcMergeBooklet {
     if (!booklet || !Array.isArray(booklet.units)) {
       this.logger.error("Invalid booklet provided. Booklet must contain a valid 'units' array.");
     }
@@ -388,22 +449,28 @@ export class PersonService {
     rows.forEach((row, index) => {
       try {
         if (!row || typeof row.bookletname !== 'string' || typeof row.unitname !== 'string') {
-          this.logger.warn(`Skipping invalid row at index ${index}. Row must contain 'bookletname' and 'unitname'.`);
           return;
         }
 
         if (booklet.id !== row.bookletname) return;
 
-        const logEntryParts = row.logentry?.split('=');
-        if (!logEntryParts || logEntryParts.length < 2) {
+        const parsedLog = this.parseLogEntry(row.logentry || '');
+        if (!parsedLog) {
           this.logger.warn(`Skipping invalid log entry in row at index ${index}: ${row.logentry}`);
+          issues?.push({
+            level: 'warning',
+            category: 'log_format',
+            message: `Invalid unit log entry format: "${row.logentry}". Expected format: KEY:VALUE or KEY=VALUE (e.g., "unitState:PRESENTED" or "FOCUS=IN"). Keys and values may be quoted.`,
+            rowIndex: index,
+            fileName: filename
+          });
           return;
         }
 
         const log = {
           ts: row.timestamp.toString(),
-          key: logEntryParts[0]?.trim() || 'UNKNOWN',
-          parameter: logEntryParts[1]?.trim()?.replace(/"/g, '') || ''
+          key: parsedLog.key || 'UNKNOWN',
+          parameter: parsedLog.value || ''
         };
 
         const existingUnit = unitMap.get(row.unitname);
@@ -439,6 +506,7 @@ export class PersonService {
       totalBooklets: number;
       totalLogsSaved: number;
       totalLogsSkipped: number;
+      issues?: TestResultsUploadIssueDto[];
     }> {
     return this.personPersistenceService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs);
   }

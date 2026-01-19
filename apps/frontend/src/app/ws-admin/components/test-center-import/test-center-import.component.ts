@@ -171,6 +171,7 @@ export class TestCenterImportComponent {
   private firstTestFilesImportData: Result | null = null;
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
+  importingTestGroups: string[] = [];
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -431,6 +432,9 @@ export class TestCenterImportComponent {
       group => group.groupName
     );
 
+    // Store the test group names for display in loading message
+    this.importingTestGroups = selectedGroupNames;
+
     const needsConfirmation =
       formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
 
@@ -454,12 +458,27 @@ export class TestCenterImportComponent {
     }
   }
 
+  loadingMessage = 'Testresultate werden hochgeladen...';
+
   private performImport(
     formValues: ImportFormValues,
     selectedGroupNames: string[],
     overwriteExistingLogs: boolean,
     overwriteFileIds?: string[]
   ): void {
+    const importedResponses = !!formValues.importOptions.responses;
+    const importedLogs = !!formValues.importOptions.logs;
+
+    if (importedLogs && importedResponses) {
+      this.loadingMessage = `Importiere Antworten und Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else if (importedLogs) {
+      this.loadingMessage = `Importiere Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else if (importedResponses) {
+      this.loadingMessage = `Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else {
+      this.loadingMessage = `Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    }
+
     this.importService
       .importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
@@ -483,8 +502,7 @@ export class TestCenterImportComponent {
           if (this.data.importType === 'testResults') {
             // Do not open a nested dialog here; return a payload to the caller.
             // The caller will compute correct before/after/delta stats from workspace overview.
-            const importedResponses = !!formValues.importOptions.responses;
-            const importedLogs = !!formValues.importOptions.logs;
+            // Flags are already calculated above
             const resultType: 'logs' | 'responses' = importedResponses ?
               'responses' :
               'logs';
@@ -493,7 +511,8 @@ export class TestCenterImportComponent {
               didImport: true,
               resultType,
               importedResponses,
-              importedLogs
+              importedLogs,
+              uploadResult: data
             });
             return;
           }

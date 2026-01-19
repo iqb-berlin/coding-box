@@ -1,4 +1,5 @@
 import { TestFilesUploadResultDto } from './test-files-upload-result.dto';
+import { TestResultsUploadIssueDto } from './test-results-upload-result.dto';
 
 export interface ImportOptionsDto {
   responses: string;
@@ -27,4 +28,10 @@ export interface ImportResultDto {
   filesBooklets?: number;
   filesTestTakers?: number;
   testFilesUploadResult?: TestFilesUploadResultDto;
+  issues?: TestResultsUploadIssueDto[];
+  // Log coverage metrics
+  bookletsWithLogs?: number;
+  totalBooklets?: number;
+  unitsWithLogs?: number;
+  totalUnits?: number;
 }

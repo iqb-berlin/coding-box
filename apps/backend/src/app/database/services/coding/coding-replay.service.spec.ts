@@ -5,7 +5,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingListService } from './coding-list.service';
 import * as replayUrlUtil from '../../../utils/replay-url.util';
 
-jest.mock('../../../../utils/replay-url.util');
+jest.mock('../../../utils/replay-url.util');
 
 describe('CodingReplayService', () => {
   let service: CodingReplayService;

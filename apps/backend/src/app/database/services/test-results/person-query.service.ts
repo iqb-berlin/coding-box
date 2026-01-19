@@ -213,4 +213,84 @@ export class PersonQueryService {
       };
     }
   }
+
+  async getLogCoverageStats(workspaceId: number): Promise<{
+    bookletsWithLogs: number;
+    totalBooklets: number;
+    unitsWithLogs: number;
+    totalUnits: number;
+    bookletDetails?: { name: string; hasLog: boolean }[];
+    unitDetails?: { bookletName: string; unitKey: string; hasLog: boolean }[];
+  }> {
+    try {
+      // Get detailed booklet stats
+      const start = Date.now();
+      const bookletRows = await this.bookletRepository
+        .createQueryBuilder('booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .leftJoin('booklet.bookletLogs', 'bookletlog')
+        .select('bookletinfo.name', 'name')
+        .addSelect('COUNT(bookletlog.id)', 'logCount')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .groupBy('bookletinfo.name')
+        .getRawMany();
+
+      const bookletDetails = bookletRows.map(row => ({
+        name: row.name,
+        hasLog: Number(row.logCount) > 0
+      }));
+
+      const totalBooklets = bookletDetails.length;
+      const bookletsWithLogs = bookletDetails.filter(b => b.hasLog).length;
+
+      // Get detailed unit stats
+      const unitRows = await this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('unit.unitLogs', 'unitlog')
+        .select('bookletinfo.name', 'bookletName')
+        .addSelect('COALESCE(unit.alias, unit.name)', 'unitKey')
+        .addSelect('COUNT(unitlog.id)', 'logCount')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .groupBy('bookletinfo.name')
+        .addGroupBy('unit.alias')
+        .addGroupBy('unit.name')
+        .getRawMany();
+
+      const unitDetails = unitRows.map(row => ({
+        bookletName: row.bookletName,
+        unitKey: row.unitKey,
+        hasLog: Number(row.logCount) > 0
+      }));
+
+      const totalUnits = unitDetails.length;
+      const unitsWithLogs = unitDetails.filter(u => u.hasLog).length;
+
+      this.logger.log(`Calculated log coverage stats in ${Date.now() - start}ms`);
+
+      return {
+        bookletsWithLogs,
+        totalBooklets,
+        unitsWithLogs,
+        totalUnits,
+        bookletDetails,
+        unitDetails
+      };
+    } catch (error) {
+      this.logger.error(`Error fetching log coverage statistics: ${error.message}`);
+      return {
+        bookletsWithLogs: 0,
+        totalBooklets: 0,
+        unitsWithLogs: 0,
+        totalUnits: 0,
+        bookletDetails: [],
+        unitDetails: []
+      };
+    }
+  }
 }

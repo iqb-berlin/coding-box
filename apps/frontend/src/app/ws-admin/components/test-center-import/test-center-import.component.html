@@ -290,7 +290,7 @@
     @if (isUploadingTestResults) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p class="loading-text">Testresultate werden hochgeladen...</p>
+      <p class="loading-text">{{ loadingMessage }}</p>
     </div>
     } @if (!isUploadingTestResults) {
     <div class="table-container">

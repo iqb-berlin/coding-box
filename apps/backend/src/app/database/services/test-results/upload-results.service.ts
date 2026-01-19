@@ -142,6 +142,12 @@ export class UploadResultsService {
     scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person',
     scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined
   ): Promise<TestResultsUploadResultDto> {
+    const logMetricsAgg = {
+      allBooklets: new Set<string>(),
+      bookletsWithLogs: new Set<string>(),
+      allUnits: new Set<string>(),
+      unitsWithLogs: new Set<string>()
+    };
     if (!Array.isArray(originalFiles)) {
       this.logger.error('The uploaded files parameter is not an array.');
       const before = await this.personService.getWorkspaceUploadStats(workspace_id);
@@ -207,7 +213,8 @@ export class UploadResultsService {
         effectivePersonMatchMode,
         overwriteMode,
         scope,
-        scopeFilters
+        scopeFilters,
+        logMetricsAgg
       );
       statusCounts = this.mergeStatusCounts(statusCounts, res);
     }
@@ -230,13 +237,33 @@ export class UploadResultsService {
       uniqueResponses: after.uniqueResponses - before.uniqueResponses
     };
 
+    const logMetrics = resultType === 'logs' ? {
+      bookletsWithLogs: logMetricsAgg.bookletsWithLogs.size,
+      totalBooklets: logMetricsAgg.allBooklets.size,
+      unitsWithLogs: logMetricsAgg.unitsWithLogs.size,
+      totalUnits: logMetricsAgg.allUnits.size,
+      bookletDetails: Array.from(logMetricsAgg.allBooklets).map(name => ({
+        name,
+        hasLog: logMetricsAgg.bookletsWithLogs.has(name)
+      })),
+      unitDetails: Array.from(logMetricsAgg.allUnits).map(key => {
+        const [bookletName, unitKey] = key.split('@@@');
+        return {
+          bookletName,
+          unitKey,
+          hasLog: logMetricsAgg.unitsWithLogs.has(key)
+        };
+      })
+    } : undefined;
+
     return {
       expected,
       before,
       after,
       delta,
       responseStatusCounts: Object.keys(statusCounts).length ? statusCounts : undefined,
-      issues: issues.length ? issues : undefined
+      issues: issues.length ? issues : undefined,
+      logMetrics
     };
   }
 
@@ -256,7 +283,13 @@ export class UploadResultsService {
     personMatchMode: 'strict' | 'loose' = 'strict',
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person',
-    scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined
+    scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined,
+    logMetricsAgg?: {
+      allBooklets: Set<string>;
+      bookletsWithLogs: Set<string>;
+      allUnits: Set<string>;
+      unitsWithLogs: Set<string>;
+    }
   ): Promise<Record<string, number> | undefined> {
     const statusCounts: Record<string, number> = {};
 
@@ -275,10 +308,22 @@ export class UploadResultsService {
             expectedAgg?.groups.add(groupname);
             if (row.bookletname) {
               expectedAgg?.booklets.add(row.bookletname);
+              logMetricsAgg?.allBooklets.add(row.bookletname);
             }
             const unitKey = row.originalUnitId || row.unitname || '';
             if (unitKey) {
               expectedAgg?.units.add(unitKey);
+            }
+
+            if (row.bookletname && row.unitname === '') {
+              // Booklet Log
+              logMetricsAgg?.bookletsWithLogs.add(row.bookletname);
+            } else if (row.bookletname && row.unitname) {
+              // Unit Log
+              // Use a composite key to uniquely identify the unit instance
+              const uKey = `${row.bookletname}@@@${unitKey}`;
+              logMetricsAgg?.allUnits.add(uKey);
+              logMetricsAgg?.unitsWithLogs.add(uKey); // Every unit entry here is a log
             }
 
             if (!groupname || !loginname || !code) {
@@ -298,8 +343,16 @@ export class UploadResultsService {
             },
             { bookletLogs: [], unitLogs: [] }
           );
-          const personList = await this.personService.createPersonList(rowData, workspace_id);
-          await this.personService.processPersonLogs(personList, unitLogs, bookletLogs, overwriteExisting);
+          const personList = (await this.personService.createPersonList(rowData, workspace_id)).map(p => {
+            const pWithBooklets = this.personService.assignBookletLogsToPerson(p, rowData, issues, file.originalname);
+            pWithBooklets.booklets = pWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, rowData, issues, file.originalname)
+            );
+            return pWithBooklets;
+          });
+          const result = await this.personService.processPersonLogs(personList, unitLogs, bookletLogs, overwriteExisting);
+          if (result.issues) {
+            issues?.push(...result.issues);
+          }
         });
       } else if (resultType === 'responses') {
         await this.handleCsvStream<Response>(bufferStream, resultType, async rowData => {

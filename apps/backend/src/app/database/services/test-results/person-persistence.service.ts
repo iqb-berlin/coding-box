@@ -1,7 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+
 import { Brackets, In, Repository } from 'typeorm';
 import { ResponseStatusType } from '@iqbspecs/response/response.interface';
+import {
+  Log,
+  Person,
+  TcMergeBooklet,
+  TcMergeSubForms,
+  TcMergeUnit
+} from '../shared';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -13,12 +21,7 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import {
-  Person,
-  TcMergeBooklet,
-  TcMergeSubForms,
-  TcMergeUnit
-} from '../shared';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
 /**
  * PersonPersistenceService
@@ -128,7 +131,8 @@ export class PersonPersistenceService {
     personList: Person[],
     workspace_id: number,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
-    scope: 'person' | 'workspace' = 'person'
+    scope: 'person' | 'workspace' = 'person',
+    issues: TestResultsUploadIssueDto[] = []
   ): Promise<void> {
     try {
       if (!Array.isArray(personList) || personList.length === 0) {
@@ -203,7 +207,7 @@ export class PersonPersistenceService {
           }
 
           try {
-            await this.processBookletWithTransaction(booklet, person, overwriteMode);
+            await this.processBookletWithTransaction(booklet, person, overwriteMode, issues);
             totalBookletsProcessed += 1;
 
             if (Array.isArray(booklet.units)) {
@@ -247,7 +251,8 @@ export class PersonPersistenceService {
   async processBookletWithTransaction(
     booklet: TcMergeBooklet,
     person: Persons,
-    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
+    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
+    issues: TestResultsUploadIssueDto[] = []
   ): Promise<void> {
     let bookletInfo = await this.bookletInfoRepository.findOne({ where: { name: booklet.id } });
     if (!bookletInfo) {
@@ -319,9 +324,9 @@ export class PersonPersistenceService {
                 ]);
               }
             } catch (unitError) {
-              this.logger.error(
-                `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`
-              );
+              const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
+              this.logger.error(msg);
+              issues.push({ level: 'error', message: msg, category: 'other' });
             }
           })
         );
@@ -525,19 +530,21 @@ export class PersonPersistenceService {
    */
   async processPersonLogs(
     persons: Person[],
-    unitLogs: any[],
-    bookletLogs: any[],
+    unitLogs: Log[],
+    bookletLogs: Log[],
     overwriteExistingLogs: boolean = true
   ): Promise<{
       success: boolean;
       totalBooklets: number;
       totalLogsSaved: number;
       totalLogsSkipped: number;
+      issues?: TestResultsUploadIssueDto[];
     }> {
     let totalBooklets = 0;
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
     let success = true;
+    const issues: TestResultsUploadIssueDto[] = [];
 
     try {
       const keys = persons.map(person => ({
@@ -549,51 +556,46 @@ export class PersonPersistenceService {
 
       const existingPersons = await this.personsRepository.find({
         where: keys,
-        select: ['group', 'code', 'login', 'booklets']
+        select: ['group', 'code', 'login', 'workspace_id', 'booklets']
       });
 
-      for (const enrichedPerson of existingPersons) {
-        const originalPerson = persons.find(
-          p => p.group === enrichedPerson.group &&
-            p.code === enrichedPerson.code &&
-            p.login === enrichedPerson.login
+      for (const originalPerson of persons) {
+        const enrichedPerson = existingPersons.find(
+          p => p.group === originalPerson.group &&
+            p.code === originalPerson.code &&
+            p.login === originalPerson.login &&
+            p.workspace_id === originalPerson.workspace_id
         );
 
-        if (!originalPerson) {
+        if (!enrichedPerson) {
           this.logger.warn(
-            `Original person matching enriched person not found: ${JSON.stringify(
-              enrichedPerson
-            )}`
+            `Enriched person not found in database: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
           );
           continue;
         }
 
-        if (!enrichedPerson.booklets || enrichedPerson.booklets.length === 0) {
-          this.logger.warn(
-            `No booklets found for person ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
+        if (!originalPerson.booklets || originalPerson.booklets.length === 0) {
+          this.logger.debug(
+            `No booklets in import data for person ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
           );
           continue;
         }
 
-        for (const booklet of enrichedPerson.booklets) {
+        for (const booklet of originalPerson.booklets) {
           if (!booklet || !booklet.id) {
-            this.logger.warn(
-              `Skipping invalid booklet for person: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
-            );
             continue;
           }
+
           const existingPerson = await this.personsRepository.findOne({
             where: {
               group: originalPerson.group,
               login: originalPerson.login,
-              code: originalPerson.code
+              code: originalPerson.code,
+              workspace_id: originalPerson.workspace_id
             }
           });
 
           if (!existingPerson) {
-            this.logger.error(
-              `Person not found in database: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
-            );
             continue;
           }
 
@@ -615,7 +617,7 @@ export class PersonPersistenceService {
 
           if (!existingBooklet) {
             this.logger.warn(
-              `Booklet not found in the repository: ${booklet.id}`
+              `Booklet not found in the repository: ${booklet.id}. Logs for this booklet will be skipped.`
             );
             continue;
           }
@@ -636,7 +638,7 @@ export class PersonPersistenceService {
             }
 
             await this.storeBookletSessions(booklet, existingBooklet);
-            await this.processUnits(booklet, existingBooklet, enrichedPerson, overwriteExistingLogs);
+            await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
           } catch (error) {
             success = false;
             this.logger.error(
@@ -655,7 +657,8 @@ export class PersonPersistenceService {
         success,
         totalBooklets,
         totalLogsSaved,
-        totalLogsSkipped
+        totalLogsSkipped,
+        issues: issues.length > 0 ? issues : undefined
       };
     } catch (error) {
       this.logger.error(
@@ -764,12 +767,14 @@ export class PersonPersistenceService {
    * @param existingBooklet - The persisted booklet entity
    * @param person - The person data
    * @param overwriteExistingLogs - Whether to overwrite existing logs
+   * @param issues - Array to collect issues
    */
   async processUnits(
     booklet: TcMergeBooklet,
     existingBooklet: Booklet,
     person: Person,
-    overwriteExistingLogs: boolean = true
+    overwriteExistingLogs: boolean = true,
+    issues?: TestResultsUploadIssueDto[]
   ): Promise<void> {
     let totalLogsSaved = 0;
     let totalLogsSkipped = 0;
@@ -779,6 +784,11 @@ export class PersonPersistenceService {
         this.logger.warn(
           `Skipping invalid unit in booklet ${booklet.id} for person ${person.group}-${person.login}-${person.code}`
         );
+        issues?.push({
+          level: 'warning',
+          category: 'invalid_unit',
+          message: `Skipping invalid unit in booklet "${booklet.id}" for person ${person.group}-${person.login}-${person.code}. Unit has no ID.`
+        });
         continue;
       }
 
@@ -794,6 +804,11 @@ export class PersonPersistenceService {
         this.logger.warn(
           `Unit not found for alias: ${unit.alias}, name: ${unit.id} ${booklet.id} ${existingBooklet.id} ID${unit.id} ALIAS${unit.alias}`
         );
+        issues?.push({
+          level: 'warning',
+          category: 'unit_not_found',
+          message: `Unit not found in database: "${unit.id}" (alias: "${unit.alias}") in booklet "${booklet.id}". The unit may not have been imported with responses.`
+        });
         continue;
       }
 

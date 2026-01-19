@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
-import { JwtService } from '@nestjs/jwt';
 import { HttpService } from '@nestjs/axios';
 import { TestcenterService } from './testcenter.service';
-import { UsersService } from './users.service';
+import { PersonService } from './person.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -17,16 +17,12 @@ describe('TestCenterService', () => {
           useValue: createMock<HttpService>()
         },
         {
-          provide: TestcenterService,
-          useValue: createMock<TestcenterService>()
+          provide: PersonService,
+          useValue: createMock<PersonService>()
         },
         {
-          provide: UsersService,
-          useValue: createMock<UsersService>()
-        },
-        {
-          provide: JwtService,
-          useValue: createMock<JwtService>()
+          provide: WorkspaceFilesService,
+          useValue: createMock<WorkspaceFilesService>()
         }
       ]
     }).compile();

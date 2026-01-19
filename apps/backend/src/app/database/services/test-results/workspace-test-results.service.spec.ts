@@ -10,10 +10,10 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
-import { UnitTagService } from './unit-tag.service';
-import { JournalService } from './journal.service';
+import { UnitTagService } from '../workspace/unit-tag.service';
+import { JournalService } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
-import { CodingListService } from './coding-list.service';
+import { CodingListService } from '../coding/coding-list.service';
 
 describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;

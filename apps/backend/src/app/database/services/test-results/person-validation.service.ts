@@ -214,20 +214,22 @@ export class PersonValidationService {
    * @param row - The row object to validate
    * @throws BadRequestException if row structure is invalid
    */
-  validateRowStructure(row: any): void {
+  validateRowStructure(row: unknown): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const r = row as any;
     if (!row || typeof row !== 'object') {
       throw new BadRequestException(
         'Invalid row: row must be an object.'
       );
     }
 
-    if (typeof row.bookletname !== 'string') {
+    if (typeof r.bookletname !== 'string') {
       throw new BadRequestException(
         'Invalid row: bookletname must be a string.'
       );
     }
 
-    if (typeof row.unitname !== 'string') {
+    if (typeof r.unitname !== 'string') {
       throw new BadRequestException(
         'Invalid row: unitname must be a string.'
       );
