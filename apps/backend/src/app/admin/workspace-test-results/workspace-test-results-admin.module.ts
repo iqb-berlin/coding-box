@@ -25,12 +25,12 @@ import { DatabaseExportService } from '../database/database-export.service';
   controllers: [
     WorkspaceTestResultsController,
     WorkspaceTestResultsStatisticsController,
-    WorkspaceTestResultsManagementController,
     WorkspaceTestResultsLogsController,
     WorkspaceTestResultsResponseController,
     WorkspaceTestResultsAnalysisController,
     WorkspaceTestResultsImportController,
-    WorkspaceTestResultsExportController
+    WorkspaceTestResultsExportController,
+    WorkspaceTestResultsManagementController
   ],
   providers: [
     DatabaseExportService

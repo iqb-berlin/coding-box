@@ -8,7 +8,9 @@ import {
   Post,
   Query,
   Req,
-  UseGuards
+  UseGuards,
+  ParseIntPipe,
+  DefaultValuePipe
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -80,8 +82,8 @@ export class WorkspaceTestResultsResponseController {
   @ApiBadRequestResponse({ description: 'Failed to delete response' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async deleteResponse(
-    @Param('workspace_id') workspaceId: number,
-      @Param('responseId') responseId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Param('responseId', ParseIntPipe) responseId: number,
       @Req() req: RequestWithUser
   ): Promise<{
         success: boolean;
@@ -118,7 +120,7 @@ export class WorkspaceTestResultsResponseController {
     description: 'Duplicate responses resolved successfully.'
   })
   async resolveDuplicateResponses(
-    @Param('workspace_id') workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Body() body: ResolveDuplicateResponsesRequest,
       @Req() req: RequestWithUser
   ): Promise<{ resolvedCount: number; success: boolean }> {
@@ -143,8 +145,8 @@ export class WorkspaceTestResultsResponseController {
   })
   async findWorkspaceResponse(
     @WorkspaceId() id: number,
-                   @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 20
+                   @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                   @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{
         data: ResponseEntity[];
         total: number;
@@ -195,8 +197,8 @@ export class WorkspaceTestResultsResponseController {
   async getResponsesByStatus(
     @WorkspaceId() workspace_id: number,
       @Param('status') status: string,
-                   @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 20
+                   @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                   @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{
         data: ResponseEntity[];
         total: number;
@@ -234,7 +236,7 @@ export class WorkspaceTestResultsResponseController {
   @ApiBadRequestResponse({ description: 'Failed to search for responses' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async searchResponses(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Query('value') value?: string,
       @Query('variableId') variableId?: string,
       @Query('unitName') unitName?: string,
@@ -244,8 +246,8 @@ export class WorkspaceTestResultsResponseController {
       @Query('group') group?: string,
       @Query('code') code?: string,
       @Query('version') version?: 'v1' | 'v2' | 'v3',
-      @Query('page') page?: number,
-      @Query('limit') limit?: number
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');

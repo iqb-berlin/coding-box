@@ -6,7 +6,10 @@ import {
   Param,
   Post,
   Query,
-  UseGuards
+  UseGuards,
+  ParseIntPipe,
+  ParseFloatPipe,
+  DefaultValuePipe
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -48,36 +51,36 @@ export class WorkspaceTestResultsAnalysisController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponses(
-    @Param('workspace_id') workspace_id: number,
-                           @Query('page') page: number = 1,
-                           @Query('limit') limit: number = 50,
-                           @Query('code') code?: string,
-                           @Query('group') group?: string,
-                           @Query('login') login?: string,
-                           @Query('booklet') booklet?: string,
-                           @Query('unit') unit?: string,
-                           @Query('response') response?: string,
-                           @Query('responseStatus') responseStatus?: string,
-                           @Query('responseValue') responseValue?: string,
-                           @Query('tags') tags?: string,
-                           @Query('geogebra') geogebra?: string,
-                           @Query('audioLow') audioLow?: string,
-                           @Query('hasValue') hasValue?: string,
-                           @Query('audioLowThreshold') audioLowThreshold?: string,
-                           @Query('shortProcessing') shortProcessing?: string,
-                           @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
-                           @Query('longLoading') longLoading?: string,
-                           @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string,
-                           @Query('processingDurations') processingDurations?: string,
-      @Query('processingDurationThresholdMs')
-                           processingDurationThresholdMs?: string,
-                           @Query('processingDurationMin') processingDurationMin?: string,
-                           @Query('processingDurationMax') processingDurationMax?: string,
-                           @Query('unitProgress') unitProgress?: string,
-                           @Query('sessionBrowsers') sessionBrowsers?: string,
-                           @Query('sessionOs') sessionOs?: string,
-                           @Query('sessionScreens') sessionScreens?: string,
-                           @Query('sessionIds') sessionIds?: string
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
+                                         @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+                                         @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number = 50,
+                                         @Query('code') code?: string,
+                                         @Query('group') group?: string,
+                                         @Query('login') login?: string,
+                                         @Query('booklet') booklet?: string,
+                                         @Query('unit') unit?: string,
+                                         @Query('response') response?: string,
+                                         @Query('responseStatus') responseStatus?: string,
+                                         @Query('responseValue') responseValue?: string,
+                                         @Query('tags') tags?: string,
+                                         @Query('geogebra') geogebra?: string,
+                                         @Query('audioLow') audioLow?: string,
+                                         @Query('hasValue') hasValue?: string,
+                                         @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
+                                         @Query('shortProcessing') shortProcessing?: string,
+                                         @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
+                                         @Query('longLoading') longLoading?: string,
+                                         @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
+                                         @Query('processingDurations') processingDurations?: string,
+      @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
+                                         processingDurationThresholdMs?: number,
+                                         @Query('processingDurationMin') processingDurationMin?: string,
+                                         @Query('processingDurationMax') processingDurationMax?: string,
+                                         @Query('unitProgress') unitProgress?: string,
+                                         @Query('sessionBrowsers') sessionBrowsers?: string,
+                                         @Query('sessionOs') sessionOs?: string,
+                                         @Query('sessionScreens') sessionScreens?: string,
+                                         @Query('sessionIds') sessionIds?: string
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const [data, total] =
       await this.workspaceTestResultsService.findFlatResponses(workspace_id, {
@@ -161,7 +164,7 @@ export class WorkspaceTestResultsAnalysisController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
   async findFlatResponseFilterOptions(
-    @Param('workspace_id') workspace_id: number,
+    @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Query('code') code?: string,
       @Query('group') group?: string,
       @Query('login') login?: string,
@@ -173,26 +176,22 @@ export class WorkspaceTestResultsAnalysisController {
       @Query('tags') tags?: string,
       @Query('geogebra') geogebra?: string,
       @Query('audioLow') audioLow?: string,
-      @Query('audioLowThreshold') audioLowThreshold?: string,
+      @Query('audioLowThreshold', new DefaultValuePipe(0.9), ParseFloatPipe) audioLowThreshold?: number,
       @Query('shortProcessing') shortProcessing?: string,
-      @Query('shortProcessingThresholdMs') shortProcessingThresholdMs?: string,
+      @Query('shortProcessingThresholdMs', new DefaultValuePipe(60000), ParseIntPipe) shortProcessingThresholdMs?: number,
       @Query('longLoading') longLoading?: string,
-      @Query('longLoadingThresholdMs') longLoadingThresholdMs?: string,
+      @Query('longLoadingThresholdMs', new DefaultValuePipe(5000), ParseIntPipe) longLoadingThresholdMs?: number,
       @Query('processingDurations') processingDurations?: string,
-      @Query('processingDurationThresholdMs')
-                           processingDurationThresholdMs?: string,
-                           @Query('unitProgress') unitProgress?: string,
-                           @Query('sessionBrowsers') sessionBrowsers?: string,
-                           @Query('sessionOs') sessionOs?: string,
-                           @Query('sessionScreens') sessionScreens?: string,
-                           @Query('sessionIds') sessionIds?: string
+      @Query('processingDurationThresholdMs', new DefaultValuePipe(60000), ParseIntPipe)
+                                         processingDurationThresholdMs?: number,
+                                         @Query('unitProgress') unitProgress?: string,
+                                         @Query('sessionBrowsers') sessionBrowsers?: string,
+                                         @Query('sessionOs') sessionOs?: string,
+                                         @Query('sessionScreens') sessionScreens?: string,
+                                         @Query('sessionIds') sessionIds?: string
   ): Promise<FlatResponseFilterOptions> {
-    const isEmpty = (v?: string) => !String(v || '').trim();
-    const thresholdRaw = String(processingDurationThresholdMs || '').trim();
-    const thresholdParsed = Number(thresholdRaw || 60000);
-    const threshold = Number.isFinite(thresholdParsed) ?
-      thresholdParsed :
-      60000;
+    const isEmpty = (v?: string | number) => !String(v || '').trim();
+    const threshold = Number(processingDurationThresholdMs || 60000);
 
     const audioLowEnabled = !isEmpty(audioLow);
     const shortProcessingEnabled = !isEmpty(shortProcessing);
