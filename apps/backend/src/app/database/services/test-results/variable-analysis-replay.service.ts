@@ -4,8 +4,8 @@ import { Like, Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
-import { WorkspaceFilesService } from '../workspace';
-import { CodingListService } from '../coding';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { CodingListService } from '../coding/coding-list.service';
 
 @Injectable()
 export class VariableAnalysisReplayService {

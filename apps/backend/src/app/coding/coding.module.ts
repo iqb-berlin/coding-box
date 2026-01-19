@@ -19,13 +19,19 @@ import { Booklet } from '../database/entities/booklet.entity';
 import {
   CodingJobService,
   CodingListService,
+  CodingFileCacheService,
+  CodingResponseFilterService,
+  CodingItemBuilderService,
+  CodingListQueryService,
+  CodingListStreamService,
   CodingStatisticsService,
   CodingResultsService,
   CodingExportService,
   CodingProcessService,
   CoderTrainingService,
   MissingsProfilesService,
-  ExternalCodingImportService
+  ExternalCodingImportService,
+  CodingValidationService
 } from '../database/services/coding';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
@@ -63,24 +69,36 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     JobDefinitionService,
     CodingStatisticsService,
     MissingsProfilesService,
+    CodingFileCacheService,
+    CodingResponseFilterService,
+    CodingItemBuilderService,
+    CodingListQueryService,
+    CodingListStreamService,
     CodingListService,
     CoderTrainingService,
     ExternalCodingImportService,
     CodingResultsService,
     CodingExportService,
-    CodingProcessService
+    CodingProcessService,
+    CodingValidationService
   ],
   exports: [
     CodingJobService,
     JobDefinitionService,
     CodingStatisticsService,
     MissingsProfilesService,
+    CodingFileCacheService,
+    CodingResponseFilterService,
+    CodingItemBuilderService,
+    CodingListQueryService,
+    CodingListStreamService,
     CodingListService,
     CoderTrainingService,
     ExternalCodingImportService,
     CodingResultsService,
     CodingExportService,
-    CodingProcessService
+    CodingProcessService,
+    CodingValidationService
   ]
 })
 export class CodingModule { }

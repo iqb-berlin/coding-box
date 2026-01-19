@@ -22,10 +22,10 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { Session } from '../../entities/session.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
-import { UnitTagService } from '../workspace';
+import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
-import { CodingListService } from '../coding';
+import { CodingListService } from '../coding/coding-list.service';
 import { ResponseManagementService } from './response-management.service';
 
 interface PersonWhere {

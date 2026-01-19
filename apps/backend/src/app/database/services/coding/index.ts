@@ -1,6 +1,11 @@
 export { CodingJobService } from './coding-job.service';
 export { CodingJobOperationsService } from './coding-job-operations.service';
 export { CodingListService } from './coding-list.service';
+export { CodingFileCacheService } from './coding-file-cache.service';
+export { CodingResponseFilterService } from './coding-response-filter.service';
+export { CodingItemBuilderService } from './coding-item-builder.service';
+export { CodingListQueryService } from './coding-list-query.service';
+export { CodingListStreamService } from './coding-list-stream.service';
 export { CodingProcessService } from './coding-process.service';
 export { CodingProgressService } from './coding-progress.service';
 export { CodingReplayService } from './coding-replay.service';

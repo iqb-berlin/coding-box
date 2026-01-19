@@ -30,11 +30,12 @@ import {
   TestTakersValidationDto
 } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../../entities/persons.entity';
-import { CodingStatisticsService } from '../coding';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
-import { WorkspaceResponseValidationService, WorkspaceTestFilesValidationService } from '../validation';
+import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {

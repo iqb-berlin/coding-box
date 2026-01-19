@@ -9,7 +9,7 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
-import { WorkspaceFilesService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 @Injectable()
 export class CodingValidationService {

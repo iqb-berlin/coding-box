@@ -7,7 +7,7 @@ import { CodingStatistics } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { BullJobManagementService } from '../jobs';
+import { BullJobManagementService } from '../jobs/bull-job-management.service';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
