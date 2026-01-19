@@ -3,53 +3,139 @@
 </h2>
 
 <div mat-dialog-content>
-  <div class="summary-grid">
-    <div class="section">
-      <div class="section-title">Erwartet (aus Upload)</div>
-      <div class="kv">
-        <div class="k">Testpersonen</div><div class="v">{{ result.expected.testPersons }}</div>
-        <div class="k">Testgruppen</div><div class="v">{{ result.expected.testGroups }}</div>
-        <div class="k">Booklets (unique)</div><div class="v">{{ result.expected.uniqueBooklets }}</div>
-        <div class="k">Units (unique)</div><div class="v">{{ result.expected.uniqueUnits }}</div>
-        <div class="k">Responses (unique)</div><div class="v">{{ result.expected.uniqueResponses }}</div>
-      </div>
+  <div class="summary-container">
+    @if (result.importedResponses) {
+    <div class="section db-changes-section">
+      <div class="section-title">Datenbank Änderungen</div>
+      <table class="db-changes-table">
+        <thead>
+          <tr>
+            <th class="col-metric">Metrik</th>
+            <th class="col-number">Erwartet</th>
+            <th class="col-number">Vorher</th>
+            <th class="col-number">Nachher</th>
+            <th class="col-number">Delta</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="row-label">Test Personen</td>
+            <td class="num">{{ result.expected.testPersons }}</td>
+            <td class="num">{{ result.before.testPersons }}</td>
+            <td class="num">{{ result.after.testPersons }}</td>
+            <td class="num delta" [class.positive]="result.delta.testPersons > 0" [class.negative]="result.delta.testPersons < 0">
+              {{ result.delta.testPersons > 0 ? '+' : '' }}{{ result.delta.testPersons }}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Test Gruppen</td>
+            <td class="num">{{ result.expected.testGroups }}</td>
+            <td class="num">{{ result.before.testGroups }}</td>
+            <td class="num">{{ result.after.testGroups }}</td>
+            <td class="num delta" [class.positive]="result.delta.testGroups > 0" [class.negative]="result.delta.testGroups < 0">
+              {{ result.delta.testGroups > 0 ? '+' : '' }}{{ result.delta.testGroups }}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Booklets</td>
+            <td class="num">{{ result.expected.uniqueBooklets }}</td>
+            <td class="num">{{ result.before.uniqueBooklets }}</td>
+            <td class="num">{{ result.after.uniqueBooklets }}</td>
+            <td class="num delta" [class.positive]="result.delta.uniqueBooklets > 0" [class.negative]="result.delta.uniqueBooklets < 0">
+              {{ result.delta.uniqueBooklets > 0 ? '+' : '' }}{{ result.delta.uniqueBooklets }}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Units</td>
+            <td class="num">{{ result.expected.uniqueUnits }}</td>
+            <td class="num">{{ result.before.uniqueUnits }}</td>
+            <td class="num">{{ result.after.uniqueUnits }}</td>
+            <td class="num delta" [class.positive]="result.delta.uniqueUnits > 0" [class.negative]="result.delta.uniqueUnits < 0">
+              {{ result.delta.uniqueUnits > 0 ? '+' : '' }}{{ result.delta.uniqueUnits }}
+            </td>
+          </tr>
+          <tr>
+            <td class="row-label">Antworten</td>
+            <td class="num">{{ result.expected.uniqueResponses }}</td>
+            <td class="num">{{ result.before.uniqueResponses }}</td>
+            <td class="num">{{ result.after.uniqueResponses }}</td>
+            <td class="num delta" [class.positive]="result.delta.uniqueResponses > 0" [class.negative]="result.delta.uniqueResponses < 0">
+              {{ result.delta.uniqueResponses > 0 ? '+' : '' }}{{ result.delta.uniqueResponses }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
     </div>
+    }
 
-    <div class="section">
-      <div class="section-title">Workspace vorher</div>
+    @if (result.importedLogs && result.logMetrics) {
+    <div class="section log-coverage-section">
+      <div class="section-title">Log Abdeckung</div>
       <div class="kv">
-        <div class="k">Testpersonen</div><div class="v">{{ result.before.testPersons }}</div>
-        <div class="k">Testgruppen</div><div class="v">{{ result.before.testGroups }}</div>
-        <div class="k">Booklets (unique)</div><div class="v">{{ result.before.uniqueBooklets }}</div>
-        <div class="k">Units (unique)</div><div class="v">{{ result.before.uniqueUnits }}</div>
-        <div class="k">Responses</div><div class="v">{{ result.before.uniqueResponses }}</div>
+        <div class="k">Booklets mit Logs</div>
+        <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
+        <div class="k">Units mit Logs</div>
+        <div class="v">{{ result.logMetrics.unitsWithLogs }} / {{ result.logMetrics.totalUnits }}</div>
+        <div class="k">Abdeckung (Booklets)</div>
+        <div class="v">{{ (result.logMetrics.totalBooklets > 0 ? (result.logMetrics.bookletsWithLogs / result.logMetrics.totalBooklets * 100) : 0) | number:'1.0-1' }}%</div>
+        <div class="k">Abdeckung (Units)</div>
+        <div class="v">{{ (result.logMetrics.totalUnits > 0 ? (result.logMetrics.unitsWithLogs / result.logMetrics.totalUnits * 100) : 0) | number:'1.0-1' }}%</div>
       </div>
     </div>
-
-    <div class="section">
-      <div class="section-title">Workspace nachher</div>
-      <div class="kv">
-        <div class="k">Testpersonen</div><div class="v">{{ result.after.testPersons }}</div>
-        <div class="k">Testgruppen</div><div class="v">{{ result.after.testGroups }}</div>
-        <div class="k">Booklets (unique)</div><div class="v">{{ result.after.uniqueBooklets }}</div>
-        <div class="k">Units (unique)</div><div class="v">{{ result.after.uniqueUnits }}</div>
-        <div class="k">Responses</div><div class="v">{{ result.after.uniqueResponses }}</div>
-      </div>
-    </div>
-
-    <div class="section">
-      <div class="section-title">Delta</div>
-      <div class="kv">
-        <div class="k">Testpersonen</div><div class="v">{{ result.delta.testPersons }}</div>
-        <div class="k">Testgruppen</div><div class="v">{{ result.delta.testGroups }}</div>
-        <div class="k">Booklets (unique)</div><div class="v">{{ result.delta.uniqueBooklets }}</div>
-        <div class="k">Units (unique)</div><div class="v">{{ result.delta.uniqueUnits }}</div>
-        <div class="k">Responses</div><div class="v">{{ result.delta.uniqueResponses }}</div>
-      </div>
-    </div>
+    }
   </div>
 
   <mat-tab-group>
+    @if (result.importedLogs) {
+      <mat-tab label="Details ({{ detailView === 'booklets' ? filteredBookletDetails.length : filteredUnitDetails.length }})">
+        <div class="tab-pad">
+          <div class="filter-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
+            <div class="toggle-group" style="display: flex; gap: 0;">
+              <button mat-stroked-button [class.active]="detailView === 'booklets'" (click)="detailView = 'booklets'" style="border-top-right-radius: 0; border-bottom-right-radius: 0;">Booklets</button>
+              <button mat-stroked-button [class.active]="detailView === 'units'" (click)="detailView = 'units'" style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none;">Units</button>
+            </div>
+            <mat-form-field appearance="outline" style="flex: 1; font-size: 14px;">
+              <mat-label>Suche</mat-label>
+              <input matInput [(ngModel)]="detailFilterText" placeholder="Name..." />
+              <mat-icon matSuffix>search</mat-icon>
+            </mat-form-field>
+          </div>
+
+          @if (detailView === 'booklets') {
+            @if (filteredBookletDetails.length === 0) {
+              <div class="empty">Keine Booklets gefunden.</div>
+            } @else {
+              <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport" style="min-height: 300px; height: 100%;">
+                <div *cdkVirtualFor="let b of filteredBookletDetails; trackBy: trackByBookletDetail" class="detail-row">
+                  <div class="detail-icon" [class.success]="b.hasLog" [class.missing]="!b.hasLog">
+                    <mat-icon>{{ b.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
+                  </div>
+                  <div class="detail-text">{{ b.name }}</div>
+                </div>
+              </cdk-virtual-scroll-viewport>
+            }
+          } @else {
+            @if (filteredUnitDetails.length === 0) {
+              <div class="empty">Keine Units gefunden.</div>
+            } @else {
+              <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport" style="min-height: 300px; height: 100%;">
+                <div *cdkVirtualFor="let u of filteredUnitDetails; trackBy: trackByUnitDetail" class="detail-row">
+                  <div class="detail-icon" [class.success]="u.hasLog" [class.missing]="!u.hasLog">
+                    <mat-icon>{{ u.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
+                  </div>
+                  <div class="detail-text">
+                    <span class="unit-booklet">{{ u.bookletName }}</span>
+                    <span class="unit-separator">/</span>
+                    <span class="unit-key">{{ u.unitKey }}</span>
+                  </div>
+                </div>
+              </cdk-virtual-scroll-viewport>
+            }
+          }
+        </div>
+      </mat-tab>
+    }
+    @if (result.importedResponses) {
     <mat-tab label="Status ({{ statusCounts.length }})">
       <div class="tab-pad">
         @if (statusCounts.length === 0) {
@@ -66,13 +152,25 @@
         }
       </div>
     </mat-tab>
+    }
 
     <mat-tab label="Probleme ({{ issues.length }})">
       <div class="tab-pad">
-        <mat-form-field appearance="outline" style="width: 100%;">
+        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 8px;">
           <mat-label>Suche</mat-label>
           <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
           <mat-icon matSuffix>search</mat-icon>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 12px;">
+          <mat-label>Kategorie</mat-label>
+          <mat-select [(ngModel)]="selectedCategory">
+            <mat-option [value]="null">Alle Kategorien</mat-option>
+            <mat-option value="log_format">Log Format</mat-option>
+            <mat-option value="unit_not_found">Unit Not Found</mat-option>
+            <mat-option value="invalid_unit">Invalid Unit</mat-option>
+            <mat-option value="other">Other</mat-option>
+          </mat-select>
         </mat-form-field>
 
         @if (filteredIssues.length === 0) {
@@ -83,6 +181,7 @@
               <div class="issue-main">
                 <div class="issue-title">
                   <span class="pill" [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">{{ i.level }}</span>
+                  @if (i.category) { <span class="category-badge">{{ getCategoryLabel(i.category) }}</span> }
                   <span class="msg">{{ i.message }}</span>
                 </div>
                 <div class="issue-meta">

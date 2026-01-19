@@ -7,7 +7,7 @@ import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Persons from '../../entities/persons.entity';
 
-jest.mock('../utils/response-status-converter');
+jest.mock('../../utils/response-status-converter');
 
 describe('CodingResponseQueryService', () => {
   let service: CodingResponseQueryService;

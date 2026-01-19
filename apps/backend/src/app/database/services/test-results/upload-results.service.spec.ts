@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { createMock } from '@golevelup/ts-jest';
 import { Repository } from 'typeorm';
 import { HttpService } from '@nestjs/axios';
-import { UsersService } from './users.service';
+import { UsersService } from '../users/users.service';
 import User from '../../entities/user.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 

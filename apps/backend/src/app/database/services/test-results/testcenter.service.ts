@@ -8,6 +8,7 @@ import { Person, Response, Log } from '../shared';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
 
 import {
@@ -120,13 +121,11 @@ export class TestcenterService {
         Number(workspace_id)
       );
 
-      const testGroups = response.data.map(group => ({
+      return response.data.map(group => ({
         ...group,
         existsInDatabase: existingGroups.includes(group.groupName),
         hasBookletLogs: groupsWithLogs.get(group.groupName) || false
       }));
-
-      return testGroups;
     } catch (error) {
       logger.error(`Error fetching test groups: ${error.message}`);
       return [];
@@ -149,7 +148,7 @@ export class TestcenterService {
     url: string,
     authToken: string,
     testGroups: string
-  ): Promise<Promise<void>[]> {
+  ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
     logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
     const chunks = this.createChunks(testGroups.split(','), 2);
@@ -184,6 +183,7 @@ export class TestcenterService {
 
     return [
       Promise.resolve().then(async () => {
+        const issues: TestResultsUploadIssueDto[] = [];
         try {
           this.persons = await this.personService.createPersonList(
             allRawResponses,
@@ -195,18 +195,24 @@ export class TestcenterService {
               const personWithBooklets =
                 await this.personService.assignBookletsToPerson(
                   person,
-                  allRawResponses
+                  allRawResponses,
+                  issues
                 );
               return this.personService.assignUnitsToBookletAndPerson(
                 personWithBooklets,
-                allRawResponses
+                allRawResponses,
+                issues
               );
             })
           );
           await this.personService.processPersonBooklets(
             personList,
-            Number(workspace_id)
+            Number(workspace_id),
+            'skip',
+            'person',
+            issues
           );
+          return { issues };
         } catch (error) {
           logger.error('Error processing consolidated response data:');
           throw error;
@@ -223,11 +229,13 @@ export class TestcenterService {
     authToken: string,
     testGroups: string,
     overwriteExistingLogs: boolean = true
-  ): Promise<Promise<void>[]> {
+  ): Promise<{ issues: TestResultsUploadIssueDto[] }> {
     logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
     const logsChunks = this.createChunks(testGroups.split(','), 2);
     const allLogData: Log[] = [];
+    const importIssues: TestResultsUploadIssueDto[] = [];
+
     for (const chunk of logsChunks) {
       const logsUrl = url ?
         `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(
@@ -252,32 +260,42 @@ export class TestcenterService {
       }
     }
 
-    return [
-      Promise.resolve().then(async () => {
-        try {
-          const { bookletLogs, unitLogs } = this.separateLogsByType(allLogData);
+    try {
+      const { bookletLogs, unitLogs } = this.separateLogsByType(allLogData);
+      const filename = `Testcenter:${tc_workspace}:${testGroups}`;
 
-          const persons = await this.personService.createPersonList(
-            allLogData,
-            Number(workspace_id)
+      const persons = await Promise.all(
+        (await this.personService.createPersonList(
+          allLogData,
+          Number(workspace_id)
+        )).map(async p => {
+          const personWithBooklets = this.personService.assignBookletLogsToPerson(p, allLogData, importIssues, filename);
+          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, allLogData, importIssues, filename)
           );
+          return personWithBooklets;
+        })
+      );
 
-          const result = await this.personService.processPersonLogs(
-            persons,
-            unitLogs,
-            bookletLogs,
-            overwriteExistingLogs
-          );
+      const result = await this.personService.processPersonLogs(
+        persons,
+        unitLogs,
+        bookletLogs,
+        overwriteExistingLogs
+      );
 
-          logger.log(`Logs import result: ${JSON.stringify(result)}`);
-        } catch (error) {
-          logger.error(
-            `Error processing consolidated log data: ${error.message}`
-          );
-          throw error;
-        }
-      })
-    ];
+      if (result.issues) {
+        importIssues.push(...result.issues);
+      }
+
+      logger.log(`Logs import result: ${JSON.stringify(result)}`);
+    } catch (error) {
+      logger.error(
+        `Error processing consolidated log data: ${error.message}`
+      );
+      throw error;
+    }
+
+    return { issues: importIssues };
   }
 
   private separateLogsByType(logData: Log[]): {
@@ -521,7 +539,7 @@ export class TestcenterService {
       importedGroups: testGroups.split(',').map(g => g.trim())
     };
 
-    const promises: Promise<void>[] = [];
+    const promises: Promise<{ issues?: TestResultsUploadIssueDto[] } | void>[] = [];
 
     try {
       if (responses === 'true') {
@@ -549,7 +567,7 @@ export class TestcenterService {
       }
 
       if (logs === 'true') {
-        const logsPromises = await this.importLogs(
+        const { issues: logsIssues } = await this.importLogs(
           workspace_id,
           tc_workspace,
           server,
@@ -558,8 +576,22 @@ export class TestcenterService {
           testGroups,
           overwriteExistingLogs
         );
-        promises.push(...logsPromises);
-        result.logs = logsPromises.length;
+        result.logs = 1; // Mark that log import was triggered
+        if (logsIssues) {
+          if (!result.issues) result.issues = [];
+          result.issues.push(...logsIssues);
+        }
+
+        // Calculate log coverage statistics
+        try {
+          const logStats = await this.personService.getLogCoverageStats(Number(workspace_id));
+          result.bookletsWithLogs = logStats.bookletsWithLogs;
+          result.totalBooklets = logStats.totalBooklets;
+          result.unitsWithLogs = logStats.unitsWithLogs;
+          result.totalUnits = logStats.totalUnits;
+        } catch (statsError) {
+          logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
+        }
       }
 
       const shouldImportFiles = this.shouldImportFiles(importOptions);
@@ -584,7 +616,15 @@ export class TestcenterService {
         result.testFilesUploadResult = filesResult.uploadResult;
       }
 
-      await Promise.all(promises);
+      if (promises.length > 0) {
+        const results = await Promise.all(promises);
+        results.forEach(res => {
+          if (res && typeof res === 'object' && 'issues' in res && Array.isArray(res.issues)) {
+            if (!result.issues) result.issues = [];
+            result.issues.push(...res.issues);
+          }
+        });
+      }
       result.success = true;
       return result;
     } catch (error) {
