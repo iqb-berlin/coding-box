@@ -1,10 +1,14 @@
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
-import { WorkspaceFilesService } from './workspace-files.service';
+import { WorkspaceFilesService } from '../workspace';
 import { CodingListService } from './coding-list.service';
+import { CodingFileCacheService } from './coding-file-cache.service';
+import { CodingListQueryService } from './coding-list-query.service';
+import { CodingListStreamService } from './coding-list-stream.service';
+import { CodingItemBuilderService } from './coding-item-builder.service';
 
-type CodingListServiceHeaderGetter = {
+type CodingItemBuilderServiceHeaderGetter = {
   getHeadersForVersion: (version: 'v1' | 'v2' | 'v3') => string[];
 };
 
@@ -16,14 +20,27 @@ describe('CodingListService', () => {
       getUnitVariableMap: jest.fn()
     } as unknown as WorkspaceFilesService;
 
-    const service = new CodingListService(
+    // Create the dependencies
+    const fileCacheService = new CodingFileCacheService(fileUploadRepository);
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const queryService = new CodingListQueryService(
       fileUploadRepository,
       responseRepository,
       workspaceFilesService
     );
+    const streamService = {} as unknown as CodingListStreamService;
 
+    const service = new CodingListService(
+      fileCacheService,
+      queryService,
+      streamService
+    );
+
+    expect(service).toBeDefined();
+
+    // Test the header generation through the item builder service
     const headersV1 = (
-      service as unknown as CodingListServiceHeaderGetter
+      itemBuilderService as unknown as CodingItemBuilderServiceHeaderGetter
     ).getHeadersForVersion('v1');
 
     expect(headersV1).toEqual(

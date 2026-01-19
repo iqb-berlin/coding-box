@@ -7,7 +7,7 @@ import { Person, Response, Log } from '../shared';
 
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { PersonService } from './person.service';
-import { WorkspaceFilesService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
 
 import {

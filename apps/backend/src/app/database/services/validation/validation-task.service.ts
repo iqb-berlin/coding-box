@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ValidationTask } from '../../entities/validation-task.entity';
-import { WorkspaceFilesService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 @Injectable()
 export class ValidationTaskService {

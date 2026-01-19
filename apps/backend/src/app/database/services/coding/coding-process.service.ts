@@ -23,9 +23,9 @@ import {
   CodingStatistics,
   CodingStatisticsWithJob
 } from '../shared';
-import { ResponseManagementService } from '../test-results';
+import { ResponseManagementService } from '../test-results/response-management.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { WorkspaceFilesService } from '../workspace';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 @Injectable()
 export class CodingProcessService {

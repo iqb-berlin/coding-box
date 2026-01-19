@@ -1,11 +1,20 @@
 import { Injectable } from '@nestjs/common';
-import {
-  CodingProcessService, CodingValidationService, CodingReviewService, CodingAnalysisService, CodingProgressService, CodingReplayService, CodingVersionService, CodingJobOperationsService, CodebookGenerationService, CodingResponseQueryService, CodingStatisticsService, CodingExportService
-} from '../coding';
-import { VariableAnalysisReplayService } from '../test-results';
-import { ExportValidationResultsService } from '../validation';
+import { CodingProcessService } from '../coding/coding-process.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
+import { CodingReviewService } from '../coding/coding-review.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
+import { CodingProgressService } from '../coding/coding-progress.service';
+import { CodingReplayService } from '../coding/coding-replay.service';
+import { CodingVersionService } from '../coding/coding-version.service';
+import { CodingJobOperationsService } from '../coding/coding-job-operations.service';
+import { CodebookGenerationService } from '../coding/codebook-generation.service';
+import { CodingResponseQueryService } from '../coding/coding-response-query.service';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
+import { CodingExportService } from '../coding/coding-export.service';
+import { VariableAnalysisReplayService } from '../test-results/variable-analysis-replay.service';
+import { ExportValidationResultsService } from '../validation/export-validation-results.service';
 import { ExternalCodingImportService, ExternalCodingImportBody } from '../coding/external-coding-import.service';
-import { BullJobManagementService } from '../jobs';
+import { BullJobManagementService } from '../jobs/bull-job-management.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatistics, CodingStatisticsWithJob } from '../shared';
 import { CodeBookContentSetting } from '../../../admin/code-book/codebook.interfaces';

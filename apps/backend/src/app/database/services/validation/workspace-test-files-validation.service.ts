@@ -9,7 +9,7 @@ import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
-import { WorkspaceXmlSchemaValidationService } from '../workspace';
+import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
 
 type FileStatus = {
