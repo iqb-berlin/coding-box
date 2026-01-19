@@ -3,73 +3,49 @@ import {
   Chunk,
   Log,
   Person,
+  Response,
   TcMergeBooklet,
   TcMergeLastState,
   TcMergeResponse,
   TcMergeSubForms,
-  TcMergeUnit, Response
-} from '../shared';
-import { TestResultsUploadStatsDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
-import { PersonQueryService } from './person-query.service';
-import { PersonPersistenceService } from './person-persistence.service';
+  TcMergeUnit
+} from '../shared/types';
 
+/**
+ * PersonDataProcessingService
+ *
+ * Responsibility: Transform and prepare data structures (no database access)
+ *
+ * This service contains pure functions for data transformation and processing.
+ * It does not interact with the database or external services.
+ */
 @Injectable()
-export class PersonService {
-  constructor(
-    private readonly personQueryService: PersonQueryService,
-    private readonly personPersistenceService: PersonPersistenceService
-  ) {
-  }
+export class PersonDataProcessingService {
+  private readonly logger = new Logger(PersonDataProcessingService.name);
 
-  logger = new Logger(PersonService.name);
-
-  async getWorkspaceGroups(workspaceId: number): Promise<string[]> {
-    return this.personQueryService.getWorkspaceGroups(workspaceId);
-  }
-
-  async getWorkspaceUploadStats(workspaceId: number): Promise<TestResultsUploadStatsDto> {
-    return this.personQueryService.getWorkspaceUploadStats(workspaceId);
-  }
-
-  async getWorkspaceGroupCodingStats(
-    workspaceId: number
-  ): Promise<{ groupName: string; testPersonCount: number; responsesToCode: number }[]> {
-    return this.personQueryService.getWorkspaceGroupCodingStats(workspaceId);
-  }
-
-  async hasBookletLogsForGroup(workspaceId: number, groupName: string): Promise<boolean> {
-    return this.personQueryService.hasBookletLogsForGroup(workspaceId, groupName);
-  }
-
-  async getGroupsWithBookletLogs(workspaceId: number): Promise<Map<string, boolean>> {
-    return this.personQueryService.getGroupsWithBookletLogs(workspaceId);
-  }
-
-  async markPersonsAsNotConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
-    return this.personPersistenceService.markPersonsAsNotConsidered(workspaceId, logins);
-  }
-
-  async markPersonsAsConsidered(workspaceId: number, logins: string[]): Promise<boolean> {
-    return this.personPersistenceService.markPersonsAsConsidered(workspaceId, logins);
-  }
-
-  async getImportStatistics(workspaceId: number): Promise<{
-    persons: number;
-    booklets: number;
-    units: number;
-  }> {
-    return this.personQueryService.getImportStatistics(workspaceId);
-  }
-
-  async createPersonList(rows: Array<{ groupname: string; loginname: string; code: string }>, workspace_id: number): Promise<Person[]> {
+  /**
+   * Build Person objects from CSV rows
+   *
+   * @param rows - Array of row data containing groupname, loginname, and code
+   * @param workspace_id - The workspace identifier
+   * @returns Array of Person objects with unique combinations
+   */
+  createPersonList(
+    rows: Array<{ groupname: string; loginname: string; code: string }>,
+    workspace_id: number
+  ): Person[] {
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid input: rows must be an array');
+      return [];
     }
 
     if (typeof workspace_id !== 'number' || workspace_id <= 0) {
       this.logger.error('Invalid input: workspace_id must be a positive number');
+      return [];
     }
+
     const personMap = new Map<string, Person>();
+
     rows.forEach((row, index) => {
       try {
         // Allow empty values for groupname, loginname, and code
@@ -100,8 +76,14 @@ export class PersonService {
     return Array.from(personMap.values());
   }
 
-  async assignBookletsToPerson(person: Person, rows: Response[]): Promise<Person> {
-    const logger = new Logger('assignBookletsToPerson');
+  /**
+   * Map booklets to person
+   *
+   * @param person - The person object to assign booklets to
+   * @param rows - Array of response rows
+   * @returns Person object with assigned booklets
+   */
+  assignBookletsToPerson(person: Person, rows: Response[]): Person {
     const bookletIds = new Set<string>();
     const booklets: TcMergeBooklet[] = [];
 
@@ -109,7 +91,7 @@ export class PersonService {
       try {
         if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
           if (!row.bookletname) {
-            logger.warn(`Missing booklet name in row: ${JSON.stringify(row)}`);
+            this.logger.warn(`Missing booklet name in row: ${JSON.stringify(row)}`);
             continue;
           }
           if (!bookletIds.has(row.bookletname)) {
@@ -123,16 +105,24 @@ export class PersonService {
           }
         }
       } catch (error) {
-        logger.error(
+        this.logger.error(
           `Error processing a row [Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}]: ${error.message}`
         );
       }
     }
+
     person.booklets = booklets;
-    logger.log(`Successfully assigned ${booklets.length} booklets to person ${person.login}.`);
+    this.logger.log(`Successfully assigned ${booklets.length} booklets to person ${person.login}.`);
     return person;
   }
 
+  /**
+   * Map logs to person's booklets
+   *
+   * @param person - The person object to assign logs to
+   * @param rows - Array of log rows
+   * @returns Person object with assigned booklet logs
+   */
   assignBookletLogsToPerson(person: Person, rows: Log[]): Person {
     const booklets: TcMergeBooklet[] = [];
     const bookletMap = new Map<string, TcMergeBooklet>();
@@ -192,6 +182,7 @@ export class PersonService {
               );
             }
           }
+
           if (logEntryKeyTrimmed !== 'LOADCOMPLETE') {
             booklet.logs.push({
               ts: timestamp,
@@ -213,39 +204,14 @@ export class PersonService {
     return person;
   }
 
-  private parseLoadCompleteLog(logEntry: string): {
-    browserVersion: string,
-    browserName: string,
-    osName: string,
-    device: string,
-    screenSizeWidth: number,
-    screenSizeHeight: number,
-    loadTime: number
-  } | null {
-    try {
-      const keyValues = logEntry.slice(1, -1).split(',');
-      const parsedResult: { [key: string]: string | number | undefined } = {};
-      keyValues.forEach(pair => {
-        const [key, value] = pair.split(':', 2).map(part => part.trim().replace(/\\/g, ''));
-        parsedResult[key] = !Number.isNaN(Number(value)) ? Number(value) : value || undefined;
-      });
-
-      return {
-        browserVersion: parsedResult.browserVersion?.toString() || 'Unknown',
-        browserName: parsedResult.browserName?.toString() || 'Unknown',
-        osName: parsedResult.osName?.toString() || 'Unknown',
-        device: parsedResult.device?.toString() || 'Unknown',
-        screenSizeWidth: Number(parsedResult.screenSizeWidth) || 0,
-        screenSizeHeight: Number(parsedResult.screenSizeHeight) || 0,
-        loadTime: Number(parsedResult.loadTime) || 0
-      };
-    } catch (error) {
-      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
-      return null;
-    }
-  }
-
-  async assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Promise<Person> {
+  /**
+   * Map units to booklet and person
+   *
+   * @param person - The person object to assign units to
+   * @param rows - Array of response rows
+   * @returns Person object with assigned units
+   */
+  assignUnitsToBookletAndPerson(person: Person, rows: Response[]): Person {
     for (const row of rows) {
       try {
         if (!this.doesRowMatchPerson(row, person)) continue;
@@ -269,111 +235,22 @@ export class PersonService {
     return person;
   }
 
-  private doesRowMatchPerson(row: Response, person: Person): boolean {
-    return row.groupname === person.group &&
-      row.loginname === person.login &&
-      row.code === person.code;
-  }
-
-  private parseResponses(responses: string | Chunk[]): Chunk[] {
-    if (Array.isArray(responses)) return responses;
-
-    try {
-      return JSON.parse(responses);
-    } catch (error) {
-      this.logger.error(`Error parsing responses: ${error.message}`);
-      return [];
-    }
-  }
-
-  private extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
-    return parsedResponses
-      .map(chunk => {
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm, responses: chunkContent };
-        } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
-          return { id: chunk.subForm, responses: [] };
-        }
-      });
-  }
-
-  private extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
-    const variables = new Set<string>();
-    subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
-    );
-    return variables;
-  }
-
-  private parseLastState(laststate: string): TcMergeLastState[] {
-    try {
-      if (!laststate || typeof laststate !== 'string' || laststate.trim() === '') {
-        this.logger.warn('Last state is empty or invalid.');
-        return [];
-      }
-
-      const parsed = JSON.parse(laststate);
-
-      if (
-        typeof parsed !== 'object' ||
-        Array.isArray(parsed) ||
-        parsed === null
-      ) {
-        this.logger.error('Parsed last state is not a valid object.');
-        return [];
-      }
-
-      return Object.entries(parsed).map(([key, value]) => ({
-        key,
-        value: String(value)
-      }));
-    } catch (error) {
-      this.logger.error(`Error parsing last state: ${error.message}`);
-      return [];
-    }
-  }
-
-  private createUnit(
-    row: Response,
-    laststate: TcMergeLastState[],
-    subforms: TcMergeSubForms[],
-    variables: Set<string>,
-    parsedResponses: Chunk[]
-  ): TcMergeUnit {
-    return {
-      id: row.unitname,
-      alias: row.unitname,
-      laststate,
-      subforms,
-      chunks: [
-        {
-          id: parsedResponses[0]?.id || '',
-          type: parsedResponses[0]?.responseType || '',
-          ts: parsedResponses[0]?.ts || 0,
-          variables: Array.from(variables)
-        }
-      ],
-      logs: []
-    };
-  }
-
-  async processPersonBooklets(
-    personList: Person[],
-    workspace_id: number,
-    overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
-    scope: 'person' | 'workspace' = 'person'
-  ): Promise<void> {
-    return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope);
-  }
-
+  /**
+   * Map unit logs to booklet
+   *
+   * @param booklet - The booklet object to assign unit logs to
+   * @param rows - Array of log rows
+   * @returns Booklet object with assigned unit logs
+   */
   assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
     if (!booklet || !Array.isArray(booklet.units)) {
       this.logger.error("Invalid booklet provided. Booklet must contain a valid 'units' array.");
+      return booklet;
     }
 
     if (!Array.isArray(rows)) {
       this.logger.error('Invalid rows provided. Expecting an array of Log items.');
+      return booklet;
     }
 
     const unitMap = new Map<string, TcMergeUnit>();
@@ -429,17 +306,171 @@ export class PersonService {
     return booklet;
   }
 
-  async processPersonLogs(
-    persons: Person[],
-    unitLogs: Log[],
-    bookletLogs: Log[],
-    overwriteExistingLogs: boolean = true
-  ): Promise<{
-      success: boolean;
-      totalBooklets: number;
-      totalLogsSaved: number;
-      totalLogsSkipped: number;
-    }> {
-    return this.personPersistenceService.processPersonLogs(persons, unitLogs, bookletLogs, overwriteExistingLogs);
+  /**
+   * Parse JSON responses
+   *
+   * @param responses - String or array of chunks
+   * @returns Parsed array of chunks
+   */
+  parseResponses(responses: string | Chunk[]): Chunk[] {
+    if (Array.isArray(responses)) return responses;
+
+    try {
+      return JSON.parse(responses);
+    } catch (error) {
+      this.logger.error(`Error parsing responses: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Extract subform data from parsed responses
+   *
+   * @param parsedResponses - Array of parsed chunks
+   * @returns Array of subforms with responses
+   */
+  extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
+    return parsedResponses
+      .map(chunk => {
+        try {
+          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
+          return { id: chunk.subForm, responses: chunkContent };
+        } catch (error) {
+          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
+          return { id: chunk.subForm, responses: [] };
+        }
+      });
+  }
+
+  /**
+   * Get variable set from subforms
+   *
+   * @param subforms - Array of subforms
+   * @returns Set of variable IDs
+   */
+  extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
+    const variables = new Set<string>();
+    subforms.forEach(subform => subform.responses.forEach(response => variables.add(response.id))
+    );
+    return variables;
+  }
+
+  /**
+   * Parse state JSON
+   *
+   * @param laststate - JSON string of last state
+   * @returns Array of last state entries
+   */
+  parseLastState(laststate: string): TcMergeLastState[] {
+    try {
+      if (!laststate || typeof laststate !== 'string' || laststate.trim() === '') {
+        this.logger.warn('Last state is empty or invalid.');
+        return [];
+      }
+
+      const parsed = JSON.parse(laststate);
+
+      if (
+        typeof parsed !== 'object' ||
+        Array.isArray(parsed) ||
+        parsed === null
+      ) {
+        this.logger.error('Parsed last state is not a valid object.');
+        return [];
+      }
+
+      return Object.entries(parsed).map(([key, value]) => ({
+        key,
+        value: String(value)
+      }));
+    } catch (error) {
+      this.logger.error(`Error parsing last state: ${error.message}`);
+      return [];
+    }
+  }
+
+  /**
+   * Parse session info from LOADCOMPLETE log entry
+   *
+   * @param logEntry - The LOADCOMPLETE log entry string
+   * @returns Parsed session information or null if parsing fails
+   */
+  parseLoadCompleteLog(logEntry: string): {
+    browserVersion: string,
+    browserName: string,
+    osName: string,
+    device: string,
+    screenSizeWidth: number,
+    screenSizeHeight: number,
+    loadTime: number
+  } | null {
+    try {
+      const keyValues = logEntry.slice(1, -1).split(',');
+      const parsedResult: { [key: string]: string | number | undefined } = {};
+      keyValues.forEach(pair => {
+        const [key, value] = pair.split(':', 2).map(part => part.trim().replace(/\\/g, ''));
+        parsedResult[key] = !Number.isNaN(Number(value)) ? Number(value) : value || undefined;
+      });
+
+      return {
+        browserVersion: parsedResult.browserVersion?.toString() || 'Unknown',
+        browserName: parsedResult.browserName?.toString() || 'Unknown',
+        osName: parsedResult.osName?.toString() || 'Unknown',
+        device: parsedResult.device?.toString() || 'Unknown',
+        screenSizeWidth: Number(parsedResult.screenSizeWidth) || 0,
+        screenSizeHeight: Number(parsedResult.screenSizeHeight) || 0,
+        loadTime: Number(parsedResult.loadTime) || 0
+      };
+    } catch (error) {
+      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
+      return null;
+    }
+  }
+
+  /**
+   * Build unit object from row data
+   *
+   * @param row - Response row data
+   * @param laststate - Parsed last state
+   * @param subforms - Extracted subforms
+   * @param variables - Set of variables
+   * @param parsedResponses - Parsed response chunks
+   * @returns Complete unit object
+   */
+  createUnit(
+    row: Response,
+    laststate: TcMergeLastState[],
+    subforms: TcMergeSubForms[],
+    variables: Set<string>,
+    parsedResponses: Chunk[]
+  ): TcMergeUnit {
+    return {
+      id: row.unitname,
+      alias: row.unitname,
+      laststate,
+      subforms,
+      chunks: [
+        {
+          id: parsedResponses[0]?.id || '',
+          type: parsedResponses[0]?.responseType || '',
+          ts: parsedResponses[0]?.ts || 0,
+          variables: Array.from(variables)
+        }
+      ],
+      logs: []
+    };
+  }
+
+  /**
+   * Match predicate to check if row matches person
+   *
+   * @param row - Response row to check
+   * @param person - Person to match against
+   * @returns True if row matches person
+   */
+  doesRowMatchPerson(row: Response, person: Person): boolean {
+    return row.groupname === person.group &&
+      row.loginname === person.login &&
+      row.code === person.code;
   }
 }

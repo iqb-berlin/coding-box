@@ -163,11 +163,7 @@ export class PersonValidationService {
 
     // Check if it contains key-value pairs
     const content = trimmed.slice(1, -1);
-    if (!content.includes(':')) {
-      return false;
-    }
-
-    return true;
+    return content.includes(':');
   }
 
   /**
