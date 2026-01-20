@@ -35,6 +35,7 @@ interface CodingResult {
   unitName: string;
   unitAlias: string | null;
   variableId: string;
+  variableAnchor: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
@@ -156,6 +157,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
                 unitName: unit.unitName,
                 unitAlias: unit.unitAlias,
                 variableId: unit.variableId,
+                variableAnchor: unit.variableAnchor,
                 bookletName: unit.bookletName,
                 personLogin: unit.personLogin,
                 personCode: unit.personCode,
@@ -373,7 +375,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       next: (token: string) => {
         loadingSnackBar.dismiss();
 
-        const testPerson = `${result.personLogin}@${result.personCode}`;
+        const testPerson = `${result.personLogin}@${result.personCode}@${result.personGroup || ''}@${result.bookletName}`;
 
         const reviewUnit: UnitsReplayUnit = {
           id: 0, // Not needed for replay
@@ -382,7 +384,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           bookletId: 0, // Not needed for replay
           testPerson: testPerson,
           variableId: result.variableId,
-          variableAnchor: result.variableId
+          variableAnchor: result.variableAnchor
         };
 
         const unitsData: UnitsReplay = {
