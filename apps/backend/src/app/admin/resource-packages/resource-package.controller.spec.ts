@@ -2,9 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { ResourcePackageController } from './resource-package.controller';
 import { AuthService } from '../../auth/service/auth.service';
-import { ResourcePackageService } from '../../database/services/resource-package.service';
+import { ResourcePackageService } from '../../database/services/workspace';
 import { AccessLevelGuard } from '../workspace/access-level.guard';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 
 describe('ResourcePackageController', () => {
   let controller: ResourcePackageController;

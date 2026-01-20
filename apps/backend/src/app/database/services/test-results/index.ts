@@ -1,0 +1,12 @@
+export { WorkspaceTestResultsService } from './workspace-test-results.service';
+export { TestcenterService, Result } from './testcenter.service';
+export { UploadResultsService } from './upload-results.service';
+export { PersonService } from './person.service';
+export { PersonQueryService } from './person-query.service';
+export * from './person-validation.service';
+export * from './person-data-processing.service';
+export * from './person-persistence.service';
+export * from './response-management.service';
+export * from './variable-analysis-replay.service';
+export * from './variable-analysis.service';
+export * from './replay-statistics.service';

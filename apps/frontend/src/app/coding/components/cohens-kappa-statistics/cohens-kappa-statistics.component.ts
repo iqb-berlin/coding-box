@@ -46,7 +46,7 @@ interface KappaStatistics {
 })
 export class CohensKappaStatisticsComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private translateService = inject(TranslateService);
 
   constructor(

@@ -6,7 +6,7 @@ import {
   SetMetadata
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 
 /**
  * Decorator to require a minimum access level for an endpoint

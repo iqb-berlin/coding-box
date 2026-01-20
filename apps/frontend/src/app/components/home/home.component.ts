@@ -11,6 +11,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../core/services/app.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
+import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
@@ -31,7 +32,7 @@ import { WorkspaceBackendService } from '../../workspace/services/workspace-back
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit, OnDestroy {
-  readonly appService = inject(AppService);
+  readonly appService: AppService = inject(AppService);
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
@@ -45,7 +46,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.appService.refreshAuthData();
-    this.authSubscription = this.appService.authData$.subscribe(authData => {
+    this.authSubscription = this.appService.authData$.subscribe((authData: AuthDataDto) => {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;

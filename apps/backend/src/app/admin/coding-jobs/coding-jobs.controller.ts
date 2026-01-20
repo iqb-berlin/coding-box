@@ -17,7 +17,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { CodingJobService } from '../../database/services/coding-job.service';
+import { CodingJobService } from '../../database/services/coding';
 import { CodingJobDto } from '../coding-job/dto/coding-job.dto';
 import { statusNumberToString } from '../../database/utils/response-status-converter';
 

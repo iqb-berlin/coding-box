@@ -29,8 +29,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
-import { CodingJobService } from '../../database/services/coding-job.service';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingJobService, CodingReplayService } from '../../database/services/coding';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
@@ -41,8 +40,8 @@ import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-pr
 export class WsgCodingJobController {
   constructor(
     private readonly codingJobService: CodingJobService,
-    private readonly workspaceCodingService: WorkspaceCodingService
-  ) {}
+    private readonly codingReplayService: CodingReplayService
+  ) { }
 
   @Get()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -274,7 +273,7 @@ export class WsgCodingJobController {
     }
 
     const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
-    const itemsWithReplayUrls = await this.workspaceCodingService.generateReplayUrlsForItems(
+    const itemsWithReplayUrls = await this.codingReplayService.generateReplayUrlsForItems(
       workspaceId,
       items,
       serverUrl
