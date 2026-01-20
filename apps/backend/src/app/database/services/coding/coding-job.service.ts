@@ -86,7 +86,7 @@ export class CodingJobService {
     private settingRepository: Repository<Setting>,
     private connection: Connection,
     private cacheService: CacheService
-  ) {}
+  ) { }
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
     const totalUnits = await this.codingJobUnitRepository.count({
@@ -126,15 +126,17 @@ export class CodingJobService {
     workspaceId: number,
     page: number = 1,
     limit?: number
-  ): Promise<{ data: (CodingJob & {
-      assignedCoders?: number[];
-      assignedVariables?: { unitName: string; variableId: string }[];
-      assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
-      progress?: number;
-      codedUnits?: number;
-      totalUnits?: number;
-      openUnits?: number;
-    })[]; total: number; totalOpenUnits?: number; page: number; limit?: number }> {
+  ): Promise<{
+      data: (CodingJob & {
+        assignedCoders?: number[];
+        assignedVariables?: { unitName: string; variableId: string }[];
+        assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
+        progress?: number;
+        codedUnits?: number;
+        totalUnits?: number;
+        openUnits?: number;
+      })[]; total: number; totalOpenUnits?: number; page: number; limit?: number
+    }> {
     const validPage = page > 0 ? page : 1;
     const shouldPaginate = limit !== undefined && limit > 0;
     const skip = shouldPaginate ? (validPage - 1) * limit : undefined;
@@ -325,7 +327,7 @@ export class CodingJobService {
           }
         }
       }
-      await this.saveCodingJobUnits(savedCodingJob.id, manager);
+      await this.saveCodingJobUnits(savedCodingJob.id, createCodingJobDto.maxCodingCases, manager);
 
       return savedCodingJob;
     });
@@ -840,11 +842,21 @@ export class CodingJobService {
     }));
   }
 
-  private async saveCodingJobUnits(codingJobId: number, manager?: EntityManager): Promise<void> {
-    const responses = await this.getResponsesForCodingJob(codingJobId, manager);
+  private async saveCodingJobUnits(codingJobId: number, maxCodingCases?: number, manager?: EntityManager): Promise<void> {
+    let responses = await this.getResponsesForCodingJob(codingJobId, manager);
 
     if (responses.length === 0) {
       return;
+    }
+
+    // Apply maxCodingCases limit if specified
+    if (maxCodingCases && maxCodingCases > 0 && responses.length > maxCodingCases) {
+      // Shuffle responses to ensure random distribution across variables (Fisher-Yates)
+      for (let i = responses.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [responses[i], responses[j]] = [responses[j], responses[i]];
+      }
+      responses = responses.slice(0, maxCodingCases);
     }
 
     const repo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
@@ -1476,7 +1488,7 @@ export class CodingJobService {
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
 
     try {
-    // Determine items to process
+      // Determine items to process
       const items: DistributionItem[] = [];
       const allVariables: VariableReference[] = [];
 

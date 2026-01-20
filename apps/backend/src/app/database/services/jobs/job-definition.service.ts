@@ -345,7 +345,8 @@ export class JobDefinitionService {
       durationSeconds: jobDefinition.duration_seconds,
       doubleCodingAbsolute: jobDefinition.double_coding_absolute,
       doubleCodingPercentage: jobDefinition.double_coding_percentage,
-      caseOrderingMode: jobDefinition.case_ordering_mode
+      caseOrderingMode: jobDefinition.case_ordering_mode,
+      maxCodingCases: jobDefinition.max_coding_cases
     };
 
     return this.codingJobService.createCodingJob(workspaceId, {
