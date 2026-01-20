@@ -46,7 +46,7 @@
       <!-- Statistics Section -->
       <div class="statistics-section">
         <app-statistics-card [codingStatistics]="codingStatistics" [referenceStatistics]="referenceStatistics"
-          [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion" [isLoading]="isLoading"
+          [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion" [isLoading]="isLoadingStatistics"
           [isDownloadInProgress]="isDownloadInProgress" [statisticsLoaded]="statisticsLoaded"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (resetVersion)="onResetVersion()"
