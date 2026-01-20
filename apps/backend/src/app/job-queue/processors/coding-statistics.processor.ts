@@ -4,13 +4,11 @@ import {
 } from '@nestjs/bull';
 import {
   Injectable,
-  Logger,
-  Inject,
-  forwardRef
+  Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
-import { CodingStatistics } from '../../database/services/shared-types';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingStatistics } from '../../database/services/shared';
+import { CodingStatisticsService } from '../../database/services/coding';
 
 export interface CodingStatisticsJobData {
   workspaceId: number;
@@ -22,16 +20,15 @@ export class CodingStatisticsProcessor {
   private readonly logger = new Logger(CodingStatisticsProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => WorkspaceCodingService))
-    private workspaceCodingService: WorkspaceCodingService
-  ) {}
+    private codingStatisticsService: CodingStatisticsService
+  ) { }
 
   @Process()
   async process(job: Job<CodingStatisticsJobData>): Promise<CodingStatistics> {
     this.logger.log(`Processing coding statistics job ${job.id} for workspace ${job.data.workspaceId}`);
     try {
       await job.progress(0);
-      const result = await this.workspaceCodingService.getCodingStatistics(job.data.workspaceId);
+      const result = await this.codingStatisticsService.getCodingStatistics(job.data.workspaceId);
       await job.progress(100);
       this.logger.log(`Coding statistics job ${job.id} completed successfully`);
       return result;

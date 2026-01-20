@@ -2,10 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock } from '@golevelup/ts-jest';
 import { WorkspaceController } from './workspace.controller';
 import { AuthService } from '../../auth/service/auth.service';
-import { UsersService } from '../../database/services/users.service';
-import { TestcenterService } from '../../database/services/testcenter.service';
-import { UploadResultsService } from '../../database/services/upload-results.service'; // ggf. anpassen, falls anderer Pfad
-import { WorkspaceCoreService } from '../../database/services/workspace-core.service';
+import { UsersService } from '../../database/services/users';
+import { TestcenterService, UploadResultsService } from '../../database/services/test-results';
+import { WorkspaceCoreService } from '../../database/services/workspace';
 import { AccessRightsMatrixService } from './access-rights-matrix.service';
 
 describe('WorkspaceController', () => {

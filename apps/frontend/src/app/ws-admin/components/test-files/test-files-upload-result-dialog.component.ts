@@ -17,6 +17,7 @@ import {
   TestFilesUploadFailedDto,
   TestFilesUploadUploadedDto
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
 export type TestFilesUploadResultDialogData = {
   attempted: number;
@@ -27,6 +28,7 @@ export type TestFilesUploadResultDialogData = {
   failedFiles: TestFilesUploadFailedDto[];
   remainingConflicts: TestFilesUploadConflictDto[];
   overwriteSelectedCount?: number;
+  issues?: TestResultsUploadIssueDto[];
 };
 
 @Component({
@@ -86,6 +88,23 @@ export class TestFilesUploadResultDialogComponent {
     return this.data?.remainingConflictsCount ?? this.remainingConflicts.length;
   }
 
+  get issues(): TestResultsUploadIssueDto[] {
+    return this.data.issues || [];
+  }
+
+  get filteredIssues(): TestResultsUploadIssueDto[] {
+    const q = (this.filterText || '').trim().toUpperCase();
+    if (!q) {
+      return this.issues;
+    }
+    return this.issues.filter(i => {
+      const parts = [i.level, i.message, i.fileName, String(i.rowIndex ?? '')]
+        .filter(Boolean)
+        .map(s => String(s).toUpperCase());
+      return parts.some(p => p.includes(q));
+    });
+  }
+
   private matchesQuery(
     parts: Array<string | undefined | null>,
     q: string
@@ -129,6 +148,10 @@ export class TestFilesUploadResultDialogComponent {
 
   trackByConflict(index: number, item: TestFilesUploadConflictDto): string {
     return `${item.fileId}@@${item.filename}@@${item.fileType || ''}@@${index}`;
+  }
+
+  trackByIssue(index: number, item: TestResultsUploadIssueDto): string {
+    return `${item.level}@@${item.fileName || ''}@@${item.rowIndex || ''}@@${item.message}@@${index}`;
   }
 
   close(): void {

@@ -164,7 +164,7 @@
   @if (isUploadingResults) {
   <div class="loading-container">
     <mat-spinner class="mat-spinner"></mat-spinner>
-    <p class="loading-text">Ergebnisse werden hochgeladen...</p>
+    <p class="loading-text">{{ uploadingMessage }}</p>
   </div>
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table></coding-box-test-results-flat-table>

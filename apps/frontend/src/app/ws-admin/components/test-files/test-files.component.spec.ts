@@ -19,7 +19,6 @@ describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
   let fixture: ComponentFixture<TestFilesComponent>;
   let fileService: jest.Mocked<FileService>;
-  let appService: jest.Mocked<AppService>;
   let dialog: jest.Mocked<MatDialog>;
   let snackBar: jest.Mocked<MatSnackBar>;
 
@@ -35,10 +34,6 @@ describe('TestFilesComponent', () => {
       downloadFile: jest.fn(),
       validateFiles: jest.fn(),
       createDummyTestTakerFile: jest.fn()
-    };
-
-    const appServiceMock = {
-      selectedWorkspaceId: 1
     };
 
     const dialogMock = {
@@ -61,12 +56,12 @@ describe('TestFilesComponent', () => {
           useValue: environment.backendUrl
         },
         {
-          provide: FileService,
-          useValue: fileServiceMock
+          provide: AppService,
+          useValue: { selectedWorkspaceId: 1 }
         },
         {
-          provide: AppService,
-          useValue: appServiceMock
+          provide: FileService,
+          useValue: fileServiceMock
         },
         {
           provide: MatDialog,
@@ -80,7 +75,6 @@ describe('TestFilesComponent', () => {
     }).compileComponents();
 
     fileService = TestBed.inject(FileService) as jest.Mocked<FileService>;
-    appService = TestBed.inject(AppService) as jest.Mocked<AppService>;
     dialog = TestBed.inject(MatDialog) as jest.Mocked<MatDialog>;
     snackBar = TestBed.inject(MatSnackBar) as jest.Mocked<MatSnackBar>;
 
@@ -174,7 +168,7 @@ describe('TestFilesComponent', () => {
         afterClosed: jest.fn().mockReturnValue(of({ overwrite: true, overwriteFileIds: ['101'] }))
       } as unknown as MatDialogRef<unknown>;
 
-      dialog.open.mockReturnValue(dialogRefMock as any);
+      dialog.open.mockReturnValue(dialogRefMock as MatDialogRef<unknown>);
 
       const overwriteResult: TestFilesUploadResultDto = {
         total: 1,

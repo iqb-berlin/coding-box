@@ -5,7 +5,7 @@ import { Repository } from 'typeorm';
 import { CacheService } from './cache.service';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
-import { WorkspaceTestResultsService } from '../database/services/workspace-test-results.service';
+import { WorkspaceTestResultsService } from '../database/services/test-results';
 
 @Injectable()
 export class ResponseCacheSchedulerService {

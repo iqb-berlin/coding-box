@@ -20,7 +20,7 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { WorkspaceId } from '../workspace/workspace.decorator';
-import { JobService } from '../../database/services/job.service';
+import { JobService } from '../../database/services/jobs';
 import { JobDto } from './dto/job.dto';
 
 @ApiTags('Jobs')

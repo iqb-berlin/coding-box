@@ -35,7 +35,7 @@ import { AppService } from '../../../core/services/app.service';
 })
 export class CodingValidationResultsDialogComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialogRef = inject<MatDialogRef<CodingValidationResultsDialogComponent>>(MatDialogRef);
 

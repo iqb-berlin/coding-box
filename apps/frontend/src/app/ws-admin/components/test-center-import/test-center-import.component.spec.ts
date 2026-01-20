@@ -15,9 +15,11 @@ import { TestCenterImportComponent } from './test-center-import.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
-import { ImportService } from '../../../shared/services/file/import.service';
+import { ImportService, Result } from '../../../shared/services/file/import.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
 import { AppService } from '../../../core/services/app.service';
+import { ServerResponse } from '../../../core/services/authentication.service';
+import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 
 describe('TestCenterImportComponent', () => {
   let component: TestCenterImportComponent;
@@ -25,7 +27,6 @@ describe('TestCenterImportComponent', () => {
   let userBackendService: jest.Mocked<UserBackendService>;
   let importService: jest.Mocked<ImportService>;
   let workspaceAdminService: jest.Mocked<WorkspaceAdminService>;
-  let appService: jest.Mocked<AppService>;
 
   const mockDialogRef = {
     close: jest.fn()
@@ -57,9 +58,6 @@ describe('TestCenterImportComponent', () => {
       setlastTestcenterInstance: jest.fn(),
       setTestGroups: jest.fn()
     };
-    const appMock = {
-      selectedWorkspaceId: 1
-    };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -77,7 +75,7 @@ describe('TestCenterImportComponent', () => {
         { provide: UserBackendService, useValue: userBackendMock },
         { provide: ImportService, useValue: importMock },
         { provide: WorkspaceAdminService, useValue: workspaceAdminMock },
-        { provide: AppService, useValue: appMock },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
         provideHttpClient()
       ]
     }).compileComponents();
@@ -85,7 +83,6 @@ describe('TestCenterImportComponent', () => {
     userBackendService = TestBed.inject(UserBackendService) as jest.Mocked<UserBackendService>;
     importService = TestBed.inject(ImportService) as jest.Mocked<ImportService>;
     workspaceAdminService = TestBed.inject(WorkspaceAdminService) as jest.Mocked<WorkspaceAdminService>;
-    appService = TestBed.inject(AppService) as jest.Mocked<AppService>;
 
     fixture = TestBed.createComponent(TestCenterImportComponent);
     component = fixture.componentInstance;
@@ -110,9 +107,14 @@ describe('TestCenterImportComponent', () => {
       success: true,
       token: 'fake-token',
       claims: {
-        workspaceAdmin: [{ id: 'tc-ws-1', label: 'TC Workspace 1', type: 'tc', flags: { mode: 'full' } }]
+        workspaceAdmin: [{
+          id: 'tc-ws-1',
+          label: 'TC Workspace 1',
+          type: 'tc',
+          flags: { mode: 'full' }
+        }]
       }
-    } as any));
+    } as ServerResponse));
 
     component.authenticate();
     fixture.detectChanges();
@@ -127,7 +129,7 @@ describe('TestCenterImportComponent', () => {
       responses: true
     });
 
-    const mockGroups = [
+    const mockGroups: TestGroupsInfoDto[] = [
       {
         groupName: 'group1',
         groupLabel: 'Group 1',
@@ -141,7 +143,7 @@ describe('TestCenterImportComponent', () => {
         hasBookletLogs: false
       }
     ];
-    importService.importTestcenterGroups.mockReturnValue(of(mockGroups as any));
+    importService.importTestcenterGroups.mockReturnValue(of(mockGroups));
 
     component.getTestGroups();
     fixture.detectChanges();
@@ -153,12 +155,17 @@ describe('TestCenterImportComponent', () => {
     component.toggleRow(mockGroups[0]);
     expect(component.selectedRows.length).toBe(1);
 
-    const mockImportResult = {
+    const mockImportResult: Result = {
       success: true,
+      testFiles: 0,
       responses: 10,
-      logs: 0
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: []
     };
-    importService.importWorkspaceFiles.mockReturnValue(of(mockImportResult as any));
+    importService.importWorkspaceFiles.mockReturnValue(of(mockImportResult));
 
     component.getTestData();
     fixture.detectChanges();
@@ -179,7 +186,8 @@ describe('TestCenterImportComponent', () => {
       didImport: true,
       resultType: 'responses',
       importedResponses: true,
-      importedLogs: false
+      importedLogs: false,
+      uploadResult: mockImportResult
     });
   });
 
@@ -211,10 +219,16 @@ describe('TestCenterImportComponent', () => {
 
   it('should complete the whole user flow for testFiles import with conflicts', async () => {
     // Change importType to testFiles
-    (component as any).data = { importType: 'testFiles' };
+    // eslint-disable-next-line @typescript-eslint/dot-notation
+    component['data'] = { importType: 'testFiles' };
     component.authenticated = true;
     component.authToken = 'fake-token';
-    component.workspaces = [{ id: 'tc-ws-1', label: 'TC Workspace 1', type: 'tc', flags: { mode: 'full' } }];
+    component.workspaces = [{
+      id: 'tc-ws-1',
+      label: 'TC Workspace 1',
+      type: 'tc',
+      flags: { mode: 'full' }
+    }];
     component.testCenterInstance = [{ id: 1, label: 'Testcenter 1' }];
 
     fixture.detectChanges();
@@ -226,37 +240,53 @@ describe('TestCenterImportComponent', () => {
     });
 
     // 2. Mock initial import with conflicts
-    const mockInitialResult = {
+    const mockInitialResult: Result = {
+      success: true,
+      testFiles: 0,
+      responses: 0,
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: [],
       testFilesUploadResult: {
         total: 1,
         uploaded: 0,
         failed: 0,
         uploadedFiles: [],
         failedFiles: [],
-        conflicts: [{ fileId: 'file1', fileName: 'file1.xml', type: 'unit' }]
+        conflicts: [{ fileId: 'file1', filename: 'file1.xml', fileType: 'unit' }]
       }
     };
-    importService.importWorkspaceFiles.mockReturnValueOnce(of(mockInitialResult as any));
+    importService.importWorkspaceFiles.mockReturnValueOnce(of(mockInitialResult));
 
     // 3. Mock dialog for conflicts
     const dialog = TestBed.inject(MatDialog);
     const mockConflictDialogRef = {
       afterClosed: jest.fn().mockReturnValue(of({ overwrite: true, overwriteFileIds: ['file1'] }))
-    };
-    jest.spyOn(dialog, 'open').mockReturnValue(mockConflictDialogRef as any);
+    } as Partial<MatDialogRef<never>>;
+    jest.spyOn(dialog, 'open').mockReturnValue(mockConflictDialogRef as MatDialogRef<never>);
 
     // 4. Mock second import (overwrite)
-    const mockFinalResult = {
+    const mockFinalResult: Result = {
+      success: true,
+      testFiles: 1,
+      responses: 0,
+      logs: 0,
+      booklets: 0,
+      units: 0,
+      persons: 0,
+      importedGroups: [],
       testFilesUploadResult: {
         total: 1,
         uploaded: 1,
         failed: 0,
-        uploadedFiles: [{ fileId: 'file1', fileName: 'file1.xml', type: 'unit' }],
+        uploadedFiles: [{ fileId: 'file1', filename: 'file1.xml', fileType: 'unit' }],
         failedFiles: [],
         conflicts: []
       }
     };
-    importService.importWorkspaceFiles.mockReturnValueOnce(of(mockFinalResult as any));
+    importService.importWorkspaceFiles.mockReturnValueOnce(of(mockFinalResult));
 
     // 5. Trigger import
     component.getTestData();

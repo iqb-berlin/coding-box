@@ -45,7 +45,7 @@ import { WorkspaceSettingsService } from '../../services/workspace-settings.serv
   ]
 })
 export class WsSettingsComponent implements OnInit {
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
@@ -88,7 +88,7 @@ export class WsSettingsComponent implements OnInit {
         this.appService.loggedUser?.sub || '',
         this.duration
       )
-      .subscribe(authToken => {
+      .subscribe((authToken: string) => {
         this.authToken = authToken;
         this.snackBar.open(
           this.translateService.instant(

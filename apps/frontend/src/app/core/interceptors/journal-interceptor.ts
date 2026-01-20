@@ -13,7 +13,7 @@ export const journalInterceptor: HttpInterceptorFn = (
   request: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService = inject(AppService);
+  const appService: AppService = inject(AppService);
   // const journalService = inject(JournalService);
 
   if (!request.url.startsWith(appService.serverUrl)) {

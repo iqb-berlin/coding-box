@@ -495,7 +495,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           ),
           uploadedFiles,
           failedFiles,
-          remainingConflicts
+          remainingConflicts,
+          issues: r.issues
         } as TestFilesUploadResultDialogData);
 
         this.onUploadSuccess();

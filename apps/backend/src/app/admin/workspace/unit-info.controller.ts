@@ -11,7 +11,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
-import { UnitInfoService } from '../../database/services/unit-info.service';
+import { UnitInfoService } from '../../database/services/workspace';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 
 @ApiTags('Unit Info')

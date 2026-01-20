@@ -41,6 +41,44 @@
   box-sizing: border-box;
 }
 
+.issue-row {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.issue-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.issue-meta {
+  font-size: 12px;
+  opacity: 0.85;
+  display: flex;
+  gap: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.pill.error {
+  background: rgba(211, 47, 47, 0.12);
+}
+
+.pill.warning {
+  background: rgba(245, 124, 0, 0.14);
+}
+
 .main {
   min-width: 0;
   width: 100%;

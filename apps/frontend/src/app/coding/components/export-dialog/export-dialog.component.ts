@@ -47,7 +47,7 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
 export class ExportDialogComponent implements OnInit, OnDestroy {
   dialogRef = inject<MatDialogRef<ExportDialogComponent>>(MatDialogRef);
   private testPersonCodingService = inject(TestPersonCodingService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private validationStateService = inject(ValidationStateService);
   private translate = inject(TranslateService);
   private matDialog = inject(MatDialog);

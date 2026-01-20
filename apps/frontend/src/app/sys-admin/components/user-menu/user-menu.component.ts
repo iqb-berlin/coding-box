@@ -27,7 +27,7 @@ import { AuthDataDto } from '../../../../../../../api-dto/auth-data-dto';
 })
 export class UserMenuComponent implements OnInit {
   private authService = inject(AuthService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
 
   userName: string = '';
   userStatus: string = '';

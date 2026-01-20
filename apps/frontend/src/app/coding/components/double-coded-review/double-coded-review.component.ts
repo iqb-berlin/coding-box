@@ -69,7 +69,7 @@ interface DoubleCodedItem {
 })
 export class DoubleCodedReviewComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
   private translateService = inject(TranslateService);
