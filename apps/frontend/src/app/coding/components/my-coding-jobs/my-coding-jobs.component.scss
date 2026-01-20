@@ -9,6 +9,9 @@
   margin: 0;
   height: 100%;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .page-title {
@@ -16,12 +19,22 @@
   font-weight: 500;
   margin: 0 0 8px 0;
   color: #333;
+  flex: 0 0 auto;
 }
 
 .subtitle {
   font-size: 16px;
   color: #666;
   margin: 0 0 20px 0;
+  flex: 0 0 auto;
+}
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  flex: 0 0 auto;
 }
 
 .total-progress-section {
@@ -32,7 +45,8 @@
   background-color: #f8f9fa;
   border-radius: 8px;
   border: 1px solid #e0e0e0;
-  margin-bottom: 16px;
+  flex: 1;
+  min-width: 250px;
 
   mat-icon {
     color: #2196f3;
@@ -55,7 +69,9 @@
 .flex-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .mat-column-actions {
@@ -138,7 +154,8 @@
 
 .coding-jobs-table {
   width: 100%;
-  min-width: 800px; /* Ensures table doesn't get too narrow */
+  min-width: 800px;
+  /* Ensures table doesn't get too narrow */
 }
 
 .cell-content {
