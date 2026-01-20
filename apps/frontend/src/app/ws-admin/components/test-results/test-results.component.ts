@@ -101,7 +101,9 @@ import {
   ExportOptionsDialogComponent,
   ExportOptions
 } from './export-options-dialog.component';
-import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+
+import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
+import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 import {
@@ -370,6 +372,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
   exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
+  uploadingMessage = 'Ergebnisse werden hochgeladen...';
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -1246,9 +1249,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.overview || fallbackOverview;
 
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '1000px',
+      width: '1200px',
       maxWidth: '95vw',
       minHeight: '800px',
+      disableClose: true,
       data: {
         importType: 'testResults'
       }
@@ -1320,6 +1324,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               afterOverview.uniqueResponses - beforeOverview.uniqueResponses
           };
 
+          const payload = maybePayload as {
+            resultType?: 'logs' | 'responses';
+            importedLogs?: boolean;
+            importedResponses?: boolean;
+            uploadResult?: ImportResultDto;
+            // Legacy/Fallback properties
+            issues?: TestResultsUploadIssueDto[];
+            logMetrics?: {
+              bookletsWithLogs: number;
+              totalBooklets: number;
+              unitsWithLogs: number;
+              totalUnits: number;
+            };
+          };
+
+          const logMetrics = payload.uploadResult ? {
+            bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
+            totalBooklets: payload.uploadResult.totalBooklets ?? 0,
+            unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
+            totalUnits: payload.uploadResult.totalUnits ?? 0
+          } : payload.logMetrics;
+
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
             before: {
@@ -1338,12 +1364,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             },
             delta,
             responseStatusCounts: afterOverview.responseStatusCounts,
-            issues: []
+            issues: payload.uploadResult?.issues || payload.issues || [],
+            logMetrics: logMetrics,
+            importedLogs: payload.importedLogs,
+            importedResponses: payload.importedResponses
           };
 
-          const payload = maybePayload as { resultType?: 'logs' | 'responses' };
           this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '1000px',
+            width: '1200px',
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
@@ -1410,6 +1438,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
               this.isLoading = true;
               this.isUploadingResults = true;
+
+              if (resultType === 'responses') {
+                this.uploadingMessage = 'Importiere Antworten...';
+              } else if (resultType === 'logs') {
+                this.uploadingMessage = 'Importiere Logs...';
+              } else {
+                this.uploadingMessage = 'Ergebnisse werden hochgeladen...';
+              }
+
               this.fileService
                 .uploadTestResults(
                   this.appService.selectedWorkspaceId,
@@ -1434,6 +1471,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                     'OK',
                     { duration: 5000 }
                   );
+
+                  // Explicitly set these flags so the dialog knows what was imported
+                  // (similar to how TestCenterImportComponent logic works)
+                  uploadResult.importedResponses = resultType === 'responses';
+                  uploadResult.importedLogs = resultType === 'logs';
 
                   this.dialog.open(TestResultsUploadResultDialogComponent, {
                     width: '1000px',

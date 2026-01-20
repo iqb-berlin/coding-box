@@ -1,7 +1,7 @@
 import {
   Controller, Get, Post, Body, Param, Delete, Put
 } from '@nestjs/common';
-import { MissingsProfilesService } from '../../database/services/missings-profiles.service';
+import { MissingsProfilesService } from '../../database/services/coding';
 import { MissingsProfilesDto } from '../../../../../../api-dto/coding/missings-profiles.dto';
 
 @Controller('admin/workspace/:workspaceId/missings-profiles')

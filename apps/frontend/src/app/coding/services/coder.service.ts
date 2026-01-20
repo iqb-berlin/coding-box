@@ -13,7 +13,7 @@ import { CodingJob } from '../models/coding-job.model';
 export class CoderService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private codersSubject = new BehaviorSubject<Coder[]>([]);
 
   getCoders(): Observable<Coder[]> {

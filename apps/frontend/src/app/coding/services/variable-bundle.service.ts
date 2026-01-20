@@ -19,7 +19,7 @@ export interface PaginatedBundles {
 export class VariableBundleService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private bundlesSubject = new BehaviorSubject<VariableBundle[]>([]);
 
   constructor() {

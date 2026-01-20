@@ -1,3 +1,4 @@
+/* eslint-disable max-classes-per-file */
 import { ApiProperty } from '@nestjs/swagger';
 
 export class TestResultsUploadStatsDto {
@@ -19,6 +20,7 @@ export class TestResultsUploadStatsDto {
 
 export type TestResultsUploadIssueDto = {
   level: 'error' | 'warning';
+  category?: 'log_format' | 'unit_not_found' | 'invalid_unit' | 'other';
   message: string;
   fileName?: string;
   rowIndex?: number;
@@ -42,4 +44,20 @@ export class TestResultsUploadResultDto {
 
   @ApiProperty({ type: [Object], required: false })
     issues?: TestResultsUploadIssueDto[];
+
+  @ApiProperty({ type: Object, required: false })
+    logMetrics?: {
+    bookletsWithLogs: number;
+    totalBooklets: number;
+    unitsWithLogs: number;
+    totalUnits: number;
+    bookletDetails?: { name: string; hasLog: boolean }[];
+    unitDetails?: { bookletName: string; unitKey: string; hasLog: boolean }[];
+  };
+
+  @ApiProperty({ type: Boolean, required: false })
+    importedLogs?: boolean;
+
+  @ApiProperty({ type: Boolean, required: false })
+    importedResponses?: boolean;
 }

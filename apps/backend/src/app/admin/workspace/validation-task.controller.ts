@@ -13,7 +13,7 @@ import {
   ApiParam,
   ApiQuery
 } from '@nestjs/swagger';
-import { ValidationTaskService } from '../../database/services/validation-task.service';
+import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { WorkspaceId } from './workspace.decorator';
 

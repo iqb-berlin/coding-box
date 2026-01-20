@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { JournalService } from '../../database/services/journal.service';
+import { JournalService } from '../../database/services/shared';
 import { JournalEntry } from '../../database/entities/journal-entry.entity';
 import { CreateJournalEntryDto } from './dto/create-journal-entry.dto';
 import { PaginatedJournalEntriesDto } from './dto/paginated-journal-entries.dto';
