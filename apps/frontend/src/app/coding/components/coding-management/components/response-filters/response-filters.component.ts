@@ -14,6 +14,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
+import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { FilterParams } from '../../../../services/coding-management.service';
 
 @Component({
@@ -58,6 +59,10 @@ export class ResponseFiltersComponent implements OnDestroy {
     { value: 'v3' as const, label: 'coding-management.statistics.second-autocode-run' }
   ];
 
+  private responseStatusMap = new Map(
+    responseStatesNumericMap.map(entry => [entry.key, entry.value])
+  );
+
   ngOnDestroy(): void {
     this.clearFilterTimer();
   }
@@ -87,7 +92,10 @@ export class ResponseFiltersComponent implements OnDestroy {
   }
 
   mapStatusToString(status: string): string {
-    // This would ideally come from a shared service or pipe
-    return status;
+    const statusNumber = parseInt(status, 10);
+    if (isNaN(statusNumber)) {
+      return status;
+    }
+    return this.responseStatusMap.get(statusNumber) || status;
   }
 }
