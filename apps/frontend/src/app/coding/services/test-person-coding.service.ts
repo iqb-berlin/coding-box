@@ -648,6 +648,30 @@ export class TestPersonCodingService {
       );
   }
 
+  applyEmptyResponseCoding(workspaceId: number): Observable<{
+    success: boolean;
+    updatedCount: number;
+    message: string;
+  }> {
+    return this.http
+      .post<{
+      success: boolean;
+      updatedCount: number;
+      message: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-empty-responses`,
+      {},
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          success: false,
+          updatedCount: 0,
+          message: 'Fehler beim Anwenden der Kodierung'
+        }))
+      );
+  }
+
   getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
