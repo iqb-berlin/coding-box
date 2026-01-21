@@ -1,3 +1,66 @@
 :host {
   display: block;
 }
+
+.table-container {
+  overflow-x: auto;
+  width: 100%;
+}
+
+// Ensure table has proper minimum width and layout
+.persons-table {
+  min-width: 100%;
+  table-layout: auto;
+
+  // Prevent wrapping in action column
+  .mat-column-actions {
+    white-space: nowrap;
+    width: 1%;
+    min-width: 240px;
+    padding-right: 8px !important;
+
+    // Make actions sticky on the right
+    position: sticky;
+    right: 0;
+    background-color: inherit;
+    z-index: 1;
+  }
+
+  // Set minimum widths for other columns to prevent excessive compression
+  .mat-column-code,
+  .mat-column-group,
+  .mat-column-login {
+    min-width: 80px;
+  }
+
+  .mat-column-booklet,
+  .mat-column-unit,
+  .mat-column-response,
+  .mat-column-responseStatus {
+    min-width: 120px;
+  }
+
+  .mat-column-responseValue {
+    min-width: 200px;
+    max-width: 400px;
+  }
+
+  .mat-column-frequencies {
+    min-width: 140px;
+  }
+
+  .mat-column-tags {
+    min-width: 100px;
+  }
+
+  // Ensure header cells don't wrap
+  th {
+    white-space: nowrap;
+  }
+
+  // Allow content cells to wrap except for actions
+  td:not(.mat-column-actions) {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+}
