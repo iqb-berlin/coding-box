@@ -487,6 +487,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           );
         }
         this.fetchCodingStatistics();
+        this.refreshTableData();
       },
       error: () => {
         this.isLoading = false;
@@ -536,5 +537,21 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   getAvailableStatuses(): string[] {
     return Object.keys(this.codingStatistics.statusCounts);
+  }
+
+  private refreshTableData(): void {
+    if (this.data.length === 0) return;
+
+    if (this.currentStatusFilter) {
+      this.fetchResponsesByStatus(this.currentStatusFilter);
+    } else {
+      const hasActiveFilters = Object.values(this.filterParams).some(
+        value => value && value.trim() !== ''
+      );
+
+      if (hasActiveFilters) {
+        this.fetchResponsesWithFilters();
+      }
+    }
   }
 }
