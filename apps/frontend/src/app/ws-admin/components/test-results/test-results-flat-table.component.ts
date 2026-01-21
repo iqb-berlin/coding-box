@@ -193,7 +193,7 @@ export class TestResultsFlatTableComponent implements OnDestroy {
 
   flatData: FlatResponseRow[] = [];
   flatTotalRecords: number = 0;
-  flatPageSize: number = 50;
+  flatPageSize: number = 100;
   flatPageIndex: number = 0;
   isLoadingFlat: boolean = false;
 
