@@ -12,6 +12,7 @@ import { CodingStatisticsService } from '../../database/services/coding';
 
 export interface CodingStatisticsJobData {
   workspaceId: number;
+  version?: 'v1' | 'v2' | 'v3';
 }
 
 @Injectable()
@@ -28,7 +29,10 @@ export class CodingStatisticsProcessor {
     this.logger.log(`Processing coding statistics job ${job.id} for workspace ${job.data.workspaceId}`);
     try {
       await job.progress(0);
-      const result = await this.codingStatisticsService.getCodingStatistics(job.data.workspaceId);
+      const result = await this.codingStatisticsService.getCodingStatistics(
+        job.data.workspaceId,
+        job.data.version || 'v1'
+      );
       await job.progress(100);
       this.logger.log(`Coding statistics job ${job.id} completed successfully`);
       return result;
