@@ -29,7 +29,7 @@ export class CodingListStreamService {
     private readonly responseFilterService: CodingResponseFilterService,
     private readonly itemBuilderService: CodingItemBuilderService,
     private readonly fileCacheService: CodingFileCacheService
-  ) {}
+  ) { }
 
   /**
    * Stream coding list as CSV with memory-efficient batching.
@@ -51,7 +51,7 @@ export class CodingListStreamService {
         let lastId = 0;
         let totalWritten = 0;
 
-        for (;;) {
+        for (; ;) {
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
             lastId,
@@ -116,7 +116,7 @@ export class CodingListStreamService {
   }
 
   /**
-   * Export coding list as Excel with memory-efficient batching.
+   * Export coding list as Excel with streaming to minimize memory usage.
    */
   async getCodingListAsExcel(
     workspace_id: number,
@@ -124,11 +124,27 @@ export class CodingListStreamService {
     serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(
-      `Memory-efficient Excel export for workspace ${workspace_id}`
+      `Streaming Excel export for workspace ${workspace_id}`
     );
     this.fileCacheService.clearCaches();
 
-    const workbook = new ExcelJS.Workbook();
+    const { PassThrough } = await import('stream');
+    const chunks: Buffer[] = [];
+
+    // Create a PassThrough stream that collects chunks
+    const stream = new PassThrough();
+
+    stream.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    // Use streaming workbook writer instead of in-memory workbook
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream,
+      useStyles: false,
+      useSharedStrings: false
+    });
+
     const worksheet = workbook.addWorksheet('Coding List');
 
     worksheet.columns = [
@@ -145,11 +161,11 @@ export class CodingListStreamService {
     ];
 
     try {
-      const batchSize = 5000;
+      const batchSize = 1000; // Reduced batch size for streaming
       let lastId = 0;
       let totalWritten = 0;
 
-      for (;;) {
+      for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
@@ -163,14 +179,13 @@ export class CodingListStreamService {
           authToken!,
           serverUrl!,
           workspace_id
-        )
-        );
+        ));
 
         const results = await Promise.allSettled(processingPromises);
 
         for (const result of results) {
           if (result.status === 'fulfilled' && result.value !== null) {
-            worksheet.addRow(result.value);
+            worksheet.addRow(result.value).commit();
             totalWritten += 1;
           }
         }
@@ -187,8 +202,21 @@ export class CodingListStreamService {
       }
 
       this.logger.log(`Excel export finished. Rows written: ${totalWritten}`);
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
+
+      // Set up promise to wait for stream completion BEFORE committing
+      const streamComplete = new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+
+      // Commit the worksheet and workbook (this triggers data writing)
+      await worksheet.commit();
+      await workbook.commit();
+
+      // Wait for all data to be written and read
+      await streamComplete;
+
+      return Buffer.concat(chunks);
     } catch (error) {
       this.logger.error(`Error creating Excel export: ${error.message}`);
       throw error;
@@ -255,7 +283,7 @@ export class CodingListStreamService {
       const batchSize = 5000;
       let lastId = 0;
 
-      for (;;) {
+      for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
@@ -323,7 +351,7 @@ export class CodingListStreamService {
         let lastId = 0;
         let totalWritten = 0;
 
-        for (;;) {
+        for (; ;) {
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
             lastId,
@@ -333,8 +361,7 @@ export class CodingListStreamService {
 
           if (!responses.length) break;
 
-          // Process responses in parallel batches for better performance
-          const items: CodingItem[] = [];
+          // Process responses in parallel batches
           const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
             response,
             version,
@@ -342,26 +369,21 @@ export class CodingListStreamService {
             serverUrl!,
             workspace_id,
             includeReplayUrls
-          )
-          );
+          ));
 
           const results = await Promise.allSettled(processingPromises);
 
+          // Write items directly to CSV stream without accumulating
           for (const result of results) {
             if (result.status === 'fulfilled' && result.value !== null) {
-              items.push(result.value);
-            }
-          }
+              const ok = csvStream.write(result.value);
+              totalWritten += 1;
 
-          // Write items to CSV stream
-          for (const item of items) {
-            const ok = csvStream.write(item);
-            totalWritten += 1;
-
-            if (!ok) {
-              await new Promise(resolve => {
-                csvStream.once('drain', resolve);
-              });
+              if (!ok) {
+                await new Promise(resolve => {
+                  csvStream.once('drain', resolve);
+                });
+              }
             }
           }
 
@@ -395,7 +417,7 @@ export class CodingListStreamService {
   }
 
   /**
-   * Export coding results by version as Excel.
+   * Export coding results by version as Excel with streaming.
    */
   async getCodingResultsByVersionAsExcel(
     workspace_id: number,
@@ -405,11 +427,27 @@ export class CodingListStreamService {
     includeReplayUrls: boolean = false
   ): Promise<Buffer> {
     this.logger.log(
-      `Starting Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+      `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
     );
     this.fileCacheService.clearCaches();
 
-    const workbook = new ExcelJS.Workbook();
+    const { PassThrough } = await import('stream');
+    const chunks: Buffer[] = [];
+
+    // Create a PassThrough stream that collects chunks
+    const stream = new PassThrough();
+
+    stream.on('data', (chunk: Buffer) => {
+      chunks.push(chunk);
+    });
+
+    // Use streaming workbook writer for minimal memory usage
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({
+      stream,
+      useStyles: false, // Disable styles to reduce memory
+      useSharedStrings: false // Disable shared strings to reduce memory
+    });
+
     const worksheet = workbook.addWorksheet('Coding Results');
 
     // Define headers based on version (include lower versions)
@@ -422,24 +460,12 @@ export class CodingListStreamService {
 
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
-    // Style header row
-    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    worksheet.getRow(1).fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'FF4472C4' }
-    };
-    worksheet.getRow(1).alignment = {
-      horizontal: 'center',
-      vertical: 'middle',
-      wrapText: true
-    };
-
-    const batchSize = 5000;
+    const batchSize = 1000; // Reduced batch size for streaming
     let lastId = 0;
+    let totalWritten = 0;
 
     try {
-      for (;;) {
+      for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
@@ -449,34 +475,63 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
-        for (const response of responses) {
-          const itemData =
-            await this.itemBuilderService.buildCodingItemWithVersions(
-              response,
-              version,
-              authToken || '',
-              serverUrl || '',
-              workspace_id,
-              includeReplayUrls
-            );
-          if (itemData) {
-            worksheet.addRow(itemData);
+        // Process responses in parallel batches
+        const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
+          response,
+          version,
+          authToken || '',
+          serverUrl || '',
+          workspace_id,
+          includeReplayUrls
+        )
+        );
+
+        const results = await Promise.allSettled(processingPromises);
+
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value !== null) {
+            worksheet.addRow(result.value).commit(); // Commit each row immediately
+            totalWritten += 1;
           }
         }
 
-        // Force garbage collection hint
+        // Force garbage collection hint after each batch
         if (global.gc) {
           global.gc();
         }
 
         lastId = responses[responses.length - 1].id;
+
+        // Log progress every 10 batches
+        if (totalWritten % 10000 === 0) {
+          this.logger.log(
+            `Excel export progress for version ${version}: ${totalWritten} rows written`
+          );
+        }
+
         await new Promise(resolve => {
           setImmediate(resolve);
         });
       }
 
-      this.logger.log(`Excel export completed for version ${version}`);
-      return (await workbook.xlsx.writeBuffer()) as unknown as Buffer;
+      this.logger.log(
+        `Excel export completed for version ${version}. Rows written: ${totalWritten}`
+      );
+
+      // Set up promise to wait for stream completion BEFORE committing
+      const streamComplete = new Promise<void>((resolve, reject) => {
+        stream.on('end', resolve);
+        stream.on('error', reject);
+      });
+
+      // Commit the worksheet and workbook (this triggers data writing)
+      await worksheet.commit();
+      await workbook.commit();
+
+      // Wait for all data to be written and read
+      await streamComplete;
+
+      return Buffer.concat(chunks);
     } catch (error) {
       this.logger.error(
         `Error during Excel export for version ${version}: ${error.message}`
