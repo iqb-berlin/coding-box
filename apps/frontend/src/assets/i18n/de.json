@@ -45,7 +45,6 @@
   },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
-
   "home": {
     "welcome": "Willkommen!",
     "home-page": "Startseite",
@@ -87,7 +86,7 @@
     "admin": "System-Administrator:in"
   },
   "admin": {
-    "set-user-access-rights":"Nutzer Zugriffsrechte für Arbeitsbereich(e)",
+    "set-user-access-rights": "Nutzer Zugriffsrechte für Arbeitsbereich(e)",
     "users": "Nutzer:innen",
     "users-title": "Admin: Nutzer:innen",
     "user-created": "Nutzer:in angelegt",
@@ -167,8 +166,8 @@
     "change-workspace-settings": "Einstellungen des Arbeitsbereiches ändern",
     "report-workspaces": "Bericht Arbeitsbereiche",
     "workspaces-excel-name": "{{date}} Arbeitsbereiche.xlsx",
-    "files-deleted":"Testdatei(en) gelöscht",
-    "files-not-deleted":"Konnte Testdatei(en) nicht löschen",
+    "files-deleted": "Testdatei(en) gelöscht",
+    "files-not-deleted": "Konnte Testdatei(en) nicht löschen",
     "test-group-not-deleted": "Konnte Testgruppe(n) nicht löschen",
     "test-group-deleted": "Testgruppe(n) gelöscht",
     "unknown": "unbekannt",
@@ -277,7 +276,6 @@
     "access-level-3": "Studienmanager:in",
     "access-level-4": "Admin"
   },
-
   "access-matrix": {
     "title": "Zugriffsrechte-Matrix",
     "description": "Diese Matrix zeigt, welche Funktionen mit welcher Zugriffsebene verwendet werden können.",
@@ -329,20 +327,17 @@
       "view-journal": "Journal ansehen"
     }
   },
-
-  "file-upload" : {
+  "file-upload": {
     "filename": "Dateiname",
     "file_type": "Dateityp",
     "file_size": "Dateigröße",
     "created_at": "Hinzugefügt am",
     "no-files": "Keine Dateien gefunden"
   },
-
   "test_group": {
     "test_group": "Testgruppe",
     "created_at": "Hochgeladen am"
   },
-
   "error": {
     "general": "Fehler: {{error}}",
     "noWorkspaceSelected": "Kein Workspace ausgewählt",
@@ -354,7 +349,6 @@
     "login_button": "Anmelden",
     "error_title": "Fehler"
   },
-
   "coding": {
     "comment-dialog": {
       "title": "Kommentar zum Kodierjob",
@@ -513,7 +507,6 @@
       "code-label-to-upper": "Code-Labels in Großbuchstaben konvertieren"
     }
   },
-
   "common": {
     "close": "Schließen",
     "cancel": "Abbrechen",
@@ -522,7 +515,6 @@
     "actions": "Aktionen",
     "created": "Erstellt am"
   },
-
   "workspace": {
     "title": "Arbeitsbereich",
     "workspace-not-loaded": "Konnte Daten für Arbeitsbereich nicht laden",
@@ -635,7 +627,6 @@
     "profile-deleted-successfully": "Profil erfolgreich gelöscht",
     "error-deleting-missings-profile": "Fehler beim Löschen des Missings-Profils"
   },
-
   "paginator": {
     "itemsPerPageLabel": "Elemente pro Seite:",
     "nextPageLabel": "Nächste Seite",
@@ -644,7 +635,6 @@
     "lastPageLabel": "Letzte Seite",
     "getRangeLabel": "{{startIndex}} - {{endIndex}} von {{length}}"
   },
-
   "replay": {
     "coding-progress": "Kodierfortschritt:",
     "open-count": "Offen:",
@@ -677,7 +667,6 @@
       "no-coded-units": "Keine kodierten Einheiten gefunden."
     }
   },
-
   "code-selector": {
     "codes-for-variable": "Codes für Variable",
     "mark-as-open": "Als offen markieren",
@@ -693,7 +682,6 @@
       "technical-problems": "Technische Probleme"
     }
   },
-
   "ws-settings": {
     "access-token": "Zugangstoken",
     "generate-token": "Token generieren",
@@ -729,7 +717,6 @@
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an."
   },
-
   "variable-analysis": {
     "analysis-results": "Analyse Ergebnisse",
     "analyzing-variables": "Analysiere Variablen...",
@@ -775,7 +762,6 @@
     "loading-results": "Lade Analyse-Ergebnisse...",
     "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
   },
-
   "coding-management": {
     "buttons": {
       "auto-code": "Automatisch Kodieren",
@@ -926,7 +912,6 @@
       "select-page": "Seiten auswählen"
     }
   },
-
   "test-results-search": {
     "search-units": "Aufgaben suchen",
     "search-responses": "Antworten suchen",
@@ -1058,9 +1043,22 @@
     "autocoder-run-selection": {
       "select-run": "Autocoder Lauf auswählen",
       "run-1": "1 Autocoder Lauf",
-      "run-2": "2 Autocoder Lauf"
+      "run-2": "2 Autocoder Lauf",
+      "hint": {
+        "v1": {
+          "title": "Hinweis zum 1. Autocoder-Lauf (v1)",
+          "text": "Dies ist die initiale maschinelle Kodierung aller Antworten. <br><strong>Warnung:</strong> Das Starten dieses Laufs löscht unwiderruflich alle vorhandenen manuellen Kodierungen (v2) und Ergebnisse des zweiten Autocoder-Laufs (v3)!"
+        },
+        "v2": {
+          "title": "Hinweis zum 2. Autocoder-Lauf (v3)",
+          "text": "Dieser Lauf sollte erst <strong>nach</strong> der manuellen Kodierung gestartet werden. Er dient dazu, verbleibende Lücken basierend auf Regeln zu schließen, die auf den manuellen Ergebnissen aufbauen."
+        },
+        "process": {
+          "title": "Ablauf der Kodierung",
+          "text": "<ol><li><strong>1. Autocoder-Lauf (v1):</strong> Basis-Kodierung durch das System.</li><li><strong>Manuelle Kodierung (v2):</strong> Bearbeitung durch Kodierer </li><li><strong>2. Autocoder-Lauf (v3):</strong> Abschluss-Kodierung (optional), falls weitere Regeln auf den manuellen Ergebnissen aufbauen.</li></ol>"
+        }
+      }
     },
-
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "select-all-groups": "Alle auswählen",
@@ -1122,8 +1120,7 @@
       "duration": "Dauer:",
       "error": "Fehler:",
       "cancel": "Auftrag abbrechen"
-    }
-    ,
+    },
     "job-result-dialog": {
       "title": "Ergebnis des Kodierauftrags",
       "total-responses": "Insgesamt kodierte Antworten",
@@ -1263,7 +1260,6 @@
       }
     }
   },
-
   "export-dialog": {
     "title": "Export Format wählen",
     "description": "Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:",
@@ -1299,7 +1295,6 @@
   "export-coding-book": {
     "validation-file": "Validierungs-Kodierliste"
   },
-
   "coding-job-definition-dialog": {
     "job-definition": {
       "edit": "Job-Definition bearbeiten",
@@ -1507,7 +1502,6 @@
       }
     }
   },
-
   "coding-job-bulk-creation-dialog": {
     "title": "Verteilte Erstellung von Kodieraufträgen",
     "description": "Die ausgewählten Variablen werden gleichmäßig auf die ausgewählten Kodierer verteilt:",
@@ -1545,7 +1539,6 @@
       "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
     }
   },
-
   "kappa": {
     "poor": "Schlechte Übereinstimmung (weniger als zufällig)",
     "slight": "Schwache Übereinstimmung",
@@ -1554,7 +1547,6 @@
     "substantial": "Substantielle Übereinstimmung",
     "almost_perfect": "Nahezu perfekte Übereinstimmung"
   },
-
   "double-coded-review": {
     "title": "Doppelkodierung überprüfen",
     "description": "Überprüfen und vergleichen Sie die Ergebnisse der Doppelkodierung, um die Qualität der Kodierung sicherzustellen.",
@@ -1609,7 +1601,6 @@
       "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
     }
   },
-
   "applied-results-overview": {
     "title": "Überblick über angewendete Ergebnisse",
     "description": "Überblick über angewendete Kodierungsergebnisse und verbleibende Arbeit für manuell kodierte Variablen",
@@ -1626,7 +1617,6 @@
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
   },
-
   "coding-validation-results": {
     "title": "Validierungsergebnisse",
     "download-button": "Als Excel herunterladen",
@@ -1650,7 +1640,6 @@
       }
     }
   },
-
   "coding-results": {
     "apply": {
       "error": {
