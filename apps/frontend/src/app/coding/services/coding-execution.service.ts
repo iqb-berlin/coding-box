@@ -70,12 +70,13 @@ export class CodingExecutionService {
       );
   }
 
-  createCodingStatisticsJob(workspace_id: number): Observable<{ jobId: string; message: string }> {
+  createCodingStatisticsJob(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<{ jobId: string; message: string }> {
+    const params = new HttpParams().set('version', version);
     return this.http
       .post<{ jobId: string; message: string }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job`,
       {},
-      {}
+      { params }
     )
       .pipe(
         catchError(() => of({ jobId: '', message: 'Failed to create job' }))

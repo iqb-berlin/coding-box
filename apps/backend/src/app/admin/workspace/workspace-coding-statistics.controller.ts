@@ -73,10 +73,18 @@ export class WorkspaceCodingStatisticsController {
       }
     }
   })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version to calculate statistics for: v1, v2, or v3',
+    enum: ['v1', 'v2', 'v3'],
+    example: 'v1'
+  })
   async createCodingStatisticsJob(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
-    return this.codingStatisticsService.createCodingStatisticsJob(workspace_id);
+    return this.codingStatisticsService.createCodingStatisticsJob(workspace_id, version);
   }
 
   @Get(':workspace_id/coding/groups')

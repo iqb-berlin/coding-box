@@ -89,7 +89,7 @@ export class JobQueueService {
     @InjectQueue('data-export') private dataExportQueue: Queue,
     @InjectQueue('flat-response-filter-options')
     private flatResponseFilterOptionsQueue: Queue
-  ) {}
+  ) { }
 
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
@@ -109,12 +109,13 @@ export class JobQueueService {
 
   async addCodingStatisticsJob(
     workspaceId: number,
+    version?: 'v1' | 'v2' | 'v3',
     options?: JobOptions
-  ): Promise<Job<{ workspaceId: number }>> {
+  ): Promise<Job<{ workspaceId: number; version?: 'v1' | 'v2' | 'v3' }>> {
     this.logger.log(
-      `Adding coding statistics job for workspace ${workspaceId}`
+      `Adding coding statistics job for workspace ${workspaceId} (version: ${version || 'v1'})`
     );
-    return this.codingStatisticsQueue.add({ workspaceId }, options);
+    return this.codingStatisticsQueue.add({ workspaceId, version }, options);
   }
 
   async getCodingStatisticsJob(

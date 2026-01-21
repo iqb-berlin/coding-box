@@ -256,26 +256,33 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async createCodingStatisticsJob(
-    workspaceId: number
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     try {
-      const cacheKey = `coding-statistics:${workspaceId}`;
+      const cacheKey = `coding-statistics:${workspaceId}:${version}`;
       const cachedResult = await this.cacheService.get<CodingStatistics>(
         cacheKey
       );
       if (cachedResult) {
         this.logger.log(
-          `Cached coding statistics exist for workspace ${workspaceId}, returning empty jobId to use cache`
+          `Cached coding statistics exist for workspace ${workspaceId} (version: ${version}), returning empty jobId to use cache`
         );
         return { jobId: '', message: 'Using cached coding statistics' };
       }
-      await this.cacheService.delete(cacheKey); // Clear any stale cache
+      // We don't delete the cache here because we just checked it. If it was there, we returned.
+      // If it's not there, we don't need to delete it.
+      // However, the original code deleted it. Let's keep deleting it just in case of race conditions or partial writes?
+      // Actually, if we are starting a job, we should probably clear any stale cache just to be sure.
+      await this.cacheService.delete(cacheKey);
+
       this.logger.log(
-        `No cached coding statistics for workspace ${workspaceId}, creating job to recalculate`
+        `No cached coding statistics for workspace ${workspaceId} (version: ${version}), creating job to recalculate`
       );
 
       const job = await this.jobQueueService.addCodingStatisticsJob(
-        workspaceId
+        workspaceId,
+        version
       );
       this.logger.log(
         `Created coding statistics job ${job.id} for workspace ${workspaceId}`

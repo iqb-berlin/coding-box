@@ -72,7 +72,7 @@ export class CodingManagementService {
     this._referenceStatistics.next(null);
     this._referenceVersion.next(null);
 
-    this.executionService.createCodingStatisticsJob(workspaceId)
+    this.executionService.createCodingStatisticsJob(workspaceId, version)
       .pipe(
         catchError(() => of({
           jobId: '' as string,
