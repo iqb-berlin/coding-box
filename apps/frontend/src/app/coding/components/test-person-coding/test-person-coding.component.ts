@@ -27,18 +27,21 @@ import {
   of,
   tap
 } from 'rxjs';
+import { concatMap } from 'rxjs/operators';
 import {
   CodingStatistics,
   JobInfo,
   JobStatus,
   PaginatedCodingList,
   TestPersonCodingService,
-  WorkspaceGroupCodingStats
+  WorkspaceGroupCodingStats,
+  CodingStatisticsWithJob
 } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
+import { CodingManagementService } from '../../services/coding-management.service';
 
 @Component({
   selector: 'coding-box-test-person-coding',
@@ -76,6 +79,7 @@ export class TestPersonCodingComponent implements OnInit {
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
+  private codingManagementService = inject(CodingManagementService);
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -206,28 +210,41 @@ export class TestPersonCodingComponent implements OnInit {
     }
 
     this.isLoading = true;
-    this.testPersonCodingService.codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
-      .pipe(
-        tap(result => {
-          if (result.jobId) {
-            this.activeJobId = result.jobId;
-            this.startJobStatusPolling(result.jobId);
-            const translatedMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : this.translateService.instant('test-person-coding.background-job-started');
-            this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 5000 });
-          } else {
-            this.snackBar.open(this.translateService.instant('test-person-coding.responses-coded', { count: result.totalResponses }), this.translateService.instant('close'), { duration: 3000 });
-            this.loadStatistics();
-            this.loadCodingList(this.currentPage, this.pageSize);
-          }
-        }),
-        catchError(error => {
-          this.snackBar.open(this.translateService.instant('test-person-coding.job-error', { error: error.message || this.translateService.instant('test-person-coding.coding-failed') }), this.translateService.instant('close'), { duration: 5000 });
-          return of(null);
-        }),
-        finalize(() => {
-          this.isLoading = false;
-        })
-      )
+
+    const startCoding$ = () => this.testPersonCodingService.codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun);
+    let task$: Observable<CodingStatisticsWithJob | null>;
+
+    if (this.autoCoderRun === 1) {
+      task$ = of(null).pipe(
+        concatMap(() => this.codingManagementService.resetCodingVersion('v2')),
+        concatMap(() => this.codingManagementService.resetCodingVersion('v3')),
+        concatMap(() => startCoding$())
+      );
+    } else {
+      task$ = startCoding$();
+    }
+
+    task$.pipe(
+      tap(result => {
+        if (result && result.jobId) {
+          this.activeJobId = result.jobId;
+          this.startJobStatusPolling(result.jobId);
+          const translatedMessage = result.message ? this.backendMessageTranslator.translateMessage(result.message) : this.translateService.instant('test-person-coding.background-job-started');
+          this.snackBar.open(translatedMessage, this.translateService.instant('close'), { duration: 5000 });
+        } else if (result) {
+          this.snackBar.open(this.translateService.instant('test-person-coding.responses-coded', { count: result.totalResponses }), this.translateService.instant('close'), { duration: 3000 });
+          this.loadStatistics();
+          this.loadCodingList(this.currentPage, this.pageSize);
+        }
+      }),
+      catchError(error => {
+        this.snackBar.open(this.translateService.instant('test-person-coding.job-error', { error: error.message || this.translateService.instant('test-person-coding.coding-failed') }), this.translateService.instant('close'), { duration: 5000 });
+        return of(null);
+      }),
+      finalize(() => {
+        this.isLoading = false;
+      })
+    )
       .subscribe();
   }
 
