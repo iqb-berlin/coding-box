@@ -1,7 +1,8 @@
 <div class="fx-column-start-start fx-gap-10 coding-container">
 
-  <div *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
-       class="fx-column-start-start fx-gap-10 validation-progress">
+  <div
+    *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
+    class="fx-column-start-start fx-gap-10 validation-progress">
     <div class="statistics-card">
       <h2 class="section-title">Validierung läuft</h2>
       <p class="section-description">
@@ -17,7 +18,7 @@
   </div>
 
   <div *ngIf="validationProgress && validationProgress.status === 'error'"
-       class="fx-column-start-start fx-gap-10 validation-error">
+    class="fx-column-start-start fx-gap-10 validation-error">
     <div class="statistics-card error-card">
       <h2 class="section-title">Fehler bei der Validierung</h2>
       <p class="section-description">
@@ -35,7 +36,7 @@
 
 
 
-  
+
   <div class="fx-row-space-between-stretch">
     <div class="statistics-card">
       <div class="header-row">
@@ -44,7 +45,8 @@
           <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
         </div>
         <div class="header-actions">
-          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading" matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
+          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading"
+            matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
             <mat-icon>link</mat-icon>
             Externe Kodierung einbinden
           </button>
@@ -62,33 +64,29 @@
           </span>
         </h3>
         <p class="subsection-description">{{ 'coding-management-manual.response-matching.description' | translate }}</p>
-        
+
         <div class="matching-options" [class.disabled]="isLoadingMatchingMode || isSavingMatchingMode">
-          <mat-checkbox
-            [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+          <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
             (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-            [disabled]="isLoadingMatchingMode || isSavingMatchingMode"
-            color="primary">
+            [disabled]="isLoadingMatchingMode || isSavingMatchingMode" color="primary">
             {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
           </mat-checkbox>
-          
-          <mat-checkbox
-            [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+
+          <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
             (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
             [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
             color="primary">
             {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
           </mat-checkbox>
-          
-          <mat-checkbox
-            [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+
+          <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
             (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
             [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
             color="primary">
             {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
           </mat-checkbox>
         </div>
-        
+
         <p class="matching-mode-hint">
           <mat-icon>info</mat-icon>
           <span *ngIf="responseMatchingFlags.length === 0">
@@ -109,7 +107,9 @@
         <h3 class="subsection-title">
           <mat-icon>analytics</mat-icon>
           {{ 'coding-management-manual.response-analysis.title' | translate }}
-          <button mat-icon-button (click)="refreshResponseAnalysis()" matTooltip="{{ 'coding-management-manual.response-analysis.refresh' | translate }}" [disabled]="isLoadingResponseAnalysis">
+          <button mat-icon-button (click)="refreshResponseAnalysis()"
+            matTooltip="{{ 'coding-management-manual.response-analysis.refresh' | translate }}"
+            [disabled]="isLoadingResponseAnalysis">
             <mat-icon>refresh</mat-icon>
           </button>
           <span *ngIf="isLoadingResponseAnalysis" class="loading-indicator">
@@ -127,7 +127,8 @@
                   {{ responseAnalysis.emptyResponses.total > 0 ? 'warning' : 'check_circle' }}
                 </mat-icon>
                 <div class="analysis-title-content">
-                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.empty-responses' | translate }}</span>
+                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.empty-responses' |
+                    translate }}</span>
                   <span class="analysis-count" [class.warning-count]="responseAnalysis.emptyResponses.total > 0">
                     {{ responseAnalysis.emptyResponses.total }}
                   </span>
@@ -135,8 +136,8 @@
               </div>
               <mat-icon class="expand-icon">{{ showEmptyResponsesDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
             </div>
-            
-            <div *ngIf="showEmptyResponsesDetails && responseAnalysis.emptyResponses.total > 0" class="analysis-details">
+            <div *ngIf="showEmptyResponsesDetails && responseAnalysis.emptyResponses.total > 0"
+              class="analysis-details">
               <table class="analysis-table">
                 <thead>
                   <tr>
@@ -156,8 +157,18 @@
                 </tbody>
               </table>
               <p *ngIf="responseAnalysis.emptyResponses.total > 50" class="more-items-hint">
-                {{ 'coding-management-manual.response-analysis.showing-first-50' | translate:{ total: responseAnalysis.emptyResponses.total } }}
+                {{ 'coding-management-manual.response-analysis.showing-first-50' | translate:{ total:
+                responseAnalysis.emptyResponses.total } }}
               </p>
+              <div class="analysis-actions">
+                <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
+                  [disabled]="isApplyingEmptyCoding"
+                  [matTooltip]="'coding-management-manual.response-analysis.apply-empty-coding-tooltip' | translate">
+                  <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
+                  <mat-spinner *ngIf="isApplyingEmptyCoding" diameter="20"></mat-spinner>
+                  {{ 'coding-management-manual.response-analysis.apply-empty-coding-button' | translate }}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -169,21 +180,26 @@
                   {{ responseAnalysis.duplicateValues.total > 0 ? 'content_copy' : 'check_circle' }}
                 </mat-icon>
                 <div class="analysis-title-content">
-                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.duplicate-values' | translate }}</span>
+                  <span class="analysis-title">{{ 'coding-management-manual.response-analysis.duplicate-values' |
+                    translate }}</span>
                   <span class="analysis-count" [class.warning-count]="responseAnalysis.duplicateValues.total > 0">
-                    {{ responseAnalysis.duplicateValues.total }} {{ 'coding-management-manual.response-analysis.groups' | translate }}
-                    ({{ responseAnalysis.duplicateValues.totalResponses }} {{ 'coding-management-manual.response-analysis.responses' | translate }})
+                    {{ responseAnalysis.duplicateValues.total }} {{ 'coding-management-manual.response-analysis.groups'
+                    | translate }}
+                    ({{ responseAnalysis.duplicateValues.totalResponses }} {{
+                    'coding-management-manual.response-analysis.responses' | translate }})
                   </span>
                 </div>
               </div>
               <mat-icon class="expand-icon">{{ showDuplicateValuesDetails ? 'expand_less' : 'expand_more' }}</mat-icon>
             </div>
-            
-            <div *ngIf="showDuplicateValuesDetails && responseAnalysis.duplicateValues.total > 0" class="analysis-details">
+
+            <div *ngIf="showDuplicateValuesDetails && responseAnalysis.duplicateValues.total > 0"
+              class="analysis-details">
               <div *ngFor="let group of responseAnalysis.duplicateValues.groups | slice:0:20" class="duplicate-group">
                 <div class="duplicate-group-header">
                   <strong>{{ group.unitAlias || group.unitName }}</strong> / {{ group.variableId }}
-                  <span class="duplicate-value">"{{ group.normalizedValue | slice:0:50 }}{{ group.normalizedValue.length > 50 ? '...' : '' }}"</span>
+                  <span class="duplicate-value">"{{ group.normalizedValue | slice:0:50 }}{{ group.normalizedValue.length
+                    > 50 ? '...' : '' }}"</span>
                   <span class="occurrence-count">({{ group.occurrences.length }}x)</span>
                 </div>
                 <ul class="occurrence-list">
@@ -191,19 +207,22 @@
                     {{ occ.personLogin }}{{ occ.personCode ? ' (' + occ.personCode + ')' : '' }} - {{ occ.bookletName }}
                   </li>
                   <li *ngIf="group.occurrences.length > 5" class="more-occurrences">
-                    +{{ group.occurrences.length - 5 }} {{ 'coding-management-manual.response-analysis.more' | translate }}
+                    +{{ group.occurrences.length - 5 }} {{ 'coding-management-manual.response-analysis.more' | translate
+                    }}
                   </li>
                 </ul>
               </div>
               <p *ngIf="responseAnalysis.duplicateValues.total > 20" class="more-items-hint">
-                {{ 'coding-management-manual.response-analysis.showing-first-20-groups' | translate:{ total: responseAnalysis.duplicateValues.total } }}
+                {{ 'coding-management-manual.response-analysis.showing-first-20-groups' | translate:{ total:
+                responseAnalysis.duplicateValues.total } }}
               </p>
             </div>
           </div>
 
           <p class="analysis-timestamp">
             <mat-icon>schedule</mat-icon>
-            {{ 'coding-management-manual.response-analysis.last-updated' | translate }}: {{ responseAnalysis.analysisTimestamp | date:'medium' }}
+            {{ 'coding-management-manual.response-analysis.last-updated' | translate }}: {{
+            responseAnalysis.analysisTimestamp | date:'medium' }}
           </p>
         </div>
 
@@ -216,7 +235,8 @@
 
       <div class="statistics-content">
         <!-- Coding Progress Overview -->
-        <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section" [class.blurred-content]="isLoadingCodingProgress">
+        <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section"
+          [class.blurred-content]="isLoadingCodingProgress">
           <div class="statistics-card">
             <h2 class="section-title">Kodierungsfortschritt</h2>
             <div class="coverage-stats">
@@ -230,11 +250,13 @@
               </div>
               <div class="stat-item">
                 <span class="stat-label">Ausstehende Fälle:</span>
-                <span class="stat-value missing">{{codingProgressOverview.totalCasesToCode - codingProgressOverview.completedCases}}</span>
+                <span class="stat-value missing">{{codingProgressOverview.totalCasesToCode -
+                  codingProgressOverview.completedCases}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Fertigstellungsrate:</span>
-                <span class="stat-value percentage">{{codingProgressOverview.completionPercentage | number:'1.1-1'}}%</span>
+                <span class="stat-value percentage">{{codingProgressOverview.completionPercentage |
+                  number:'1.1-1'}}%</span>
               </div>
             </div>
             <div class="coverage-bar">
@@ -250,26 +272,26 @@
         </div>
 
         <div class="job-definitions-container">
-          <coding-box-coding-job-definitions 
-            (bulkCreationCompleted)="reloadCodingJobsList()"
+          <coding-box-coding-job-definitions (bulkCreationCompleted)="reloadCodingJobsList()"
             (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
         </div>
 
         <!-- Variable Coverage Statistics -->
-        <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section" [class.blurred-content]="isLoadingVariableCoverage">
+        <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section"
+          [class.blurred-content]="isLoadingVariableCoverage">
           <div class="statistics-card">
             <h2 class="section-title">
               Variablenabdeckung
               <button mat-icon-button (click)="refreshAllStatistics()" matTooltip="Statistiken manuell aktualisieren">
                 <mat-icon>refresh</mat-icon>
               </button>
-              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge" 
-                    matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
+              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge"
+                matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
                 <mat-icon>warning</mat-icon>
                 {{variableCoverageOverview.conflictedVariables}} Konflikte
               </span>
             </h2>
-            
+
             <!-- Overall Coverage Stats -->
             <div class="coverage-stats">
               <div class="stat-item">
@@ -294,7 +316,8 @@
               </div>
               <div class="stat-item">
                 <span class="stat-label">Abdeckungsrate:</span>
-                <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage | number:'1.1-1'}}%</span>
+                <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage |
+                  number:'1.1-1'}}%</span>
               </div>
             </div>
 
@@ -340,14 +363,16 @@
                 Variablenkonflikte
               </h3>
               <div class="conflicts-list">
-                <div *ngFor="let conflict of variableCoverageOverview.coverageByStatus.conflicted" class="conflict-item">
+                <div *ngFor="let conflict of variableCoverageOverview.coverageByStatus.conflicted"
+                  class="conflict-item">
                   <div class="conflict-variable">
                     <mat-icon>code</mat-icon>
                     <span>{{conflict.variableKey}}</span>
                   </div>
                   <div class="conflict-definitions">
                     <span class="conflict-label">Zugeordnet zu:</span>
-                    <span *ngFor="let def of conflict.conflictingDefinitions; let last = last" class="conflict-definition">
+                    <span *ngFor="let def of conflict.conflictingDefinitions; let last = last"
+                      class="conflict-definition">
                       Definition #{{def.id}} ({{getStatusLabel(def.status)}}){{!last ? ', ' : ''}}
                     </span>
                   </div>
@@ -373,7 +398,8 @@
         </div>
 
         <!-- Case Coverage Statistics -->
-        <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section" [class.blurred-content]="isLoadingCaseCoverage">
+        <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section"
+          [class.blurred-content]="isLoadingCaseCoverage">
           <div class="statistics-card">
             <h2 class="section-title">Fälle in Kodierjobs</h2>
             <div class="coverage-stats">
@@ -433,7 +459,8 @@
               </div>
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.completion-progress' | translate }}</span>
-                <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage | number:'1.1-1'}}%</span>
+                <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage |
+                  number:'1.1-1'}}%</span>
               </div>
             </div>
             <div class="coverage-bar">
@@ -444,8 +471,7 @@
 
         <div class="coder-training-list-container">
           <h3>Kodierer-Schulungen</h3>
-          <coding-box-coder-trainings-list
-            (onCreateTraining)="openCoderTraining()">
+          <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()">
           </coding-box-coder-trainings-list>
         </div>
         <div class="variable-bundle-container">
@@ -458,14 +484,13 @@
 
 
 
-  <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls" (change)="onExternalCodingFileSelected($event)">
+  <input #externalCodingFileInput type="file" style="display: none;" accept=".csv, .xlsx, .xls"
+    (change)="onExternalCodingFileSelected($event)">
 
   <!-- Coder Training Component -->
   <div *ngIf="showCoderTraining" class="coder-training-overlay">
     <div class="coder-training-modal">
-      <coding-box-coder-training
-        (close)="closeCoderTraining()"
-        (startTraining)="onTrainingStart($event)">
+      <coding-box-coder-training (close)="closeCoderTraining()" (startTraining)="onTrainingStart($event)">
       </coding-box-coder-training>
     </div>
   </div>

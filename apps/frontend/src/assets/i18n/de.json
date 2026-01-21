@@ -1264,6 +1264,22 @@
         "variable": "Variable",
         "person": "Person",
         "booklet": "Booklet"
+      },
+      "apply-empty-coding-button": "Kodierung automatisch anwenden",
+      "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
+      "apply-empty-coding-confirm-message": "Möchten Sie die automatische Kodierung für {{count}} leere Unit-Antworten anwenden?",
+      "apply-empty-coding-success": "{{count}} leere Antworten wurden erfolgreich kodiert.",
+      "apply-empty-coding-error": "Fehler beim Kodieren der leeren Antworten: {{error}}",
+      "apply-empty-coding-dialog": {
+        "title": "Leere Antworten automatisch kodieren",
+        "description": "Sie sind dabei, die automatische Kodierung für {{count}} leere Antworten anzuwenden.",
+        "apply-header": "Folgende Werte werden gesetzt:",
+        "status": "Kodierstatus",
+        "code": "Code",
+        "score": "Bewertung (Score)",
+        "warning": "Hinweis: Bestehende v2-Kodierungen werden nicht überschrieben.",
+        "cancel": "Abbrechen",
+        "confirm": "Kodierung anwenden"
       }
     }
   },

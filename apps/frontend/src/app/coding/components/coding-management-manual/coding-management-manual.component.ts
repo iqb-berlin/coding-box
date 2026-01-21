@@ -26,6 +26,7 @@ import {
   ImportComparisonDialogComponent,
   ImportComparisonData
 } from '../import-comparison-dialog/import-comparison-dialog.component';
+import { ApplyEmptyCodingDialogComponent } from './apply-empty-coding-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
@@ -63,7 +64,8 @@ import {
     CoderTrainingComponent,
     CoderTrainingsListComponent,
     CommonModule,
-    MatCheckboxModule
+    MatCheckboxModule,
+    ApplyEmptyCodingDialogComponent
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -136,6 +138,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isLoadingResponseAnalysis = false;
   showEmptyResponsesDetails = false;
   showDuplicateValuesDetails = false;
+  isApplyingEmptyCoding = false;
 
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
@@ -890,5 +893,66 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   toggleDuplicateValuesDetails(): void {
     this.showDuplicateValuesDetails = !this.showDuplicateValuesDetails;
+  }
+
+  onApplyEmptyResponseCoding(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || !this.responseAnalysis) {
+      return;
+    }
+
+    const totalResponses = this.responseAnalysis.emptyResponses.total;
+
+    // Show Material Dialog confirmation
+    const dialogRef = this.dialog.open(ApplyEmptyCodingDialogComponent, {
+      width: '550px',
+      data: { count: totalResponses }
+    });
+
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.isApplyingEmptyCoding = true;
+
+      this.testPersonCodingService
+        .applyEmptyResponseCoding(workspaceId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: result => {
+            this.isApplyingEmptyCoding = false;
+
+            if (result.success) {
+              this.showSuccess(
+                this.translateService.instant(
+                  'coding-management-manual.response-analysis.apply-empty-coding-success',
+                  { count: result.updatedCount }
+                )
+              );
+
+              // Refresh analysis and statistics
+              this.loadResponseAnalysis();
+              this.refreshAllStatistics();
+            } else {
+              this.showError(
+                this.translateService.instant(
+                  'coding-management-manual.response-analysis.apply-empty-coding-error',
+                  { error: result.message }
+                )
+              );
+            }
+          },
+          error: () => {
+            this.isApplyingEmptyCoding = false;
+            this.showError(
+              this.translateService.instant(
+                'coding-management-manual.response-analysis.apply-empty-coding-error',
+                { error: 'Unbekannter Fehler' }
+              )
+            );
+          }
+        });
+    });
   }
 }

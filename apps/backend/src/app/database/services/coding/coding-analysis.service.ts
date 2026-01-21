@@ -135,7 +135,9 @@ export class CodingAnalysisService {
           response.value === null ||
           response.value === '' ||
           response.value === undefined;
-        if (isEmptyValue) {
+
+        // Skip if already coded in v2 (status_v2 is set)
+        if (isEmptyValue && response.status_v2 === null) {
           const unit = unitMap.get(response.unitid);
           if (!unit) continue;
 
