@@ -9,6 +9,7 @@ import {
 } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
+import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import {
   statusNumberToString,
   statusStringToNumber
@@ -797,12 +798,20 @@ export class CodingProcessService {
               return key === variableAlias || key === resolvedVariableId;
             }) :
             undefined;
-
+          let responseValue: ResponseValueType = response.value;
+          const isArrayString = /^\[.*]$/.test(response.value);
+          if (isArrayString) {
+            try {
+              responseValue = JSON.parse(response.value);
+            } catch (e) {
+              // ignore
+            }
+          }
           const codedResult = Autocoder.CodingFactory.code(
             {
               id: response.variableid,
-              value: response.value,
-              status: statusNumberToString(inputStatus) || 'UNSET'
+              value: responseValue,
+              status: statusNumberToString(inputStatus)
             },
             variableCoding
           );
