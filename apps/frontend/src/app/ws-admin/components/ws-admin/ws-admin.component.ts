@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import {
-  ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet
+  ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
@@ -24,7 +24,6 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 })
 export class WsAdminComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
   appService = inject(AppService);
   private userBackendService = inject(UserBackendService);
 
@@ -48,10 +47,6 @@ export class WsAdminComponent implements OnInit {
       // Update access level for the new workspace
       this.updateAccessLevel();
     });
-  }
-
-  navigateToTab(link: string): void {
-    this.router.navigate(['/workspace-admin', this.appService.selectedWorkspaceId, link]);
   }
 
   private updateAccessLevel(): void {
