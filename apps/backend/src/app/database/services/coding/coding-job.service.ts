@@ -589,6 +589,9 @@ export class CodingJobService {
       queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
     }
 
+    // Exclude aggregated duplicates (marked with code_v2 = -111)
+    queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+
     return queryBuilder
       .orderBy('response.id', 'ASC')
       .getMany();
@@ -847,6 +850,31 @@ export class CodingJobService {
 
     if (responses.length === 0) {
       return;
+    }
+
+    // Get coding job to find workspace ID
+    const codingJob = await this.codingJobRepository.findOne({ where: { id: codingJobId } });
+    if (!codingJob) {
+      throw new Error(`Coding job ${codingJobId} not found`);
+    }
+    const workspaceId = codingJob.workspace_id;
+
+    // Get aggregation threshold
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+
+    // If aggregation is enabled, filter to unique cases only
+    if (aggregationThreshold !== null && aggregationThreshold >= 2) {
+      const originalCount = responses.length;
+      responses = await this.filterResponsesForAggregation(
+        responses,
+        aggregationThreshold,
+        workspaceId
+      );
+
+      this.logger.log(
+        `Aggregation enabled (threshold: ${aggregationThreshold}). ` +
+        `Reduced from ${originalCount} to ${responses.length} cases`
+      );
     }
 
     // Apply maxCodingCases limit if specified
@@ -1154,7 +1182,8 @@ export class CodingJobService {
       .leftJoinAndSelect('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -1426,8 +1455,7 @@ export class CodingJobService {
 
       // After applying the global cap, update totalCases in the doubleCodingInfo
       // so that the summary reflects the actually distributed (capped) cases
-      const cappedTotalCasesForItem = Object.values(distribution[itemKey]).reduce((sum, value) => sum + value, 0);
-      doubleCodingInfo[itemKey].totalCases = cappedTotalCasesForItem;
+      doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey]).reduce((sum, value) => sum + value, 0);
     }
 
     return {
@@ -1547,7 +1575,31 @@ export class CodingJobService {
 
         // Calculate aggregation info based on matching mode
         const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-        const uniqueCases = aggregatedGroups.length;
+
+        // Get aggregation threshold
+        const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+        const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
+
+        const filteredResponses: ResponseEntity[] = [];
+        let uniqueCases = 0;
+
+        if (aggregationThreshold !== null) {
+          // Apply filtering logic: if group size >= threshold, keep 1. Else keep all.
+          aggregatedGroups.forEach(group => {
+            if (group.responses.length >= threshold) {
+              group.responses.sort((a, b) => a.id - b.id);
+              filteredResponses.push(group.responses[0]);
+              uniqueCases += 1;
+            } else {
+              filteredResponses.push(...group.responses);
+              uniqueCases += group.responses.length;
+            }
+          });
+        } else {
+          // Aggregation disabled
+          filteredResponses.push(...responses);
+          uniqueCases = responses.length;
+        }
 
         aggregationInfo[itemKey] = {
           uniqueCases,
@@ -1583,7 +1635,7 @@ export class CodingJobService {
           doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
         }
 
-        const sortedResponses = [...responses].sort((a, b) => {
+        const sortedResponses = [...filteredResponses].sort((a, b) => {
           const aVariableId = a.variableid || '';
           const bVariableId = b.variableid || '';
           const aUnitName = a.unit?.name || '';
@@ -1627,7 +1679,7 @@ export class CodingJobService {
         });
 
         const caseDistribution = this.distributeCasesForVariable(
-          responses,
+          filteredResponses,
           doubleCodingResponses,
           sortedCoders
         );
@@ -1795,6 +1847,102 @@ export class CodingJobService {
     }));
 
     return progressMap;
+  }
+
+  /**
+   * Get the duplicate aggregation threshold for a workspace
+   * Returns 2 as default (aggregation enabled by default)
+   */
+  async getAggregationThreshold(workspaceId: number): Promise<number | null> {
+    const settingKey = `workspace-${workspaceId}-duplicate-aggregation-threshold`;
+    const setting = await this.settingRepository.findOne({
+      where: { key: settingKey }
+    });
+
+    if (!setting) {
+      // Default: threshold = 2 (aggregation enabled)
+      return 2;
+    }
+
+    // Allow explicit disable by setting to 'disabled' or '0'
+    if (setting.content === 'disabled' || setting.content === '0') {
+      return null;
+    }
+
+    return parseInt(setting.content, 10);
+  }
+
+  /**
+   * Set the duplicate aggregation threshold for a workspace
+   */
+  async setAggregationThreshold(
+    workspaceId: number,
+    threshold: number | null
+  ): Promise<void> {
+    const settingKey = `workspace-${workspaceId}-duplicate-aggregation-threshold`;
+
+    if (threshold === null) {
+      // Explicitly disable aggregation
+      await this.settingRepository.save({
+        key: settingKey,
+        content: 'disabled'
+      });
+    } else {
+      await this.settingRepository.save({
+        key: settingKey,
+        content: threshold.toString()
+      });
+    }
+
+    this.logger.log(`Set aggregation threshold for workspace ${workspaceId}: ${threshold}`);
+  }
+
+  /**
+   * Filter responses to include only one representative per duplicate group
+   * Groups responses by unit+variable+normalized_value and keeps only the first
+   */
+  private async filterResponsesForAggregation(
+    responses: ResponseEntity[],
+    threshold: number,
+    workspaceId: number
+  ): Promise<ResponseEntity[]> {
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+
+    // Group responses by unit+variable+normalized_value
+    const groupMap = new Map<string, ResponseEntity[]>();
+
+    for (const response of responses) {
+      const unit = response.unit;
+      if (!unit) continue;
+
+      if (!response.value || response.value === '') continue;
+
+      const normalizedValue = this.normalizeValue(response.value, matchingFlags);
+      const key = `${unit.name}_${response.variableid}_${normalizedValue}`;
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, []);
+      }
+      groupMap.get(key)!.push(response);
+    }
+
+    // For each group, keep only first response if group size >= threshold
+    const filteredResponses: ResponseEntity[] = [];
+
+    for (const [key, group] of groupMap.entries()) {
+      if (group.length >= threshold) {
+        group.sort((a, b) => a.id - b.id);
+        filteredResponses.push(group[0]);
+
+        this.logger.debug(
+          `Group ${key}: ${group.length} duplicates, keeping master ${group[0].id}`
+        );
+      } else {
+        filteredResponses.push(...group);
+      }
+    }
+
+    return filteredResponses;
   }
 }
 

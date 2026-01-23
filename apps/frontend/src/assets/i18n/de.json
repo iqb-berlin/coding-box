@@ -1281,6 +1281,35 @@
         "cancel": "Abbrechen",
         "confirm": "Kodierung anwenden"
       }
+    },
+    "duplicate-aggregation": {
+      "is-applied": "Aggregation angewendet",
+      "config-title": "Aggregationseinstellungen",
+      "config-description": "Konfigurieren Sie, wie mehrfache Antworten behandelt werden sollen. Standardmäßig ist die Aggregation mit Schwellenwert 2 aktiviert.",
+      "threshold-label": "Schwellenwert für Duplikate",
+      "threshold-hint": "Mindestanzahl identischer Antworten für Aggregation (2-100). Standard: 2",
+      "apply-button": "Aggregation anwenden",
+      "deactivate-button": "Aggregation deaktivieren (Alle anzeigen)",
+      "apply-tooltip": "Mehrfache Antworten basierend auf dem Schwellenwert aggregieren",
+      "no-groups-meet-threshold": "Keine Duplikatgruppen erfüllen den Schwellenwert von {{threshold}}",
+      "success": "{{aggregatedResponses}} Antworten in {{aggregatedGroups}} Gruppen erfolgreich konfiguriert. {{uniqueCases}} eindeutige Kodierfälle werden in Kodieraufträgen erscheinen.",
+      "error": "Fehler beim Anwenden der Aggregation: {{error}}",
+      "deactivate-confirm": "Möchten Sie die Aggregation wirklich deaktivieren? Dadurch werden alle bisher aggregierten Duplikate wieder in die Liste der manuell zu kodierenden Fälle aufgenommen.",
+      "deactivate-dialog-title": "Aggregation deaktivieren",
+      "deactivate-confirm-button": "Aggregation deaktivieren",
+      "cancel": "Abbrechen",
+      "dialog": {
+        "title": "Duplikate aggregieren",
+        "info": "Sie sind dabei, die Aggregationseinstellungen zu konfigurieren. Dies beeinflusst, wie viele Kodierfälle in Kodieraufträgen erscheinen.",
+        "groups": "Duplikatgruppen",
+        "total-responses": "Gesamtantworten",
+        "threshold": "Schwellenwert",
+        "warning-title": "Wichtiger Hinweis",
+        "warning-text": "Mit dieser Einstellung werden nur eindeutige Antworten in Kodieraufträgen angezeigt. Wenn Sie eine Antwort kodieren, erhalten alle Duplikate automatisch denselben Code.",
+        "explanation": "Für jede Gruppe wird nur eine Antwort (Master) in Kodieraufträgen angezeigt. Alle anderen Duplikate erhalten automatisch denselben Code, wenn die Ergebnisse angewendet werden.",
+        "cancel": "Abbrechen",
+        "confirm": "Einstellungen speichern"
+      }
     }
   },
   "export-dialog": {

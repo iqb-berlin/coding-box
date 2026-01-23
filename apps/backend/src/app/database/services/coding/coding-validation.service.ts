@@ -320,6 +320,9 @@ export class CodingValidationService {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
     }
 
+    // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
+    queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)');
+
     queryBuilder.groupBy('unit.name').addGroupBy('response.variableid');
 
     const rawResults = await queryBuilder.getRawMany();
@@ -441,6 +444,7 @@ export class CodingValidationService {
             AND response.status_v1 = $2
             AND (${conditions})
             AND response.status_v2 IN ($3, $4, $5)
+            AND (response.code_v2 IS NULL OR response.code_v2 >= 0)
         `;
 
         const result = await this.responseRepository.query(query, [

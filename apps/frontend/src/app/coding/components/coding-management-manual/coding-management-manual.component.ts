@@ -2,6 +2,7 @@ import {
   Component, OnDestroy, OnInit, inject, ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
@@ -27,6 +28,11 @@ import {
   ImportComparisonData
 } from '../import-comparison-dialog/import-comparison-dialog.component';
 import { ApplyEmptyCodingDialogComponent } from './apply-empty-coding-dialog.component';
+import {
+  ApplyDuplicateAggregationDialogComponent,
+  ApplyDuplicateAggregationDialogData
+} from './apply-duplicate-aggregation-dialog.component';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { Coder } from '../../models/coder.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
@@ -64,6 +70,7 @@ import {
     CoderTrainingComponent,
     CoderTrainingsListComponent,
     CommonModule,
+    FormsModule,
     MatCheckboxModule
   ]
 })
@@ -129,6 +136,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           value: string;
         }[];
       }[];
+      isAggregationApplied: boolean;
     };
     matchingFlags: string[];
     analysisTimestamp: string;
@@ -138,6 +146,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   showEmptyResponsesDetails = false;
   showDuplicateValuesDetails = false;
   isApplyingEmptyCoding = false;
+
+  // Duplicate aggregation state
+  duplicateAggregationThreshold = 2;
+  isApplyingDuplicateAggregation = false;
 
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
@@ -216,6 +228,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }[] = [];
 
   statusDistribution: { [status: string]: number } = {};
+  statusDistributionV2: { [status: string]: number } = {};
   appliedResultsOverview: {
     totalIncompleteVariables: number;
     totalIncompleteResponses: number;
@@ -271,6 +284,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadWorkspaceKappaSummary();
     this.loadCodingIncompleteVariables();
     this.loadStatusDistribution();
+    this.loadStatusDistributionV2();
     this.loadAppliedResultsOverview();
     this.loadResponseMatchingMode();
     this.loadResponseAnalysis();
@@ -476,6 +490,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadWorkspaceKappaSummary();
     this.loadCodingIncompleteVariables();
     this.loadStatusDistribution();
+    this.loadStatusDistributionV2();
     this.loadAppliedResultsOverview();
   }
 
@@ -627,12 +642,44 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
             INVALID: statistics.statusCounts['7'] || 0,
-            CODING_ERROR: statistics.statusCounts['9'] || 0
+            CODING_ERROR: statistics.statusCounts['9'] || 0,
+            INTENDED_INCOMPLETE: statistics.statusCounts['12'] || 0
+          };
+          // Don't call loadAppliedResultsOverview here anymore, waiting for both
+        },
+        error: () => {
+          this.statusDistribution = {
+            CODING_INCOMPLETE: 0,
+            CODING_COMPLETE: 0,
+            INVALID: 0,
+            CODING_ERROR: 0
+          };
+        }
+      });
+  }
+
+  private loadStatusDistributionV2(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.statisticsService
+      .getCodingStatistics(workspaceId, 'v2')
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: statistics => {
+          this.statusDistributionV2 = {
+            CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
+            CODING_COMPLETE: statistics.statusCounts['5'] || 0,
+            INVALID: statistics.statusCounts['7'] || 0,
+            CODING_ERROR: statistics.statusCounts['9'] || 0,
+            INTENDED_INCOMPLETE: statistics.statusCounts['12'] || 0
           };
           this.loadAppliedResultsOverview();
         },
         error: () => {
-          this.statusDistribution = {
+          this.statusDistributionV2 = {
             CODING_INCOMPLETE: 0,
             CODING_COMPLETE: 0,
             INVALID: 0,
@@ -670,18 +717,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                 remainingResponses: Math.max(0, remainingResponses),
                 completionPercentage: Math.min(100, completionPercentage),
                 finalStatusBreakdown: {
-                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
-                  invalid: this.statusDistribution.INVALID || 0,
-                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  codingComplete: this.statusDistributionV2.CODING_COMPLETE || 0,
+                  invalid: this.statusDistributionV2.INVALID || 0,
+                  codingError: this.statusDistributionV2.CODING_ERROR || 0,
                   other: 0
                 }
               };
             },
             error: () => {
               const appliedResponses =
-                (this.statusDistribution.CODING_COMPLETE || 0) +
-                (this.statusDistribution.INVALID || 0) +
-                (this.statusDistribution.CODING_ERROR || 0);
+                (this.statusDistributionV2.CODING_COMPLETE || 0) +
+                (this.statusDistributionV2.INVALID || 0) +
+                (this.statusDistributionV2.CODING_ERROR || 0);
 
               const remainingResponses =
                 totalIncompleteResponses - appliedResponses;
@@ -697,9 +744,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                 remainingResponses: Math.max(0, remainingResponses),
                 completionPercentage: Math.min(100, completionPercentage),
                 finalStatusBreakdown: {
-                  codingComplete: this.statusDistribution.CODING_COMPLETE || 0,
-                  invalid: this.statusDistribution.INVALID || 0,
-                  codingError: this.statusDistribution.CODING_ERROR || 0,
+                  codingComplete: this.statusDistributionV2.CODING_COMPLETE || 0,
+                  invalid: this.statusDistributionV2.INVALID || 0,
+                  codingError: this.statusDistributionV2.CODING_ERROR || 0,
                   other: 0 // Could be expanded to include other statuses
                 }
               };
@@ -804,6 +851,24 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.saveResponseMatchingMode(newFlags);
+
+    // Sync with aggregation state:
+    // If NO_AGGREGATION is now set, deactivate aggregation.
+    // If NO_AGGREGATION is now UNSET, activate aggregation (with current threshold).
+    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
+      const isNoAggregationSet = newFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
+      this.testPersonCodingService
+        .applyDuplicateAggregation(
+          workspaceId,
+          this.duplicateAggregationThreshold,
+          !isNoAggregationSet // Activate if NO_AGGREGATION is UNSET
+        )
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(() => {
+          this.loadResponseAnalysis();
+          this.refreshAllStatistics();
+        });
+    }
   }
 
   private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): void {
@@ -950,6 +1015,159 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
                 { error: 'Unbekannter Fehler' }
               )
             );
+          }
+        });
+    });
+  }
+
+  onApplyDuplicateAggregation(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || !this.responseAnalysis) {
+      return;
+    }
+
+    // Filter groups that meet the threshold
+    const groupsMeetingThreshold = this.responseAnalysis.duplicateValues.groups.filter(
+      group => group.occurrences.length >= this.duplicateAggregationThreshold
+    );
+
+    if (groupsMeetingThreshold.length === 0) {
+      this.showError(
+        this.translateService.instant(
+          'coding-management-manual.duplicate-aggregation.no-groups-meet-threshold',
+          { threshold: this.duplicateAggregationThreshold }
+        )
+      );
+      return;
+    }
+
+    const totalResponsesInGroups = groupsMeetingThreshold.reduce(
+      (sum, group) => sum + group.occurrences.length,
+      0
+    );
+
+    // Show confirmation dialog
+    const dialogData: ApplyDuplicateAggregationDialogData = {
+      duplicateGroups: groupsMeetingThreshold.length,
+      totalResponses: totalResponsesInGroups,
+      threshold: this.duplicateAggregationThreshold
+    };
+
+    const dialogRef = this.dialog.open(ApplyDuplicateAggregationDialogComponent, {
+      width: '550px',
+      data: dialogData
+    });
+
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.isApplyingDuplicateAggregation = true;
+
+      this.testPersonCodingService
+        .applyDuplicateAggregation(
+          workspaceId,
+          this.duplicateAggregationThreshold,
+          true
+        )
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: result => {
+            this.isApplyingDuplicateAggregation = false;
+
+            if (result.success) {
+              this.showSuccess(
+                this.translateService.instant(
+                  'coding-management-manual.duplicate-aggregation.success',
+                  {
+                    aggregatedResponses: result.aggregatedResponses,
+                    aggregatedGroups: result.aggregatedGroups,
+                    uniqueCases: result.uniqueCodingCases
+                  }
+                )
+              );
+
+              // Sync with matching flag: Clear 'NO_AGGREGATION' when applying
+              this.saveResponseMatchingMode(
+                this.responseMatchingFlags.filter(f => f !== ResponseMatchingFlag.NO_AGGREGATION)
+              );
+
+              // Refresh analysis and statistics
+              this.loadResponseAnalysis();
+              this.refreshAllStatistics();
+            } else {
+              this.showError(
+                this.translateService.instant(
+                  'coding-management-manual.duplicate-aggregation.error',
+                  { error: result.message }
+                )
+              );
+            }
+          },
+          error: () => {
+            this.isApplyingDuplicateAggregation = false;
+            this.showError(
+              this.translateService.instant(
+                'coding-management-manual.duplicate-aggregation.error',
+                { error: 'Unbekannter Fehler' }
+              )
+            );
+          }
+        });
+    });
+  }
+
+  onDeactivateDuplicateAggregation(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '400px',
+      data: {
+        title: this.translateService.instant('coding-management-manual.duplicate-aggregation.deactivate-dialog-title'),
+        message: this.translateService.instant('coding-management-manual.duplicate-aggregation.deactivate-confirm'),
+        confirmButtonText: this.translateService.instant('coding-management-manual.duplicate-aggregation.deactivate-confirm-button'),
+        cancelButtonText: this.translateService.instant('coding-management-manual.duplicate-aggregation.cancel')
+      }
+    });
+
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+      if (!confirmed) {
+        return;
+      }
+
+      this.isApplyingDuplicateAggregation = true;
+
+      this.testPersonCodingService
+        .applyDuplicateAggregation(
+          workspaceId,
+          this.duplicateAggregationThreshold,
+          false // Deactivate
+        )
+        .pipe(takeUntil(this.destroy$))
+        .subscribe({
+          next: result => {
+            this.isApplyingDuplicateAggregation = false;
+
+            if (result.success) {
+              this.showSuccess(result.message);
+
+              // Sync with matching flag: Set 'NO_AGGREGATION' when deactivating
+              this.saveResponseMatchingMode([ResponseMatchingFlag.NO_AGGREGATION]);
+
+              // Refresh analysis and statistics
+              this.loadResponseAnalysis();
+              this.refreshAllStatistics();
+            } else {
+              this.showError(result.message);
+            }
+          },
+          error: () => {
+            this.isApplyingDuplicateAggregation = false;
+            this.showError('Fehler beim Deaktivieren der Aggregation');
           }
         });
     });

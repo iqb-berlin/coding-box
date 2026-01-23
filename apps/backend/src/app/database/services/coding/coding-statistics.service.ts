@@ -92,10 +92,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       if (version === 'v2') {
         statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
+        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL AND (response.code_v2 IS NULL OR response.code_v2 != -111)';
       } else if (version === 'v3') {
         statusColumn = 'COALESCE(response.status_v3, response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
+        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL AND (response.code_v2 IS NULL OR response.code_v2 != -111)';
       }
 
       const statusCountResults = await this.responseRepository.query(`
