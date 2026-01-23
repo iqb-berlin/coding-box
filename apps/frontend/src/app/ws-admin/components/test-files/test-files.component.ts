@@ -69,6 +69,8 @@ import {
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
+import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -813,6 +815,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.loadTestFiles();
             }
           });
+        } else if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vomd')) {
+          this.openMetadataDialog(file, decodedContent);
         } else {
           this.dialog.open(ContentDialogComponent, {
             width: '800px',
@@ -826,5 +830,61 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
   }
 
+  private async openMetadataDialog(file: FilesInListDto, decodedContent: string): Promise<void> {
+    try {
+      const vomdData = JSON.parse(decodedContent);
+
+      const unitProfile = vomdData.profiles?.[0];
+      if (!unitProfile) {
+        this.snackBar.open('Keine Metadaten in der Datei gefunden', 'Schließen', {
+          duration: 5000
+        });
+        return;
+      }
+
+      // Get item profile (from first item if exists)
+      const firstItem = vomdData.items?.[0];
+      const itemProfile = firstItem?.profiles?.[0];
+
+      // Create resolver and load profiles with vocabularies
+      const resolver = new MetadataResolver();
+
+      // Load unit profile and vocabularies
+      const unitProfileUrl = unitProfile.profileId;
+      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+
+      // Load item profile and vocabularies (if items exist)
+      let itemProfileData = null;
+      if (itemProfile) {
+        const itemProfileUrl = itemProfile.profileId;
+        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        itemProfileData = itemProfileWithVocabs.profile;
+
+        console.log(`Loaded profiles: Unit + Items (${vomdData.items.length} items)`);
+      } else {
+        console.log('Loaded profile: Unit only (no items)');
+      }
+
+      this.dialog.open(MetadataDialogComponent, {
+        width: '1000px',
+        maxHeight: '90vh',
+        data: {
+          title: file.filename,
+          profileData: unitProfileWithVocabs.profile,
+          itemProfileData: itemProfileData,
+          metadataValues: vomdData,
+          resolver: resolver,
+          language: 'de',
+          mode: 'readonly'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error parsing vomd file:', error);
+      this.snackBar.open('Fehler beim Parsen der Metadaten-Datei', 'Schließen', {
+        duration: 5000
+      });
+    }
+  }
   protected readonly getFileIcon = getFileIcon;
 }
