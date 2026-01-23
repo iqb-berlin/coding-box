@@ -64,8 +64,7 @@ import {
     CoderTrainingComponent,
     CoderTrainingsListComponent,
     CommonModule,
-    MatCheckboxModule,
-    ApplyEmptyCodingDialogComponent
+    MatCheckboxModule
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -625,10 +624,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: statistics => {
           this.statusDistribution = {
-            CODING_INCOMPLETE: statistics.statusCounts['4'] || 0,
+            CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
-            INVALID: statistics.statusCounts['6'] || 0,
-            CODING_ERROR: statistics.statusCounts['7'] || 0
+            INVALID: statistics.statusCounts['7'] || 0,
+            CODING_ERROR: statistics.statusCounts['9'] || 0
           };
           this.loadAppliedResultsOverview();
         },
