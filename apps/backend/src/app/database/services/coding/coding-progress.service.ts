@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  In, IsNull, Not, Repository
+  Brackets, In, IsNull, Not, Repository
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -39,6 +39,18 @@ export class CodingProgressService {
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
       .getCount();
 
     const completedCases = await this.codingJobUnitRepository.count({
@@ -52,7 +64,7 @@ export class CodingProgressService {
     });
 
     const completionPercentage =
-            totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
+      totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
 
     return {
       totalCasesToCode,
@@ -79,6 +91,19 @@ export class CodingProgressService {
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
+      // Exclude pre-processed responses (not in manual coding pool)
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
       .getCount();
 
     const casesInJobs = await this.codingJobUnitRepository
@@ -94,6 +119,19 @@ export class CodingProgressService {
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
+      // Exclude pre-processed responses (not in manual coding pool)
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
       .getCount();
 
     const uniqueCasesInJobsResult = await this.codingJobUnitRepository
@@ -109,6 +147,19 @@ export class CodingProgressService {
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .andWhere('coding_job.training_id IS NULL')
+      // Exclude pre-processed responses (not in manual coding pool)
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
       .select('COUNT(DISTINCT cju.response_id)', 'count')
       .getRawOne();
 
@@ -122,7 +173,7 @@ export class CodingProgressService {
     const singleCodedCases = uniqueCasesInJobs;
     const unassignedCases = totalCasesToCode - uniqueCasesInJobs;
     const coveragePercentage =
-            totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
+      totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
 
     return {
       totalCasesToCode,
@@ -181,6 +232,19 @@ export class CodingProgressService {
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        // Exclude pre-processed responses (not in manual coding pool)
+        .andWhere(new Brackets(qb => {
+          qb.where('response.code_v2 IS NULL')
+            .orWhere(subQuery => {
+              const exists = subQuery
+                .subQuery()
+                .select('1')
+                .from('coding_job_unit', 'cju')
+                .where('cju.response_id = response.id')
+                .getQuery();
+              return `EXISTS (${exists})`;
+            });
+        }))
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
         .getRawMany();
@@ -281,9 +345,9 @@ export class CodingProgressService {
 
           if (variableCaseInfo) {
             const casesInJobs =
-                            casesInJobsMap.get(
-                              `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
-                            ) || 0;
+              casesInJobsMap.get(
+                `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+              ) || 0;
             const availableCases = variableCaseInfo.caseCount - casesInJobs;
 
             // Only mark as conflict if there are no available cases left
@@ -311,9 +375,9 @@ export class CodingProgressService {
 
         if (variableCaseInfo) {
           const casesInJobs =
-                        casesInJobsMap.get(
-                          `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
-                        ) || 0;
+            casesInJobsMap.get(
+              `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
+            ) || 0;
 
           if (casesInJobs >= variableCaseInfo.caseCount) {
             fullyAbgedeckteVariablen.add(variableKey);
@@ -333,7 +397,7 @@ export class CodingProgressService {
       const partiallyAbgedeckteCount = partiallyAbgedeckteVariablen.size;
       const fullyAbgedeckteCount = fullyAbgedeckteVariablen.size;
       const coveragePercentage =
-                totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
+        totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
 
       this.logger.log(
         `Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(

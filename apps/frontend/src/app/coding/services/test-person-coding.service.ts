@@ -596,6 +596,7 @@ export class TestPersonCodingService {
           value: string;
         }[];
       }[];
+      isAggregationApplied: boolean;
     };
     matchingFlags: string[];
     analysisTimestamp: string;
@@ -631,6 +632,7 @@ export class TestPersonCodingService {
             value: string;
           }[];
         }[];
+        isAggregationApplied: boolean;
       };
       matchingFlags: string[];
       analysisTimestamp: string;
@@ -641,7 +643,9 @@ export class TestPersonCodingService {
       .pipe(
         catchError(() => of({
           emptyResponses: { total: 0, items: [] },
-          duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+          duplicateValues: {
+            total: 0, totalResponses: 0, groups: [], isAggregationApplied: false
+          },
           matchingFlags: [],
           analysisTimestamp: new Date().toISOString()
         }))
@@ -668,6 +672,40 @@ export class TestPersonCodingService {
           success: false,
           updatedCount: 0,
           message: 'Fehler beim Anwenden der Kodierung'
+        }))
+      );
+  }
+
+  applyDuplicateAggregation(
+    workspaceId: number,
+    threshold: number,
+    aggregateMode: boolean
+  ): Observable<{
+      success: boolean;
+      aggregatedGroups: number;
+      aggregatedResponses: number;
+      uniqueCodingCases: number;
+      message: string;
+    }> {
+    return this.http
+      .post<{
+      success: boolean;
+      aggregatedGroups: number;
+      aggregatedResponses: number;
+      uniqueCodingCases: number;
+      message: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/apply-duplicate-aggregation`,
+      { threshold, aggregateMode },
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          success: false,
+          aggregatedGroups: 0,
+          aggregatedResponses: 0,
+          uniqueCodingCases: 0,
+          message: 'Fehler beim Anwenden der Aggregation'
         }))
       );
   }

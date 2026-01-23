@@ -950,6 +950,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         if (result.success) {
           this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
           this.loadCodingJobs(); // Refresh the list to show updated status
+          this.jobsChanged.emit();
         } else {
           this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
         }
@@ -1004,6 +1005,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           const processedCount = result.jobsProcessed;
           this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
+          this.jobsChanged.emit();
         } else {
           this.snackBar.open(`Fehler bei der Massenanwendung: ${result.message}`, 'Schließen', { duration: 5000 });
         }

@@ -162,7 +162,7 @@ export class CodingResultsService {
         await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.refreshStatistics(workspaceId);
+        await this.codingStatisticsService.invalidateCache(workspaceId);
 
         return {
           success: true,
@@ -264,7 +264,7 @@ export class CodingResultsService {
 
         // Invalidate caches and refresh statistics
         await this.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.refreshStatistics(workspaceId);
+        await this.codingStatisticsService.invalidateCache(workspaceId);
 
         this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
 
