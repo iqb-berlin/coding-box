@@ -11,7 +11,7 @@ import {
   EmptyResponseDto,
   DuplicateValueGroupDto
 } from '../../../../../../../api-dto/coding/response-analysis.dto';
-import { CodingJobService } from './coding-job.service';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 
 @Injectable()
 export class CodingAnalysisService {
@@ -132,9 +132,9 @@ export class CodingAnalysisService {
       const emptyResponses: EmptyResponseDto[] = [];
       for (const response of allResponses) {
         const isEmptyValue =
-                    response.value === null ||
-                    response.value === '' ||
-                    response.value === undefined;
+          response.value === null ||
+          response.value === '' ||
+          response.value === undefined;
         if (isEmptyValue) {
           const unit = unitMap.get(response.unitid);
           if (!unit) continue;
@@ -173,8 +173,8 @@ export class CodingAnalysisService {
         // Skip empty responses for duplicate analysis
         if (
           response.value === null ||
-                    response.value === '' ||
-                    response.value === undefined
+          response.value === '' ||
+          response.value === undefined
         ) {
           continue;
         }
@@ -263,7 +263,8 @@ export class CodingAnalysisService {
         duplicateValues: {
           total: duplicateValueGroups.length,
           totalResponses: totalDuplicateResponses,
-          groups: duplicateValueGroups
+          groups: duplicateValueGroups,
+          isAggregationApplied: !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION)
         },
         matchingFlags,
         analysisTimestamp: new Date().toISOString()
@@ -288,7 +289,8 @@ export class CodingAnalysisService {
       duplicateValues: {
         total: 0,
         totalResponses: 0,
-        groups: []
+        groups: [],
+        isAggregationApplied: !matchingFlags.includes('NO_AGGREGATION')
       },
       matchingFlags,
       analysisTimestamp: new Date().toISOString()

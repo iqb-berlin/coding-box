@@ -57,7 +57,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
-  ) {}
+  ) { }
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
     this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
@@ -450,7 +450,7 @@ ${bookletRefs}
       const isConflict = (
         value: unknown
       ): value is TestFilesUploadConflictDto & { conflict: true } => !!value &&
-        typeof value === 'object' &&
+      typeof value === 'object' &&
         (value as { conflict?: unknown }).conflict === true;
 
       settled.forEach((result, idx) => {
@@ -709,8 +709,7 @@ ${bookletRefs}
         const maxErrors = 10;
         const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
         this.logger.warn(
-          `XSD validation failed on upload: ${file.originalname} (errors: ${
-            xmlValidation.errors.length
+          `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length
           }) ${JSON.stringify(errorsPreview)}`
         );
         throw this.unsupportedFile(
@@ -2025,8 +2024,7 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${
-              (e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
             }`
           );
         }
@@ -2341,8 +2339,7 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${
-              (e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
             }`
           );
         }

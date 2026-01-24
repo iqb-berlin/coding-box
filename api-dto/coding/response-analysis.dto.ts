@@ -37,6 +37,7 @@ export interface ResponseAnalysisDto {
     total: number;
     totalResponses: number;
     groups: DuplicateValueGroupDto[];
+    isAggregationApplied: boolean;
   };
   matchingFlags: string[];
   analysisTimestamp: string;
