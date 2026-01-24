@@ -300,10 +300,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
                       matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
                       <mat-icon>info</mat-icon>
                     </button>
+                    }
                   </li>
                   }
                 </ul>
@@ -360,10 +362,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
                       matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
                       <mat-icon>info</mat-icon>
                     </button>
+                    }
                   </li>
                   }
                 </ul>
@@ -440,10 +444,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openSchemeFile(file.filename)"
                       matTooltip="Kodierschema anzeigen" [attr.aria-label]="'Kodierschema anzeigen'">
                       <mat-icon>schema</mat-icon>
                     </button>
+                    }
                   </li>
                   }
                 </ul>
@@ -596,10 +602,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if (file.exists) {
                     <button mat-icon-button class="file-action-button" (click)="openDefinitionFile(file.filename)"
                       matTooltip="Aufgabendefinition anzeigen" [attr.aria-label]="'Aufgabendefinition anzeigen'">
                       <mat-icon>description</mat-icon>
                     </button>
+                    }
                   </li>
                   }
                 </ul>
