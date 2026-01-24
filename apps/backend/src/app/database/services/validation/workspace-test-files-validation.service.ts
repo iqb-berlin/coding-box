@@ -59,7 +59,7 @@ export class WorkspaceTestFilesValidationService {
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService
-  ) {}
+  ) { }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
@@ -494,6 +494,7 @@ export class WorkspaceTestFilesValidationService {
       .createQueryBuilder('file')
       .select(['file.file_id', 'file.filename'])
       .where('file.workspace_id = :workspaceId', { workspaceId })
+      .andWhere("file.file_type = 'Resource'")
       .skip(offset)
       .take(BATCH_SIZE)
       .getRawMany();
@@ -513,6 +514,7 @@ export class WorkspaceTestFilesValidationService {
         .createQueryBuilder('file')
         .select(['file.file_id', 'file.filename'])
         .where('file.workspace_id = :workspaceId', { workspaceId })
+        .andWhere("file.file_type = 'Resource'")
         .skip(offset)
         .take(BATCH_SIZE)
         .getRawMany();
@@ -773,13 +775,13 @@ export class WorkspaceTestFilesValidationService {
         files: unitFiles
       },
       schemes: {
-        complete: unitComplete ? missingCodingSchemeRefs.length === 0 : false,
+        complete: missingCodingSchemeRefs.length === 0,
         missing: missingCodingSchemeRefs,
         missingRefsPerUnit: missingCodingSchemeRefsByUnit,
         files: schemeFiles
       },
       schemer: {
-        complete: unitComplete ? missingSchemerRefs.length === 0 : false,
+        complete: missingSchemerRefs.length === 0,
         missing: missingSchemerRefs,
         missingRefsPerUnit: missingSchemerRefsByUnit,
         files: Array.from(allSchemerRefs).map(r => ({
@@ -788,13 +790,13 @@ export class WorkspaceTestFilesValidationService {
         }))
       },
       definitions: {
-        complete: unitComplete ? missingDefinitionRefs.length === 0 : false,
+        complete: missingDefinitionRefs.length === 0,
         missing: missingDefinitionRefs,
         missingRefsPerUnit: missingDefinitionRefsByUnit,
         files: Array.from(allDefinitionRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
       },
       player: {
-        complete: unitComplete ? missingPlayerRefs.length === 0 : false,
+        complete: missingPlayerRefs.length === 0,
         missing: missingPlayerRefs,
         missingRefsPerUnit: missingPlayerRefsByUnit,
         files: Array.from(allPlayerRefs).map(r => ({

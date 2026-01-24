@@ -297,6 +297,27 @@ export class FilesValidationDialogComponent {
     return data.files.filter(file => !file.exists).length;
   }
 
+  getBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
+    if (!data.missingUnitsPerBooklet || data.missingUnitsPerBooklet.length === 0 || !unit) {
+      return [];
+    }
+    const normalizedUnit = unit.toUpperCase().trim();
+    return data.missingUnitsPerBooklet
+      .filter(entry => (entry.missingUnits || []).map(u => u.toUpperCase().trim()).includes(normalizedUnit))
+      .map(entry => entry.booklet);
+  }
+
+  getBookletsForMissingUnitLimited(data: DataValidation, unit: string, limit: number): string[] {
+    const booklets = this.getBookletsForMissingUnit(data, unit);
+    if (limit <= 0) return [];
+    return booklets.slice(0, limit);
+  }
+
+  getBookletsForMissingUnitRemainingCount(data: DataValidation, unit: string, limit: number): number {
+    const booklets = this.getBookletsForMissingUnit(data, unit);
+    return Math.max(0, booklets.length - Math.max(0, limit));
+  }
+
   getUnitsForMissingRef(data: DataValidation, ref: string): string[] {
     if (!data.missingRefsPerUnit || data.missingRefsPerUnit.length === 0 || !ref) {
       return [];
