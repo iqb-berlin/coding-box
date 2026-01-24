@@ -25,7 +25,7 @@ function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
 }
 
-enum ResponseMatchingFlag {
+export enum ResponseMatchingFlag {
   NO_AGGREGATION = 'NO_AGGREGATION',
   IGNORE_CASE = 'IGNORE_CASE',
   IGNORE_WHITESPACE = 'IGNORE_WHITESPACE'

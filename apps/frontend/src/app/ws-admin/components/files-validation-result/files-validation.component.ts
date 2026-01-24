@@ -234,6 +234,8 @@ export class FilesValidationDialogComponent {
     }
   }
 
+  filesDeleted = false;
+
   toggleUnusedFilesSelection(file: UnusedTestFile): void {
     this.unusedFilesSelection.toggle(file);
     this.checkIfAllUnusedFilesSelected();
@@ -265,17 +267,26 @@ export class FilesValidationDialogComponent {
     this.fileService.deleteFiles(this.data.workspaceId, idsToDelete)
       .subscribe({
         next: (success: boolean) => {
+          this.isDeletingUnusedFiles = false;
           if (success) {
+            this.filesDeleted = true;
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
             this.checkIfAllUnusedFilesSelected();
+            this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
+          } else {
+            this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
           }
-          this.isDeletingUnusedFiles = false;
         },
         error: () => {
           this.isDeletingUnusedFiles = false;
+          this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
         }
       });
+  }
+
+  close(): void {
+    this.dialogRef.close(this.filesDeleted);
   }
 
   getExistingCount(data: DataValidation): number {
@@ -628,16 +639,6 @@ export class FilesValidationDialogComponent {
           }
         });
     }
-  }
-
-  private updateModeGroups(): void {
-    const modeMap = new Map<string, number>();
-    this.filteredTestTakers.filter(item => this.isKnownTestTaker(item)).forEach(item => {
-      const count = modeMap.get(item.mode) || 0;
-      modeMap.set(item.mode, count + 1);
-    });
-
-    this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
   }
 
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {

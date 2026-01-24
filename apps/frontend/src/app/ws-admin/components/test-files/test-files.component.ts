@@ -718,7 +718,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               v => !!v?.testTaker
             );
             if (validationResults.length > 0) {
-              this.dialog.open(FilesValidationDialogComponent, {
+              const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
                 width: '90%',
                 maxWidth: '1400px',
                 height: '80vh',
@@ -729,11 +729,17 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                   workspaceId: this.appService.selectedWorkspaceId
                 }
               });
+
+              dialogRef.afterClosed().subscribe((dialogResult: boolean) => {
+                if (dialogResult) {
+                  this.loadTestFiles();
+                }
+              });
             }
           }
         });
       } else {
-        this.dialog.open(FilesValidationDialogComponent, {
+        const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
           width: '90%',
           maxWidth: '1400px',
           height: '80vh',
@@ -744,6 +750,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             filteredTestTakers: res.filteredTestTakers,
             unusedTestFiles: res.unusedTestFiles,
             workspaceId: this.appService.selectedWorkspaceId
+          }
+        });
+
+        dialogRef.afterClosed().subscribe((result: boolean) => {
+          if (result) {
+            this.loadTestFiles();
           }
         });
       }
