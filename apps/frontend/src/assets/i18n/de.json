@@ -332,7 +332,11 @@
     "file_type": "Dateityp",
     "file_size": "Dateigröße",
     "created_at": "Hinzugefügt am",
-    "no-files": "Keine Dateien gefunden"
+    "no-files": "Keine Dateien gefunden",
+    "upload-test-files": "Testdateien hochladen",
+    "upload-test-files-tooltip": "Hochladen von Testinhalten (xml, html, Voud, vomd, vocs, zip, etc.)",
+    "upload-packages-tooltip": "Hochladen von externen Ressourcen-Paketen (.itcr.zip, z.B. GeoGebra)",
+    "resource-package-hint": "Bitte laden Sie nur Ressourcen-Pakete mit der Endung .itcr.zip hoch. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch."
   },
   "test_group": {
     "test_group": "Testgruppe",
@@ -798,6 +802,7 @@
       "json-convert-error": "Fehler beim Umwandeln der CSV-Daten in JSON",
       "coding-list-csv-success": "Kodierliste wurde als CSV erfolgreich heruntergeladen.",
       "error-coding-list-csv": "Fehler beim Herunterladen der Kodierliste als CSV",
+      "Failed to upload resource package": "Fehler beim Hochladen: Das Paket muss die Endung .itcr.zip haben.",
       "coding-list-excel-success": "Kodierliste wurde als Excel erfolgreich heruntergeladen.",
       "error-coding-list-excel": "Fehler beim Herunterladen der Kodierliste als Excel",
       "error-unit-coding-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
