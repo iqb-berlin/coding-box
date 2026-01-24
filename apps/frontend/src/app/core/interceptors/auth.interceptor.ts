@@ -41,17 +41,7 @@ export const authInterceptor: HttpInterceptorFn = (
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
-          if (error.status === 500 || error.status === 999) {
-            appService.setBackendUnavailable(true);
-            snackBar.open(
-              'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
-              'Schließen',
-              {
-                duration: 0,
-                panelClass: ['error-snackbar']
-              }
-            );
-          } else if (error.status === 401 || error.status === 403) {
+          if (error.status === 401 || error.status === 403) {
             const errorMessage = error.error?.message || error.message || '';
 
             if (errorMessage.includes('Access level')) {
