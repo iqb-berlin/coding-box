@@ -16,31 +16,39 @@ import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
-import { bootstrapMetadataWebComponents } from '@iqb/metadata-components';
-
-export interface MetadataDialogData {
-  title: string;
-  profileUrl?: string;
-  itemProfileUrl?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  profileData?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  itemProfileData?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  metadataValues?: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vocabularies?: any[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  resolver?: any;
-  language?: string;
-  mode?: 'edit' | 'readonly';
-}
+import { MDProfile } from '@iqbspecs/metadata-profile/metadata-profile.interface';
+import { MetadataProfileValues, VocabularyEntry } from '@iqbspecs/metadata-values/metadata-values.interface';
+import { bootstrapMetadataWebComponents, UnitMetadataValues } from '@iqb/metadata-components';
+// @ts-ignore
+import { MetadataResolver } from '@iqb/metadata-resolver';
 
 interface MetadataItem {
   id: string;
   uuid: string;
   variableId: string | null;
   description: string | null;
+  profiles?: MetadataProfileValues[];
+}
+
+interface MetadataProfileFormElement extends HTMLElement {
+  resolver?: MetadataResolver;
+  profileData?: MDProfile;
+  metadataValues: Partial<UnitMetadataValues>;
+  language?: string;
+  readonly: boolean;
+}
+
+export interface MetadataDialogData {
+  title: string;
+  profileUrl?: string;
+  itemProfileUrl?: string;
+  profileData?: MDProfile;
+  itemProfileData?: MDProfile;
+  metadataValues?: { items?: MetadataItem[], profiles?: MetadataProfileValues[] };
+  vocabularies?: VocabularyEntry[];
+  resolver?: MetadataResolver;
+  language?: string;
+  mode?: 'edit' | 'readonly';
 }
 
 @Component({
@@ -144,8 +152,7 @@ interface MetadataItem {
     }
 
     .selection-container {
-      padding: 1rem;
-      padding-bottom: 0;
+      padding: 1rem 1rem 0;
     }
 
     mat-form-field {
@@ -191,8 +198,7 @@ interface MetadataItem {
   `]
 })
 export class MetadataDialogComponent implements OnInit {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private currentMetadata: any = null;
+  private currentMetadata: Partial<UnitMetadataValues> | null = null;
   private webComponentInitialized = false;
   isLoading = true;
 
@@ -218,8 +224,7 @@ export class MetadataDialogComponent implements OnInit {
       return;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.items = this.data.metadataValues.items.map((item: any) => ({
+    this.items = this.data.metadataValues.items.map((item: MetadataItem) => ({
       id: item.id,
       uuid: item.uuid,
       variableId: item.variableId,
@@ -228,8 +233,7 @@ export class MetadataDialogComponent implements OnInit {
   }
 
   private initializeWebComponent(): void {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const form = document.getElementById('metadata-form') as any;
+    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
 
     if (!form) {
       return;
@@ -238,15 +242,11 @@ export class MetadataDialogComponent implements OnInit {
     try {
       this.updateFormData(form);
 
-      form.addEventListener('metadataChange', (event: CustomEvent) => {
+      form.addEventListener('metadataChange', ((event: CustomEvent) => {
         this.currentMetadata = event.detail;
-      });
+      }) as EventListener);
 
-      if (this.data.mode === 'readonly') {
-        form.readonly = true;
-      } else {
-        form.readonly = false;
-      }
+      form.readonly = this.data.mode === 'readonly';
       this.webComponentInitialized = true;
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -256,22 +256,23 @@ export class MetadataDialogComponent implements OnInit {
     }
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private updateFormData(form: any): void {
+  private updateFormData(form: MetadataProfileFormElement): void {
     if (this.selectedView === 'unit') {
       form.metadataValues = {
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         profiles: this.data.metadataValues?.profiles || []
       };
       form.profileData = this.data.profileData;
     } else {
-      // Show item metadata
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const selectedItem = this.data.metadataValues?.items?.find(
-        (item: any) => item.uuid === this.selectedView
+        (item: MetadataItem) => item.uuid === this.selectedView
       );
 
       if (selectedItem) {
         form.metadataValues = {
+          // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+          // @ts-ignore
           profiles: selectedItem.profiles || []
         };
         form.profileData = this.data.itemProfileData;
@@ -283,9 +284,7 @@ export class MetadataDialogComponent implements OnInit {
   }
 
   onViewChange(): void {
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const form = document.getElementById('metadata-form') as any;
+    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
     }
