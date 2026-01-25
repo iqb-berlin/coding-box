@@ -35,6 +35,7 @@ import {
   MatPaginatorIntl,
   PageEvent
 } from '@angular/material/paginator';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -70,7 +71,6 @@ import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
 import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
-import { MetadataResolver } from '@iqb/metadata-resolver';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -860,14 +860,17 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
         itemProfileData = itemProfileWithVocabs.profile;
 
+        // eslint-disable-next-line no-console
         console.log(`Loaded profiles: Unit + Items (${vomdData.items.length} items)`);
       } else {
+        // eslint-disable-next-line no-console
         console.log('Loaded profile: Unit only (no items)');
       }
 
       this.dialog.open(MetadataDialogComponent, {
-        width: '1000px',
-        maxHeight: '90vh',
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
         data: {
           title: file.filename,
           profileData: unitProfileWithVocabs.profile,
@@ -878,13 +881,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           mode: 'readonly'
         }
       });
-
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Error parsing vomd file:', error);
       this.snackBar.open('Fehler beim Parsen der Metadaten-Datei', 'Schließen', {
         duration: 5000
       });
     }
   }
+
   protected readonly getFileIcon = getFileIcon;
 }
