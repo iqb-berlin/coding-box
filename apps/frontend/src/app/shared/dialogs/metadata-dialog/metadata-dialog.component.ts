@@ -1,4 +1,6 @@
-import { Component, Inject, OnInit, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import {
+  Component, Inject, OnInit, CUSTOM_ELEMENTS_SCHEMA
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialogRef,
@@ -9,19 +11,26 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatButton } from '@angular/material/button';
 import { MatDivider } from '@angular/material/divider';
-import { MatFormField, MatLabel } from '@angular/material/form-field';
+import { MatLabel, MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { FormsModule } from '@angular/forms';
 import { bootstrapMetadataWebComponents } from '@iqb/metadata-components';
 
 export interface MetadataDialogData {
   title: string;
   profileUrl?: string;
   itemProfileUrl?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   profileData?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   itemProfileData?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   metadataValues?: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vocabularies?: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   resolver?: any;
   language?: string;
   mode?: 'edit' | 'readonly';
@@ -45,60 +54,70 @@ interface MetadataItem {
     MatDialogActions,
     MatButton,
     MatDivider,
-    MatFormField,
+    MatFormFieldModule,
     MatLabel,
     MatSelect,
-    MatOption
+    MatOption,
+    MatProgressSpinnerModule,
+    FormsModule
   ],
   template: `
     <h2 mat-dialog-title>{{ data.title }}</h2>
 
     <mat-dialog-content>
-      <div class="selection-container">
-        <mat-form-field appearance="outline">
-          <mat-label>Metadaten anzeigen für</mat-label>
-          <mat-select [(value)]="selectedView" (selectionChange)="onViewChange()">
-            <mat-option value="unit">Unit (Aufgabe)</mat-option>
-            @for (item of items; track item.uuid) {
-              <mat-option [value]="item.uuid">
-                Item {{ item.id }}
-              </mat-option>
-            }
-          </mat-select>
-        </mat-form-field>
-      </div>
-
-      @if (selectedView !== 'unit') {
-        <div class="item-info">
-          <div class="info-field">
-            <label>Item-ID</label>
-            <div class="info-value">{{ getSelectedItem()?.id }}</div>
-          </div>
-
-          @if (getSelectedItem()?.variableId) {
-            <div class="info-field">
-              <label>Variablen-ID</label>
-              <div class="info-value">{{ getSelectedItem()?.variableId }}</div>
-            </div>
-          }
-
-          @if (getSelectedItem()?.description) {
-            <div class="info-field">
-              <label>Beschreibung</label>
-              <div class="info-value">{{ getSelectedItem()?.description }}</div>
-            </div>
-          }
+      @if (isLoading) {
+        <div class="spinner-container">
+          <mat-progress-spinner mode="indeterminate"></mat-progress-spinner>
         </div>
       }
 
-      <mat-divider />
+      <div [style.display]="isLoading ? 'none' : 'block'">
+        <div class="selection-container">
+          <mat-form-field appearance="outline">
+            <mat-label>Metadaten anzeigen für</mat-label>
+            <mat-select [(ngModel)]="selectedView" (selectionChange)="onViewChange()">
+              <mat-option value="unit">Unit (Aufgabe)</mat-option>
+              @for (item of items; track item.uuid) {
+                <mat-option [value]="item.uuid">
+                  Item {{ item.id }}
+                </mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+        </div>
 
-      <div class="metadata-container">
-        <metadata-profile-form
-          id="metadata-form"
-          [attr.language]="data.language || 'de'"
-          [attr.readonly]="data.mode === 'readonly' ? '' : null">
-        </metadata-profile-form>
+        @if (selectedView !== 'unit') {
+          <div class="item-info">
+            <div class="info-field">
+              <label>Item-ID</label>
+              <div class="info-value">{{ getSelectedItem()?.id }}</div>
+            </div>
+
+            @if (getSelectedItem()?.variableId) {
+              <div class="info-field">
+                <label>Variablen-ID</label>
+                <div class="info-value">{{ getSelectedItem()?.variableId }}</div>
+              </div>
+            }
+
+            @if (getSelectedItem()?.description) {
+              <div class="info-field">
+                <label>Beschreibung</label>
+                <div class="info-value">{{ getSelectedItem()?.description }}</div>
+              </div>
+            }
+          </div>
+        }
+
+        <mat-divider />
+
+        <div class="metadata-container">
+          <metadata-profile-form
+            id="metadata-form"
+            [attr.language]="data.language || 'de'"
+            [attr.readonly]="data.mode === 'readonly' ? '' : null">
+          </metadata-profile-form>
+        </div>
       </div>
     </mat-dialog-content>
 
@@ -117,6 +136,13 @@ interface MetadataItem {
     </mat-dialog-actions>
   `,
   styles: [`
+    .spinner-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 300px;
+    }
+
     .selection-container {
       padding: 1rem;
       padding-bottom: 0;
@@ -160,15 +186,15 @@ interface MetadataItem {
     }
 
     .metadata-container {
-      max-height: 60vh;
-      overflow-y: auto;
       padding: 1rem;
     }
   `]
 })
 export class MetadataDialogComponent implements OnInit {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private currentMetadata: any = null;
   private webComponentInitialized = false;
+  isLoading = true;
 
   selectedView: string = 'unit';
   items: MetadataItem[] = [];
@@ -176,12 +202,10 @@ export class MetadataDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<MetadataDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: MetadataDialogData
-  ) {}
+  ) { }
 
   async ngOnInit() {
     await bootstrapMetadataWebComponents();
-    console.log('Web components bootstrapped');
-
     this.extractItems();
 
     setTimeout(() => {
@@ -191,62 +215,57 @@ export class MetadataDialogComponent implements OnInit {
 
   private extractItems(): void {
     if (!this.data.metadataValues?.items) {
-      console.log('No items found in metadata');
       return;
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     this.items = this.data.metadataValues.items.map((item: any) => ({
       id: item.id,
       uuid: item.uuid,
       variableId: item.variableId,
       description: item.description
     }));
-
-    console.log(`Found ${this.items.length} items`);
   }
 
   private initializeWebComponent(): void {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const form = document.getElementById('metadata-form') as any;
 
     if (!form) {
-      console.error('Web component element not found');
       return;
     }
 
     try {
-      console.log('Initializing web component...');
-
       this.updateFormData(form);
 
       form.addEventListener('metadataChange', (event: CustomEvent) => {
-        console.log('Metadata changed:', event.detail);
         this.currentMetadata = event.detail;
       });
 
       if (this.data.mode === 'readonly') {
         form.readonly = true;
-        console.log('Setting readonly to true');
       } else {
         form.readonly = false;
       }
-
       this.webComponentInitialized = true;
-      console.log('Web component initialized');
-
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error('Error initializing web component:', err);
+    } finally {
+      this.isLoading = false;
     }
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private updateFormData(form: any): void {
     if (this.selectedView === 'unit') {
       form.metadataValues = {
         profiles: this.data.metadataValues?.profiles || []
       };
       form.profileData = this.data.profileData;
-      console.log('Displaying unit metadata');
     } else {
       // Show item metadata
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const selectedItem = this.data.metadataValues?.items?.find(
         (item: any) => item.uuid === this.selectedView
       );
@@ -256,7 +275,6 @@ export class MetadataDialogComponent implements OnInit {
           profiles: selectedItem.profiles || []
         };
         form.profileData = this.data.itemProfileData;
-        console.log(`Displaying metadata for item ${selectedItem.id}`);
       }
     }
 
@@ -265,8 +283,8 @@ export class MetadataDialogComponent implements OnInit {
   }
 
   onViewChange(): void {
-    console.log(`View changed to: ${this.selectedView}`);
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const form = document.getElementById('metadata-form') as any;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
