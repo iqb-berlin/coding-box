@@ -1028,13 +1028,24 @@ ${bookletRefs}
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
+
+      this.logger.log(`[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`);
+      if (overwriteAllowList) {
+        this.logger.log(`[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`);
+      }
+
       const overwriteAllowed =
         overwriteExisting &&
         (!overwriteAllowList || overwriteAllowList.has(fileIdNormalized));
+
+      this.logger.log(`[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`);
+
       if (existing && !overwriteAllowed) {
         if (overwriteExisting && overwriteAllowList) {
+          this.logger.log(`[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`);
           return await Promise.resolve();
         }
+        this.logger.log(`[OctetStream] Conflict detected for ${fileIdNormalized}`);
         return {
           conflict: true,
           fileId: fileUpload.file_id,
@@ -1042,6 +1053,8 @@ ${bookletRefs}
           fileType
         };
       }
+
+      this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
       await this.fileUploadRepository.upsert(fileUpload, [
         'file_id',

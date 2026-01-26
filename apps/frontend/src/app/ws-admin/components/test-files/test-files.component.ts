@@ -70,7 +70,7 @@ import {
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
-import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -867,7 +867,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         console.log('Loaded profile: Unit only (no items)');
       }
 
-      this.dialog.open(MetadataDialogComponent, {
+      const dialogRef = this.dialog.open(MetadataDialogComponent, {
         width: '1200px',
         maxWidth: '95vw',
         maxHeight: '95vh',
@@ -881,6 +881,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           mode: 'readonly'
         }
       });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result) {
+          this.saveMetadata(file, result);
+        }
+      });
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Error parsing vomd file:', error);
@@ -888,6 +894,37 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         duration: 5000
       });
     }
+  }
+
+  private saveMetadata(originalFile: FilesInListDto, newMetadata: VomdMetadata): void {
+    this.isLoading = true;
+    const jsonContent = JSON.stringify(newMetadata, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/octet-stream' });
+    const file = new File([blob], originalFile.filename, { type: 'application/octet-stream' });
+
+    // Create a DataTransfer to simulate file selection
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    const files = dataTransfer.files;
+
+    this.fileService.uploadTestFiles(
+      this.appService.selectedWorkspaceId,
+      files,
+      true, // overwriteExisting
+      [originalFile.filename]
+    ).pipe(
+      finalize(() => {
+        this.isLoading = false;
+      })
+    ).subscribe({
+      next: () => {
+        this.snackBar.open('Metadaten erfolgreich gespeichert.', 'OK', { duration: 3000 });
+        this.loadTestFiles();
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Speichern der Metadaten.', 'Fehler', { duration: 3000 });
+      }
+    });
   }
 
   protected readonly getFileIcon = getFileIcon;

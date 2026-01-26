@@ -16,16 +16,23 @@ import { MatSelect } from '@angular/material/select';
 import { MatOption } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { FormsModule } from '@angular/forms';
+import { MatInputModule } from '@angular/material/input';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MDProfile } from '@iqbspecs/metadata-profile/metadata-profile.interface';
 import { MetadataProfileValues, VocabularyEntry } from '@iqbspecs/metadata-values/metadata-values.interface';
 import { bootstrapMetadataWebComponents, UnitMetadataValues } from '@iqb/metadata-components';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 
-interface MetadataItem {
+export interface MetadataItem {
   id: string;
   uuid: string;
   variableId: string | null;
   description: string | null;
+  profiles?: MetadataProfileValues[];
+}
+
+export interface VomdMetadata {
+  items?: MetadataItem[];
   profiles?: MetadataProfileValues[];
 }
 
@@ -43,7 +50,7 @@ export interface MetadataDialogData {
   itemProfileUrl?: string;
   profileData?: MDProfile;
   itemProfileData?: MDProfile;
-  metadataValues?: { items?: MetadataItem[], profiles?: MetadataProfileValues[] };
+  metadataValues?: VomdMetadata;
   vocabularies?: VocabularyEntry[];
   resolver?: MetadataResolver;
   language?: string;
@@ -62,14 +69,26 @@ export interface MetadataDialogData {
     MatButton,
     MatDivider,
     MatFormFieldModule,
+    MatInputModule,
     MatLabel,
     MatSelect,
     MatOption,
     MatProgressSpinnerModule,
-    FormsModule
+    FormsModule,
+    MatSlideToggleModule
   ],
   template: `
-    <h2 mat-dialog-title>{{ data.title }}</h2>
+    <div class="dialog-header">
+      <h2 mat-dialog-title>{{ data.title }}</h2>
+      <div class="header-controls">
+        <mat-slide-toggle
+          [(ngModel)]="isEditing"
+          (change)="onEditModeChange()"
+          color="primary">
+          {{ isEditing ? 'Bearbeiten aktiv' : 'Bearbeiten' }}
+        </mat-slide-toggle>
+      </div>
+    </div>
 
     <mat-dialog-content>
       @if (isLoading) {
@@ -95,24 +114,30 @@ export interface MetadataDialogData {
 
         @if (selectedView !== 'unit') {
           <div class="item-info">
-            <div class="info-field">
-              <label>Item-ID</label>
-              <div class="info-value">{{ getSelectedItem()?.id }}</div>
-            </div>
+            <mat-form-field appearance="outline">
+              <mat-label>Item-ID</mat-label>
+              <input matInput
+                     [(ngModel)]="getSelectedItem()!.id"
+                     [disabled]="!isEditing"
+                     (ngModelChange)="markAsChanged()">
+            </mat-form-field>
 
-            @if (getSelectedItem()?.variableId) {
-              <div class="info-field">
-                <label>Variablen-ID</label>
-                <div class="info-value">{{ getSelectedItem()?.variableId }}</div>
-              </div>
-            }
+            <mat-form-field appearance="outline">
+              <mat-label>Variablen-ID</mat-label>
+              <input matInput
+                     [(ngModel)]="getSelectedItem()!.variableId"
+                     [disabled]="!isEditing"
+                     (ngModelChange)="markAsChanged()">
+            </mat-form-field>
 
-            @if (getSelectedItem()?.description) {
-              <div class="info-field">
-                <label>Beschreibung</label>
-                <div class="info-value">{{ getSelectedItem()?.description }}</div>
-              </div>
-            }
+            <mat-form-field appearance="outline">
+              <mat-label>Beschreibung</mat-label>
+              <textarea matInput
+                        [(ngModel)]="getSelectedItem()!.description"
+                        [disabled]="!isEditing"
+                        rows="3"
+                        (ngModelChange)="markAsChanged()"></textarea>
+            </mat-form-field>
           </div>
         }
 
@@ -122,7 +147,7 @@ export interface MetadataDialogData {
           <metadata-profile-form
             id="metadata-form"
             [attr.language]="data.language || 'de'"
-            [attr.readonly]="data.mode === 'readonly' ? '' : null">
+            [attr.readonly]="isEditing ? null : ''">
           </metadata-profile-form>
         </div>
       </div>
@@ -132,10 +157,10 @@ export interface MetadataDialogData {
 
     <mat-dialog-actions align="end">
       <button mat-button (click)="close(false)">
-        {{ data.mode === 'readonly' ? 'Schließen' : 'Abbrechen' }}
+        {{ isEditing && hasChanges ? 'Abbrechen' : 'Schließen' }}
       </button>
 
-      @if (data.mode !== 'readonly') {
+      @if (isEditing && hasChanges) {
         <button mat-raised-button color="primary" (click)="close(true)">
           Speichern
         </button>
@@ -143,6 +168,13 @@ export interface MetadataDialogData {
     </mat-dialog-actions>
   `,
   styles: [`
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-right: 24px;
+    }
+
     .spinner-container {
       display: flex;
       justify-content: center;
@@ -168,41 +200,22 @@ export interface MetadataDialogData {
       gap: 0.5rem;
     }
 
-    .info-field {
-      display: flex;
-      flex-direction: column;
-      gap: 0.25rem;
-    }
-
-    .info-field label {
-      font-size: 12px;
-      font-weight: 500;
-      color: rgba(0, 0, 0, 0.6);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .info-value {
-      font-size: 14px;
-      color: rgba(0, 0, 0, 0.87);
-      padding: 0.5rem;
-      background: white;
-      border-radius: 4px;
-      border: 1px solid rgba(0, 0, 0, 0.12);
-    }
-
     .metadata-container {
       padding: 1rem;
     }
   `]
 })
 export class MetadataDialogComponent implements OnInit {
-  private currentMetadata: Partial<UnitMetadataValues> | null = null;
+  private currentWebComponentMetadata: Partial<UnitMetadataValues> | null = null;
   private webComponentInitialized = false;
   isLoading = true;
 
   selectedView: string = 'unit';
   items: MetadataItem[] = [];
+  localMetadataValues: VomdMetadata | undefined; // Local copy of full metadata
+
+  isEditing = false;
+  hasChanges = false;
 
   constructor(
     public dialogRef: MatDialogRef<MetadataDialogComponent>,
@@ -210,6 +223,9 @@ export class MetadataDialogComponent implements OnInit {
   ) { }
 
   async ngOnInit() {
+    // Deep copy metadata values to avoid mutating reference passed in
+    this.localMetadataValues = JSON.parse(JSON.stringify(this.data.metadataValues));
+
     await bootstrapMetadataWebComponents();
     this.extractItems();
 
@@ -219,16 +235,11 @@ export class MetadataDialogComponent implements OnInit {
   }
 
   private extractItems(): void {
-    if (!this.data.metadataValues?.items) {
+    if (!this.localMetadataValues?.items) {
       return;
     }
-
-    this.items = this.data.metadataValues.items.map((item: MetadataItem) => ({
-      id: item.id,
-      uuid: item.uuid,
-      variableId: item.variableId,
-      description: item.description
-    }));
+    // Items are references to objects inside localMetadataValues, so editing them updates localMetadataValues
+    this.items = this.localMetadataValues.items;
   }
 
   private initializeWebComponent(): void {
@@ -242,10 +253,12 @@ export class MetadataDialogComponent implements OnInit {
       this.updateFormData(form);
 
       form.addEventListener('metadataChange', ((event: CustomEvent) => {
-        this.currentMetadata = event.detail;
+        this.currentWebComponentMetadata = event.detail;
+        this.saveCurrentViewDataToLocal();
+        this.markAsChanged();
       }) as EventListener);
 
-      form.readonly = this.data.mode === 'readonly';
+      form.readonly = !this.isEditing;
       this.webComponentInitialized = true;
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -260,11 +273,11 @@ export class MetadataDialogComponent implements OnInit {
       form.metadataValues = {
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
         // @ts-ignore
-        profiles: this.data.metadataValues?.profiles || []
+        profiles: this.localMetadataValues?.profiles || []
       };
       form.profileData = this.data.profileData;
     } else {
-      const selectedItem = this.data.metadataValues?.items?.find(
+      const selectedItem = this.items.find(
         (item: MetadataItem) => item.uuid === this.selectedView
       );
 
@@ -280,22 +293,47 @@ export class MetadataDialogComponent implements OnInit {
 
     form.language = this.data.language || 'de';
     form.resolver = this.data.resolver;
+    form.readonly = !this.isEditing;
   }
 
   onViewChange(): void {
+    // We don't save here because the listener already updates local state on every change
+    // But we need to update the form with the new view's data
     const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
     if (form && this.webComponentInitialized) {
       this.updateFormData(form);
     }
   }
 
+  onEditModeChange(): void {
+    const form = document.getElementById('metadata-form') as unknown as MetadataProfileFormElement;
+    if (form) {
+      form.readonly = !this.isEditing;
+    }
+  }
+
+  markAsChanged(): void {
+    this.hasChanges = true;
+  }
+
+  private saveCurrentViewDataToLocal(): void {
+    if (!this.currentWebComponentMetadata) return;
+
+    if (this.selectedView === 'unit') {
+      if (!this.localMetadataValues) this.localMetadataValues = {};
+      this.localMetadataValues.profiles = this.currentWebComponentMetadata.profiles as unknown as MetadataProfileValues[];
+    } else {
+      const itemIndex = this.items.findIndex(i => i.uuid === this.selectedView);
+      if (itemIndex > -1) {
+        this.items[itemIndex].profiles = this.currentWebComponentMetadata.profiles as unknown as MetadataProfileValues[];
+      }
+    }
+  }
+
   close(save: boolean = false): void {
     if (save) {
-      const result = {
-        selectedView: this.selectedView,
-        metadata: this.currentMetadata
-      };
-      this.dialogRef.close(result);
+      // Ensure latest web component state is captured (should be covered by listener, but good to be sure)
+      this.dialogRef.close(this.localMetadataValues);
     } else {
       this.dialogRef.close(null);
     }
