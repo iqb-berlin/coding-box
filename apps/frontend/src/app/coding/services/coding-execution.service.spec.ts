@@ -55,11 +55,11 @@ describe('CodingExecutionService', () => {
 
   it('should create coding statistics job', () => {
     const mockRes = { jobId: 'job1', message: 'started' };
-    service.createCodingStatisticsJob(1).subscribe(res => {
+    service.createCodingStatisticsJob(1, 'v1').subscribe(res => {
       expect(res.jobId).toBe('job1');
     });
 
-    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/statistics/job`);
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/statistics/job?version=v1`);
     expect(req.request.method).toBe('POST');
     req.flush(mockRes);
   });

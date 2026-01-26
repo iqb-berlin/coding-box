@@ -93,7 +93,7 @@ export class ResponseFiltersComponent implements OnDestroy {
 
   mapStatusToString(status: string): string {
     const statusNumber = parseInt(status, 10);
-    if (isNaN(statusNumber)) {
+    if (Number.isNaN(statusNumber)) {
       return status;
     }
     return this.responseStatusMap.get(statusNumber) || status;

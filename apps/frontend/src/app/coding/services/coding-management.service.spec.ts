@@ -120,7 +120,7 @@ describe('CodingManagementService', () => {
       service.fetchCodingStatistics('v1');
 
       // Assert
-      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1);
+      expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledWith(1, 'v1');
 
       // Advance time for polling (timer(0, 2000))
       tick(0); // initial
