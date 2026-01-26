@@ -28,6 +28,7 @@ import { CodingJobBackendService } from '../../../services/coding-job-backend.se
 import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
+import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
 
 import { UnitsReplay, UnitsReplayUnit } from '../../../../replay/services/units-replay.service';
 
@@ -438,12 +439,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        let schemeContent: string;
-        try {
-          schemeContent = atob(schemeFile.base64Data);
-        } catch (error) {
-          schemeContent = schemeFile.base64Data;
-        }
+        const schemeContent = base64ToUtf8(schemeFile.base64Data);
 
         const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
           width: '90vw',
@@ -473,7 +469,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   private serializeUnitsData(unitsData: UnitsReplay): string {
     try {
       const jsonString = JSON.stringify(unitsData);
-      return btoa(jsonString);
+      return utf8ToBase64(jsonString);
     } catch (error) {
       return '';
     }

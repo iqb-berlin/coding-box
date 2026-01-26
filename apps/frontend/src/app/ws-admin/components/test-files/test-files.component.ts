@@ -35,6 +35,7 @@ import {
   MatPaginatorIntl,
   PageEvent
 } from '@angular/material/paginator';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
@@ -69,6 +70,8 @@ import {
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
+import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -538,7 +541,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       .downloadFile(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
         next: (res: FileDownloadDto) => {
-          const decodedString = atob(res.base64Data);
+          const decodedString = base64ToUtf8(res.base64Data);
           const byteArray = new Uint8Array(decodedString.length);
           for (let i = 0; i < decodedString.length; i++) {
             byteArray[i] = decodedString.charCodeAt(i);
@@ -721,7 +724,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
                 width: '90%',
                 maxWidth: '1400px',
-                height: '80vh',
+                maxHeight: '95vh',
+                panelClass: 'validation-dialog-container',
                 data: {
                   validationResults,
                   filteredTestTakers: res.filteredTestTakers,
@@ -742,7 +746,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
           width: '90%',
           maxWidth: '1400px',
-          height: '80vh',
+          maxHeight: '95vh',
+          panelClass: 'validation-dialog-container',
           data: {
             validationResults: (res.validationResults || []).filter(
               v => !!v?.testTaker
@@ -789,7 +794,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
       .subscribe(fileData => {
-        const decodedContent = atob(fileData.base64Data);
+        const decodedContent = base64ToUtf8(fileData.base64Data);
 
         if (
           file.file_type === 'Resource' &&
@@ -811,6 +816,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.loadTestFiles();
             }
           });
+        } else if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vomd')) {
+          this.openMetadataDialog(file, decodedContent);
         } else {
           this.dialog.open(ContentDialogComponent, {
             width: '800px',
@@ -822,6 +829,103 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           });
         }
       });
+  }
+
+  private async openMetadataDialog(file: FilesInListDto, decodedContent: string): Promise<void> {
+    try {
+      const vomdData = JSON.parse(decodedContent);
+
+      const unitProfile = vomdData.profiles?.[0];
+      if (!unitProfile) {
+        this.snackBar.open('Keine Metadaten in der Datei gefunden', 'Schließen', {
+          duration: 5000
+        });
+        return;
+      }
+
+      // Get item profile (from first item if exists)
+      const firstItem = vomdData.items?.[0];
+      const itemProfile = firstItem?.profiles?.[0];
+
+      // Create resolver and load profiles with vocabularies
+      const resolver = new MetadataResolver();
+
+      // Load unit profile and vocabularies
+      const unitProfileUrl = unitProfile.profileId;
+      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+
+      // Load item profile and vocabularies (if items exist)
+      let itemProfileData = null;
+      if (itemProfile) {
+        const itemProfileUrl = itemProfile.profileId;
+        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        itemProfileData = itemProfileWithVocabs.profile;
+
+        // eslint-disable-next-line no-console
+        console.log(`Loaded profiles: Unit + Items (${vomdData.items.length} items)`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('Loaded profile: Unit only (no items)');
+      }
+
+      const dialogRef = this.dialog.open(MetadataDialogComponent, {
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        data: {
+          title: file.filename,
+          profileData: unitProfileWithVocabs.profile,
+          itemProfileData: itemProfileData,
+          metadataValues: vomdData,
+          resolver: resolver,
+          language: 'de',
+          mode: 'readonly'
+        }
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result) {
+          this.saveMetadata(file, result);
+        }
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error parsing vomd file:', error);
+      this.snackBar.open('Fehler beim Parsen der Metadaten-Datei', 'Schließen', {
+        duration: 5000
+      });
+    }
+  }
+
+  private saveMetadata(originalFile: FilesInListDto, newMetadata: VomdMetadata): void {
+    this.isLoading = true;
+    const jsonContent = JSON.stringify(newMetadata, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/octet-stream' });
+    const file = new File([blob], originalFile.filename, { type: 'application/octet-stream' });
+
+    // Create a DataTransfer to simulate file selection
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    const files = dataTransfer.files;
+
+    this.fileService.uploadTestFiles(
+      this.appService.selectedWorkspaceId,
+      files,
+      true, // overwriteExisting
+      [originalFile.filename]
+    ).pipe(
+      finalize(() => {
+        this.isLoading = false;
+      })
+    ).subscribe({
+      next: () => {
+        this.snackBar.open('Metadaten erfolgreich gespeichert.', 'OK', { duration: 3000 });
+        this.loadTestFiles();
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Speichern der Metadaten.', 'Fehler', { duration: 3000 });
+      }
+    });
   }
 
   protected readonly getFileIcon = getFileIcon;

@@ -191,7 +191,8 @@ export class TestCenterImportComponent {
       codings: this.fb.control(false),
       logs: this.fb.control(false),
       testTakers: this.fb.control(false),
-      booklets: this.fb.control(false)
+      booklets: this.fb.control(false),
+      metadata: this.fb.control(false)
     });
   }
 
@@ -209,7 +210,8 @@ export class TestCenterImportComponent {
         'player',
         'codings',
         'booklets',
-        'testTakers'
+        'testTakers',
+        'metadata'
       ];
     }
 
@@ -229,7 +231,8 @@ export class TestCenterImportComponent {
       'codings',
       'logs',
       'testTakers',
-      'booklets'
+      'booklets',
+      'metadata'
     ];
 
     optionControls.forEach(name => {
@@ -420,7 +423,8 @@ export class TestCenterImportComponent {
         codings: this.importFilesForm.get('codings')?.value,
         logs: this.importFilesForm.get('logs')?.value,
         testTakers: this.importFilesForm.get('testTakers')?.value,
-        booklets: this.importFilesForm.get('booklets')?.value
+        booklets: this.importFilesForm.get('booklets')?.value,
+        metadata: this.importFilesForm.get('metadata')?.value
       }
     };
 
@@ -629,7 +633,8 @@ export class TestCenterImportComponent {
             filesDefinitions: 0,
             filesCodings: 0,
             filesBooklets: 0,
-            filesTestTakers: 0
+            filesTestTakers: 0,
+            filesMetadata: 0
           };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;

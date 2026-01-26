@@ -1,4 +1,6 @@
 import { Component, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -29,6 +31,8 @@ import {
   AffectedUnitsDialogComponent,
   AffectedUnitsDialogResult
 } from './affected-units-dialog.component';
+import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 type FileStatus = {
   filename: string;
@@ -63,6 +67,7 @@ type FilesValidation = {
   schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
+  metadata: DataValidation;
 };
 
 interface ExpandedFilesLists {
@@ -72,6 +77,7 @@ interface ExpandedFilesLists {
   schemer: boolean;
   definitions: boolean;
   player: boolean;
+  metadata: boolean;
 }
 
 @Component({
@@ -200,7 +206,8 @@ export class FilesValidationDialogComponent {
             schemes: false,
             schemer: false,
             definitions: false,
-            player: false
+            player: false,
+            metadata: false
           });
         });
       }
@@ -783,12 +790,7 @@ export class FilesValidationDialogComponent {
           return;
         }
 
-        let decodedContent: string;
-        try {
-          decodedContent = atob(fileDownload.base64Data);
-        } catch {
-          decodedContent = fileDownload.base64Data;
-        }
+        const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
         this.dialog.open(SchemeEditorDialogComponent, {
           width: '100vw',
@@ -830,21 +832,6 @@ export class FilesValidationDialogComponent {
     });
   }
 
-  openUnitDefinitionForUnit(unitId: string): void {
-    if (!this.data.workspaceId || !unitId) {
-      return;
-    }
-
-    this.dialog.open(UnitDefinitionPlayerDialogComponent, {
-      width: '1200px',
-      height: '80vh',
-      data: {
-        workspaceId: this.data.workspaceId!,
-        unitId: unitId.toUpperCase()
-      }
-    });
-  }
-
   showTestTakerXml(testTakerId: string): void {
     if (!this.data.workspaceId || !testTakerId) {
       return;
@@ -869,5 +856,113 @@ export class FilesValidationDialogComponent {
           );
         }
       });
+  }
+
+  async openMetadataFile(filename: string): Promise<void> {
+    if (!this.data.workspaceId || !filename) {
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+
+    try {
+      // 1. Find file ID
+      const filesList = await firstValueFrom(
+        this.fileService.getFilesList(
+          this.data.workspaceId,
+          1,
+          20,
+          'Resource',
+          undefined,
+          filename
+        )
+      );
+
+      // eslint-disable-next-line no-console
+      console.log('Metadata file search:', {
+        searchedFor: filename,
+        found: filesList.data.length,
+        results: filesList.data.map(f => f.filename)
+      });
+
+      let fileEntry = filesList.data.find(f => f.filename === filename);
+
+      if (!fileEntry && filesList.data.length > 0) {
+        fileEntry = filesList.data.find(f => f.filename.toLowerCase() === filename.toLowerCase());
+      }
+
+      if (!fileEntry) {
+        // Fallback: if we have exactly one result and it contains the filename (e.g. funny path issues), log it
+        if (filesList.data.length === 1) {
+          // eslint-disable-next-line no-console
+          console.warn('Exact match failed, but found 1 file:', filesList.data[0].filename);
+        }
+
+        loadingSnackBar.dismiss();
+        this.snackBar.open(`Datei "${filename}" nicht gefunden.`, 'Fehler', { duration: 3000 });
+        return;
+      }
+
+      // 2. Download file content
+      const fileDownload = await firstValueFrom(
+        this.fileService.downloadFile(this.data.workspaceId, fileEntry.id)
+      );
+
+      if (!fileDownload) {
+        loadingSnackBar.dismiss();
+        this.snackBar.open('Fehler beim Laden der Datei.', 'Fehler', { duration: 3000 });
+        return;
+      }
+
+      // 3. Parse content
+      const decodedContent = base64ToUtf8(fileDownload.base64Data);
+
+      const vomdData = JSON.parse(decodedContent);
+
+      // 4. Resolve profiles
+      const unitProfile = vomdData.profiles?.[0];
+      if (!unitProfile) {
+        loadingSnackBar.dismiss();
+        this.snackBar.open('Keine Metadaten-Profile in der Datei gefunden', 'Schließen', { duration: 5000 });
+        return;
+      }
+
+      const resolver = new MetadataResolver();
+      const unitProfileUrl = unitProfile.profileId;
+      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+
+      let itemProfileData = null;
+      const firstItem = vomdData.items?.[0];
+      const itemProfile = firstItem?.profiles?.[0];
+
+      if (itemProfile) {
+        const itemProfileUrl = itemProfile.profileId;
+        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        itemProfileData = itemProfileWithVocabs.profile;
+      }
+
+      loadingSnackBar.dismiss();
+
+      // 5. Open dialog
+      this.dialog.open(MetadataDialogComponent, {
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        data: {
+          title: filename,
+          profileData: unitProfileWithVocabs.profile,
+          itemProfileData: itemProfileData,
+          metadataValues: vomdData,
+          resolver: resolver,
+          language: 'de',
+          mode: 'readonly'
+        }
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error opening metadata file:', error);
+      loadingSnackBar.dismiss();
+      this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+    }
   }
 }

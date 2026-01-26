@@ -38,6 +38,7 @@ import { StatisticsCardComponent } from './components/statistics-card/statistics
 import { ResponseFiltersComponent } from './components/response-filters/response-filters.component';
 import { ResponseTableComponent } from './components/response-table/response-table.component';
 import { SearchResponseItem } from '../../../models/coding-interfaces';
+import { ItemListDialogComponent } from '../../../shared/dialogs/item-list-dialog/item-list-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -553,5 +554,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.fetchResponsesWithFilters();
       }
     }
+  }
+
+  openItemListDialog(): void {
+    this.dialog.open(ItemListDialogComponent, {
+      width: '600px',
+      maxHeight: '80vh'
+    });
   }
 }

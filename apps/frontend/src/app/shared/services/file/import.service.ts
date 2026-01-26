@@ -31,6 +31,7 @@ export class ImportService {
       definitions,
       player,
       codings,
+      metadata,
       logs,
       testTakers,
       booklets
@@ -49,6 +50,7 @@ export class ImportService {
       .set('token', token)
       .set('testTakers', String(testTakers))
       .set('booklets', String(booklets))
+      .set('metadata', String(metadata))
       .set('testGroups', String(testGroups.join(',')))
       .set('overwriteExistingLogs', String(overwriteExistingLogs))
       .set('overwriteFileIds', String((overwriteFileIds || []).join(';')));

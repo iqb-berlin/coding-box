@@ -330,6 +330,7 @@ export class TestcenterService {
       filesCodings: number;
       filesBooklets: number;
       filesTestTakers: number;
+      filesMetadata: number;
       uploadResult: TestFilesUploadResultDto;
     }> {
     const headersRequest = this.createHeaders(authToken);
@@ -348,7 +349,7 @@ export class TestcenterService {
         );
 
       const {
-        units, definitions, player, codings, testTakers, booklets
+        units, definitions, player, codings, testTakers, booklets, metadata
       } =
         importOptions;
 
@@ -369,6 +370,10 @@ export class TestcenterService {
         booklets === 'true' ? (files.Booklet as unknown as File[]) : [];
       const testTakersArr: File[] =
         testTakers === 'true' ? (files.Testtakers as unknown as File[]) : [];
+      const metadataArr: File[] =
+        metadata === 'true' ?
+          files.Resource.filter(f => f.name.includes('.vomd')) :
+          [];
 
       const overwriteIdSet = new Set((overwriteFileIds || []).filter(Boolean));
       const onlyOverwriteSelected = overwriteIdSet.size > 0;
@@ -379,7 +384,8 @@ export class TestcenterService {
         ...definitionsArr,
         ...codingsArr,
         ...bookletsArr,
-        ...testTakersArr
+        ...testTakersArr,
+        ...metadataArr
       ];
 
       const filteredSelected = onlyOverwriteSelected ?
@@ -456,6 +462,7 @@ export class TestcenterService {
         filesCodings: codingsArr.length,
         filesBooklets: bookletsArr.length,
         filesTestTakers: testTakersArr.length,
+        filesMetadata: metadataArr.length,
         uploadResult
       };
     } catch (error) {
@@ -481,6 +488,7 @@ export class TestcenterService {
         filesCodings: 0,
         filesBooklets: 0,
         filesTestTakers: 0,
+        filesMetadata: 0,
         uploadResult
       };
     }
@@ -613,6 +621,7 @@ export class TestcenterService {
         result.filesCodings = filesResult.filesCodings;
         result.filesBooklets = filesResult.filesBooklets;
         result.filesTestTakers = filesResult.filesTestTakers;
+        result.filesMetadata = filesResult.filesMetadata;
         result.testFilesUploadResult = filesResult.uploadResult;
       }
 
@@ -640,7 +649,7 @@ export class TestcenterService {
 
   private shouldImportFiles(importOptions: ImportOptions): boolean {
     const {
-      definitions, player, units, codings, testTakers, booklets
+      definitions, player, units, codings, testTakers, booklets, metadata
     } =
       importOptions;
     return (
@@ -649,7 +658,8 @@ export class TestcenterService {
       units === 'true' ||
       codings === 'true' ||
       testTakers === 'true' ||
-      booklets === 'true'
+      booklets === 'true' ||
+      metadata === 'true'
     );
   }
 

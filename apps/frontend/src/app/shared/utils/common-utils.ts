@@ -84,3 +84,57 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 export function isNullOrUndefined(value: unknown): value is null | undefined {
   return value === null || value === undefined;
 }
+
+/**
+ * Decodes a base64 string to a UTF-8 string, correctly handling multibyte characters like Umlauts.
+ * @param base64 The base64 string to decode
+ * @returns The decoded UTF-8 string
+ */
+export function base64ToUtf8(base64: string): string {
+  if (!base64) return '';
+  try {
+    // atob() decodes base64 to a "binary" string (one byte per character).
+    // TextEncoder/Decoder or decodeURIComponent(escape()) are common ways to convert this to UTF-8.
+    const binaryString = atob(base64);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to decode base64 to UTF-8:', e);
+    // Fallback to atob if everything else fails
+    try {
+      return atob(base64);
+    } catch (atobError) {
+      return base64;
+    }
+  }
+}
+
+/**
+ * Encodes a UTF-8 string to a base64 string, correctly handling multibyte characters like Umlauts.
+ * @param str The string to encode
+ * @returns The base64 encoded string
+ */
+export function utf8ToBase64(str: string): string {
+  if (!str) return '';
+  try {
+    const bytes = new TextEncoder().encode(str);
+    let binaryString = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binaryString += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binaryString);
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to encode UTF-8 to base64:', e);
+    // Fallback to btoa if everything else fails
+    try {
+      return btoa(str);
+    } catch (btoaError) {
+      return str;
+    }
+  }
+}

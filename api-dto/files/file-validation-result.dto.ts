@@ -62,5 +62,6 @@ export class FileValidationResultDto {
     schemer: DataValidation;
     definitions: DataValidation;
     player: DataValidation;
+    metadata: DataValidation;
   }[];
 }
