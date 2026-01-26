@@ -168,4 +168,45 @@ export class WorkspaceFilesInfoController {
       scheme_file_id
     );
   }
+
+  @Get(':workspace_id/files/item-ids')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Get item IDs from metadata files',
+    description: 'Retrieves a list of item IDs extracted from .vomd metadata files in the workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Item IDs retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fileId: { type: 'string' },
+          id: { type: 'number' },
+          items: {
+            type: 'array',
+            items: { type: 'string' }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Failed to retrieve item IDs'
+  })
+  async getItemIdsFromMetadataFiles(
+    @Param('workspace_id') workspace_id: number
+  ): Promise<{ fileId: string; id: number; items: string[] }[]> {
+    if (!workspace_id) {
+      throw new BadRequestException('Workspace ID is required.');
+    }
+    return this.workspaceFilesService.getItemIdsFromMetadataFiles(workspace_id);
+  }
 }

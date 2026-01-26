@@ -10,6 +10,9 @@ mat-dialog-content {
   font-size: 1rem;
   color: #444;
   padding: 0;
+  max-height: unset !important; // Override default mat-dialog-content limit
+  flex: 1;
+  overflow-y: auto;
 }
 
 mat-dialog-actions {
@@ -19,6 +22,9 @@ mat-dialog-actions {
 
 :host ::ng-deep .mat-dialog-container {
   padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important; // Prevent outer scrollbar
 }
 
 .scroll-container {

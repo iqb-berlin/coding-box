@@ -89,7 +89,7 @@
       <h3>
         Angemeldet in
         {{
-          this.testCenterInstance[0].label ||
+          this.testCenterInstance[0]?.label ||
             this.loginForm.get('testCenterIndividual')?.value
         }}
       </h3>
@@ -198,6 +198,14 @@
               </mat-checkbox>
               <div class="checkbox-hint">
                 Testteilnehmende (<code>.xml</code>-Dateien)
+              </div>
+            </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="metadata">
+                <span class="checkbox-label">Metadaten</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Metadaten zu Aufgaben (<code>.vomd</code>-Dateien)
               </div>
             </div>
             }

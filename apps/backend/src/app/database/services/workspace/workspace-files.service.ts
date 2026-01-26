@@ -384,6 +384,48 @@ ${bookletRefs}
     }
   }
 
+  async getItemIdsFromMetadataFiles(workspaceId: number): Promise<{ fileId: string; id: number; items: string[] }[]> {
+    try {
+      const metadataFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          filename: Like('%.vomd')
+        }
+      });
+
+      const result: { fileId: string; id: number; items: string[] }[] = [];
+
+      metadataFiles.forEach(file => {
+        try {
+          const content = JSON.parse(file.data);
+          if (Array.isArray(content.items)) {
+            const ids: string[] = [];
+            content.items.forEach((item: { id?: string | number }) => {
+              if (item.id) {
+                ids.push(String(item.id));
+              }
+            });
+            if (ids.length > 0) {
+              result.push({
+                fileId: file.file_id,
+                id: file.id,
+                items: ids.sort()
+              });
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`Failed to parse metadata file ${file.filename}: ${e.message}`);
+        }
+      });
+
+      return result.sort((a, b) => a.fileId.localeCompare(b.fileId));
+    } catch (error) {
+      this.logger.error(`Error fetching item IDs from metadata files: ${error.message}`);
+      return [];
+    }
+  }
+
   async uploadTestFiles(
     workspace_id: number,
     originalFiles: FileIo[],
@@ -1028,13 +1070,24 @@ ${bookletRefs}
         where: { file_id: fileUpload.file_id, workspace_id: workspaceId }
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
+
+      this.logger.log(`[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`);
+      if (overwriteAllowList) {
+        this.logger.log(`[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`);
+      }
+
       const overwriteAllowed =
         overwriteExisting &&
         (!overwriteAllowList || overwriteAllowList.has(fileIdNormalized));
+
+      this.logger.log(`[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`);
+
       if (existing && !overwriteAllowed) {
         if (overwriteExisting && overwriteAllowList) {
+          this.logger.log(`[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`);
           return await Promise.resolve();
         }
+        this.logger.log(`[OctetStream] Conflict detected for ${fileIdNormalized}`);
         return {
           conflict: true,
           fileId: fileUpload.file_id,
@@ -1042,6 +1095,8 @@ ${bookletRefs}
           fileType
         };
       }
+
+      this.logger.log(`[OctetStream] Proceeding to upsert ${fileIdNormalized}`);
 
       await this.fileUploadRepository.upsert(fileUpload, [
         'file_id',

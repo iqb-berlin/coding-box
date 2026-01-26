@@ -110,6 +110,11 @@ export class WorkspaceTestCenterController {
     description: 'Include booklets'
   })
   @ApiQuery({
+    name: 'metadata',
+    required: false,
+    description: 'Include metadata'
+  })
+  @ApiQuery({
     name: 'overwriteFileIds',
     required: false,
     description:
@@ -138,6 +143,7 @@ export class WorkspaceTestCenterController {
       @Query('testTakers') testTakers: string,
       @Query('testGroups') testGroups: string,
       @Query('booklets') booklets: string,
+      @Query('metadata') metadata: string,
       @Query('overwriteFileIds') overwriteFileIds: string,
       @Query('overwriteExistingLogs') overwriteExistingLogs: string
   ): Promise<Result> {
@@ -149,7 +155,8 @@ export class WorkspaceTestCenterController {
       codings: codings,
       logs: logs,
       booklets: booklets,
-      testTakers: testTakers
+      testTakers: testTakers,
+      metadata: metadata
     };
 
     const overwriteLogs = overwriteExistingLogs === 'true';

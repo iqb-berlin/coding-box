@@ -94,3 +94,32 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
     color: #ff4d4d !important;
   }
 }
+
+// Styles for Files Validation Dialog to fix double scrollbars
+.validation-dialog-container {
+  overflow: hidden !important; // Pane should not scroll
+
+  .mat-mdc-dialog-container,
+  .mat-dialog-container,
+  .mat-mdc-dialog-surface {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important; // Container and Surface should not scroll
+  }
+  
+  // Target the component host specifically
+  files-validation-dialog {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden !important;
+  }
+}
+
+// Ensure the content scrolls
+.validation-dialog-container .mat-mdc-dialog-content,
+.validation-dialog-container mat-dialog-content {
+  flex: 1;
+  max-height: unset !important;
+  overflow-y: auto !important;
+}

@@ -37,6 +37,7 @@ import { CodeSelectorComponent } from '../../../coding/components/code-selector/
 import { CodingJobCommentDialogComponent } from '../../../coding/components/coding-job-comment-dialog/coding-job-comment-dialog.component';
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
 import { ReplayCodingService } from '../../services/replay-coding.service';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 @Component({
   providers: [ReplayCodingService],
@@ -135,7 +136,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     try {
-      const jsonString = atob(encodedData);
+      const jsonString = base64ToUtf8(encodedData);
       return JSON.parse(jsonString) as UnitsReplay;
     } catch (error) {
       return null;
