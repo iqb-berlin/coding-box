@@ -279,7 +279,7 @@ export class CodingAnalysisService {
           totalResponses: totalDuplicateResponses,
           groups: duplicateValueGroups,
           isAggregationApplied,
-          isAggregationApplied: !matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION)
+
         },
         matchingFlags,
         analysisTimestamp: new Date().toISOString()
