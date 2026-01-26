@@ -9,6 +9,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
 import { FileService } from '../../../shared/services/file/file.service';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 
@@ -150,7 +151,7 @@ export class SchemeEditorDialogComponent implements OnInit {
               .subscribe({
                 next: fileDownload => {
                   try {
-                    this.schemerHtml = atob(fileDownload.base64Data);
+                    this.schemerHtml = base64ToUtf8(fileDownload.base64Data);
                     this.isLoading = false;
                   } catch (error) {
                     this.snackBar.open('Failed to decode schemer HTML', 'Error', { duration: 3000 });

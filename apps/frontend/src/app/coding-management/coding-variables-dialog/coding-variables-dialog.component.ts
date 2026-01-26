@@ -33,6 +33,7 @@ import { UnitInfoDialogComponent } from '../../ws-admin/components/unit-info-dia
 import { SchemeEditorDialogComponent } from '../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
+import { base64ToUtf8 } from '../../shared/utils/common-utils';
 
 export interface CodingVariablesDialogData {
   workspaceId: number;
@@ -290,12 +291,7 @@ export class CodingVariablesDialogComponent implements OnInit {
           return;
         }
 
-        let schemeContent: string;
-        try {
-          schemeContent = atob(schemeFile.base64Data);
-        } catch (error) {
-          schemeContent = schemeFile.base64Data;
-        }
+        const schemeContent = base64ToUtf8(schemeFile.base64Data);
 
         this.dialog.open(SchemeEditorDialogComponent, {
           width: '100vw',

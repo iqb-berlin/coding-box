@@ -13,6 +13,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MetadataDialogComponent, MetadataDialogData } from '../metadata-dialog/metadata-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { FileService } from '../../services/file/file.service';
+import { base64ToUtf8 } from '../../utils/common-utils';
 
 @Component({
   selector: 'app-item-list-dialog',
@@ -81,12 +82,7 @@ export class ItemListDialogComponent implements OnInit {
         this.fileService.downloadFile(workspaceId, group.id)
       );
 
-      let decodedContent: string;
-      try {
-        decodedContent = atob(fileDownload.base64Data);
-      } catch {
-        decodedContent = fileDownload.base64Data;
-      }
+      const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
       const vomdData = JSON.parse(decodedContent);
 
