@@ -1,0 +1,37 @@
+<h1 mat-dialog-title>Itemliste</h1>
+<div mat-dialog-content class="dialog-content">
+  <div *ngIf="isLoading" class="loading-container">
+    <mat-spinner diameter="40"></mat-spinner>
+    <p>Lade Item-IDs...</p>
+  </div>
+
+  <div *ngIf="error" class="error-container">
+    <mat-icon color="warn">error</mat-icon>
+    <p>{{ error }}</p>
+    <button mat-button color="primary" (click)="loadItemIds()">Erneut versuchen</button>
+  </div>
+
+  <div *ngIf="!isLoading && !error">
+    <div *ngIf="itemGroups.length === 0" class="empty-state">
+      <p>Keine Items in den Metadaten-Dateien gefunden.</p>
+    </div>
+
+    <div *ngIf="itemGroups.length > 0" class="groups-container">
+      <div *ngFor="let group of itemGroups" class="file-group">
+        <h3 class="group-header pointer" (click)="openMetadata(group)" matTooltip="Metadaten anzeigen (Unit)">
+          <mat-icon>folder_open</mat-icon>
+          {{ group.fileId }}
+        </h3>
+        <div class="items-grid">
+          <div *ngFor="let id of group.items" class="item-chip pointer" (click)="openMetadata(group, id)"
+               matTooltip="Metadaten anzeigen (Item)">
+            {{ id }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<div mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Schließen</button>
+</div>

@@ -55,6 +55,7 @@ export interface MetadataDialogData {
   resolver?: MetadataResolver;
   language?: string;
   mode?: 'edit' | 'readonly';
+  selectedView?: string;
 }
 
 @Component({
@@ -117,26 +118,26 @@ export interface MetadataDialogData {
             <mat-form-field appearance="outline">
               <mat-label>Item-ID</mat-label>
               <input matInput
-                     [(ngModel)]="getSelectedItem()!.id"
-                     [disabled]="!isEditing"
-                     (ngModelChange)="markAsChanged()">
+                     [value]="getSelectedItem()!.id"
+                     [readonly]="!isEditing"
+                     (input)="updateItemProperty('id', $any($event.target).value)">
             </mat-form-field>
 
             <mat-form-field appearance="outline">
               <mat-label>Variablen-ID</mat-label>
               <input matInput
-                     [(ngModel)]="getSelectedItem()!.variableId"
-                     [disabled]="!isEditing"
-                     (ngModelChange)="markAsChanged()">
+                     [value]="getSelectedItem()!.variableId"
+                     [readonly]="!isEditing"
+                     (input)="updateItemProperty('variableId', $any($event.target).value)">
             </mat-form-field>
 
             <mat-form-field appearance="outline">
               <mat-label>Beschreibung</mat-label>
               <textarea matInput
-                        [(ngModel)]="getSelectedItem()!.description"
-                        [disabled]="!isEditing"
+                        [value]="getSelectedItem()!.description"
+                        [readonly]="!isEditing"
                         rows="3"
-                        (ngModelChange)="markAsChanged()"></textarea>
+                        (input)="updateItemProperty('description', $any($event.target).value)"></textarea>
             </mat-form-field>
           </div>
         }
@@ -226,6 +227,10 @@ export class MetadataDialogComponent implements OnInit {
     // Deep copy metadata values to avoid mutating reference passed in
     this.localMetadataValues = JSON.parse(JSON.stringify(this.data.metadataValues));
 
+    if (this.data.selectedView) {
+      this.selectedView = this.data.selectedView;
+    }
+
     await bootstrapMetadataWebComponents();
     this.extractItems();
 
@@ -275,7 +280,8 @@ export class MetadataDialogComponent implements OnInit {
         // @ts-ignore
         profiles: this.localMetadataValues?.profiles || []
       };
-      form.profileData = this.data.profileData;
+      // Force reference change to trigger update if needed
+      form.profileData = this.data.profileData ? JSON.parse(JSON.stringify(this.data.profileData)) : undefined;
     } else {
       const selectedItem = this.items.find(
         (item: MetadataItem) => item.uuid === this.selectedView
@@ -287,7 +293,8 @@ export class MetadataDialogComponent implements OnInit {
           // @ts-ignore
           profiles: selectedItem.profiles || []
         };
-        form.profileData = this.data.itemProfileData;
+        // Force reference change to trigger update if needed
+        form.profileData = this.data.itemProfileData ? JSON.parse(JSON.stringify(this.data.itemProfileData)) : undefined;
       }
     }
 
@@ -314,6 +321,14 @@ export class MetadataDialogComponent implements OnInit {
 
   markAsChanged(): void {
     this.hasChanges = true;
+  }
+
+  updateItemProperty(prop: 'id' | 'variableId' | 'description', value: string): void {
+    const item = this.getSelectedItem();
+    if (item) {
+      item[prop] = value;
+      this.markAsChanged();
+    }
   }
 
   private saveCurrentViewDataToLocal(): void {

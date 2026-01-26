@@ -384,6 +384,48 @@ ${bookletRefs}
     }
   }
 
+  async getItemIdsFromMetadataFiles(workspaceId: number): Promise<{ fileId: string; id: number; items: string[] }[]> {
+    try {
+      const metadataFiles = await this.fileUploadRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          file_type: 'Resource',
+          filename: Like('%.vomd')
+        }
+      });
+
+      const result: { fileId: string; id: number; items: string[] }[] = [];
+
+      metadataFiles.forEach(file => {
+        try {
+          const content = JSON.parse(file.data);
+          if (Array.isArray(content.items)) {
+            const ids: string[] = [];
+            content.items.forEach((item: { id?: string | number }) => {
+              if (item.id) {
+                ids.push(String(item.id));
+              }
+            });
+            if (ids.length > 0) {
+              result.push({
+                fileId: file.file_id,
+                id: file.id,
+                items: ids.sort()
+              });
+            }
+          }
+        } catch (e) {
+          this.logger.warn(`Failed to parse metadata file ${file.filename}: ${e.message}`);
+        }
+      });
+
+      return result.sort((a, b) => a.fileId.localeCompare(b.fileId));
+    } catch (error) {
+      this.logger.error(`Error fetching item IDs from metadata files: ${error.message}`);
+      return [];
+    }
+  }
+
   async uploadTestFiles(
     workspace_id: number,
     originalFiles: FileIo[],
