@@ -10,6 +10,7 @@ export interface ImportOptionsDto {
   logs: string;
   testTakers: string;
   booklets: string;
+  metadata: string;
 }
 
 export interface ImportResultDto {
@@ -27,6 +28,7 @@ export interface ImportResultDto {
   filesCodings?: number;
   filesBooklets?: number;
   filesTestTakers?: number;
+  filesMetadata?: number;
   testFilesUploadResult?: TestFilesUploadResultDto;
   issues?: TestResultsUploadIssueDto[];
   // Log coverage metrics
