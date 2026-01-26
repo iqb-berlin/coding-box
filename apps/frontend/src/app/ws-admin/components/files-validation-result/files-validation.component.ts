@@ -63,6 +63,7 @@ type FilesValidation = {
   schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
+  metadata: DataValidation;
 };
 
 interface ExpandedFilesLists {
@@ -72,6 +73,7 @@ interface ExpandedFilesLists {
   schemer: boolean;
   definitions: boolean;
   player: boolean;
+  metadata: boolean;
 }
 
 @Component({
@@ -200,7 +202,8 @@ export class FilesValidationDialogComponent {
             schemes: false,
             schemer: false,
             definitions: false,
-            player: false
+            player: false,
+            metadata: false
           });
         });
       }
@@ -826,21 +829,6 @@ export class FilesValidationDialogComponent {
       data: {
         workspaceId: this.data.workspaceId!,
         unitId
-      }
-    });
-  }
-
-  openUnitDefinitionForUnit(unitId: string): void {
-    if (!this.data.workspaceId || !unitId) {
-      return;
-    }
-
-    this.dialog.open(UnitDefinitionPlayerDialogComponent, {
-      width: '1200px',
-      height: '80vh',
-      data: {
-        workspaceId: this.data.workspaceId!,
-        unitId: unitId.toUpperCase()
       }
     });
   }

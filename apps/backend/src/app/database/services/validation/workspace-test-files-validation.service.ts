@@ -33,6 +33,7 @@ type UnitRefs = {
   codingSchemeRefs: string[];
   definitionRefs: string[];
   playerRefs: string[];
+  metadataRefs: string[];
   hasPlayer: boolean;
 };
 
@@ -46,6 +47,7 @@ type ValidationData = {
   schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
+  metadata: DataValidation;
 };
 
 @Injectable()
@@ -323,6 +325,7 @@ export class WorkspaceTestFilesValidationService {
         addToken(f.filename);
         addPlayerPatchTokens(f.filename);
       });
+      result.metadata.files.forEach(f => addToken(f.filename));
     });
 
     const allFiles = await this.fileUploadRepository.find({
@@ -448,6 +451,7 @@ export class WorkspaceTestFilesValidationService {
             codingSchemeRefs: [],
             definitionRefs: [],
             playerRefs: [],
+            metadataRefs: [],
             hasPlayer: false
           };
 
@@ -458,6 +462,8 @@ export class WorkspaceTestFilesValidationService {
             const playerRefAttr = $(element).find('DefinitionRef').attr('player');
             const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
 
+            const metadataRef = $(element).find('Metadata > Reference').text();
+
             const schemerRef = schemerRefAttr ? schemerRefAttr.replace('@', '-') : '';
 
             if (codingSchemeRef) refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
@@ -467,6 +473,7 @@ export class WorkspaceTestFilesValidationService {
               refs.playerRefs.push(playerRef.toUpperCase());
               refs.hasPlayer = true;
             }
+            if (metadataRef) refs.metadataRefs.push(metadataRef.toUpperCase());
           });
           unitMap.set(unit.file_id.toUpperCase(), refs);
         } catch (e) {
@@ -654,12 +661,14 @@ export class WorkspaceTestFilesValidationService {
     const missingCodingSchemeRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
     const missingDefinitionRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
     const missingPlayerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingMetadataRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
     const missingSchemerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
 
     const allCodingSchemeRefs = new Set<string>();
     const allSchemerRefs = new Set<string>();
     const allDefinitionRefs = new Set<string>();
     const allPlayerRefs = new Set<string>();
+    const allMetadataRefs = new Set<string>();
 
     for (const unitId of uniqueUnits) {
       const exists = unitMap.has(unitId);
@@ -684,6 +693,7 @@ export class WorkspaceTestFilesValidationService {
         refs?.schemerRefs.forEach(r => allSchemerRefs.add(r));
         refs?.definitionRefs.forEach(r => allDefinitionRefs.add(r));
         refs?.playerRefs.forEach(r => allPlayerRefs.add(r));
+        refs?.metadataRefs.forEach(r => allMetadataRefs.add(r));
 
         const codingSchemeMissingForUnit = (refs?.codingSchemeRefs || []).filter(r => !this.resourceExists(r, resourceIds));
         if (codingSchemeMissingForUnit.length > 0) {
@@ -710,6 +720,11 @@ export class WorkspaceTestFilesValidationService {
         if (playerMissingForUnit.length > 0) {
           missingPlayerRefsByUnit.push({ unit: unitId, missingRefs: playerMissingForUnit });
         }
+
+        const metadataMissingForUnit = (refs?.metadataRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        if (metadataMissingForUnit.length > 0) {
+          missingMetadataRefsByUnit.push({ unit: unitId, missingRefs: metadataMissingForUnit });
+        }
       }
     }
 
@@ -723,6 +738,7 @@ export class WorkspaceTestFilesValidationService {
       if (this.resourceExists(r, resourceIds)) return false;
       return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
     });
+    const missingMetadataRefs = Array.from(allMetadataRefs).filter(r => !this.resourceExists(r, resourceIds));
 
     const allBookletsExist = missingBooklets.length === 0;
     const allUnitsExist = missingUnits.length === 0;
@@ -803,6 +819,13 @@ export class WorkspaceTestFilesValidationService {
           filename: r,
           exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
         }))
+
+      },
+      metadata: {
+        complete: missingMetadataRefs.length === 0,
+        missing: missingMetadataRefs,
+        missingRefsPerUnit: missingMetadataRefsByUnit,
+        files: Array.from(allMetadataRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
       }
     };
   }
@@ -825,7 +848,8 @@ export class WorkspaceTestFilesValidationService {
       schemes: { complete: false, missing: [], files: [] },
       schemer: { complete: false, missing: [], files: [] },
       definitions: { complete: false, missing: [], files: [] },
-      player: { complete: false, missing: [], files: [] }
+      player: { complete: false, missing: [], files: [] },
+      metadata: { complete: false, missing: [], files: [] }
     }];
   }
 

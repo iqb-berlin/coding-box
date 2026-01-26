@@ -604,7 +604,7 @@
                     <span class="file-name">
                       (
                       @for (u of getUnitsForMissingRefLimited(val.definitions, file.filename, 3); track u) {
-                      <button mat-button type="button" (click)="openUnitDefinitionForUnit(u)">
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
                         {{ u }}
                       </button>
                       }
@@ -687,7 +687,7 @@
                     <span class="file-name">
                       (
                       @for (u of getUnitsForMissingRefLimited(val.player, file.filename, 3); track u) {
-                      <button mat-button type="button" (click)="openUnitDefinitionForUnit(u)">
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
                         {{ u }}
                       </button>
                       }
@@ -698,6 +698,83 @@
                                       openUnitInfo.bind(this)
                                     )">
                         +{{ getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
+                    }
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
+                    }
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Metadata Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">description</mat-icon>
+              Metadaten
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.metadata.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
+              }
+              @if (!val.metadata.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.metadata.missing && val.metadata.missing.length > 0) {
+                Unvollständig (Metadaten fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'metadata')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.metadata.files.length }}
+                  (vorhanden: {{ getExistingCount(val.metadata) }},
+                  fehlend: {{ getMissingCount(val.metadata) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'metadata') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'metadata')">
+                <ul>
+                  @for (file of val.metadata.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.metadata, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.metadata, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.metadata, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
+                                          'Betroffene Aufgaben (Metadaten)',
+                                          getUnitsForMissingRef(val.metadata, file.filename),
+                                          openUnitInfo.bind(this)
+                                        )">
+                        +{{ getUnitsForMissingRefRemainingCount(val.metadata, file.filename, 3) }} mehr
                       </button>
                       }
                       )
