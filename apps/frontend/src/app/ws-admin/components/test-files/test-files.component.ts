@@ -721,7 +721,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
                 width: '90%',
                 maxWidth: '1400px',
-                height: '80vh',
+                maxHeight: '95vh',
+                panelClass: 'validation-dialog-container',
                 data: {
                   validationResults,
                   filteredTestTakers: res.filteredTestTakers,
@@ -742,7 +743,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
           width: '90%',
           maxWidth: '1400px',
-          height: '80vh',
+          maxHeight: '95vh',
+          panelClass: 'validation-dialog-container',
           data: {
             validationResults: (res.validationResults || []).filter(
               v => !!v?.testTaker
