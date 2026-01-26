@@ -32,6 +32,7 @@ import {
   AffectedUnitsDialogResult
 } from './affected-units-dialog.component';
 import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 type FileStatus = {
   filename: string;
@@ -789,12 +790,7 @@ export class FilesValidationDialogComponent {
           return;
         }
 
-        let decodedContent: string;
-        try {
-          decodedContent = atob(fileDownload.base64Data);
-        } catch {
-          decodedContent = fileDownload.base64Data;
-        }
+        const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
         this.dialog.open(SchemeEditorDialogComponent, {
           width: '100vw',
@@ -919,12 +915,7 @@ export class FilesValidationDialogComponent {
       }
 
       // 3. Parse content
-      let decodedContent: string;
-      try {
-        decodedContent = atob(fileDownload.base64Data);
-      } catch {
-        decodedContent = fileDownload.base64Data;
-      }
+      const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
       const vomdData = JSON.parse(decodedContent);
 

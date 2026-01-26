@@ -71,6 +71,7 @@ import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
 import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -540,7 +541,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       .downloadFile(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
         next: (res: FileDownloadDto) => {
-          const decodedString = atob(res.base64Data);
+          const decodedString = base64ToUtf8(res.base64Data);
           const byteArray = new Uint8Array(decodedString.length);
           for (let i = 0; i < decodedString.length; i++) {
             byteArray[i] = decodedString.charCodeAt(i);
@@ -793,7 +794,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
       .subscribe(fileData => {
-        const decodedContent = atob(fileData.base64Data);
+        const decodedContent = base64ToUtf8(fileData.base64Data);
 
         if (
           file.file_type === 'Resource' &&
