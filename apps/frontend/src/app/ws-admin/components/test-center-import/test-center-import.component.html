@@ -89,7 +89,7 @@
       <h3>
         Angemeldet in
         {{
-          this.testCenterInstance[0].label ||
+          this.testCenterInstance[0]?.label ||
             this.loginForm.get('testCenterIndividual')?.value
         }}
       </h3>
