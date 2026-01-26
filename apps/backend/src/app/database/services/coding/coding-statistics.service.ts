@@ -196,7 +196,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables:${workspace_id}`;
+    const cacheKey = `coding_incomplete_variables_v2:${workspace_id}`;
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
