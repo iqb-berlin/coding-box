@@ -300,4 +300,44 @@ describe('TestCenterImportComponent', () => {
       overwriteSelectedCount: 1
     }));
   });
+
+  it('should render correctly when using individual URL (reproduction of crash)', async () => {
+    // 1. Initial state
+    expect(component.authenticated).toBe(false);
+
+    // 2. Authenticate with "Individual URL" (ID 6)
+    component.loginForm.patchValue({
+      name: 'testuser',
+      pw: 'testpass',
+      testCenter: 6, // 6 = Individual URL
+      testCenterIndividual: 'https://my-custom-tc.com'
+    });
+
+    userBackendService.authenticate.mockReturnValue(of({
+      success: true,
+      token: 'fake-token',
+      claims: {
+        workspaceAdmin: [{
+          id: 'tc-ws-1',
+          label: 'TC Workspace 1',
+          type: 'tc',
+          flags: { mode: 'full' }
+        }]
+      }
+    } as ServerResponse));
+
+    component.authenticate();
+    fixture.detectChanges();
+
+    expect(component.authenticated).toBe(true);
+    // The component sets testCenterInstance based on the ID 6, which doesn't exist in the hardcoded list.
+    // So component.testCenterInstance[0] will be undefined.
+    expect(component.testCenterInstance[0]).toBeUndefined();
+
+    // Verify that the UI renders the individual URL in the "Angemeldet in" section
+    const compiled = fixture.nativeElement as HTMLElement;
+    const userInfo = compiled.querySelector('.user-info h3');
+    expect(userInfo?.textContent).toContain('Angemeldet in');
+    expect(userInfo?.textContent).toContain('https://my-custom-tc.com');
+  });
 });
