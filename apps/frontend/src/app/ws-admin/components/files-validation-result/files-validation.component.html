@@ -785,6 +785,12 @@
                       report_problem
                     </mat-icon>
                     }
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openMetadataFile(file.filename)"
+                      matTooltip="Metadaten anzeigen" [attr.aria-label]="'Metadaten anzeigen'">
+                      <mat-icon>description</mat-icon>
+                    </button>
+                    }
                   </li>
                   }
                 </ul>
