@@ -280,4 +280,13 @@ export class FileService {
       catchError(() => of([]))
     );
   }
+
+  getItemIdsFromMetadata(workspaceId: number): Observable<{ fileId: string; id: number; items: string[] }[]> {
+    return this.http.get<{ fileId: string; id: number; items: string[] }[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/files/item-ids`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of([]))
+    );
+  }
 }
