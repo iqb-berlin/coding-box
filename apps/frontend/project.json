@@ -16,7 +16,10 @@
           "nx/src/utils/logger",
           "exceljs",
           "@iqbspecs/response",
-          "@iqbspecs/response/response.interface"
+          "@iqbspecs/response/response.interface",
+          "@iqb/metadata/md-profile-entry",
+          "@iqb/metadata",
+          "@iqb/metadata-components"
         ],
         "outputPath": "dist/apps/frontend",
         "index": "apps/frontend/src/index.html",
