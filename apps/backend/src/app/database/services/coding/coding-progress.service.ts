@@ -34,8 +34,11 @@ export class CodingProgressService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -86,8 +89,11 @@ export class CodingProgressService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -113,8 +119,11 @@ export class CodingProgressService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -141,8 +150,11 @@ export class CodingProgressService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
       })
       .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -227,8 +239,11 @@ export class CodingProgressService {
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
-        .where('response.status_v1 = :status', {
-          status: statusStringToNumber('CODING_INCOMPLETE')
+        .where('response.status_v1 IN (:...statuses)', {
+          statuses: [
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE')
+          ]
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })

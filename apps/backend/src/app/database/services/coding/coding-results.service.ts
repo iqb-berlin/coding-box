@@ -211,10 +211,13 @@ export class CodingResultsService {
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.status_v1 = :status', {
-          status: statusStringToNumber('CODING_INCOMPLETE')
+        .andWhere('response.status_v1 IN (:...statuses)', {
+          statuses: [
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE')
+          ]
         })
-        .andWhere('(response.value IS NULL OR response.value = :emptyString)', { emptyString: '' })
+        .andWhere('(response.value IS NULL OR response.value = :emptyString OR response.value = :emptyArrayString)', { emptyString: '', emptyArrayString: '[]' })
         .andWhere('response.status_v2 IS NULL')
         .getMany();
 

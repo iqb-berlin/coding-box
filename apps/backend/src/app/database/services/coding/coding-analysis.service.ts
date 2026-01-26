@@ -11,7 +11,7 @@ import {
   EmptyResponseDto,
   DuplicateValueGroupDto
 } from '../../../../../../../api-dto/coding/response-analysis.dto';
-import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
+import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
 
 @Injectable()
@@ -105,15 +105,15 @@ export class CodingAnalysisService {
       const unitIds = allUnits.map(unit => unit.id);
       const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
 
-      // Get all responses for these units that require manual coding (CODING_INCOMPLETE status)
       const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+      const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
       let allResponses: ResponseEntity[] = [];
       for (let i = 0; i < unitIds.length; i += batchSize) {
         const unitIdsBatch = unitIds.slice(i, i + batchSize);
         const responsesBatch = await this.responseRepository.find({
           where: {
             unitid: In(unitIdsBatch),
-            status_v1: codingIncompleteStatus
+            status_v1: In([codingIncompleteStatus, intendedIncompleteStatus])
           }
         });
         allResponses = [...allResponses, ...responsesBatch];
@@ -146,6 +146,7 @@ export class CodingAnalysisService {
         const isEmptyValue =
           response.value === null ||
           response.value === '' ||
+          response.value === '[]' ||
           response.value === undefined;
 
         // Skip if already coded in v2 (status_v2 is set)
@@ -188,6 +189,7 @@ export class CodingAnalysisService {
         if (
           response.value === null ||
           response.value === '' ||
+          response.value === '[]' ||
           response.value === undefined
         ) {
           continue;
@@ -278,7 +280,7 @@ export class CodingAnalysisService {
           total: duplicateValueGroups.length,
           totalResponses: totalDuplicateResponses,
           groups: duplicateValueGroups,
-          isAggregationApplied,
+          isAggregationApplied
 
         },
         matchingFlags,
