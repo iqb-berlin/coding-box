@@ -19,7 +19,6 @@ import { FormsModule } from '@angular/forms';
 import { MDProfile } from '@iqbspecs/metadata-profile/metadata-profile.interface';
 import { MetadataProfileValues, VocabularyEntry } from '@iqbspecs/metadata-values/metadata-values.interface';
 import { bootstrapMetadataWebComponents, UnitMetadataValues } from '@iqb/metadata-components';
-// @ts-ignore
 import { MetadataResolver } from '@iqb/metadata-resolver';
 
 interface MetadataItem {
