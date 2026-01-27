@@ -26,6 +26,13 @@ export interface BookletUnit {
   bookletId: number;
 }
 
+export interface GithubReleaseShort {
+  version: string;
+  url: string;
+  name: string;
+  published_at: string;
+}
+
 interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -287,6 +294,21 @@ export class FileService {
       { headers: this.authHeader }
     ).pipe(
       catchError(() => of([]))
+    );
+  }
+
+  getGithubReleases(workspaceId: number, type: 'aspect-player' | 'schemer'): Observable<GithubReleaseShort[]> {
+    return this.http.get<GithubReleaseShort[]>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/github/releases/${type}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  installGithubRelease(workspaceId: number, url: string): Observable<boolean> {
+    return this.http.post<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/github/install`,
+      { url },
+      { headers: this.authHeader }
     );
   }
 }
