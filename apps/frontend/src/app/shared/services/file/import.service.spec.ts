@@ -50,7 +50,8 @@ describe('ImportService', () => {
         codings: 'true',
         logs: 'true',
         testTakers: 'true',
-        booklets: 'true'
+        booklets: 'true',
+        metadata: 'true'
       };
 
       service.importWorkspaceFiles(mockWorkspaceId, 'ws1', 'srv', 'url', 'tok', options, ['g1'])
