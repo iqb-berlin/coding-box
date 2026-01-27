@@ -844,7 +844,9 @@
       "manual-coding-run": "manuelle Kodierung",
       "second-autocode-run": "2 Autocoder Lauf",
       "difference-tooltip-v1": "Differenz zum 1. Autocoder-Lauf",
-      "difference-tooltip-v2": "Differenz zur manuellen Kodierung"
+      "difference-tooltip-v2": "Differenz zur manuellen Kodierung",
+      "reset-success": "Erfolgreich {{count}} Antworten für Version {{version}} zurückgesetzt{{cascade}}",
+      "reset-cascade-suffix": " und {{versions}} (Kaskade)"
     },
     "columns": {
       "unitname": "Aufgabe",
@@ -1078,6 +1080,7 @@
     "coding-test-persons-count": "Kodiere {{count}} Testpersonen",
     "responses-coded": "{{count}} Antworten kodiert",
     "background-job-started": "Hintergrundauftrag gestartet",
+    "background-processing": "Verarbeite {{count}} Testpersonen im Hintergrund. Prüfen Sie den Job-Status mit der Job-ID: {{jobId}}",
     "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
     "job-error": "Fehler: {{error}}",
     "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
@@ -1264,6 +1267,57 @@
         "variable": "Variable",
         "person": "Person",
         "booklet": "Booklet"
+      },
+      "apply-empty-coding-button": "Kodierung automatisch anwenden",
+      "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
+      "apply-empty-coding-confirm-message": "Möchten Sie die automatische Kodierung für {{count}} leere Unit-Antworten anwenden?",
+      "apply-empty-coding-success": "{{count}} leere Antworten wurden erfolgreich kodiert.",
+      "apply-empty-coding-error": "Fehler beim Kodieren der leeren Antworten: {{error}}",
+      "apply-empty-coding-dialog": {
+        "title": "Leere Antworten automatisch kodieren",
+        "description": "Sie sind dabei, die automatische Kodierung für {{count}} leere Antworten anzuwenden.",
+        "apply-header": "Folgende Werte werden gesetzt:",
+        "status": "Kodierstatus",
+        "code": "Code",
+        "score": "Bewertung (Score)",
+        "warning": "Hinweis: Bestehende v2-Kodierungen werden nicht überschrieben.",
+        "cancel": "Abbrechen",
+        "confirm": "Kodierung anwenden"
+      }
+    },
+    "statistics": {
+      "manual-coding-incomplete": "Es gibt noch Kodierungen, die unvollständig oder absichtlich unvollständig markiert sind. Die manuelle Kodierung ist noch nicht abgeschlossen.",
+      "manual-coding-complete": "Die manuelle Kodierung ist vollständig abgeschlossen. Sie können nun mit dem zweiten Durchlauf des Autocoders fortfahren."
+    },
+    "duplicate-aggregation": {
+      "is-applied": "Aggregation angewendet",
+      "config-title": "Aggregationseinstellungen",
+      "config-description": "Konfigurieren Sie, wie mehrfache Antworten behandelt werden sollen.",
+      "threshold-label": "Schwellenwert für Duplikate",
+      "threshold-hint": "Mindestanzahl identischer Antworten für Aggregation (2-100). Standard: 2",
+      "apply-button": "Aggregation anwenden",
+      "deactivate-button": "Aggregation deaktivieren (Alle anzeigen)",
+      "apply-tooltip": "Mehrfache Antworten basierend auf dem Schwellenwert aggregieren",
+      "settings-header": "Einstellungen",
+      "no-groups-meet-threshold": "Keine Duplikatgruppen erfüllen den Schwellenwert von {{threshold}}",
+      "success": "{{aggregatedResponses}} Antworten in {{aggregatedGroups}} Gruppen erfolgreich konfiguriert. {{uniqueCases}} eindeutige Kodierfälle werden in Kodieraufträgen erscheinen.",
+      "auto-updated": "Aggregation wurde mit neuem Schwellenwert aktualisiert",
+      "error": "Fehler beim Anwenden der Aggregation: {{error}}",
+      "deactivate-confirm": "Möchten Sie die Aggregation wirklich deaktivieren? Dadurch werden alle bisher aggregierten Duplikate wieder in die Liste der manuell zu kodierenden Fälle aufgenommen.",
+      "deactivate-dialog-title": "Aggregation deaktivieren",
+      "deactivate-confirm-button": "Aggregation deaktivieren",
+      "cancel": "Abbrechen",
+      "dialog": {
+        "title": "Duplikate aggregieren",
+        "info": "Sie sind dabei, die Aggregationseinstellungen zu konfigurieren. Dies beeinflusst, wie viele Kodierfälle in Kodieraufträgen erscheinen.",
+        "groups": "Duplikatgruppen",
+        "total-responses": "Gesamtantworten",
+        "threshold": "Schwellenwert",
+        "warning-title": "Wichtiger Hinweis",
+        "warning-text": "Mit dieser Einstellung werden nur eindeutige Antworten in Kodieraufträgen angezeigt. Wenn Sie eine Antwort kodieren, erhalten alle Duplikate automatisch denselben Code.",
+        "explanation": "Für jede Gruppe wird nur eine Antwort (Master) in Kodieraufträgen angezeigt. Alle anderen Duplikate erhalten automatisch denselben Code, wenn die Ergebnisse angewendet werden.",
+        "cancel": "Abbrechen",
+        "confirm": "Einstellungen speichern"
       }
     }
   },
@@ -1535,7 +1589,12 @@
     },
     "buttons": {
       "cancel": "Abbrechen",
-      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen"
+      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen",
+      "continue": "Trotzdem fortfahren"
+    },
+    "warnings": {
+      "title": "Warnungen",
+      "description": "Bitte beachten Sie die folgenden Warnungen zu den ausgewählten Variablen."
     },
     "double-coding-summary": {
       "variable": "Variable",
