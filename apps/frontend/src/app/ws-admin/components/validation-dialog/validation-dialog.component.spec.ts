@@ -1,13 +1,13 @@
 /* eslint-disable max-classes-per-file */
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
-  MatDialogModule, MatDialog, MatDialogRef, MAT_DIALOG_DATA
+  MatDialog, MatDialogRef, MAT_DIALOG_DATA, MatDialogModule
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import {
-  Component, Input, Output, EventEmitter
+  Component, Input, Output, EventEmitter, CUSTOM_ELEMENTS_SCHEMA
 } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -91,6 +91,7 @@ describe('ValidationDialogComponent', () => {
         NoopAnimationsModule,
         ValidationDialogComponent
       ],
+      schemas: [CUSTOM_ELEMENTS_SCHEMA],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
