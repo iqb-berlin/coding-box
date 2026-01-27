@@ -393,4 +393,67 @@ export class WorkspaceCodingAnalysisController {
   async getResponseAnalysis(@WorkspaceId() workspace_id: number) {
     return this.codingAnalysisService.getResponseAnalysis(workspace_id);
   }
+
+  @Post(':workspace_id/coding/apply-duplicate-aggregation')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    description: 'Aggregation configuration with threshold and mode',
+    schema: {
+      type: 'object',
+      properties: {
+        threshold: {
+          type: 'number',
+          description: 'Minimum number of duplicate occurrences to trigger aggregation',
+          example: 2,
+          minimum: 2
+        },
+        aggregateMode: {
+          type: 'boolean',
+          description: 'Whether to enable aggregation',
+          example: true
+        }
+      },
+      required: ['threshold', 'aggregateMode']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Duplicate aggregation applied successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        aggregatedGroups: {
+          type: 'number',
+          description: 'Number of duplicate groups that were aggregated'
+        },
+        aggregatedResponses: {
+          type: 'number',
+          description: 'Total number of responses marked as aggregated'
+        },
+        uniqueCodingCases: {
+          type: 'number',
+          description: 'New total count of unique coding cases after aggregation'
+        },
+        message: { type: 'string' }
+      }
+    }
+  })
+  async applyDuplicateAggregation(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: { threshold: number; aggregateMode: boolean }
+  ): Promise<{
+        success: boolean;
+        aggregatedGroups: number;
+        aggregatedResponses: number;
+        uniqueCodingCases: number;
+        message: string;
+      }> {
+    return this.codingAnalysisService.applyDuplicateAggregation(
+      workspace_id,
+      body.threshold,
+      body.aggregateMode
+    );
+  }
 }
