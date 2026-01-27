@@ -33,6 +33,11 @@
       <mat-icon>archive</mat-icon>
       Pakete
     </a>
+    <a mat-raised-button color="primary" (click)="openGithubReleasesDialog()"
+      matTooltip="Aspect-Player und Schemer von GitHub laden">
+      <mat-icon>cloud_download</mat-icon>
+      GitHub
+    </a>
   </div>
 
   <input #hiddenFileInput type="file" name="files" accept=".xml,.voud,.vocs,.vomd,.zip,.html" multiple [hidden]="true"
