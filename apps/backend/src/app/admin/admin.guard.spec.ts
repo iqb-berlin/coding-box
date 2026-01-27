@@ -1,9 +1,6 @@
 import {
   Test, TestingModule
 } from '@nestjs/testing';
-import {
-  fakeAsync, tick
-} from '@angular/core/testing';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { AdminGuard } from './admin.guard';
 import { AuthService } from '../auth/service/auth.service';
@@ -170,23 +167,11 @@ describe('AdminGuard (Backend)', () => {
       await expect(guard.canActivate(context)).rejects.toThrow('Database error');
     });
 
-    it('should handle auth service timeout', fakeAsync(() => {
-      authService.isAdminUser.mockImplementation(
-        () => new Promise(resolve => {
-          setTimeout(() => resolve(false), 10000);
-        })
-      );
+    it('should handle auth service async response', async () => {
+      authService.isAdminUser.mockResolvedValue(false);
       const context = createMockExecutionContext(1);
 
-      const promise = guard.canActivate(context);
-      expect(promise).toBeDefined();
-
-      tick(10000);
-    }));
-
-    afterEach(() => {
-      jest.useRealTimers();
-      authService.isAdminUser.mockReset();
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
     });
 
     it('should handle auth service returning null', async () => {
@@ -243,13 +228,8 @@ describe('AdminGuard (Backend)', () => {
       authService.isAdminUser.mockResolvedValue(false);
       const context = createMockExecutionContext(1);
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toBe('Admin privileges required');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('Admin privileges required');
     });
   });
 });

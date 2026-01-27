@@ -1,9 +1,6 @@
 import {
   Test, TestingModule
 } from '@nestjs/testing';
-import {
-  fakeAsync, tick
-} from '@angular/core/testing';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -256,23 +253,11 @@ describe('WorkspaceGuard (Backend)', () => {
       await expect(guard.canActivate(context)).rejects.toThrow('Database error');
     });
 
-    it('should handle auth service timeout', fakeAsync(() => {
-      authService.canAccessWorkSpace.mockImplementation(
-        () => new Promise(resolve => {
-          setTimeout(() => resolve(false), 10000);
-        })
-      );
+    it('should handle auth service async response', async () => {
+      authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '123');
 
-      const promise = guard.canActivate(context);
-      expect(promise).toBeDefined();
-
-      tick(10000);
-    }));
-
-    afterEach(() => {
-      jest.useRealTimers();
-      authService.canAccessWorkSpace.mockReset();
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
     });
 
     it('should handle auth service returning null', async () => {
@@ -334,12 +319,7 @@ describe('WorkspaceGuard (Backend)', () => {
       authService.canAccessWorkSpace.mockResolvedValue(false);
       const context = createMockExecutionContext(1, '123');
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
     });
   });
 });
