@@ -324,7 +324,15 @@
       "view-workspace-settings": "Arbeitsbereichseinstellungen ansehen",
       "edit-workspace-settings": "Arbeitsbereichseinstellungen bearbeiten",
       "delete-workspace": "Arbeitsbereich löschen",
-      "view-journal": "Journal ansehen"
+      "view-journal": "Journal ansehen",
+      "view-unit-info": "Aufgaben-Informationen ansehen",
+      "view-booklet-info": "Testheft-Informationen ansehen",
+      "manage-unit-tags": "Aufgaben-Tags verwalten",
+      "manage-unit-notes": "Aufgaben-Notizen verwalten",
+      "manage-variable-analysis": "Item/Variablen-Analyse verwalten",
+      "manage-variable-bundles": "Variablenbündel verwalten",
+      "manage-access-tokens": "Zugangstoken verwalten",
+      "manage-coding-settings": "Kodier-Einstellungen verwalten"
     }
   },
   "file-upload": {
