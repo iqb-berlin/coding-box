@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Param,
+  Post,
   Query,
   UseGuards
 } from '@nestjs/common';
@@ -15,7 +16,9 @@ import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingJobService, CodingProcessService, CodingResponseQueryService } from '../../database/services/coding';
+import {
+  CodingJobService, CodingProcessService, CodingResponseQueryService, CodingResultsService
+} from '../../database/services/coding';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Coding')
@@ -24,7 +27,8 @@ export class WorkspaceCodingController {
   constructor(
     private codingProcessService: CodingProcessService,
     private codingResponseQueryService: CodingResponseQueryService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingResultsService: CodingResultsService
   ) { }
 
   @Get(':workspace_id/coding')
@@ -173,5 +177,30 @@ export class WorkspaceCodingController {
       @Param('codingJobId') codingJobId: number
   ): Promise<Record<string, string>> {
     return this.codingJobService.getCodingNotes(codingJobId);
+  }
+
+  @Post(':workspace_id/coding/apply-empty-responses')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Empty response coding applied successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', description: 'Whether the operation was successful' },
+        updatedCount: { type: 'number', description: 'Number of responses updated' },
+        message: { type: 'string', description: 'Status message' }
+      }
+    }
+  })
+  async applyEmptyResponseCoding(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        success: boolean;
+        updatedCount: number;
+        message: string;
+      }> {
+    return this.codingResultsService.applyEmptyResponseCoding(workspace_id);
   }
 }

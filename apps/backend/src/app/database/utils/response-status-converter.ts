@@ -35,5 +35,9 @@ export function statusNumberToString(statusNumber: number): ResponseStatusType |
  * @returns The numeric representation of the status, or null if not found
  */
 export function statusStringToNumber(statusString: string): number | null {
-  return stringToNumberMap.get(statusString) || null;
+  const numericStatus = parseInt(statusString, 10);
+  if (!Number.isNaN(numericStatus) && numberToStringMap.has(numericStatus)) {
+    return numericStatus;
+  }
+  return stringToNumberMap.get(statusString) ?? null;
 }

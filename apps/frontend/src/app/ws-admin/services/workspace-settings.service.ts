@@ -111,4 +111,34 @@ export class WorkspaceSettingsService {
       'Controls how responses are aggregated by value similarity for coding case distribution'
     );
   }
+
+  getAggregationThreshold(workspaceId: number): Observable<number> {
+    return new Observable(observer => {
+      this.getWorkspaceSetting(workspaceId, 'duplicate-aggregation-threshold')
+        .subscribe({
+          next: setting => {
+            try {
+              const value = parseInt(setting.value, 10);
+              observer.next(Number.isNaN(value) ? 2 : value);
+            } catch {
+              observer.next(2);
+            }
+            observer.complete();
+          },
+          error: () => {
+            observer.next(2); // Default
+            observer.complete();
+          }
+        });
+    });
+  }
+
+  setAggregationThreshold(workspaceId: number, threshold: number): Observable<WorkspaceSettings> {
+    return this.setWorkspaceSetting(
+      workspaceId,
+      'duplicate-aggregation-threshold',
+      threshold.toString(),
+      'Minimum number of identical responses required for aggregation'
+    );
+  }
 }

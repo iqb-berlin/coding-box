@@ -338,6 +338,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
             { duration: 3000 }
           );
           this.loadJobDefinitions();
+          this.jobDefinitionChanged.emit();
         },
         error: error => {
           this.showError(

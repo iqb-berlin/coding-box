@@ -154,5 +154,15 @@ export class StatisticsCardComponent {
     this.statusClick.emit(status);
   }
 
+  get isManualCodingComplete(): boolean {
+    if (this.selectedVersion !== 'v2') {
+      return false;
+    }
+    // CODING_INCOMPLETE = 8, INTENDED_INCOMPLETE = 12
+    const incompleteCount = (this.codingStatistics.statusCounts['8'] || 0) +
+      (this.codingStatistics.statusCounts['12'] || 0);
+    return incompleteCount === 0;
+  }
+
   protected readonly Number = Number;
 }

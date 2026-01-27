@@ -110,6 +110,24 @@
         </div>
       }
     </div>
+
+    @if (selectedVersion === 'v2') {
+      <div class="manual-coding-status-section" [class.status-complete]="isManualCodingComplete"
+        [class.status-incomplete]="!isManualCodingComplete">
+        <div class="status-content-wrapper">
+          <mat-icon [class.icon-complete]="isManualCodingComplete" [class.icon-incomplete]="!isManualCodingComplete">
+            {{ isManualCodingComplete ? 'check_circle' : 'info' }}
+          </mat-icon>
+          <div class="status-message">
+            <p class="message-text">
+              {{ (isManualCodingComplete ?
+              'coding-management-manual.statistics.manual-coding-complete' :
+              'coding-management-manual.statistics.manual-coding-incomplete') | translate }}
+            </p>
+          </div>
+        </div>
+      </div>
+    }
   </div>
 }
 
