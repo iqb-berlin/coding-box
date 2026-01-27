@@ -10,7 +10,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ExportJob, ExportJobService } from '../../services/export-job.service';
+import { ExportJob, ExportJobService } from '../../shared/services/file/export-job.service';
 
 @Component({
   selector: 'coding-box-export-toast',

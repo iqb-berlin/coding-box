@@ -15,8 +15,8 @@ import { FormsModule } from '@angular/forms';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
+import { AppService } from '../../../core/services/app.service';
 import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/create-unit-note.dto';
 
 @Component({
@@ -257,7 +257,7 @@ export class NoteDialogComponent implements OnInit {
     title?: string;
   }>(MAT_DIALOG_DATA);
 
-  private backendService = inject(BackendService);
+  private unitNoteService = inject(UnitNoteService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
 
@@ -301,7 +301,7 @@ export class NoteDialogComponent implements OnInit {
       note: this.newNoteText.trim()
     };
 
-    this.backendService.createUnitNote(
+    this.unitNoteService.createUnitNote(
       this.appService.selectedWorkspaceId,
       createNoteDto
     ).subscribe({
@@ -330,7 +330,7 @@ export class NoteDialogComponent implements OnInit {
    * @param noteId The ID of the note to delete
    */
   deleteNote(noteId: number): void {
-    this.backendService.deleteUnitNote(
+    this.unitNoteService.deleteUnitNote(
       this.appService.selectedWorkspaceId,
       noteId
     ).subscribe({

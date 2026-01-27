@@ -150,6 +150,80 @@
       }
     }
   }
+
+  .overview-distributions {
+    margin-top: 18px;
+
+    .dist-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+    }
+
+    .dist-card {
+      background-color: #f9fafc;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+      border-radius: 10px;
+      padding: 12px 14px;
+      overflow: hidden;
+    }
+
+    .dist-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #1976d2;
+      margin-bottom: 10px;
+    }
+
+    .dist-empty {
+      font-size: 12px;
+      color: #666;
+      padding: 6px 0;
+    }
+
+    .dist-row {
+      display: grid;
+      grid-template-columns: minmax(90px, 1fr) 1.6fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 4px 0;
+    }
+
+    .dist-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #444;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dist-bar {
+      height: 8px;
+      background-color: rgba(25, 118, 210, 0.12);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .dist-bar-fill {
+      height: 100%;
+      background-color: #1976d2;
+      border-radius: 999px;
+    }
+
+    .dist-value {
+      font-size: 12px;
+      font-weight: 700;
+      color: #1976d2;
+      white-space: nowrap;
+    }
+
+    .dist-percent {
+      font-weight: 600;
+      color: #5c6b7a;
+      margin-left: 4px;
+    }
+  }
 }
 
 // Card styles

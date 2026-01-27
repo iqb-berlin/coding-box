@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
-import { BackendService } from '../../../services/backend.service';
+import { VariableAnalysisService, JobCancelResult } from '../../../shared/services/response/variable-analysis.service';
 
 export interface VariableAnalysisJobsDialogData {
   jobs: VariableAnalysisJobDto[];
@@ -48,9 +48,9 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisJobsDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisJobsDialogData,
-    private backendService: BackendService,
+    private variableAnalysisService: VariableAnalysisService,
     private snackBar: MatSnackBar
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.refreshJobs();
@@ -58,9 +58,9 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
 
   refreshJobs(): void {
     this.isLoading = true;
-    this.backendService.getAllVariableAnalysisJobs(this.data.workspaceId)
+    this.variableAnalysisService.getAllJobs(this.data.workspaceId)
       .subscribe({
-        next: jobs => {
+        next: (jobs: VariableAnalysisJobDto[]) => {
           this.data.jobs = jobs.filter(job => job.type === 'variable-analysis');
           this.isLoading = false;
         },
@@ -77,9 +77,9 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
 
   cancelJob(jobId: number): void {
     this.isLoading = true;
-    this.backendService.cancelVariableAnalysisJob(this.data.workspaceId, jobId)
+    this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
       .subscribe({
-        next: result => {
+        next: (result: JobCancelResult) => {
           if (result.success) {
             this.snackBar.open(
               result.message || 'Analyse-Auftrag erfolgreich abgebrochen',

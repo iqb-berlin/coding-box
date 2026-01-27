@@ -1,50 +1,184 @@
-// eslint-disable-next-line max-classes-per-file
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import {
+  ComponentFixture, TestBed, fakeAsync, tick
+} from '@angular/core/testing';
+import { EventEmitter } from '@angular/core';
+import {
+  TranslateModule, TranslateService, LangChangeEvent, TranslationChangeEvent, DefaultLangChangeEvent
+} from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatDialogModule, MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { provideHttpClient } from '@angular/common/http';
+import { of } from 'rxjs';
 import { WsUsersComponent } from './ws-users.component';
-import { environment } from '../../../../environments/environment';
-import { SERVER_URL } from '../../../injection-tokens';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
+import { MessageDialogComponent, MessageType } from '../../../shared/dialogs/message-dialog.component';
+import { EditUserComponent } from '../../../sys-admin/components/edit-user/edit-user.component';
+import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
+import { WorkspaceAccessRightsDialogComponent } from '../../../sys-admin/components/workspace-access-rights-dialog/workspace-access-rights-dialog.component';
 
 describe('WsUsersComponent', () => {
   let component: WsUsersComponent;
   let fixture: ComponentFixture<WsUsersComponent>;
+  let mockUserBackendService: Partial<UserBackendService>;
+  let mockWorkspaceBackendService: Partial<WorkspaceBackendService>;
+  let mockAppService: Partial<AppService>;
+  let mockDialog: Partial<MatDialog>;
+  let mockTranslateService: Partial<TranslateService>;
+
+  const mockUsers: (UserFullDto & { name: string })[] = [
+    {
+      id: 1, username: 'user1', name: 'user1', isAdmin: false
+    },
+    {
+      id: 2, username: 'user2', name: 'user2', isAdmin: true
+    }
+  ];
 
   beforeEach(async () => {
+    mockUserBackendService = {
+      getUsersFull: jest.fn().mockReturnValue(of(mockUsers)),
+      getWorkspacesByUserList: jest.fn().mockReturnValue(of([])),
+      deleteUsers: jest.fn().mockReturnValue(of(true))
+    };
+
+    mockWorkspaceBackendService = {
+      getAllWorkspacesList: jest.fn().mockReturnValue(of({ data: [] }))
+    };
+
+    mockAppService = {
+      dataLoading: false
+    };
+
+    mockDialog = {
+      open: jest.fn().mockReturnValue({ afterClosed: () => of(true) })
+    };
+
+    mockTranslateService = {
+      instant: jest.fn().mockImplementation((key: string) => key),
+      get: jest.fn().mockImplementation((key: string) => of(key)),
+      onLangChange: new EventEmitter<LangChangeEvent>(),
+      onTranslationChange: new EventEmitter<TranslationChangeEvent>(),
+      onDefaultLangChange: new EventEmitter<DefaultLangChangeEvent>()
+    };
+
     await TestBed.configureTestingModule({
       imports: [
+        WsUsersComponent,
         MatCheckboxModule,
         MatTooltipModule,
         MatIconModule,
         MatTableModule,
+        MatDialogModule,
         NoopAnimationsModule,
         TranslateModule.forRoot()
       ],
       providers: [
-        provideHttpClient(),
-        {
-          provide: SERVER_URL,
-          useValue: environment.backendUrl
-        },
-        {
-          provide: MatSnackBar,
-          useValue: { open: jest.fn() }
-        }
+        { provide: UserBackendService, useValue: mockUserBackendService },
+        { provide: WorkspaceBackendService, useValue: mockWorkspaceBackendService },
+        { provide: AppService, useValue: mockAppService },
+        { provide: MatDialog, useValue: mockDialog },
+        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: TranslateService, useValue: mockTranslateService }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(WsUsersComponent);
     component = fixture.componentInstance;
-    fixture.detectChanges();
+    // Initialize properties that are normally set by inputs or other means if necessary
+    component.selectedRows = [];
+    component.checkedRows = [];
   });
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should load users on init', fakeAsync(() => {
+    component.ngOnInit();
+    tick(); // processes setTimeout
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
+    expect(component.userObjectsDatasource.data.length).toBe(2);
+  }));
+
+  it('should load users when updateUserList is called', () => {
+    component.updateUserList();
+    expect(mockUserBackendService.getUsersFull).toHaveBeenCalled();
+    expect(component.userObjectsDatasource.data.length).toBe(2);
+  });
+
+  it('should filter users correctly', fakeAsync(() => {
+    component.ngOnInit();
+    tick();
+    component.userObjectsDatasource.filter = 'user1';
+    expect(component.userObjectsDatasource.filteredData.length).toBe(1);
+    expect(component.userObjectsDatasource.filteredData[0].username).toBe('user1');
+  }));
+
+  it('should toggle checkbox and emit selection', fakeAsync(() => {
+    fixture.detectChanges();
+    tick();
+    const emitSpy = jest.spyOn(component.userSelectionChanged, 'emit');
+    component.checkboxToggle(mockUsers[0]);
+    expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
+    expect(emitSpy).toHaveBeenCalledWith([mockUsers[0]]);
+  }));
+
+  describe('Dialogs', () => {
+    beforeEach(() => {
+      // Reset dialog spy
+      (mockDialog.open as jest.Mock).mockClear();
+    });
+
+    it('editUser should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.editUser();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
+
+    it('editUser should open EditUserComponent if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.editUser();
+      expect(mockDialog.open).toHaveBeenCalledWith(EditUserComponent, expect.anything());
+    });
+
+    it('deleteUsers should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.deleteUsers();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
+
+    it('deleteUsers should open ConfirmDialog if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.deleteUsers();
+      expect(mockDialog.open).toHaveBeenCalledWith(ConfirmDialogComponent, expect.anything());
+    });
+
+    it('setUserWorkspaceAccessRight should open MessageDialog if no selection', () => {
+      component.selectedRows = [];
+      component.checkedRows = [];
+      component.setUserWorkspaceAccessRight();
+      expect(mockDialog.open).toHaveBeenCalledWith(MessageDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ type: MessageType.error })
+      }));
+    });
+
+    it('setUserWorkspaceAccessRight should open WorkspaceAccessRightsDialogComponent if user selected', () => {
+      component.selectedRows = [mockUsers[0]];
+      component.setUserWorkspaceAccessRight();
+      expect(mockDialog.open).toHaveBeenCalledWith(WorkspaceAccessRightsDialogComponent, expect.anything());
+    });
   });
 });

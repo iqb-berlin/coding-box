@@ -14,7 +14,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
 
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { JournalComponent } from '../journal/journal.component';
 import { EditMissingsProfilesDialogComponent } from '../../../coding/components/edit-missings-profiles-dialog/edit-missings-profiles-dialog.component';
@@ -45,7 +45,7 @@ import { WorkspaceSettingsService } from '../../services/workspace-settings.serv
   ]
 })
 export class WsSettingsComponent implements OnInit {
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
@@ -88,7 +88,7 @@ export class WsSettingsComponent implements OnInit {
         this.appService.loggedUser?.sub || '',
         this.duration
       )
-      .subscribe(authToken => {
+      .subscribe((authToken: string) => {
         this.authToken = authToken;
         this.snackBar.open(
           this.translateService.instant(

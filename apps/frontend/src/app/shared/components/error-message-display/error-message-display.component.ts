@@ -3,8 +3,9 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 
 @Component({
   selector: 'app-error-message-display',
@@ -14,11 +15,11 @@ import { AuthService } from '../../../core/services/auth.service';
   styleUrls: ['./error-message-display.component.scss']
 })
 export class ErrorMessageDisplayComponent {
-  appService = inject(AppService);
+  appService: AppService = inject(AppService);
   authService = inject(AuthService);
 
   dismissError(errorId: number): void {
-    this.appService.errorMessages = this.appService.errorMessages.filter(e => e.id !== errorId);
+    this.appService.errorMessages = this.appService.errorMessages.filter((e: AppHttpError) => e.id !== errorId);
   }
 
   dismissBackendUnavailable(): void {

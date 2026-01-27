@@ -1,0 +1,143 @@
+<h2 mat-dialog-title>Testauswertung – Filtereinstellungen</h2>
+
+<div mat-dialog-content style="overflow: auto; padding: 8px 24px 16px 24px">
+  <div style="margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">Audio-Filter</div>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Audio-Schwellwert</mat-label>
+    <input matInput type="number" step="0.01" [(ngModel)]="audioLowThreshold" />
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Nur Audio-Variablen (variableId beginnt mit „audio“) mit numerischem Wert
+      kleiner als der Schwellwert.
+    </mat-hint>
+  </mat-form-field>
+
+  <div style="margin-top: 8px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
+    Log-Filter
+  </div>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Früh abgebrochen (max. Bearbeitungszeit in ms)</mat-label>
+    <input
+      matInput
+      type="number"
+      step="1000"
+      [(ngModel)]="shortProcessingThresholdMs"
+    />
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Bestimmt über Testheft-Logs: CONTROLLER/RUNNING → CONTROLLER/TERMINATED.
+      Wenn die Dauer kleiner als dieser Wert ist.
+    </mat-hint>
+  </mat-form-field>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-top: 4px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Lange Ladezeit (min. Ladezeit in ms)</mat-label>
+    <input
+      matInput
+      type="number"
+      step="1000"
+      [(ngModel)]="longLoadingThresholdMs"
+    />
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Bestimmt über Aufgaben-Logs: STARTED → ENDED. Wenn die Dauer mindestens
+      dieser Wert ist.
+    </mat-hint>
+  </mat-form-field>
+
+  <div style="margin-top: 16px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
+    Bearbeitungsdauer
+  </div>
+  <div style="display: flex; gap: 12px; margin-bottom: 16px">
+    <mat-form-field
+      appearance="outline"
+      style="flex: 1"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Bearbeitungszeit min. (mm:ss)</mat-label>
+      <input matInput type="text" [(ngModel)]="processingDurationMin" />
+      <mat-hint style="white-space: normal; line-height: 1.35">
+        Wird angewendet, wenn im Spezialfilter „Bearbeitungszeit“ aktiviert ist.
+      </mat-hint>
+    </mat-form-field>
+    <mat-form-field
+      appearance="outline"
+      style="flex: 1"
+      subscriptSizing="dynamic"
+    >
+      <mat-label>Bearbeitungszeit max. (mm:ss)</mat-label>
+      <input matInput type="text" [(ngModel)]="processingDurationMax" />
+      <mat-hint style="white-space: normal; line-height: 1.35">
+        Bearbeitungszeit = CONTROLLER/RUNNING → CONTROLLER/TERMINATED.
+      </mat-hint>
+    </mat-form-field>
+  </div>
+
+  <div style="margin-top: 8px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
+    Session-Filter
+  </div>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Browser</mat-label>
+    <mat-select [(ngModel)]="sessionBrowsersAllowlist" multiple>
+      <mat-option
+        *ngFor="let browser of availableSessionBrowsers"
+        [value]="browser"
+      >
+        {{ browser }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%; margin-bottom: 16px"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>OS</mat-label>
+    <mat-select [(ngModel)]="sessionOsAllowlist" multiple>
+      <mat-option *ngFor="let os of availableSessionOs" [value]="os">
+        {{ os }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
+  <mat-form-field
+    appearance="outline"
+    style="width: 100%"
+    subscriptSizing="dynamic"
+  >
+    <mat-label>Screen</mat-label>
+    <mat-select [(ngModel)]="sessionScreensAllowlist" multiple>
+      <mat-option
+        *ngFor="let screen of availableSessionScreens"
+        [value]="screen"
+      >
+        {{ screen }}
+      </mat-option>
+    </mat-select>
+    <mat-hint style="white-space: normal; line-height: 1.35">
+      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+    </mat-hint>
+  </mat-form-field>
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button (click)="close()">Abbrechen</button>
+  <button mat-raised-button color="primary" (click)="save()">Speichern</button>
+</div>

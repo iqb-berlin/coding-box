@@ -1,0 +1,13 @@
+export { WorkspaceCoreService } from './workspace-core.service';
+export { WorkspaceFilesService } from './workspace-files.service';
+export { WorkspaceFileStorageService } from './workspace-file-storage.service';
+export { WorkspaceFileParsingService } from './workspace-file-parsing.service';
+export { WorkspaceCodingService } from './workspace-coding.service';
+export { WorkspacePlayerService, BookletUnit } from './workspace-player.service';
+export { WorkspaceUsersService } from './workspace-users.service';
+export { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
+export { ResourcePackageService } from './resource-package.service';
+export { UnitInfoService } from './unit-info.service';
+export { UnitTagService } from './unit-tag.service';
+export { UnitNoteService } from './unit-note.service';
+export { BookletInfoService } from './booklet-info.service';

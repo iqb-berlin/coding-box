@@ -13,7 +13,7 @@ import {
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 
 /**
@@ -23,7 +23,7 @@ export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService = inject(AppService);
+  const appService: AppService = inject(AppService);
   const snackBar = inject(MatSnackBar);
   const authService = inject(AuthService);
   let httpErrorInfo: AppHttpError | null = null;
@@ -41,17 +41,7 @@ export const authInterceptor: HttpInterceptorFn = (
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
-          if (error.status === 500 || error.status === 999) {
-            appService.setBackendUnavailable(true);
-            snackBar.open(
-              'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
-              'Schließen',
-              {
-                duration: 0,
-                panelClass: ['error-snackbar']
-              }
-            );
-          } else if (error.status === 401 || error.status === 403) {
+          if (error.status === 401 || error.status === 403) {
             const errorMessage = error.error?.message || error.message || '';
 
             if (errorMessage.includes('Access level')) {

@@ -1,6 +1,6 @@
 /**
  * DTO for response analysis - identifies empty responses and duplicate values
- * based on the response matching settings for a workspace.
+ * based on the response matching settings for a workspace
  */
 
 export interface EmptyResponseDto {
@@ -37,6 +37,7 @@ export interface ResponseAnalysisDto {
     total: number;
     totalResponses: number;
     groups: DuplicateValueGroupDto[];
+    isAggregationApplied: boolean;
   };
   matchingFlags: string[];
   analysisTimestamp: string;

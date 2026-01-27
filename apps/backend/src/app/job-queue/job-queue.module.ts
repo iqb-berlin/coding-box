@@ -5,8 +5,11 @@ import { JobQueueService } from './job-queue.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { ExportJobProcessor } from './processors/export-job.processor';
+import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
 // eslint-disable-next-line import/no-cycle
-import { DatabaseModule } from '../database/database.module';
+import { CodingModule } from '../coding/coding.module';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceModule } from '../workspace/workspace.module';
 import { CacheModule } from '../cache/cache.module';
 
 @Module({
@@ -31,10 +34,20 @@ import { CacheModule } from '../cache/cache.module';
     BullModule.registerQueue({
       name: 'data-export'
     }),
-    forwardRef(() => DatabaseModule),
+    BullModule.registerQueue({
+      name: 'flat-response-filter-options'
+    }),
+    forwardRef(() => CodingModule),
+    forwardRef(() => WorkspaceModule),
     CacheModule
   ],
-  providers: [JobQueueService, TestPersonCodingProcessor, CodingStatisticsProcessor, ExportJobProcessor],
+  providers: [
+    JobQueueService,
+    TestPersonCodingProcessor,
+    CodingStatisticsProcessor,
+    ExportJobProcessor,
+    FlatResponseFilterOptionsProcessor
+  ],
   exports: [JobQueueService]
 })
-export class JobQueueModule {}
+export class JobQueueModule { }

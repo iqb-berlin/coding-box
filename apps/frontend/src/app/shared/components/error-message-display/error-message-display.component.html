@@ -1,53 +1,57 @@
 <div class="error-messages-container">
   @if (appService.backendUnavailable) {
-    <div class="error-message backend-unavailable">
-      <div class="error-content">
-        <mat-icon class="error-icon">cloud_off</mat-icon>
-        <div class="error-text">
-          <h3>{{ 'error.backend_unavailable_title' | translate }}</h3>
-          <p>{{ 'error.backend_unavailable_message' | translate }}</p>
+  <div class="error-message backend-unavailable">
+    <div class="error-content">
+      <mat-icon class="error-icon">cloud_off</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.backend_unavailable_title' | translate }}</h3>
+        <p>{{ 'error.backend_unavailable_message' | translate }}</p>
+        <div class="error-details-section">
+          <p><strong>Konsequenzen:</strong> {{ 'error.backend_unavailable_consequences' | translate }}</p>
+          <p><strong>Lösung:</strong> {{ 'error.backend_unavailable_solution' | translate }}</p>
         </div>
       </div>
-      <button mat-icon-button (click)="dismissBackendUnavailable()" class="close-button">
-        <mat-icon>close</mat-icon>
-      </button>
     </div>
+    <button mat-icon-button (click)="dismissBackendUnavailable()" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
   }
 
   @if (appService.needsReAuthentication) {
-    <div class="error-message re-authentication">
-      <div class="error-content">
-        <mat-icon class="error-icon">lock</mat-icon>
-        <div class="error-text">
-          <h3>{{ 'error.reauthentication_title' | translate }}</h3>
-          <p>{{ 'error.reauthentication_message' | translate }}</p>
-        </div>
-      </div>
-      <div class="error-actions">
-        <button mat-raised-button color="primary" (click)="handleLogin()">
-          {{ 'error.login_button' | translate }}
-        </button>
-        <button mat-icon-button (click)="dismissReAuthentication()" class="close-button">
-          <mat-icon>close</mat-icon>
-        </button>
+  <div class="error-message re-authentication">
+    <div class="error-content">
+      <mat-icon class="error-icon">lock</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.reauthentication_title' | translate }}</h3>
+        <p>{{ 'error.reauthentication_message' | translate }}</p>
       </div>
     </div>
+    <div class="error-actions">
+      <button mat-raised-button color="primary" (click)="handleLogin()">
+        {{ 'error.login_button' | translate }}
+      </button>
+      <button mat-icon-button (click)="dismissReAuthentication()" class="close-button">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
   }
 
   <!-- Other Error Messages -->
   @for (error of appService.errorMessages; track error.id) {
-    <div class="error-message other-error">
-      <div class="error-content">
-        <mat-icon class="error-icon">error_outline</mat-icon>
-        <div class="error-text">
-          <h3>{{ 'error.error_title' | translate }}</h3>
-          <p>{{ error.message }}</p>
-          <small class="error-details">{{ error.method }} {{ error.urlWithParams }}</small>
-        </div>
+  <div class="error-message other-error">
+    <div class="error-content">
+      <mat-icon class="error-icon">error_outline</mat-icon>
+      <div class="error-text">
+        <h3>{{ 'error.error_title' | translate }}</h3>
+        <p>{{ error.message }}</p>
+        <small class="error-details">{{ error.method }} {{ error.urlWithParams }}</small>
       </div>
-      <button mat-icon-button (click)="dismissError(error.id)" class="close-button">
-        <mat-icon>close</mat-icon>
-      </button>
     </div>
+    <button mat-icon-button (click)="dismissError(error.id)" class="close-button">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
   }
 </div>

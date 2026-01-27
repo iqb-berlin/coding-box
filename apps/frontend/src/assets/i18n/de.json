@@ -45,7 +45,6 @@
   },
   "status-cancelled": "Abgebrochen",
   "status-paused": "Pausiert",
-
   "home": {
     "welcome": "Willkommen!",
     "home-page": "Startseite",
@@ -87,7 +86,7 @@
     "admin": "System-Administrator:in"
   },
   "admin": {
-    "set-user-access-rights":"Nutzer Zugriffsrechte für Arbeitsbereich(e)",
+    "set-user-access-rights": "Nutzer Zugriffsrechte für Arbeitsbereich(e)",
     "users": "Nutzer:innen",
     "users-title": "Admin: Nutzer:innen",
     "user-created": "Nutzer:in angelegt",
@@ -167,8 +166,8 @@
     "change-workspace-settings": "Einstellungen des Arbeitsbereiches ändern",
     "report-workspaces": "Bericht Arbeitsbereiche",
     "workspaces-excel-name": "{{date}} Arbeitsbereiche.xlsx",
-    "files-deleted":"Testdatei(en) gelöscht",
-    "files-not-deleted":"Konnte Testdatei(en) nicht löschen",
+    "files-deleted": "Testdatei(en) gelöscht",
+    "files-not-deleted": "Konnte Testdatei(en) nicht löschen",
     "test-group-not-deleted": "Konnte Testgruppe(n) nicht löschen",
     "test-group-deleted": "Testgruppe(n) gelöscht",
     "unknown": "unbekannt",
@@ -277,7 +276,6 @@
     "access-level-3": "Studienmanager:in",
     "access-level-4": "Admin"
   },
-
   "access-matrix": {
     "title": "Zugriffsrechte-Matrix",
     "description": "Diese Matrix zeigt, welche Funktionen mit welcher Zugriffsebene verwendet werden können.",
@@ -326,35 +324,45 @@
       "view-workspace-settings": "Arbeitsbereichseinstellungen ansehen",
       "edit-workspace-settings": "Arbeitsbereichseinstellungen bearbeiten",
       "delete-workspace": "Arbeitsbereich löschen",
-      "view-journal": "Journal ansehen"
+      "view-journal": "Journal ansehen",
+      "view-unit-info": "Aufgaben-Informationen ansehen",
+      "view-booklet-info": "Testheft-Informationen ansehen",
+      "manage-unit-tags": "Aufgaben-Tags verwalten",
+      "manage-unit-notes": "Aufgaben-Notizen verwalten",
+      "manage-variable-analysis": "Item/Variablen-Analyse verwalten",
+      "manage-variable-bundles": "Variablenbündel verwalten",
+      "manage-access-tokens": "Zugangstoken verwalten",
+      "manage-coding-settings": "Kodier-Einstellungen verwalten"
     }
   },
-
-  "file-upload" : {
+  "file-upload": {
     "filename": "Dateiname",
     "file_type": "Dateityp",
     "file_size": "Dateigröße",
     "created_at": "Hinzugefügt am",
-    "no-files": "Keine Dateien gefunden"
+    "no-files": "Keine Dateien gefunden",
+    "upload-test-files": "Testdateien hochladen",
+    "upload-test-files-tooltip": "Hochladen von Testinhalten (xml, html, Voud, vomd, vocs, zip, etc.)",
+    "upload-packages-tooltip": "Hochladen von externen Ressourcen-Paketen (.itcr.zip, z.B. GeoGebra)",
+    "resource-package-hint": "Bitte laden Sie nur Ressourcen-Pakete mit der Endung .itcr.zip hoch. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch."
   },
-
   "test_group": {
     "test_group": "Testgruppe",
     "created_at": "Hochgeladen am"
   },
-
   "error": {
     "general": "Fehler: {{error}}",
     "noWorkspaceSelected": "Kein Workspace ausgewählt",
     "unknown": "Unbekannter Fehler",
     "backend_unavailable_title": "Backend nicht verfügbar",
-    "backend_unavailable_message": "Der Backend-Server ist derzeit nicht erreichbar. Bitte versuchen Sie es später erneut.",
+    "backend_unavailable_message": "Der Backend-Server ist derzeit nicht erreichbar.",
+    "backend_unavailable_consequences": "Daten können nicht gespeichert oder geladen werden. Arbeiten Sie nicht weiter, um Datenverlust zu vermeiden.",
+    "backend_unavailable_solution": "Bitte prüfen Sie Ihre Internetverbindung oder versuchen Sie es später erneut. Falls der Fehler bestehen bleibt, wenden Sie sich an den Administrator.",
     "reauthentication_title": "Anmeldung erforderlich",
     "reauthentication_message": "Ihre Sitzung ist abgelaufen oder Sie sind nicht mehr angemeldet. Bitte melden Sie sich erneut an.",
     "login_button": "Anmelden",
     "error_title": "Fehler"
   },
-
   "coding": {
     "comment-dialog": {
       "title": "Kommentar zum Kodierjob",
@@ -513,7 +521,6 @@
       "code-label-to-upper": "Code-Labels in Großbuchstaben konvertieren"
     }
   },
-
   "common": {
     "close": "Schließen",
     "cancel": "Abbrechen",
@@ -522,7 +529,6 @@
     "actions": "Aktionen",
     "created": "Erstellt am"
   },
-
   "workspace": {
     "title": "Arbeitsbereich",
     "workspace-not-loaded": "Konnte Daten für Arbeitsbereich nicht laden",
@@ -635,7 +641,6 @@
     "profile-deleted-successfully": "Profil erfolgreich gelöscht",
     "error-deleting-missings-profile": "Fehler beim Löschen des Missings-Profils"
   },
-
   "paginator": {
     "itemsPerPageLabel": "Elemente pro Seite:",
     "nextPageLabel": "Nächste Seite",
@@ -644,7 +649,6 @@
     "lastPageLabel": "Letzte Seite",
     "getRangeLabel": "{{startIndex}} - {{endIndex}} von {{length}}"
   },
-
   "replay": {
     "coding-progress": "Kodierfortschritt:",
     "open-count": "Offen:",
@@ -677,7 +681,6 @@
       "no-coded-units": "Keine kodierten Einheiten gefunden."
     }
   },
-
   "code-selector": {
     "codes-for-variable": "Codes für Variable",
     "mark-as-open": "Als offen markieren",
@@ -693,7 +696,6 @@
       "technical-problems": "Technische Probleme"
     }
   },
-
   "ws-settings": {
     "access-token": "Zugangstoken",
     "generate-token": "Token generieren",
@@ -729,7 +731,6 @@
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an."
   },
-
   "variable-analysis": {
     "analysis-results": "Analyse Ergebnisse",
     "analyzing-variables": "Analysiere Variablen...",
@@ -775,7 +776,6 @@
     "loading-results": "Lade Analyse-Ergebnisse...",
     "error-loading-results": "Fehler beim Laden der Analyse-Ergebnisse"
   },
-
   "coding-management": {
     "buttons": {
       "auto-code": "Automatisch Kodieren",
@@ -810,6 +810,7 @@
       "json-convert-error": "Fehler beim Umwandeln der CSV-Daten in JSON",
       "coding-list-csv-success": "Kodierliste wurde als CSV erfolgreich heruntergeladen.",
       "error-coding-list-csv": "Fehler beim Herunterladen der Kodierliste als CSV",
+      "Failed to upload resource package": "Fehler beim Hochladen: Das Paket muss die Endung .itcr.zip haben.",
       "coding-list-excel-success": "Kodierliste wurde als Excel erfolgreich heruntergeladen.",
       "error-coding-list-excel": "Fehler beim Herunterladen der Kodierliste als Excel",
       "error-unit-coding-xml": "Fehler beim Abrufen der Unit-XML-Daten für Unit {{unitId}}",
@@ -851,7 +852,9 @@
       "manual-coding-run": "manuelle Kodierung",
       "second-autocode-run": "2 Autocoder Lauf",
       "difference-tooltip-v1": "Differenz zum 1. Autocoder-Lauf",
-      "difference-tooltip-v2": "Differenz zur manuellen Kodierung"
+      "difference-tooltip-v2": "Differenz zur manuellen Kodierung",
+      "reset-success": "Erfolgreich {{count}} Antworten für Version {{version}} zurückgesetzt{{cascade}}",
+      "reset-cascade-suffix": " und {{versions}} (Kaskade)"
     },
     "columns": {
       "unitname": "Aufgabe",
@@ -926,7 +929,6 @@
       "select-page": "Seiten auswählen"
     }
   },
-
   "test-results-search": {
     "search-units": "Aufgaben suchen",
     "search-responses": "Antworten suchen",
@@ -1058,9 +1060,22 @@
     "autocoder-run-selection": {
       "select-run": "Autocoder Lauf auswählen",
       "run-1": "1 Autocoder Lauf",
-      "run-2": "2 Autocoder Lauf"
+      "run-2": "2 Autocoder Lauf",
+      "hint": {
+        "v1": {
+          "title": "Hinweis zum 1. Autocoder-Lauf (v1)",
+          "text": "Dies ist die initiale maschinelle Kodierung aller Antworten. <br><strong>Warnung:</strong> Das Starten dieses Laufs löscht unwiderruflich alle vorhandenen manuellen Kodierungen (v2) und Ergebnisse des zweiten Autocoder-Laufs (v3)!"
+        },
+        "v2": {
+          "title": "Hinweis zum 2. Autocoder-Lauf (v3)",
+          "text": "Dieser Lauf sollte erst <strong>nach</strong> der manuellen Kodierung gestartet werden. Er dient dazu, verbleibende Lücken basierend auf Regeln zu schließen, die auf den manuellen Ergebnissen aufbauen."
+        },
+        "process": {
+          "title": "Ablauf der Kodierung",
+          "text": "<ol><li><strong>1. Autocoder-Lauf (v1):</strong> Basis-Kodierung durch das System.</li><li><strong>Manuelle Kodierung (v2):</strong> Bearbeitung durch Kodierer </li><li><strong>2. Autocoder-Lauf (v3):</strong> Abschluss-Kodierung (optional), falls weitere Regeln auf den manuellen Ergebnissen aufbauen.</li></ol>"
+        }
+      }
     },
-
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "select-all-groups": "Alle auswählen",
@@ -1073,6 +1088,7 @@
     "coding-test-persons-count": "Kodiere {{count}} Testpersonen",
     "responses-coded": "{{count}} Antworten kodiert",
     "background-job-started": "Hintergrundauftrag gestartet",
+    "background-processing": "Verarbeite {{count}} Testpersonen im Hintergrund. Prüfen Sie den Job-Status mit der Job-ID: {{jobId}}",
     "enter-test-person-ids": "Bitte geben Sie Testpersonen-IDs ein",
     "job-error": "Fehler: {{error}}",
     "coding-failed": "Kodierung der Testpersonen fehlgeschlagen",
@@ -1122,8 +1138,7 @@
       "duration": "Dauer:",
       "error": "Fehler:",
       "cancel": "Auftrag abbrechen"
-    }
-    ,
+    },
     "job-result-dialog": {
       "title": "Ergebnis des Kodierauftrags",
       "total-responses": "Insgesamt kodierte Antworten",
@@ -1260,10 +1275,60 @@
         "variable": "Variable",
         "person": "Person",
         "booklet": "Booklet"
+      },
+      "apply-empty-coding-button": "Kodierung automatisch anwenden",
+      "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
+      "apply-empty-coding-confirm-message": "Möchten Sie die automatische Kodierung für {{count}} leere Unit-Antworten anwenden?",
+      "apply-empty-coding-success": "{{count}} leere Antworten wurden erfolgreich kodiert.",
+      "apply-empty-coding-error": "Fehler beim Kodieren der leeren Antworten: {{error}}",
+      "apply-empty-coding-dialog": {
+        "title": "Leere Antworten automatisch kodieren",
+        "description": "Sie sind dabei, die automatische Kodierung für {{count}} leere Antworten anzuwenden.",
+        "apply-header": "Folgende Werte werden gesetzt:",
+        "status": "Kodierstatus",
+        "code": "Code",
+        "score": "Bewertung (Score)",
+        "warning": "Hinweis: Bestehende v2-Kodierungen werden nicht überschrieben.",
+        "cancel": "Abbrechen",
+        "confirm": "Kodierung anwenden"
+      }
+    },
+    "statistics": {
+      "manual-coding-incomplete": "Es gibt noch Kodierungen, die unvollständig oder absichtlich unvollständig markiert sind. Die manuelle Kodierung ist noch nicht abgeschlossen.",
+      "manual-coding-complete": "Die manuelle Kodierung ist vollständig abgeschlossen. Sie können nun mit dem zweiten Durchlauf des Autocoders fortfahren."
+    },
+    "duplicate-aggregation": {
+      "is-applied": "Aggregation angewendet",
+      "config-title": "Aggregationseinstellungen",
+      "config-description": "Konfigurieren Sie, wie mehrfache Antworten behandelt werden sollen.",
+      "threshold-label": "Schwellenwert für Duplikate",
+      "threshold-hint": "Mindestanzahl identischer Antworten für Aggregation (2-100). Standard: 2",
+      "apply-button": "Aggregation anwenden",
+      "deactivate-button": "Aggregation deaktivieren (Alle anzeigen)",
+      "apply-tooltip": "Mehrfache Antworten basierend auf dem Schwellenwert aggregieren",
+      "settings-header": "Einstellungen",
+      "no-groups-meet-threshold": "Keine Duplikatgruppen erfüllen den Schwellenwert von {{threshold}}",
+      "success": "{{aggregatedResponses}} Antworten in {{aggregatedGroups}} Gruppen erfolgreich konfiguriert. {{uniqueCases}} eindeutige Kodierfälle werden in Kodieraufträgen erscheinen.",
+      "auto-updated": "Aggregation wurde mit neuem Schwellenwert aktualisiert",
+      "error": "Fehler beim Anwenden der Aggregation: {{error}}",
+      "deactivate-confirm": "Möchten Sie die Aggregation wirklich deaktivieren? Dadurch werden alle bisher aggregierten Duplikate wieder in die Liste der manuell zu kodierenden Fälle aufgenommen.",
+      "deactivate-dialog-title": "Aggregation deaktivieren",
+      "deactivate-confirm-button": "Aggregation deaktivieren",
+      "cancel": "Abbrechen",
+      "dialog": {
+        "title": "Duplikate aggregieren",
+        "info": "Sie sind dabei, die Aggregationseinstellungen zu konfigurieren. Dies beeinflusst, wie viele Kodierfälle in Kodieraufträgen erscheinen.",
+        "groups": "Duplikatgruppen",
+        "total-responses": "Gesamtantworten",
+        "threshold": "Schwellenwert",
+        "warning-title": "Wichtiger Hinweis",
+        "warning-text": "Mit dieser Einstellung werden nur eindeutige Antworten in Kodieraufträgen angezeigt. Wenn Sie eine Antwort kodieren, erhalten alle Duplikate automatisch denselben Code.",
+        "explanation": "Für jede Gruppe wird nur eine Antwort (Master) in Kodieraufträgen angezeigt. Alle anderen Duplikate erhalten automatisch denselben Code, wenn die Ergebnisse angewendet werden.",
+        "cancel": "Abbrechen",
+        "confirm": "Einstellungen speichern"
       }
     }
   },
-
   "export-dialog": {
     "title": "Export Format wählen",
     "description": "Bitte wählen Sie das gewünschte Format für den Export der Kodierliste:",
@@ -1299,7 +1364,6 @@
   "export-coding-book": {
     "validation-file": "Validierungs-Kodierliste"
   },
-
   "coding-job-definition-dialog": {
     "job-definition": {
       "edit": "Job-Definition bearbeiten",
@@ -1507,7 +1571,6 @@
       }
     }
   },
-
   "coding-job-bulk-creation-dialog": {
     "title": "Verteilte Erstellung von Kodieraufträgen",
     "description": "Die ausgewählten Variablen werden gleichmäßig auf die ausgewählten Kodierer verteilt:",
@@ -1534,7 +1597,12 @@
     },
     "buttons": {
       "cancel": "Abbrechen",
-      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen"
+      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen",
+      "continue": "Trotzdem fortfahren"
+    },
+    "warnings": {
+      "title": "Warnungen",
+      "description": "Bitte beachten Sie die folgenden Warnungen zu den ausgewählten Variablen."
     },
     "double-coding-summary": {
       "variable": "Variable",
@@ -1545,7 +1613,6 @@
       "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
     }
   },
-
   "kappa": {
     "poor": "Schlechte Übereinstimmung (weniger als zufällig)",
     "slight": "Schwache Übereinstimmung",
@@ -1554,7 +1621,6 @@
     "substantial": "Substantielle Übereinstimmung",
     "almost_perfect": "Nahezu perfekte Übereinstimmung"
   },
-
   "double-coded-review": {
     "title": "Doppelkodierung überprüfen",
     "description": "Überprüfen und vergleichen Sie die Ergebnisse der Doppelkodierung, um die Qualität der Kodierung sicherzustellen.",
@@ -1609,7 +1675,6 @@
       "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
     }
   },
-
   "applied-results-overview": {
     "title": "Überblick über angewendete Ergebnisse",
     "description": "Überblick über angewendete Kodierungsergebnisse und verbleibende Arbeit für manuell kodierte Variablen",
@@ -1626,7 +1691,6 @@
     "invalid": "INVALID:",
     "coding-error": "CODING_ERROR:"
   },
-
   "coding-validation-results": {
     "title": "Validierungsergebnisse",
     "download-button": "Als Excel herunterladen",
@@ -1650,7 +1714,6 @@
       }
     }
   },
-
   "coding-results": {
     "apply": {
       "error": {

@@ -122,6 +122,15 @@ export class CreateCodingJobDto {
     doubleCodingPercentage?: number;
 
   @ApiProperty({
+    description: 'Maximum number of cases to code',
+    example: 100,
+    required: false
+  })
+  @IsNumber()
+  @IsOptional()
+    maxCodingCases?: number;
+
+  @ApiProperty({
     description: 'ID of the job definition this job is created from',
     example: 1,
     required: false

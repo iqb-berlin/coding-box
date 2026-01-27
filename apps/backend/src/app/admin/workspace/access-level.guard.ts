@@ -6,7 +6,7 @@ import {
   SetMetadata
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 
 /**
  * Decorator to require a minimum access level for an endpoint
@@ -42,7 +42,7 @@ export class AccessLevelGuard implements CanActivate {
     // Get workspace ID from route params
     const workspaceId = parseInt(request.params.workspace_id, 10);
 
-    if (!workspaceId || Number.isNaN(workspaceId)) {
+    if (!workspaceId || Number.isNaN(workspaceId) || workspaceId <= 0) {
       throw new UnauthorizedException('Workspace ID not found in request');
     }
 

@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable, of } from 'rxjs';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { catchError, map } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { VariableBundle } from '../models/coding-job.model';
 
 export interface PaginatedBundles {
@@ -19,7 +19,7 @@ export interface PaginatedBundles {
 export class VariableBundleService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private bundlesSubject = new BehaviorSubject<VariableBundle[]>([]);
 
   constructor() {

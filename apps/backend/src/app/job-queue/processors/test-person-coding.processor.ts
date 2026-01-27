@@ -1,14 +1,12 @@
 import { Processor, Process } from '@nestjs/bull';
 import {
   Injectable,
-  Logger,
-  Inject,
-  forwardRef
+  Logger
 } from '@nestjs/common';
 import { Job } from 'bull';
 import { TestPersonCodingJobData } from '../job-queue.service';
-import { CodingStatistics } from '../../database/services/shared-types';
-import { WorkspaceCodingService } from '../../database/services/workspace-coding.service';
+import { CodingStatistics } from '../../database/services/shared';
+import { WorkspaceCodingService } from '../../database/services/workspace';
 
 @Injectable()
 @Processor('test-person-coding')
@@ -16,9 +14,8 @@ export class TestPersonCodingProcessor {
   private readonly logger = new Logger(TestPersonCodingProcessor.name);
 
   constructor(
-    @Inject(forwardRef(() => WorkspaceCodingService))
-    private workspaceCodingService: WorkspaceCodingService
-  ) {}
+    private readonly workspaceCodingService: WorkspaceCodingService
+  ) { }
 
   @Process()
   async process(job: Job<TestPersonCodingJobData>): Promise<CodingStatistics> {

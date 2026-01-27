@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { catchError, map } from 'rxjs/operators';
 import { Coder } from '../models/coder.model';
 import { SERVER_URL } from '../../injection-tokens';
-import { AppService } from '../../services/app.service';
+import { AppService } from '../../core/services/app.service';
 import { CodingJob } from '../models/coding-job.model';
 
 @Injectable({
@@ -13,7 +13,7 @@ import { CodingJob } from '../models/coding-job.model';
 export class CoderService {
   private http = inject(HttpClient);
   private readonly serverUrl = inject(SERVER_URL);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private codersSubject = new BehaviorSubject<Coder[]>([]);
 
   getCoders(): Observable<Coder[]> {

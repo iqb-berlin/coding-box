@@ -5,7 +5,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { UserMenuComponent } from './user-menu.component';
 import { AuthService } from '../../../core/services/auth.service';
-import { LogoService } from '../../../services/logo.service';
+import { LogoService } from '../../../core/services/logo.service';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
 

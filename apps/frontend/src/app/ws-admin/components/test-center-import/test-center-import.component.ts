@@ -37,10 +37,10 @@ import {
   MatTable
 } from '@angular/material/table';
 import { MatTooltip } from '@angular/material/tooltip';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { ImportService, ImportOptions, Result } from '../../../shared/services/file/import.service';
+import { AppService } from '../../../core/services/app.service';
 import { WorkspaceAdminService } from '../../services/workspace-admin.service';
-import { ImportOptions, Result } from '../../../services/import.service';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import {
   ConfirmDialogComponent,
@@ -109,7 +109,8 @@ export interface ImportFormValues {
   ]
 })
 export class TestCenterImportComponent {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
+  private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
   data = inject<{
     importType: string;
@@ -170,6 +171,7 @@ export class TestCenterImportComponent {
   private firstTestFilesImportData: Result | null = null;
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
+  importingTestGroups: string[] = [];
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -189,12 +191,13 @@ export class TestCenterImportComponent {
       codings: this.fb.control(false),
       logs: this.fb.control(false),
       testTakers: this.fb.control(false),
-      booklets: this.fb.control(false)
+      booklets: this.fb.control(false),
+      metadata: this.fb.control(false)
     });
   }
 
   selectAllImportOptions(): void {
-    let optionControls: string[] = [];
+    let optionControls: string[];
 
     if (this.data.importType === 'testResults') {
       // For results import, only responses and logs are relevant
@@ -207,7 +210,8 @@ export class TestCenterImportComponent {
         'player',
         'codings',
         'booklets',
-        'testTakers'
+        'testTakers',
+        'metadata'
       ];
     }
 
@@ -227,7 +231,8 @@ export class TestCenterImportComponent {
       'codings',
       'logs',
       'testTakers',
-      'booklets'
+      'booklets',
+      'metadata'
     ];
 
     optionControls.forEach(name => {
@@ -289,7 +294,7 @@ export class TestCenterImportComponent {
     this.testCenterInstance = this.testCenters.filter(
       testcenter => testcenter.id === this.loginForm.get('testCenter')?.value
     );
-    this.backendService
+    this.userBackendService
       .authenticate(name, pw, this.testCenterInstance[0]?.id.toString(), url)
       .pipe(
         catchError(() => {
@@ -297,8 +302,8 @@ export class TestCenterImportComponent {
           return of();
         })
       )
-      .subscribe(response => {
-        if (!response) {
+      .subscribe((response: { token?: string; claims?: { workspaceAdmin: WorkspaceAdmin[] } }) => {
+        if (!response || !response.token || !response.claims) {
           this.authenticationError = true;
           return;
         }
@@ -355,7 +360,7 @@ export class TestCenterImportComponent {
       formValues.testCenterIndividual;
 
     this.isUploadingTestResults = true;
-    this.backendService
+    this.importService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
@@ -363,7 +368,7 @@ export class TestCenterImportComponent {
         url,
         this.authToken
       )
-      .subscribe(response => {
+      .subscribe((response: TestGroupsInfoDto[]) => {
         this.isUploadingTestResults = false;
         this.workspaceAdminService.setTestGroups(response);
         this.testGroups = response;
@@ -374,62 +379,6 @@ export class TestCenterImportComponent {
   goBackToOptions(): void {
     this.showTestGroups = false;
     this.selectedRows = [];
-  }
-
-  startNewImport(): void {
-    this.uploadData = null;
-    this.firstTestFilesImportData = null;
-    this.showTestGroups = false;
-    this.selectedRows = [];
-
-    if (this.data.importType === 'testResults') {
-      this.getTestGroups();
-    }
-  }
-
-  goBackToTestGroups(): void {
-    this.uploadData = null;
-    this.firstTestFilesImportData = null;
-    this.selectedRows = [];
-    this.showTestGroups = true;
-  }
-
-  refreshTestGroups(): void {
-    const formValues = {
-      testCenter: this.loginForm.get('testCenter')?.value,
-      workspace: this.importFilesForm.get('workspace')?.value,
-      testCenterIndividual:
-        this.loginForm.get('testCenterIndividual')?.value || ''
-    };
-
-    const server =
-      this.workspaceAdminService.getLastServer() ||
-      formValues.testCenter?.toString();
-    const url =
-      this.workspaceAdminService.getLastUrl() ||
-      formValues.testCenterIndividual;
-
-    const tempIsUploadingTestResults = this.isUploadingTestResults;
-    this.isUploadingTestResults = true;
-
-    this.backendService
-      .importTestcenterGroups(
-        this.appService.selectedWorkspaceId,
-        formValues.workspace,
-        server,
-        url,
-        this.authToken
-      )
-      .subscribe({
-        next: response => {
-          this.isUploadingTestResults = tempIsUploadingTestResults;
-          this.workspaceAdminService.setTestGroups(response);
-          this.testGroups = response;
-        },
-        error: () => {
-          this.isUploadingTestResults = tempIsUploadingTestResults;
-        }
-      });
   }
 
   private hasSelectedGroupsWithLogs(): boolean {
@@ -474,7 +423,8 @@ export class TestCenterImportComponent {
         codings: this.importFilesForm.get('codings')?.value,
         logs: this.importFilesForm.get('logs')?.value,
         testTakers: this.importFilesForm.get('testTakers')?.value,
-        booklets: this.importFilesForm.get('booklets')?.value
+        booklets: this.importFilesForm.get('booklets')?.value,
+        metadata: this.importFilesForm.get('metadata')?.value
       }
     };
 
@@ -485,6 +435,9 @@ export class TestCenterImportComponent {
     const selectedGroupNames = this.selectedRows.map(
       group => group.groupName
     );
+
+    // Store the test group names for display in loading message
+    this.importingTestGroups = selectedGroupNames;
 
     const needsConfirmation =
       formValues.importOptions.logs && this.hasSelectedGroupsWithLogs();
@@ -509,13 +462,28 @@ export class TestCenterImportComponent {
     }
   }
 
+  loadingMessage = 'Testresultate werden hochgeladen...';
+
   private performImport(
     formValues: ImportFormValues,
     selectedGroupNames: string[],
     overwriteExistingLogs: boolean,
     overwriteFileIds?: string[]
   ): void {
-    this.backendService
+    const importedResponses = !!formValues.importOptions.responses;
+    const importedLogs = !!formValues.importOptions.logs;
+
+    if (importedLogs && importedResponses) {
+      this.loadingMessage = `Importiere Antworten und Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else if (importedLogs) {
+      this.loadingMessage = `Importiere Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else if (importedResponses) {
+      this.loadingMessage = `Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    } else {
+      this.loadingMessage = `Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    }
+
+    this.importService
       .importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
         formValues.workspace,
@@ -538,8 +506,7 @@ export class TestCenterImportComponent {
           if (this.data.importType === 'testResults') {
             // Do not open a nested dialog here; return a payload to the caller.
             // The caller will compute correct before/after/delta stats from workspace overview.
-            const importedResponses = !!formValues.importOptions.responses;
-            const importedLogs = !!formValues.importOptions.logs;
+            // Flags are already calculated above
             const resultType: 'logs' | 'responses' = importedResponses ?
               'responses' :
               'logs';
@@ -548,16 +515,14 @@ export class TestCenterImportComponent {
               didImport: true,
               resultType,
               importedResponses,
-              importedLogs
+              importedLogs,
+              uploadResult: data
             });
             return;
           }
 
           if (this.data.importType === 'testFiles') {
-            const initial = data as unknown as {
-              testFilesUploadResult?: TestFilesUploadResultDto;
-            };
-            const initialResult = initial.testFilesUploadResult;
+            const initialResult = data.testFilesUploadResult;
             const initialConflicts = initialResult?.conflicts || [];
 
             if (!overwriteFileIds && initialConflicts.length > 0) {
@@ -574,7 +539,7 @@ export class TestCenterImportComponent {
                 data: { conflicts: initialConflicts }
               });
 
-              ref.afterClosed().subscribe(choice => {
+              ref.afterClosed().subscribe((choice: TestFilesUploadConflictsDialogResult | undefined) => {
                 if (
                   choice?.overwrite === true &&
                   (choice.overwriteFileIds || []).length > 0
@@ -600,14 +565,8 @@ export class TestCenterImportComponent {
 
             // Second call: overwrite-only import. Merge with previous (stored in uploadData).
             if (overwriteFileIds && this.firstTestFilesImportData) {
-              const first = this.firstTestFilesImportData as unknown as {
-                testFilesUploadResult?: TestFilesUploadResultDto;
-              };
-              const firstResult = first.testFilesUploadResult;
-              const second = data as unknown as {
-                testFilesUploadResult?: TestFilesUploadResultDto;
-              };
-              const secondResult = second.testFilesUploadResult;
+              const firstResult = this.firstTestFilesImportData.testFilesUploadResult;
+              const secondResult = data.testFilesUploadResult;
 
               const mergedUploadedFiles = [
                 ...(firstResult?.uploadedFiles || []),
@@ -626,7 +585,7 @@ export class TestCenterImportComponent {
               const mergedResult: TestFilesUploadResultDto = {
                 total: Number(
                   firstResult?.total ??
-                    mergedUploadedFiles.length + mergedFailedFiles.length
+                  mergedUploadedFiles.length + mergedFailedFiles.length
                 ),
                 uploaded: mergedUploadedFiles.length,
                 failed: mergedFailedFiles.length,
@@ -636,7 +595,7 @@ export class TestCenterImportComponent {
               };
 
               const mergedData = {
-                ...(data as Record<string, unknown>),
+                ...(data as unknown as Record<string, unknown>),
                 testFilesUploadResult: mergedResult
               };
 
@@ -674,7 +633,8 @@ export class TestCenterImportComponent {
             filesDefinitions: 0,
             filesCodings: 0,
             filesBooklets: 0,
-            filesTestTakers: 0
+            filesTestTakers: 0,
+            filesMetadata: 0
           };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;

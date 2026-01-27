@@ -33,8 +33,9 @@ import {
 } from 'rxjs';
 import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { DistributedCodingService } from '../../services/distributed-coding.service';
+import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
@@ -111,7 +112,8 @@ interface CreationResults {
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private fb = inject(FormBuilder);
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
@@ -162,7 +164,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   constructor(
     public dialogRef: MatDialogRef<CodingJobDefinitionDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: CodingJobDefinitionDialogData
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     if (this.data.codingJob?.doubleCodingAbsolute !== null && this.data.codingJob?.doubleCodingAbsolute !== undefined && this.data.codingJob.doubleCodingAbsolute > 0) {
@@ -243,7 +245,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getJobDefinitions(workspaceId).subscribe({
+    this.codingJobBackendService.getJobDefinitions(workspaceId).subscribe({
       next: definitions => {
         // When editing an existing job definition, exclude the current job definition
         // from the list to prevent its variables from being incorrectly disabled
@@ -284,13 +286,19 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   initForm(): void {
-    const formFields: Record<string, [string | number | null | undefined, ValidatorFn[]]> = {
+    const formFields: Record<string, [string | number | boolean | null | undefined, ValidatorFn[]]> = {
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []],
       caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', []]
     };
+
+    if (this.data.mode === 'job') {
+      formFields.showScore = [this.data.codingJob?.showScore ?? true, []];
+      formFields.allowComments = [this.data.codingJob?.allowComments ?? true, []];
+      formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
+    }
 
     if (this.data.isEdit) {
       const defaultStatus = this.data.mode === 'definition' ? 'draft' : 'pending';
@@ -324,7 +332,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
       next: variables => {
         this.variables = variables;
         this.applyJobDefinitionUsage();
@@ -373,11 +381,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (workspaceId) {
-      this.backendService.getVariableBundles(workspaceId).subscribe({
+      this.codingJobBackendService.getVariableBundles(workspaceId).subscribe({
         next: bundles => {
           const enrichedBundles = bundles.map(bundle => ({
             ...bundle,
-            variables: bundle.variables.map(bundleVar => {
+            variables: bundle.variables.map((bundleVar: Variable) => {
               const matchingVar = this.variables.find(v => v.unitName === bundleVar.unitName && v.variableId === bundleVar.variableId);
               return {
                 ...bundleVar,
@@ -411,7 +419,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     if (!this.variables || this.variables.length === 0) return;
 
     const casesUsedInDefinitions = new Map<string, number>();
-    const makeKey = (u: string | undefined, v: string | undefined) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
+    const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
+
+    const getTotalCases = (unitName?: string, variableId?: string) => {
+      const key = makeKey(unitName, variableId);
+      const loadedVar = this.variables.find(v => makeKey(v.unitName, v.variableId) === key);
+      return loadedVar?.responseCount || 0;
+    };
 
     // Count cases used in each job definition (excluding the current one being edited)
     if (this.existingJobDefinitions && this.existingJobDefinitions.length > 0) {
@@ -421,17 +435,48 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        def.assignedVariables?.forEach(v => {
-          const key = makeKey(v.unitName, v.variableId);
-          const casesForThisVar = def.maxCodingCases || (v.responseCount || 0);
-          casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + casesForThisVar);
-        });
+        const itemsCount = (def.assignedVariables?.length || 0) + (def.assignedVariableBundles?.length || 0);
+        const maxCodingCases = def.maxCodingCases;
+        let currentItemIndex = 0;
+
+        // 1. Process Variable Bundles (Backend processes bundles first)
         def.assignedVariableBundles?.forEach(bundle => {
-          bundle.variables?.forEach(v => {
-            const key = makeKey(v.unitName, v.variableId);
-            const casesForThisVar = def.maxCodingCases || (v.responseCount || 0);
-            casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + casesForThisVar);
-          });
+          let bundleUsage: number;
+          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
+            const baseQuota = Math.floor(maxCodingCases / itemsCount);
+            const remainder = maxCodingCases % itemsCount;
+            bundleUsage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
+          } else {
+            // Unlimited: sum of all variables in bundle
+            bundleUsage = bundle.variables?.reduce((sum, v) => sum + getTotalCases(v.unitName, v.variableId), 0) || 0;
+          }
+
+          const varsInBundle = bundle.variables?.length || 0;
+          if (varsInBundle > 0) {
+            const usagePerVar = Math.ceil(bundleUsage / varsInBundle);
+            bundle.variables?.forEach(v => {
+              const key = makeKey(v.unitName, v.variableId);
+              casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usagePerVar);
+            });
+          }
+          currentItemIndex += 1;
+        });
+
+        // 2. Process Variables
+        def.assignedVariables?.forEach(v => {
+          let usage: number;
+          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
+            const baseQuota = Math.floor(maxCodingCases / itemsCount);
+            const remainder = maxCodingCases % itemsCount;
+            // Note: index continues incrementing from bundles
+            usage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
+          } else {
+            usage = getTotalCases(v.unitName, v.variableId);
+          }
+
+          const key = makeKey(v.unitName, v.variableId);
+          casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usage);
+          currentItemIndex += 1;
         });
       });
     }
@@ -566,14 +611,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     // Disable variables that are included in currently selected variable bundles
-    const isInSelectedBundle = this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
+    return this.selectedVariableBundles.selected.some(bundle => bundle.variables.some(bundleVar => bundleVar.unitName === variable.unitName && bundleVar.variableId === variable.variableId
     )
     );
-
-    if (isInSelectedBundle) {
-      return true; // Disable variables in selected bundles
-    }
-    return false;
   }
 
   getVariableDisabledReason(variable: Variable): string {
@@ -772,7 +812,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    this.backendService.updateCodingJob(workspaceId, this.data.codingJob!.id!, codingJob).subscribe({
+    this.codingJobBackendService.updateCodingJob(workspaceId, this.data.codingJob!.id!, codingJob).subscribe({
       next: updatedJob => {
         if (updatedJob?.id && selectedCoderIds.length > 0) {
           const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(updatedJob.id!, id));
@@ -826,7 +866,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       assignedVariableBundles: this.selectedVariableBundles.selected
     };
 
-    this.backendService.createCodingJob(workspaceId, codingJob).subscribe({
+    this.codingJobBackendService.createCodingJob(workspaceId, codingJob).subscribe({
       next: createdJob => {
         if (createdJob?.id && selectedCoderIds.length > 0) {
           const assignCalls = selectedCoderIds.map(id => this.codingJobService.assignCoder(createdJob.id!, id));
@@ -918,7 +958,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         name: coder.name,
         username: coder.name
       }));
-      const result = await firstValueFrom(this.backendService.createDistributedCodingJobs(
+      const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
         mappedCoders,
@@ -1013,17 +1053,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: JobDefinition = {
       status: 'draft',
-      assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
-      durationSeconds: this.codingJobForm.value.durationSeconds,
-      maxCodingCases: this.codingJobForm.value.maxCodingCases,
-      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
-    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+    this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-created-success'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -1031,7 +1071,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-creating-definition', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
+        const message = this.getErrorMessage(error);
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-creating-definition', { error: message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -1049,13 +1090,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
 
     const jobDefinition: Partial<JobDefinition> = {
-      assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
-      durationSeconds: this.codingJobForm.value.durationSeconds,
-      maxCodingCases: this.codingJobForm.value.maxCodingCases,
-      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
@@ -1063,7 +1104,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       jobDefinition.status = this.codingJobForm.value.status;
     }
 
-    this.backendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
+    this.codingJobBackendService.updateJobDefinition(workspaceId, this.data.jobDefinitionId!, jobDefinition).subscribe({
       next: updatedDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-updated-success'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -1071,7 +1112,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-updating-definition', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
+        const message = this.getErrorMessage(error);
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-updating-definition', { error: message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
@@ -1114,17 +1156,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
-      assignedVariables: this.selectedVariables.selected,
-      assignedVariableBundles: this.selectedVariableBundles.selected,
+      assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
-      durationSeconds: this.codingJobForm.value.durationSeconds,
-      maxCodingCases: this.codingJobForm.value.maxCodingCases,
-      doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
+      maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
+      doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
+      doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode
     };
 
-    this.backendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
+    this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
       next: createdDefinition => {
         this.isSaving = false;
         this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.definition-submitted-review'), this.translateService.instant('common.close'), { duration: 3000 });
@@ -1132,12 +1174,35 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       },
       error: error => {
         this.isSaving = false;
-        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-submitting-review', { error: error.message }), this.translateService.instant('common.close'), { duration: 5000 });
+        const message = this.getErrorMessage(error);
+        this.snackBar.open(this.translateService.instant('coding-job-definition-dialog.snackbars.error-submitting-review', { error: message }), this.translateService.instant('common.close'), { duration: 5000 });
       }
     });
   }
 
   onCancel(): void {
     this.dialogRef.close();
+  }
+
+  private sanitizeNumber(value: unknown): number | undefined {
+    if (value === null || value === undefined || value === '') {
+      return undefined;
+    }
+    const num = Number(value);
+    return Number.isNaN(num) ? undefined : num;
+  }
+
+  private getErrorMessage(error: unknown): string {
+    const err = error as { error?: { message?: string } | string; message?: string };
+    if (err.error) {
+      if (typeof err.error === 'object') {
+        return err.error.message || JSON.stringify(err.error);
+      }
+      return err.error;
+    }
+    if (err.message) {
+      return err.message;
+    }
+    return 'Unknown error';
   }
 }

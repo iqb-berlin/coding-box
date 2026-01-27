@@ -16,7 +16,10 @@
           "nx/src/utils/logger",
           "exceljs",
           "@iqbspecs/response",
-          "@iqbspecs/response/response.interface"
+          "@iqbspecs/response/response.interface",
+          "@iqb/metadata/md-profile-entry",
+          "@iqb/metadata",
+          "@iqb/metadata-components"
         ],
         "outputPath": "dist/apps/frontend",
         "index": "apps/frontend/src/index.html",
@@ -101,6 +104,19 @@
       "options": {
         "jestConfig": "apps/frontend/jest.config.ts",
         "passWithNoTests": true
+      }
+    },
+    "e2e": {
+      "executor": "@nx/cypress:cypress",
+      "options": {
+        "cypressConfig": "cypress.config.ts",
+        "testingType": "e2e",
+        "devServerTarget": "frontend:serve"
+      },
+      "configurations": {
+        "production": {
+          "devServerTarget": "frontend:serve:production"
+        }
       }
     }
   }

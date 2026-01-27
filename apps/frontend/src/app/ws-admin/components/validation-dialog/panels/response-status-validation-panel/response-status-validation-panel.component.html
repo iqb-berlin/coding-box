@@ -1,0 +1,83 @@
+<mat-expansion-panel>
+  <mat-expansion-panel-header>
+    <coding-box-validation-panel-header
+      title="Antwortstatus-Prüfung"
+      [status]="status"
+      [errorCount]="errorCount">
+    </coding-box-validation-panel-header>
+  </mat-expansion-panel-header>
+
+  <coding-box-validation-guidance
+    description="Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml)."
+    whyText="Ungültige Antwortstatus können zu Problemen bei der Datenauswertung und beim Export führen."
+    fixHint="Korrigieren Sie die Status-Definitionen in der Unit.xml oder löschen Sie die ungültigen Antworten.">
+  </coding-box-validation-guidance>
+
+  <div class="validation-actions">
+    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+      Antwortstatus prüfen
+    </button>
+  </div>
+
+  @if (isRunning) {
+    <div class="loading-container">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Antwortstatus wird geprüft...</p>
+    </div>
+  }
+
+  @if (invalidStatusVariables.length > 0 || totalInvalid > 0) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Antwortstatus gefunden.</span>
+    </div>
+
+    @if (invalidStatusVariables.length > 0) {
+      <div class="actions-container">
+        <button mat-button (click)="toggleExpansion()">
+          {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
+        </button>
+        <button mat-button (click)="selectAll()">Alle auswählen</button>
+        <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
+        <button mat-button color="warn" 
+                (click)="deleteSelected()" 
+                [disabled]="isDeletingResponses || selectedResponses.size === 0">
+          @if (isDeletingResponses) {
+            <mat-spinner diameter="20"></mat-spinner> Löschen...
+          } @else {
+            Ausgewählte löschen ({{ selectedResponses.size }})
+          }
+        </button>
+        <button mat-button color="warn" 
+                (click)="deleteAll()" 
+                [disabled]="isDeletingResponses || invalidStatusVariables.length === 0">
+          @if (isDeletingResponses) {
+            <mat-spinner diameter="20"></mat-spinner> Löschen...
+          } @else {
+            Alle löschen ({{ totalInvalid }})
+          }
+        </button>
+      </div>
+
+      <mat-expansion-panel [expanded]="expandedPanel">
+        <coding-box-validation-data-table
+          [data]="invalidStatusVariables"
+          [columns]="tableColumns"
+          [totalItems]="totalInvalid"
+          [pageSize]="pageSize"
+          [currentPage]="currentPage"
+          [selectedItems]="selectedResponses"
+          [selectionKey]="'responseId'"
+          (pageChange)="onPageChange($event)"
+          (selectionChange)="onSelectionChange($event)"
+          (linkClick)="onLinkClick($event)">
+        </coding-box-validation-data-table>
+      </mat-expansion-panel>
+    }
+  } @else if (!isRunning && invalidStatusVariables.length === 0 && totalInvalid === 0 && wasRun) {
+    <div class="validation-result validation-success">
+      <mat-icon>check_circle</mat-icon>
+      <span>Prüfung bestanden: Keine ungültigen Antwortstatus gefunden.</span>
+    </div>
+  }
+</mat-expansion-panel>
