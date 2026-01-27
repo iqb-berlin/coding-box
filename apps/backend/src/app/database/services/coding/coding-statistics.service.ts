@@ -92,10 +92,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       if (version === 'v2') {
         statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
+        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL AND (response.code_v2 IS NULL OR response.code_v2 != -111)';
       } else if (version === 'v3') {
         statusColumn = 'COALESCE(response.status_v3, response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
+        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL AND (response.code_v2 IS NULL OR response.code_v2 != -111)';
       }
 
       const statusCountResults = await this.responseRepository.query(`
@@ -196,7 +196,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables:${workspace_id}`;
+    const cacheKey = `coding_incomplete_variables_v2:${workspace_id}`;
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }

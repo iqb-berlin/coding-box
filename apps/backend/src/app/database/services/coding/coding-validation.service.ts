@@ -308,8 +308,11 @@ export class CodingValidationService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
       })
       .andWhere('person.workspace_id = :workspace_id', {
         workspace_id: workspaceId
@@ -319,6 +322,9 @@ export class CodingValidationService {
     if (unitName) {
       queryBuilder.andWhere('unit.name = :unitName', { unitName });
     }
+
+    // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
+    queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)');
 
     queryBuilder.groupBy('unit.name').addGroupBy('response.variableid');
 
@@ -356,7 +362,7 @@ export class CodingValidationService {
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables:${workspaceId}`;
+    return `coding_incomplete_variables_v2:${workspaceId}`;
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
@@ -438,16 +444,18 @@ export class CodingValidationService {
           INNER JOIN persons person ON booklet.personid = person.id
           WHERE person.workspace_id = $1
             AND person.consider = true
-            AND response.status_v1 = $2
+            AND response.status_v1 IN ($2, $3)
             AND (${conditions})
-            AND response.status_v2 IN ($3, $4, $5)
+            AND response.status_v2 IN ($4, $5, $6)
+            AND (response.code_v2 IS NULL OR response.code_v2 >= 0)
         `;
 
         const result = await this.responseRepository.query(query, [
           workspaceId,
-          statusStringToNumber('CODING_INCOMPLETE'), // status_v1 = CODING_INCOMPLETE
-          statusStringToNumber('CODING_COMPLETE'), // status_v2 = CODING_COMPLETE
-          statusStringToNumber('INVALID'), // status_v2 = INVALID
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE'),
+          statusStringToNumber('CODING_COMPLETE'),
+          statusStringToNumber('INVALID'),
           statusStringToNumber('CODING_ERROR') // status_v2 = CODING_ERROR
         ]);
 
