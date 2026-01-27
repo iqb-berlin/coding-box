@@ -12,8 +12,10 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import {
-  Subject, takeUntil, debounceTime, finalize
+  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap
 } from 'rxjs';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
@@ -71,7 +73,9 @@ import {
     CoderTrainingsListComponent,
     CommonModule,
     FormsModule,
-    MatCheckboxModule
+    MatCheckboxModule,
+    MatFormFieldModule,
+    MatInputModule
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -153,6 +157,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
+  private thresholdChangeSubject = new Subject<number>();
   private statisticsRefreshSubject = new Subject<void>();
 
   codingProgressOverview: {
@@ -278,6 +283,22 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.refreshAllStatistics();
       });
 
+    // Auto-apply aggregation when threshold changes
+    this.thresholdChangeSubject
+      .pipe(
+        debounceTime(800), // Wait for user to stop typing
+        takeUntil(this.destroy$)
+      )
+      .subscribe(threshold => {
+        const workspaceId = this.appService.selectedWorkspaceId;
+        if (workspaceId) {
+          this.workspaceSettingsService.setAggregationThreshold(workspaceId, threshold)
+            .pipe(takeUntil(this.destroy$))
+            .subscribe();
+        }
+        this.processAutoApplyAggregation(threshold);
+      });
+
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();
@@ -287,6 +308,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadStatusDistributionV2();
     this.loadAppliedResultsOverview();
     this.loadResponseMatchingMode();
+    this.loadAggregationThreshold();
     this.loadResponseAnalysis();
   }
 
@@ -821,6 +843,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadAggregationThreshold(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.workspaceSettingsService
+      .getAggregationThreshold(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(threshold => {
+        this.duplicateAggregationThreshold = threshold;
+      });
+  }
+
   hasMatchingFlag(flag: ResponseMatchingFlag): boolean {
     return this.responseMatchingFlags.includes(flag);
   }
@@ -850,59 +886,75 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     }
 
-    this.saveResponseMatchingMode(newFlags);
+    // Determine if we need to apply/revert aggregation (only when toggling NO_AGGREGATION)
+    const isAggregationToggle = flag === ResponseMatchingFlag.NO_AGGREGATION;
 
-    // Sync with aggregation state:
-    // If NO_AGGREGATION is now set, deactivate aggregation.
-    // If NO_AGGREGATION is now UNSET, activate aggregation (with current threshold).
-    if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
-      const isNoAggregationSet = newFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
-      this.testPersonCodingService
-        .applyDuplicateAggregation(
-          workspaceId,
-          this.duplicateAggregationThreshold,
-          !isNoAggregationSet // Activate if NO_AGGREGATION is UNSET
-        )
-        .pipe(takeUntil(this.destroy$))
-        .subscribe(() => {
-          this.loadResponseAnalysis();
-          this.refreshAllStatistics();
-        });
-    }
-  }
-
-  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    this.isSavingMatchingMode = true;
-    this.workspaceSettingsService
-      .setResponseMatchingMode(workspaceId, flags)
-      .pipe(takeUntil(this.destroy$))
+    // Sequential execution: Save Settings -> (Optional) Apply Aggregation -> Refresh Stats
+    this.saveResponseMatchingMode(newFlags, isAggregationToggle)
+      .pipe(
+        switchMap(() => {
+          if (isAggregationToggle) {
+            const isNoAggregationSet = newFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
+            // If NO_AGGREGATION is set, we deactivate aggregation (false).
+            // If NO_AGGREGATION is NOT set, we activate aggregation (true).
+            return this.testPersonCodingService.applyDuplicateAggregation(
+              workspaceId,
+              this.duplicateAggregationThreshold,
+              !isNoAggregationSet
+            );
+          }
+          return of(null);
+        }),
+        takeUntil(this.destroy$)
+      )
       .subscribe({
         next: () => {
-          this.responseMatchingFlags = flags;
-          this.isSavingMatchingMode = false;
-          this.showSuccess(
-            this.translateService.instant(
-              'coding-management-manual.response-matching.save-success'
-            )
-          );
-
-          // Refresh all affected areas after matching mode change
+          // Final refresh after all operations are complete
           this.onResponseMatchingModeChanged();
         },
         error: () => {
-          this.isSavingMatchingMode = false;
-          this.showError(
-            this.translateService.instant(
-              'coding-management-manual.response-matching.save-error'
-            )
-          );
+          // Error handling is mostly done in the individual methods (toasts),
+          // but we ensure loading states are reset if needed.
+          this.isLoadingMatchingMode = false;
         }
       });
+  }
+
+  private saveResponseMatchingMode(flags: ResponseMatchingFlag[], skipRefresh = false): Observable<void> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return of(undefined);
+    }
+
+    this.isSavingMatchingMode = true;
+    return this.workspaceSettingsService
+      .setResponseMatchingMode(workspaceId, flags)
+      .pipe(
+        tap({
+          next: () => {
+            this.responseMatchingFlags = flags;
+            this.isSavingMatchingMode = false;
+            this.showSuccess(
+              this.translateService.instant(
+                'coding-management-manual.response-matching.save-success'
+              )
+            );
+
+            if (!skipRefresh) {
+              this.onResponseMatchingModeChanged();
+            }
+          },
+          error: () => {
+            this.isSavingMatchingMode = false;
+            this.showError(
+              this.translateService.instant(
+                'coding-management-manual.response-matching.save-error'
+              )
+            );
+          }
+        }),
+        switchMap(() => of(undefined))
+      );
   }
 
   private onResponseMatchingModeChanged(): void {
@@ -1171,5 +1223,46 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           }
         });
     });
+  }
+
+  onThresholdChanged(newValue: number): void {
+    this.thresholdChangeSubject.next(newValue);
+  }
+
+  private processAutoApplyAggregation(threshold: number): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || !this.responseAnalysis) {
+      return;
+    }
+
+    // Only apply if "No aggregation" is NOT selected
+    if (this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)) {
+      return;
+    }
+
+    // Optional: Validate threshold
+    if (threshold < 2 || threshold > 100) {
+      return;
+    }
+
+    this.isApplyingDuplicateAggregation = true;
+    this.testPersonCodingService
+      .applyDuplicateAggregation(workspaceId, threshold, true)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: result => {
+          this.isApplyingDuplicateAggregation = false;
+          if (result.success) {
+            this.showSuccess(
+              this.translateService.instant('coding-management-manual.duplicate-aggregation.auto-updated') || 'Aggregation aktualisiert'
+            );
+            this.loadResponseAnalysis();
+            this.refreshAllStatistics();
+          }
+        },
+        error: () => {
+          this.isApplyingDuplicateAggregation = false;
+        }
+      });
   }
 }

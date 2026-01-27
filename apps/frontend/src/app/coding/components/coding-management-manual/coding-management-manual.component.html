@@ -34,9 +34,6 @@
     </div>
   </div>
 
-
-
-
   <div class="fx-row-space-between-stretch">
     <div class="statistics-card">
       <div class="header-row">
@@ -57,90 +54,67 @@
       <!-- Aggregation Configuration and Actions -->
       <div class="manual-coding-sections-container" *ngIf="responseAnalysis">
         <div class="aggregation-config" *ngIf="responseAnalysis">
-          <h4 class="config-title">
+          <h3 class="subsection-title">
             <mat-icon>settings</mat-icon>
             {{ 'coding-management-manual.duplicate-aggregation.config-title' | translate }}
-          </h4>
-          <p class="config-description">
+          </h3>
+          <p class="subsection-description">
             {{ 'coding-management-manual.duplicate-aggregation.config-description' | translate }}
           </p>
+          <div class="analysis-summary">
+            <div class="analysis-card">
+              <div class="analysis-details">
+                <div class="config-grid">
+                  <div class="settings-control threshold-control">
+                    <mat-form-field appearance="outline" class="density-compact">
+                      <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate }}</mat-label>
+                      <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
+                             (ngModelChange)="onThresholdChanged($event)"
+                             min="2" max="100" step="1">
+                    </mat-form-field>
 
-          <div class="threshold-input-container">
-            <label class="threshold-label">
-              {{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate }}
-            </label>
-            <input type="number" [(ngModel)]="duplicateAggregationThreshold" min="2" max="100" step="1"
-              class="threshold-input"
-              [matTooltip]="'coding-management-manual.duplicate-aggregation.threshold-hint' | translate">
-            <span class="threshold-hint">
-              {{ 'coding-management-manual.duplicate-aggregation.threshold-hint' | translate }}
-            </span>
-          </div>
+                    <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
+                      <mat-spinner diameter="20"></mat-spinner>
+                      <span>Speichern...</span>
+                    </div>
+                  </div>
+                  <div class="settings-label">
+                    <mat-icon class="label-icon">compare_arrows</mat-icon>
+                    {{ 'coding-management-manual.response-matching.title' | translate }}
+                    <span *ngIf="isLoadingMatchingMode || isSavingMatchingMode" class="loading-indicator">
+                      <mat-spinner diameter="14"></mat-spinner>
+                    </span>
+                  </div>
 
-          <div class="analysis-actions">
-            <button mat-raised-button color="primary" (click)="onApplyDuplicateAggregation()"
-              [disabled]="isApplyingDuplicateAggregation"
-              matTooltip="{{ 'coding-management-manual.duplicate-aggregation.apply-tooltip' | translate }}">
-              <mat-spinner *ngIf="isApplyingDuplicateAggregation" diameter="18"></mat-spinner>
-              <mat-icon *ngIf="!isApplyingDuplicateAggregation">layers</mat-icon>
-              {{ 'coding-management-manual.duplicate-aggregation.apply-button' | translate }}
-            </button>
-            <button *ngIf="responseAnalysis.duplicateValues.isAggregationApplied" mat-stroked-button color="warn"
-              (click)="onDeactivateDuplicateAggregation()" [disabled]="isApplyingDuplicateAggregation">
-              <mat-icon>layers_clear</mat-icon>
-              {{ 'coding-management-manual.duplicate-aggregation.deactivate-button' | translate }}
-            </button>
+                  <div class="settings-control matching-control">
+                    <div class="checkbox-group">
+                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+                        (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode" color="primary">
+                        {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
+                      </mat-checkbox>
+
+                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+                        (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
+                        color="primary">
+                        {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
+                      </mat-checkbox>
+
+                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                        (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                        color="primary">
+                        {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
+                      </mat-checkbox>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Response Matching Mode Configuration -->
-        <div class="response-matching-section">
-          <h3 class="subsection-title">
-            <mat-icon>compare_arrows</mat-icon>
-            {{ 'coding-management-manual.response-matching.title' | translate }}
-            <span *ngIf="isLoadingMatchingMode || isSavingMatchingMode" class="loading-indicator">
-              <mat-spinner diameter="16"></mat-spinner>
-            </span>
-          </h3>
-          <p class="subsection-description">{{ 'coding-management-manual.response-matching.description' | translate }}
-          </p>
-
-          <div class="matching-options" [class.disabled]="isLoadingMatchingMode || isSavingMatchingMode">
-            <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-              (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-              [disabled]="isLoadingMatchingMode || isSavingMatchingMode" color="primary">
-              {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
-            </mat-checkbox>
-
-            <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-              (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-              [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
-              color="primary">
-              {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
-            </mat-checkbox>
-
-            <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-              (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-              [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-              color="primary">
-              {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
-            </mat-checkbox>
-          </div>
-
-          <p class="matching-mode-hint">
-            <mat-icon>info</mat-icon>
-            <span *ngIf="responseMatchingFlags.length === 0">
-              {{ 'coding-management-manual.response-matching.hint-exact' | translate }}
-            </span>
-            <span *ngIf="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)">
-              {{ 'coding-management-manual.response-matching.hint-no-aggregation' | translate }}
-            </span>
-            <span *ngIf="!hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION) && responseMatchingFlags.length > 0">
-              {{ 'coding-management-manual.response-matching.hint-aggregating' | translate }}
-            </span>
-          </p>
-        </div>
-        <hr>
         <!-- Response Analysis Section -->
         <div class="response-analysis-section">
           <h3 class="subsection-title">
@@ -270,12 +244,14 @@
 
               </div>
 
-              <p class="analysis-timestamp">
-                <mat-icon>schedule</mat-icon>
-                {{ 'coding-management-manual.response-analysis.last-updated' | translate }}: {{
-                responseAnalysis.analysisTimestamp | date:'medium' }}
-              </p>
+
             </div>
+
+            <p class="analysis-timestamp">
+              <mat-icon>schedule</mat-icon>
+              {{ 'coding-management-manual.response-analysis.last-updated' | translate }}: {{
+              responseAnalysis.analysisTimestamp | date:'medium' }}
+            </p>
 
             <div *ngIf="!responseAnalysis && !isLoadingResponseAnalysis" class="no-analysis-data">
               <mat-icon>info</mat-icon>
