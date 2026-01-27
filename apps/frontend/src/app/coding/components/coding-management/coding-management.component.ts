@@ -15,7 +15,7 @@ import {
 } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -65,6 +65,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private codingManagementService = inject(CodingManagementService);
   private uiService = inject(CodingManagementUiService);
+  private translateService = inject(TranslateService);
 
   // State
   data: Success[] = [];
@@ -478,8 +479,24 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       next: result => {
         this.isLoading = false;
         if (result) {
+          let cascadeText = '';
+          if (result.cascadeResetVersions && result.cascadeResetVersions.length > 0) {
+            cascadeText = this.translateService.instant(
+              'coding-management.statistics.reset-cascade-suffix',
+              { versions: result.cascadeResetVersions.join(', ') }
+            );
+          }
+          const message = this.translateService.instant(
+            'coding-management.statistics.reset-success',
+            {
+              count: result.affectedResponseCount,
+              version: version,
+              cascade: cascadeText
+            }
+          );
+
           this.snackBar.open(
-            result.message,
+            message,
             'Schließen',
             {
               duration: 5000,
@@ -493,7 +510,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       error: () => {
         this.isLoading = false;
         this.snackBar.open(
-          'Fehler beim Zurücksetzen der Version',
+          this.translateService.instant('coding-management.descriptions.error-reset'),
           'Schließen',
           {
             duration: 5000,

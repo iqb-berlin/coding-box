@@ -115,6 +115,14 @@ export class BackendMessageTranslatorService {
       return this.translateService.instant('trainings.delete.error.generic', { error: trainingDeleteErrorMatch[1] });
     }
 
+    const processingBackgroundMatch = message.match(/^Processing (\d+) test persons in the background\. Check job status with jobId: (.+)$/i);
+    if (processingBackgroundMatch) {
+      return this.translateService.instant('test-person-coding.background-processing', {
+        count: processingBackgroundMatch[1],
+        jobId: processingBackgroundMatch[2]
+      });
+    }
+
     return null;
   }
 }

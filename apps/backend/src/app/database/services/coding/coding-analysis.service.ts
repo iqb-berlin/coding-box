@@ -13,6 +13,7 @@ import {
 } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 @Injectable()
 export class CodingAnalysisService {
@@ -28,7 +29,8 @@ export class CodingAnalysisService {
     @InjectRepository(Unit)
     private unitRepository: Repository<Unit>,
     private codingJobService: CodingJobService,
-    private codingValidationService: CodingValidationService
+    private codingValidationService: CodingValidationService,
+    private codingStatisticsService: CodingStatisticsService
   ) { }
 
   /**
@@ -359,6 +361,7 @@ export class CodingAnalysisService {
 
       // Invalidate cache
       await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+      await this.codingStatisticsService.invalidateCache(workspaceId);
 
       return {
         success: true,
@@ -458,6 +461,7 @@ export class CodingAnalysisService {
 
         // Invalidate the cache for incomplete variables so UI reflects the aggregation immediately
         await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+        await this.codingStatisticsService.invalidateCache(workspaceId);
 
         return {
           success: true,
