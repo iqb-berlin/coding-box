@@ -108,6 +108,26 @@ export class AccessRightsMatrixService {
         featureKey: 'delete-resource-packages',
         translationKey: 'access-matrix.feature.delete-resource-packages',
         minAccessLevel: 3
+      },
+      {
+        featureKey: 'view-unit-info',
+        translationKey: 'access-matrix.feature.view-unit-info',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-unit-tags',
+        translationKey: 'access-matrix.feature.manage-unit-tags',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-unit-notes',
+        translationKey: 'access-matrix.feature.manage-unit-notes',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'view-booklet-info',
+        translationKey: 'access-matrix.feature.view-booklet-info',
+        minAccessLevel: 3
       }
     ];
 
@@ -161,6 +181,11 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-replay-statistics',
         translationKey: 'access-matrix.feature.view-replay-statistics',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-variable-analysis',
+        translationKey: 'access-matrix.feature.manage-variable-analysis',
         minAccessLevel: 3
       }
     ];
@@ -231,6 +256,11 @@ export class AccessRightsMatrixService {
         featureKey: 'apply-job-results',
         translationKey: 'access-matrix.feature.apply-job-results',
         minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-variable-bundles',
+        translationKey: 'access-matrix.feature.manage-variable-bundles',
+        minAccessLevel: 2
       }
     ];
 
@@ -288,6 +318,16 @@ export class AccessRightsMatrixService {
       {
         featureKey: 'view-journal',
         translationKey: 'access-matrix.feature.view-journal',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-access-tokens',
+        translationKey: 'access-matrix.feature.manage-access-tokens',
+        minAccessLevel: 3
+      },
+      {
+        featureKey: 'manage-coding-settings',
+        translationKey: 'access-matrix.feature.manage-coding-settings',
         minAccessLevel: 3
       }
     ];
