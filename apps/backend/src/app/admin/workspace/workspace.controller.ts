@@ -25,7 +25,7 @@ import { logger } from 'nx/src/utils/logger';
 import { WorkspaceInListDto } from '../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-workspace-dto';
-import { WorkspaceCoreService } from '../../database/services/workspace-core.service';
+import { WorkspaceCoreService } from '../../database/services/workspace';
 import { WorkspaceId } from './workspace.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';

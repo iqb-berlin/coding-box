@@ -6,8 +6,8 @@ import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { WorkspaceUserToCheckCollection } from '../../models/workspace-users-to-check-collection.class';
 import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class';
 
@@ -18,7 +18,7 @@ import { WorkspaceUserChecked } from '../../models/workspace-user-checked.class'
   imports: [MatCheckbox, MatButton, MatTooltip, FormsModule, TranslateModule, MatIcon]
 })
 export class WsAccessRightsComponent {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
   appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   workspaceUsers = new WorkspaceUserToCheckCollection([]);
@@ -29,7 +29,7 @@ export class WsAccessRightsComponent {
 
   createUserList(): void {
     this.workspaceUsers = new WorkspaceUserToCheckCollection([]);
-    this.backendService.getUsers(this.appService.selectedWorkspaceId)
+    this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
       .subscribe(users => {
         if (users.length > 0) {
           this.workspaceUsers = new WorkspaceUserToCheckCollection(users);
@@ -38,7 +38,7 @@ export class WsAccessRightsComponent {
   }
 
   save(): void {
-    this.backendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
+    this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers.getChecks())
       .subscribe(() => {
         this.snackBar.open('Zugriffsrechte erfolgreich gespeichert', 'Schließen', { duration: 3000 });
         this.workspaceUsers.setHasChangedFalse();

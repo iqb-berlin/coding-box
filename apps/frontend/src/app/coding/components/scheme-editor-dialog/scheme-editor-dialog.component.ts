@@ -8,7 +8,9 @@ import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
-import { BackendService } from '../../../services/backend.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
+
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
 
 export interface SchemeEditorDialogData {
@@ -88,7 +90,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     const raw = this.unitScheme?.scheme ?? '';
     if (!raw) return '';
     try {
-      const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      const parsed = JSON.parse(raw);
       return JSON.stringify(parsed, null, 2);
     } catch {
       return raw.toString?.() ?? String(raw);
@@ -99,9 +101,10 @@ export class SchemeEditorDialogComponent implements OnInit {
     public dialogRef: MatDialogRef<SchemeEditorDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
     private snackBar: MatSnackBar,
-    private backendService: BackendService,
+    private fileService: FileService,
+
     private dialog: MatDialog
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.loadSchemerHtml();
@@ -110,7 +113,7 @@ export class SchemeEditorDialogComponent implements OnInit {
       scheme: this.data.content,
       schemeType: 'iqb-standard@3.2'
     };
-    this.backendService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
+    this.fileService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
       .subscribe({
         next: variables => {
           if (variables && variables.length > 0) {
@@ -133,7 +136,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   loadSchemerHtml(): void {
     this.isLoading = true;
 
-    this.backendService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer')
+    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer')
       .subscribe({
         next: response => {
           if (response.data && response.data.length > 0) {
@@ -144,12 +147,11 @@ export class SchemeEditorDialogComponent implements OnInit {
 
             const latestFile = sortedFiles[0];
 
-            this.backendService.downloadFile(this.data.workspaceId, latestFile.id)
+            this.fileService.downloadFile(this.data.workspaceId, latestFile.id)
               .subscribe({
                 next: fileDownload => {
                   try {
-                    const decodedContent = atob(fileDownload.base64Data);
-                    this.schemerHtml = decodedContent;
+                    this.schemerHtml = base64ToUtf8(fileDownload.base64Data);
                     this.isLoading = false;
                   } catch (error) {
                     this.snackBar.open('Failed to decode schemer HTML', 'Error', { duration: 3000 });
@@ -208,12 +210,12 @@ export class SchemeEditorDialogComponent implements OnInit {
     }
 
     const schemeFilename = this.data.fileName;
-    this.backendService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
+    this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Resource')
       .subscribe({
         next: response => {
           const existingFile = response.data?.find(file => file.filename === schemeFilename && file.file_type === 'Resource');
           if (existingFile) {
-            this.backendService.deleteFiles(this.data.workspaceId, [existingFile.id])
+            this.fileService.deleteFiles(this.data.workspaceId, [existingFile.id])
               .subscribe(deleteSuccess => {
                 if (deleteSuccess) {
                   this.uploadSchemeFile(schemeFilename);
@@ -238,7 +240,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     const formData = new FormData();
     formData.append('files', file);
 
-    this.backendService.uploadTestFiles(this.data.workspaceId, formData)
+    this.fileService.uploadTestFiles(this.data.workspaceId, formData)
       .subscribe(result => {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;

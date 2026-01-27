@@ -1,0 +1,139 @@
+@if (!statisticsLoaded && !isLoading) {
+  <div class="statistics-placeholder">
+    <div class="statistics-icon-container">
+      <button 
+        mat-fab 
+        color="primary" 
+        (click)="onLoadStatistics()" 
+        [matTooltip]="'coding-management.tooltips.load-statistics' | translate" 
+        class="statistics-load-button">
+        <mat-icon>analytics</mat-icon>
+      </button>
+      <p class="statistics-placeholder-text">{{ 'coding-management.descriptions.load-statistics' | translate }}</p>
+    </div>
+  </div>
+}
+
+@if (statisticsLoaded && !isLoading) {
+  <div class="statistics-card">
+    <div class="statistics-header">
+      <div class="statistics-title-section">
+        <h2 class="section-title">{{ 'coding-management.titles.coding-statistics' | translate }}</h2>
+        <p class="section-description">{{ 'coding-management.descriptions.statistics-overview' | translate }}</p>
+      </div>
+      <div class="statistics-version-selector">
+        <mat-form-field appearance="outline" class="statistics-version-field">
+          <mat-label>{{ 'coding-management.statistics.coding-version-selector' | translate }}</mat-label>
+          <mat-select [value]="selectedVersion" (selectionChange)="onVersionChange($event.value)">
+            @for (option of codingRunOptions; track option.value) {
+              <mat-option [value]="option.value">
+                {{ option.label | translate }}
+              </mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+        <div class="button-group">
+          <button 
+            mat-icon-button 
+            (click)="onDownloadResults()"
+            [matTooltip]="'coding-management.download-dialog.download-tooltip' | translate"
+            color="primary"
+            [disabled]="isDownloadInProgress"
+            class="download-results-button">
+            <mat-icon>download</mat-icon>
+          </button>
+          @if (isDownloadInProgress) {
+            <mat-progress-bar mode="indeterminate" class="button-progress"></mat-progress-bar>
+          }
+        </div>
+        <div class="button-group">
+          <button
+            mat-icon-button
+            (click)="onResetVersion()"
+            [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
+            color="primary"
+            class="reset-version-button"
+            [disabled]="isLoading || isDownloadInProgress">
+            <mat-icon>restart_alt</mat-icon>
+          </button>
+          @if (isLoading) {
+            <mat-progress-spinner
+              mode="indeterminate"
+              diameter="24"
+              strokeWidth="3"
+              class="reset-button-spinner">
+            </mat-progress-spinner>
+          }
+        </div>
+      </div>
+    </div>
+    <mat-divider></mat-divider>
+    <div class="statistics-content">
+      <div class="statistic-item">
+        <span class="statistic-label">{{ 'coding-management.statistics.total-responses' | translate }}</span>
+        <span class="statistic-value">
+          {{ codingStatistics.totalResponses }}
+          @if (getTotalResponsesDifference() !== null) {
+            <span class="difference-value" [ngClass]="{
+              'difference-positive': getTotalResponsesDifference()! > 0,
+              'difference-negative': getTotalResponsesDifference()! < 0,
+              'difference-neutral': getTotalResponsesDifference() === 0
+            }" [matTooltip]="getDifferenceTooltip() | translate">
+              ({{ formatDifference(getTotalResponsesDifference()) }})
+            </span>
+          }
+        </span>
+      </div>
+      @for (status of getStatuses(); track status) {
+        <div class="statistic-item clickable" (click)="onStatusClick(status)">
+          <span class="statistic-label">
+            @if (status === 'null') {
+              {{ 'coding-management.statistics.uncoded-responses' | translate }}
+              <mat-icon class="warning-icon" color="warn" [matTooltip]="'coding-management.statistics.missing-schemas' | translate">warning</mat-icon>
+            } @else {
+              {{ 'coding-management.statistics.responses-with-status' | translate:{status: mapStatusToString(Number(status))} }}
+            }
+          </span>
+          <span class="statistic-value">
+            {{ codingStatistics.statusCounts[status] || 0 }}
+            <span class="percentage">({{ getStatusPercentage(status) }}%)</span>
+            @if (getStatusDifference(status) !== null) {
+              <span class="difference-value" [ngClass]="{
+                'difference-positive': getStatusDifference(status)! > 0,
+                'difference-negative': getStatusDifference(status)! < 0,
+                'difference-neutral': getStatusDifference(status) === 0
+              }" [matTooltip]="getDifferenceTooltip() | translate">
+                {{ formatDifference(getStatusDifference(status)) }}
+              </span>
+            }
+          </span>
+        </div>
+      }
+    </div>
+
+    @if (selectedVersion === 'v2') {
+      <div class="manual-coding-status-section" [class.status-complete]="isManualCodingComplete"
+        [class.status-incomplete]="!isManualCodingComplete">
+        <div class="status-content-wrapper">
+          <mat-icon [class.icon-complete]="isManualCodingComplete" [class.icon-incomplete]="!isManualCodingComplete">
+            {{ isManualCodingComplete ? 'check_circle' : 'info' }}
+          </mat-icon>
+          <div class="status-message">
+            <p class="message-text">
+              {{ (isManualCodingComplete ?
+              'coding-management-manual.statistics.manual-coding-complete' :
+              'coding-management-manual.statistics.manual-coding-incomplete') | translate }}
+            </p>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+}
+
+@if (isLoading) {
+  <div class="loading-container">
+    <mat-spinner diameter="80" class="large-transparent-spinner"></mat-spinner>
+    <p class="loading-text">{{ 'coding-management.loading.loading-statistics' | translate }}</p>
+  </div>
+}

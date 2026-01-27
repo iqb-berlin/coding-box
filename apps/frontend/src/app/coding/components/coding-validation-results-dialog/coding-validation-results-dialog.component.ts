@@ -18,7 +18,7 @@ import {
   ValidateCodingCompletenessResponseDto
 } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
-import { AppService } from '../../../services/app.service';
+import { AppService } from '../../../core/services/app.service';
 
 @Component({
   selector: 'coding-box-coding-validation-results-dialog',
@@ -35,7 +35,7 @@ import { AppService } from '../../../services/app.service';
 })
 export class CodingValidationResultsDialogComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
-  private appService = inject(AppService);
+  private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialogRef = inject<MatDialogRef<CodingValidationResultsDialogComponent>>(MatDialogRef);
 

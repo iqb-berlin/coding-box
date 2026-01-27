@@ -89,7 +89,7 @@
       <h3>
         Angemeldet in
         {{
-          this.testCenterInstance[0].label ||
+          this.testCenterInstance[0]?.label ||
             this.loginForm.get('testCenterIndividual')?.value
         }}
       </h3>
@@ -200,6 +200,14 @@
                 Testteilnehmende (<code>.xml</code>-Dateien)
               </div>
             </div>
+            <div class="checkbox-item">
+              <mat-checkbox formControlName="metadata">
+                <span class="checkbox-label">Metadaten</span>
+              </mat-checkbox>
+              <div class="checkbox-hint">
+                Metadaten zu Aufgaben (<code>.vomd</code>-Dateien)
+              </div>
+            </div>
             }
           </div>
         </div>
@@ -290,7 +298,7 @@
     @if (isUploadingTestResults) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p class="loading-text">Testresultate werden hochgeladen...</p>
+      <p class="loading-text">{{ loadingMessage }}</p>
     </div>
     } @if (!isUploadingTestResults) {
     <div class="table-container">

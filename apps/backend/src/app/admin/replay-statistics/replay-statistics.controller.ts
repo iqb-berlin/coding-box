@@ -19,7 +19,7 @@ import {
   AccessLevelGuard,
   RequireAccessLevel
 } from '../workspace/access-level.guard';
-import { ReplayStatisticsService } from '../../database/services/replay-statistics.service';
+import { ReplayStatisticsService } from '../../database/services/test-results';
 import { ReplayStatistics } from '../../database/entities/replay-statistics.entity';
 
 /**

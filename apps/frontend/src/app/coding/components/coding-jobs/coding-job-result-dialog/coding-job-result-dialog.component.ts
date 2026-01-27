@@ -23,17 +23,20 @@ import { CommonModule, NgClass } from '@angular/common';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltip } from '@angular/material/tooltip';
 import { Router } from '@angular/router';
-import { BackendService } from '../../../../services/backend.service';
-import { AppService } from '../../../../services/app.service';
+import { FileService } from '../../../../shared/services/file/file.service';
+import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
+import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
+import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
 
-import { UnitsReplay, UnitsReplayUnit } from '../../../../services/units-replay.service';
+import { UnitsReplay, UnitsReplayUnit } from '../../../../replay/services/units-replay.service';
 
 interface CodingResult {
   unitName: string;
   unitAlias: string | null;
   variableId: string;
+  variableAnchor: string;
   bookletName: string;
   personLogin: string;
   personCode: string;
@@ -71,7 +74,8 @@ interface CodingResult {
 export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   @ViewChild(MatSort) sort!: MatSort;
 
-  private backendService = inject(BackendService);
+  private codingJobBackendService = inject(CodingJobBackendService);
+  private fileService = inject(FileService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
@@ -101,7 +105,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   constructor(
     public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number }
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.loadCodingResults();
@@ -135,7 +139,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   loadCodingResults(): void {
     this.isLoading = true;
 
-    this.backendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id).subscribe({
+    this.codingJobBackendService.getCodingJobUnits(this.data.workspaceId, this.data.codingJob.id).subscribe({
       next: unitsResult => {
         if (!unitsResult || unitsResult.length === 0) {
           this.isLoading = false;
@@ -143,7 +147,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        this.backendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
+        this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
           next: progressResult => {
             this.dataSource.data = unitsResult.map(unit => {
               const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
@@ -154,6 +158,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
                 unitName: unit.unitName,
                 unitAlias: unit.unitAlias,
                 variableId: unit.variableId,
+                variableAnchor: unit.variableAnchor,
                 bookletName: unit.bookletName,
                 personLogin: unit.personLogin,
                 personCode: unit.personCode,
@@ -189,7 +194,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       // Check unit name filter (includes unitName and unitAlias)
       const unitFilter = filters.unitName?.toLowerCase() || '';
       if (unitFilter && !data.unitName.toLowerCase().includes(unitFilter) &&
-          !(data.unitAlias && data.unitAlias.toLowerCase().includes(unitFilter))) {
+        !(data.unitAlias && data.unitAlias.toLowerCase().includes(unitFilter))) {
         return false;
       }
 
@@ -239,7 +244,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
   applyCodingResults(): void {
     this.isLoading = true;
-    this.backendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
+    this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
       next: result => {
         this.isLoading = false;
         let message = this.translateService.instant(result.messageKey, result.messageParams || {});
@@ -328,8 +333,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       const expectedLabel = this.getCodingIssueOption(-2);
       // Check for exact match or if label contains the expected text
       return result.codingIssueOptionLabel === expectedLabel ||
-             result.codingIssueOptionLabel.includes('Neuer Code') ||
-             result.codingIssueOptionLabel.includes('new-code-needed');
+        result.codingIssueOptionLabel.includes('Neuer Code') ||
+        result.codingIssueOptionLabel.includes('new-code-needed');
     }
     return false;
   }
@@ -371,7 +376,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       next: (token: string) => {
         loadingSnackBar.dismiss();
 
-        const testPerson = `${result.personLogin}@${result.personCode}`;
+        const testPerson = `${result.personLogin}@${result.personCode}@${result.personGroup || ''}@${result.bookletName}`;
 
         const reviewUnit: UnitsReplayUnit = {
           id: 0, // Not needed for replay
@@ -380,7 +385,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
           bookletId: 0, // Not needed for replay
           testPerson: testPerson,
           variableId: result.variableId,
-          variableAnchor: result.variableId
+          variableAnchor: result.variableAnchor
         };
 
         const unitsData: UnitsReplay = {
@@ -427,19 +432,14 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
+    this.fileService.getCodingSchemeFile(this.data.workspaceId, codingSchemeRef).subscribe({
       next: schemeFile => {
         if (!schemeFile) {
           this.snackBar.open('Kodierungsschema-Datei nicht gefunden', 'Schließen', { duration: 3000 });
           return;
         }
 
-        let schemeContent: string;
-        try {
-          schemeContent = atob(schemeFile.base64Data);
-        } catch (error) {
-          schemeContent = schemeFile.base64Data;
-        }
+        const schemeContent = base64ToUtf8(schemeFile.base64Data);
 
         const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
           width: '90vw',
@@ -469,7 +469,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   private serializeUnitsData(unitsData: UnitsReplay): string {
     try {
       const jsonString = JSON.stringify(unitsData);
-      return btoa(jsonString);
+      return utf8ToBase64(jsonString);
     } catch (error) {
       return '';
     }

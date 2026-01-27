@@ -15,7 +15,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule } from '@ngx-translate/core';
 import { NgxChartsModule } from '@swimlane/ngx-charts';
-import { BackendService } from '../../../services/backend.service';
+import { ReplayBackendService } from '../../../replay/services/replay-backend.service';
 
 interface ReplayFrequencyData {
   name: string;
@@ -449,7 +449,7 @@ interface ReplayFrequencyData {
 })
 export class ReplayStatisticsDialogComponent
 implements OnInit, AfterViewInit, OnDestroy {
-  private backendService = inject(BackendService);
+  private replayBackendService = inject(ReplayBackendService);
   private data = inject(MAT_DIALOG_DATA);
 
   @ViewChild('dialogContent', { static: false })
@@ -498,23 +498,13 @@ implements OnInit, AfterViewInit, OnDestroy {
   // Chart configuration
   colorScheme = 'vivid';
 
-  /**
-   * Format milliseconds to a more readable format
-   * @param milliseconds The duration in milliseconds
-   * @returns Formatted string (e.g., "5.00 s" for 5000 milliseconds)
-   */
   formatMilliseconds(milliseconds: number): string {
     // Convert to seconds with 2 decimal places for better readability
     return `${(milliseconds / 1000).toFixed(2)} s`;
   }
 
-  /**
-   * Format X-axis labels to handle long unit names
-   * @param value The label value
-   * @returns Truncated label if too long
-   */
   formatXAxisLabel(value: string): string {
-    if (true && value.length > 20) {
+    if (value.length > 20) {
       return `${value.substring(0, 17)}...`;
     }
     return value;
@@ -598,10 +588,10 @@ implements OnInit, AfterViewInit, OnDestroy {
     const options = { lastDays: this.defaultLastDays };
 
     // Load replay frequency data
-    this.backendService
+    this.replayBackendService
       .getReplayFrequencyByUnit(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.frequencyData = this.toTopNWithOther(
             data,
             this.topUnitsCount,
@@ -618,10 +608,10 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadDayDistribution(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getReplayDistributionByDay(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.dayDistributionData = Object.entries(data).map(
             ([day, count]) => ({
               name: day,
@@ -643,10 +633,10 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadHourDistribution(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getReplayDistributionByHour(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.hourDistributionData = Object.entries(data).map(
             ([hour, count]) => ({
               name: `${hour}:00`,
@@ -672,10 +662,16 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadDurationStatistics(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getReplayDurationStatistics(this.workspaceId, undefined, options)
       .subscribe({
-        next: data => {
+        next: (data: {
+          min: number;
+          max: number;
+          average: number;
+          distribution: Record<string, number>;
+          unitAverages?: Record<string, number>;
+        }) => {
           // Set duration statistics
           this.durationStats = {
             min: data.min,
@@ -687,7 +683,7 @@ implements OnInit, AfterViewInit, OnDestroy {
           this.durationDistributionData = Object.entries(data.distribution).map(
             ([range, count]) => ({
               name: range,
-              value: count
+              value: count as number
             })
           );
 
@@ -722,10 +718,16 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadErrorStatistics(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getReplayErrorStatistics(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: {
+          successRate: number;
+          totalReplays: number;
+          successfulReplays: number;
+          failedReplays: number;
+          commonErrors: Array<{ message: string; count: number }>;
+        }) => {
           this.errorStats = data;
 
           // Load failure distributions
@@ -740,10 +742,10 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   private loadFailureDistributions(options: { lastDays: number }): void {
     // Load failure distribution by unit
-    this.backendService
+    this.replayBackendService
       .getFailureDistributionByUnit(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.failureByUnitData = this.toTopNWithOther(
             data,
             this.topUnitsCount,
@@ -759,10 +761,10 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadFailureDistributionByDay(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getFailureDistributionByDay(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.failureByDayData = Object.entries(data).map(([day, count]) => ({
             name: day,
             value: count
@@ -780,10 +782,10 @@ implements OnInit, AfterViewInit, OnDestroy {
   }
 
   private loadFailureDistributionByHour(options: { lastDays: number }): void {
-    this.backendService
+    this.replayBackendService
       .getFailureDistributionByHour(this.workspaceId, options)
       .subscribe({
-        next: data => {
+        next: (data: Record<string, number>) => {
           this.failureByHourData = Object.entries(data).map(
             ([hour, count]) => ({
               name: `${hour}:00`,

@@ -1,774 +1,812 @@
 <mat-dialog-content>
-    <div class="scroll-container">
-      <div class="validation-info">
-        <mat-expansion-panel>
-          <mat-expansion-panel-header>
-            <mat-panel-title>
-              <mat-icon class="info-icon">info</mat-icon>
-              <span class="info-title">Hinweise zur Validierung</span>
-            </mat-panel-title>
-          </mat-expansion-panel-header>
+  <div class="scroll-container">
+    <div class="validation-info">
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="info-icon">info</mat-icon>
+            <span class="info-title">Hinweise zur Validierung</span>
+          </mat-panel-title>
+        </mat-expansion-panel-header>
 
-          <div class="info-content">
-            <p>
-              Die Validierung arbeitet in Schritten: Zuerst werden TestTakers-Dateien gelesen und die darin referenzierten Testhefte ermittelt.
-              Aus den Testheften werden die referenzierten Aufgaben (Units) bestimmt. Anschließend werden pro Unit die referenzierten Ressourcen
-              (Kodierschemata, Schemer, Definitionen, Player und Metadaten) auf Vorhandensein geprüft.
-            </p>
-            <p>
-              Zusätzlich werden Schemas geprüft:
-            </p>
-            <ul>
-              <li>XML-Dateien (TestTakers/Booklet/Unit) werden gegen das in der Datei angegebene XSD validiert.</li>
-              <li>Kodierschemata (Schemer) werden anhand der eingebetteten JSON-LD Metadaten gegen das JSON-Schema validiert.</li>
-            </ul>
-            <p>
-              Dateien, die von keinem TestTaker aus erreichbar sind, werden als "Nicht verwendete Dateien" angezeigt.
-            </p>
-          </div>
-        </mat-expansion-panel>
-      </div>
+        <div class="info-content">
+          <p>
+            Die Validierung arbeitet in Schritten: Zuerst werden TestTakers-Dateien gelesen und die darin referenzierten
+            Testhefte ermittelt.
+            Aus den Testheften werden die referenzierten Aufgaben (Units) bestimmt. Anschließend werden pro Unit die
+            referenzierten Ressourcen
+            (Kodierschemata, Schemer, Definitionen, Player und Metadaten) auf Vorhandensein geprüft.
+          </p>
+          <p>
+            Zusätzlich werden Schemas geprüft:
+          </p>
+          <ul>
+            <li>XML-Dateien (TestTakers/Booklet/Unit) werden gegen das in der Datei angegebene XSD validiert.</li>
+            <li>Kodierschemata (Schemer) werden anhand der eingebetteten JSON-LD Metadaten gegen das JSON-Schema
+              validiert.</li>
+          </ul>
+          <p>
+            Dateien, die von keinem TestTaker aus erreichbar sind, werden als "Nicht verwendete Dateien" angezeigt.
+          </p>
+        </div>
+      </mat-expansion-panel>
+    </div>
 
-      @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
-        <div class="missing-units-warning duplicate-testtakers-warning">
-          <mat-expansion-panel>
-            <mat-expansion-panel-header>
-              <mat-panel-title>
-                <mat-icon class="warning-icon">error</mat-icon>
-                <span class="warning-title">Doppelte TestTaker gefunden</span>
-              </mat-panel-title>
-            </mat-expansion-panel-header>
+    @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
+    <div class="missing-units-warning duplicate-testtakers-warning">
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="warning-icon">error</mat-icon>
+            <span class="warning-title">Doppelte TestTaker gefunden</span>
+          </mat-panel-title>
+        </mat-expansion-panel-header>
 
-            <div class="warning-content">
-              <p>Die folgenden Login-Namen wurden in mehreren TestTaker-Dateien gefunden. Bitte wählen Sie aus, welche Vorkommen Sie behalten möchten.</p>
+        <div class="warning-content">
+          <p>Die folgenden Login-Namen wurden in mehreren TestTaker-Dateien gefunden. Bitte wählen Sie aus, welche
+            Vorkommen Sie behalten möchten.</p>
 
-              @for (duplicate of duplicateTestTakers; track duplicate.login) {
-                <div class="duplicate-item">
-                  <p class="duplicate-login">Login: <strong>{{ duplicate.login }}</strong></p>
-                  <div class="duplicate-occurrences">
-                    @for (occurrence of duplicate.occurrences; track occurrence.testTaker) {
-                      <div class="occurrence-item">
-                        <mat-checkbox
-                          [checked]="getSelectedOccurrence(duplicate.login) === occurrence.testTaker"
-                          (change)="selectDuplicateOccurrence(duplicate.login, occurrence.testTaker)">
-                          <strong>{{ occurrence.testTaker }}</strong> ({{ occurrence.mode }})
-                        </mat-checkbox>
-                      </div>
-                    }
-                  </div>
-                </div>
+          @for (duplicate of duplicateTestTakers; track duplicate.login) {
+          <div class="duplicate-item">
+            <p class="duplicate-login">Login: <strong>{{ duplicate.login }}</strong></p>
+            <div class="duplicate-occurrences">
+              @for (occurrence of duplicate.occurrences; track occurrence.testTaker) {
+              <div class="occurrence-item">
+                <mat-checkbox [checked]="getSelectedOccurrence(duplicate.login) === occurrence.testTaker"
+                  (change)="selectDuplicateOccurrence(duplicate.login, occurrence.testTaker)">
+                  <strong>{{ occurrence.testTaker }}</strong> ({{ occurrence.mode }})
+                </mat-checkbox>
+              </div>
               }
+            </div>
+          </div>
+          }
 
-              <div class="resolve-button-container">
-                <button
-                  mat-raised-button
-                  color="primary"
-                  class="resolve-button"
-                  (click)="resolveDuplicateTestTakers()"
-                  [disabled]="isResolvingDuplicates">
-                  <mat-icon>{{ isResolvingDuplicates ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
-                  @if (isResolvingDuplicates) {
-                    Wird bearbeitet...
-                  } @else {
-                    Doppelte TestTaker auflösen
+          <div class="resolve-button-container">
+            <button mat-raised-button color="primary" class="resolve-button" (click)="resolveDuplicateTestTakers()"
+              [disabled]="isResolvingDuplicates">
+              <mat-icon>{{ isResolvingDuplicates ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+              @if (isResolvingDuplicates) {
+              Wird bearbeitet...
+              } @else {
+              Doppelte TestTaker auflösen
+              }
+            </button>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+    }
+
+    @if (filteredTestTakers && filteredTestTakers.length > 0) {
+    <div class="missing-units-warning filtered-testtakers-warning">
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="warning-icon">warning</mat-icon>
+            <span class="warning-title">TestTaker zum Filtern</span>
+          </mat-panel-title>
+          <mat-panel-description>
+            {{ filteredExcludedCount }} / {{ filteredTotalCount }}
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="warning-content">
+          <p>
+            Hier werden Login-Namen aus TestTaker-Dateien angezeigt, deren Modus nicht zu den erlaubten Modi gehört.
+            Es werden nur Logins angezeigt, die bereits als Person im Workspace vorhanden sind.
+            Mit den Aktionen können Sie festlegen, ob diese Personen berücksichtigt oder ausgeschlossen werden.
+            Das wirkt sich auf Auswertungen, Suche, Validierungen sowie Kodier- und Autokodier-Workflows aus.
+          </p>
+
+          <div class="mode-selection">
+            <div class="select-all-row">
+              <mat-checkbox [checked]="allSelected" [indeterminate]="selection.hasValue() && !allSelected"
+                (change)="toggleAllSelection()">
+                Alle auswählen
+              </mat-checkbox>
+              <span class="count-badge">{{ filteredExcludedCount }} / {{ filteredTotalCount }}</span>
+            </div>
+
+            @for (modeGroup of modeGroups; track modeGroup) {
+            <div class="mode-group">
+              <mat-checkbox [checked]="isModeSelected(modeGroup.mode)" (change)="toggleModeSelection(modeGroup.mode)">
+                {{ modeGroup.mode }} ({{ modeGroup.count }})
+              </mat-checkbox>
+            </div>
+            }
+          </div>
+
+          <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
+            <div *cdkVirtualFor="let item of filteredTestTakers; trackBy: trackByFn" class="virtual-item">
+              <mat-checkbox [checked]="selection.isSelected(item)" (change)="toggleSelection(item)">
+                <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
+                @if (item.consider === true) {
+                <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
+                }
+                @if (item.consider === false) {
+                <mat-icon matTooltip="Wird ausgeschlossen">block</mat-icon>
+                }
+              </mat-checkbox>
+            </div>
+          </cdk-virtual-scroll-viewport>
+
+          <div class="exclude-button-container">
+            <button mat-raised-button color="primary" class="exclude-button" (click)="markTestTakersAsConsidered()"
+              [disabled]="isConsidering || selection.selected.length === 0">
+              <mat-icon>{{ isConsidering ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
+              @if (isConsidering) {
+              Wird bearbeitet... ({{ consideringProgress }}%)
+              } @else {
+              Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
+              }
+            </button>
+
+            <button mat-raised-button color="warn" class="exclude-button" (click)="markTestTakersAsExcluded()"
+              [disabled]="isExcluding || selection.selected.length === 0">
+              <mat-icon>{{ isExcluding ? 'hourglass_empty' : 'block' }}</mat-icon>
+              @if (isExcluding) {
+              Wird bearbeitet... ({{ excludingProgress }}%)
+              } @else {
+              Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
+              }
+            </button>
+
+            @if (isConsidering) {
+            <div class="progress-container">
+              <div class="progress-bar" [style.width.%]="consideringProgress"></div>
+            </div>
+            }
+
+            @if (isExcluding) {
+            <div class="progress-container">
+              <div class="progress-bar" [style.width.%]="excludingProgress"></div>
+            </div>
+            }
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+    }
+
+    @if (unusedTestFiles && unusedTestFiles.length > 0) {
+    <div class="missing-units-warning filtered-testtakers-warning">
+      <mat-expansion-panel>
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="warning-icon">warning</mat-icon>
+            <span class="warning-title">Nicht verwendete Dateien</span>
+          </mat-panel-title>
+          <mat-panel-description>
+            {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="warning-content">
+          <div class="mode-selection">
+            <div class="select-all-row">
+              <mat-checkbox [checked]="allUnusedFilesSelected"
+                [indeterminate]="unusedFilesSelection.hasValue() && !allUnusedFilesSelected"
+                (change)="toggleAllUnusedFilesSelection()">
+                Alle auswählen
+              </mat-checkbox>
+              <span class="count-badge">{{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}</span>
+            </div>
+          </div>
+
+          <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
+            <div *cdkVirtualFor="let file of unusedTestFiles" class="virtual-item">
+              <mat-checkbox [checked]="unusedFilesSelection.isSelected(file)"
+                (change)="toggleUnusedFilesSelection(file)">
+                <strong>{{ file.fileId }}</strong>: {{ file.filename }} ({{ file.fileType }})
+              </mat-checkbox>
+            </div>
+          </cdk-virtual-scroll-viewport>
+
+          <div class="exclude-button-container">
+            <button mat-raised-button color="warn" class="exclude-button" (click)="deleteSelectedUnusedFiles()"
+              [disabled]="isDeletingUnusedFiles || unusedFilesSelection.selected.length === 0">
+              <mat-icon>{{ isDeletingUnusedFiles ? 'hourglass_empty' : 'delete' }}</mat-icon>
+              @if (isDeletingUnusedFiles) {
+              Wird gelöscht...
+              } @else {
+              Ausgewählte Dateien löschen ({{ unusedFilesSelection.selected.length }})
+              }
+            </button>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+    }
+
+    @if (data.validationResults && data.validationResults.length > 0) {
+    <mat-tab-group>
+      @for (val of data.validationResults; track val.testTaker) {
+      <mat-tab [label]="val.testTaker">
+        <h4>
+          <mat-icon class="test-taker-icon">person</mat-icon>
+          {{val.testTaker}}
+          @if (val.testTakerSchemaValid === false) {
+          <mat-icon class="file-status-icon" matTooltip="{{ (val.testTakerSchemaErrors || []).join('\n') }}"
+            [attr.aria-label]="'TestTaker XML ist nicht schema-konform'">
+            report_problem
+          </mat-icon>
+          }
+          <button mat-icon-button class="test-taker-xml-button" (click)="showTestTakerXml(val.testTaker)"
+            matTooltip="TestTaker XML anzeigen" [attr.aria-label]="'TestTaker XML anzeigen'">
+            <mat-icon>code</mat-icon>
+          </button>
+        </h4>
+
+        @if (val.booklets.missing && val.booklets.missing.length > 0) {
+        <div class="missing-units-warning">
+          <mat-icon class="warning-icon">warning</mat-icon>
+          <div class="warning-content">
+            <p class="warning-title">Fehlende Testhefte:</p>
+            <ul>
+              @for (booklet of val.booklets.missing; track booklet) {
+              <li>{{ booklet }}</li>
+              }
+            </ul>
+          </div>
+        </div>
+        }
+
+        <div class="validation-container">
+          <!-- Booklets Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">book</mat-icon>
+              Testhefte
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.booklets.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+              </span>
+              }
+              @if (!val.booklets.complete) {
+              <span class="status-incomplete">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.booklets.missing && val.booklets.missing.length > 0) {
+                Unvollständig (Testhefte fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'booklets')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.booklets.files.length }}
+                  (vorhanden: {{ getExistingCount(val.booklets) }},
+                  fehlend: {{ getMissingCount(val.booklets) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'booklets') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'booklets')">
+                <ul>
+                  @for (file of val.booklets.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
+                    }
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
+                      matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
+                      <mat-icon>info</mat-icon>
+                    </button>
+                    }
+                  </li>
                   }
-                </button>
+                </ul>
               </div>
             </div>
-          </mat-expansion-panel>
-        </div>
-      }
-
-      @if (filteredTestTakers && filteredTestTakers.length > 0) {
-        <div class="missing-units-warning filtered-testtakers-warning">
-          <mat-expansion-panel>
-            <mat-expansion-panel-header>
-              <mat-panel-title>
-                <mat-icon class="warning-icon">warning</mat-icon>
-                <span class="warning-title">TestTaker zum Filtern</span>
-              </mat-panel-title>
-              <mat-panel-description>
-                {{ filteredExcludedCount }} / {{ filteredTotalCount }}
-              </mat-panel-description>
-            </mat-expansion-panel-header>
-
-            <div class="warning-content">
-              <p>
-                Hier werden Login-Namen aus TestTaker-Dateien angezeigt, deren Modus nicht zu den erlaubten Modi gehört.
-                Es werden nur Logins angezeigt, die bereits als Person im Workspace vorhanden sind.
-                Mit den Aktionen können Sie festlegen, ob diese Personen berücksichtigt oder ausgeschlossen werden.
-                Das wirkt sich auf Auswertungen, Suche, Validierungen sowie Kodier- und Autokodier-Workflows aus.
+          </div>
+          <!-- Units Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">view_module</mat-icon>
+              Aufgaben
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.units.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+              </span>
+              }
+              @if (!val.units.complete) {
+              <span class="status-incomplete">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.units.missing && val.units.missing.length > 0) {
+                Unvollständig (Aufgaben fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.units.files.length }}
+                  (vorhanden: {{ getExistingCount(val.units) }},
+                  fehlend: {{ getMissingCount(val.units) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'units') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
               </p>
 
-              <div class="mode-selection">
-                <div class="select-all-row">
-                  <mat-checkbox
-                    [checked]="allSelected"
-                    [indeterminate]="selection.hasValue() && !allSelected"
-                    (change)="toggleAllSelection()">
-                    Alle auswählen
-                  </mat-checkbox>
-                  <span class="count-badge">{{ filteredExcludedCount }} / {{ filteredTotalCount }}</span>
-                </div>
 
-                @for (modeGroup of modeGroups; track modeGroup) {
-                  <div class="mode-group">
-                    <mat-checkbox
-                      [checked]="isModeSelected(modeGroup.mode)"
-                      (change)="toggleModeSelection(modeGroup.mode)">
-                      {{ modeGroup.mode }} ({{ modeGroup.count }})
-                    </mat-checkbox>
-                  </div>
-                }
-              </div>
 
-              <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
-                <div *cdkVirtualFor="let item of filteredTestTakers; trackBy: trackByFn" class="virtual-item">
-                  <mat-checkbox
-                    [checked]="selection.isSelected(item)"
-                    (change)="toggleSelection(item)">
-                    <strong>{{ item.testTaker }}:</strong> {{ item.login }} ({{ item.mode }})
-                    @if (item.consider === true) {
-                      <mat-icon matTooltip="Wird berücksichtigt">check_circle</mat-icon>
-                    }
-                    @if (item.consider === false) {
-                      <mat-icon matTooltip="Wird ausgeschlossen">block</mat-icon>
-                    }
-                  </mat-checkbox>
-                </div>
-              </cdk-virtual-scroll-viewport>
-
-              <div class="exclude-button-container">
-                <button
-                  mat-raised-button
-                  color="primary"
-                  class="exclude-button"
-                  (click)="markTestTakersAsConsidered()"
-                  [disabled]="isConsidering || selection.selected.length === 0">
-                  <mat-icon>{{ isConsidering ? 'hourglass_empty' : 'check_circle' }}</mat-icon>
-                  @if (isConsidering) {
-                    Wird bearbeitet... ({{ consideringProgress }}%)
-                  } @else {
-                    Ausgewählte TestTaker berücksichtigen ({{ selection.selected.length }})
-                  }
-                </button>
-
-                <button
-                  mat-raised-button
-                  color="warn"
-                  class="exclude-button"
-                  (click)="markTestTakersAsExcluded()"
-                  [disabled]="isExcluding || selection.selected.length === 0">
-                  <mat-icon>{{ isExcluding ? 'hourglass_empty' : 'block' }}</mat-icon>
-                  @if (isExcluding) {
-                    Wird bearbeitet... ({{ excludingProgress }}%)
-                  } @else {
-                    Ausgewählte TestTaker ausschließen ({{ selection.selected.length }})
-                  }
-                </button>
-
-                @if (isConsidering) {
-                  <div class="progress-container">
-                    <div class="progress-bar" [style.width.%]="consideringProgress"></div>
-                  </div>
-                }
-
-                @if (isExcluding) {
-                  <div class="progress-container">
-                    <div class="progress-bar" [style.width.%]="excludingProgress"></div>
-                  </div>
-                }
-              </div>
-            </div>
-          </mat-expansion-panel>
-        </div>
-      }
-
-      @if (unusedTestFiles && unusedTestFiles.length > 0) {
-        <div class="missing-units-warning filtered-testtakers-warning">
-          <mat-expansion-panel>
-            <mat-expansion-panel-header>
-              <mat-panel-title>
-                <mat-icon class="warning-icon">warning</mat-icon>
-                <span class="warning-title">Nicht verwendete Dateien</span>
-              </mat-panel-title>
-              <mat-panel-description>
-                {{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}
-              </mat-panel-description>
-            </mat-expansion-panel-header>
-
-            <div class="warning-content">
-              <div class="mode-selection">
-                <div class="select-all-row">
-                  <mat-checkbox
-                    [checked]="allUnusedFilesSelected"
-                    [indeterminate]="unusedFilesSelection.hasValue() && !allUnusedFilesSelected"
-                    (change)="toggleAllUnusedFilesSelection()">
-                    Alle auswählen
-                  </mat-checkbox>
-                  <span class="count-badge">{{ unusedFilesSelection.selected.length }} / {{ unusedTestFiles.length }}</span>
-                </div>
-              </div>
-
-              <cdk-virtual-scroll-viewport class="test-takers-list" [itemSize]="48" [minBufferPx]="200" [maxBufferPx]="400">
-                <div *cdkVirtualFor="let file of unusedTestFiles" class="virtual-item">
-                  <mat-checkbox
-                    [checked]="unusedFilesSelection.isSelected(file)"
-                    (change)="toggleUnusedFilesSelection(file)">
-                    <strong>{{ file.fileId }}</strong>: {{ file.filename }} ({{ file.fileType }})
-                  </mat-checkbox>
-                </div>
-              </cdk-virtual-scroll-viewport>
-
-              <div class="exclude-button-container">
-                <button
-                  mat-raised-button
-                  color="warn"
-                  class="exclude-button"
-                  (click)="deleteSelectedUnusedFiles()"
-                  [disabled]="isDeletingUnusedFiles || unusedFilesSelection.selected.length === 0">
-                  <mat-icon>{{ isDeletingUnusedFiles ? 'hourglass_empty' : 'delete' }}</mat-icon>
-                  @if (isDeletingUnusedFiles) {
-                    Wird gelöscht...
-                  } @else {
-                    Ausgewählte Dateien löschen ({{ unusedFilesSelection.selected.length }})
-                  }
-                </button>
-              </div>
-            </div>
-          </mat-expansion-panel>
-        </div>
-      }
-
-      @if (data.validationResults && data.validationResults.length > 0) {
-        <mat-tab-group>
-          @for (val of data.validationResults; track val.testTaker) {
-            <mat-tab [label]="val.testTaker">
-              <h4>
-                <mat-icon class="test-taker-icon">person</mat-icon>
-                {{val.testTaker}}
-                @if (val.testTakerSchemaValid === false) {
-                  <mat-icon
-                    class="file-status-icon"
-                    matTooltip="{{ (val.testTakerSchemaErrors || []).join('\n') }}"
-                    [attr.aria-label]="'TestTaker XML ist nicht schema-konform'">
-                    report_problem
-                  </mat-icon>
-                }
-                <button
-                  mat-icon-button
-                  class="test-taker-xml-button"
-                  (click)="showTestTakerXml(val.testTaker)"
-                  matTooltip="TestTaker XML anzeigen"
-                  [attr.aria-label]="'TestTaker XML anzeigen'">
-                  <mat-icon>code</mat-icon>
-                </button>
-              </h4>
-
-              @if (val.booklets.missing && val.booklets.missing.length > 0) {
-                <div class="missing-units-warning">
-                  <mat-icon class="warning-icon">warning</mat-icon>
-                  <div class="warning-content">
-                    <p class="warning-title">Fehlende Testhefte:</p>
-                    <ul>
-                      @for (booklet of val.booklets.missing; track booklet) {
-                        <li>{{ booklet }}</li>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'units')">
+                <ul>
+                  @for (file of val.units.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getBookletsForMissingUnit(val.units, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (b of getBookletsForMissingUnitLimited(val.units, file.filename, 3); track b) {
+                      <button mat-button type="button" (click)="openBookletInfo(b)">
+                        {{ b }}
+                      </button>
                       }
-                    </ul>
-                  </div>
-                </div>
+                      @if (getBookletsForMissingUnitRemainingCount(val.units, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
+                                      'Betroffene Testhefte',
+                                      getBookletsForMissingUnit(val.units, file.filename),
+                                      openBookletInfo.bind(this)
+                                    )">
+                        +{{ getBookletsForMissingUnitRemainingCount(val.units, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
+                    }
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
+                    }
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
+                      matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
+                      <mat-icon>info</mat-icon>
+                    </button>
+                    }
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Schemes Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">schema</mat-icon>
+              Kodierschemata
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.schemes.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
               }
-
-              <div class="validation-container">
-                <!-- Booklets Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">book</mat-icon>
-                    Testhefte
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.booklets.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
-                    }
-                    @if (!val.booklets.complete) {
-                      <span class="status-incomplete">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.booklets.missing && val.booklets.missing.length > 0) {
-                          Unvollständig (Testhefte fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
-                    }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'booklets')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.booklets.files.length }}
-                        (vorhanden: {{ getExistingCount(val.booklets) }},
-                        fehlend: {{ getMissingCount(val.booklets) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'booklets') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'booklets')">
-                      <ul>
-                        @for (file of val.booklets.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                            <button
-                              mat-icon-button
-                              class="file-action-button"
-                              (click)="openBookletInfo(file.filename)"
-                              matTooltip="Testheft anzeigen"
-                              [attr.aria-label]="'Testheft anzeigen'">
-                              <mat-icon>info</mat-icon>
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <!-- Units Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">view_module</mat-icon>
-                    Aufgaben
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.units.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
-                    }
-                    @if (!val.units.complete) {
-                      <span class="status-incomplete"
-                            [matTooltip]="val.units.missing && val.units.missing.length === 0 && !val.booklets.complete ? 'Nicht überprüfbar: Testhefte fehlen oder sind unvollständig' : ''">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.units.missing && val.units.missing.length > 0) {
-                          Unvollständig (Aufgaben fehlen)
-                        } @else if (!val.booklets.complete) {
-                          Nicht überprüfbar (Voraussetzungen fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
-                    }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'units')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.units.files.length }}
-                        (vorhanden: {{ getExistingCount(val.units) }},
-                        fehlend: {{ getMissingCount(val.units) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'units') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'units')">
-                      <ul>
-                        @for (file of val.units.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                            <button
-                              mat-icon-button
-                              class="file-action-button"
-                              (click)="openUnitInfo(file.filename)"
-                              matTooltip="Aufgabe anzeigen"
-                              [attr.aria-label]="'Aufgabe anzeigen'">
-                              <mat-icon>info</mat-icon>
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <!-- Schemes Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">schema</mat-icon>
-                    Kodierschemata
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.schemes.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
-                    }
-                    @if (!val.schemes.complete) {
-                      <span class="status-incomplete"
-                            [matTooltip]="val.schemes.missing && val.schemes.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.schemes.missing && val.schemes.missing.length > 0) {
-                          Unvollständig (Kodierschemata fehlen)
-                        } @else if (!val.units.complete) {
-                          Nicht überprüfbar (Voraussetzungen fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
-                    }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.schemes.files.length }}
-                        (vorhanden: {{ getExistingCount(val.schemes) }},
-                        fehlend: {{ getMissingCount(val.schemes) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemes') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemes')">
-                      <ul>
-                        @for (file of val.schemes.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (!file.exists && getUnitsForMissingRef(val.schemes, file.filename).length > 0) {
-                              <span class="file-name">
-                                (
-                                @for (u of getUnitsForMissingRefLimited(val.schemes, file.filename, 3); track u) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openUnitInfo(u)">
-                                    {{ u }}
-                                  </button>
-                                }
-                                @if (getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) > 0) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openAffectedUnitsDialog(
+              @if (!val.schemes.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.schemes.missing && val.schemes.missing.length > 0) {
+                Unvollständig (Kodierschemata fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.schemes.files.length }}
+                  (vorhanden: {{ getExistingCount(val.schemes) }},
+                  fehlend: {{ getMissingCount(val.schemes) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemes') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemes')">
+                <ul>
+                  @for (file of val.schemes.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.schemes, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.schemes, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
                                       'Betroffene Aufgaben (Kodierschema)',
                                       getUnitsForMissingRef(val.schemes, file.filename),
                                       openUnitInfo.bind(this)
                                     )">
-                                    +{{ getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) }} mehr
-                                  </button>
-                                }
-                                )
-                              </span>
-                            }
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                            <button
-                              mat-icon-button
-                              class="file-action-button"
-                              (click)="openSchemeFile(file.filename)"
-                              matTooltip="Kodierschema anzeigen"
-                              [attr.aria-label]="'Kodierschema anzeigen'">
-                              <mat-icon>schema</mat-icon>
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <!-- Schemer Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">app_registration</mat-icon>
-                    Schemer
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.schemer.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
+                        +{{ getUnitsForMissingRefRemainingCount(val.schemes, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
                     }
-                    @if (!val.schemer.complete) {
-                      <span class="status-incomplete"
-                            [matTooltip]="val.schemer.missing && val.schemer.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.schemer.missing && val.schemer.missing.length > 0) {
-                          Unvollständig (Schemer fehlen)
-                        } @else if (!val.units.complete) {
-                          Nicht überprüfbar (Voraussetzungen fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
                     }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.schemer.files.length }}
-                        (vorhanden: {{ getExistingCount(val.schemer) }},
-                        fehlend: {{ getMissingCount(val.schemer) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemer') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemer')">
-                      <ul>
-                        @for (file of val.schemer.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (!file.exists && getUnitsForMissingRef(val.schemer, file.filename).length > 0) {
-                              <span class="file-name">
-                                (
-                                @for (u of getUnitsForMissingRefLimited(val.schemer, file.filename, 3); track u) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openUnitInfo(u)">
-                                    {{ u }}
-                                  </button>
-                                }
-                                @if (getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) > 0) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openAffectedUnitsDialog(
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openSchemeFile(file.filename)"
+                      matTooltip="Kodierschema anzeigen" [attr.aria-label]="'Kodierschema anzeigen'">
+                      <mat-icon>schema</mat-icon>
+                    </button>
+                    }
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Schemer Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">app_registration</mat-icon>
+              Schemer
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.schemer.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
+              }
+              @if (!val.schemer.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.schemer.missing && val.schemer.missing.length > 0) {
+                Unvollständig (Schemer fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.schemer.files.length }}
+                  (vorhanden: {{ getExistingCount(val.schemer) }},
+                  fehlend: {{ getMissingCount(val.schemer) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemer') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemer')">
+                <ul>
+                  @for (file of val.schemer.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.schemer, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.schemer, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
                                       'Betroffene Aufgaben (Schemer)',
                                       getUnitsForMissingRef(val.schemer, file.filename),
                                       openUnitInfo.bind(this)
                                     )">
-                                    +{{ getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) }} mehr
-                                  </button>
-                                }
-                                )
-                              </span>
-                            }
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <!-- Definitions Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">description</mat-icon>
-                    Aufgabendefinitionen
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.definitions.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
+                        +{{ getUnitsForMissingRefRemainingCount(val.schemer, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
                     }
-                    @if (!val.definitions.complete) {
-                      <span class="status-incomplete"
-                            [matTooltip]="val.definitions.missing && val.definitions.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.definitions.missing && val.definitions.missing.length > 0) {
-                          Unvollständig (Definitionen fehlen)
-                        } @else if (!val.units.complete) {
-                          Nicht überprüfbar (Voraussetzungen fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
                     }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.definitions.files.length }}
-                        (vorhanden: {{ getExistingCount(val.definitions) }},
-                        fehlend: {{ getMissingCount(val.definitions) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'definitions') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'definitions')">
-                      <ul>
-                        @for (file of val.definitions.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (!file.exists && getUnitsForMissingRef(val.definitions, file.filename).length > 0) {
-                              <span class="file-name">
-                                (
-                                @for (u of getUnitsForMissingRefLimited(val.definitions, file.filename, 3); track u) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openUnitDefinitionForUnit(u)">
-                                    {{ u }}
-                                  </button>
-                                }
-                                @if (getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) > 0) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openAffectedUnitsDialog(
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Definitions Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">description</mat-icon>
+              Aufgabendefinitionen
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.definitions.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
+              }
+              @if (!val.definitions.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.definitions.missing && val.definitions.missing.length > 0) {
+                Unvollständig (Definitionen fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.definitions.files.length }}
+                  (vorhanden: {{ getExistingCount(val.definitions) }},
+                  fehlend: {{ getMissingCount(val.definitions) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'definitions') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'definitions')">
+                <ul>
+                  @for (file of val.definitions.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.definitions, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.definitions, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
                                       'Betroffene Aufgaben (Definition)',
                                       getUnitsForMissingRef(val.definitions, file.filename),
                                       openUnitInfo.bind(this)
                                     )">
-                                    +{{ getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) }} mehr
-                                  </button>
-                                }
-                                )
-                              </span>
-                            }
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                            <button
-                              mat-icon-button
-                              class="file-action-button"
-                              (click)="openDefinitionFile(file.filename)"
-                              matTooltip="Aufgabendefinition anzeigen"
-                              [attr.aria-label]="'Aufgabendefinition anzeigen'">
-                              <mat-icon>description</mat-icon>
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
-                <!-- Player Section -->
-                <div class="validation-card">
-                  <h3>
-                    <mat-icon class="section-icon">play_circle</mat-icon>
-                    Player
-                  </h3>
-                  <p class="status-row">
-                    Status:
-                    @if (val.player.complete) {
-                      <span class="status-complete">
-                        <mat-icon class="status-icon">check_circle</mat-icon>
-                        Vollständig
-                      </span>
+                        +{{ getUnitsForMissingRefRemainingCount(val.definitions, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
                     }
-                    @if (!val.player.complete) {
-                      <span class="status-incomplete"
-                            [matTooltip]="val.player.missing && val.player.missing.length === 0 && !val.units.complete ? 'Nicht überprüfbar: Aufgaben fehlen oder sind unvollständig' : ''">
-                        <mat-icon class="status-icon">error</mat-icon>
-                        @if (val.player.missing && val.player.missing.length > 0) {
-                          Unvollständig (Player fehlen)
-                        } @else if (!val.units.complete) {
-                          Nicht überprüfbar (Voraussetzungen fehlen)
-                        } @else {
-                          Unvollständig
-                        }
-                      </span>
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
                     }
-                  </p>
-                  <div class="files-list-container">
-                    <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')">
-                      <mat-icon class="files-icon">list</mat-icon>
-                      <span>
-                        Alle Dateien: {{ val.player.files.length }}
-                        (vorhanden: {{ getExistingCount(val.player) }},
-                        fehlend: {{ getMissingCount(val.player) }})
-                      </span>
-                      <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'player') ? 'expand_less' : 'expand_more' }}</mat-icon>
-                    </p>
-                    <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'player')">
-                      <ul>
-                        @for (file of val.player.files; track file) {
-                          <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                            <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                            <span class="file-name">{{ file.filename }}</span>
-                            @if (!file.exists && getUnitsForMissingRef(val.player, file.filename).length > 0) {
-                              <span class="file-name">
-                                (
-                                @for (u of getUnitsForMissingRefLimited(val.player, file.filename, 3); track u) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openUnitDefinitionForUnit(u)">
-                                    {{ u }}
-                                  </button>
-                                }
-                                @if (getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) > 0) {
-                                  <button
-                                    mat-button
-                                    type="button"
-                                    (click)="openAffectedUnitsDialog(
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openDefinitionFile(file.filename)"
+                      matTooltip="Aufgabendefinition anzeigen" [attr.aria-label]="'Aufgabendefinition anzeigen'">
+                      <mat-icon>description</mat-icon>
+                    </button>
+                    }
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+          <!-- Player Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">play_circle</mat-icon>
+              Player
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.player.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
+              }
+              @if (!val.player.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.player.missing && val.player.missing.length > 0) {
+                Unvollständig (Player fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.player.files.length }}
+                  (vorhanden: {{ getExistingCount(val.player) }},
+                  fehlend: {{ getMissingCount(val.player) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'player') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'player')">
+                <ul>
+                  @for (file of val.player.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.player, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.player, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
                                       'Betroffene Aufgaben (Player)',
                                       getUnitsForMissingRef(val.player, file.filename),
                                       openUnitInfo.bind(this)
                                     )">
-                                    +{{ getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) }} mehr
-                                  </button>
-                                }
-                                )
-                              </span>
-                            }
-                            @if (file.schemaValid === false) {
-                              <mat-icon
-                                class="file-status-icon"
-                                matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                                report_problem
-                              </mat-icon>
-                            }
-                          </li>
-                        }
-                      </ul>
-                    </div>
-                  </div>
-                </div>
+                        +{{ getUnitsForMissingRefRemainingCount(val.player, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
+                    }
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
+                    }
+                  </li>
+                  }
+                </ul>
               </div>
-            </mat-tab>
-          }
-        </mat-tab-group>
+            </div>
+          </div>
+          <!-- Metadata Section -->
+          <div class="validation-card">
+            <h3>
+              <mat-icon class="section-icon">description</mat-icon>
+              Metadaten
+            </h3>
+            <p class="status-row">
+              Status:
+              @if (val.metadata.complete) {
+              <span class="status-complete">
+                <mat-icon class="status-icon">check_circle</mat-icon>
+                Vollständig
+                @if (val.units.missing && val.units.missing.length > 0) {
+                <span class="status-note">(für vorhandene Aufgaben)</span>
+                }
+              </span>
+              }
+              @if (!val.metadata.complete) {
+              <span class="status-incomplete"
+                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                <mat-icon class="status-icon">error</mat-icon>
+                @if (val.metadata.missing && val.metadata.missing.length > 0) {
+                Unvollständig (Metadaten fehlen)
+                } @else {
+                Unvollständig
+                }
+              </span>
+              }
+            </p>
+            <div class="files-list-container">
+              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'metadata')">
+                <mat-icon class="files-icon">list</mat-icon>
+                <span>
+                  Alle Dateien: {{ val.metadata.files.length }}
+                  (vorhanden: {{ getExistingCount(val.metadata) }},
+                  fehlend: {{ getMissingCount(val.metadata) }})
+                </span>
+                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'metadata') ? 'expand_less' :
+                  'expand_more' }}</mat-icon>
+              </p>
+              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'metadata')">
+                <ul>
+                  @for (file of val.metadata.files; track file) {
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                    <span class="file-name">{{ file.filename }}</span>
+                    @if (!file.exists && getUnitsForMissingRef(val.metadata, file.filename).length > 0) {
+                    <span class="file-name">
+                      (
+                      @for (u of getUnitsForMissingRefLimited(val.metadata, file.filename, 3); track u) {
+                      <button mat-button type="button" (click)="openUnitInfo(u)">
+                        {{ u }}
+                      </button>
+                      }
+                      @if (getUnitsForMissingRefRemainingCount(val.metadata, file.filename, 3) > 0) {
+                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
+                                          'Betroffene Aufgaben (Metadaten)',
+                                          getUnitsForMissingRef(val.metadata, file.filename),
+                                          openUnitInfo.bind(this)
+                                        )">
+                        +{{ getUnitsForMissingRefRemainingCount(val.metadata, file.filename, 3) }} mehr
+                      </button>
+                      }
+                      )
+                    </span>
+                    }
+                    @if (file.schemaValid === false) {
+                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                      report_problem
+                    </mat-icon>
+                    }
+                    @if (file.exists) {
+                    <button mat-icon-button class="file-action-button" (click)="openMetadataFile(file.filename)"
+                      matTooltip="Metadaten anzeigen" [attr.aria-label]="'Metadaten anzeigen'">
+                      <mat-icon>description</mat-icon>
+                    </button>
+                    }
+                  </li>
+                  }
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
       }
-    </div>
-  </mat-dialog-content>
+    </mat-tab-group>
+    }
+  </div>
+</mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-raised-button
-    color="primary"
-    type="submit"
-    [mat-dialog-close]="true">
+  <button mat-raised-button color="primary" type="submit" (click)="close()">
     {{ 'close' | translate }}
   </button>
 </mat-dialog-actions>
-

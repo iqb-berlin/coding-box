@@ -7,109 +7,111 @@
         <mat-icon>upload</mat-icon>
         Paket(e) hochladen
       </a>
-      <a mat-raised-button color="primary" [disabled]="resourcePackageSelection.selected.length === 0" (click)="deleteResourcePackages()">
+      <a mat-raised-button color="primary" [disabled]="resourcePackageSelection.selected.length === 0"
+        (click)="deleteResourcePackages()">
         <mat-icon>delete</mat-icon>
         Paket(e) löschen
       </a>
     </div>
 
-    <input #resourcePackageInput type="file"
-      name="resourcePackage"
-      accept=".zip"
-      [hidden]="true"
-      (change)="onResourcePackageSelected($event.currentTarget)"/>
+    <div class="hint-text">
+      {{ 'file-upload.resource-package-hint' | translate }}
+    </div>
+
+    <input #resourcePackageInput type="file" name="resourcePackage" accept=".itcr.zip" [hidden]="true"
+      (change)="onResourcePackageSelected($event.currentTarget)" />
 
     @if (isLoadingResourcePackages) {
-      <div class="loading-container">
-        <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">Resource Packages werden geladen...</p>
-      </div>
+    <div class="loading-container">
+      <mat-spinner class="mat-spinner"></mat-spinner>
+      <p class="loading-text">Resource Packages werden geladen...</p>
+    </div>
     }
 
     <!-- Resource Packages Table -->
     @if (!isLoadingResourcePackages) {
-      <div class="data-card resource-packages-card">
-        <div class="search-section">
-          <div class="filter-container">
-            <coding-box-search-filter
-              [title]="'Filtere Pakete'"
-              (valueChange)="onResourcePackageTextFilterChange($event)">
-            </coding-box-search-filter>
+    <div class="data-card resource-packages-card">
+      <div class="search-section">
+        <div class="filter-container">
+          <coding-box-search-filter [title]="'Filtere Pakete'"
+            (valueChange)="onResourcePackageTextFilterChange($event)">
+          </coding-box-search-filter>
 
-            <div class="filter-selects">
-              <button mat-stroked-button color="primary" (click)="clearResourcePackageFilters()" class="clear-filters-btn">
-                <mat-icon>clear</mat-icon>
-                Filter zurücksetzen
-              </button>
-            </div>
+          <div class="filter-selects">
+            <button mat-stroked-button color="primary" (click)="clearResourcePackageFilters()"
+              class="clear-filters-btn">
+              <mat-icon>clear</mat-icon>
+              Filter zurücksetzen
+            </button>
           </div>
         </div>
-
-        <div class="table-container">
-          <mat-table [dataSource]="resourcePackageDataSource" class="resource-packages-table">
-            <mat-header-row *matHeaderRowDef="resourcePackageColumns;sticky: true"></mat-header-row>
-            <mat-row *matRowDef="let row; columns: resourcePackageColumns;" (click)="downloadResourcePackage(row)" class="clickable-row">
-            </mat-row>
-
-            <ng-container matColumnDef="selectCheckbox">
-              <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
-                <mat-checkbox [checked]="isAllResourcePackagesSelected()"
-                  [indeterminate]="resourcePackageSelection.selected.length > 0 && !isAllResourcePackagesSelected()"
-                  (change)="$event ? masterToggleResourcePackages() : null">
-                </mat-checkbox>
-              </mat-header-cell>
-              <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
-                <mat-checkbox [checked]="resourcePackageSelection.isSelected(row)"
-                  (click)="$event.stopPropagation()"
-                  (change)="$event ? resourcePackageSelection.toggle(row) : null">
-                </mat-checkbox>
-              </mat-cell>
-            </ng-container>
-
-            <ng-container matColumnDef="name">
-              <mat-header-cell *matHeaderCellDef>Name</mat-header-cell>
-              <mat-cell *matCellDef="let element">
-                <div class="file-info">
-                  <mat-icon class="file-icon">folder_zip</mat-icon>
-                  <span>{{element.name}}</span>
-                </div>
-              </mat-cell>
-            </ng-container>
-
-            <ng-container matColumnDef="elements">
-              <mat-header-cell *matHeaderCellDef>Elemente</mat-header-cell>
-              <mat-cell *matCellDef="let element">
-                <span class="elements-count">{{element.elements.length}} Elemente</span>
-              </mat-cell>
-            </ng-container>
-
-            <ng-container matColumnDef="packageSize">
-              <mat-header-cell *matHeaderCellDef>Paketgröße</mat-header-cell>
-              <mat-cell *matCellDef="let element">
-                <span class="package-size">
-                  {{element.packageSize > 1024 * 1024 ?
-                  (element.packageSize / (1024 * 1024) | number:'1.2-2') + ' MB' :
-                  (element.packageSize / 1024 | number:'1.2-2') + ' KB'}}
-                </span>
-              </mat-cell>
-            </ng-container>
-
-            <ng-container matColumnDef="createdAt">
-              <mat-header-cell *matHeaderCellDef>Erstellt am</mat-header-cell>
-              <mat-cell *matCellDef="let element">
-                <span class="date-time">{{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}</span>
-              </mat-cell>
-            </ng-container>
-          </mat-table>
-        </div>
-
-        @if (resourcePackageDataSource.data.length === 0) {
-          <div class="empty-state">
-            <mat-icon class="empty-icon">folder_zip</mat-icon>
-            <p class="empty-text">Keine Pakete vorhanden. Laden Sie Pakete hoch, um zu beginnen.</p>
-          </div>
-        }
       </div>
+
+      <div class="table-container">
+        <mat-table [dataSource]="resourcePackageDataSource" class="resource-packages-table">
+          <mat-header-row *matHeaderRowDef="resourcePackageColumns;sticky: true"></mat-header-row>
+          <mat-row *matRowDef="let row; columns: resourcePackageColumns;" (click)="downloadResourcePackage(row)"
+            class="clickable-row">
+          </mat-row>
+
+          <ng-container matColumnDef="selectCheckbox">
+            <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
+              <mat-checkbox [checked]="isAllResourcePackagesSelected()"
+                [indeterminate]="resourcePackageSelection.selected.length > 0 && !isAllResourcePackagesSelected()"
+                (change)="$event ? masterToggleResourcePackages() : null">
+              </mat-checkbox>
+            </mat-header-cell>
+            <mat-cell *matCellDef="let row" class="fx-flex-row-fix-70">
+              <mat-checkbox [checked]="resourcePackageSelection.isSelected(row)" (click)="$event.stopPropagation()"
+                (change)="$event ? resourcePackageSelection.toggle(row) : null">
+              </mat-checkbox>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="name">
+            <mat-header-cell *matHeaderCellDef>Name</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <div class="file-info">
+                <mat-icon class="file-icon">folder_zip</mat-icon>
+                <span>{{element.name}}</span>
+              </div>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="elements">
+            <mat-header-cell *matHeaderCellDef>Elemente</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span class="elements-count">{{element.elements.length}} Elemente</span>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="packageSize">
+            <mat-header-cell *matHeaderCellDef>Paketgröße</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span class="package-size">
+                {{element.packageSize > 1024 * 1024 ?
+                (element.packageSize / (1024 * 1024) | number:'1.2-2') + ' MB' :
+                (element.packageSize / 1024 | number:'1.2-2') + ' KB'}}
+              </span>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="createdAt">
+            <mat-header-cell *matHeaderCellDef>Erstellt am</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span class="date-time">{{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}</span>
+            </mat-cell>
+          </ng-container>
+        </mat-table>
+      </div>
+
+      @if (resourcePackageDataSource.data.length === 0) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">folder_zip</mat-icon>
+        <p class="empty-text">Keine Pakete vorhanden.</p>
+      </div>
+      }
+    </div>
     }
   </div>
 

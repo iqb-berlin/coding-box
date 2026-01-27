@@ -3,7 +3,7 @@ import {
 } from '@angular/core';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatSort, MatSortModule } from '@angular/material/sort';
-import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
+import { MatPaginator, MatPaginatorModule, MatPaginatorIntl } from '@angular/material/paginator';
 import {
   MatCell, MatCellDef, MatColumnDef,
   MatHeaderCell,
@@ -23,11 +23,11 @@ import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatIconButton } from '@angular/material/button';
 import { DatePipe, NgClass, NgFor } from '@angular/common';
-import { Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { AppService } from '../../../core/services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingJob, Variable } from '../../models/coding-job.model';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 
@@ -61,13 +61,15 @@ import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/worksp
     MatLabel,
     MatSelect,
     MatOption
+  ],
+  providers: [
+    { provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }
   ]
 })
 export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   appService = inject(AppService);
-  backendService = inject(BackendService);
+  codingJobBackendService = inject(CodingJobBackendService);
   private snackBar = inject(MatSnackBar);
-  private router = inject(Router);
   private cdr = inject(ChangeDetectorRef);
   private translateService = inject(TranslateService);
 
@@ -86,11 +88,18 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
 
   selectedStatus: string | null = null;
   selectedJobName: string | null = null;
+  selectedWorkspaceIds: number[] = [];
   originalData: CodingJob[] = [];
+  availableJobNames: string[] = [];
   currentWorkspaces: WorkspaceFullDto[] = [];
 
-  @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @ViewChild(MatSort) set sort(sort: MatSort) {
+    this.dataSource.sort = sort;
+  }
+
+  @ViewChild(MatPaginator) set paginator(paginator: MatPaginator) {
+    this.dataSource.paginator = paginator;
+  }
 
   private handleWindowFocus = () => {
     if (this.isAuthorized) {
@@ -103,6 +112,29 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   };
 
   ngOnInit(): void {
+    this.dataSource.sortingDataAccessor = (item: CodingJob, property: string) => {
+      switch (property) {
+        case 'variables':
+          return (item.assignedVariables?.length || item.variables?.length || 0);
+        case 'variableBundles':
+          return (item.assignedVariableBundles?.length || item.variableBundles?.length || 0);
+        case 'progress':
+          return item.progress || 0;
+        case 'created_at':
+          return item.created_at ? new Date(item.created_at).getTime() : 0;
+        case 'updated_at':
+          return item.updated_at ? new Date(item.updated_at).getTime() : 0;
+        case 'status':
+          return item.status;
+        case 'name':
+          return item.name.toLowerCase();
+        case 'description':
+          return (item.description || '').toLowerCase();
+        default:
+          return (item as unknown as Record<string, unknown>)[property] as string | number;
+      }
+    };
+
     this.appService.authData$.subscribe(authData => {
       this.currentUserId = authData.userId;
       this.isAuthorized = true;
@@ -114,8 +146,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
   }
 
   ngAfterViewInit(): void {
-    this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
+    // ViewChildren are handled via setters
   }
 
   ngOnDestroy(): void {
@@ -126,7 +157,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.currentWorkspaces = workspaces || [];
     this.isLoading = true;
     if (workspaces) {
-      const workspaceJobsObservables = workspaces.map(workspace => this.backendService.getCodingJobs(workspace.id).pipe(
+      const workspaceJobsObservables = workspaces.map(workspace => this.codingJobBackendService.getCodingJobs(workspace.id).pipe(
         map(response => response.data)
       )
       );
@@ -138,6 +169,10 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           );
           this.originalData = [...assignedJobs];
           this.dataSource.data = assignedJobs;
+          if (this.selectedWorkspaceIds.length === 0) {
+            this.selectedWorkspaceIds = this.currentWorkspaces.map(ws => ws.id);
+          }
+          this.updateAvailableJobNames();
           this.applyAllFilters();
           this.calculateTotalProgress(assignedJobs);
           this.cdr.detectChanges();
@@ -163,8 +198,57 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     this.applyAllFilters();
   }
 
+  onWorkspaceFilterChange(): void {
+    if (this.isAllWorkspacesSelected()) {
+      if (!this.selectedWorkspaceIds.includes(-1)) {
+        this.selectedWorkspaceIds = [...this.selectedWorkspaceIds, -1];
+      }
+    } else {
+      this.selectedWorkspaceIds = this.selectedWorkspaceIds.filter(id => id !== -1);
+    }
+    this.updateAvailableJobNames();
+    this.applyAllFilters();
+  }
+
+  isAllWorkspacesSelected(): boolean {
+    if (this.currentWorkspaces.length === 0) return false;
+    return this.currentWorkspaces.every(ws => this.selectedWorkspaceIds.includes(ws.id));
+  }
+
+  toggleAllWorkspaces(): void {
+    if (this.isAllWorkspacesSelected()) {
+      this.selectedWorkspaceIds = [];
+    } else {
+      this.selectedWorkspaceIds = [...this.currentWorkspaces.map(ws => ws.id), -1];
+    }
+    this.updateAvailableJobNames();
+    this.applyAllFilters();
+  }
+
+  private updateAvailableJobNames(): void {
+    const workspaceIds = this.selectedWorkspaceIds.filter(id => id !== -1);
+
+    if (workspaceIds.length === 0) {
+      this.availableJobNames = [];
+    } else {
+      const relevantJobs = this.originalData.filter(job => workspaceIds.includes(job.workspace_id));
+      this.availableJobNames = [...new Set(relevantJobs.map(job => job.name))].sort();
+    }
+
+    // If selected job name is no longer available, reset it
+    if (this.selectedJobName && !this.availableJobNames.includes(this.selectedJobName)) {
+      this.selectedJobName = null;
+    }
+  }
+
   private applyAllFilters(): void {
     let filteredData = this.originalData || [];
+    const workspaceIds = this.selectedWorkspaceIds.filter(id => id !== -1);
+    if (workspaceIds.length === 0) {
+      filteredData = [];
+    } else {
+      filteredData = filteredData.filter(job => workspaceIds.includes(job.workspace_id));
+    }
 
     if (this.selectedStatus !== null && this.selectedStatus !== 'all') {
       filteredData = filteredData.filter(job => job.status === this.selectedStatus);
@@ -187,7 +271,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const sendingMessage = this.translateService.instant('coding.my-coding-jobs.sending-to-review', { name: job.name });
     const loadingSnack = this.snackBar.open(sendingMessage, '', { duration: 3000 });
 
-    this.backendService.updateCodingJob(job.workspace_id, job.id, { status: 'review' }).subscribe({
+    this.codingJobBackendService.updateCodingJob(job.workspace_id, job.id, { status: 'review' }).subscribe({
       next: () => {
         loadingSnack.dismiss();
         const sentMessage = this.translateService.instant('coding.my-coding-jobs.sent-to-review', { name: job.name });
@@ -206,7 +290,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
     const startingMessage = this.translateService.instant('coding.my-coding-jobs.starting-job', { name: job.name });
     const loadingSnack = this.snackBar.open(startingMessage, '', { duration: 3000 });
 
-    this.backendService.startCodingJob(job.workspace_id, job.id).subscribe({
+    this.codingJobBackendService.startCodingJob(job.workspace_id, job.id).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (!result || result.total === 0) {
@@ -215,14 +299,25 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
 
-        const units = result.items.map((item, idx) => ({
+        const units = result.items.map((item: {
+          unitAlias?: string | null;
+          unitName: string;
+          personLogin: string;
+          personCode: string;
+          personGroup?: string;
+          bookletName: string;
+          variableId: string;
+          variableAnchor?: string;
+          replayUrl?: string;
+        }, idx: number) => ({
           id: idx,
           name: item.unitAlias || item.unitName,
           alias: item.unitAlias || null,
           bookletId: 0,
-          testPerson: `${item.personLogin}@${item.personCode}@${item.bookletName}`,
+          testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
           variableId: item.variableId,
-          variableAnchor: item.variableAnchor
+          variableAnchor: item.variableAnchor,
+          replayUrl: item.replayUrl
         }));
 
         const bookletData = {
@@ -233,33 +328,28 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
         };
 
         const first = units[0];
-        const firstTestPerson = first.testPerson;
-        const firstUnitId = first.name;
 
         this.appService
           .createToken(job.workspace_id, this.appService.loggedUser?.sub || '', 1)
           .subscribe(token => {
-            const bookletKey = `replay_booklet_${job.id}_${Date.now()}`;
+            const bookletKey = `replay_booklet_${job.id}`;
             try {
               localStorage.setItem(bookletKey, JSON.stringify(bookletData));
             } catch (e) {
               // ignore
             }
 
-            const queryParams = {
-              auth: token,
-              mode: 'coding',
-              bookletKey
-            } as const;
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
+            const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
 
-            const url = this.router.serializeUrl(
-              this.router.createUrlTree([
-                `replay/${firstTestPerson}/${firstUnitId}/0/0`
-              ], { queryParams })
-            );
-            window.open(`#/${url}`, '_blank');
-            const preparedMessage = this.translateService.instant('coding.my-coding-jobs.preparing-replay', { count: result.total });
-            this.snackBar.open(preparedMessage, this.translateService.instant('close'), { duration: 3000 });
+            if (replayUrl) {
+              window.open(replayUrl, '_blank');
+              const preparedMessage = this.translateService.instant('coding.my-coding-jobs.preparing-replay', { count: result.total });
+              this.snackBar.open(preparedMessage, this.translateService.instant('close'), { duration: 3000 });
+            } else {
+              const errorMessage = this.translateService.instant('coding.my-coding-jobs.error-starting-job');
+              this.snackBar.open(errorMessage, this.translateService.instant('close'), { duration: 3000 });
+            }
           });
       },
       error: () => {

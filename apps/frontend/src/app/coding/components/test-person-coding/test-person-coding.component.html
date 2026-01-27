@@ -32,6 +32,21 @@
             <mat-radio-button [value]="1">{{ 'test-person-coding.autocoder-run-selection.run-1' | translate }}</mat-radio-button>
             <mat-radio-button [value]="2">{{ 'test-person-coding.autocoder-run-selection.run-2' | translate }}</mat-radio-button>
           </mat-radio-group>
+          
+          <div class="autocoder-hint-box warning" *ngIf="autoCoderRun === 1">
+            <h4><mat-icon>warning</mat-icon> {{ 'test-person-coding.autocoder-run-selection.hint.v1.title' | translate }}</h4>
+            <p [innerHTML]="'test-person-coding.autocoder-run-selection.hint.v1.text' | translate"></p>
+            
+            <div class="process-info" style="margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 8px;">
+               <h4 style="font-size: 14px; margin-bottom: 4px;">{{ 'test-person-coding.autocoder-run-selection.hint.process.title' | translate }}</h4>
+               <div [innerHTML]="'test-person-coding.autocoder-run-selection.hint.process.text' | translate"></div>
+            </div>
+          </div>
+
+          <div class="autocoder-hint-box" *ngIf="autoCoderRun === 2">
+            <h4><mat-icon>info</mat-icon> {{ 'test-person-coding.autocoder-run-selection.hint.v2.title' | translate }}</h4>
+            <p [innerHTML]="'test-person-coding.autocoder-run-selection.hint.v2.text' | translate"></p>
+          </div>
         </div>
 
         <div class="button-container">

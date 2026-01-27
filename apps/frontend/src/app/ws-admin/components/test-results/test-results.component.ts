@@ -14,10 +14,10 @@ import {
 import {
   Component,
   ElementRef,
+  inject,
   OnDestroy,
   OnInit,
-  ViewChild,
-  inject
+  ViewChild
 } from '@angular/core';
 
 import { MatSort, MatSortHeader } from '@angular/material/sort';
@@ -57,12 +57,21 @@ import { MatDivider } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TestResultsImportDialogComponent } from './test-results-import-dialog.component';
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
+import { FileService } from '../../../shared/services/file/file.service';
+import { TestResultBackendService, TestResultExportJob } from '../../../shared/services/test-result/test-result-backend.service';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
+import { ResponseService } from '../../../shared/services/response/response.service';
+import { UnitService } from '../../../shared/services/unit/unit.service';
+import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
+import { AppService } from '../../../core/services/app.service';
 import {
   TestResultService,
-  TestResultsOverviewResponse
-} from '../../../services/test-result.service';
+  TestResultsOverviewResponse,
+  PersonTestResult
+} from '../../../shared/services/test-result/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
@@ -78,11 +87,11 @@ import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.d
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
-import { ValidationTaskStateService } from '../../../services/validation-task-state.service';
+import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import {
   UnitsReplay,
   UnitsReplayService
-} from '../../../services/units-replay.service';
+} from '../../../replay/services/units-replay.service';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
@@ -92,7 +101,9 @@ import {
   ExportOptionsDialogComponent,
   ExportOptions
 } from './export-options-dialog.component';
-import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+
+import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
+import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 import {
@@ -297,7 +308,14 @@ string,
 })
 export class TestResultsComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
-  private backendService = inject(BackendService);
+  private testResultBackendService = inject(TestResultBackendService);
+  private validationService = inject(ValidationService);
+  private unitNoteService = inject(UnitNoteService);
+  private fileService = inject(FileService);
+  private responseService = inject(ResponseService);
+  private unitService = inject(UnitService);
+  private statisticsService = inject(CodingStatisticsService);
+  private variableAnalysisService = inject(VariableAnalysisService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
   private router = inject(Router);
@@ -354,6 +372,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
   exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
+  uploadingMessage = 'Ergebnisse werden hochgeladen...';
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
   @ViewChild(MatSort) sort!: MatSort;
@@ -416,7 +435,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     if (Object.keys(taskIds).length > 0) {
       for (const [type, taskId] of Object.entries(taskIds)) {
-        this.backendService
+        this.validationService
           .getValidationTask(this.appService.selectedWorkspaceId, taskId)
           .subscribe({
             next: task => {
@@ -424,11 +443,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
                   type as
-                    | 'variables'
-                    | 'variableTypes'
-                    | 'responseStatus'
-                    | 'testTakers'
-                    | 'groupResponses'
+                  | 'variables'
+                  | 'variableTypes'
+                  | 'responseStatus'
+                  | 'testTakers'
+                  | 'groupResponses'
                 );
               }
             },
@@ -436,11 +455,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
                 type as
-                  | 'variables'
-                  | 'variableTypes'
-                  | 'responseStatus'
-                  | 'testTakers'
-                  | 'groupResponses'
+                | 'variables'
+                | 'variableTypes'
+                | 'responseStatus'
+                | 'testTakers'
+                | 'groupResponses'
               );
             }
           });
@@ -507,10 +526,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.unitTagsMap.clear();
     this.unitNotesMap.clear();
     this.isLoadingBooklets = true;
-    this.backendService
+    this.testResultService
       .getPersonTestResults(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
-        next: booklets => {
+        next: (booklets: PersonTestResult[]) => {
           this.selectedBooklet = '';
           this.booklets = booklets as unknown as Booklet[];
           this.sortBooklets();
@@ -592,12 +611,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.backendService
+    this.unitNoteService
       .getNotesForMultipleUnits(this.appService.selectedWorkspaceId, unitIds)
       .subscribe({
         next: notesByUnitId => {
           Object.entries(notesByUnitId).forEach(([unitId, notes]) => {
-            this.unitNotesMap.set(Number(unitId), notes);
+            this.unitNotesMap.set(Number(unitId), notes as UnitNoteDto[]);
           });
         },
         error: () => {
@@ -711,7 +730,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             return;
           }
 
-          this.backendService
+          this.statisticsService
             .getReplayUrl(
               this.appService.selectedWorkspaceId,
               firstResponse.id,
@@ -784,8 +803,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '700px',
       data: {
         logs: this.logs,
-        title: `Logs für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -802,8 +820,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         tags: this.unitTags,
-        title: `Tags für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Tags für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -827,8 +844,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         notes: this.unitNotes,
-        title: `Notizen für Unit: ${
-          this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Notizen für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -882,7 +898,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (this.unitNotesMap.has(unitId)) {
         this.unitNotes = this.unitNotesMap.get(unitId) || [];
       } else {
-        this.backendService
+        this.unitNoteService
           .getUnitNotes(this.appService.selectedWorkspaceId, unitId)
           .subscribe({
             next: notes => {
@@ -1084,6 +1100,68 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .sort((a, b) => b.count - a.count);
   }
 
+  private toSortedCountList(
+    map?: Record<string, number>
+  ): Array<{ key: string; count: number }> {
+    const m = (map || {}) as Record<string, number>;
+    return Object.entries(m)
+      .map(([key, count]) => ({ key, count: Number(count) }))
+      .filter(e => e.count > 0)
+      .sort((a, b) => b.count - a.count);
+  }
+
+  private totalCount(list: Array<{ count: number }>): number {
+    return list.reduce((sum, x) => sum + (Number(x.count) || 0), 0);
+  }
+
+  get overviewBrowserCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionBrowserCounts);
+  }
+
+  get overviewOsCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionOsCounts);
+  }
+
+  get overviewScreenCounts(): Array<{ key: string; count: number }> {
+    return this.toSortedCountList(this.overview?.sessionScreenCounts);
+  }
+
+  getBrowserTotal(): number {
+    return this.totalCount(this.overviewBrowserCounts);
+  }
+
+  getOsTotal(): number {
+    return this.totalCount(this.overviewOsCounts);
+  }
+
+  getScreenTotal(): number {
+    return this.totalCount(this.overviewScreenCounts);
+  }
+
+  getPercent(count: number, total: number): number {
+    const t = Number(total) || 0;
+    if (t <= 0) {
+      return 0;
+    }
+    return Math.round((Number(count) / t) * 1000) / 10;
+  }
+
+  openSessionDistributionsDialog(): void {
+    if (!this.overview) {
+      return;
+    }
+
+    this.dialog.open(SessionDistributionsDialogComponent, {
+      width: '900px',
+      maxWidth: '95vw',
+      data: {
+        browserCounts: this.overview.sessionBrowserCounts || {},
+        osCounts: this.overview.sessionOsCounts || {},
+        screenCounts: this.overview.sessionScreenCounts || {}
+      }
+    });
+  }
+
   getResponseStatusTooltip(status: string): string {
     const info = RESPONSE_STATUS_INFO[status];
     if (!info) {
@@ -1157,7 +1235,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       uniqueBooklets: 0,
       uniqueUnits: 0,
       uniqueResponses: 0,
-      responseStatusCounts: {}
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
     };
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -1168,9 +1249,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       this.overview || fallbackOverview;
 
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
-      width: '1000px',
+      width: '1200px',
       maxWidth: '95vw',
       minHeight: '800px',
+      disableClose: true,
       data: {
         importType: 'testResults'
       }
@@ -1242,6 +1324,28 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               afterOverview.uniqueResponses - beforeOverview.uniqueResponses
           };
 
+          const payload = maybePayload as {
+            resultType?: 'logs' | 'responses';
+            importedLogs?: boolean;
+            importedResponses?: boolean;
+            uploadResult?: ImportResultDto;
+            // Legacy/Fallback properties
+            issues?: TestResultsUploadIssueDto[];
+            logMetrics?: {
+              bookletsWithLogs: number;
+              totalBooklets: number;
+              unitsWithLogs: number;
+              totalUnits: number;
+            };
+          };
+
+          const logMetrics = payload.uploadResult ? {
+            bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
+            totalBooklets: payload.uploadResult.totalBooklets ?? 0,
+            unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
+            totalUnits: payload.uploadResult.totalUnits ?? 0
+          } : payload.logMetrics;
+
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
             before: {
@@ -1260,12 +1364,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             },
             delta,
             responseStatusCounts: afterOverview.responseStatusCounts,
-            issues: []
+            issues: payload.uploadResult?.issues || payload.issues || [],
+            logMetrics: logMetrics,
+            importedLogs: payload.importedLogs,
+            importedResponses: payload.importedResponses
           };
 
-          const payload = maybePayload as { resultType?: 'logs' | 'responses' };
           this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '1000px',
+            width: '1200px',
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
@@ -1332,7 +1438,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
               this.isLoading = true;
               this.isUploadingResults = true;
-              this.backendService
+
+              if (resultType === 'responses') {
+                this.uploadingMessage = 'Importiere Antworten...';
+              } else if (resultType === 'logs') {
+                this.uploadingMessage = 'Importiere Logs...';
+              } else {
+                this.uploadingMessage = 'Ergebnisse werden hochgeladen...';
+              }
+
+              this.fileService
                 .uploadTestResults(
                   this.appService.selectedWorkspaceId,
                   inputElement.files,
@@ -1356,6 +1471,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                     'OK',
                     { duration: 5000 }
                   );
+
+                  // Explicitly set these flags so the dialog knows what was imported
+                  // (similar to how TestCenterImportComponent logic works)
+                  uploadResult.importedResponses = resultType === 'responses';
+                  uploadResult.importedLogs = resultType === 'logs';
 
                   this.dialog.open(TestResultsUploadResultDialogComponent, {
                     width: '1000px',
@@ -1393,12 +1513,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.isDeletingTestPersons = true;
     const selectedTestPersons = this.selection.selected;
-    this.backendService
+    this.responseService
       .deleteTestPersons(
         this.appService.selectedWorkspaceId,
         selectedTestPersons.map(person => person.id)
       )
-      .subscribe(respOk => {
+      .subscribe((respOk: boolean) => {
         if (respOk) {
           this.snackBar.open(
             this.translateService.instant('ws-admin.test-group-deleted'),
@@ -1446,8 +1566,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '400px',
       data: <ConfirmDialogData>{
         title: 'Unit löschen',
-        content: `Möchten Sie die Unit "${
-          unit.alias || 'Unbenannte Einheit'
+        content: `Möchten Sie die Unit "${unit.alias || 'Unbenannte Einheit'
         }" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Löschen',
         showCancel: true
@@ -1456,7 +1575,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.backendService
+        this.unitService
           .deleteUnit(this.appService.selectedWorkspaceId, unit.id as number)
           .subscribe({
             next: result => {
@@ -1475,8 +1594,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 }
 
                 this.snackBar.open(
-                  `Unit "${
-                    unit.alias || 'Unbenannte Einheit'
+                  `Unit "${unit.alias || 'Unbenannte Einheit'
                   }" wurde erfolgreich gelöscht.`,
                   'Erfolg',
                   { duration: 3000 }
@@ -1525,7 +1643,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.backendService
+        this.responseService
           .deleteResponse(
             this.appService.selectedWorkspaceId,
             response.id as number
@@ -1605,8 +1723,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       duration: 3000
     });
 
-    this.backendService
-      .getAllVariableAnalysisJobs(this.appService.selectedWorkspaceId)
+    this.variableAnalysisService
+      .getAllJobs(this.appService.selectedWorkspaceId)
       .subscribe({
         next: jobs => {
           loadingSnackBar.dismiss();
@@ -1643,7 +1761,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService
+    this.fileService
       .getBookletInfo(this.appService.selectedWorkspaceId, bookletName)
       .subscribe({
         next: (bookletInfo: BookletInfoDto) => {
@@ -1689,7 +1807,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService
+    this.fileService
       .getUnitInfo(this.appService.selectedWorkspaceId, unitFileId)
       .subscribe({
         next: (unitInfo: UnitInfoDto) => {
@@ -1776,11 +1894,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           exportType === 'results' ? 'test-results' : 'test-logs';
         const exportMethod =
           exportType === 'results' ?
-            this.backendService.startExportTestResultsJob(
+            this.testResultBackendService.startExportTestResultsJob(
               this.appService.selectedWorkspaceId,
               filters
             ) :
-            this.backendService.startExportTestLogsJob(
+            this.testResultBackendService.startExportTestLogsJob(
               this.appService.selectedWorkspaceId,
               filters
             );
@@ -1812,16 +1930,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
-    this.backendService
+    this.testResultBackendService
       .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
       .subscribe({
-        next: jobs => {
+        next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
-            j => j.exportType === 'test-results' || j.exportType === 'test-logs'
+            (j: TestResultExportJob) => j.exportType === 'test-results' || j.exportType === 'test-logs'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(
-            j => j.status === 'active' ||
+            (j: TestResultExportJob) => j.status === 'active' ||
               j.status === 'waiting' ||
               j.status === 'delayed'
           );
@@ -1844,10 +1962,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         clearInterval(timer);
         return;
       }
-      this.backendService
+      this.testResultBackendService
         .getExportTestResultsJobs(this.appService.selectedWorkspaceId)
         .subscribe({
-          next: jobs => {
+          next: (jobs: TestResultExportJob[]) => {
             const job = jobs.find(j => j.jobId === jobId);
             if (job) {
               this.exportJobStatus = job.status;
@@ -1888,7 +2006,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
-    this.backendService
+    this.testResultBackendService
       .downloadExportTestResultsJob(this.appService.selectedWorkspaceId, jobId)
       .subscribe({
         next: blob => {
@@ -1908,7 +2026,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.exportTypeInProgress = null;
 
           // Delete the job from the server
-          this.backendService
+          this.testResultBackendService
             .deleteTestResultExportJob(
               this.appService.selectedWorkspaceId,
               jobId

@@ -24,8 +24,9 @@
       <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
       @for (link of navLinks; track link) {
         <a mat-tab-link
-           (click)="navigateToTab(link)"
-           routerLinkActive #rla="routerLinkActive"
+           [routerLink]="link"
+           routerLinkActive="active-link"
+           #rla="routerLinkActive"
            [active]="rla.isActive">
           {{'ws-admin.' + link | translate}}
         </a>

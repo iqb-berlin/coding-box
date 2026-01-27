@@ -8,8 +8,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { WorkspacesMenuComponent } from '../workspaces-menu/workspaces-menu.component';
 import { WorkspacesSelectionComponent } from '../workspaces-selection/workspaces-selection.component';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
 
 type WorkspaceData = {
@@ -25,14 +25,14 @@ type WorkspaceData = {
 })
 export class WorkspacesComponent {
   private appService = inject(AppService);
-  private backendService = inject(BackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
   tableSelectionCheckboxes = new SelectionModel<WorkspaceInListDto>(true, []);
   tableSelectionRow = new SelectionModel<WorkspaceInListDto>(false, []);
   selectedWorkspaceId = 0;
-  selectedWorkspaces : number[] = [];
+  selectedWorkspaces: number[] = [];
   workspacesChanged: boolean = false;
   isDeleting: boolean = false;
   deleteStatus: string = '';
@@ -40,7 +40,7 @@ export class WorkspacesComponent {
   @ViewChild(MatSort) sort = new MatSort();
 
   addWorkspace(result: UntypedFormGroup): void {
-    this.backendService.addWorkspace(<CreateWorkspaceDto>{
+    this.workspaceBackendService.addWorkspace(<CreateWorkspaceDto>{
       name: (<UntypedFormGroup>result).get('name')?.value,
       settings: {}
     }).subscribe(
@@ -62,7 +62,7 @@ export class WorkspacesComponent {
   }
 
   editWorkspace(value: { selection: number[], formData: UntypedFormGroup }): void {
-    this.backendService.changeWorkspace({
+    this.workspaceBackendService.changeWorkspace({
       id: value.selection[0],
       name: value.formData.get('name')?.value
     })
@@ -85,7 +85,7 @@ export class WorkspacesComponent {
       );
   }
 
-  deleteWorkspace(workspace_ids:number[]): void {
+  deleteWorkspace(workspace_ids: number[]): void {
     this.isDeleting = true;
     const deleteSteps = [
       'admin.deleting-workspace-starting',
@@ -105,7 +105,7 @@ export class WorkspacesComponent {
       }
     }, 1000);
 
-    this.backendService.deleteWorkspace(workspace_ids).subscribe(
+    this.workspaceBackendService.deleteWorkspace(workspace_ids).subscribe(
       respOk => {
         clearInterval(interval);
         if (respOk) {
@@ -138,7 +138,7 @@ export class WorkspacesComponent {
   }
 
   setWorkspaceUsersAccessRight(users: number[]): void {
-    this.backendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users).subscribe(
+    this.workspaceBackendService.setWorkspaceUsersAccessRight(this.selectedWorkspaces[0], users).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(

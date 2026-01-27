@@ -12,8 +12,9 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { UsersSelectionComponent } from '../users-selection/users-selection.component';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
-import { BackendService } from '../../../services/backend.service';
-import { AppService } from '../../../services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
+import { AppService } from '../../../core/services/app.service';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
 import { UsersMenuComponent } from '../users-menu/users-menu.component';
 
@@ -24,17 +25,18 @@ import { UsersMenuComponent } from '../users-menu/users-menu.component';
   imports: [UsersSelectionComponent, UsersMenuComponent]
 })
 export class UsersComponent implements OnInit {
-  private backendService = inject(BackendService);
+  private userBackendService = inject(UserBackendService);
+  private workspaceBackendService = inject(WorkspaceBackendService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  selectedUsers : number[] = [];
-  selectedRows : UserFullDto[] = [];
+  selectedUsers: number[] = [];
+  selectedRows: UserFullDto[] = [];
   userObjectsDatasource = new MatTableDataSource<UserFullDto>();
   tableSelectionRow = new SelectionModel<UserFullDto>(false, []);
   tableSelectionCheckboxes = new SelectionModel<UserFullDto>(true, []);
-  userWorkspaces :WorkspaceInListDto[] = [];
+  userWorkspaces: WorkspaceInListDto[] = [];
 
   @ViewChild(MatSort) sort = new MatSort();
 
@@ -64,7 +66,7 @@ export class UsersComponent implements OnInit {
 
   updateUserList(): void {
     this.appService.dataLoading = true;
-    this.backendService.getUsersFull().subscribe(
+    this.userBackendService.getUsersFull().subscribe(
       (users: UserFullDto[]) => {
         if (users.length > 0) {
           this.setObjectsDatasource(users);
@@ -89,7 +91,7 @@ export class UsersComponent implements OnInit {
       lastName: userData.get('lastName')?.value,
       email: userData.get('email')?.value
     };
-    this.backendService.addUser(user).subscribe(
+    this.userBackendService.addUser(user).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -120,7 +122,7 @@ export class UsersComponent implements OnInit {
       username: value.user.get('username')?.value,
       isAdmin: value.user.get('isAdmin')?.value
     };
-    this.backendService.changeUserData(this.authData.userId, changedData).subscribe(
+    this.userBackendService.changeUserData(this.authData.userId, changedData).subscribe(
       respOk => {
         this.updateUserList();
         if (respOk) {
@@ -143,7 +145,7 @@ export class UsersComponent implements OnInit {
     this.appService.dataLoading = true;
     const usersToDelete: number[] = [];
     users.forEach((r: UserFullDto) => usersToDelete.push(r.id));
-    this.backendService.deleteUsers(usersToDelete).subscribe(
+    this.userBackendService.deleteUsers(usersToDelete).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
@@ -163,7 +165,7 @@ export class UsersComponent implements OnInit {
   }
 
   setUserWorkspaceAccessRight(workspaces: number[]): void {
-    this.backendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces).subscribe(
+    this.userBackendService.setUserWorkspaceAccessRight(this.selectedUsers[0], workspaces).subscribe(
       respOk => {
         if (respOk) {
           this.snackBar.open(
@@ -182,7 +184,7 @@ export class UsersComponent implements OnInit {
   }
 
   createWorkspaceList(): void {
-    this.backendService.getAllWorkspacesList().subscribe(workspaces => {
+    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
       if (workspaces.data.length > 0) { this.userWorkspaces = workspaces.data; }
     });
   }

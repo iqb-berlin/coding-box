@@ -12,7 +12,7 @@ import FileUpload from '../../database/entities/file_upload.entity';
 import {
   WorkspacePlayerService,
   BookletUnit
-} from '../../database/services/workspace-player.service';
+} from '../../database/services/workspace';
 import { ResponseEntity } from '../../database/entities/response.entity';
 
 @ApiTags('Admin Workspace Player')

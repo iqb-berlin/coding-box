@@ -19,7 +19,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { BackendService } from '../../../services/backend.service';
+import { VariableAnalysisService, JobCancelResult } from '../../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialogs/confirm-dialog.component';
@@ -46,14 +46,16 @@ export interface VariableAnalysisData {
       unitName: string;
       variableId: string;
     }[];
-    frequencies: { [key: string]: {
-      unitId?: number;
-      unitName?: string;
-      variableId: string;
-      value: string;
-      count: number;
-      percentage: number;
-    }[] };
+    frequencies: {
+      [key: string]: {
+        unitId?: number;
+        unitName?: string;
+        variableId: string;
+        value: string;
+        count: number;
+        percentage: number;
+      }[]
+    };
     total: number;
   };
   jobs?: VariableAnalysisJobDto[];
@@ -126,11 +128,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: VariableAnalysisData,
-    private backendService: BackendService,
+    private variableAnalysisService: VariableAnalysisService,
     private snackBar: MatSnackBar,
     private translate: TranslateService,
     private dialog: MatDialog
-  ) {}
+  ) { }
 
   ngOnInit(): void {
     this.searchSubject.pipe(
@@ -266,9 +268,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   refreshJobs(): void {
     this.isJobsLoading = true;
-    this.backendService.getAllVariableAnalysisJobs(this.data.workspaceId)
+    this.variableAnalysisService.getAllJobs(this.data.workspaceId)
       .subscribe({
-        next: jobs => {
+        next: (jobs: VariableAnalysisJobDto[]) => {
           this.jobs = jobs.filter(job => job.type === 'variable-analysis');
           this.isJobsLoading = false;
         },
@@ -291,11 +293,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       { duration: 3000 }
     );
 
-    this.backendService.createVariableAnalysisJob(
+    this.variableAnalysisService.createAnalysisJob(
       this.data.workspaceId,
       this.data.unitId // Optional unit ID, may be undefined
     ).subscribe({
-      next: job => {
+      next: (job: VariableAnalysisJobDto) => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
           this.translate.instant('variable-analysis.analysis-started', { jobId: job.id }),
@@ -318,9 +320,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   cancelJob(jobId: number): void {
     this.isJobsLoading = true;
-    this.backendService.cancelVariableAnalysisJob(this.data.workspaceId, jobId)
+    this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
       .subscribe({
-        next: result => {
+        next: (result: JobCancelResult) => {
           if (result.success) {
             this.snackBar.open(
               result.message || this.translate.instant('variable-analysis.job-cancelled'),
@@ -367,9 +369,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       }
 
       this.isJobsLoading = true;
-      this.backendService.deleteVariableAnalysisJob(this.data.workspaceId, jobId)
+      this.variableAnalysisService.deleteJob(this.data.workspaceId, jobId)
         .subscribe({
-          next: result => {
+          next: (result: JobCancelResult) => {
             if (result.success) {
               this.snackBar.open(
                 result.message || this.translate.instant('variable-analysis.job-deleted'),
@@ -406,11 +408,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       { duration: undefined }
     );
 
-    this.backendService.getVariableAnalysisResults(
+    this.variableAnalysisService.getAnalysisResults(
       this.data.workspaceId,
       jobId
     ).subscribe({
-      next: results => {
+      next: (results: VariableAnalysisData['analysisResults']) => {
         loadingSnackBar.dismiss();
         this.isLoading = false;
         this.data.analysisResults = results;

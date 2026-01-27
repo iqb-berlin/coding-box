@@ -1,4 +1,6 @@
 import { Component, inject } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -16,9 +18,9 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { WorkspaceService } from '../../../services/workspace.service';
-import { BackendService } from '../../../services/backend.service';
-import { TestResultService } from '../../../services/test-result.service';
+import { WorkspaceService } from '../../../workspace/services/workspace.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
@@ -29,6 +31,8 @@ import {
   AffectedUnitsDialogComponent,
   AffectedUnitsDialogResult
 } from './affected-units-dialog.component';
+import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 type FileStatus = {
   filename: string;
@@ -63,6 +67,7 @@ type FilesValidation = {
   schemer: DataValidation;
   definitions: DataValidation;
   player: DataValidation;
+  metadata: DataValidation;
 };
 
 interface ExpandedFilesLists {
@@ -72,6 +77,7 @@ interface ExpandedFilesLists {
   schemer: boolean;
   definitions: boolean;
   player: boolean;
+  metadata: boolean;
 }
 
 @Component({
@@ -122,7 +128,7 @@ export class FilesValidationDialogComponent {
   isResolvingDuplicates = false;
 
   private workspaceService = inject(WorkspaceService);
-  private backendService = inject(BackendService);
+  private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
 
@@ -200,7 +206,8 @@ export class FilesValidationDialogComponent {
             schemes: false,
             schemer: false,
             definitions: false,
-            player: false
+            player: false,
+            metadata: false
           });
         });
       }
@@ -234,6 +241,8 @@ export class FilesValidationDialogComponent {
     }
   }
 
+  filesDeleted = false;
+
   toggleUnusedFilesSelection(file: UnusedTestFile): void {
     this.unusedFilesSelection.toggle(file);
     this.checkIfAllUnusedFilesSelected();
@@ -251,7 +260,7 @@ export class FilesValidationDialogComponent {
 
   checkIfAllUnusedFilesSelected(): void {
     this.allUnusedFilesSelected = this.unusedTestFiles.length > 0 &&
-                                 this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
+      this.unusedFilesSelection.selected.length === this.unusedTestFiles.length;
   }
 
   deleteSelectedUnusedFiles(): void {
@@ -262,20 +271,29 @@ export class FilesValidationDialogComponent {
     this.isDeletingUnusedFiles = true;
     const idsToDelete = this.unusedFilesSelection.selected.map(f => f.id);
 
-    this.backendService.deleteFiles(this.data.workspaceId, idsToDelete)
+    this.fileService.deleteFiles(this.data.workspaceId, idsToDelete)
       .subscribe({
-        next: success => {
+        next: (success: boolean) => {
+          this.isDeletingUnusedFiles = false;
           if (success) {
+            this.filesDeleted = true;
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
             this.checkIfAllUnusedFilesSelected();
+            this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
+          } else {
+            this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
           }
-          this.isDeletingUnusedFiles = false;
         },
         error: () => {
           this.isDeletingUnusedFiles = false;
+          this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
         }
       });
+  }
+
+  close(): void {
+    this.dialogRef.close(this.filesDeleted);
   }
 
   getExistingCount(data: DataValidation): number {
@@ -284,6 +302,27 @@ export class FilesValidationDialogComponent {
 
   getMissingCount(data: DataValidation): number {
     return data.files.filter(file => !file.exists).length;
+  }
+
+  getBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
+    if (!data.missingUnitsPerBooklet || data.missingUnitsPerBooklet.length === 0 || !unit) {
+      return [];
+    }
+    const normalizedUnit = unit.toUpperCase().trim();
+    return data.missingUnitsPerBooklet
+      .filter(entry => (entry.missingUnits || []).map(u => u.toUpperCase().trim()).includes(normalizedUnit))
+      .map(entry => entry.booklet);
+  }
+
+  getBookletsForMissingUnitLimited(data: DataValidation, unit: string, limit: number): string[] {
+    const booklets = this.getBookletsForMissingUnit(data, unit);
+    if (limit <= 0) return [];
+    return booklets.slice(0, limit);
+  }
+
+  getBookletsForMissingUnitRemainingCount(data: DataValidation, unit: string, limit: number): number {
+    const booklets = this.getBookletsForMissingUnit(data, unit);
+    return Math.max(0, booklets.length - Math.max(0, limit));
   }
 
   getUnitsForMissingRef(data: DataValidation, ref: string): string[] {
@@ -449,7 +488,7 @@ export class FilesValidationDialogComponent {
 
   checkIfAllSelected(): void {
     this.allSelected = this.knownFilteredCount > 0 &&
-                       this.selection.selected.length === this.knownFilteredCount;
+      this.selection.selected.length === this.knownFilteredCount;
   }
 
   isModeSelected(mode: string): boolean {
@@ -630,16 +669,6 @@ export class FilesValidationDialogComponent {
     }
   }
 
-  private updateModeGroups(): void {
-    const modeMap = new Map<string, number>();
-    this.filteredTestTakers.filter(item => this.isKnownTestTaker(item)).forEach(item => {
-      const count = modeMap.get(item.mode) || 0;
-      modeMap.set(item.mode, count + 1);
-    });
-
-    this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
-  }
-
   toggleFilesList(testTaker: string, section: keyof ExpandedFilesLists): void {
     const sections = this.expandedFilesLists.get(testTaker);
     if (sections) {
@@ -669,11 +698,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getBookletInfo(
+    this.fileService.getBookletInfo(
       this.data.workspaceId,
       normalizedBookletId
     ).subscribe({
-      next: bookletInfo => {
+      next: (bookletInfo: unknown) => {
         loadingSnackBar.dismiss();
 
         this.dialog.open(BookletInfoDialogComponent, {
@@ -707,11 +736,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getUnitInfo(
+    this.fileService.getUnitInfo(
       this.data.workspaceId,
       unitId
     ).subscribe({
-      next: unitInfo => {
+      next: (unitInfo: unknown) => {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
@@ -745,11 +774,11 @@ export class FilesValidationDialogComponent {
       { duration: 3000 }
     );
 
-    this.backendService.getCodingSchemeFile(
+    this.fileService.getCodingSchemeFile(
       this.data.workspaceId,
       schemeId
     ).subscribe({
-      next: fileDownload => {
+      next: (fileDownload: { base64Data: string; filename: string } | null) => {
         loadingSnackBar.dismiss();
 
         if (!fileDownload) {
@@ -761,12 +790,7 @@ export class FilesValidationDialogComponent {
           return;
         }
 
-        let decodedContent: string;
-        try {
-          decodedContent = atob(fileDownload.base64Data);
-        } catch {
-          decodedContent = fileDownload.base64Data;
-        }
+        const decodedContent = base64ToUtf8(fileDownload.base64Data);
 
         this.dialog.open(SchemeEditorDialogComponent, {
           width: '100vw',
@@ -808,28 +832,13 @@ export class FilesValidationDialogComponent {
     });
   }
 
-  openUnitDefinitionForUnit(unitId: string): void {
-    if (!this.data.workspaceId || !unitId) {
-      return;
-    }
-
-    this.dialog.open(UnitDefinitionPlayerDialogComponent, {
-      width: '1200px',
-      height: '80vh',
-      data: {
-        workspaceId: this.data.workspaceId!,
-        unitId: unitId.toUpperCase()
-      }
-    });
-  }
-
   showTestTakerXml(testTakerId: string): void {
     if (!this.data.workspaceId || !testTakerId) {
       return;
     }
 
-    this.backendService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
-      .subscribe(xmlContent => {
+    this.fileService.getTestTakerContentXml(this.data.workspaceId, testTakerId)
+      .subscribe((xmlContent: string | null) => {
         if (xmlContent) {
           this.dialog.open(ContentDialogComponent, {
             width: '80%',
@@ -847,5 +856,113 @@ export class FilesValidationDialogComponent {
           );
         }
       });
+  }
+
+  async openMetadataFile(filename: string): Promise<void> {
+    if (!this.data.workspaceId || !filename) {
+      return;
+    }
+
+    const loadingSnackBar = this.snackBar.open('Lade Metadaten...', '', { duration: 3000 });
+
+    try {
+      // 1. Find file ID
+      const filesList = await firstValueFrom(
+        this.fileService.getFilesList(
+          this.data.workspaceId,
+          1,
+          20,
+          'Resource',
+          undefined,
+          filename
+        )
+      );
+
+      // eslint-disable-next-line no-console
+      console.log('Metadata file search:', {
+        searchedFor: filename,
+        found: filesList.data.length,
+        results: filesList.data.map(f => f.filename)
+      });
+
+      let fileEntry = filesList.data.find(f => f.filename === filename);
+
+      if (!fileEntry && filesList.data.length > 0) {
+        fileEntry = filesList.data.find(f => f.filename.toLowerCase() === filename.toLowerCase());
+      }
+
+      if (!fileEntry) {
+        // Fallback: if we have exactly one result and it contains the filename (e.g. funny path issues), log it
+        if (filesList.data.length === 1) {
+          // eslint-disable-next-line no-console
+          console.warn('Exact match failed, but found 1 file:', filesList.data[0].filename);
+        }
+
+        loadingSnackBar.dismiss();
+        this.snackBar.open(`Datei "${filename}" nicht gefunden.`, 'Fehler', { duration: 3000 });
+        return;
+      }
+
+      // 2. Download file content
+      const fileDownload = await firstValueFrom(
+        this.fileService.downloadFile(this.data.workspaceId, fileEntry.id)
+      );
+
+      if (!fileDownload) {
+        loadingSnackBar.dismiss();
+        this.snackBar.open('Fehler beim Laden der Datei.', 'Fehler', { duration: 3000 });
+        return;
+      }
+
+      // 3. Parse content
+      const decodedContent = base64ToUtf8(fileDownload.base64Data);
+
+      const vomdData = JSON.parse(decodedContent);
+
+      // 4. Resolve profiles
+      const unitProfile = vomdData.profiles?.[0];
+      if (!unitProfile) {
+        loadingSnackBar.dismiss();
+        this.snackBar.open('Keine Metadaten-Profile in der Datei gefunden', 'Schließen', { duration: 5000 });
+        return;
+      }
+
+      const resolver = new MetadataResolver();
+      const unitProfileUrl = unitProfile.profileId;
+      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+
+      let itemProfileData = null;
+      const firstItem = vomdData.items?.[0];
+      const itemProfile = firstItem?.profiles?.[0];
+
+      if (itemProfile) {
+        const itemProfileUrl = itemProfile.profileId;
+        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        itemProfileData = itemProfileWithVocabs.profile;
+      }
+
+      loadingSnackBar.dismiss();
+
+      // 5. Open dialog
+      this.dialog.open(MetadataDialogComponent, {
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        data: {
+          title: filename,
+          profileData: unitProfileWithVocabs.profile,
+          itemProfileData: itemProfileData,
+          metadataValues: vomdData,
+          resolver: resolver,
+          language: 'de',
+          mode: 'readonly'
+        }
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error opening metadata file:', error);
+      loadingSnackBar.dismiss();
+      this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
+    }
   }
 }

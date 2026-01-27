@@ -122,6 +122,16 @@
         }
       </div>
     </div>
+
+    <div class="overview-distributions">
+      <button
+        mat-stroked-button
+        type="button"
+        (click)="openSessionDistributionsDialog()"
+      >
+        Sitzungs-Verteilungen anzeigen
+      </button>
+    </div>
     } @if (!isLoadingOverview && !overview) {
     <div class="empty-state-container" style="max-width: unset">
       <mat-icon class="empty-state-icon">info</mat-icon>
@@ -154,7 +164,7 @@
   @if (isUploadingResults) {
   <div class="loading-container">
     <mat-spinner class="mat-spinner"></mat-spinner>
-    <p class="loading-text">Ergebnisse werden hochgeladen...</p>
+    <p class="loading-text">{{ uploadingMessage }}</p>
   </div>
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table></coding-box-test-results-flat-table>

@@ -35,12 +35,14 @@ import {
   MatPaginatorIntl,
   PageEvent
 } from '@angular/material/paginator';
+import { MetadataResolver } from '@iqb/metadata-resolver';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { FileService } from '../../../shared/services/file/file.service';
+import { FileBackendService } from '../../../shared/services/file/file-backend.service';
 import { HasSelectionValuePipe } from '../../../shared/pipes/hasSelectionValue.pipe';
 import { IsAllSelectedPipe } from '../../../shared/pipes/isAllSelected.pipe';
 import { IsSelectedPipe } from '../../../shared/pipes/isSelected.pipe';
@@ -67,7 +69,9 @@ import {
 } from './test-files-zip-export-options-dialog.component';
 import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
-import { Result } from '../../../services/import.service';
+import { Result } from '../../../shared/services/file/import.service';
+import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -109,7 +113,8 @@ import { Result } from '../../../services/import.service';
 })
 export class TestFilesComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
-  backendService = inject(BackendService);
+  fileService = inject(FileService);
+  private fileBackendService = inject(FileBackendService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
@@ -229,7 +234,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   loadTestFiles(): void {
     this.isLoading = true;
     this.isValidating = false;
-    this.backendService
+    this.fileService
       .getFilesList(
         this.appService.selectedWorkspaceId,
         this.page,
@@ -345,7 +350,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.isUploading = true;
         const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
           .length;
-        this.backendService
+        this.fileService
           .uploadTestFiles(
             workspaceId,
             files,
@@ -412,7 +417,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.isUploading = true;
       const workspaceId = this.appService.selectedWorkspaceId;
-      this.backendService
+      this.fileService
         .uploadTestFiles(workspaceId, files, false)
         .pipe(
           finalize(() => {
@@ -493,7 +498,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           ),
           uploadedFiles,
           failedFiles,
-          remainingConflicts
+          remainingConflicts,
+          issues: r.issues
         } as TestFilesUploadResultDialogData);
 
         this.onUploadSuccess();
@@ -509,7 +515,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   deleteFiles(): void {
     const fileIds = this.tableCheckboxSelection.selected.map(file => file.id);
     this.isDeleting = true;
-    this.backendService
+    this.fileService
       .deleteFiles(this.appService.selectedWorkspaceId, fileIds)
       .pipe(
         finalize(() => {
@@ -531,11 +537,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   downloadFile(row: FilesInListDto): void {
-    this.backendService
+    this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, row.id)
       .subscribe({
         next: (res: FileDownloadDto) => {
-          const decodedString = atob(res.base64Data);
+          const decodedString = base64ToUtf8(res.base64Data);
           const byteArray = new Uint8Array(decodedString.length);
           for (let i = 0; i < decodedString.length; i++) {
             byteArray[i] = decodedString.charCodeAt(i);
@@ -577,7 +583,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
 
       this.isDownloadingAllFiles = true;
-      this.backendService
+      this.fileBackendService
         .downloadWorkspaceFilesAsZip(
           this.appService.selectedWorkspaceId,
           result.fileTypes
@@ -615,7 +621,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   validateFiles(): void {
     this.isLoading = true;
     this.isValidating = true;
-    this.backendService
+    this.fileService
       .validateFiles(this.appService.selectedWorkspaceId)
       .subscribe({
         next: respOk => {
@@ -674,7 +680,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         confirmRef.afterClosed().subscribe(result => {
           if (result === true) {
             this.isLoading = true;
-            this.backendService
+            this.fileService
               .createDummyTestTakerFile(this.appService.selectedWorkspaceId)
               .subscribe({
                 next: success => {
@@ -715,10 +721,11 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               v => !!v?.testTaker
             );
             if (validationResults.length > 0) {
-              this.dialog.open(FilesValidationDialogComponent, {
+              const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
                 width: '90%',
                 maxWidth: '1400px',
-                height: '80vh',
+                maxHeight: '95vh',
+                panelClass: 'validation-dialog-container',
                 data: {
                   validationResults,
                   filteredTestTakers: res.filteredTestTakers,
@@ -726,14 +733,21 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                   workspaceId: this.appService.selectedWorkspaceId
                 }
               });
+
+              dialogRef.afterClosed().subscribe((dialogResult: boolean) => {
+                if (dialogResult) {
+                  this.loadTestFiles();
+                }
+              });
             }
           }
         });
       } else {
-        this.dialog.open(FilesValidationDialogComponent, {
+        const dialogRef = this.dialog.open(FilesValidationDialogComponent, {
           width: '90%',
           maxWidth: '1400px',
-          height: '80vh',
+          maxHeight: '95vh',
+          panelClass: 'validation-dialog-container',
           data: {
             validationResults: (res.validationResults || []).filter(
               v => !!v?.testTaker
@@ -741,6 +755,12 @@ export class TestFilesComponent implements OnInit, OnDestroy {
             filteredTestTakers: res.filteredTestTakers,
             unusedTestFiles: res.unusedTestFiles,
             workspaceId: this.appService.selectedWorkspaceId
+          }
+        });
+
+        dialogRef.afterClosed().subscribe((result: boolean) => {
+          if (result) {
+            this.loadTestFiles();
           }
         });
       }
@@ -771,10 +791,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   showFileContent(file: FilesInListDto): void {
-    this.backendService
+    this.fileService
       .downloadFile(this.appService.selectedWorkspaceId, file.id)
       .subscribe(fileData => {
-        const decodedContent = atob(fileData.base64Data);
+        const decodedContent = base64ToUtf8(fileData.base64Data);
 
         if (
           file.file_type === 'Resource' &&
@@ -796,6 +816,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               this.loadTestFiles();
             }
           });
+        } else if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vomd')) {
+          this.openMetadataDialog(file, decodedContent);
         } else {
           this.dialog.open(ContentDialogComponent, {
             width: '800px',
@@ -807,6 +829,103 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           });
         }
       });
+  }
+
+  private async openMetadataDialog(file: FilesInListDto, decodedContent: string): Promise<void> {
+    try {
+      const vomdData = JSON.parse(decodedContent);
+
+      const unitProfile = vomdData.profiles?.[0];
+      if (!unitProfile) {
+        this.snackBar.open('Keine Metadaten in der Datei gefunden', 'Schließen', {
+          duration: 5000
+        });
+        return;
+      }
+
+      // Get item profile (from first item if exists)
+      const firstItem = vomdData.items?.[0];
+      const itemProfile = firstItem?.profiles?.[0];
+
+      // Create resolver and load profiles with vocabularies
+      const resolver = new MetadataResolver();
+
+      // Load unit profile and vocabularies
+      const unitProfileUrl = unitProfile.profileId;
+      const unitProfileWithVocabs = await resolver.loadProfileWithVocabularies(unitProfileUrl);
+
+      // Load item profile and vocabularies (if items exist)
+      let itemProfileData = null;
+      if (itemProfile) {
+        const itemProfileUrl = itemProfile.profileId;
+        const itemProfileWithVocabs = await resolver.loadProfileWithVocabularies(itemProfileUrl);
+        itemProfileData = itemProfileWithVocabs.profile;
+
+        // eslint-disable-next-line no-console
+        console.log(`Loaded profiles: Unit + Items (${vomdData.items.length} items)`);
+      } else {
+        // eslint-disable-next-line no-console
+        console.log('Loaded profile: Unit only (no items)');
+      }
+
+      const dialogRef = this.dialog.open(MetadataDialogComponent, {
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '95vh',
+        data: {
+          title: file.filename,
+          profileData: unitProfileWithVocabs.profile,
+          itemProfileData: itemProfileData,
+          metadataValues: vomdData,
+          resolver: resolver,
+          language: 'de',
+          mode: 'readonly'
+        }
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result) {
+          this.saveMetadata(file, result);
+        }
+      });
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Error parsing vomd file:', error);
+      this.snackBar.open('Fehler beim Parsen der Metadaten-Datei', 'Schließen', {
+        duration: 5000
+      });
+    }
+  }
+
+  private saveMetadata(originalFile: FilesInListDto, newMetadata: VomdMetadata): void {
+    this.isLoading = true;
+    const jsonContent = JSON.stringify(newMetadata, null, 2);
+    const blob = new Blob([jsonContent], { type: 'application/octet-stream' });
+    const file = new File([blob], originalFile.filename, { type: 'application/octet-stream' });
+
+    // Create a DataTransfer to simulate file selection
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    const files = dataTransfer.files;
+
+    this.fileService.uploadTestFiles(
+      this.appService.selectedWorkspaceId,
+      files,
+      true, // overwriteExisting
+      [originalFile.filename]
+    ).pipe(
+      finalize(() => {
+        this.isLoading = false;
+      })
+    ).subscribe({
+      next: () => {
+        this.snackBar.open('Metadaten erfolgreich gespeichert.', 'OK', { duration: 3000 });
+        this.loadTestFiles();
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Speichern der Metadaten.', 'Fehler', { duration: 3000 });
+      }
+    });
   }
 
   protected readonly getFileIcon = getFileIcon;

@@ -26,8 +26,9 @@ import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
-import { AppService } from '../../../services/app.service';
-import { BackendService } from '../../../services/backend.service';
+import { AppService } from '../../../core/services/app.service';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from '../coding-job-definition-dialog/coding-job-definition-dialog.component';
@@ -38,6 +39,32 @@ import { CodingJobResultDialogComponent } from './coding-job-result-dialog/codin
 import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+
+interface CodingJobItem {
+  responseId: number;
+  unitName: string;
+  unitAlias: string | null;
+  variableId: string;
+  variableAnchor: string;
+  bookletName: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  replayUrl: string;
+}
+
+interface BulkApplyResultItem {
+  jobId: number;
+  jobName: string;
+  hasIssues: boolean;
+  skipped: boolean;
+  result?: {
+    success: boolean;
+    updatedResponsesCount: number;
+    skippedReviewCount: number;
+    message: string;
+  };
+}
 
 interface SavedCode {
   id: number;
@@ -85,7 +112,8 @@ interface SavedCode {
 })
 export class CodingJobsComponent implements OnInit, AfterViewInit {
   appService = inject(AppService);
-  backendService = inject(BackendService);
+  codingJobBackendService = inject(CodingJobBackendService);
+  codingTrainingBackendService = inject(CodingTrainingBackendService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -143,14 +171,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.backendService.getCodingIncompleteVariables(workspaceId).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId).subscribe({
       next: variables => {
         this.preloadedVariables = variables;
 
-        this.backendService.getCodingJobs(workspaceId).subscribe({
+        this.codingJobBackendService.getCodingJobs(workspaceId).subscribe({
           next: async response => {
             this.coderNamesByJobId.clear();
-            const processedData = response.data.map(job => ({
+            const processedData = response.data.map((job: CodingJob) => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
               updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
@@ -161,14 +189,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             try {
               let bulkProgressResult: Record<number, Record<string, unknown>> | undefined;
               if (jobIds.length > 0) {
-                bulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, jobIds));
+                bulkProgressResult = await firstValueFrom(this.codingJobBackendService.getBulkCodingProgress(workspaceId, jobIds));
               }
 
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
                   ((typeof progress.id === 'number' && progress.id < 0) ||
-                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
                 ) : false;
               });
             } catch (error) {
@@ -193,10 +221,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
-        this.backendService.getCodingJobs(workspaceId).subscribe({
+        this.codingJobBackendService.getCodingJobs(workspaceId).subscribe({
           next: async response => {
             this.coderNamesByJobId.clear();
-            const processedData = response.data.map(job => ({
+            const processedData = response.data.map((job: CodingJob) => ({
               ...job,
               createdAt: job.created_at ? new Date(job.created_at) : new Date(),
               updatedAt: job.updated_at ? new Date(job.updated_at) : new Date(),
@@ -207,14 +235,14 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
             try {
               let fallbackBulkProgressResult: Record<number, Record<string, unknown>> | undefined;
               if (fallbackJobIds.length > 0) {
-                fallbackBulkProgressResult = await firstValueFrom(this.backendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
+                fallbackBulkProgressResult = await firstValueFrom(this.codingJobBackendService.getBulkCodingProgress(workspaceId, fallbackJobIds));
               }
 
               processedData.forEach(job => {
                 const progressResult = fallbackBulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
                   ((typeof progress.id === 'number' && progress.id < 0) ||
-                   (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
                 ) : false;
               });
             } catch (fallbackError) {
@@ -440,7 +468,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           return;
         }
 
-        this.backendService.deleteCodingJob(workspaceId, job.id).subscribe({
+        this.codingJobBackendService.deleteCodingJob(workspaceId, job.id).subscribe({
           next: response => {
             if (response.success) {
               this.snackBar.open(`Kodierjob "${job.name}" wurde erfolgreich gelöscht`, 'Schließen', { duration: 3000 });
@@ -490,7 +518,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     const loadingSnack = this.snackBar.open(`Starte Kodierjob "${selectedJob.name}"...`, '', { duration: 3000 });
 
-    this.backendService.startCodingJob(workspaceId, selectedJob.id).subscribe({
+    this.codingJobBackendService.startCodingJob(workspaceId, selectedJob.id).subscribe({
       next: startResult => {
         loadingSnack.dismiss();
         if (!startResult || startResult.total === 0) {
@@ -499,7 +527,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         }
 
         // Map responses to a booklet-like structure so we can reuse the Replay booklet navigation
-        const units = startResult.items.map((item, idx) => ({
+        const units = startResult.items.map((item: CodingJobItem, idx: number) => ({
           id: idx,
           name: item.unitAlias || item.unitName,
           alias: item.unitAlias || null,
@@ -661,7 +689,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    this.backendService.getCoderTrainings(workspaceId).subscribe({
+    this.codingTrainingBackendService.getCoderTrainings(workspaceId).subscribe({
       next: trainings => {
         this.coderTrainings = trainings;
       },
@@ -706,11 +734,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        this.backendService.restartCodingJobWithOpenUnits(workspaceId, job.id).subscribe({
+        this.codingJobBackendService.restartCodingJobWithOpenUnits(workspaceId, job.id).subscribe({
           next: restartedJob => {
             const loadingSnack = this.snackBar.open(`Neustart von Kodierjob "${restartedJob.name}" mit offenen Einheiten...`, '', { duration: 3000 });
 
-            this.backendService.startCodingJob(workspaceId, restartedJob.id).subscribe({
+            this.codingJobBackendService.startCodingJob(workspaceId, restartedJob.id).subscribe({
               next: restartResult => {
                 loadingSnack.dismiss();
                 if (!restartResult || restartResult.total === 0) {
@@ -718,7 +746,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   return;
                 }
 
-                const units = restartResult.items.map((item, idx) => ({
+                const units = restartResult.items.map((item: CodingJobItem, idx: number) => ({
                   id: idx,
                   name: item.unitAlias || item.unitName,
                   alias: item.unitAlias || null,
@@ -876,7 +904,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     for (const job of jobs) {
       try {
-        const response = await firstValueFrom(this.backendService.deleteCodingJob(workspaceId, job.id));
+        const response = await firstValueFrom(this.codingJobBackendService.deleteCodingJob(workspaceId, job.id));
         if (response?.success) {
           successCount += 1;
         } else {
@@ -916,12 +944,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
 
-    this.backendService.applyCodingResults(workspaceId, job.id).subscribe({
+    this.codingJobBackendService.applyCodingResults(workspaceId, job.id).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (result.success) {
           this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
           this.loadCodingJobs(); // Refresh the list to show updated status
+          this.jobsChanged.emit();
         } else {
           this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
         }
@@ -968,14 +997,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     const loadingSnack = this.snackBar.open('Wende Ergebnisse für alle geeigneten Kodierjobs an...', '', { duration: 3000 });
 
-    this.backendService.bulkApplyCodingResults(workspaceId).subscribe({
+    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).subscribe({
       next: result => {
         loadingSnack.dismiss();
         if (result.success) {
-          const skippedCount = result.results.filter(r => r.skipped).length;
+          const skippedCount = result.results.filter((r: BulkApplyResultItem) => r.skipped).length;
           const processedCount = result.jobsProcessed;
           this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
+          this.jobsChanged.emit();
         } else {
           this.snackBar.open(`Fehler bei der Massenanwendung: ${result.message}`, 'Schließen', { duration: 5000 });
         }

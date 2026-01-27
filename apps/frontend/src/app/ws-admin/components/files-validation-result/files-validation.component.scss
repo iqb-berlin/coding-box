@@ -10,6 +10,9 @@ mat-dialog-content {
   font-size: 1rem;
   color: #444;
   padding: 0;
+  max-height: unset !important; // Override default mat-dialog-content limit
+  flex: 1;
+  overflow-y: auto;
 }
 
 mat-dialog-actions {
@@ -19,6 +22,9 @@ mat-dialog-actions {
 
 :host ::ng-deep .mat-dialog-container {
   padding-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important; // Prevent outer scrollbar
 }
 
 .scroll-container {
@@ -50,8 +56,13 @@ mat-dialog-actions {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 h4 {
@@ -828,6 +839,49 @@ h4 {
             color: #d32f2f;
           }
         }
+      }
+    }
+  }
+}
+
+.status-note {
+  font-size: 0.85em;
+  font-weight: normal;
+  color: #666;
+  margin-left: 6px;
+  font-style: italic;
+}
+
+.missing-units-context {
+  margin: 8px 0 12px 0;
+  background-color: #fff3e0;
+  border: 1px solid rgba(255, 152, 0, 0.2);
+  border-radius: 6px;
+  padding: 12px;
+
+  p {
+    font-weight: 600;
+    color: #e65100;
+    margin: 0 0 8px 0;
+    font-size: 14px;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 20px;
+
+    li {
+      font-size: 13px;
+      color: #bf360c;
+      margin-bottom: 4px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .missing-list {
+        color: #795548;
+        font-style: italic;
       }
     }
   }

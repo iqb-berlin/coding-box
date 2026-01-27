@@ -17,7 +17,7 @@ import {
 } from '@nestjs/swagger';
 import { Express } from 'express';
 import 'multer';
-import { ResourcePackageService } from '../../database/services/resource-package.service';
+import { ResourcePackageService } from '../../database/services/workspace';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
 import { ApiFile } from './api-file.decorator';

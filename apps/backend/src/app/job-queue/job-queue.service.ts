@@ -10,15 +10,30 @@ export interface TestPersonCodingJobData {
   autoCoderRun?: number;
 }
 
+export interface FlatResponseFilterOptionsJobData {
+  workspaceId: number;
+  processingDurationThresholdMs: number;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
-  exportType: 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times' | 'test-results' | 'test-logs';
+  exportType:
+  | 'aggregated'
+  | 'by-coder'
+  | 'by-variable'
+  | 'detailed'
+  | 'coding-times'
+  | 'test-results'
+  | 'test-logs';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
-  doubleCodingMethod?: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent';
+  doubleCodingMethod?:
+  | 'new-row-per-variable'
+  | 'new-column-per-coder'
+  | 'most-frequent';
   includeComments?: boolean;
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
@@ -71,33 +86,74 @@ export class JobQueueService {
   constructor(
     @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
     @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
-    @InjectQueue('data-export') private dataExportQueue: Queue
-  ) {}
+    @InjectQueue('data-export') private dataExportQueue: Queue,
+    @InjectQueue('flat-response-filter-options')
+    private flatResponseFilterOptionsQueue: Queue
+  ) { }
 
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
     options?: JobOptions
   ): Promise<Job<TestPersonCodingJobData>> {
-    this.logger.log(`Adding test person coding job for workspace ${data.workspaceId}`);
+    this.logger.log(
+      `Adding test person coding job for workspace ${data.workspaceId}`
+    );
     return this.testPersonCodingQueue.add(data, options);
   }
 
-  async getTestPersonCodingJob(jobId: string): Promise<Job<TestPersonCodingJobData>> {
+  async getTestPersonCodingJob(
+    jobId: string
+  ): Promise<Job<TestPersonCodingJobData>> {
     return this.testPersonCodingQueue.getJob(jobId);
   }
 
-  async addCodingStatisticsJob(workspaceId: number, options?: JobOptions): Promise<Job<{ workspaceId: number }>> {
-    this.logger.log(`Adding coding statistics job for workspace ${workspaceId}`);
-    return this.codingStatisticsQueue.add({ workspaceId }, options);
+  async addCodingStatisticsJob(
+    workspaceId: number,
+    version?: 'v1' | 'v2' | 'v3',
+    options?: JobOptions
+  ): Promise<Job<{ workspaceId: number; version?: 'v1' | 'v2' | 'v3' }>> {
+    this.logger.log(
+      `Adding coding statistics job for workspace ${workspaceId} (version: ${version || 'v1'})`
+    );
+    return this.codingStatisticsQueue.add({ workspaceId, version }, options);
   }
 
-  async getCodingStatisticsJob(jobId: string): Promise<Job<{ workspaceId: number }>> {
+  async getCodingStatisticsJob(
+    jobId: string
+  ): Promise<Job<{ workspaceId: number }>> {
     return this.codingStatisticsQueue.getJob(jobId);
   }
 
-  async getTestPersonCodingJobs(workspaceId: number): Promise<Job<TestPersonCodingJobData>[]> {
-    this.logger.log(`Fetching all test person coding jobs for workspace ${workspaceId}`);
-    const jobs = await this.testPersonCodingQueue.getJobs(['completed', 'failed', 'active', 'waiting', 'delayed']);
+  async addFlatResponseFilterOptionsJob(
+    workspaceId: number,
+    processingDurationThresholdMs: number,
+    options?: JobOptions
+  ): Promise<Job<FlatResponseFilterOptionsJobData>> {
+    this.logger.log(
+      `Adding flat response filter-options cache job for workspace ${workspaceId}`
+    );
+    return this.flatResponseFilterOptionsQueue.add(
+      {
+        workspaceId,
+        processingDurationThresholdMs
+      },
+      options
+    );
+  }
+
+  async getTestPersonCodingJobs(
+    workspaceId: number
+  ): Promise<Job<TestPersonCodingJobData>[]> {
+    this.logger.log(
+      `Fetching all test person coding jobs for workspace ${workspaceId}`
+    );
+    const jobs = await this.testPersonCodingQueue.getJobs([
+      'completed',
+      'failed',
+      'active',
+      'waiting',
+      'delayed'
+    ]);
     this.logger.log(`Found ${jobs.length} jobs in total`);
     return jobs.filter(job => job.data.workspaceId === workspaceId);
   }
@@ -114,13 +170,17 @@ export class JobQueueService {
 
       if (state === 'waiting' || state === 'delayed') {
         await job.remove();
-        this.logger.log(`Job ${jobId} has been cancelled and removed from queue`);
+        this.logger.log(
+          `Job ${jobId} has been cancelled and removed from queue`
+        );
         return true;
       }
 
       if (state === 'active') {
         await job.discard();
-        this.logger.log(`Job ${jobId} is active, marked for discard (will not retry on failure)`);
+        this.logger.log(
+          `Job ${jobId} is active, marked for discard (will not retry on failure)`
+        );
         return true;
       }
 
@@ -160,7 +220,9 @@ export class JobQueueService {
     data: ExportJobData,
     options?: JobOptions
   ): Promise<Job<ExportJobData>> {
-    this.logger.log(`Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`);
+    this.logger.log(
+      `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
+    );
     return this.dataExportQueue.add(data, options);
   }
 
@@ -170,7 +232,13 @@ export class JobQueueService {
 
   async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
     this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
-    const jobs = await this.dataExportQueue.getJobs(['completed', 'failed', 'active', 'waiting', 'delayed']);
+    const jobs = await this.dataExportQueue.getJobs([
+      'completed',
+      'failed',
+      'active',
+      'waiting',
+      'delayed'
+    ]);
     this.logger.log(`Found ${jobs.length} export jobs in total`);
     return jobs.filter(job => job.data.workspaceId === workspaceId);
   }
@@ -188,7 +256,9 @@ export class JobQueueService {
       // For waiting/delayed jobs, we can remove them directly
       if (state === 'waiting' || state === 'delayed') {
         await job.remove();
-        this.logger.log(`Export job ${jobId} has been cancelled and removed from queue`);
+        this.logger.log(
+          `Export job ${jobId} has been cancelled and removed from queue`
+        );
         return true;
       }
 
@@ -196,13 +266,17 @@ export class JobQueueService {
       // and handle the cancellation. We use discard() to prevent retries.
       if (state === 'active') {
         await job.discard();
-        this.logger.log(`Export job ${jobId} is active, marked for cancellation (will stop at next checkpoint)`);
+        this.logger.log(
+          `Export job ${jobId} is active, marked for cancellation (will stop at next checkpoint)`
+        );
         return true;
       }
 
       // For completed/failed jobs, just log and return true
       if (state === 'completed' || state === 'failed') {
-        this.logger.log(`Export job ${jobId} is already ${state}, no action needed`);
+        this.logger.log(
+          `Export job ${jobId} is already ${state}, no action needed`
+        );
         return true;
       }
 
@@ -211,7 +285,10 @@ export class JobQueueService {
       this.logger.log(`Export job ${jobId} has been cancelled`);
       return true;
     } catch (error) {
-      this.logger.error(`Error cancelling export job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error cancelling export job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -219,7 +296,9 @@ export class JobQueueService {
   async markExportJobCancelled(jobId: string): Promise<boolean> {
     const job = await this.dataExportQueue.getJob(jobId);
     if (!job) {
-      this.logger.warn(`Export job with ID ${jobId} not found for cancellation marking`);
+      this.logger.warn(
+        `Export job with ID ${jobId} not found for cancellation marking`
+      );
       return false;
     }
 
@@ -232,7 +311,10 @@ export class JobQueueService {
       this.logger.log(`Export job ${jobId} has been marked as cancelled`);
       return true;
     } catch (error) {
-      this.logger.error(`Error marking export job as cancelled: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error marking export job as cancelled: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -245,7 +327,10 @@ export class JobQueueService {
       }
       return job.data.isCancelled === true;
     } catch (error) {
-      this.logger.error(`Error checking export job cancellation: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error checking export job cancellation: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -262,7 +347,10 @@ export class JobQueueService {
       this.logger.log(`Export job ${jobId} has been deleted`);
       return true;
     } catch (error) {
-      this.logger.error(`Error deleting export job: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error deleting export job: ${error.message}`,
+        error.stack
+      );
       return false;
     }
   }
@@ -310,7 +398,10 @@ export class JobQueueService {
         }
       };
     } catch (error) {
-      this.logger.error(`Redis connection check failed: ${error.message}`, error.stack);
+      this.logger.error(
+        `Redis connection check failed: ${error.message}`,
+        error.stack
+      );
 
       return {
         connected: false,

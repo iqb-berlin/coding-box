@@ -1,41 +1,58 @@
-// eslint-disable-next-line max-classes-per-file
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatTableModule } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { provideHttpClient } from '@angular/common/http';
+import { of } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
-import { environment } from '../../../../environments/environment';
-import { SERVER_URL } from '../../../injection-tokens';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('WsAccessRightsComponent', () => {
   let component: WsAccessRightsComponent;
   let fixture: ComponentFixture<WsAccessRightsComponent>;
+  let mockUserBackendService: Partial<UserBackendService>;
+  let mockAppService: Partial<AppService>;
+  let mockSnackBar: Partial<MatSnackBar>;
+
+  const mockUsers = [
+    {
+      id: 1, name: 'user1', displayName: 'User One', accessLevel: 1
+    },
+    {
+      id: 2, name: 'user2', displayName: 'User Two', accessLevel: 2
+    }
+  ];
 
   beforeEach(async () => {
+    mockUserBackendService = {
+      getUsers: jest.fn().mockReturnValue(of(mockUsers)),
+      saveUsers: jest.fn().mockReturnValue(of(true))
+    };
+
+    mockAppService = {
+      selectedWorkspaceId: 1
+    };
+
+    mockSnackBar = {
+      open: jest.fn()
+    };
+
     await TestBed.configureTestingModule({
-      providers: [
-        provideHttpClient(),
-        {
-          provide: SERVER_URL,
-          useValue: environment.backendUrl
-        },
-        {
-          provide: MatSnackBar,
-          useValue: { open: jest.fn() }
-        }
-      ],
       imports: [
+        WsAccessRightsComponent,
         MatCheckboxModule,
         MatTooltipModule,
         MatIconModule,
-        MatTableModule,
         NoopAnimationsModule,
         TranslateModule.forRoot()
+      ],
+      providers: [
+        { provide: UserBackendService, useValue: mockUserBackendService },
+        { provide: AppService, useValue: mockAppService },
+        { provide: MatSnackBar, useValue: mockSnackBar }
       ]
     }).compileComponents();
 
@@ -46,5 +63,34 @@ describe('WsAccessRightsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should load users on creation', () => {
+    expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
+    expect(component.workspaceUsers.entries.length).toBe(2);
+    expect(component.workspaceUsers.entries[0].name).toBe('user1');
+  });
+
+  it('should change access level correctly', () => {
+    const user = component.workspaceUsers.entries[0];
+    component.changeAccessLevel(true, user, 3);
+    expect(user.accessLevel).toBe(3);
+    expect(user.isChecked).toBe(true);
+    expect(component.workspaceUsers.hasChanged).toBe(true);
+
+    component.changeAccessLevel(false, user, 3);
+    expect(user.accessLevel).toBe(0);
+    expect(user.isChecked).toBe(false);
+  });
+
+  it('should save access rights successfully', () => {
+    const user = component.workspaceUsers.entries[0];
+    component.changeAccessLevel(true, user, 3);
+
+    component.save();
+
+    expect(mockUserBackendService.saveUsers).toHaveBeenCalled();
+    expect(mockSnackBar.open).toHaveBeenCalledWith('Zugriffsrechte erfolgreich gespeichert', 'Schließen', expect.any(Object));
+    expect(component.workspaceUsers.hasChanged).toBe(false);
   });
 });
