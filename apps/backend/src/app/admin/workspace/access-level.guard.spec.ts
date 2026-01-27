@@ -215,13 +215,8 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(null);
       const context = createMockExecutionContext(42, '456', 2);
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toContain('workspace 456');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('workspace 456');
     });
   });
 
@@ -551,13 +546,8 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(1);
       const context = createMockExecutionContext(42, '123', 3);
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toBe('Access level 3 required. Current user has level 1');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('Access level 3 required. Current user has level 1');
     });
 
     it('should provide clear error message for missing workspace access', async () => {
@@ -565,13 +555,8 @@ describe('AccessLevelGuard (Backend)', () => {
       usersService.getUserAccessLevel.mockResolvedValue(null);
       const context = createMockExecutionContext(42, '789', 2);
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toBe('User does not have access to workspace 789');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('User does not have access to workspace 789');
     });
 
     it('should provide clear error message for missing user ID', async () => {
@@ -585,13 +570,8 @@ describe('AccessLevelGuard (Backend)', () => {
         getHandler: () => ({})
       } as unknown as ExecutionContext;
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toBe('User ID not found in request');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('User ID not found in request');
     });
 
     it('should provide clear error message for missing workspace ID', async () => {
@@ -606,13 +586,8 @@ describe('AccessLevelGuard (Backend)', () => {
         getHandler: () => ({})
       } as unknown as ExecutionContext;
 
-      try {
-        await guard.canActivate(context);
-        fail('Should have thrown UnauthorizedException');
-      } catch (error) {
-        expect(error).toBeInstanceOf(UnauthorizedException);
-        expect(error.message).toBe('Workspace ID not found in request');
-      }
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('Workspace ID not found in request');
     });
   });
 });
