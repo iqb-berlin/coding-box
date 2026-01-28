@@ -14,6 +14,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
 export class CodingResultsExportService {
@@ -31,7 +32,8 @@ export class CodingResultsExportService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   clearPageMapsCache(): void {
@@ -212,7 +214,12 @@ export class CodingResultsExportService {
       const personBooklets = new Map<string, string>();
       const variableUnitNames = new Map<string, string>();
 
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -425,7 +432,12 @@ export class CodingResultsExportService {
         coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -659,8 +671,13 @@ export class CodingResultsExportService {
         coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
       // Process all coding job units
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 

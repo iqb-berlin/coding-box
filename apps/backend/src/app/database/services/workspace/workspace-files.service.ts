@@ -181,10 +181,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     const numericIds = fileIds
       .map(id => parseInt(id, 10))
       .filter(id => !Number.isNaN(id));
-    const res = await this.fileUploadRepository.delete({
-      id: In(numericIds),
-      workspace_id: workspace_id
-    });
+
+    const res = await this.fileUploadRepository
+      .createQueryBuilder()
+      .delete()
+      .from(FileUpload)
+      .where('workspace_id = :workspaceId', { workspaceId: workspace_id })
+      .andWhere('id IN (:...ids)', { ids: numericIds })
+      .execute();
 
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);

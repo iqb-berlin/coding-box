@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 export interface ResponseFilterOptions {
   status?: string;
@@ -25,8 +26,9 @@ export class CodingResponseFilterService {
   constructor(
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
-    private readonly fileCacheService: CodingFileCacheService
-  ) {}
+    private readonly fileCacheService: CodingFileCacheService,
+    private readonly workspaceCoreService: WorkspaceCoreService
+  ) { }
 
   /**
    * Get filtered responses for a workspace with CODING_INCOMPLETE status.
@@ -55,6 +57,11 @@ export class CodingResponseFilterService {
     }
 
     queryBuilder.orderBy('response.id', 'ASC');
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
 
     const responses = await queryBuilder.getMany();
 
@@ -111,6 +118,11 @@ export class CodingResponseFilterService {
     queryBuilder
       .orderBy('response.id', 'ASC')
       .take(batchSize);
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
 
     return queryBuilder.getMany();
   }

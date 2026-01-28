@@ -10,6 +10,7 @@ import Persons from '../../entities/persons.entity';
 
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
 
 type FileStatus = {
@@ -17,6 +18,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  ignored?: boolean;
 };
 
 type DataValidation = {
@@ -60,20 +62,24 @@ export class WorkspaceTestFilesValidationService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
-    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService
+    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
       this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
 
-      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults] = await Promise.all([
+      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults, ignoredUnits] = await Promise.all([
         this.preloadBookletToUnits(workspaceId),
         this.preloadUnitRefs(workspaceId),
         this.getAllResourceIds(workspaceId),
         this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(workspaceId),
-        this.validateAllCodingSchemes(workspaceId)
+        this.validateAllCodingSchemes(workspaceId),
+        this.workspaceCoreService.getIgnoredUnits(workspaceId)
       ]);
+
+      const ignoredUnitsSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
       const summarizeSchemaResults = (label: string, results: Map<string, { schemaValid: boolean; errors: string[] }>): void => {
         const entries = Array.from(results.entries());
@@ -162,7 +168,8 @@ export class WorkspaceTestFilesValidationService {
             resourceIds,
             resourceIdsArray,
             xmlSchemaResults,
-            codingSchemeResults
+            codingSchemeResults,
+            ignoredUnitsSet
           );
           if (validationResult) {
             validationResults.push(validationResult);
@@ -608,7 +615,8 @@ export class WorkspaceTestFilesValidationService {
     resourceIds: Set<string>,
     resourceIdsArray: string[],
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
-    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>
+    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>,
+    ignoredUnits: Set<string>
   ): ValidationData | null {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
@@ -672,9 +680,10 @@ export class WorkspaceTestFilesValidationService {
 
     for (const unitId of uniqueUnits) {
       const exists = unitMap.has(unitId);
+      const isIgnored = ignoredUnits.has(unitId);
       const schemaKey = `Unit:${unitId}`;
       const schemaInfo = xmlSchemaResults.get(schemaKey);
-      const status: FileStatus = { filename: unitId, exists };
+      const status: FileStatus = { filename: unitId, exists, ignored: isIgnored };
       if (schemaInfo) {
         status.schemaValid = schemaInfo.schemaValid;
         if (!schemaInfo.schemaValid) {
@@ -682,6 +691,10 @@ export class WorkspaceTestFilesValidationService {
         }
       }
       unitFiles.push(status);
+
+      if (isIgnored) {
+        continue;
+      }
 
       if (!exists) {
         missingUnits.push(unitId);
