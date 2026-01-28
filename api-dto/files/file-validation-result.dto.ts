@@ -5,6 +5,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  ignored?: boolean;
 };
 
 type DataValidation = {

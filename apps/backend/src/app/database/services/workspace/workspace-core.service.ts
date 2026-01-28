@@ -17,7 +17,7 @@ export class WorkspaceCoreService {
     @InjectRepository(Workspace)
     private workspaceRepository: Repository<Workspace>,
     private connection: Connection
-  ) {}
+  ) { }
 
   async findAll(options?: { page: number; limit: number }): Promise<[WorkspaceInListDto[], number]> {
     this.logger.log('Fetching all workspaces from the repository.');
@@ -123,5 +123,25 @@ export class WorkspaceCoreService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  async getIgnoredUnits(workspaceId: number): Promise<string[]> {
+    const workspace = await this.findOne(workspaceId);
+    if (!workspace.settings) return [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const settings = workspace.settings as any;
+    return Array.isArray(settings.ignoredUnits) ? settings.ignoredUnits : [];
+  }
+
+  async setIgnoredUnits(workspaceId: number, ignoredUnits: string[]): Promise<void> {
+    const workspace = await this.workspaceRepository.findOne({ where: { id: workspaceId } });
+    if (!workspace) throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const settings = (workspace.settings || {}) as any;
+    settings.ignoredUnits = ignoredUnits;
+    workspace.settings = settings;
+
+    await this.workspaceRepository.save(workspace);
   }
 }

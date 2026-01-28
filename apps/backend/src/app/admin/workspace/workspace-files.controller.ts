@@ -12,7 +12,8 @@ import {
   StreamableFile,
   UseGuards,
   UseInterceptors,
-  UploadedFiles
+  UploadedFiles,
+  Put
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -31,7 +32,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
-import { WorkspaceFilesService } from '../../database/services/workspace';
+import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
@@ -41,6 +42,7 @@ import { CodingStatisticsService, CodingValidationService } from '../../database
 export class WorkspaceFilesController {
   constructor(
     private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly workspaceCoreService: WorkspaceCoreService,
     private readonly personService: PersonService,
     private readonly codingStatisticsService: CodingStatisticsService,
     private readonly codingValidationService: CodingValidationService
@@ -121,7 +123,7 @@ export class WorkspaceFilesController {
       };
     } catch (error) {
       throw new BadRequestException(
-        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message}`
+        `An error occurred while fetching files for workspace ${workspace_id}: ${error.message} `
       );
     }
   }
@@ -343,7 +345,7 @@ export class WorkspaceFilesController {
         fileId
       );
     } catch (error) {
-      logger.error(`'Error downloading test file:' ${error}`);
+      logger.error(`'Error downloading test file:' ${error} `);
       throw new InternalServerErrorException(
         'Unable to download the file. Please try again later.'
       );
@@ -390,7 +392,7 @@ export class WorkspaceFilesController {
       Number.isNaN(parsedWorkspaceId) ||
       parsedWorkspaceId <= 0
     ) {
-      logger.warn(`Invalid workspace ID provided: ${workspaceId}`);
+      logger.warn(`Invalid workspace ID provided: ${workspaceId} `);
       throw new BadRequestException('Workspace ID must be a positive integer.');
     }
     const workspaceIdNum = parsedWorkspaceId;
@@ -405,7 +407,7 @@ export class WorkspaceFilesController {
 
       if (body.fileTypes.length > MAX_FILE_TYPES) {
         logger.warn(
-          `Too many file types requested for workspace ${workspaceId}: ${body.fileTypes.length}`
+          `Too many file types requested for workspace ${workspaceId}: ${body.fileTypes.length} `
         );
         throw new BadRequestException(
           `Maximum ${MAX_FILE_TYPES} file types allowed.`
@@ -459,12 +461,12 @@ export class WorkspaceFilesController {
 
       const duration = Date.now() - startTime;
       logger.log(
-        `ZIP download completed for workspace ${workspaceIdNum} in ${duration}ms (${zipBuffer.length} bytes)`
+        `ZIP download completed for workspace ${workspaceIdNum} in ${duration} ms(${zipBuffer.length} bytes)`
       );
 
       return new StreamableFile(zipBuffer, {
         type: 'application/zip',
-        disposition: `attachment; filename="workspace-${workspaceIdNum}-files.zip"`
+        disposition: `attachment; filename = "workspace-${workspaceIdNum}-files.zip"`
       });
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -472,8 +474,8 @@ export class WorkspaceFilesController {
         error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       logger.error(
-        `Error creating ZIP file for workspace ${workspaceIdNum} after ${duration}ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
-        }`
+        `Error creating ZIP file for workspace ${workspaceIdNum} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
+        } `
       );
 
       // Re-throw known exceptions
@@ -507,5 +509,29 @@ export class WorkspaceFilesController {
         'Unable to create ZIP file. Please try again later.'
       );
     }
+  }
+
+  @Get(':workspace_id/files/ignored-units')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOkResponse({ description: 'List of ignored units', type: [String] })
+  async getIgnoredUnits(@Param('workspace_id') workspaceId: number): Promise<string[]> {
+    return this.workspaceCoreService.getIgnoredUnits(workspaceId);
+  }
+
+  @Put(':workspace_id/files/ignored-units')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOkResponse({ description: 'Ignored units updated' })
+  async updateIgnoredUnits(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: { ignoredUnits: string[] }
+  ): Promise<void> {
+    if (!body || !Array.isArray(body.ignoredUnits)) {
+      throw new BadRequestException('ignoredUnits must be an array of strings');
+    }
+    return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits);
   }
 }
