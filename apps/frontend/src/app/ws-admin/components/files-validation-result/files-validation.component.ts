@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
@@ -97,7 +97,7 @@ interface ExpandedFilesLists {
   ],
   styleUrls: ['./files-validation.component.scss']
 })
-export class FilesValidationDialogComponent {
+export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
 
@@ -126,6 +126,8 @@ export class FilesValidationDialogComponent {
 
   allSelected = false;
   isResolvingDuplicates = false;
+
+  ignoredUnits = new Set<string>();
 
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -239,6 +241,89 @@ export class FilesValidationDialogComponent {
         this.unusedTestFiles = this.data.unusedTestFiles;
       }
     }
+  }
+
+  ngOnInit(): void {
+    if (this.data.workspaceId) {
+      this.loadIgnoredUnits();
+    }
+  }
+
+  loadIgnoredUnits(): void {
+    if (!this.data.workspaceId) return;
+    this.workspaceService.getIgnoredUnits(this.data.workspaceId).subscribe(units => {
+      this.ignoredUnits = new Set(units.map(u => u.toUpperCase()));
+    });
+  }
+
+  isUnitIgnored(unit: string): boolean {
+    return !!unit && this.ignoredUnits.has(unit.toUpperCase());
+  }
+
+  toggleUnitIgnore(unit: string): void {
+    if (!unit || !this.data.workspaceId) return;
+    const normalized = unit.toUpperCase();
+    let message = '';
+
+    if (this.ignoredUnits.has(normalized)) {
+      this.ignoredUnits.delete(normalized);
+      message = 'Aufgabe wiederhergestellt';
+    } else {
+      this.ignoredUnits.add(normalized);
+      message = 'Aufgabe ignoriert';
+    }
+
+    this.workspaceService.saveIgnoredUnits(this.data.workspaceId, Array.from(this.ignoredUnits)).subscribe({
+      next: success => {
+        if (success) {
+          this.snackBar.open(message, 'OK', { duration: 3000 });
+          if (this.data.workspaceId) {
+            this.testResultService.invalidateCache(this.data.workspaceId);
+          }
+        } else {
+          // Revert change on failure
+          if (this.ignoredUnits.has(normalized)) {
+            this.ignoredUnits.delete(normalized);
+          } else {
+            this.ignoredUnits.add(normalized);
+          }
+          this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+        }
+      },
+      error: () => {
+        // Revert change on error
+        if (this.ignoredUnits.has(normalized)) {
+          this.ignoredUnits.delete(normalized);
+        } else {
+          this.ignoredUnits.add(normalized);
+        }
+        this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+      }
+    });
+  }
+
+  isSectionComplete(data: DataValidation, sectionType: string): boolean {
+    if (data.complete) return true;
+    if (!data.missing || data.missing.length === 0) return true;
+    if (sectionType === 'units') {
+      const visibleMissing = data.missing.filter(u => !this.isUnitIgnored(u));
+      return visibleMissing.length === 0;
+    }
+    // Check if missing items depends on ignored units (e.g. Schemes for ignored units?)
+    // For simplicity, we only filter "missing units" in the Units section for now.
+    // Ideally, if a unit is ignored, its missing resources should probably also be ignored?
+    // But currently we only implement ignoring UNITS.
+    return false;
+  }
+
+  getFilteredMissingCount(data: DataValidation, sectionType: string): number {
+    const missingCount = this.getMissingCount(data);
+    if (sectionType === 'units') {
+      const missingFiles = data.files.filter(f => !f.exists);
+      const ignoredMissing = missingFiles.filter(f => this.isUnitIgnored(f.filename));
+      return Math.max(0, missingCount - ignoredMissing.length);
+    }
+    return missingCount;
   }
 
   filesDeleted = false;

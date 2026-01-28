@@ -14,6 +14,7 @@ import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;
@@ -41,7 +42,8 @@ describe('WorkspaceTestResultsService', () => {
       {} as unknown as JournalService,
       {} as unknown as CacheService,
       {} as unknown as CodingListService,
-      responseManagementService
+      responseManagementService,
+      {} as unknown as WorkspaceCoreService
     );
   });
 
