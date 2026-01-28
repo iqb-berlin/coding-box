@@ -320,13 +320,13 @@
             </h3>
             <p class="status-row">
               Status:
-              @if (val.units.complete) {
+              @if (isSectionComplete(val.units, 'units')) {
               <span class="status-complete">
                 <mat-icon class="status-icon">check_circle</mat-icon>
                 Vollständig
               </span>
               }
-              @if (!val.units.complete) {
+              @if (!isSectionComplete(val.units, 'units')) {
               <span class="status-incomplete">
                 <mat-icon class="status-icon">error</mat-icon>
                 @if (val.units.missing && val.units.missing.length > 0) {
@@ -343,7 +343,7 @@
                 <span>
                   Alle Dateien: {{ val.units.files.length }}
                   (vorhanden: {{ getExistingCount(val.units) }},
-                  fehlend: {{ getMissingCount(val.units) }})
+                  fehlend: {{ getFilteredMissingCount(val.units, 'units') }})
                 </span>
                 <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'units') ? 'expand_less' :
                   'expand_more' }}</mat-icon>
@@ -354,7 +354,7 @@
               <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'units')">
                 <ul>
                   @for (file of val.units.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists" [class.ignored-unit]="isUnitIgnored(file.filename)">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && getBookletsForMissingUnit(val.units, file.filename).length > 0) {
@@ -388,6 +388,10 @@
                       <mat-icon>info</mat-icon>
                     </button>
                     }
+                    <button mat-icon-button class="file-action-button" (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
+                      matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}">
+                      <mat-icon>{{ isUnitIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
+                    </button>
                   </li>
                   }
                 </ul>

@@ -8,6 +8,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
@@ -20,7 +21,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
-    private bullJobManagementService: BullJobManagementService
+    private bullJobManagementService: BullJobManagementService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -75,7 +77,9 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
     try {
       const unitVariables = await this.getUnitVariables(workspace_id);
-      const unitsWithVariables = Object.keys(unitVariables);
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+      const unitsWithVariables = Object.keys(unitVariables).filter(u => !ignoredSet.has(u.toUpperCase()));
 
       if (unitsWithVariables.length === 0) {
         this.logger.log(`No units with variables found for workspace ${workspace_id}`);

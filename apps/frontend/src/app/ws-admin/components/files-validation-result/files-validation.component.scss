@@ -886,3 +886,17 @@ h4 {
     }
   }
 }
+
+.ignored-unit {
+  opacity: 0.6;
+  background-color: rgba(0, 0, 0, 0.03) !important;
+  
+  .file-name {
+    text-decoration: line-through;
+    color: #999;
+  }
+  
+  .file-status-icon {
+    opacity: 0.5;
+  }
+}
