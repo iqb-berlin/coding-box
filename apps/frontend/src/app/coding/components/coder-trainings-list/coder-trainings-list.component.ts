@@ -223,8 +223,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: jobs => {
           this.dialog.open(TrainingJobsDialogComponent, {
-            width: '80vw',
-            maxWidth: '1000px',
+            width: '90vw',
             data: {
               training,
               jobs

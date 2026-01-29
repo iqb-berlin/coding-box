@@ -131,7 +131,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   isLoading = false;
 
   coderTrainings: CoderTraining[] = [];
-  selectedTrainingId: number | null = null;
+  selectedTrainingId: number | string | null = null;
   selectedStatus: string | null = null;
   selectedCoderId: number | null = null;
   selectedJobName: string | null = null;
@@ -195,7 +195,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
-                  ((typeof progress.id === 'number' && progress.id < 0) ||
+                  ((typeof progress.id === 'number' && progress.id < 0 && progress.id !== -1) ||
                     (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
                 ) : false;
               });
@@ -211,7 +211,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
-            this.onTrainingFilterChange();
+            this.applyAllFilters();
             this.jobsChanged.emit();
           },
           error: () => {
@@ -258,7 +258,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
             this.jobDetailsCache.clear();
             this.isLoading = false;
-            this.onTrainingFilterChange();
+            this.applyAllFilters();
             this.jobsChanged.emit();
           },
           error: () => {
@@ -308,8 +308,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       filteredData = filteredData.filter(job => job.name === this.selectedJobName);
     }
 
-    if (this.selectedTrainingId !== null && this.selectedTrainingId !== undefined) {
-      filteredData = filteredData.filter(job => job.training_id === this.selectedTrainingId);
+    if (this.selectedTrainingId === 'none') {
+      filteredData = filteredData.filter(job => !job.training_id && !job.training);
+    } else if (this.selectedTrainingId !== null && this.selectedTrainingId !== undefined) {
+      const searchId = Number(this.selectedTrainingId);
+      filteredData = filteredData.filter(job => (job.training_id && Number(job.training_id) === searchId) ||
+        (job.training && job.training.id && Number(job.training.id) === searchId)
+      );
     }
 
     this.dataSource.data = filteredData;
@@ -500,7 +505,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return 'Keine Aufgaben';
     }
 
-    if (openUnits > 0) {
+    if (openUnits > 0 && codedUnits > 0) {
       return `${progress}% (${codedUnits}/${totalUnits}, ${openUnits} offen)`;
     }
 
@@ -700,17 +705,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   onTrainingFilterChange(): void {
-    this.applyTrainingFilter();
-    this.applyFilter();
-  }
-
-  private applyTrainingFilter(): void {
-    if (this.selectedTrainingId === null || this.selectedTrainingId === undefined) {
-      this.dataSource.data = this.originalData || [];
-      return;
-    }
-
-    this.dataSource.data = (this.originalData || []).filter(job => job.training_id === this.selectedTrainingId);
+    this.selection.clear();
+    this.applyAllFilters();
   }
 
   restartCodingJob(job: CodingJob): void {

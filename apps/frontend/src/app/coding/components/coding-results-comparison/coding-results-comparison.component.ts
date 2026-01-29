@@ -3,7 +3,7 @@ import {
   ViewChild
 } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatSort, MatSortModule } from '@angular/material/sort';
 import { MatPaginator, MatPaginatorIntl, MatPaginatorModule } from '@angular/material/paginator';
@@ -75,6 +75,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   @ViewChild(MatPaginator) paginator!: MatPaginator;
 
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
+  private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
   isLoading = false;
@@ -96,19 +97,19 @@ export class CodingResultsComparisonComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: { workspaceId: number; selectedTraining?: CoderTraining },
     private paginatorIntl: MatPaginatorIntl
   ) {
-    this.paginatorIntl.itemsPerPageLabel = 'Einträge pro Seite:';
-    this.paginatorIntl.nextPageLabel = 'Nächste Seite';
-    this.paginatorIntl.previousPageLabel = 'Vorherige Seite';
-    this.paginatorIntl.firstPageLabel = 'Erste Seite';
-    this.paginatorIntl.lastPageLabel = 'Letzte Seite';
+    this.paginatorIntl.itemsPerPageLabel = this.translate.instant('paginator.itemsPerPageLabel');
+    this.paginatorIntl.nextPageLabel = this.translate.instant('paginator.nextPageLabel');
+    this.paginatorIntl.previousPageLabel = this.translate.instant('paginator.previousPageLabel');
+    this.paginatorIntl.firstPageLabel = this.translate.instant('paginator.firstPageLabel');
+    this.paginatorIntl.lastPageLabel = this.translate.instant('paginator.lastPageLabel');
     this.paginatorIntl.getRangeLabel = (page: number, pageSize: number, length: number) => {
       if (length === 0 || pageSize === 0) {
-        return `0 von ${length}`;
+        return this.translate.instant('paginator.getRangeLabel', { startIndex: 0, endIndex: 0, length });
       }
       const effectiveLength = Math.max(length, 0);
       const startIndex = page * pageSize;
       const endIndex = startIndex < effectiveLength ? Math.min(startIndex + pageSize, effectiveLength) : startIndex + pageSize;
-      return `${startIndex + 1} - ${endIndex} von ${effectiveLength}`;
+      return this.translate.instant('paginator.getRangeLabel', { startIndex: startIndex + 1, endIndex, length: effectiveLength });
     };
   }
 
@@ -141,7 +142,7 @@ export class CodingResultsComparisonComponent implements OnInit {
           resolve();
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Kodierer-Schulungen', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translate.instant('coding.trainings.loading.error'), this.translate.instant('common.close'), { duration: 3000 });
           reject();
         }
       });
@@ -196,7 +197,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   loadComparison(): void {
     if (this.comparisonMode === 'between-trainings') {
       if (this.selectedTrainings.selected.length < 2) {
-        this.snackBar.open('Bitte wählen Sie mindestens 2 Schulungen zum Vergleich aus', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.translate.instant('coding.trainings.compare.notEnough'), this.translate.instant('common.close'), { duration: 3000 });
         return;
       }
 
@@ -211,13 +212,13 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.isLoading = false;
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Vergleichsdaten', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
           this.isLoading = false;
         }
       });
     } else if (this.comparisonMode === 'within-training') {
       if (!this.selectedTrainingForWithin) {
-        this.snackBar.open('Bitte wählen Sie eine Schulung aus', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.translate.instant('coding.trainings.select-training'), this.translate.instant('common.close'), { duration: 3000 });
         return;
       }
 
@@ -236,7 +237,7 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.isLoading = false;
         },
         error: () => {
-          this.snackBar.open('Fehler beim Laden der Vergleichsdaten', 'Schließen', { duration: 3000 });
+          this.snackBar.open(this.translate.instant('variable-analysis.error-loading-results'), this.translate.instant('common.close'), { duration: 3000 });
           this.isLoading = false;
         }
       });
