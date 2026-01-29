@@ -33,7 +33,7 @@ export class GithubReleasesService {
   constructor(
     private readonly httpService: HttpService,
     private readonly workspaceFilesService: WorkspaceFilesService
-  ) {}
+  ) { }
 
   async getReleases(type: 'aspect-player' | 'schemer'): Promise<GithubReleaseShort[]> {
     const repo = this.repositories[type];
@@ -48,7 +48,13 @@ export class GithubReleasesService {
 
       return response.data
         .map(release => {
-          const asset = release.assets.find(a => a.name.endsWith('.html'));
+          let asset;
+          if (type === 'aspect-player') {
+            asset = release.assets.find(a => a.name.endsWith('.html') && a.name.toLowerCase().includes('player'));
+          } else {
+            asset = release.assets.find(a => a.name.endsWith('.html'));
+          }
+
           if (!asset) return null;
           return {
             version: release.tag_name,
@@ -75,7 +81,7 @@ export class GithubReleasesService {
       );
 
       const buffer = Buffer.from(response.data);
-      const filename = url.split('/').pop() || 'download.html';
+      const filename = decodeURIComponent(url.split('/').pop() || 'download.html');
       const fileIo: FileIo = {
         buffer,
         originalname: filename,
