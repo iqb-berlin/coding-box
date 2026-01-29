@@ -263,7 +263,7 @@ export class WorkspaceFileParsingService {
     if (!file?.originalname) {
       throw new Error('Invalid file: originalname is required.');
     }
-    const filePathParts = file.originalname.split('/')
+    const filePathParts = decodeURIComponent(file.originalname).split('/')
       .map(part => part.trim());
     const fileName = filePathParts.pop();
     if (!fileName) {
