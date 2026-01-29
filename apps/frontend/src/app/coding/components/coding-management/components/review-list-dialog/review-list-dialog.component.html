@@ -1,0 +1,54 @@
+<div class="dialog-header">
+    <h2 mat-dialog-title>{{ data.title || ('coding-management.actions.review-session' | translate) }}</h2>
+    <div class="header-controls">
+        <span class="count-badge">{{ reviewItems.length }} {{ 'coding-management.statistics.responses' | translate
+            }}</span>
+        <button mat-icon-button (click)="close()">
+            <mat-icon>close</mat-icon>
+        </button>
+    </div>
+</div>
+
+<div mat-dialog-content class="dialog-content">
+    <div class="review-list">
+        @for (item of reviewItems; track item.response.id; let i = $index) {
+        <div class="review-item" #reviewItemRef [attr.data-index]="i">
+            <div class="item-header">
+                <div class="item-info">
+                    <span class="index-badge">#{{ i + 1 }}</span>
+                    <span class="info-pill code"><strong>Code:</strong> {{ getResolvedCode(item.response) }}</span>
+                    <span class="info-pill status"><strong>Status:</strong> {{ getResolvedStatus(item.response)
+                        }}</span>
+                    <span class="info-pill login"><strong>Login:</strong> {{ item.response.login_name }}</span>
+                    @if (item.response.person_code || item.response.login_code) {
+                    <span class="info-pill person-code"><strong>Pers-Code:</strong> {{ item.response.person_code ||
+                        item.response.login_code }}</span>
+                    }
+                    @if (item.response.person_group || item.response.login_group) {
+                    <span class="info-pill person-group"><strong>Gruppe:</strong> {{ item.response.person_group ||
+                        item.response.login_group }}</span>
+                    }
+                    <span class="info-pill unit"><strong>Unit:</strong> {{ item.response.unitname }}</span>
+                </div>
+            </div>
+
+            <div class="player-container" [class.loaded]="item.isLoaded">
+                @if (item.isLoading) {
+                <div class="loading-overlay">
+                    <mat-spinner diameter="30"></mat-spinner>
+                    <p>Loading session player...</p>
+                </div>
+                }
+
+                @if (item.isLoaded && item.replayUrl) {
+                <iframe [src]="item.replayUrl" class="replay-iframe" frameborder="0" allowfullscreen></iframe>
+                }
+            </div>
+        </div>
+        }
+    </div>
+</div>
+
+<div mat-dialog-actions class="dialog-actions">
+    <button mat-button (click)="close()">{{ 'coding-management.actions.close' | translate }}</button>
+</div>

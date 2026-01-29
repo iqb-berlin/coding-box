@@ -115,6 +115,8 @@ export interface SearchResponsesParams {
   group?: string;
   code?: string;
   version?: 'v1' | 'v2' | 'v3';
+  geogebra?: boolean;
+  personLogin?: string;
 }
 
 export interface SearchResponseItem {
@@ -135,6 +137,12 @@ export interface SearchResponseItem {
   personCode: string;
   personGroup: string;
   variablePage?: string;
+  code_v1?: number;
+  code_v2?: number;
+  code_v3?: number;
+  status_v1?: string;
+  status_v2?: string;
+  status_v3?: string;
 }
 
 export interface PaginatedResponse<T> {

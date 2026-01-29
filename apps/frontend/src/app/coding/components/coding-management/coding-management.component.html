@@ -52,18 +52,19 @@
       <!-- Statistics Section -->
       <div class="statistics-section">
         <app-statistics-card [codingStatistics]="codingStatistics" [referenceStatistics]="referenceStatistics"
-          [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion" [isLoading]="isLoadingStatistics"
-          [isDownloadInProgress]="isDownloadInProgress" [statisticsLoaded]="statisticsLoaded"
-          (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
-          (downloadResults)="onDownloadResults()" (resetVersion)="onResetVersion()"
-          (statusClick)="onStatusClick($event)">
+          [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion"
+          [isLoading]="isLoadingStatistics" [isDownloadInProgress]="isDownloadInProgress"
+          [statisticsLoaded]="statisticsLoaded" (versionChange)="onVersionChange($event)"
+          (loadStatistics)="fetchCodingStatistics()" (downloadResults)="onDownloadResults()"
+          (resetVersion)="onResetVersion()" (statusClick)="onStatusClick($event)">
         </app-statistics-card>
       </div>
 
       <!-- Filter Section -->
       <div class="filters-section">
         <app-response-filters [filterParams]="filterParams" [availableStatuses]="getAvailableStatuses()"
-          [isLoading]="isLoading" (filterChange)="onFilterChange($event)" (clearFilters)="onClearFilters()">
+          [isLoading]="isLoading" [isGeogebraAvailable]="isGeogebraAvailable" (filterChange)="onFilterChange($event)"
+          (clearFilters)="onClearFilters()">
         </app-response-filters>
       </div>
 
@@ -72,8 +73,9 @@
         <app-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords"
           [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
           [currentStatusFilter]="currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
-          (pageChange)="onPageChange($event)" (replayClick)="onReplayClick($event)"
-          (showCodingScheme)="onShowCodingScheme($event)" (showUnitXml)="onShowUnitXml($event)">
+          [isGeogebraFilterActive]="filterParams.geogebra" (pageChange)="onPageChange($event)"
+          (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
+          (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()">
         </app-response-table>
       </div>
     </div>
