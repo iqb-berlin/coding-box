@@ -12,6 +12,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatInputModule } from '@angular/material/input';
 import { MatButton } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
@@ -30,6 +31,7 @@ import { FilterParams } from '../../../../services/coding-management.service';
     MatSelectModule,
     MatInputModule,
     MatButton,
+    MatCheckboxModule,
     MatIcon,
     TranslateModule
   ]
@@ -42,11 +44,14 @@ export class ResponseFiltersComponent implements OnDestroy {
     code: '',
     group: '',
     bookletName: '',
-    variableId: ''
+    variableId: '',
+    geogebra: false,
+    personLogin: ''
   };
 
   @Input() availableStatuses: string[] = [];
   @Input() isLoading = false;
+  @Input() isGeogebraAvailable = false;
 
   @Output() filterChange = new EventEmitter<FilterParams>();
   @Output() clearFilters = new EventEmitter<void>();

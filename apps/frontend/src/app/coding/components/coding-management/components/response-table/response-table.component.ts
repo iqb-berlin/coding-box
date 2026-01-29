@@ -27,7 +27,7 @@ import { MatSort, MatSortModule, MatSortHeader } from '@angular/material/sort';
 import { MatPaginator, MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIcon } from '@angular/material/icon';
-import { MatIconButton } from '@angular/material/button';
+import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDivider } from '@angular/material/divider';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -57,6 +57,7 @@ import { Success } from '../../../../models/success.model';
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatIcon,
+    MatButton,
     MatIconButton,
     MatTooltipModule,
     MatDivider,
@@ -73,11 +74,13 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
   @Input() isLoading = false;
   @Input() currentStatusFilter: string | null = null;
   @Input() selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
+  @Input() isGeogebraFilterActive = false;
 
   @Output() pageChange = new EventEmitter<PageEvent>();
   @Output() replayClick = new EventEmitter<Success>();
   @Output() showCodingScheme = new EventEmitter<number>();
   @Output() showUnitXml = new EventEmitter<number>();
+  @Output() reviewClick = new EventEmitter<void>();
 
   @ViewChild(MatSort) sort!: MatSort;
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -142,6 +145,10 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
 
   onShowUnitXml(unitName: number): void {
     this.showUnitXml.emit(unitName);
+  }
+
+  onReviewClick(): void {
+    this.reviewClick.emit();
   }
 
   getFilterStatusLabel(): string {
