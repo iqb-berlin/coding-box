@@ -221,6 +221,268 @@
 
     @if (data.validationResults && data.validationResults.length > 0) {
     <mat-tab-group>
+      @if (data.validationResults.length > 1) {
+      <mat-tab label="Übersicht">
+        <div class="summary-container">
+          <div class="summary-header">
+            <h4>Validierungs-Übersicht</h4>
+            <div class="summary-stats">
+              <div class="stat-item">
+                <span class="stat-label">Gesamtanzahl TestTaker:</span>
+                <span class="stat-value">{{ summary.totalTestTakers }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Valide TestTaker XMLs:</span>
+                <span class="stat-value success">
+                  <mat-icon class="inline-icon">check_circle</mat-icon> {{ summary.validTestTakerXmls }}
+                </span>
+              </div>
+              @if (summary.invalidTestTakerXmls > 0) {
+              <div class="stat-item">
+                <span class="stat-label">Invalide TestTaker XMLs:</span>
+                <span class="stat-value error">
+                  <mat-icon class="inline-icon">error</mat-icon> {{ summary.invalidTestTakerXmls }}
+                </span>
+              </div>
+              }
+            </div>
+          </div>
+
+          <div class="summary-cards">
+            <!-- Booklets Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">book</mat-icon>
+                <span>Testhefte</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.booklets.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.booklets.missingFiles > 0"
+                  (click)="summary.booklets.missingFiles > 0 ? toggleSummaryList('booklets') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.booklets.missingFiles > 0">{{ summary.booklets.missingFiles
+                    }}</span>
+                  @if (summary.booklets.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('booklets') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('booklets') && summary.booklets.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.booklets.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Units Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">view_module</mat-icon>
+                <span>Aufgaben</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.units.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.units.missingFiles > 0"
+                  (click)="summary.units.missingFiles > 0 ? toggleSummaryList('units') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.units.missingFiles > 0">{{ summary.units.missingFiles
+                    }}</span>
+                  @if (summary.units.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('units') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('units') && summary.units.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.units.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Schemes Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">schema</mat-icon>
+                <span>Kodierschemata</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.schemes.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.schemes.missingFiles > 0"
+                  (click)="summary.schemes.missingFiles > 0 ? toggleSummaryList('schemes') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.schemes.missingFiles > 0">{{ summary.schemes.missingFiles
+                    }}</span>
+                  @if (summary.schemes.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('schemes') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('schemes') && summary.schemes.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.schemes.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Schemer Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">app_registration</mat-icon>
+                <span>Schemer</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.schemer.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.schemer.missingFiles > 0"
+                  (click)="summary.schemer.missingFiles > 0 ? toggleSummaryList('schemer') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.schemer.missingFiles > 0">{{ summary.schemer.missingFiles
+                    }}</span>
+                  @if (summary.schemer.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('schemer') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('schemer') && summary.schemer.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.schemer.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Definitions Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">description</mat-icon>
+                <span>Definitionen</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.definitions.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.definitions.missingFiles > 0"
+                  (click)="summary.definitions.missingFiles > 0 ? toggleSummaryList('definitions') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.definitions.missingFiles > 0">{{
+                    summary.definitions.missingFiles }}</span>
+                  @if (summary.definitions.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('definitions') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('definitions') && summary.definitions.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.definitions.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Player Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">play_circle</mat-icon>
+                <span>Player</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.player.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.player.missingFiles > 0"
+                  (click)="summary.player.missingFiles > 0 ? toggleSummaryList('player') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.player.missingFiles > 0">{{ summary.player.missingFiles
+                    }}</span>
+                  @if (summary.player.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('player') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('player') && summary.player.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.player.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+
+            <!-- Metadata Summary -->
+            <div class="summary-card">
+              <div class="card-header">
+                <mat-icon class="section-icon">description</mat-icon>
+                <span>Metadaten</span>
+              </div>
+              <div class="card-content">
+                <div class="card-stat">
+                  <span class="label">Vollständig:</span>
+                  <span class="value success">{{ summary.metadata.complete }} / {{ summary.totalTestTakers }}</span>
+                </div>
+                <div class="card-stat" [class.clickable-stat]="summary.metadata.missingFiles > 0"
+                  (click)="summary.metadata.missingFiles > 0 ? toggleSummaryList('metadata') : null">
+                  <span class="label">So viele fehlen (einzigartig):</span>
+                  <span class="value" [class.error]="summary.metadata.missingFiles > 0">{{ summary.metadata.missingFiles
+                    }}</span>
+                  @if (summary.metadata.missingFiles > 0) {
+                  <mat-icon class="toggle-icon">{{ isSummaryListExpanded('metadata') ? 'expand_less' : 'expand_more'
+                    }}</mat-icon>
+                  }
+                </div>
+                @if (isSummaryListExpanded('metadata') && summary.metadata.missingFiles > 0) {
+                <div class="missing-files-list">
+                  <ul>
+                    @for (file of summary.metadata.missingFileNames; track file) {
+                    <li>{{ file }}</li>
+                    }
+                  </ul>
+                </div>
+                }
+              </div>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+      }
       @for (val of data.validationResults; track val.testTaker) {
       <mat-tab [label]="val.testTaker">
         <h4>
@@ -354,7 +616,8 @@
               <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'units')">
                 <ul>
                   @for (file of val.units.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists" [class.ignored-unit]="isUnitIgnored(file.filename)">
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists"
+                    [class.ignored-unit]="isUnitIgnored(file.filename)">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && getBookletsForMissingUnit(val.units, file.filename).length > 0) {
@@ -388,7 +651,8 @@
                       <mat-icon>info</mat-icon>
                     </button>
                     }
-                    <button mat-icon-button class="file-action-button" (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
+                    <button mat-icon-button class="file-action-button"
+                      (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
                       matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}">
                       <mat-icon>{{ isUnitIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
                     </button>

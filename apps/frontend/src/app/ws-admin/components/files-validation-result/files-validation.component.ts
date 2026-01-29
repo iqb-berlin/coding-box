@@ -80,6 +80,26 @@ interface ExpandedFilesLists {
   metadata: boolean;
 }
 
+interface SectionSummary {
+  complete: number;
+  incomplete: number;
+  missingFiles: number;
+  missingFileNames: string[];
+}
+
+interface ValidationSummary {
+  totalTestTakers: number;
+  validTestTakerXmls: number;
+  invalidTestTakerXmls: number;
+  booklets: SectionSummary;
+  units: SectionSummary;
+  schemes: SectionSummary;
+  schemer: SectionSummary;
+  definitions: SectionSummary;
+  player: SectionSummary;
+  metadata: SectionSummary;
+}
+
 @Component({
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
@@ -139,6 +159,133 @@ export class FilesValidationDialogComponent implements OnInit {
 
   isConsidering = false;
   consideringProgress = 0;
+
+  summary: ValidationSummary = {
+    totalTestTakers: 0,
+    validTestTakerXmls: 0,
+    invalidTestTakerXmls: 0,
+    booklets: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    units: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    schemes: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    schemer: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    definitions: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    player: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    metadata: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    }
+  };
+
+  expandedSummaryLists: Set<string> = new Set();
+
+  toggleSummaryList(section: string): void {
+    if (this.expandedSummaryLists.has(section)) {
+      this.expandedSummaryLists.delete(section);
+    } else {
+      this.expandedSummaryLists.add(section);
+    }
+  }
+
+  isSummaryListExpanded(section: string): boolean {
+    return this.expandedSummaryLists.has(section);
+  }
+
+  private calculateSummary(): void {
+    if (!this.data.validationResults) return;
+
+    const summaryData: ValidationSummary = {
+      totalTestTakers: this.data.validationResults.length,
+      validTestTakerXmls: 0,
+      invalidTestTakerXmls: 0,
+      booklets: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      units: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      schemes: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      schemer: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      definitions: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      player: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      metadata: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      }
+    };
+
+    const missingFilesSets = {
+      booklets: new Set<string>(),
+      units: new Set<string>(),
+      schemes: new Set<string>(),
+      schemer: new Set<string>(),
+      definitions: new Set<string>(),
+      player: new Set<string>(),
+      metadata: new Set<string>()
+    };
+
+    this.data.validationResults.forEach(val => {
+      if (val.testTakerSchemaValid === false) {
+        summaryData.invalidTestTakerXmls += 1;
+      } else {
+        summaryData.validTestTakerXmls += 1;
+      }
+
+      const updateSectionStats = (section: keyof typeof missingFilesSets, data: DataValidation) => {
+        if (this.isSectionComplete(data, section)) {
+          summaryData[section].complete += 1;
+        } else {
+          summaryData[section].incomplete += 1;
+        }
+
+        // Collect missing files
+        if (data.files) {
+          data.files.forEach(f => {
+            if (!f.exists) {
+              // For units, check if ignored
+              if (section === 'units' && this.isUnitIgnored(f.filename)) {
+                return;
+              }
+              missingFilesSets[section].add(f.filename);
+            }
+          });
+        }
+      };
+
+      updateSectionStats('booklets', val.booklets);
+      updateSectionStats('units', val.units);
+      updateSectionStats('schemes', val.schemes);
+      updateSectionStats('schemer', val.schemer);
+      updateSectionStats('definitions', val.definitions);
+      updateSectionStats('player', val.player);
+      updateSectionStats('metadata', val.metadata);
+    });
+
+    // Sort missing files and assign to summary
+    (Object.keys(missingFilesSets) as (keyof typeof missingFilesSets)[]).forEach(section => {
+      summaryData[section].missingFileNames = Array.from(missingFilesSets[section]).sort();
+      summaryData[section].missingFiles = summaryData[section].missingFileNames.length;
+    });
+
+    this.summary = summaryData;
+  }
 
   private isKnownTestTaker(item: FilteredTestTaker): boolean {
     return item.consider === true || item.consider === false;
@@ -212,6 +359,7 @@ export class FilesValidationDialogComponent implements OnInit {
             metadata: false
           });
         });
+        this.calculateSummary();
       }
 
       if (this.data.filteredTestTakers) {
