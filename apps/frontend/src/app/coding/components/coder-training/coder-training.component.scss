@@ -1,369 +1,454 @@
-.coder-training-container {
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: white;
 }
 
-.training-header {
+.coder-training-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+// Header
+.header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #e0e0e0;
+  padding: 12px 24px;
+  background: #ffffff;
+  border-bottom: 2px solid #edf2f7;
+  flex-shrink: 0;
 
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+  .title {
     margin: 0;
-    font-size: 24px;
-    font-weight: 500;
-    color: #333;
-
-    mat-icon {
-      color: #1976d2;
-    }
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #1a202c;
   }
 
   .close-button {
-    color: #666;
+    color: #a0aec0;
   }
 }
 
-.training-content {
+// Form with scrolling content
+.training-form {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
-}
+  gap: 20px;
 
-.section {
-  .section-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16px;
+  .section {
+    display: block;
+    width: 100%;
 
-    .section-subtitle {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 500;
-      color: #333;
-    }
-
-    .selection-controls {
-      display: flex;
-      gap: 8px;
-    }
-  }
-}
-
-// Coder Selection Styles
-.coder-selection {
-  .coder-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 12px;
-    margin-bottom: 16px;
-  }
-
-  .coder-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    padding: 16px;
-    border: 2px solid #e0e0e0;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-
-    &:hover {
-      border-color: #1976d2;
-      background-color: #f8f9fa;
-    }
-
-    &.selected {
-      border-color: #1976d2;
-      background-color: #e3f2fd;
-    }
-
-    .coder-info {
-      flex: 1;
-
-      .coder-name {
-        font-weight: 500;
-        font-size: 16px;
-        color: #333;
-        margin-bottom: 4px;
-      }
-
-      .coder-email {
-        font-size: 14px;
-        color: #666;
-        margin-bottom: 4px;
-      }
-
-      .coder-jobs {
-        font-size: 12px;
-        color: #888;
-        font-style: italic;
-      }
-    }
-  }
-
-  .no-coders-message {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 48px;
-    color: #666;
-    text-align: center;
-
-    mat-icon {
-      font-size: 48px;
-      width: 48px;
-      height: 48px;
-      margin-bottom: 16px;
-      color: #ccc;
-    }
-  }
-}
-
-.selection-summary {
-  padding: 12px 16px;
-  background-color: #e8f5e8;
-  border-radius: 6px;
-  border-left: 4px solid #4caf50;
-
-  p {
-    margin: 0;
-    color: #2e7d32;
-  }
-}
-
-// Variable Configuration Styles
-.variable-config {
-  .variable-section-title {
-    margin-bottom: 16px;
-    color: #555;
-    font-weight: 500;
-  }
-
-  .variable-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 16px;
-    margin-bottom: 16px;
-    padding: 16px;
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    background-color: #fafafa;
-
-    .variable-name-field {
-      flex: 2;
-    }
-
-    .sample-count-field {
-      flex: 1;
-      min-width: 150px;
-    }
-
-    .remove-variable-button {
-      margin-top: 8px;
-    }
-  }
-
-  // Bundle-specific styles
-  .bundle-variable-group {
-    margin-bottom: 32px;
-    border: 2px solid #e8f4fd;
-    border-radius: 12px;
-    background-color: #f8fbff;
-
-    .bundle-header {
+    .section-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 16px 20px;
-      background-color: #e8f4fd;
-      border-bottom: 1px solid #bbdefb;
-      border-radius: 12px 12px 0 0;
+      margin-bottom: 16px;
 
-      .bundle-title {
+      .section-subtitle {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        color: #2d3748;
         display: flex;
         align-items: center;
         gap: 8px;
-        margin: 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: #1565c0;
 
-        mat-icon {
-          color: #1976d2;
-        }
-
-        .bundle-variable-count-badge {
-          background-color: #1976d2;
-          color: white;
-          padding: 2px 6px;
-          border-radius: 10px;
-          font-size: 12px;
-          font-weight: 500;
-          margin-left: 8px;
+        .selection-count,
+        .bundle-count,
+        .variable-count {
+          font-size: 0.85rem;
+          color: #718096;
+          font-weight: 400;
         }
       }
 
-      .bundle-controls {
+      .header-actions {
         display: flex;
-        align-items: center;
-        gap: 16px;
+        gap: 8px;
 
-        .bundle-sample-field {
-          min-width: 180px;
-
-          mat-form-field {
-            width: 100%;
-          }
+        .action-link {
+          color: #3182ce;
+          font-size: 0.8rem;
+          font-weight: 600;
+          padding: 0 4px;
+          min-width: unset;
         }
       }
     }
 
-    .bundle-variables-list {
-      padding: 16px 20px 20px 20px;
-
-      .bundle-variable-item {
-        background-color: #fff;
-        border: 1px solid #ddd;
-        border-left: 3px solid #1976d2;
-        opacity: 0.9;
-
-        .variable-info {
-          flex: 1;
-          display: flex;
-          gap: 16px;
-
-          .variable-name-field {
-            margin-right: 12px;
-          }
-
-          .bundle-sample-display {
-            margin-right: 12px;
-
-            input[readonly] {
-              background-color: #f5f5f5;
-              color: #666;
-            }
-
-            .mat-mdc-form-field-hint {
-              color: #666;
-              font-style: italic;
-            }
-          }
-        }
-      }
+    mat-form-field.full-width {
+      width: 100%;
     }
   }
-}
 
-// Action Buttons
-.action-buttons {
-  display: flex;
-  gap: 16px;
-  justify-content: flex-end;
-  padding-top: 24px;
-  border-top: 1px solid #e0e0e0;
-
-  .start-training-button {
-    min-width: 180px;
+  .section-divider {
+    margin: 8px 0;
+    opacity: 0.5;
   }
 }
 
-// Training Summary
-.training-summary {
-  .summary-card {
-    padding: 20px;
-    background-color: #f5f5f5;
+// Coder Grid
+.coder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  width: 100%;
+
+  .coder-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
     border-radius: 8px;
-    border-left: 4px solid #1976d2;
+    cursor: pointer;
+    transition: all 0.1s ease;
+
+    &:hover {
+      border-color: #cbd5e0;
+      background: #f7fafc;
+    }
+
+    &.selected {
+      border-color: #3182ce;
+      background: #ebf8ff;
+    }
+
+    .coder-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+
+      .coder-name {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: #2d3748;
+      }
+
+      .coder-login {
+        font-size: 0.75rem;
+        color: #718096;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        overflow: hidden;
+      }
+    }
+  }
+}
+
+// Global Form Field Fix
+mat-form-field {
+  width: 100%;
+}
+
+.bundle-selection,
+.variable-selection-controls {
+  width: 100%;
+
+  .bundle-select-field,
+  .variable-multiselect-field {
+    width: 100%;
+    max-width: 500px;
+    margin-bottom: -10px;
+  }
+}
+
+// Bundles
+.bundle-variable-group {
+  margin-top: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  overflow: hidden;
+
+  .bundle-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    background: #f7fafc;
+    border-bottom: 1px solid #e2e8f0;
+
+    .bundle-title {
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #2d3748;
+
+      mat-icon {
+        color: #4a5568;
+        font-size: 20px;
+        width: 20px;
+        height: 20px;
+      }
+
+      .bundle-variable-count-badge {
+        font-size: 0.8rem;
+        color: #a0aec0;
+        font-weight: 400;
+      }
+    }
+
+    .bundle-controls {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+
+      .bundle-sample-field {
+        width: 130px;
+        margin-bottom: -1.25em;
+      }
+    }
+  }
+}
+
+// Variables List
+.variable-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+
+  .variable-item {
+    display: grid;
+    grid-template-columns: 1fr 240px 40px 40px;
+    align-items: start;
+    gap: 16px;
+    padding: 24px 16px 16px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+    min-height: 90px;
+    overflow: visible;
+
+    &.has-error {
+      padding-bottom: 12px;
+    }
+
+    &:hover {
+      border-color: #cbd5e0;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
+
+    .variable-name-field {
+      min-width: 0;
+    }
+
+    .variable-name-field,
+    .sample-count-field {
+      overflow: visible;
+    }
+
+    .warning-container,
+    .remove-variable-button {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .warning-container {
+      min-width: 40px;
+    }
+
+    .remove-variable-button {
+      color: #a0aec0;
+
+      &:hover {
+        color: #e53e3e;
+      }
+    }
+  }
+}
+
+// Summary
+.training-summary {
+  padding: 0 24px;
+  margin-top: 8px;
+  flex-shrink: 0;
+
+  .summary-card {
+    padding: 12px 20px;
+    background: #ebf8ff;
+    border-radius: 8px;
+    border: 1px solid #bee3f8;
+    border-left: 4px solid #3182ce;
 
     h4 {
-      margin: 0 0 16px 0;
-      color: #333;
-      font-weight: 500;
+      margin: 0 0 8px 0;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #2c5282;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     ul {
       margin: 0;
-      padding-left: 20px;
-      list-style-type: disc;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px 32px;
 
       li {
-        margin-bottom: 8px;
-        color: #555;
-
-        &:last-child {
-          margin-bottom: 0;
-        }
+        font-size: 0.85rem;
+        color: #2a4365;
 
         strong {
-          color: #1976d2;
+          font-weight: 700;
+          color: #1a365d;
         }
       }
     }
   }
 }
 
-// Loading State
-.loading-container {
+// Footer
+.action-buttons {
+  padding: 12px 24px;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 64px;
-  color: #666;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #f7fafc;
+  border-top: 1px solid #edf2f7;
+  flex-shrink: 0;
 
-  p {
-    margin-top: 16px;
-    font-size: 16px;
+  .start-training-button {
+    height: 40px;
+    padding: 0 24px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+
+  .cancel-button {
+    height: 40px;
+    padding: 0 20px;
+    border-radius: 4px;
+    color: #4a5568;
   }
 }
 
-// Responsive Design
-@media (max-width: 768px) {
-  .coder-training-container {
-    padding: 16px;
+// Alerts & Validation
+.overlap-warning {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background: #fffaf0;
+  color: #c05621;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid #feebc8;
+
+  mat-icon {
+    font-size: 14px;
+    height: 14px;
+    width: 14px;
+  }
+}
+
+.insufficient-cases-warning {
+  mat-icon {
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+  }
+}
+
+.warn-text {
+  color: #e53e3e !important;
+  white-space: nowrap !important;
+  font-size: 11px !important;
+  font-weight: 500;
+  display: block;
+}
+
+.insufficient-input {
+  ::ng-deep .mat-mdc-text-field-wrapper {
+    border: 1.5px solid #e53e3e !important;
+    background-color: rgba(229, 62, 62, 0.05) !important;
   }
 
-  .training-header {
-    .section-title {
-      font-size: 20px;
-    }
+  ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+    display: block !important;
+    margin-top: 4px !important;
+    padding: 0 4px !important;
+  }
+}
+
+// Density for compact layout
+::ng-deep .density-compact {
+  .mat-mdc-form-field-subscript-wrapper {
+    display: none;
   }
 
-  .section-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
+  .mat-mdc-text-field-wrapper {
+    min-height: 56px !important;
+    height: 56px !important;
+    padding: 0 12px !important;
+    display: flex !important;
+    align-items: stretch !important;
   }
 
-  .coder-selection .coder-list {
-    grid-template-columns: 1fr;
+  .mat-mdc-form-field-infix {
+    padding-top: 16px !important;
+    padding-bottom: 0 !important;
+    min-height: 56px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
   }
 
-  .variable-config .variable-item {
-    flex-direction: column;
-    align-items: stretch;
-
-    .remove-variable-button {
-      align-self: flex-end;
-      margin-top: 12px;
-    }
+  .mat-mdc-floating-label {
+    top: 28px !important;
   }
 
+  .mat-mdc-form-field-input-control {
+    height: auto !important;
+    line-height: normal !important;
+    display: flex !important;
+    align-items: center !important;
+  }
+
+  &.mat-form-field-can-float.mat-form-field-should-float .mat-mdc-floating-label {
+    top: 28px !important;
+    transform: translateY(-34px) scale(0.75) !important;
+  }
+}
+
+// Search field in mat-select
+.select-search-container {
+  padding: 8px 16px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+
+  .select-search-field {
+    width: 100%;
+    margin-bottom: -16px;
+  }
+}
+
+@media (max-width: 600px) {
   .action-buttons {
     flex-direction: column-reverse;
 

@@ -12,6 +12,7 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
+import { MatDivider } from '@angular/material/divider';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatFormField, MatHint, MatLabel } from '@angular/material/form-field';
 import { MatInput } from '@angular/material/input';
@@ -25,13 +26,16 @@ import {
   FormGroup,
   ReactiveFormsModule,
   Validators,
-  FormArray
+  FormArray,
+  FormControl
 } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
+import {
+  Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject
+} from 'rxjs';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { Coder } from '../../models/coder.model';
-import { VariableBundle } from '../../models/coding-job.model';
+import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -57,6 +61,7 @@ export interface VariableGrouping {
     TranslateModule,
     MatButton,
     MatIcon,
+    MatDivider,
     MatCheckbox,
     MatFormField,
     MatLabel,
@@ -98,14 +103,24 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   coders: Coder[] = [];
   selectedCoders: Set<number> = new Set();
-  availableVariables: { unitName: string; variableId: string }[] = [];
+  availableVariables: Variable[] = [];
   availableBundles: VariableBundle[] = [];
   selectedBundleIds: Set<number> = new Set();
   isLoading = false;
   isLoadingVariables = false;
   isLoadingBundles = false;
 
+  private _availableVariables$ = new BehaviorSubject<Variable[]>([]);
+
   trainingForm: FormGroup;
+  variableFilterCtrl = new FormControl('');
+  bundleFilterCtrl = new FormControl('');
+  bundleSelection$ = new BehaviorSubject<number[]>([]);
+  manualVariablesSelectControl = new FormControl<string[]>([]); // Stable control for mat-select
+  private isSyncing = false;
+
+  filteredVariables$!: Observable<Variable[]>;
+  filteredBundles$!: Observable<VariableBundle[]>;
 
   constructor() {
     this.trainingForm = this.fb.group({
@@ -115,6 +130,86 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     // Initialize grouped variables
     this.updateGroupedVariables();
+    this.setupFilters();
+    this.setupManualSelectSync();
+  }
+
+  private setupManualSelectSync(): void {
+    // 1. Sync FormArray -> FormControl (Initial & External Changes)
+    this.variablesFormArray.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        if (this.isSyncing) return;
+
+        const manualVarKeys = this.variablesFormArray.controls
+          .filter(c => !c.get('bundleId')?.value)
+          .map(c => `${c.get('unitId')?.value}::${c.get('variableId')?.value}`)
+          .filter(key => key !== '::');
+
+        const currentSelectedKeys = this.manualVariablesSelectControl.value || [];
+        const sortedManual = [...manualVarKeys].sort();
+        const sortedCurrent = [...currentSelectedKeys].sort();
+
+        if (JSON.stringify(sortedManual) !== JSON.stringify(sortedCurrent)) {
+          this.manualVariablesSelectControl.setValue(manualVarKeys, { emitEvent: false });
+        }
+      });
+
+    // 2. Sync FormControl -> FormArray (User Selection via UI)
+    this.manualVariablesSelectControl.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(selectedVarIds => {
+        if (this.isSyncing) return;
+
+        if (selectedVarIds) {
+          this.isSyncing = true;
+          try {
+            this.onVariablesSelectionChange(selectedVarIds);
+          } finally {
+            this.isSyncing = false;
+          }
+        }
+      });
+  }
+
+  private setupFilters(): void {
+    this.filteredVariables$ = combineLatest([
+      this.variableFilterCtrl.valueChanges.pipe(startWith('')),
+      this.bundleSelection$,
+      this.manualVariablesSelectControl.valueChanges.pipe(startWith([])),
+      this._availableVariables$
+    ]).pipe(
+      map(([filter, selectedBundleIds, , availableVariables]) => {
+        const search = (filter || '').toLowerCase();
+
+        const variablesInBundles = new Set<string>();
+        selectedBundleIds.forEach(bundleId => {
+          const bundle = this.availableBundles.find(b => b.id === bundleId);
+          if (bundle) {
+            bundle.variables.forEach(v => {
+              variablesInBundles.add(`${v.unitName}::${v.variableId}`);
+            });
+          }
+        });
+
+        return availableVariables.filter(v => {
+          const matchesSearch = v.variableId.toLowerCase().includes(search) ||
+            v.unitName.toLowerCase().includes(search);
+          const inBundle = variablesInBundles.has(`${v.unitName}::${v.variableId}`);
+          return matchesSearch && !inBundle;
+        });
+      })
+    );
+
+    this.filteredBundles$ = this.bundleFilterCtrl.valueChanges.pipe(
+      startWith(''),
+      map(filter => {
+        const search = (filter || '').toLowerCase();
+        return this.availableBundles.filter(b => b.name.toLowerCase().includes(search) ||
+          (b.description && b.description.toLowerCase().includes(search))
+        );
+      })
+    );
   }
 
   ngOnInit(): void {
@@ -148,32 +243,32 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       .subscribe({
         next: variables => {
           this.availableVariables = variables;
+          this._availableVariables$.next(variables);
           this.isLoadingVariables = false;
-          if (variables.length === 0) {
-            this.addVariable();
-          }
           this.changeDetectorRef.markForCheck();
         },
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.isLoadingVariables = false;
-          this.addVariable();
           this.changeDetectorRef.markForCheck();
         }
       });
   }
 
-  addVariable(variableId: string = '', unitId: string = '', sampleCount: number = 10, bundleId?: number, bundleName?: string): void {
+  addVariable(variableId: string = '', unitId: string = '', sampleCount: number = 10, bundleId?: number, bundleName?: string, skipUpdate = false): void {
     const variableGroup = this.fb.group({
       variableId: [variableId, [Validators.required]],
       unitId: [unitId, [Validators.required]],
       sampleCount: [sampleCount, [Validators.required, Validators.min(1), Validators.max(1000)]],
       bundleId: [bundleId],
-      bundleName: [bundleName]
+      bundleName: [bundleName],
+      overlapWarning: [false]
     });
 
     this.variablesFormArray.push(variableGroup);
-    this.updateGroupedVariables();
+    if (!skipUpdate) {
+      this.updateGroupedVariables();
+    }
   }
 
   onVariableChange(variableId: string, index: number): void {
@@ -181,18 +276,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
     if (selectedVariable) {
       control.get('unitId')?.setValue(selectedVariable.unitName);
-      // Force validation update for the changed control
       control.get('unitId')?.updateValueAndValidity();
     }
+    this.checkForOverlaps();
   }
 
-  removeVariable(index: number): void {
-    if (this.variablesFormArray.length > 1) {
-      this.variablesFormArray.removeAt(index);
-    } else {
-      this.showError('Mindestens eine Variable ist erforderlich');
+  removeVariable(index: number, skipUpdate = false): void {
+    this.variablesFormArray.removeAt(index);
+    if (!skipUpdate) {
+      this.updateGroupedVariables();
     }
-    this.updateGroupedVariables();
   }
 
   loadCoders(): void {
@@ -274,6 +367,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (duplicateVariables.length > 0) {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
+
+    this.checkForOverlaps();
   }
 
   private isVariableAlreadyAdded(variable: { unitName: string; variableId: string }): boolean {
@@ -285,43 +380,74 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   onBundleSelectionChange(selectedBundleIds: number[]): void {
-    if (selectedBundleIds && selectedBundleIds.length > 0) {
+    if (selectedBundleIds) {
+      const currentSelectedIds = Array.from(this.selectedBundleIds);
       const newBundleIds = selectedBundleIds.filter(id => !this.selectedBundleIds.has(id));
+      const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
-        if (!this.selectedBundleIds.has(bundleId)) {
-          this.addBundleVariables(bundleId, 10); // Add with default sample count of 10
-          this.selectedBundleIds.add(bundleId);
-        }
+        this.addBundleVariables(bundleId, 10);
+        this.selectedBundleIds.add(bundleId);
       });
+
+      removedBundleIds.forEach(bundleId => {
+        this.removeBundle(bundleId);
+      });
+
+      this.bundleSelection$.next(selectedBundleIds);
+    }
+  }
+
+  onVariablesSelectionChange(selectedVarKeys: string[]): void {
+    const currentManualKeys = this.variablesFormArray.controls
+      .filter(c => !c.get('bundleId')?.value)
+      .map(c => `${c.get('unitId')?.value}::${c.get('variableId')?.value}`)
+      .filter(key => key !== '::');
+
+    const newKeys = selectedVarKeys.filter(key => !currentManualKeys.includes(key));
+    const removedKeys = currentManualKeys.filter(key => !selectedVarKeys.includes(key));
+
+    if (newKeys.length === 0 && removedKeys.length === 0) {
+      return;
     }
 
-    const removedBundleIds = Array.from(this.selectedBundleIds).filter(id => !selectedBundleIds.includes(id));
-
-    removedBundleIds.forEach(bundleId => {
-      this.removeBundle(bundleId);
+    newKeys.forEach(key => {
+      const [unitId, variableId] = key.split('::');
+      if (unitId && variableId) {
+        this.addVariable(variableId, unitId, 10, undefined, undefined, true);
+      }
     });
+
+    removedKeys.forEach(key => {
+      const [unitId, variableId] = key.split('::');
+      const index = this.variablesFormArray.controls.findIndex(c => !c.get('bundleId')?.value &&
+        c.get('variableId')?.value === variableId &&
+        c.get('unitId')?.value === unitId
+      );
+      if (index !== -1) {
+        this.removeVariable(index, true);
+      }
+    });
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+  }
+
+  get selectedManualVariableIds(): string[] {
+    return this.variablesFormArray.controls
+      .filter(c => !c.get('bundleId')?.value)
+      .map(c => c.get('variableId')?.value as string)
+      .filter(id => !!id);
   }
 
   removeBundle(bundleId: number): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
-    if (!bundle) {
-      return;
-    }
+    if (!bundle) return;
 
     const variablesToRemove: number[] = [];
-
     this.variablesFormArray.controls.forEach((control, index) => {
-      const variableId = control.get('variableId')?.value;
-      const unitId = control.get('unitId')?.value;
-
-      if (variableId && unitId) {
-        const variableExistsInBundle = bundle.variables.some(v => v.variableId === variableId && v.unitName === unitId
-        );
-
-        if (variableExistsInBundle) {
-          variablesToRemove.push(index);
-        }
+      if (control.get('bundleId')?.value === bundleId) {
+        variablesToRemove.push(index);
       }
     });
 
@@ -330,13 +456,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     this.selectedBundleIds.delete(bundleId);
-
-    if (this.variablesFormArray.length === 0) {
-      this.addVariable();
-    }
-
+    this.bundleSelection$.next(Array.from(this.selectedBundleIds));
     this.updateGroupedVariables();
-    this.showSuccess(`Bundle "${bundle.name}" entfernt. ${variablesToRemove.length} Variable(n) wurden entfernt.`);
+    this.showSuccess(`Variablenbündel "${bundle.name}" entfernt.`);
+    this.checkForOverlaps();
   }
 
   toggleCoderSelection(coder: Coder): void {
@@ -368,7 +491,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.selectedCoders.size > 0 &&
       trainingLabel?.trim() &&
       this.trainingForm.valid &&
-      (this.hasAtLeastOneVariableSelected() || this.hasBundlesSelected());
+      (this.hasAtLeastOneVariableSelected() || this.hasBundlesSelected()) &&
+      !this.hasAnyInsufficientCases();
+  }
+
+  private hasAnyInsufficientCases(): boolean {
+    return this.variablesFormArray.controls.some(control => {
+      const unitId = control.get('unitId')?.value;
+      const variableId = control.get('variableId')?.value;
+      const requestedCount = control.get('sampleCount')?.value || 0;
+      const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
+      return variableData && (variableData.responseCount || 0) < requestedCount;
+    });
   }
 
   private hasBundlesSelected(): boolean {
@@ -383,7 +517,41 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getTotalSamples(): number {
-    return this.variablesFormArray.controls.reduce((total, control) => total + (control.get('sampleCount')?.value || 0), 0);
+    return this.variablesFormArray.controls.reduce((total, control) => total + (Number(control.get('sampleCount')?.value) || 0), 0);
+  }
+
+  isVariableSelected(variableId: string): boolean {
+    return this.variablesFormArray.controls.some(control => control.get('variableId')?.value === variableId);
+  }
+
+  private checkForOverlaps(): void {
+    const bundleVariables = new Set<string>();
+
+    this.variablesFormArray.controls.forEach(control => {
+      if (control.get('bundleId')?.value) {
+        const varId = control.get('variableId')?.value;
+        const unitId = control.get('unitId')?.value;
+        if (varId && unitId) {
+          bundleVariables.add(`${unitId}::${varId}`);
+        }
+      }
+    });
+
+    this.variablesFormArray.controls.forEach(control => {
+      if (!control.get('bundleId')?.value) {
+        const varId = control.get('variableId')?.value;
+        const unitId = control.get('unitId')?.value;
+        const key = `${unitId}::${varId}`;
+        const isOverlapping = bundleVariables.has(key);
+
+        const currentWarning = control.get('overlapWarning')?.value;
+        if (currentWarning !== isOverlapping) {
+          control.get('overlapWarning')?.setValue(isOverlapping);
+        }
+      }
+    });
+
+    this.updateGroupedVariables();
   }
 
   get selectedBundleArray(): number[] {
@@ -399,8 +567,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.removeBundle(bundleId);
   }
 
-  getVariablesGroupedByBundle() {
-    const manualVariables: FormGroup[] = [];
+  getVariablesGroupedByBundle(): VariableGrouping {
+    const manualVariables: { control: FormGroup; index: number }[] = [];
     const bundleGroups: { [bundleId: number]: { bundle: VariableBundle; variables: { control: FormGroup; index: number }[] } } = {};
 
     this.variablesFormArray.controls.forEach((control, index) => {
@@ -424,12 +592,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         }
         bundleGroups[bundleId].variables.push({ control: control as FormGroup, index });
       } else {
-        manualVariables.push(control as FormGroup);
+        manualVariables.push({ control: control as FormGroup, index });
       }
     });
 
     return {
-      manual: manualVariables.map((control, index) => ({ control, index })),
+      manual: manualVariables,
       bundles: Object.values(bundleGroups)
     };
   }
@@ -445,26 +613,45 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    let updatedCount = 0;
-    const bundle = this.availableBundles.find(b => b.id === bundleId);
-
     this.variablesFormArray.controls.forEach(control => {
-      const variableBundleId = control.get('bundleId')?.value;
-      if (variableBundleId === bundleId) {
+      if (control.get('bundleId')?.value === bundleId) {
         control.get('sampleCount')?.setValue(newSampleCount);
-        updatedCount += 1;
       }
     });
 
-    if (bundle && updatedCount > 0) {
-      this.showSuccess(`${updatedCount} Variable(n) in Bundle "${bundle.name}" wurden auf ${newSampleCount} Stichproben aktualisiert.`);
-    }
+    this.changeDetectorRef.markForCheck();
   }
 
   getBundleSampleCount(bundleId: number): number {
-    const firstVariable = this.variablesFormArray.controls.find(control => control.get('bundleId')?.value === bundleId
-    );
+    const firstVariable = this.variablesFormArray.controls.find(control => control.get('bundleId')?.value === bundleId);
     return firstVariable?.get('sampleCount')?.value || 10;
+  }
+
+  hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {
+    if (bundleGroup.variables.length === 0) return false;
+    const requestedCount = bundleGroup.variables[0].control.get('sampleCount')?.value || 0;
+
+    return bundleGroup.variables.some(v => {
+      const unitId = v.control.get('unitId')?.value;
+      const variableId = v.control.get('variableId')?.value;
+      const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+      return variableData && (variableData.responseCount || 0) < requestedCount;
+    });
+  }
+
+  isManualVariableInsufficient(item: { control: FormGroup }): boolean {
+    const unitId = item.control.get('unitId')?.value;
+    const variableId = item.control.get('variableId')?.value;
+    const requestedCount = item.control.get('sampleCount')?.value || 0;
+    const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+    return !!variableData && (variableData.responseCount || 0) < requestedCount;
+  }
+
+  getAvailableCount(item: { control: FormGroup }): number {
+    const unitId = item.control.get('unitId')?.value;
+    const variableId = item.control.get('variableId')?.value;
+    const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+    return variableData?.responseCount || 0;
   }
 
   trackByCoderId(index: number, coder: Coder): number {
@@ -481,10 +668,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const selectedCoders = this.getSelectedCoders();
     const variableConfigs: VariableConfig[] = this.variablesFormArray.controls.map(control => {
       const variableId = control.get('variableId')?.value || '';
-      const selectedVariable = this.availableVariables.find(v => v.variableId === variableId);
       return {
         variableId,
-        unitId: selectedVariable?.unitName || '',
+        unitId: control.get('unitId')?.value || '',
         sampleCount: control.get('sampleCount')?.value || 10
       };
     });

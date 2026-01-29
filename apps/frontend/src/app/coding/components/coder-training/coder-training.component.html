@@ -1,86 +1,67 @@
 <div class="coder-training-container">
-  <div class="training-header">
-    <h2 class="section-title">
-      <mat-icon>school</mat-icon>
-      Kodierer-Schulung konfigurieren
-    </h2>
+  <div class="header">
+    <h2 class="title">Kodierer-Schulung erstellen</h2>
     <button mat-icon-button (click)="onClose()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
   </div>
 
-  <div class="training-content">
-    <form [formGroup]="trainingForm">
-      <!-- Training Label Section -->
-      <div class="section">
+  <form [formGroup]="trainingForm" class="training-form">
+    <!-- Training Label Section -->
+    <div class="section">
+      <div class="section-header">
         <h3 class="section-subtitle">Schulungs-Bezeichnung</h3>
-        <mat-form-field appearance="outline" class="training-label-field">
-          <mat-label>Bezeichnung für diese Kodierungs-Schulung</mat-label>
-          <input matInput
-                 formControlName="trainingLabel"
-                 placeholder="z.B. Schulung vom 15.10.2025"
-                 maxlength="255">
-        </mat-form-field>
+      </div>
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>Bezeichnung der Schulung</mat-label>
+        <input matInput formControlName="trainingLabel" placeholder="z.B. Schulung 2024 - Mathematik">
+        <mat-hint>Diese Bezeichnung wird den Kodierern als Projekttitel angezeigt.</mat-hint>
+      </mat-form-field>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Coder Selection Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">
+          Kodierer-Auswahl
+          <span class="selection-count">({{selectedCoders.size}} ausgewählt)</span>
+        </h3>
+        <div class="header-actions">
+          <button mat-button type="button" (click)="selectAllCoders()" class="action-link">Alle auswählen</button>
+          <button mat-button type="button" (click)="deselectAllCoders()" class="action-link">Alle abwählen</button>
+        </div>
       </div>
 
-      <!-- Coder Selection Section -->
-      <div class="section">
-        <div class="section-header">
-          <h3 class="section-subtitle">Kodierer auswählen</h3>
-          <div class="selection-controls">
-            <button mat-button (click)="selectAllCoders()" type="button">
-              <mat-icon>check_box</mat-icon>
-              Alle auswählen
-            </button>
-            <button mat-button (click)="deselectAllCoders()" type="button">
-              <mat-icon>check_box_outline_blank</mat-icon>
-              Alle abwählen
-            </button>
+      <div class="coder-grid">
+        <div *ngFor="let coder of coders; trackBy: trackByCoderId" class="coder-item"
+          [class.selected]="isCoderSelected(coder)" (click)="toggleCoderSelection(coder)">
+          <mat-checkbox [checked]="isCoderSelected(coder)" (click)="$event.preventDefault()" color="primary">
+          </mat-checkbox>
+          <div class="coder-info">
+            <span class="coder-name">{{coder.name}}</span>
+            <span class="coder-login">{{coder.email}}</span>
           </div>
         </div>
-
-      <div class="coder-selection">
-        <div class="coder-list" *ngIf="coders.length > 0; else noCodersTemplate">
-          <div
-            class="coder-item"
-            *ngFor="let coder of coders; trackBy: trackByCoderId"
-            [class.selected]="isCoderSelected(coder)"
-            (click)="toggleCoderSelection(coder)">
-            <mat-checkbox
-              [checked]="isCoderSelected(coder)"
-              (change)="toggleCoderSelection(coder)"
-              (click)="$event.stopPropagation()">
-            </mat-checkbox>
-            <div class="coder-info">
-              <div class="coder-name">{{coder.displayName || coder.name}}</div>
-              <div class="coder-email" *ngIf="coder.email">{{coder.email}}</div>
-              <div class="coder-jobs" *ngIf="coder.assignedJobs && coder.assignedJobs.length > 0">
-                Zugewiesene Jobs: {{coder.assignedJobs.length}}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <ng-template #noCodersTemplate>
-          <div class="no-coders-message">
-            <mat-icon>person_off</mat-icon>
-            <p>Keine Kodierer gefunden</p>
-          </div>
-        </ng-template>
       </div>
 
-      <div class="selection-summary" *ngIf="selectedCoders.size > 0">
-        <p><strong>{{selectedCoders.size}}</strong> Kodierer ausgewählt</p>
+      <div *ngIf="coders.length === 0" class="no-coders-message">
+        <mat-icon>group_off</mat-icon>
+        <p>Keine Kodierer verfügbar</p>
       </div>
     </div>
 
-    <!-- Variable Bundle Selection Section -->
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Variable Variablenbündel Selection Section -->
     <div class="section">
       <div class="section-header">
         <h3 class="section-subtitle">
           Variablenbündel
           <span *ngIf="isLoadingBundles" class="loading-text">
-            <mat-progress-spinner mode="indeterminate" diameter="16" style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+            <mat-progress-spinner mode="indeterminate" diameter="16"
+              style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
             Lade Variablenbündel...
           </span>
           <span *ngIf="!isLoadingBundles && availableBundles.length > 0" class="bundle-count">
@@ -93,10 +74,17 @@
         <div class="bundle-select-container">
           <mat-form-field appearance="outline" class="bundle-select-field">
             <mat-label>Variablenbündel auswählen</mat-label>
-            <mat-select placeholder="Variablenbündel auswählen" multiple [value]="selectedBundleArray" (selectionChange)="onBundleSelectionChange($event.value)">
-              <mat-option *ngFor="let bundle of availableBundles" [value]="bundle.id"
-                [matTooltip]="bundle.description || ''"
-                matTooltipPosition="above">
+            <mat-select placeholder="Variablenbündel auswählen" multiple [value]="selectedBundleArray"
+              (selectionChange)="onBundleSelectionChange($event.value)">
+              <div class="select-search-container">
+                <mat-form-field appearance="fill" class="select-search-field">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [formControl]="bundleFilterCtrl" placeholder="Suchen..."
+                    (keydown)="$event.stopPropagation()">
+                </mat-form-field>
+              </div>
+              <mat-option *ngFor="let bundle of filteredBundles$ | async" [value]="bundle.id"
+                [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                 {{bundle.name}}
                 <span class="bundle-variable-count"> ({{bundle.variables.length}} Variablen)</span>
               </mat-option>
@@ -104,19 +92,35 @@
           </mat-form-field>
         </div>
 
-        <!-- Selected Bundle Chips -->
-        <div *ngIf="selectedBundleIds.size > 0" class="selected-bundles">
-          <h5>Ausgewählte Variablenbündel:</h5>
-          <mat-chip-set>
-            <mat-chip
-              *ngFor="let bundleId of selectedBundleIds"
-              [removable]="true"
-              (removed)="onBundleRemoved(bundleId)"
-              matTooltip="Bundle entfernen">
-              {{getBundleName(bundleId)}}
-              <mat-icon matChipRemove>cancel</mat-icon>
-            </mat-chip>
-          </mat-chip-set>
+        <div class="bundle-variable-config" style="margin-top: 24px;">
+          <div *ngFor="let bundleGroup of groupedVariables.bundles" class="bundle-variable-group">
+            <div class="bundle-header">
+              <h4 class="bundle-title">
+                <mat-icon>inventory_2</mat-icon>
+                Variablenbündel: {{bundleGroup.bundle.name}}
+                <span class="bundle-variable-count-badge">({{bundleGroup.variables.length}} Variablen)</span>
+              </h4>
+              <div class="bundle-controls">
+                <!-- Case Count Validation Warning for Bundle -->
+                <div *ngIf="hasInsufficientCases(bundleGroup)" class="insufficient-cases-warning"
+                  matTooltip="Dieses Variablenbündel enthält Variablen mit weniger als {{getBundleSampleCount(bundleGroup.bundle.id)}} verfügbaren Fällen.">
+                  <mat-icon color="warn">warning</mat-icon>
+                </div>
+
+                <mat-form-field appearance="outline" class="bundle-sample-field">
+                  <mat-label>Stichproben pro Variable</mat-label>
+                  <input matInput type="number" [value]="getBundleSampleCount(bundleGroup.bundle.id)"
+                    (input)="updateBundleSampleCount(bundleGroup.bundle.id, $any($event.target).value)" min="1"
+                    max="1000">
+                </mat-form-field>
+                <button mat-icon-button color="warn" (click)="removeBundle(bundleGroup.bundle.id)"
+                  matTooltip="Variablenbündel entfernen">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              </div>
+            </div>
+            <!-- Individual variable details hidden for bundles as per requirement -->
+          </div>
         </div>
       </div>
 
@@ -126,130 +130,81 @@
       </div>
     </div>
 
+    <mat-divider class="section-divider"></mat-divider>
+
     <!-- Variable Configuration Section -->
     <div class="section">
       <div class="section-header">
         <h3 class="section-subtitle">
-          Variablen-Konfiguration
+          Variablen
           <span *ngIf="isLoadingVariables" class="loading-text">
-            <mat-progress-spinner mode="indeterminate" diameter="16" style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
+            <mat-progress-spinner mode="indeterminate" diameter="16"
+              style="display: inline-block; margin-left: 8px;"></mat-progress-spinner>
             Lade verfügbare Variablen...
           </span>
           <span *ngIf="!isLoadingVariables && availableVariables.length > 0" class="variable-count">
             ({{availableVariables.length}} verfügbare Variablen)
           </span>
         </h3>
-        <button mat-button (click)="addVariable()" type="button" [disabled]="isLoadingVariables">
-          <mat-icon>add</mat-icon>
-          Variable hinzufügen
-        </button>
+      </div>
+
+      <div class="variable-selection-controls">
+        <mat-form-field appearance="outline" class="variable-multiselect-field">
+          <mat-label>Variablen auswählen</mat-label>
+          <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
+            <div class="select-search-container">
+              <mat-form-field appearance="fill" class="select-search-field">
+                <mat-icon matPrefix>search</mat-icon>
+                <input matInput [formControl]="variableFilterCtrl" placeholder="Suchen..."
+                  (keydown)="$event.stopPropagation()">
+              </mat-form-field>
+            </div>
+            <mat-option *ngFor="let variable of filteredVariables$ | async"
+              [value]="variable.unitName + '::' + variable.variableId">
+              {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
       </div>
 
       <div class="variable-config">
         <!-- Manual Variables -->
         <div *ngIf="groupedVariables.manual.length > 0">
-          <h4 class="variable-section-title">Manuell hinzugefügte Variablen</h4>
-          <div formArrayName="variables">
-            <div
-              class="variable-item"
-              *ngFor="let item of groupedVariables.manual"
-              [formGroupName]="item.index">
+          <h4 class="variable-section-title">Hinzugefügte Variablen</h4>
+          <div class="variable-list">
+            <div class="variable-item" *ngFor="let item of groupedVariables.manual" [formGroup]="item.control"
+              [class.has-error]="isManualVariableInsufficient(item)">
 
-              <mat-form-field appearance="outline" class="variable-name-field">
-                <mat-label>Variable auswählen</mat-label>
-                <mat-select formControlName="variableId" placeholder="Variable auswählen" (selectionChange)="onVariableChange($event.value, item.index)">
-                  <mat-option *ngFor="let variable of availableVariables" [value]="variable.variableId">
-                    {{variable.unitName}} - {{variable.variableId}}
-                  </mat-option>
-                  <mat-option value="" *ngIf="availableVariables.length === 0">
-                    Keine Variablen verfügbar
-                  </mat-option>
-                </mat-select>
-                <input type="hidden" formControlName="unitId">
+              <mat-form-field appearance="outline" class="variable-name-field density-compact">
+                <mat-label>Variable</mat-label>
+                <input matInput
+                  [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
               </mat-form-field>
 
-              <mat-form-field appearance="outline" class="sample-count-field">
+              <mat-form-field appearance="outline" class="sample-count-field density-compact"
+                [class.insufficient-input]="isManualVariableInsufficient(item)">
                 <mat-label>Anzahl Stichproben</mat-label>
-                <input matInput
-                       type="number"
-                       formControlName="sampleCount"
-                       min="1"
-                       max="1000">
+                <input matInput type="number" formControlName="sampleCount" min="1" max="1000">
+                <mat-hint *ngIf="isManualVariableInsufficient(item)" class="warn-text">
+                  Max. {{getAvailableCount(item)}} Fälle verfügbar
+                </mat-hint>
               </mat-form-field>
 
-              <button
-                mat-icon-button
-                type="button"
-                color="warn"
-                (click)="removeVariable(item.index)"
-                [disabled]="variablesFormArray.length === 1"
-                class="remove-variable-button">
-                <mat-icon>delete</mat-icon>
-              </button>
-            </div>
-          </div>
-        </div>
+              <!-- Validation/Overlap Warnings -->
+              <div class="warning-container">
+                <div *ngIf="item.control.get('overlapWarning')?.value" class="overlap-warning"
+                  matTooltip="Diese Variable ist auch in einem ausgewählten Variablenbündel enthalten.">
+                  <mat-icon>warning</mat-icon>
+                  <span>Doppelt</span>
+                </div>
 
-        <!-- Bundle Variables -->
-        <div *ngFor="let bundleGroup of groupedVariables.bundles" class="bundle-variable-group">
-          <div class="bundle-header">
-            <h4 class="bundle-title">
-              <mat-icon>inventory_2</mat-icon>
-              Bundle: {{bundleGroup.bundle.name}}
-              <span class="bundle-variable-count-badge">({{bundleGroup.variables.length}} Variablen)</span>
-            </h4>
-            <div class="bundle-controls">
-              <mat-form-field appearance="outline" class="bundle-sample-field">
-                <mat-label>Stichproben pro Variable</mat-label>
-                <input matInput
-                       type="number"
-                       [value]="getBundleSampleCount(bundleGroup.bundle.id)"
-                       (input)="updateBundleSampleCount(bundleGroup.bundle.id, $any($event.target).value)"
-                       min="1"
-                       max="1000">
-              </mat-form-field>
-              <button mat-icon-button
-                      color="warn"
-                      (click)="removeBundle(bundleGroup.bundle.id)"
-                      matTooltip="Bundle entfernen">
-                <mat-icon>cancel</mat-icon>
-              </button>
-            </div>
-          </div>
-
-          <div formArrayName="variables" class="bundle-variables-list">
-            <div
-              class="variable-item bundle-variable-item"
-              *ngFor="let item of bundleGroup.variables"
-              [formGroupName]="item.index">
-
-              <div class="variable-info">
-                <mat-form-field appearance="outline" class="variable-name-field">
-                  <mat-label>Variable</mat-label>
-                  <input matInput
-                         formControlName="variableId"
-                         readonly
-                         [matTooltip]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value">
-                  <input type="hidden" formControlName="unitId">
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="sample-count-field bundle-sample-display">
-                  <mat-label>Stichproben</mat-label>
-                  <input matInput
-                         type="number"
-                         formControlName="sampleCount"
-                         readonly
-                         [matTooltip]="'Aktueller Wert: ' + item.control.get('sampleCount')?.value + ' (gesetzt durch Bundle)'">
-                  <mat-hint>Bundle gesteuert</mat-hint>
-                </mat-form-field>
+                <div *ngIf="isManualVariableInsufficient(item)" class="insufficient-cases-warning"
+                  [matTooltip]="'Ungültige Stichprobenanzahl. Nur ' + getAvailableCount(item) + ' Fälle verfügbar.'">
+                  <mat-icon color="warn">warning</mat-icon>
+                </div>
               </div>
 
-              <button
-                mat-icon-button
-                type="button"
-                color="warn"
-                (click)="removeVariable(item.index)"
-                [disabled]="variablesFormArray.length === 1"
+              <button mat-icon-button type="button" color="warn" (click)="removeVariable(item.index)"
                 class="remove-variable-button">
                 <mat-icon>delete</mat-icon>
               </button>
@@ -258,58 +213,44 @@
         </div>
       </div>
     </div>
+  </form>
 
-    </form>
-
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-      <button
-        mat-raised-button
-        color="primary"
-        (click)="onStartTraining()"
-        [disabled]="!canStartTraining() || isLoading"
-        class="start-training-button">
-        <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
-        <mat-progress-spinner mode="indeterminate" diameter="20" *ngIf="isLoading"></mat-progress-spinner>
-        {{ isLoading ? 'Kodierungsaufträge werden erstellt...' : 'Kodierungsaufträge erstellen' }}
-      </button>
-
-      <button
-        mat-button
-        (click)="onClose()"
-        [disabled]="isLoading"
-        class="cancel-button">
-        <mat-icon>cancel</mat-icon>
-        Abbrechen
-      </button>
-    </div>
-
-    <!-- Training Summary -->
-    <div class="training-summary" *ngIf="selectedCoders.size > 0 && (variablesFormArray.length > 0 || availableBundles.length > 0)">
-      <div class="summary-card">
-        <h4>Schulungs-Übersicht</h4>
-        <ul>
-          <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
-          <li *ngIf="variablesFormArray.length > 0">Konfigurierte Variablen: <strong>{{variablesFormArray.length}}</strong></li>
-          <li *ngIf="variablesFormArray.length > 0">
-            Gesamte Stichproben:
-            <strong>{{getTotalSamples()}}</strong>
-          </li>
-          <li *ngIf="variablesFormArray.length === 0 && availableBundles.length > 0">
-            Verfügbare Variablenbündel: <strong>{{availableBundles.length}}</strong>
-          </li>
-          <li *ngIf="variablesFormArray.length === 0 && availableBundles.length > 0">
-            <em>Wählen Sie ein Variablenbündel aus, um Variablen hinzuzufügen</em>
-          </li>
-        </ul>
-      </div>
+  <!-- Training Summary -->
+  <div class="training-summary">
+    <div class="summary-card">
+      <h4>Schulungs-Übersicht</h4>
+      <ul>
+        <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
+        <li>
+          Ausgewählte Variablen: <strong>{{groupedVariables.manual.length}}</strong>
+        </li>
+        <li>
+          Ausgewählte Variablenbündel: <strong>{{groupedVariables.bundles.length}}</strong>
+        </li>
+        <li>
+          Gesamte Stichproben:
+          <strong>{{getTotalSamples()}}</strong>
+        </li>
+        <li>
+          Erstellte Aufträge:
+          <strong>{{selectedCoders.size * getTotalSamples()}}</strong>
+        </li>
+      </ul>
     </div>
   </div>
 
-  <ng-template>
-    <div class="loading-container">
-      <mat-progress-spinner mode="indeterminate" diameter="50"></mat-progress-spinner>
-      <p>Lade Kodierer...</p>
-    </div>
-  </ng-template>
+  <!-- Action Buttons -->
+  <div class="action-buttons">
+    <button mat-raised-button color="primary" (click)="onStartTraining()" [disabled]="!canStartTraining() || isLoading"
+      class="start-training-button">
+      <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
+      <mat-progress-spinner mode="indeterminate" diameter="20" *ngIf="isLoading"></mat-progress-spinner>
+      {{ isLoading ? 'Kodierungsaufträge werden erstellt...' : 'Kodierungsaufträge erstellen' }}
+    </button>
+
+    <button mat-button (click)="onClose()" [disabled]="isLoading" class="cancel-button">
+      <mat-icon>cancel</mat-icon>
+      Abbrechen
+    </button>
+  </div>
 </div>

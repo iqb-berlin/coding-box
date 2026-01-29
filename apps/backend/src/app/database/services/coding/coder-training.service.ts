@@ -61,7 +61,7 @@ export class CoderTrainingService {
     private coderTrainingRepository: Repository<CoderTraining>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>
-  ) {}
+  ) { }
 
   private sampleResponses(
     responses: CoderTrainingResponse[],
@@ -260,6 +260,7 @@ export class CoderTrainingService {
           codingJobUnit.booklet_name = response.bookletName;
           codingJobUnit.person_login = response.personLogin;
           codingJobUnit.person_code = response.personCode;
+          codingJobUnit.is_open = true;
           await this.codingJobUnitRepository.save(codingJobUnit);
 
           this.logger.log(`Added coding job unit for response ${response.responseId} to training job ${jobId} for coder ${coderName}`);

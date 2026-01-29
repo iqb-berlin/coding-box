@@ -425,6 +425,8 @@
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
       },
       "loading": "Lade Kodierer-Schulungen...",
+      "loading.error": "Fehler beim Laden der Kodierer-Schulungen",
+      "select-training": "Bitte wählen Sie eine Schulung aus",
       "empty": {
         "title": "Keine Kodierer-Schulungen vorhanden",
         "subtitle": "Erstellen Sie Ihre erste Schulung, um mit dem Training zu beginnen."
