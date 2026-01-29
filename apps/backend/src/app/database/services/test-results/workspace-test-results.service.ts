@@ -2662,6 +2662,8 @@ export class WorkspaceTestResultsService {
       group?: string;
       code?: string;
       version?: 'v1' | 'v2' | 'v3';
+      geogebra?: boolean;
+      personLogin?: string;
     },
     options: { page?: number; limit?: number } = {}
   ): Promise<{
@@ -2759,6 +2761,22 @@ export class WorkspaceTestResultsService {
         query.andWhere('person.code = :code', { code: searchParams.code });
       }
 
+      if (searchParams.personLogin) {
+        query.andWhere('person.login ILIKE :personLogin', {
+          personLogin: `%${searchParams.personLogin}%`
+        });
+      }
+
+      if (searchParams.geogebra) {
+        query.andWhere(
+          'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+          { ggPrefix: 'UEsD%' }
+        );
+        const version = searchParams.version || 'v1';
+        query.addOrderBy(`response.code_${version}`, 'ASC');
+        query.addOrderBy('person.code', 'ASC');
+      }
+
       const total = await query.getCount();
 
       if (total === 0) {
@@ -2810,6 +2828,12 @@ export class WorkspaceTestResultsService {
           code,
           score,
           codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+          code_v1: response.code_v1,
+          code_v2: response.code_v2,
+          code_v3: response.code_v3,
+          status_v1: statusNumberToString(response.status_v1) || 'UNSET',
+          status_v2: statusNumberToString(response.status_v2) || 'UNSET',
+          status_v3: statusNumberToString(response.status_v3) || 'UNSET',
           unitId: response.unit.id,
           unitName: response.unit.name,
           unitAlias: response.unit.alias,
@@ -3694,5 +3718,19 @@ export class WorkspaceTestResultsService {
       booklets: booklets.map(b => b.name),
       units: units.map(u => u.name)
     };
+  }
+
+  async hasGeogebraResponses(workspaceId: number): Promise<boolean> {
+    const count = await this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' })
+      .getCount();
+
+    return count > 0;
   }
 }

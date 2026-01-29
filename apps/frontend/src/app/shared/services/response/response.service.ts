@@ -149,7 +149,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3' },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; personLogin?: string },
     page?: number,
     limit?: number
   ): Observable<{
@@ -212,6 +212,14 @@ export class ResponseService {
       params = params.set('version', searchParams.version);
     }
 
+    if (searchParams.geogebra) {
+      params = params.set('geogebra', 'true');
+    }
+
+    if (searchParams.personLogin) {
+      params = params.set('personLogin', searchParams.personLogin);
+    }
+
     if (page !== undefined) {
       params = params.set('page', page.toString());
     }
@@ -258,6 +266,15 @@ export class ResponseService {
       { headers: this.authHeader, params }
     ).pipe(
       catchError(() => of(0))
+    );
+  }
+
+  hasGeogebraResponses(workspaceId: number): Observable<boolean> {
+    return this.http.get<boolean>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/responses/geogebra-existence`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(() => of(false))
     );
   }
 }
