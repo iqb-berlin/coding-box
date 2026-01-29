@@ -508,7 +508,7 @@ export class WorkspaceTestFilesValidationService {
       .createQueryBuilder('file')
       .select(['file.file_id', 'file.filename'])
       .where('file.workspace_id = :workspaceId', { workspaceId })
-      .andWhere("file.file_type = 'Resource'")
+      .andWhere("file.file_type IN ('Resource', 'Schemer')")
       .skip(offset)
       .take(BATCH_SIZE)
       .getRawMany();
@@ -519,8 +519,16 @@ export class WorkspaceTestFilesValidationService {
           const id = f.file_id || f.file_file_id;
           const name = f.filename || f.file_filename;
 
-          if (id) resourceIds.add(id.trim().toUpperCase());
-          if (name) resourceIds.add(name.trim().toUpperCase());
+          if (id) {
+            const decodedId = decodeURIComponent(id).trim().toUpperCase();
+            resourceIds.add(decodedId);
+            resourceIds.add(decodedId.replace('@', '-'));
+          }
+          if (name) {
+            const decodedName = decodeURIComponent(name).trim().toUpperCase();
+            resourceIds.add(decodedName);
+            resourceIds.add(decodedName.replace('@', '-'));
+          }
         }
       });
       offset += BATCH_SIZE;
@@ -528,7 +536,7 @@ export class WorkspaceTestFilesValidationService {
         .createQueryBuilder('file')
         .select(['file.file_id', 'file.filename'])
         .where('file.workspace_id = :workspaceId', { workspaceId })
-        .andWhere("file.file_type = 'Resource'")
+        .andWhere("file.file_type IN ('Resource', 'Schemer')")
         .skip(offset)
         .take(BATCH_SIZE)
         .getRawMany();
@@ -715,10 +723,19 @@ export class WorkspaceTestFilesValidationService {
 
         const schemerMissingForUnit = (refs?.schemerRefs || []).filter(r => {
           if (this.resourceExists(r, resourceIds)) return false;
-          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+
+          if (r.startsWith('IQB-SCHEMER-1.1')) {
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            if (hasFallback) return false;
+          }
+          return true;
         });
         if (schemerMissingForUnit.length > 0) {
-          missingSchemerRefsByUnit.push({ unit: unitId, missingRefs: schemerMissingForUnit });
+          missingSchemerRefsByUnit.push({
+            unit: unitId,
+            missingRefs: schemerMissingForUnit
+          });
         }
 
         const definitionMissingForUnit = (refs?.definitionRefs || []).filter(r => !this.resourceExists(r, resourceIds));
@@ -742,10 +759,18 @@ export class WorkspaceTestFilesValidationService {
     }
 
     const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(r => !this.resourceExists(r, resourceIds));
-    const missingSchemerRefs = Array.from(allSchemerRefs).filter(r => {
-      if (this.resourceExists(r, resourceIds)) return false;
-      return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
-    });
+    const missingSchemerRefs = Array.from(allSchemerRefs)
+      .filter(r => {
+        if (this.resourceExists(r, resourceIds)) return false;
+        if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+
+        if (r.startsWith('IQB-SCHEMER-1.1')) {
+          const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+          if (hasFallback) return false;
+        }
+
+        return true;
+      });
     const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(r => !this.resourceExists(r, resourceIds));
     const missingPlayerRefs = Array.from(allPlayerRefs).filter(r => {
       if (this.resourceExists(r, resourceIds)) return false;
@@ -813,10 +838,27 @@ export class WorkspaceTestFilesValidationService {
         complete: missingSchemerRefs.length === 0,
         missing: missingSchemerRefs,
         missingRefsPerUnit: missingSchemerRefsByUnit,
-        files: Array.from(allSchemerRefs).map(r => ({
-          filename: r,
-          exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
-        }))
+        files: Array.from(allSchemerRefs).map(r => {
+          let exists = this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          let schemaValid: boolean | undefined;
+          let schemaErrors: string[] | undefined;
+
+          if (!exists && r.startsWith('IQB-SCHEMER-1.1')) {
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            if (hasFallback) {
+              exists = true;
+              schemaValid = false;
+              schemaErrors = ['IQB-SCHEMER-1.1 ist veraltet. Es wird die neueste verfügbare Schemer-Version verwendet.'];
+            }
+          }
+
+          return {
+            filename: r,
+            exists,
+            schemaValid,
+            schemaErrors
+          };
+        })
       },
       definitions: {
         complete: missingDefinitionRefs.length === 0,
