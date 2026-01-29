@@ -21,6 +21,14 @@
             </h3>
         </div>
         }
+        @if (isGeogebraFilterActive) {
+        <div class="header-actions">
+            <button mat-raised-button color="primary" (click)="onReviewClick()">
+                <mat-icon>rate_review</mat-icon>
+                {{ 'coding-management.actions.review-session' | translate }}
+            </button>
+        </div>
+        }
     </div>
     <mat-divider></mat-divider>
     <div class="table-container">
@@ -54,6 +62,10 @@
                         [matTooltip]="'coding-management.tooltips.show-unit-xml' | translate">
                         {{ element[column] }}
                     </span>
+                    } @else if (column === 'value') {
+                    <div class="truncated-value" [matTooltip]="element[column].length < 500 ? element[column] : null">
+                        {{ element[column] }}
+                    </div>
                     } @else {
                     @if (column === 'codedstatus') {
                     {{ getStatusString(element[column]) }}

@@ -828,6 +828,13 @@
       "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
       "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
     },
+    "actions": {
+      "review-session": "Review",
+      "close": "Schließen"
+    },
+    "messages": {
+      "no-data-to-review": "Keine Daten zur Überprüfung vorhanden."
+    },
     "loading": {
       "loading-statistics": "Lade Kodierstatistiken...",
       "coding-responses": "Antworten werden kodiert...",
@@ -854,7 +861,8 @@
       "difference-tooltip-v1": "Differenz zum 1. Autocoder-Lauf",
       "difference-tooltip-v2": "Differenz zur manuellen Kodierung",
       "reset-success": "Erfolgreich {{count}} Antworten für Version {{version}} zurückgesetzt{{cascade}}",
-      "reset-cascade-suffix": " und {{versions}} (Kaskade)"
+      "reset-cascade-suffix": " und {{versions}} (Kaskade)",
+      "responses": "Antworten"
     },
     "columns": {
       "unitname": "Aufgabe",
@@ -876,12 +884,15 @@
       "run": "Lauf",
       "person-code": "Person-Code",
       "person-code-placeholder": "Person-Code eingeben...",
+      "person-login": "Person-Login",
+      "person-login-placeholder": "Person-Login eingeben...",
       "person-group": "Person-Gruppe",
       "person-group-placeholder": "Person-Gruppe eingeben...",
       "booklet-name": "Testheft-Name",
       "booklet-name-placeholder": "Testheft-Name eingeben...",
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
+      "geogebra": "Spezialfilter: Geogebra",
       "clear": "Filter löschen"
     },
     "reset-dialog": {
