@@ -35,6 +35,12 @@ export class WorkspaceCodingReviewController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
     name: 'unitName',
     required: false,
     description: 'Filter by unit name',
@@ -129,6 +135,11 @@ export class WorkspaceCodingReviewController {
             codersIncluded: {
               type: 'number',
               description: 'Number of coders included in the analysis'
+            },
+            weightingMethod: {
+              type: 'string',
+              enum: ['weighted', 'unweighted'],
+              description: 'Method used to calculate mean kappa'
             }
           },
           description: 'Workspace-wide summary statistics'
@@ -137,9 +148,11 @@ export class WorkspaceCodingReviewController {
     }
   })
   async getCohensKappa(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean?: string
   ): Promise<CohensKappaSummary> {
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspace_id);
+    const useWeightedMean = weightedMean !== 'false'; // Default true
+    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspace_id, useWeightedMean);
   }
 
   @Get(':workspace_id/coding/double-coded-review')

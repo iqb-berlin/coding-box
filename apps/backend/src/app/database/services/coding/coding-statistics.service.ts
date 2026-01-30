@@ -460,14 +460,23 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
 
       // Calculate Cohen's Kappa
+      // Reference: R eatPrep meanKappa function
+      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
+      // R implementation sets kappa = 1 when coders agree perfectly:
+      // if(is.na(kap[["value"]])) { if(identical(dat.ij[,1],dat.ij[,2])) { kap[["value"]] <- 1 } }
       let kappa: number;
-      if (expectedAgreement === 1) {
-        kappa = 1; // Perfect expected agreement
+      if (observedAgreement === 1) {
+        // Perfect observed agreement - coders agree on all items
+        kappa = 1;
+      } else if (expectedAgreement === 1) {
+        // Perfect expected agreement
+        kappa = 1;
       } else {
+        // Standard Cohen's Kappa formula: κ = (Po - Pe) / (1 - Pe)
         kappa = (observedAgreement - expectedAgreement) / (1 - expectedAgreement);
       }
 
-      // Handle edge cases
+      // Handle edge cases (fallback for NaN/Infinite values)
       if (Number.isNaN(kappa) || !Number.isFinite(kappa)) {
         kappa = 0;
       }

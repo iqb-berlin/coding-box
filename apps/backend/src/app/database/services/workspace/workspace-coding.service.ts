@@ -590,27 +590,31 @@ export class WorkspaceCodingService {
     );
   }
 
-  async getWorkspaceCohensKappaSummary(workspaceId: number): Promise<{
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-    };
-  }> {
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspaceId);
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number,
+    weightedMean: boolean = true
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+      };
+    }> {
+    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspaceId, weightedMean);
   }
 
   async resetCodingVersion(

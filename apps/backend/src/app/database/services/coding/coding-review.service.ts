@@ -193,13 +193,13 @@ export class CodingReviewService {
         try {
           // Get the selected coder's coding_job_unit entry
           const selectedCodingJobUnit =
-                        await this.codingJobUnitRepository.findOne({
-                          where: {
-                            response_id: decision.responseId,
-                            coding_job_id: decision.selectedJobId
-                          },
-                          relations: ['response', 'coding_job']
-                        });
+            await this.codingJobUnitRepository.findOne({
+              where: {
+                response_id: decision.responseId,
+                coding_job_id: decision.selectedJobId
+              },
+              relations: ['response', 'coding_job']
+            });
 
           if (!selectedCodingJobUnit) {
             this.logger.warn(
@@ -278,26 +278,30 @@ export class CodingReviewService {
     }
   }
 
-  async getWorkspaceCohensKappaSummary(workspaceId: number): Promise<{
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-    };
-  }> {
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number,
+    weightedMean: boolean = true
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+      };
+    }> {
     try {
       this.logger.log(
         `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`
@@ -317,7 +321,8 @@ export class CodingReviewService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
           }
         };
       }
@@ -349,28 +354,28 @@ export class CodingReviewService {
             uniqueCoders.add(coder2.coderId);
 
             const pairKey =
-                            coder1.coderId < coder2.coderId ?
-                              `${coder1.coderId}-${coder2.coderId}` :
-                              `${coder2.coderId}-${coder1.coderId}`;
+              coder1.coderId < coder2.coderId ?
+                `${coder1.coderId}-${coder2.coderId}` :
+                `${coder2.coderId}-${coder1.coderId}`;
 
             if (!coderPairData.has(pairKey)) {
               coderPairData.set(pairKey, {
                 coder1Id:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder1.coderId :
-                                      coder2.coderId,
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderId :
+                    coder2.coderId,
                 coder1Name:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder1.coderName :
-                                      coder2.coderName,
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderName :
+                    coder2.coderName,
                 coder2Id:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder2.coderId :
-                                      coder1.coderId,
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderId :
+                    coder1.coderId,
                 coder2Name:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder2.coderName :
-                                      coder1.coderName,
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderName :
+                    coder1.coderName,
                 codes: []
               });
             }
@@ -392,8 +397,6 @@ export class CodingReviewService {
       }
 
       const coderPairs = [];
-      let totalKappa = 0;
-      let validKappaCount = 0;
 
       for (const pair of coderPairData.values()) {
         const kappaResults = this.codingStatisticsService.calculateCohensKappa([
@@ -403,23 +406,54 @@ export class CodingReviewService {
         if (kappaResults.length > 0) {
           const result = kappaResults[0];
           coderPairs.push(result);
+        }
+      }
 
+      // Calculate mean kappa
+      // Reference: R eatPrep meanKappa function
+      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
+      // R default: weighted.mean(dfr$kappa, dfr$N)
+      // R alternative: mean(dfr$kappa, na.rm = TRUE)
+      let averageKappa: number | null;
+
+      if (weightedMean) {
+        // Weighted mean: weight each pair's kappa by number of valid pairs (N)
+        // This matches the R default behavior: weighted.mean(dfr$kappa, dfr$N)
+        let totalWeightedKappa = 0;
+        let totalWeight = 0;
+
+        for (const result of coderPairs) {
+          if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+            const weight = result.validPairs; // N = number of valid pairs
+            totalWeightedKappa += result.kappa * weight;
+            totalWeight += weight;
+          }
+        }
+
+        averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
+      } else {
+        // Simple arithmetic mean (unweighted)
+        // This matches R behavior with weight.mean = FALSE
+        let totalKappa = 0;
+        let validKappaCount = 0;
+
+        for (const result of coderPairs) {
           if (result.kappa !== null && !Number.isNaN(result.kappa)) {
             totalKappa += result.kappa;
             validKappaCount += 1;
           }
         }
-      }
 
-      const averageKappa =
-                validKappaCount > 0 ? totalKappa / validKappaCount : null;
+        averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+      }
 
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
         totalCoderPairs: coderPairs.length,
         averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
         variablesIncluded: uniqueVariables.size,
-        codersIncluded: uniqueCoders.size
+        codersIncluded: uniqueCoders.size,
+        weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
       };
 
       this.logger.log(

@@ -385,6 +385,12 @@ export class WorkspaceCodingStatisticsController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
     name: 'unitName',
     required: false,
     description: 'Filter by unit name',
@@ -436,7 +442,12 @@ export class WorkspaceCodingStatisticsController {
             totalCoderPairs: { type: 'number' },
             averageKappa: { type: 'number', nullable: true },
             variablesIncluded: { type: 'number' },
-            codersIncluded: { type: 'number' }
+            codersIncluded: { type: 'number' },
+            weightingMethod: {
+              type: 'string',
+              enum: ['weighted', 'unweighted'],
+              description: 'Method used to calculate mean kappa'
+            }
           }
         }
       }
@@ -444,6 +455,7 @@ export class WorkspaceCodingStatisticsController {
   })
   async getCohensKappaStatistics(
     @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean?: string,
       @Query('unitName') unitName?: string,
       @Query('variableId') variableId?: string
   ): Promise<{
@@ -468,6 +480,7 @@ export class WorkspaceCodingStatisticsController {
           averageKappa: number | null;
           variablesIncluded: number;
           codersIncluded: number;
+          weightingMethod: 'weighted' | 'unweighted';
         };
       }> {
     try {
@@ -616,12 +629,14 @@ export class WorkspaceCodingStatisticsController {
           Math.round((totalKappa / validKappaCount) * 1000) / 1000 :
           0;
 
+      const useWeightedMean = weightedMean !== 'false'; // Default true
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
         totalCoderPairs: validKappaCount,
         averageKappa,
         variablesIncluded: uniqueVariables.size,
-        codersIncluded: uniqueCoders.size
+        codersIncluded: uniqueCoders.size,
+        weightingMethod: (useWeightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
       };
 
       this.logger.log(
@@ -647,6 +662,12 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
   @ApiOkResponse({
     description:
       "Workspace-wide Cohen's Kappa statistics for double-coded incomplete variables.",
@@ -711,6 +732,11 @@ export class WorkspaceCodingStatisticsController {
             codersIncluded: {
               type: 'number',
               description: 'Number of coders included in the analysis'
+            },
+            weightingMethod: {
+              type: 'string',
+              enum: ['weighted', 'unweighted'],
+              description: 'Method used to calculate mean kappa'
             }
           },
           description: 'Summary statistics for the entire workspace'
@@ -719,7 +745,8 @@ export class WorkspaceCodingStatisticsController {
     }
   })
   async getWorkspaceCohensKappaSummary(
-    @WorkspaceId() workspace_id: number
+    @WorkspaceId() workspace_id: number,
+      @Query('weightedMean') weightedMean?: string
   ): Promise<{
         coderPairs: Array<{
           coder1Id: number;
@@ -738,10 +765,13 @@ export class WorkspaceCodingStatisticsController {
           averageKappa: number | null;
           variablesIncluded: number;
           codersIncluded: number;
+          weightingMethod: 'weighted' | 'unweighted';
         };
       }> {
+    const useWeightedMean = weightedMean !== 'false'; // Default true
     return this.codingReviewService.getWorkspaceCohensKappaSummary(
-      workspace_id
+      workspace_id,
+      useWeightedMean
     );
   }
 
