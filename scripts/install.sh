@@ -321,10 +321,6 @@ customize_settings() {
     sed -i.bak "s|^${env_var_name}.*|${env_var_name}=${env_var_value}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
   done
 
-  declare jwt_secret
-  jwt_secret=$(openssl rand -base64 32 | tr -- '+/' '-_')
-  sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=${jwt_secret}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
-
   # Setup makefiles
   sed -i.bak "s|^${MAKE_BASE_DIR_NAME} :=.*|${MAKE_BASE_DIR_NAME} := \\${APP_DIR}|" \
     "scripts/make/${APP_NAME}.mk" && rm "scripts/make/${APP_NAME}.mk.bak"
