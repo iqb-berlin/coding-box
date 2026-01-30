@@ -813,6 +813,7 @@ export class TestPersonCodingService {
 
   getCohensKappaStatistics(
     workspaceId: number,
+    weightedMean: boolean = true,
     unitName?: string,
     variableId?: string
   ): Observable<{
@@ -840,6 +841,8 @@ export class TestPersonCodingService {
       };
     }> {
     let params = new HttpParams();
+
+    params = params.set('weightedMean', weightedMean.toString());
 
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -871,6 +874,7 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
@@ -884,14 +888,16 @@ export class TestPersonCodingService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
           }
         }))
       );
   }
 
   getWorkspaceCohensKappaSummary(
-    workspaceId: number
+    workspaceId: number,
+    weightedMean: boolean = true
   ): Observable<{
       coderPairs: Array<{
         coder1Id: number;
@@ -910,8 +916,10 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
+    const params = new HttpParams().set('weightedMean', weightedMean.toString());
     return this.http
       .get<{
       coderPairs: Array<{
@@ -931,10 +939,11 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
-      { headers: this.authHeader }
+      { headers: this.authHeader, params }
     )
       .pipe(
         catchError(() => of({
@@ -944,7 +953,8 @@ export class TestPersonCodingService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
           }
         }))
       );
