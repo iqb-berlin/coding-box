@@ -15,7 +15,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
 
@@ -39,6 +39,9 @@ interface WithinTrainingComparison {
   unitName: string;
   variableId: string;
   testperson?: string;
+  personLogin?: string;
+  personCode?: string;
+  personGroup?: string;
   coders: Array<{
     jobId: number;
     coderName: string;
@@ -56,6 +59,7 @@ interface WithinTrainingComparison {
     CommonModule,
     TranslateModule,
     FormsModule,
+    ReactiveFormsModule,
     MatDialogModule,
     MatTableModule,
     MatSortModule,
@@ -80,13 +84,17 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   isLoading = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
-  displayedColumns: string[] = ['unitName', 'variableId', 'testperson', 'match'];
+  displayedColumns: string[] = ['unitName', 'variableId', 'personLogin', 'personCode', 'personGroup', 'match'];
   availableTrainings: CoderTraining[] = [];
   selectedTrainings = new SelectionModel<number>(true, []);
   comparisonData: TrainingComparison[] = [];
   withinTrainingData: WithinTrainingComparison[] = [];
   comparisonMode: 'between-trainings' | 'within-training' = 'between-trainings';
   selectedTrainingForWithin: number | null = null;
+
+  availableCoders: Array<{ jobId: number; coderName: string }> = [];
+  codersFormControl = new FormControl<number[]>([]);
+  selectedCoderIds = new SelectionModel<number>(true, []);
 
   totalComparisons = 0;
   matchingComparisons = 0;
@@ -159,28 +167,45 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   onTrainingSelectionChange(): void {
-    this.updateDisplayedColumns();
+    if (this.comparisonMode === 'between-trainings' && this.selectedTrainings.selected.length >= 2) {
+      this.loadComparison();
+    } else {
+      this.comparisonData = [];
+      this.dataSource.data = [];
+      this.updateDisplayedColumns();
+    }
   }
 
   onTrainingForWithinChange(): void {
-    this.updateDisplayedColumns();
+    if (this.comparisonMode === 'within-training' && this.selectedTrainingForWithin) {
+      this.loadComparison();
+    } else {
+      this.withinTrainingData = [];
+      this.dataSource.data = [];
+      this.updateDisplayedColumns();
+    }
   }
 
   private updateDisplayedColumns(): void {
-    const baseColumns = ['unitName', 'variableId', 'testperson', 'match'];
+    const baseColumns = ['unitName', 'variableId'];
 
     if (this.comparisonMode === 'between-trainings') {
       const trainingColumns = this.selectedTrainings.selected.map(trainingId => {
         const training = this.availableTrainings.find(t => t.id === trainingId);
         return training ? `training_${trainingId}` : '';
       }).filter(col => col);
-      this.displayedColumns = [...baseColumns, ...trainingColumns];
+      // For between trainings, we only show testperson as we don't have detailed person info consistency guaranteed
+      this.displayedColumns = [...baseColumns, 'testperson', 'match', ...trainingColumns];
     } else if (this.comparisonMode === 'within-training') {
+      // For within training, we show detailed person info
+      const personColumns = ['personLogin', 'personCode', 'personGroup'];
+
       if (this.selectedTrainingForWithin && this.withinTrainingData.length > 0) {
-        const coderColumns = this.withinTrainingData[0].coders.map(coder => `coder_${coder.jobId}`);
-        this.displayedColumns = [...baseColumns, ...coderColumns];
+        // Filter columns based on selected coders
+        const coderColumns = this.selectedCoderIds.selected.map(jobId => `coder_${jobId}`);
+        this.displayedColumns = [...baseColumns, ...personColumns, 'match', ...coderColumns];
       } else {
-        this.displayedColumns = baseColumns;
+        this.displayedColumns = [...baseColumns, ...personColumns, 'match'];
       }
     }
   }
@@ -229,8 +254,28 @@ export class CodingResultsComparisonComponent implements OnInit {
             unitName: item.unitName,
             variableId: item.variableId,
             testperson: item.testPerson,
+            personLogin: item.personLogin,
+            personCode: item.personCode,
+            personGroup: item.personGroup,
             coders: item.coders
           }));
+
+          // Extract available coders from the first data item (assuming all items have same coders structure)
+          if (this.withinTrainingData.length > 0) {
+            this.availableCoders = this.withinTrainingData[0].coders.map(c => ({
+              jobId: c.jobId,
+              coderName: c.coderName
+            }));
+            // Select all coders by default
+            const allCoderIds = this.availableCoders.map(c => c.jobId);
+            this.codersFormControl.setValue(allCoderIds);
+            this.selectedCoderIds.setSelection(...allCoderIds);
+          } else {
+            this.availableCoders = [];
+            this.codersFormControl.setValue([]);
+            this.selectedCoderIds.clear();
+          }
+
           this.dataSource.data = this.withinTrainingData;
           this.updateDisplayedColumns();
           this.calculateStatistics();
@@ -242,6 +287,13 @@ export class CodingResultsComparisonComponent implements OnInit {
         }
       });
     }
+  }
+
+  onCoderSelectionChange(): void {
+    const selectedIds = this.codersFormControl.value || [];
+    this.selectedCoderIds.clear();
+    this.selectedCoderIds.select(...selectedIds);
+    this.updateDisplayedColumns();
   }
 
   getCoderCode(comparison: WithinTrainingComparison, jobId: number): string | null {

@@ -1,7 +1,7 @@
 .comparison-container {
   min-width: 600px;
   max-width: 1200px;
-  padding: 24px;
+  padding: 24px 24px 0 24px;
 
   .dialog-header {
     margin-bottom: 24px;
@@ -18,18 +18,18 @@
   }
 
   .training-selection {
-    margin-bottom: 24px;
+    margin-bottom: 16px;
     padding: 16px;
     border: 1px solid #e0e0e0;
     border-radius: 4px;
 
     h3 {
-      margin: 0 0 16px 0;
+      margin: 0 0 12px 0;
       color: #333;
     }
 
     .training-options {
-      margin-bottom: 16px;
+      margin-bottom: 12px;
 
       mat-form-field {
         width: 300px;
@@ -37,12 +37,17 @@
     }
   }
 
-  .controls {
-    margin-bottom: 24px;
-    display: flex;
-    gap: 12px;
-    justify-content: flex-end;
+  // .controls removed
+
+
+  .full-width-select {
+    width: 100%;
   }
+
+  .coder-selection {
+    margin-top: 16px;
+  }
+
 
   .loading-container,
   .no-data,
@@ -216,7 +221,8 @@
       table {
         font-size: 12px;
 
-        td, th {
+        td,
+        th {
           padding: 8px 4px;
         }
       }

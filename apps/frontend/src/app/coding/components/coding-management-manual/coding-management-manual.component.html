@@ -67,10 +67,10 @@
                 <div class="config-grid">
                   <div class="settings-control threshold-control">
                     <mat-form-field appearance="outline" class="density-compact">
-                      <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate }}</mat-label>
+                      <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate
+                        }}</mat-label>
                       <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
-                             (ngModelChange)="onThresholdChanged($event)"
-                             min="2" max="100" step="1">
+                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1">
                     </mat-form-field>
 
                     <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
@@ -500,7 +500,8 @@
 
           <div class="coder-training-list-container">
             <h3>Kodierer-Schulungen</h3>
-            <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()">
+            <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()"
+              (onEditTraining)="openTrainingEdit($event)">
             </coding-box-coder-trainings-list>
           </div>
           <div class="variable-bundle-container">
@@ -519,7 +520,8 @@
     <!-- Coder Training Component -->
     <div *ngIf="showCoderTraining" class="coder-training-overlay">
       <div class="coder-training-modal">
-        <coding-box-coder-training (close)="closeCoderTraining()" (startTraining)="onTrainingStart($event)">
+        <coding-box-coder-training [editTraining]="editTraining" (close)="closeCoderTraining()"
+          (startTraining)="onTrainingStart($event)">
         </coding-box-coder-training>
       </div>
     </div>

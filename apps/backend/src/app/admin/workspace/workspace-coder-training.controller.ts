@@ -20,6 +20,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { CoderTrainingService } from '../../database/services/coding';
+import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
@@ -34,7 +35,7 @@ export class WorkspaceCoderTrainingController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
     description:
-            'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
+      'Generate coder training packages based on CODING_INCOMPLETE responses for specific variable and unit combinations',
     schema: {
       type: 'object',
       properties: {
@@ -190,7 +191,7 @@ export class WorkspaceCoderTrainingController {
         missingsProfileId: {
           type: 'number',
           description:
-                        'ID of the missings profile to assign to all created coding jobs'
+            'ID of the missings profile to assign to all created coding jobs'
         },
         selectedCoders: {
           type: 'array',
@@ -210,6 +211,27 @@ export class WorkspaceCoderTrainingController {
               variableId: { type: 'string' },
               unitId: { type: 'string' },
               sampleCount: { type: 'number' }
+            }
+          }
+        },
+        assignedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        },
+        assignedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
             }
           }
         }
@@ -256,6 +278,8 @@ export class WorkspaceCoderTrainingController {
                        unitId: string;
                        sampleCount: number;
                      }[];
+                     assignedVariables?: JobDefinitionVariable[];
+                     assignedVariableBundles?: JobDefinitionVariableBundle[];
                    }
   ): Promise<{
         success: boolean;
@@ -274,7 +298,9 @@ export class WorkspaceCoderTrainingController {
       body.selectedCoders,
       body.variableConfigs,
       body.trainingLabel,
-      body.missingsProfileId
+      body.missingsProfileId,
+      body.assignedVariables,
+      body.assignedVariableBundles
     );
   }
 
@@ -364,7 +390,7 @@ export class WorkspaceCoderTrainingController {
   })
   @ApiOkResponse({
     description:
-            'Comparison of coding results within a single training by individual coders',
+      'Comparison of coding results within a single training by individual coders',
     schema: {
       type: 'array',
       items: {
@@ -436,48 +462,98 @@ export class WorkspaceCoderTrainingController {
     description: 'ID of the coder training to update'
   })
   @ApiBody({
-    description: 'New label for the coder training',
+    description: 'Updated coder training configuration',
     schema: {
       type: 'object',
       properties: {
-        label: {
-          type: 'string',
-          description: 'New label for the coder training'
+        label: { type: 'string' },
+        missingsProfileId: { type: 'number' },
+        selectedCoders: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
+            }
+          }
+        },
+        variableConfigs: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              variableId: { type: 'string' },
+              unitId: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        },
+        assignedVariables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string' },
+              variableId: { type: 'string' },
+              sampleCount: { type: 'number' }
+            }
+          }
+        },
+        assignedVariableBundles: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'number' },
+              name: { type: 'string' }
+            }
+          }
         }
       },
-      required: ['label']
+      required: ['label', 'selectedCoders', 'variableConfigs']
     }
   })
   @ApiOkResponse({
-    description: 'Coder training label updated successfully.',
+    description: 'Coder training updated successfully.',
     schema: {
       type: 'object',
       properties: {
-        success: {
-          type: 'boolean',
-          description: 'Whether the update was successful'
-        },
-        message: { type: 'string', description: 'Result message' }
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        jobsCreated: { type: 'number' }
       }
     }
   })
-  async updateCoderTrainingLabel(
+  async updateCoderTraining(
     @WorkspaceId() workspace_id: number,
       @Param('trainingId') trainingId: number,
-      @Body() body: { label: string }
-  ): Promise<{ success: boolean; message: string }> {
+      @Body() body: {
+        label: string;
+        missingsProfileId?: number;
+        selectedCoders: { id: number; name: string }[];
+        variableConfigs: {
+          variableId: string;
+          unitId: string;
+          sampleCount: number;
+        }[];
+        assignedVariables?: JobDefinitionVariable[];
+        assignedVariableBundles?: JobDefinitionVariableBundle[];
+      }
+  ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
       throw new Error('Valid training ID must be provided');
     }
 
-    if (!body.label || body.label.trim().length === 0) {
-      throw new Error('Valid label must be provided');
-    }
-
-    return this.coderTrainingService.updateCoderTrainingLabel(
+    return this.coderTrainingService.updateCoderTraining(
       workspace_id,
       trainingId,
-      body.label.trim()
+      body.label,
+      body.selectedCoders,
+      body.variableConfigs,
+      body.missingsProfileId,
+      body.assignedVariables,
+      body.assignedVariableBundles
     );
   }
 
@@ -581,6 +657,61 @@ export class WorkspaceCoderTrainingController {
     return this.coderTrainingService.deleteCoderTraining(
       workspace_id,
       trainingId
+    );
+  }
+
+  @Put(':workspace_id/coding/coder-trainings/:trainingId/label')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training to update'
+  })
+  @ApiBody({
+    description: 'New label for the coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        label: {
+          type: 'string',
+          description: 'New label for the coder training'
+        }
+      },
+      required: ['label']
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coder training label updated successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        success: {
+          type: 'boolean',
+          description: 'Whether the update was successful'
+        },
+        message: { type: 'string', description: 'Result message' }
+      }
+    }
+  })
+  async updateCoderTrainingLabel(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body() body: { label: string }
+  ): Promise<{ success: boolean; message: string }> {
+    if (!trainingId || trainingId <= 0) {
+      throw new Error('Valid training ID must be provided');
+    }
+
+    if (!body.label || body.label.trim().length === 0) {
+      throw new Error('Valid label must be provided');
+    }
+
+    return this.coderTrainingService.updateCoderTrainingLabel(
+      workspace_id,
+      trainingId,
+      body.label.trim()
     );
   }
 }
