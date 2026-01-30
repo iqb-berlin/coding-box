@@ -4,6 +4,7 @@ import {
   OnDestroy,
   inject,
   Output,
+  Input,
   EventEmitter,
   ChangeDetectionStrategy,
   ChangeDetectorRef
@@ -40,6 +41,7 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import { CoderTraining } from '../../models/coder-training.model';
 
 export interface VariableConfig {
   variableId: string;
@@ -81,6 +83,7 @@ export interface VariableGrouping {
 export class CoderTrainingComponent implements OnInit, OnDestroy {
   @Output() close = new EventEmitter<void>();
   @Output() startTraining = new EventEmitter<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
+  @Input() editTraining: CoderTraining | null = null;
 
   private destroy$ = new Subject<void>();
   private changeDetectorRef = inject(ChangeDetectorRef);
@@ -99,6 +102,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   // Public getters for template access
   get groupedVariables(): VariableGrouping {
     return this._groupedVariables;
+  }
+
+  get isEditMode(): boolean {
+    return !!this.editTraining;
   }
 
   coders: Coder[] = [];
@@ -215,7 +222,59 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCoders();
     this.loadAvailableVariables();
-    this.loadVariableBundles();
+
+    // Population logic: wait for variables and bundles if in edit mode
+    combineLatest([
+      this._availableVariables$.pipe(startWith([])),
+      this.variableBundleService.getBundles(1, 100).pipe(
+        map(({ bundles }: { bundles: VariableBundle[] }) => bundles),
+        startWith([])
+      )
+    ]).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(([variables, bundles]: [Variable[], VariableBundle[]]) => {
+      this.availableVariables = variables;
+      this.availableBundles = bundles;
+
+      if ((variables.length > 0 || bundles.length > 0) && this.editTraining && this.trainingForm.get('variables')?.value.length === 0) {
+        this.populateFormFromTraining();
+      }
+
+      this.isLoadingVariables = false;
+      this.isLoadingBundles = false;
+      this.changeDetectorRef.markForCheck();
+    });
+  }
+
+  private populateFormFromTraining(): void {
+    if (!this.editTraining) return;
+
+    this.trainingForm.get('trainingLabel')?.setValue(this.editTraining.label);
+
+    if (this.editTraining.assigned_coders) {
+      this.selectedCoders = new Set(this.editTraining.assigned_coders);
+    }
+
+    if (this.editTraining.assigned_variables) {
+      this.editTraining.assigned_variables.forEach(v => {
+        this.addVariable(v.variableId, v.unitName, v.sampleCount || 10, undefined, undefined, true);
+      });
+    }
+
+    if (this.editTraining.assigned_variable_bundles) {
+      this.editTraining.assigned_variable_bundles.forEach(b => {
+        const bundle = this.availableBundles.find(avail => avail.id === b.id);
+        if (bundle) {
+          const firstVarInBundle = this.editTraining?.assigned_variables?.find(v => bundle.variables.some(bv => bv.variableId === v.variableId && bv.unitName === v.unitName)
+          );
+          const sampleCountByKey = firstVarInBundle?.sampleCount;
+          const sampleCount = b.sampleCount || sampleCountByKey || 10;
+          this.addBundleVariables(b.id, sampleCount);
+        }
+      });
+    }
+
+    this.updateGroupedVariables();
   }
 
   ngOnDestroy(): void {
@@ -685,31 +744,80 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const trainingLabel = this.trainingForm.get('trainingLabel')?.value || '';
 
-    this.codingTrainingBackendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel)
-      .subscribe({
-        next: result => {
-          this.isLoading = false;
-          this.changeDetectorRef.markForCheck();
-          if (result.success) {
-            const translatedMessage = result.message ?
-              this.backendMessageTranslator.translateMessage(result.message) :
-              `Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`;
-            this.showSuccess(translatedMessage);
-            this.startTraining.emit({ selectedCoders, variableConfigs });
-            this.onClose();
+    const assignedVariables: { unitName: string; variableId: string; sampleCount: number }[] =
+      this.variablesFormArray.controls
+        .filter(c => !c.get('bundleId')?.value)
+        .map(c => ({
+          variableId: c.get('variableId')?.value,
+          unitName: c.get('unitId')?.value,
+          sampleCount: c.get('sampleCount')?.value
+        }));
+
+    const assignedVariableBundles: { id: number; name: string; sampleCount: number }[] = [];
+    const seenBundleIds = new Set<number>();
+    this.variablesFormArray.controls.forEach(c => {
+      const bundleId = c.get('bundleId')?.value;
+      if (bundleId && !seenBundleIds.has(bundleId)) {
+        seenBundleIds.add(bundleId);
+        assignedVariableBundles.push({
+          id: bundleId,
+          name: c.get('bundleName')?.value,
+          sampleCount: c.get('sampleCount')?.value || 10
+        });
+      }
+    });
+
+    const request$ = this.isEditMode ?
+      this.codingTrainingBackendService.updateCoderTraining(
+        workspaceId,
+        this.editTraining!.id,
+        trainingLabel,
+        selectedCoders,
+        variableConfigs,
+        undefined,
+        assignedVariables,
+        assignedVariableBundles
+      ) :
+      this.codingTrainingBackendService.createCoderTrainingJobs(
+        workspaceId,
+        selectedCoders,
+        variableConfigs,
+        trainingLabel,
+        undefined,
+        assignedVariables,
+        assignedVariableBundles
+      );
+
+    request$.subscribe({
+      next: (result: { success: boolean; message: string; jobsCreated?: number; jobs?: unknown[] }) => {
+        this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
+        if (result.success) {
+          let translatedMessage: string;
+          if (result.message) {
+            translatedMessage = this.backendMessageTranslator.translateMessage(result.message);
+          } else if (this.isEditMode) {
+            translatedMessage = 'Training erfolgreich aktualisiert';
           } else {
-            const translatedError = result.message ?
-              this.backendMessageTranslator.translateMessage(result.message) :
-              'Fehler beim Erstellen der Kodierungsaufträge';
-            this.showError(translatedError);
+            translatedMessage = `Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`;
           }
-        },
-        error: () => {
-          this.isLoading = false;
-          this.changeDetectorRef.markForCheck();
-          this.showError('Fehler beim Erstellen der Kodierungsaufträge');
+
+          this.showSuccess(translatedMessage);
+          this.startTraining.emit({ selectedCoders, variableConfigs });
+          this.onClose();
+        } else {
+          const translatedError = result.message ?
+            this.backendMessageTranslator.translateMessage(result.message) :
+            'Fehler beim Speichern der Kodierungsaufträge';
+          this.showError(translatedError);
         }
-      });
+      },
+      error: () => {
+        this.isLoading = false;
+        this.changeDetectorRef.markForCheck();
+        this.showError('Fehler beim Speichern der Kodierungsaufträge');
+      }
+    });
   }
 
   onClose(): void {

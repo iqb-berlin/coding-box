@@ -25,6 +25,7 @@ import {
   VariableConfig
 } from '../coder-training/coder-training.component';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
+import { CoderTraining } from '../../models/coder-training.model';
 import {
   ImportComparisonDialogComponent,
   ImportComparisonData
@@ -252,6 +253,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   } | null = null;
 
   showCoderTraining = false;
+  editTraining: CoderTraining | null = null;
 
   expectedCombinations: ExpectedCombinationDto[] = [];
 
@@ -498,6 +500,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   closeCoderTraining(): void {
     this.showCoderTraining = false;
+    this.editTraining = null;
+  }
+
+  openTrainingEdit(training: CoderTraining): void {
+    this.editTraining = training;
+    this.showCoderTraining = true;
   }
 
   /**
