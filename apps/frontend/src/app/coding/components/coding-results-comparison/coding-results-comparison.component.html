@@ -5,7 +5,6 @@
   </div>
 
   <div class="mode-selection">
-    <h3>Vergleichsmodus</h3>
     <mat-radio-group [(ngModel)]="comparisonMode" (change)="onModeChange()">
       <mat-radio-button value="between-trainings">Zwischen Schulungen vergleichen</mat-radio-button>
       <mat-radio-button value="within-training">Innerhalb einer Schulung vergleichen</mat-radio-button>
@@ -69,6 +68,124 @@
         <span>Gesamtvergleiche: <strong>{{ totalComparisons }}</strong></span>
         <span>Übereinstimmungen: <strong>{{ matchingComparisons }}</strong></span>
         <span>Übereinstimmungsrate: <strong>{{ matchingPercentage }}%</strong></span>
+        <span
+          *ngIf="comparisonMode === 'within-training' && kappaStatistics?.workspaceSummary?.meanAgreement !== null && kappaStatistics?.workspaceSummary?.meanAgreement !== undefined">
+          Durchschnittliche Übereinstimmung: <strong>{{ kappaStatistics!.workspaceSummary.meanAgreement! |
+            percent:'1.1-1' }}</strong>
+          <small class="text-muted">({{ useWeightedMean ? 'gewichtet' : 'ungewichtet' }})</small>
+        </span>
+      </div>
+    </div>
+
+    <!-- Cohen's Kappa Statistics Section (within-training mode only) -->
+    <div class="kappa-section" *ngIf="comparisonMode === 'within-training' && selectedTrainingForWithin">
+      <div class="kappa-header" (click)="toggleKappaStatistics()">
+        <h4>
+          <mat-icon>{{ showKappaStatistics ? 'expand_less' : 'expand_more' }}</mat-icon>
+          Cohen's Kappa (Interrater-Reliabilität)
+        </h4>
+        <button mat-icon-button class="toggle-button">
+          <mat-icon>{{ showKappaStatistics ? 'expand_less' : 'expand_more' }}</mat-icon>
+        </button>
+      </div>
+
+      <div class="kappa-content" *ngIf="showKappaStatistics">
+        <div class="loading-container" *ngIf="!kappaStatistics">
+          <mat-progress-spinner mode="indeterminate" diameter="30"></mat-progress-spinner>
+          <p>Berechne Cohen's Kappa...</p>
+        </div>
+
+        <div *ngIf="kappaStatistics" class="kappa-statistics">
+          <!-- Weighted Mean Toggle -->
+          <div class="weighting-toggle-container">
+            <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
+              Gewichteter Mittelwert (R eatPrep::meanKappa)
+            </mat-slide-toggle>
+            <mat-icon class="info-icon"
+              matTooltip="Der gewichtete Mittelwert gewichtet jeden Kappa-Wert nach der Anzahl gültiger Paare, entsprechend der R-Implementierung: weighted.mean(dfr$kappa, dfr$N)"
+              matTooltipPosition="right">
+              info
+            </mat-icon>
+          </div>
+
+          <!-- Calculation Level Toggle -->
+          <div class="level-toggle-container">
+            <mat-slide-toggle [(ngModel)]="useCodeLevel" (change)="toggleCalculationLevel()" color="primary">
+              Kappa auf Ebene der Codes
+            </mat-slide-toggle>
+            <mat-icon class="info-icon"
+              matTooltip="Code-Ebene: Unterscheidet zwischen allen Codes (inkl. Missing-Codes 6,8,9). Score-Ebene: Basiert auf Scores, wobei verschiedene Codes auf denselben Score abgebildet werden können."
+              matTooltipPosition="right">
+              info
+            </mat-icon>
+            <span class="level-indicator">
+              ({{ useCodeLevel ? 'Code-Ebene' : 'Score-Ebene' }})
+            </span>
+          </div>
+
+          <!-- Summary Statistics -->
+          <div class="summary-stats">
+            <div class="stat-card">
+              <span class="stat-label">Durchschnittliches Kappa</span>
+              <span class="stat-value kappa-value"
+                [class.kappa-high]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.8"
+                [class.kappa-moderate]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.6 && (kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.8"
+                [class.kappa-fair]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.4 && (kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.6"
+                [class.kappa-low]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.4">
+                {{ kappaStatistics.workspaceSummary.averageKappa !== null ?
+                (kappaStatistics.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
+              </span>
+              <span class="stat-sublabel">{{ kappaStatistics.workspaceSummary.weightingMethod === 'weighted' ?
+                'Gewichtet' : 'Ungewichtet' }}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Kodierer-Paare</span>
+              <span class="stat-value">{{ kappaStatistics.workspaceSummary.totalCoderPairs }}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Doppelt kodierte Antworten</span>
+              <span class="stat-value">{{ kappaStatistics.workspaceSummary.totalDoubleCodedResponses }}</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-label">Kodierer</span>
+              <span class="stat-value">{{ kappaStatistics.workspaceSummary.codersIncluded }}</span>
+            </div>
+          </div>
+
+          <!-- Detailed Coder Pair Statistics -->
+          <div class="coder-pairs-details" *ngIf="kappaStatistics.variables.length > 0">
+            <h5>Details nach Kodierer-Paaren</h5>
+            <div class="pairs-container" *ngFor="let variable of kappaStatistics.variables">
+              <div class="pair-card" *ngFor="let pair of variable.coderPairs">
+                <div class="pair-header">
+                  <strong>{{ pair.coder1Name }} ↔ {{ pair.coder2Name }}</strong>
+                </div>
+                <div class="pair-stats">
+                  <div class="pair-stat">
+                    <span class="pair-stat-label">Kappa:</span>
+                    <span class="pair-stat-value kappa-value" [class.kappa-high]="(pair.kappa ?? 0) >= 0.8"
+                      [class.kappa-moderate]="(pair.kappa ?? 0) >= 0.6 && (pair.kappa ?? 0) < 0.8"
+                      [class.kappa-fair]="(pair.kappa ?? 0) >= 0.4 && (pair.kappa ?? 0) < 0.6"
+                      [class.kappa-low]="(pair.kappa ?? 0) < 0.4">
+                      {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
+                    </span>
+                  </div>
+                  <div class="pair-stat">
+                    <span class="pair-stat-label">Übereinstimmung:</span>
+                    <span class="pair-stat-value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
+                  </div>
+                  <div class="pair-stat">
+                    <span class="pair-stat-label">Gültige Paare:</span>
+                    <span class="pair-stat-value">{{ pair.validPairs }} / {{ pair.totalItems }}</span>
+                  </div>
+                  <div class="pair-stat interpretation">
+                    <span class="interpretation-badge">{{ pair.interpretation | translate }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -166,7 +283,8 @@
         </ng-container>
 
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;" [class.codes-match]="areCodesTheSame(row)"
+          [class.codes-differ]="!areCodesTheSame(row)"></tr>
       </table>
 
       <mat-paginator [pageSizeOptions]="[50, 100, 200, 500]" showFirstLastButtons></mat-paginator>

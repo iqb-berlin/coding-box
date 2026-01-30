@@ -15,6 +15,8 @@ import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule, FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -71,7 +73,9 @@ interface WithinTrainingComparison {
     MatInputModule,
     MatCheckboxModule,
     MatRadioModule,
-    MatSelectModule
+    MatSelectModule,
+    MatSlideToggleModule,
+    MatTooltipModule
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit {
@@ -99,6 +103,38 @@ export class CodingResultsComparisonComponent implements OnInit {
   totalComparisons = 0;
   matchingComparisons = 0;
   matchingPercentage = 0;
+
+  // Cohen's Kappa properties
+  kappaStatistics: {
+    variables: Array<{
+      unitName: string;
+      variableId: string;
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalItems: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+    }>;
+    workspaceSummary: {
+      totalDoubleCodedResponses: number;
+      totalCoderPairs: number;
+      averageKappa: number | null;
+      meanAgreement?: number | null;
+      variablesIncluded: number;
+      codersIncluded: number;
+      weightingMethod: 'weighted' | 'unweighted';
+    };
+  } | null = null;
+
+  showKappaStatistics = false;
+  useWeightedMean = true;
+  useCodeLevel = true; // true = code level, false = score level
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
@@ -279,6 +315,8 @@ export class CodingResultsComparisonComponent implements OnInit {
           this.dataSource.data = this.withinTrainingData;
           this.updateDisplayedColumns();
           this.calculateStatistics();
+          // Automatically load Kappa statistics to show Mean Agreement in summary
+          this.loadKappaStatistics();
           this.isLoading = false;
         },
         error: () => {
@@ -359,5 +397,76 @@ export class CodingResultsComparisonComponent implements OnInit {
       codes = comparison.coders.map(c => c.code);
     }
     return codes.some(c => c !== null);
+  }
+
+  loadKappaStatistics(): void {
+    if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
+      return;
+    }
+
+    const level = this.useCodeLevel ? 'code' : 'score';
+    this.codingTrainingBackendService
+      .getTrainingCohensKappa(
+        this.data.workspaceId,
+        this.selectedTrainingForWithin,
+        this.useWeightedMean,
+        level
+      )
+      .subscribe({
+        next: stats => {
+          this.kappaStatistics = stats;
+          this.calculateMeanAgreement();
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translate.instant('coding.trainings.kappa.error'),
+            this.translate.instant('common.close'),
+            { duration: 3000 }
+          );
+        }
+      });
+  }
+
+  calculateMeanAgreement(): void {
+    if (!this.kappaStatistics) return;
+
+    let totalAgreementWeighted = 0;
+    let totalWeight = 0;
+    let totalAgreementSum = 0;
+    let pairCount = 0;
+
+    this.kappaStatistics.variables.forEach(variable => {
+      variable.coderPairs.forEach(pair => {
+        if (pair.validPairs > 0) { // Only consider pairs with data
+          totalAgreementWeighted += pair.agreement * pair.validPairs;
+          totalWeight += pair.validPairs;
+          totalAgreementSum += pair.agreement;
+          pairCount += 1;
+        }
+      });
+    });
+
+    if (this.useWeightedMean) {
+      this.kappaStatistics.workspaceSummary.meanAgreement = totalWeight > 0 ? totalAgreementWeighted / totalWeight : 0;
+    } else {
+      this.kappaStatistics.workspaceSummary.meanAgreement = pairCount > 0 ? totalAgreementSum / pairCount : 0;
+    }
+  }
+
+  toggleKappaStatistics(): void {
+    this.showKappaStatistics = !this.showKappaStatistics;
+    if (this.showKappaStatistics && !this.kappaStatistics) {
+      this.loadKappaStatistics();
+    }
+  }
+
+  toggleWeightingMethod(): void {
+    this.useWeightedMean = !this.useWeightedMean;
+    this.loadKappaStatistics();
+  }
+
+  toggleCalculationLevel(): void {
+    this.useCodeLevel = !this.useCodeLevel;
+    this.loadKappaStatistics();
   }
 }

@@ -165,4 +165,64 @@ export class CodingTrainingBackendService {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
     return this.http.get<CodingJobForTraining[]>(url, { headers: this.authHeader });
   }
+
+  getTrainingCohensKappa(
+    workspaceId: number,
+    trainingId: number,
+    weightedMean: boolean = true,
+    level: 'code' | 'score' = 'code'
+  ): Observable<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+        calculationLevel: 'code' | 'score';
+      };
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/cohens-kappa?weightedMean=${weightedMean}&level=${level}`;
+    return this.http.get<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+        calculationLevel: 'code' | 'score';
+      };
+    }>(url, { headers: this.authHeader });
+  }
 }

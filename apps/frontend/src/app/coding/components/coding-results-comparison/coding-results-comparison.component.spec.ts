@@ -6,6 +6,8 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { TranslateModule } from '@ngx-translate/core';
+import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
 
@@ -18,7 +20,8 @@ describe('CodingResultsComparisonComponent', () => {
       imports: [
         CodingResultsComparisonComponent,
         MatDialogModule,
-        HttpClientTestingModule
+        HttpClientTestingModule,
+        TranslateModule.forRoot()
       ],
       providers: [
         {
@@ -36,6 +39,15 @@ describe('CodingResultsComparisonComponent', () => {
         {
           provide: MatSnackBar,
           useValue: { open: jest.fn() }
+        },
+        {
+          provide: CodingTrainingBackendService,
+          useValue: {
+            getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+            compareTrainingCodingResults: jest.fn(),
+            compareWithinTrainingCodingResults: jest.fn(),
+            getTrainingCohensKappa: jest.fn()
+          }
         }
       ]
     }).compileComponents();
@@ -178,6 +190,104 @@ describe('CodingResultsComparisonComponent', () => {
       expect(component.totalComparisons).toBe(0);
       expect(component.matchingComparisons).toBe(0);
       expect(component.matchingPercentage).toBe(0);
+    });
+  });
+
+  describe('calculateMeanAgreement', () => {
+    it('should calculate weighted mean agreement correctly', () => {
+      component.kappaStatistics = {
+        variables: [
+          {
+            unitName: 'U1',
+            variableId: 'V1',
+            coderPairs: [
+              {
+                coder1Id: 1,
+                coder1Name: 'C1',
+                coder2Id: 2,
+                coder2Name: 'C2',
+                kappa: 0.5,
+                agreement: 0.8,
+                totalItems: 10,
+                validPairs: 10,
+                interpretation: 'mod'
+              },
+              {
+                coder1Id: 1,
+                coder1Name: 'C1',
+                coder2Id: 3,
+                coder2Name: 'C3',
+                kappa: 0.6,
+                agreement: 0.9,
+                totalItems: 10,
+                validPairs: 5,
+                interpretation: 'good'
+              }
+            ]
+          }
+        ],
+        workspaceSummary: {
+          totalDoubleCodedResponses: 0,
+          totalCoderPairs: 0,
+          averageKappa: 0,
+          variablesIncluded: 0,
+          codersIncluded: 0,
+          weightingMethod: 'weighted'
+        }
+      };
+      component.useWeightedMean = true;
+      component.calculateMeanAgreement();
+
+      // Weighted mean: (0.8 * 10 + 0.9 * 5) / (10 + 5) = (8 + 4.5) / 15 = 12.5 / 15 = 0.8333...
+      expect(component.kappaStatistics?.workspaceSummary.meanAgreement).toBeCloseTo(0.8333, 4);
+    });
+
+    it('should calculate unweighted mean agreement correctly', () => {
+      component.kappaStatistics = {
+        variables: [
+          {
+            unitName: 'U1',
+            variableId: 'V1',
+            coderPairs: [
+              {
+                coder1Id: 1,
+                coder1Name: 'C1',
+                coder2Id: 2,
+                coder2Name: 'C2',
+                kappa: 0.5,
+                agreement: 0.8,
+                totalItems: 10,
+                validPairs: 10,
+                interpretation: 'mod'
+              },
+              {
+                coder1Id: 1,
+                coder1Name: 'C1',
+                coder2Id: 3,
+                coder2Name: 'C3',
+                kappa: 0.6,
+                agreement: 0.9,
+                totalItems: 10,
+                validPairs: 5,
+                interpretation: 'good'
+              }
+            ]
+          }
+        ],
+        workspaceSummary: {
+          totalDoubleCodedResponses: 0,
+          totalCoderPairs: 0,
+          averageKappa: 0,
+          variablesIncluded: 0,
+          codersIncluded: 0,
+          weightingMethod: 'unweighted'
+        }
+      };
+      component.useWeightedMean = false;
+      component.calculateMeanAgreement();
+
+      // Unweighted mean: (0.8 + 0.9) / 2 = 0.85
+      expect(component.kappaStatistics?.workspaceSummary.meanAgreement).toBeCloseTo(0.85, 4);
     });
   });
 });

@@ -502,6 +502,7 @@ export class CoderTrainingService {
     }
 
     const unitVariableMap = new Map<string, {
+      responseId: number;
       unitName: string;
       variableId: string;
       personCode: string;
@@ -513,13 +514,14 @@ export class CoderTrainingService {
 
     training.codingJobs.forEach(job => {
       job.codingJobUnits?.forEach(unit => {
-        const unitVariableKey = `${unit.unit_name}:${unit.variable_id}:${unit.person_code}`;
+        const unitVariableKey = unit.response_id.toString();
         if (!unitVariableMap.has(unitVariableKey)) {
           const givenAnswer = unit.response?.value || '';
           const personGroup = unit.response?.unit?.booklet?.person?.group || '';
           const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
 
           unitVariableMap.set(unitVariableKey, {
+            responseId: unit.response_id,
             unitName: unit.unit_name,
             variableId: unit.variable_id,
             personCode: unit.person_code,
@@ -551,7 +553,7 @@ export class CoderTrainingService {
           `Coder ${job.name}`;
 
         job.codingJobUnits?.forEach(unit => {
-          if (unit.unit_name === unitVar.unitName && unit.variable_id === unitVar.variableId && unit.person_code === unitVar.personCode) {
+          if (unit.response_id === unitVar.responseId) {
             if (unit.code !== null) {
               code = unit.code.toString();
             }
@@ -887,5 +889,117 @@ export class CoderTrainingService {
         message: errorMessage
       };
     }
+  }
+
+  /**
+   * Transform within-training comparison data to format expected by Cohen's Kappa calculation
+   * This allows reuse of existing Cohen's Kappa calculation logic
+   */
+  transformToCoderPairs(
+    comparisonData: Array<{
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      givenAnswer: string;
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>
+  ): Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores: Array<{ score1: number | null; score2: number | null }>;
+    }> {
+    this.logger.log(`Transforming ${comparisonData.length} comparison items to coder pairs format`);
+
+    // Group by unit/variable to get all responses for each variable
+    const variableMap = new Map<string, typeof comparisonData>();
+
+    for (const item of comparisonData) {
+      const key = `${item.unitName}:${item.variableId}`;
+      if (!variableMap.has(key)) {
+        variableMap.set(key, []);
+      }
+      variableMap.get(key)!.push(item);
+    }
+
+    const allCoderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores: Array<{ score1: number | null; score2: number | null }>;
+    }> = [];
+
+    // For each variable, create coder pairs
+    for (const [variableKey, items] of variableMap.entries()) {
+      if (items.length === 0) continue;
+
+      // Get all unique coders from the first item (all items should have same coders)
+      const coders = items[0].coders;
+
+      if (coders.length < 2) {
+        this.logger.warn(`Variable ${variableKey} has less than 2 coders, skipping`);
+        continue;
+      }
+
+      // Create all possible pairs of coders
+      for (let i = 0; i < coders.length; i++) {
+        for (let j = i + 1; j < coders.length; j++) {
+          const coder1 = coders[i];
+          const coder2 = coders[j];
+
+          // Collect code and score pairs for this coder pair across all responses
+          const codePairs: Array<{ code1: number | null; code2: number | null }> = [];
+          const scorePairs: Array<{ score1: number | null; score2: number | null }> = [];
+
+          for (const item of items) {
+            const coder1Data = item.coders.find(c => c.jobId === coder1.jobId);
+            const coder2Data = item.coders.find(c => c.jobId === coder2.jobId);
+
+            if (coder1Data && coder2Data) {
+              // Convert string codes to numbers (codes are stored as strings in the comparison data)
+              const code1 = coder1Data.code !== null ? parseInt(coder1Data.code, 10) : null;
+              const code2 = coder2Data.code !== null ? parseInt(coder2Data.code, 10) : null;
+
+              codePairs.push({
+                code1: Number.isNaN(code1) ? null : code1,
+                code2: Number.isNaN(code2) ? null : code2
+              });
+
+              // Collect score pairs
+              scorePairs.push({
+                score1: coder1Data.score,
+                score2: coder2Data.score
+              });
+            }
+          }
+
+          if (codePairs.length > 0) {
+            allCoderPairs.push({
+              coder1Id: coder1.jobId,
+              coder1Name: coder1.coderName,
+              coder2Id: coder2.jobId,
+              coder2Name: coder2.coderName,
+              codes: codePairs,
+              scores: scorePairs
+            });
+          }
+        }
+      }
+    }
+
+    this.logger.log(`Created ${allCoderPairs.length} coder pairs from ${variableMap.size} variables`);
+    return allCoderPairs;
   }
 }

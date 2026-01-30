@@ -19,14 +19,15 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CoderTrainingService } from '../../database/services/coding';
+import { CoderTrainingService, CodingStatisticsService } from '../../database/services/coding';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../database/entities/job-definition.entity';
 
 @ApiTags('Admin Workspace Coder Training')
 @Controller('admin/workspace')
 export class WorkspaceCoderTrainingController {
   constructor(
-    private coderTrainingService: CoderTrainingService
+    private coderTrainingService: CoderTrainingService,
+    private codingStatisticsService: CodingStatisticsService
   ) { }
 
   @Post(':workspace_id/coding/coder-training-packages')
@@ -713,5 +714,212 @@ export class WorkspaceCoderTrainingController {
       trainingId,
       body.label.trim()
     );
+  }
+
+  @Get(':workspace_id/coding/coder-trainings/:trainingId/cohens-kappa')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiQuery({
+    name: 'weightedMean',
+    required: false,
+    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+    type: Boolean
+  })
+  @ApiQuery({
+    name: 'level',
+    required: false,
+    enum: ['code', 'score'],
+    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+    type: String
+  })
+  @ApiOkResponse({
+    description: 'Cohen\'s Kappa inter-rater reliability statistics for the coder training',
+    schema: {
+      type: 'object',
+      properties: {
+        variables: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              unitName: { type: 'string', description: 'Name of the unit' },
+              variableId: { type: 'string', description: 'Variable ID' },
+              coderPairs: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    coder1Id: { type: 'number' },
+                    coder1Name: { type: 'string' },
+                    coder2Id: { type: 'number' },
+                    coder2Name: { type: 'string' },
+                    kappa: { type: 'number', nullable: true },
+                    agreement: { type: 'number' },
+                    totalItems: { type: 'number' },
+                    validPairs: { type: 'number' },
+                    interpretation: { type: 'string' }
+                  }
+                }
+              }
+            }
+          }
+        },
+        workspaceSummary: {
+          type: 'object',
+          properties: {
+            totalDoubleCodedResponses: { type: 'number' },
+            totalCoderPairs: { type: 'number' },
+            averageKappa: { type: 'number', nullable: true },
+            variablesIncluded: { type: 'number' },
+            codersIncluded: { type: 'number' },
+            weightingMethod: {
+              type: 'string',
+              enum: ['weighted', 'unweighted'],
+              description: 'Method used to calculate mean kappa'
+            }
+          }
+        }
+      }
+    }
+  })
+  async getTrainingCohensKappa(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Query('weightedMean') weightedMean?: string,
+      @Query('level') level?: 'code' | 'score'
+  ): Promise<{
+        variables: Array<{
+          unitName: string;
+          variableId: string;
+          coderPairs: Array<{
+            coder1Id: number;
+            coder1Name: string;
+            coder2Id: number;
+            coder2Name: string;
+            kappa: number | null;
+            agreement: number;
+            totalItems: number;
+            validPairs: number;
+            interpretation: string;
+          }>;
+        }>;
+        workspaceSummary: {
+          totalDoubleCodedResponses: number;
+          totalCoderPairs: number;
+          averageKappa: number | null;
+          variablesIncluded: number;
+          codersIncluded: number;
+          weightingMethod: 'weighted' | 'unweighted';
+          calculationLevel: 'code' | 'score';
+        };
+      }> {
+    if (!trainingId || trainingId <= 0) {
+      throw new Error('Valid training ID must be provided');
+    }
+
+    const useWeightedMean = weightedMean !== 'false'; // Default true
+    const calculationLevel = level || 'code'; // Default to code level
+
+    // 1. Get within-training comparison data
+    const comparisonData = await this.coderTrainingService.getWithinTrainingCodingComparison(
+      workspace_id,
+      trainingId
+    );
+
+    if (comparisonData.length === 0) {
+      return {
+        variables: [],
+        workspaceSummary: {
+          totalDoubleCodedResponses: 0,
+          totalCoderPairs: 0,
+          averageKappa: null,
+          variablesIncluded: 0,
+          codersIncluded: 0,
+          weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
+          calculationLevel
+        }
+      };
+    }
+
+    // 2. Transform to coder pairs format
+    const coderPairs = this.coderTrainingService.transformToCoderPairs(comparisonData);
+
+    if (coderPairs.length === 0) {
+      return {
+        variables: [],
+        workspaceSummary: {
+          totalDoubleCodedResponses: 0,
+          totalCoderPairs: 0,
+          averageKappa: null,
+          variablesIncluded: 0,
+          codersIncluded: 0,
+          weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
+          calculationLevel
+        }
+      };
+    }
+
+    // 3. Calculate Cohen's Kappa for each pair (reuse existing logic)
+    const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs, calculationLevel);
+
+    // 4. Group by variable (extract from comparison data)
+    // For simplicity, we'll group all results under a single "Training" variable for now
+    // In a more sophisticated implementation, we'd track which variable each pair belongs to
+    const variables = [{
+      unitName: 'Training',
+      variableId: 'all',
+      coderPairs: kappaResults
+    }];
+
+    // 5. Calculate summary statistics
+    let totalWeightedKappa = 0;
+    let totalWeight = 0;
+    let totalKappa = 0;
+    let validKappaCount = 0;
+    const uniqueCoders = new Set<number>();
+
+    for (const result of kappaResults) {
+      uniqueCoders.add(result.coder1Id);
+      uniqueCoders.add(result.coder2Id);
+
+      if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+        if (useWeightedMean) {
+          const weight = result.validPairs;
+          totalWeightedKappa += result.kappa * weight;
+          totalWeight += weight;
+        } else {
+          totalKappa += result.kappa;
+          validKappaCount += 1;
+        }
+      }
+    }
+
+    let averageKappa: number | null;
+    if (useWeightedMean) {
+      averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
+    } else {
+      averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+    }
+
+    const totalResponses = kappaResults.length > 0 ? kappaResults[0].totalItems : 0;
+
+    return {
+      variables,
+      workspaceSummary: {
+        totalDoubleCodedResponses: totalResponses,
+        totalCoderPairs: kappaResults.length,
+        averageKappa,
+        variablesIncluded: 1, // For now, treating all as one training variable
+        codersIncluded: uniqueCoders.size,
+        weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
+        calculationLevel
+      }
+    };
   }
 }

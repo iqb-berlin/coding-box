@@ -380,15 +380,20 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   /**
    * Calculate Cohen's Kappa for inter-rater agreement between coders
    * @param coderPairs Array of coder pairs with their coding data
+   * @param level Calculation level: 'code' for code-level kappa, 'score' for score-level kappa
    * @returns Cohen's Kappa coefficient and related statistics
    */
-  calculateCohensKappa(coderPairs: Array<{
-    coder1Id: number;
-    coder1Name: string;
-    coder2Id: number;
-    coder2Name: string;
-    codes: Array<{ code1: number | null; code2: number | null }>;
-  }>): Array<{
+  calculateCohensKappa(
+    coderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores?: Array<{ score1: number | null; score2: number | null }>;
+    }>,
+    level: 'code' | 'score' = 'code'
+  ): Array<{
       coder1Id: number;
       coder1Name: string;
       coder2Id: number;
@@ -402,10 +407,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     const results = [];
 
     for (const pair of coderPairs) {
-      const { codes } = pair;
+      // Select data based on calculation level
+      const dataToUse = level === 'score' && pair.scores ?
+        pair.scores.map(s => ({ code1: s.score1, code2: s.score2 })) :
+        pair.codes;
 
-      // Filter out pairs where either coder has null code
-      const validCodes = codes.filter(c => c.code1 !== null && c.code2 !== null);
+      // Filter out pairs where either coder has null value
+      const validCodes = dataToUse.filter(c => c.code1 !== null && c.code2 !== null);
 
       if (validCodes.length === 0) {
         results.push({
@@ -415,7 +423,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           coder2Name: pair.coder2Name,
           kappa: null,
           agreement: 0,
-          totalItems: codes.length,
+          totalItems: dataToUse.length,
           validPairs: 0,
           interpretation: 'No valid coding pairs'
         });
@@ -504,7 +512,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         coder2Name: pair.coder2Name,
         kappa: Math.round(kappa * 1000) / 1000, // Round to 3 decimal places
         agreement: Math.round(observedAgreement * 1000) / 1000,
-        totalItems: codes.length,
+        totalItems: dataToUse.length,
         validPairs: validCodes.length,
         interpretation
       });
