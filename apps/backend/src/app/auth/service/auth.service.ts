@@ -1,18 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { ConfigService } from '@nestjs/config';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
-import { OAuth2ClientCredentialsService } from './oauth2-client-credentials.service';
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   constructor(
     private usersService: UsersService,
-    private jwtService: JwtService,
-    private configService: ConfigService,
-    private oauth2ClientCredentialsService: OAuth2ClientCredentialsService
+    private jwtService: JwtService
   ) {
   }
 

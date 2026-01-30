@@ -15,19 +15,10 @@ import { JwtStrategy } from './jwt.strategy';
     DatabaseModule,
     HttpModule,
     UserModule,
-    HttpModule,
-    JwtModule.registerAsync({
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get('JWT_SECRET'),
-        signOptions: { expiresIn: '365d' }
-      }),
-      inject: [ConfigService]
-    })
+    HttpModule
   ],
   controllers: [AuthController],
   providers: [AuthService, OAuth2ClientCredentialsService, KeycloakAuthService, JwtStrategy],
   exports: [AuthService, OAuth2ClientCredentialsService, KeycloakAuthService]
-  providers: [AuthService, JwtStrategy],
-  exports: [AuthService, UserModule]
 })
 export class AuthModule { }
