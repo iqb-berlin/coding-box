@@ -886,6 +886,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
+    this.isLoadingResponseAnalysis = true;
+
     let newFlags: ResponseMatchingFlag[];
 
     if (flag === ResponseMatchingFlag.NO_AGGREGATION) {
@@ -1250,8 +1252,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private processAutoApplyAggregation(threshold: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId || !this.responseAnalysis) {
+    if (!workspaceId) {
       return;
+    }
+
+    this.isLoadingResponseAnalysis = true;
+
+    if (!this.responseAnalysis) {
+      // If no analysis yet, we still want to apply it later,
+      // but we need to wait for the analysis to be loaded first
+      // or we just trigger the aggregation which will then reload the analysis.
     }
 
     // Only apply if "No aggregation" is NOT selected

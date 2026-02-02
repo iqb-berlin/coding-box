@@ -52,8 +52,8 @@
       <hr>
 
       <!-- Aggregation Configuration and Actions -->
-      <div class="manual-coding-sections-container" *ngIf="responseAnalysis">
-        <div class="aggregation-config" *ngIf="responseAnalysis">
+      <div class="manual-coding-sections-container" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
+        <div class="aggregation-config" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
           <h3 class="subsection-title">
             <mat-icon>settings</mat-icon>
             {{ 'coding-management-manual.duplicate-aggregation.config-title' | translate }}
@@ -116,7 +116,7 @@
         </div>
 
         <!-- Response Analysis Section -->
-        <div class="response-analysis-section">
+        <div class="response-analysis-section statistics-section" [class.blurred-content]="isLoadingResponseAnalysis">
           <h3 class="subsection-title">
             <mat-icon>analytics</mat-icon>
             {{ 'coding-management-manual.response-analysis.title' | translate }}
@@ -245,8 +245,6 @@
                 </p>
 
               </div>
-
-
             </div>
 
             <p class="analysis-timestamp">
@@ -258,6 +256,14 @@
             <div *ngIf="!responseAnalysis && !isLoadingResponseAnalysis" class="no-analysis-data">
               <mat-icon>info</mat-icon>
               <span>{{ 'coding-management-manual.response-analysis.no-data' | translate }}</span>
+            </div>
+          </div>
+
+          <!-- Loading Overlay for Response Analysis -->
+          <div *ngIf="isLoadingResponseAnalysis" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.response-analysis' | translate }}</div>
             </div>
           </div>
         </div>

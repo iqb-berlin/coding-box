@@ -164,6 +164,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   loadCodingJobs(): void {
     this.isLoading = true;
+    this.loadCoderTrainings();
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
