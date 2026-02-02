@@ -60,6 +60,7 @@ export class WorkspaceCodingService {
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
+    this.codingAnalysisService.invalidateCache(workspace_id);
     await this.codingStatisticsService.refreshStatistics(workspace_id);
 
     return statistics;
@@ -261,6 +262,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
@@ -291,6 +293,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
       body
@@ -377,6 +380,7 @@ export class WorkspaceCodingService {
       messageKey: string;
       messageParams?: Record<string, unknown>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.applyCodingResults(
       workspaceId,
       codingJobId
@@ -472,6 +476,7 @@ export class WorkspaceCodingService {
       };
     }>;
   }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.bulkApplyCodingResults(workspaceId);
   }
 
@@ -627,6 +632,7 @@ export class WorkspaceCodingService {
       cascadeResetVersions: ('v2' | 'v3')[];
       message: string;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingVersionService.resetCodingVersion(
       workspaceId,
       version,

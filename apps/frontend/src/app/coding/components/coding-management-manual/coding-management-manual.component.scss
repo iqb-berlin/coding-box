@@ -1005,7 +1005,8 @@
     }
   }
 
-  &.blurred-content .statistics-card {
+  &.blurred-content .statistics-card,
+  &.blurred-content .analysis-card {
     filter: blur(1px);
     pointer-events: none;
     opacity: 0.7;

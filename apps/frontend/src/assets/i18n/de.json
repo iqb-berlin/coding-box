@@ -1200,7 +1200,8 @@
       "variable-coverage": "Variablenabdeckung wird geladen...",
       "case-coverage": "Fallabdeckung wird geladen...",
       "coding-progress": "Kodierungsfortschritt wird geladen...",
-      "kappa-summary": "Kappa-Statistiken werden geladen..."
+      "kappa-summary": "Kappa-Statistiken werden geladen...",
+      "response-analysis": "Antwort-Analyse wird durchgeführt..."
     },
     "titles": {
       "validation-running": "Validierung läuft",

@@ -18,6 +18,7 @@ import { CodingStatisticsService } from './coding-statistics.service';
 @Injectable()
 export class CodingAnalysisService {
   private readonly logger = new Logger(CodingAnalysisService.name);
+  private analysisCache = new Map<string, ResponseAnalysisDto>();
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -46,13 +47,19 @@ export class CodingAnalysisService {
         `Starting response analysis for workspace ${workspaceId}`
       );
 
-      // Get response matching flags from settings
       const matchingFlags = await this.codingJobService.getResponseMatchingMode(
         workspaceId
       );
       this.logger.log(
         `Response matching flags: ${JSON.stringify(matchingFlags)}`
       );
+
+      // Check cache
+      const cacheKey = this.getCacheKey(workspaceId, matchingFlags);
+      if (this.analysisCache.has(cacheKey)) {
+        this.logger.log(`Returning cached response analysis for workspace ${workspaceId}`);
+        return this.analysisCache.get(cacheKey)!;
+      }
 
       // Get all persons in the workspace that should be considered
       const persons = await this.personsRepository.find({
@@ -289,6 +296,9 @@ export class CodingAnalysisService {
         analysisTimestamp: new Date().toISOString()
       };
 
+      // Cache the result
+      this.analysisCache.set(cacheKey, result);
+
       return result;
     } catch (error) {
       this.logger.error(
@@ -322,6 +332,9 @@ export class CodingAnalysisService {
     if (!aggregateMode) {
       // Revert aggregation: Reset all responses with code_v2 = -99 to NULL
       this.logger.log(`Reverting duplicate aggregation for workspace ${workspaceId}`);
+
+      // Invalidate existing cache before operation
+      this.invalidateCache(workspaceId);
 
       // Better approach for safe update across relations:
       // 1. Find IDs of aggregated responses in workspace
@@ -452,6 +465,9 @@ export class CodingAnalysisService {
         // Save threshold as workspace setting
         await this.codingJobService.setAggregationThreshold(workspaceId, threshold);
 
+        // Invalidate cache since data changed
+        this.invalidateCache(workspaceId);
+
         // Calculate unique coding cases after aggregation
         const uniqueCodingCases = analysis.duplicateValues.totalResponses - totalAggregatedResponses;
 
@@ -516,5 +532,22 @@ export class CodingAnalysisService {
     };
 
     return result;
+  }
+
+  /**
+   * Invalidates all cached analysis results for a given workspace
+   */
+  invalidateCache(workspaceId: number): void {
+    const prefix = `${workspaceId}_`;
+    for (const key of this.analysisCache.keys()) {
+      if (key.startsWith(prefix)) {
+        this.analysisCache.delete(key);
+      }
+    }
+    this.logger.log(`Invalidated response analysis cache for workspace ${workspaceId}`);
+  }
+
+  private getCacheKey(workspaceId: number, matchingFlags: string[]): string {
+    return `${workspaceId}_${[...matchingFlags].sort().join(',')}`;
   }
 }
