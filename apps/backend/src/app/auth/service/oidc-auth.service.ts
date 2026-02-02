@@ -28,7 +28,7 @@ export class OidcAuthService {
   private readonly logger = new Logger(OidcAuthService.name);
   private readonly oidcProviderUrl: string;
   private readonly oidcRealm: string;
-  private readonly clientId: string;
+  private readonly oAuth2ClientId: string;
   private readonly clientSecret: string;
 
   constructor(
@@ -37,7 +37,7 @@ export class OidcAuthService {
   ) {
     this.oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
     this.oidcRealm = this.configService.get<string>('OIDC_REALM');
-    this.clientId = this.configService.get<string>('KEYCLOAK_CLIENT_ID');
+    this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID');
     this.clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET');
   }
 
@@ -48,14 +48,14 @@ export class OidcAuthService {
    * @returns Authorization URL
    */
   getAuthorizationUrl(state: string, redirectUri: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.clientId) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
     const authUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/auth`;
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: this.clientId,
+      client_id: this.oAuth2ClientId,
       redirect_uri: redirectUri,
       state: state,
       scope: 'openid profile email'
@@ -71,7 +71,7 @@ export class OidcAuthService {
    * @returns Token response from Keycloak
    */
   async exchangeCodeForToken(code: string, redirectUri: string): Promise<KeycloakTokenResponse> {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.clientId || !this.clientSecret) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId || !this.clientSecret) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
@@ -79,7 +79,7 @@ export class OidcAuthService {
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
-      client_id: this.clientId,
+      client_id: this.oAuth2ClientId,
       client_secret: this.clientSecret,
       code: code,
       redirect_uri: redirectUri
@@ -138,13 +138,13 @@ export class OidcAuthService {
    * @returns Logout URL
    */
   getLogoutUrl(idToken: string, redirectUri: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.clientId) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
     const logoutUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/logout`;
     const params = new URLSearchParams({
-      client_id: this.clientId,
+      client_id: this.oAuth2ClientId,
       id_token_hint: idToken,
       post_logout_redirect_uri: redirectUri
     });
@@ -158,14 +158,14 @@ export class OidcAuthService {
    * @returns Promise that resolves when logout is complete
    */
   async logoutWithRefreshToken(refreshToken: string): Promise<void> {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.clientId) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
     const logoutEndpoint = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/logout`;
 
     const params = new URLSearchParams({
-      client_id: this.clientId,
+      client_id: this.oAuth2ClientId,
       refresh_token: refreshToken
     });
 
@@ -198,14 +198,14 @@ export class OidcAuthService {
    * @returns Profile management URL
    */
   getProfileUrl(redirectUri?: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.clientId) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
     const profileUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/account`;
     if (redirectUri) {
       const params = new URLSearchParams({
-        referrer: this.clientId,
+        referrer: this.oAuth2ClientId,
         referrer_uri: redirectUri
       });
       return `${profileUrl}?${params.toString()}`;
