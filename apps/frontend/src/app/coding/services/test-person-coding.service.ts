@@ -713,7 +713,9 @@ export class TestPersonCodingService {
   getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -727,6 +729,7 @@ export class TestPersonCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -739,7 +742,9 @@ export class TestPersonCodingService {
     }> {
     const params = new HttpParams()
       .set('page', page.toString())
-      .set('limit', limit.toString());
+      .set('limit', limit.toString())
+      .set('onlyConflicts', onlyConflicts.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
 
     return this.http
       .get<{
@@ -755,6 +760,7 @@ export class TestPersonCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;

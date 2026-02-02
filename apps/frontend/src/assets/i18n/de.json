@@ -1659,6 +1659,8 @@
     "code-label": "Code",
     "score-label": "Bewertung",
     "apply-decisions": "Entscheidungen anwenden",
+    "apply-help-tooltip": "Behebt Konflikte für die ausgewählten Items. Die Kodierung wird auf 'CODING_COMPLETE' gesetzt und der Code des gewählten Kodierers wird als endgültiger Wert übernommen. Die ursprünglichen Kodierwerte werden in den Verlauf (v1, v2, v3) verschoben.",
+    "apply-single-tooltip": "Diese Entscheidung anwenden",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen"
     },

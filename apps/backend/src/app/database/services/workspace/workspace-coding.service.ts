@@ -534,7 +534,9 @@ export class WorkspaceCodingService {
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false
   ): Promise<{
       data: Array<{
         responseId: number;
@@ -548,6 +550,7 @@ export class WorkspaceCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -561,7 +564,9 @@ export class WorkspaceCodingService {
     return this.codingReviewService.getDoubleCodedVariablesForReview(
       workspaceId,
       page,
-      limit
+      limit,
+      onlyConflicts,
+      excludeTrainings
     );
   }
 

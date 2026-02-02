@@ -494,7 +494,8 @@ export class WorkspaceCodingStatisticsController {
         await this.codingReviewService.getDoubleCodedVariablesForReview(
           workspace_id,
           1,
-          10000
+          10000,
+          true // Exclude coder training jobs
         ); // Get all data
 
       // Group by unit and variable

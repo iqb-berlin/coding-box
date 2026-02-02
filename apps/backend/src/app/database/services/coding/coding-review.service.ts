@@ -21,7 +21,9 @@ export class CodingReviewService {
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false
   ): Promise<{
       data: Array<{
         responseId: number;
@@ -35,6 +37,7 @@ export class CodingReviewService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -47,9 +50,9 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId}`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts})`
       );
-      const doubleCodedResponseIds = await this.codingJobUnitRepository
+      const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
         .select('cju.response_id', 'responseId')
         .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
@@ -58,8 +61,21 @@ export class CodingReviewService {
         .where('cj.workspace_id = :workspaceId', { workspaceId })
         .andWhere('cju.code IS NOT NULL') // Only include coded responses
         .groupBy('cju.response_id')
-        .having('COUNT(DISTINCT cju.coding_job_id) > 1') // Multiple jobs coded this response
-        .getRawMany();
+        .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs coded this response
+
+      if (onlyConflicts) {
+        // A conflict exists if there are different codes for the same response.
+        // We use COALESCE to handle NULL codes as a distinct value (-999999).
+        // If all codes are the same, COUNT(DISTINCT ...) will be 1.
+        // If there are differences, it will be > 1.
+        query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+      }
+
+      if (excludeTrainings) {
+        query.andWhere('cj.training_id IS NULL');
+      }
+
+      const doubleCodedResponseIds = await query.getRawMany();
 
       const responseIds = doubleCodedResponseIds.map(row => row.responseId);
 
@@ -103,6 +119,7 @@ export class CodingReviewService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -135,6 +152,7 @@ export class CodingReviewService {
             coderId: coder.user_id,
             coderName: coder.user?.username || `Coder ${coder.user_id}`,
             jobId: unit.coding_job_id,
+            jobName: unit.coding_job?.name || '',
             code: unit.code,
             score: unit.score,
             notes: unit.notes,
@@ -310,7 +328,8 @@ export class CodingReviewService {
       const doubleCodedData = await this.getDoubleCodedVariablesForReview(
         workspaceId,
         1,
-        10000
+        10000,
+        true // Exclude coder training jobs
       ); // Get all data
 
       if (doubleCodedData.total === 0) {
