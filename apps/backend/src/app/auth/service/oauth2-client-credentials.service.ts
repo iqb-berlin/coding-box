@@ -33,13 +33,13 @@ export class OAuth2ClientCredentialsService {
    */
   async getAccessToken(clientCredentials: ClientCredentialsRequest): Promise<ClientCredentialsTokenResponse> {
     const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
+    const oidcRealm = this.configService.get<string>('OIDC_REALM');
 
-    if (!oidcProviderUrl || !keycloakRealm) {
+    if (!oidcProviderUrl || !oidcRealm) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const tokenEndpoint = `${oidcProviderUrl}/realms/${keycloakRealm}/protocol/openid-connect/token`;
+    const tokenEndpoint = `${oidcProviderUrl}/realms/${oidcRealm}/protocol/openid-connect/token`;
 
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
@@ -76,13 +76,13 @@ export class OAuth2ClientCredentialsService {
    */
   async validateAccessToken(accessToken: string): Promise<KeycloakUserInfo> {
     const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-    const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
+    const oidcRealm = this.configService.get<string>('OIDC_REALM');
 
-    if (!oidcProviderUrl || !keycloakRealm) {
+    if (!oidcProviderUrl || !oidcRealm) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const userinfoEndpoint = `${oidcProviderUrl}/realms/${keycloakRealm}/protocol/openid-connect/userinfo`;
+    const userinfoEndpoint = `${oidcProviderUrl}/realms/${oidcRealm}/protocol/openid-connect/userinfo`;
 
     try {
       const response = await firstValueFrom(
