@@ -60,6 +60,7 @@ export class WorkspaceCodingService {
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
+    this.codingAnalysisService.invalidateCache(workspace_id);
     await this.codingStatisticsService.refreshStatistics(workspace_id);
 
     return statistics;
@@ -261,6 +262,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCodingWithProgress(
       workspaceId,
       body,
@@ -291,6 +293,7 @@ export class WorkspaceCodingService {
         updatedScore: number | null;
       }>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.externalCodingImportService.importExternalCoding(
       workspaceId,
       body
@@ -377,6 +380,7 @@ export class WorkspaceCodingService {
       messageKey: string;
       messageParams?: Record<string, unknown>;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.applyCodingResults(
       workspaceId,
       codingJobId
@@ -472,6 +476,7 @@ export class WorkspaceCodingService {
       };
     }>;
   }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingJobOperationsService.bulkApplyCodingResults(workspaceId);
   }
 
@@ -529,7 +534,9 @@ export class WorkspaceCodingService {
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false
   ): Promise<{
       data: Array<{
         responseId: number;
@@ -543,6 +550,7 @@ export class WorkspaceCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -556,7 +564,9 @@ export class WorkspaceCodingService {
     return this.codingReviewService.getDoubleCodedVariablesForReview(
       workspaceId,
       page,
-      limit
+      limit,
+      onlyConflicts,
+      excludeTrainings
     );
   }
 
@@ -590,27 +600,31 @@ export class WorkspaceCodingService {
     );
   }
 
-  async getWorkspaceCohensKappaSummary(workspaceId: number): Promise<{
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-    };
-  }> {
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspaceId);
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number,
+    weightedMean: boolean = true
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+      };
+    }> {
+    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspaceId, weightedMean);
   }
 
   async resetCodingVersion(
@@ -623,6 +637,7 @@ export class WorkspaceCodingService {
       cascadeResetVersions: ('v2' | 'v3')[];
       message: string;
     }> {
+    this.codingAnalysisService.invalidateCache(workspaceId);
     return this.codingVersionService.resetCodingVersion(
       workspaceId,
       version,

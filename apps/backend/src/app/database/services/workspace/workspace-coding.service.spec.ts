@@ -146,7 +146,8 @@ describe('WorkspaceCodingService', () => {
   };
 
   const mockCodingAnalysisService = {
-    getVariableAnalysis: jest.fn()
+    getResponseAnalysis: jest.fn(),
+    invalidateCache: jest.fn()
   };
 
   const mockCodingProgressService = {

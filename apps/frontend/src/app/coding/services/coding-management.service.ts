@@ -30,6 +30,8 @@ export interface FilterParams {
   group: string;
   bookletName: string;
   variableId: string;
+  geogebra: boolean;
+  personLogin: string;
 }
 
 @Injectable({
@@ -229,7 +231,9 @@ export class CodingManagementService {
       code: filterParams.code,
       group: filterParams.group,
       bookletName: filterParams.bookletName,
-      variableId: filterParams.variableId
+      variableId: filterParams.variableId,
+      geogebra: filterParams.geogebra,
+      personLogin: filterParams.personLogin
     };
 
     return this.responseService.searchResponses(workspaceId, backendParams, page, limit)
@@ -239,6 +243,12 @@ export class CodingManagementService {
           return of({ data: [], total: 0 });
         })
       );
+  }
+
+  hasGeogebraResponses(): Observable<boolean> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return of(false);
+    return this.responseService.hasGeogebraResponses(workspaceId);
   }
 
   resetCodingVersion(version: StatisticsVersion): Observable<{ affectedResponseCount: number; cascadeResetVersions: ('v2' | 'v3')[]; message: string } | null> {

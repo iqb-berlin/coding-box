@@ -31,99 +31,97 @@
   </div>
 
   @if (isLoading) {
-    <div class="loading-container">
-      <mat-spinner></mat-spinner>
-      <p>Lade Kodierergebnisse...</p>
-    </div>
+  <div class="loading-container">
+    <mat-spinner></mat-spinner>
+    <p>Lade Kodierergebnisse...</p>
+  </div>
   } @else {
-    <div class="table-container">
-      @if (dataSource.data.length > 0) {
-        <mat-table [dataSource]="dataSource" matSort class="coding-results-table">
-          <ng-container matColumnDef="unitName">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Aufgabe</mat-header-cell>
-            <mat-cell *matCellDef="let result">{{result.unitName}}
-              <span *ngIf="result.unitAlias && result.unitAlias !== result.unitName" class="unit-alias">
-                ({{result.unitAlias}})
-              </span>
-            </mat-cell>
-          </ng-container>
+  <div class="table-container">
+    @if (dataSource.data.length > 0) {
+    <mat-table [dataSource]="dataSource" matSort class="coding-results-table">
+      <ng-container matColumnDef="unitName">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Aufgabe</mat-header-cell>
+        <mat-cell *matCellDef="let result">{{result.unitName}}
+          <span *ngIf="result.unitAlias && result.unitAlias !== result.unitName" class="unit-alias">
+            ({{result.unitAlias}})
+          </span>
+        </mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="testPerson">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</mat-header-cell>
-            <mat-cell *matCellDef="let result">{{result.testPerson}}</mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="testPerson">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</mat-header-cell>
+        <mat-cell *matCellDef="let result">{{result.testPerson}}</mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="variableId">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Variable</mat-header-cell>
-            <mat-cell *matCellDef="let result">{{result.variableId}}</mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="variableId">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Variable</mat-header-cell>
+        <mat-cell *matCellDef="let result">{{result.variableId}}</mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="code">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
-              @if (isCodingIssueOption(result) && result.givenCode !== undefined && result.givenCode !== null) {
-                <span class="given-code">{{result.givenCode}}</span>
-                <span class="uncertainty-indicator">(unsicher)</span>
-              } @else {
-                {{getCodeDisplay(result)}}
-              }
-            </mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="code">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Code</mat-header-cell>
+        <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+          @if (isCodingIssueOption(result) && result.givenCode !== undefined && result.givenCode !== null) {
+          <span class="given-code">{{result.givenCode}}</span>
+          <span class="uncertainty-indicator">(unsicher)</span>
+          } @else {
+          {{getCodeDisplay(result)}}
+          }
+        </mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="score">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
-              @if (isCodingIssueOption(result) && result.givenScore !== undefined && result.givenScore !== null) {
-                <span class="given-code">{{result.givenScore}}</span>
-                <span class="uncertainty-indicator">(unsicher)</span>
-              } @else {
-                {{getScoreDisplay(result)}}
-              }
-            </mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="score">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Score</mat-header-cell>
+        <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+          @if (isCodingIssueOption(result) && result.givenScore !== undefined && result.givenScore !== null) {
+          <span class="given-code">{{result.givenScore}}</span>
+          <span class="uncertainty-indicator">(unsicher)</span>
+          } @else {
+          {{getScoreDisplay(result)}}
+          }
+        </mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="codingIssueOption">
-            <mat-header-cell *matHeaderCellDef mat-sort-header>Kodierungshinweis</mat-header-cell>
-            <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
-              {{result.codingIssueOptionLabel || '-'}}
-            </mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="codingIssueOption">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>Kodierungshinweis</mat-header-cell>
+        <mat-cell *matCellDef="let result" [ngClass]="getCellClasses(result)">
+          {{result.codingIssueOptionLabel || '-'}}
+        </mat-cell>
+      </ng-container>
 
-          <ng-container matColumnDef="actions">
-            <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
-            <mat-cell *matCellDef="let result">
-              <button *ngIf="isCodingIssueOption(result)" mat-icon-button color="primary"
-                      (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
-                <mat-icon>replay</mat-icon>
-              </button>
-              <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="primary"
-                      (click)="editCodingScheme(result)" matTooltip="Kodierungsschema bearbeiten">
-                <mat-icon>edit</mat-icon>
-              </button>
-            </mat-cell>
-          </ng-container>
+      <ng-container matColumnDef="actions">
+        <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+        <mat-cell *matCellDef="let result">
+          <button *ngIf="isCodingIssueOption(result)" mat-icon-button color="primary"
+            (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
+            <mat-icon>replay</mat-icon>
+          </button>
+          <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="primary" (click)="editCodingScheme(result)"
+            matTooltip="Kodierungsschema bearbeiten">
+            <mat-icon>edit</mat-icon>
+          </button>
+        </mat-cell>
+      </ng-container>
 
-          <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
-          <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
-        </mat-table>
+      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
+    </mat-table>
 
 
-      } @else {
-        <div class="no-data-message">
-          <p>Keine Kodierergebnisse verfügbar.</p>
-          <p>Entweder wurden noch keine Variablen für diesen Job kodiert oder es gibt keine zu kodierenden Einheiten.</p>
-        </div>
-      }
+    } @else {
+    <div class="no-data-message">
+      <p>Keine Kodierergebnisse verfügbar.</p>
+      <p>Entweder wurden noch keine Variablen für diesen Job kodiert oder es gibt keine zu kodierenden Einheiten.</p>
     </div>
+    }
+  </div>
   }
 
   <div class="dialog-actions">
     <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
-    <button mat-raised-button
-            color="accent"
-            [disabled]="isLoading || data.codingJob.status === 'results_applied'"
-            (click)="applyCodingResults()"
-            matTooltip="Kodierergebnisse auf Datenbank anwenden">
+    <button mat-raised-button color="accent"
+      [disabled]="isLoading || data.codingJob.status === 'results_applied' || !!data.codingJob.training?.id || !!data.codingJob.training_id"
+      (click)="applyCodingResults()" matTooltip="Kodierergebnisse auf Datenbank anwenden">
       <mat-icon>input</mat-icon>
       Ergebnisse anwenden
     </button>

@@ -144,6 +144,19 @@ export class CodingJobDto {
     missings_profile?: MissingsProfile;
 
   @ApiProperty({
+    description: 'ID of the training assigned to the coding job',
+    example: 1,
+    required: false
+  })
+    training_id?: number;
+
+  @ApiProperty({
+    description: 'Training assigned to the coding job',
+    required: false
+  })
+    training?: { id: number; label: string };
+
+  @ApiProperty({
     description: 'Workspace ID the coding job belongs to (camelCase alias)',
     example: 1,
     required: false
@@ -232,6 +245,14 @@ export class CodingJobDto {
 
     if (entity.missingsProfile) {
       dto.missings_profile = entity.missingsProfile;
+    }
+
+    if (entity.training_id) {
+      dto.training_id = entity.training_id;
+    }
+
+    if (entity.training) {
+      dto.training = entity.training;
     }
 
     if (assignedCoders) {

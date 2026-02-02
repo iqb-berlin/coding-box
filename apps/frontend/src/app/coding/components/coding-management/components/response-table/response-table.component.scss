@@ -7,6 +7,13 @@
 
 .card-header {
     padding: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.header-actions {
+    margin-left: auto;
 }
 
 .section-title {
@@ -108,4 +115,12 @@
 .empty-state h3 {
     margin: 0;
     font-weight: 400;
+}
+
+/* New style for constraining value column width */
+.truncated-value {
+    max-width: 400px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }

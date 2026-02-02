@@ -425,6 +425,8 @@
         "notEnough": "Um Ergebnisse zu vergleichen, werden mindestens zwei Kodierer-Schulungen benötigt."
       },
       "loading": "Lade Kodierer-Schulungen...",
+      "loading.error": "Fehler beim Laden der Kodierer-Schulungen",
+      "select-training": "Bitte wählen Sie eine Schulung aus",
       "empty": {
         "title": "Keine Kodierer-Schulungen vorhanden",
         "subtitle": "Erstellen Sie Ihre erste Schulung, um mit dem Training zu beginnen."
@@ -828,6 +830,13 @@
       "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
       "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
     },
+    "actions": {
+      "review-session": "Review",
+      "close": "Schließen"
+    },
+    "messages": {
+      "no-data-to-review": "Keine Daten zur Überprüfung vorhanden."
+    },
     "loading": {
       "loading-statistics": "Lade Kodierstatistiken...",
       "coding-responses": "Antworten werden kodiert...",
@@ -854,7 +863,8 @@
       "difference-tooltip-v1": "Differenz zum 1. Autocoder-Lauf",
       "difference-tooltip-v2": "Differenz zur manuellen Kodierung",
       "reset-success": "Erfolgreich {{count}} Antworten für Version {{version}} zurückgesetzt{{cascade}}",
-      "reset-cascade-suffix": " und {{versions}} (Kaskade)"
+      "reset-cascade-suffix": " und {{versions}} (Kaskade)",
+      "responses": "Antworten"
     },
     "columns": {
       "unitname": "Aufgabe",
@@ -876,12 +886,15 @@
       "run": "Lauf",
       "person-code": "Person-Code",
       "person-code-placeholder": "Person-Code eingeben...",
+      "person-login": "Person-Login",
+      "person-login-placeholder": "Person-Login eingeben...",
       "person-group": "Person-Gruppe",
       "person-group-placeholder": "Person-Gruppe eingeben...",
       "booklet-name": "Testheft-Name",
       "booklet-name-placeholder": "Testheft-Name eingeben...",
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
+      "geogebra": "Spezialfilter: Geogebra",
       "clear": "Filter löschen"
     },
     "reset-dialog": {
@@ -1187,7 +1200,8 @@
       "variable-coverage": "Variablenabdeckung wird geladen...",
       "case-coverage": "Fallabdeckung wird geladen...",
       "coding-progress": "Kodierungsfortschritt wird geladen...",
-      "kappa-summary": "Kappa-Statistiken werden geladen..."
+      "kappa-summary": "Kappa-Statistiken werden geladen...",
+      "response-analysis": "Antwort-Analyse wird durchgeführt..."
     },
     "titles": {
       "validation-running": "Validierung läuft",
@@ -1645,6 +1659,8 @@
     "code-label": "Code",
     "score-label": "Bewertung",
     "apply-decisions": "Entscheidungen anwenden",
+    "apply-help-tooltip": "Behebt Konflikte für die ausgewählten Items. Die Kodierung wird auf 'CODING_COMPLETE' gesetzt und der Code des gewählten Kodierers wird als endgültiger Wert übernommen. Die ursprünglichen Kodierwerte werden in den Verlauf (v1, v2, v3) verschoben.",
+    "apply-single-tooltip": "Diese Entscheidung anwenden",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen"
     },

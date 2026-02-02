@@ -10,6 +10,7 @@ import Persons from '../../entities/persons.entity';
 
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
 
 type FileStatus = {
@@ -17,6 +18,7 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  ignored?: boolean;
 };
 
 type DataValidation = {
@@ -60,20 +62,24 @@ export class WorkspaceTestFilesValidationService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
-    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService
+    private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
       this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
 
-      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults] = await Promise.all([
+      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults, ignoredUnits] = await Promise.all([
         this.preloadBookletToUnits(workspaceId),
         this.preloadUnitRefs(workspaceId),
         this.getAllResourceIds(workspaceId),
         this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(workspaceId),
-        this.validateAllCodingSchemes(workspaceId)
+        this.validateAllCodingSchemes(workspaceId),
+        this.workspaceCoreService.getIgnoredUnits(workspaceId)
       ]);
+
+      const ignoredUnitsSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
       const summarizeSchemaResults = (label: string, results: Map<string, { schemaValid: boolean; errors: string[] }>): void => {
         const entries = Array.from(results.entries());
@@ -162,7 +168,8 @@ export class WorkspaceTestFilesValidationService {
             resourceIds,
             resourceIdsArray,
             xmlSchemaResults,
-            codingSchemeResults
+            codingSchemeResults,
+            ignoredUnitsSet
           );
           if (validationResult) {
             validationResults.push(validationResult);
@@ -501,7 +508,7 @@ export class WorkspaceTestFilesValidationService {
       .createQueryBuilder('file')
       .select(['file.file_id', 'file.filename'])
       .where('file.workspace_id = :workspaceId', { workspaceId })
-      .andWhere("file.file_type = 'Resource'")
+      .andWhere("file.file_type IN ('Resource', 'Schemer')")
       .skip(offset)
       .take(BATCH_SIZE)
       .getRawMany();
@@ -512,8 +519,16 @@ export class WorkspaceTestFilesValidationService {
           const id = f.file_id || f.file_file_id;
           const name = f.filename || f.file_filename;
 
-          if (id) resourceIds.add(id.trim().toUpperCase());
-          if (name) resourceIds.add(name.trim().toUpperCase());
+          if (id) {
+            const decodedId = decodeURIComponent(id).trim().toUpperCase();
+            resourceIds.add(decodedId);
+            resourceIds.add(decodedId.replace('@', '-'));
+          }
+          if (name) {
+            const decodedName = decodeURIComponent(name).trim().toUpperCase();
+            resourceIds.add(decodedName);
+            resourceIds.add(decodedName.replace('@', '-'));
+          }
         }
       });
       offset += BATCH_SIZE;
@@ -521,7 +536,7 @@ export class WorkspaceTestFilesValidationService {
         .createQueryBuilder('file')
         .select(['file.file_id', 'file.filename'])
         .where('file.workspace_id = :workspaceId', { workspaceId })
-        .andWhere("file.file_type = 'Resource'")
+        .andWhere("file.file_type IN ('Resource', 'Schemer')")
         .skip(offset)
         .take(BATCH_SIZE)
         .getRawMany();
@@ -608,7 +623,8 @@ export class WorkspaceTestFilesValidationService {
     resourceIds: Set<string>,
     resourceIdsArray: string[],
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
-    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>
+    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>,
+    ignoredUnits: Set<string>
   ): ValidationData | null {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
@@ -672,9 +688,10 @@ export class WorkspaceTestFilesValidationService {
 
     for (const unitId of uniqueUnits) {
       const exists = unitMap.has(unitId);
+      const isIgnored = ignoredUnits.has(unitId);
       const schemaKey = `Unit:${unitId}`;
       const schemaInfo = xmlSchemaResults.get(schemaKey);
-      const status: FileStatus = { filename: unitId, exists };
+      const status: FileStatus = { filename: unitId, exists, ignored: isIgnored };
       if (schemaInfo) {
         status.schemaValid = schemaInfo.schemaValid;
         if (!schemaInfo.schemaValid) {
@@ -682,6 +699,10 @@ export class WorkspaceTestFilesValidationService {
         }
       }
       unitFiles.push(status);
+
+      if (isIgnored) {
+        continue;
+      }
 
       if (!exists) {
         missingUnits.push(unitId);
@@ -702,10 +723,19 @@ export class WorkspaceTestFilesValidationService {
 
         const schemerMissingForUnit = (refs?.schemerRefs || []).filter(r => {
           if (this.resourceExists(r, resourceIds)) return false;
-          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+
+          if (r.startsWith('IQB-SCHEMER-1.1')) {
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            if (hasFallback) return false;
+          }
+          return true;
         });
         if (schemerMissingForUnit.length > 0) {
-          missingSchemerRefsByUnit.push({ unit: unitId, missingRefs: schemerMissingForUnit });
+          missingSchemerRefsByUnit.push({
+            unit: unitId,
+            missingRefs: schemerMissingForUnit
+          });
         }
 
         const definitionMissingForUnit = (refs?.definitionRefs || []).filter(r => !this.resourceExists(r, resourceIds));
@@ -729,10 +759,18 @@ export class WorkspaceTestFilesValidationService {
     }
 
     const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(r => !this.resourceExists(r, resourceIds));
-    const missingSchemerRefs = Array.from(allSchemerRefs).filter(r => {
-      if (this.resourceExists(r, resourceIds)) return false;
-      return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
-    });
+    const missingSchemerRefs = Array.from(allSchemerRefs)
+      .filter(r => {
+        if (this.resourceExists(r, resourceIds)) return false;
+        if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+
+        if (r.startsWith('IQB-SCHEMER-1.1')) {
+          const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+          if (hasFallback) return false;
+        }
+
+        return true;
+      });
     const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(r => !this.resourceExists(r, resourceIds));
     const missingPlayerRefs = Array.from(allPlayerRefs).filter(r => {
       if (this.resourceExists(r, resourceIds)) return false;
@@ -800,10 +838,27 @@ export class WorkspaceTestFilesValidationService {
         complete: missingSchemerRefs.length === 0,
         missing: missingSchemerRefs,
         missingRefsPerUnit: missingSchemerRefsByUnit,
-        files: Array.from(allSchemerRefs).map(r => ({
-          filename: r,
-          exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
-        }))
+        files: Array.from(allSchemerRefs).map(r => {
+          let exists = this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          let schemaValid: boolean | undefined;
+          let schemaErrors: string[] | undefined;
+
+          if (!exists && r.startsWith('IQB-SCHEMER-1.1')) {
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            if (hasFallback) {
+              exists = true;
+              schemaValid = false;
+              schemaErrors = ['IQB-SCHEMER-1.1 ist veraltet. Es wird die neueste verfügbare Schemer-Version verwendet.'];
+            }
+          }
+
+          return {
+            filename: r,
+            exists,
+            schemaValid,
+            schemaErrors
+          };
+        })
       },
       definitions: {
         complete: missingDefinitionRefs.length === 0,
