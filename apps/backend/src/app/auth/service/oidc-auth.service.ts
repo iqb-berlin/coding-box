@@ -29,7 +29,7 @@ export class OidcAuthService {
   private readonly oidcProviderUrl: string;
   private readonly oidcRealm: string;
   private readonly oAuth2ClientId: string;
-  private readonly clientSecret: string;
+  private readonly oAuth2ClientSecret: string;
 
   constructor(
     private readonly httpService: HttpService,
@@ -38,7 +38,7 @@ export class OidcAuthService {
     this.oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
     this.oidcRealm = this.configService.get<string>('OIDC_REALM');
     this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID');
-    this.clientSecret = this.configService.get<string>('KEYCLOAK_CLIENT_SECRET');
+    this.oAuth2ClientSecret = this.configService.get<string>('OAUTH2_CLIENT_SECRET');
   }
 
   /**
@@ -71,7 +71,7 @@ export class OidcAuthService {
    * @returns Token response from Keycloak
    */
   async exchangeCodeForToken(code: string, redirectUri: string): Promise<KeycloakTokenResponse> {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId || !this.clientSecret) {
+    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId || !this.oAuth2ClientSecret) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
@@ -80,7 +80,7 @@ export class OidcAuthService {
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: this.oAuth2ClientId,
-      client_secret: this.clientSecret,
+      client_secret: this.oAuth2ClientSecret,
       code: code,
       redirect_uri: redirectUri
     });
@@ -170,8 +170,8 @@ export class OidcAuthService {
     });
 
     // Add client_secret only for confidential clients
-    if (this.clientSecret) {
-      params.append('client_secret', this.clientSecret);
+    if (this.oAuth2ClientSecret) {
+      params.append('client_secret', this.oAuth2ClientSecret);
     }
 
     try {

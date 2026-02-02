@@ -50,7 +50,7 @@ services:
       - OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
       - OIDC_REALM=${OIDC_REALM}
       - OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}
-      - BACKEND_URL=${BACKEND_URL:-api/}
+      - BACKEND_URL=${BACKEND_URL}
     volumes:
       - "./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
     restart: always
