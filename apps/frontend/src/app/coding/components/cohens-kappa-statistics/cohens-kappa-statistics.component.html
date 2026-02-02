@@ -34,7 +34,7 @@
               info
             </mat-icon>
             <span class="weighting-method-label">
-              ({{ workspaceKappaSummary?.workspaceSummary?.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet'
+              ({{ workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet'
               }})
             </span>
           </div>
@@ -68,7 +68,7 @@
               <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.variablesIncluded}}</span>
             </div>
           </div>
-          <div class="kappa-interpretation" *ngIf="workspaceKappaSummary?.workspaceSummary?.averageKappa !== null">
+          <div class="kappa-interpretation" *ngIf="workspaceKappaSummary.workspaceSummary.averageKappa !== null">
             <div class="interpretation-text">
               <strong>Interpretation:</strong>
               <span [class]="getKappaInterpretationClass(workspaceKappaSummary.workspaceSummary.averageKappa)">

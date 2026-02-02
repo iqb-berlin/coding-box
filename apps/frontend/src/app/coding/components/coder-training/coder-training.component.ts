@@ -314,11 +314,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addVariable(variableId: string = '', unitId: string = '', sampleCount: number = 10, bundleId?: number, bundleName?: string, skipUpdate = false): void {
+  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false): void {
+    const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
+    const maxAvailable = variableData?.responseCount || 1000;
+    const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
+
     const variableGroup = this.fb.group({
       variableId: [variableId, [Validators.required]],
       unitId: [unitId, [Validators.required]],
-      sampleCount: [sampleCount, [Validators.required, Validators.min(1), Validators.max(1000)]],
+      sampleCount: [defaultSampleCount, [Validators.required, Validators.min(1), Validators.max(maxAvailable)]],
       bundleId: [bundleId],
       bundleName: [bundleName],
       overlapWarning: [false]
@@ -362,34 +366,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  private loadVariableBundles(): void {
-    this.isLoadingBundles = true;
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (!workspaceId) {
-      this.showError('Kein Arbeitsbereich ausgewählt');
-      this.isLoadingBundles = false;
-      this.changeDetectorRef.markForCheck();
-      return;
-    }
-
-    this.variableBundleService.getBundles(1, 100)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: ({ bundles }) => {
-          this.availableBundles = bundles;
-          this.isLoadingBundles = false;
-          this.changeDetectorRef.markForCheck();
-        },
-        error: () => {
-          this.showError('Fehler beim Laden der Variable-Bundles');
-          this.isLoadingBundles = false;
-          this.changeDetectorRef.markForCheck();
-        }
-      });
-  }
-
-  addBundleVariables(bundleId: number, sampleCount: number | string = 10): void {
+  addBundleVariables(bundleId: number, sampleCount?: number | string): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variable-Bundle nicht gefunden');
@@ -401,8 +378,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const sampleCountNum = Number(sampleCount);
-    if (Number.isNaN(sampleCountNum) || sampleCountNum < 1 || sampleCountNum > 1000) {
+    const sampleCountNum = sampleCount !== undefined ? Number(sampleCount) : undefined;
+    if (sampleCountNum !== undefined && (Number.isNaN(sampleCountNum) || sampleCountNum < 1 || sampleCountNum > 1000)) {
       this.showError('Ungültige Stichprobenanzahl. Muss zwischen 1 und 1000 liegen.');
       return;
     }
@@ -420,7 +397,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     if (addedCount > 0) {
-      this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" mit je ${sampleCountNum} Stichproben hinzugefügt`);
+      this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt`);
     }
 
     if (duplicateVariables.length > 0) {
@@ -445,7 +422,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
-        this.addBundleVariables(bundleId, 10);
+        this.addBundleVariables(bundleId);
         this.selectedBundleIds.add(bundleId);
       });
 
@@ -473,7 +450,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     newKeys.forEach(key => {
       const [unitId, variableId] = key.split('::');
       if (unitId && variableId) {
-        this.addVariable(variableId, unitId, 10, undefined, undefined, true);
+        this.addVariable(variableId, unitId, undefined, undefined, undefined, true);
       }
     });
 
@@ -527,6 +504,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     } else {
       this.selectedCoders.add(coder.id);
     }
+    this.changeDetectorRef.markForCheck();
   }
 
   isCoderSelected(coder: Coder): boolean {
@@ -535,10 +513,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   selectAllCoders(): void {
     this.coders.forEach(coder => this.selectedCoders.add(coder.id));
+    this.changeDetectorRef.markForCheck();
   }
 
   deselectAllCoders(): void {
     this.selectedCoders.clear();
+    this.changeDetectorRef.markForCheck();
   }
 
   getSelectedCoders(): Coder[] {
