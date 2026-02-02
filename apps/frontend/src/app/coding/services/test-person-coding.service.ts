@@ -14,6 +14,7 @@ import {
   ValidateCodingCompletenessRequestDto
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
+import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -566,79 +567,31 @@ export class TestPersonCodingService {
       );
   }
 
-  getResponseAnalysis(workspaceId: number): Observable<{
-    emptyResponses: {
-      total: number;
-      items: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        bookletName: string;
-        responseId: number;
-      }[];
-    };
-    duplicateValues: {
-      total: number;
-      totalResponses: number;
-      groups: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        normalizedValue: string;
-        originalValue: string;
-        occurrences: {
-          personLogin: string;
-          personCode: string;
-          bookletName: string;
-          responseId: number;
-          value: string;
-        }[];
-      }[];
-      isAggregationApplied: boolean;
-    };
-    matchingFlags: string[];
-    analysisTimestamp: string;
-  }> {
+  getResponseAnalysis(
+    workspaceId: number,
+    threshold?: number,
+    emptyPage?: number,
+    emptyLimit?: number,
+    duplicatePage?: number,
+    duplicateLimit?: number
+  ): Observable<ResponseAnalysisDto> {
+    let params = new HttpParams();
+    if (threshold) {
+      params = params.set('threshold', threshold.toString());
+    }
+    if (emptyPage) params = params.set('emptyPage', emptyPage.toString());
+    if (emptyLimit) params = params.set('emptyLimit', emptyLimit.toString());
+    if (duplicatePage) {
+      params = params.set('duplicatePage', duplicatePage.toString());
+    }
+    if (duplicateLimit) {
+      params = params.set('duplicateLimit', duplicateLimit.toString());
+    }
+
     return this.http
-      .get<{
-      emptyResponses: {
-        total: number;
-        items: {
-          unitName: string;
-          unitAlias: string | null;
-          variableId: string;
-          personLogin: string;
-          personCode: string;
-          bookletName: string;
-          responseId: number;
-        }[];
-      };
-      duplicateValues: {
-        total: number;
-        totalResponses: number;
-        groups: {
-          unitName: string;
-          unitAlias: string | null;
-          variableId: string;
-          normalizedValue: string;
-          originalValue: string;
-          occurrences: {
-            personLogin: string;
-            personCode: string;
-            bookletName: string;
-            responseId: number;
-            value: string;
-          }[];
-        }[];
-        isAggregationApplied: boolean;
-      };
-      matchingFlags: string[];
-      analysisTimestamp: string;
-    }>(
+      .get<ResponseAnalysisDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
-      { headers: this.authHeader }
+      { headers: this.authHeader, params }
     )
       .pipe(
         catchError(() => of({
@@ -648,7 +601,7 @@ export class TestPersonCodingService {
           },
           matchingFlags: [],
           analysisTimestamp: new Date().toISOString()
-        }))
+        } as ResponseAnalysisDto))
       );
   }
 

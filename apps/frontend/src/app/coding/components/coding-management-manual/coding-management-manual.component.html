@@ -163,7 +163,7 @@
                       </tr>
                     </thead>
                     <tbody>
-                      <tr *ngFor="let item of responseAnalysis.emptyResponses.items | slice:0:50">
+                      <tr *ngFor="let item of responseAnalysis.emptyResponses.items">
                         <td>{{ item.unitAlias || item.unitName }}</td>
                         <td>{{ item.variableId }}</td>
                         <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
@@ -172,10 +172,14 @@
                     </tbody>
                   </table>
                 </div>
-                <p *ngIf="responseAnalysis.emptyResponses.total > 50" class="more-items-hint">
-                  {{ 'coding-management-manual.response-analysis.showing-first-50' | translate:{ total:
-                  responseAnalysis.emptyResponses.total } }}
-                </p>
+
+                <mat-paginator [length]="responseAnalysis.emptyResponses.total"
+                  [pageSize]="emptyPageSize"
+                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
+                  [pageIndex]="emptyPageIndex"
+                  (page)="onEmptyPageChange($event)"
+                  aria-label="Select page of empty responses">
+                </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
                     [disabled]="isApplyingEmptyCoding"
@@ -219,7 +223,7 @@
 
               <div *ngIf="showDuplicateValuesDetails && responseAnalysis.duplicateValues.total > 0"
                 class="analysis-details">
-                <div *ngFor="let group of responseAnalysis.duplicateValues.groups | slice:0:20" class="duplicate-group">
+                <div *ngFor="let group of responseAnalysis.duplicateValues.groups" class="duplicate-group">
                   <div class="duplicate-group-header">
                     <strong>{{ group.unitAlias || group.unitName }}</strong> / {{ group.variableId }}
                     <span class="duplicate-value">"{{ group.normalizedValue | slice:0:50 }}{{
@@ -239,11 +243,14 @@
                     </li>
                   </ul>
                 </div>
-                <p *ngIf="responseAnalysis.duplicateValues.total > 20" class="more-items-hint">
-                  {{ 'coding-management-manual.response-analysis.showing-first-20-groups' | translate:{ total:
-                  responseAnalysis.duplicateValues.total } }}
-                </p>
 
+                <mat-paginator [length]="responseAnalysis.duplicateValues.total"
+                  [pageSize]="duplicatePageSize"
+                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
+                  [pageIndex]="duplicatePageIndex"
+                  (page)="onDuplicatePageChange($event)"
+                  aria-label="Select page of duplicate groups">
+                </mat-paginator>
               </div>
             </div>
 
