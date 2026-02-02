@@ -3,10 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
 } from 'typeorm';
-import {
-  VariableCodingData,
-  CodingScheme
-} from '@iqbspecs/coding-scheme';
+import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
@@ -46,7 +43,7 @@ export class CodingProcessService {
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
     private workspaceFilesService: WorkspaceFilesService
-  ) { }
+  ) {}
 
   private codingSchemeCache: Map<
   string,
@@ -335,8 +332,10 @@ export class CodingProcessService {
       );
 
       this.logger.log(
-        `Filtered responses: ${allResponses.length} -> ${filteredResponses.length
-        } (removed ${allResponses.length - filteredResponses.length
+        `Filtered responses: ${allResponses.length} -> ${
+          filteredResponses.length
+        } (removed ${
+          allResponses.length - filteredResponses.length
         } invalid variable responses)`
       );
 
@@ -581,9 +580,8 @@ export class CodingProcessService {
     responses: ResponseEntity[],
     units: Unit[]
   ): Promise<ResponseEntity[]> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
-      workspaceId
-    );
+    const unitVariables =
+      await this.workspaceFilesService.getUnitVariableMap(workspaceId);
     const validVariableSets = new Map<string, Set<string>>();
     unitVariables.forEach((vars: Set<string>, unitName: string) => {
       validVariableSets.set(unitName.toUpperCase(), vars);
@@ -713,7 +711,9 @@ export class CodingProcessService {
     }
   }
 
-  private async isJobCancelled(jobId: string | number | undefined): Promise<boolean> {
+  private async isJobCancelled(
+    jobId: string | number | undefined
+  ): Promise<boolean> {
     if (!jobId) return false;
     try {
       const bullJob = await this.jobQueueService.getTestPersonCodingJob(
@@ -909,7 +909,8 @@ export class CodingProcessService {
             codingSchemeRefs.add(codingSchemeRefUpper);
             unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
             this.logger.debug(
-              `Extracted coding scheme mapping: unitId=${unit.id
+              `Extracted coding scheme mapping: unitId=${
+                unit.id
               }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
             );
           }

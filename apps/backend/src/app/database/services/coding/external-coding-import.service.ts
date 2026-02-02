@@ -10,7 +10,10 @@ import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { CacheService } from '../../../cache/cache.service';
-import { statusStringToNumber, statusNumberToString } from '../../utils/response-status-converter';
+import {
+  statusStringToNumber,
+  statusNumberToString
+} from '../../utils/response-status-converter';
 import FileUpload from '../../entities/file_upload.entity';
 
 interface ExternalCodingRow {
@@ -114,7 +117,9 @@ export class ExternalCodingImportService {
       }>;
     }> {
     try {
-      this.logger.log(`Starting external coding import for workspace ${workspaceId}`);
+      this.logger.log(
+        `Starting external coding import for workspace ${workspaceId}`
+      );
       progressCallback?.(5, 'Starting external coding import...');
 
       const fileData = body.file; // Assuming base64 encoded file data
@@ -130,7 +135,9 @@ export class ExternalCodingImportService {
       } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
         parsedData = await this.parseExcelFile(fileData);
       } else {
-        this.logger.error(`Unsupported file format: ${fileName}. Please use CSV or Excel files.`);
+        this.logger.error(
+          `Unsupported file format: ${fileName}. Please use CSV or Excel files.`
+        );
         return {
           message: 'Unsupported file format. Please use CSV or Excel files.',
           processedRows: 0,
@@ -140,7 +147,9 @@ export class ExternalCodingImportService {
         };
       }
 
-      this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
+      this.logger.log(
+        `Parsed ${parsedData.length} rows from external coding file`
+      );
       progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
 
       const updatedRows = 0;
@@ -164,33 +173,50 @@ export class ExternalCodingImportService {
       const batchSize = 1000;
       const totalBatches = Math.ceil(parsedData.length / batchSize);
 
-      this.logger.log(`Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`);
-      progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
+      this.logger.log(
+        `Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`
+      );
+      progressCallback?.(
+        25,
+        `Starting to process ${parsedData.length} rows in ${totalBatches} batches`
+      );
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const batchStart = batchIndex * batchSize;
         const batchEnd = Math.min(batchStart + batchSize, parsedData.length);
         const batch = parsedData.slice(batchStart, batchEnd);
 
-        this.logger.log(`Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+        this.logger.log(
+          `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`
+        );
 
         // Calculate progress: 25% start + 70% for batch processing
-        const batchProgress = 25 + Math.floor(((batchIndex) / totalBatches) * 70);
-        progressCallback?.(batchProgress, `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`);
+        const batchProgress = 25 + Math.floor((batchIndex / totalBatches) * 70);
+        progressCallback?.(
+          batchProgress,
+          `Processing batch ${batchIndex + 1}/${totalBatches} (rows ${batchStart + 1}-${batchEnd})`
+        );
 
         for (const row of batch) {
           try {
             const {
               unit_key: unitKey,
-              unit_alias: unitAlias, variable_id: variableId, code,
-              person_code: personCode, person_login: personLogin, person_group: personGroup, booklet_name: bookletName
+              unit_alias: unitAlias,
+              variable_id: variableId,
+              code,
+              person_code: personCode,
+              person_login: personLogin,
+              person_group: personGroup,
+              booklet_name: bookletName
             } = row;
 
             // Use unit_key if provided, otherwise fall back to unit_alias for backward compatibility
             const unitIdentifier = unitKey || unitAlias;
 
             if (!unitIdentifier || !variableId) {
-              errors.push(`Row missing required fields: unit_key=${unitKey}, unit_alias=${unitAlias}, variable_id=${variableId}`);
+              errors.push(
+                `Row missing required fields: unit_key=${unitKey}, unit_alias=${unitAlias}, variable_id=${variableId}`
+              );
               continue;
             }
 
@@ -203,9 +229,13 @@ export class ExternalCodingImportService {
 
             // Use unit.name if unit_key was provided, otherwise unit.alias for unit_alias
             if (unitKey) {
-              queryBuilder.andWhere('unit.name = :unitIdentifier', { unitIdentifier });
+              queryBuilder.andWhere('unit.name = :unitIdentifier', {
+                unitIdentifier
+              });
             } else {
-              queryBuilder.andWhere('unit.alias = :unitIdentifier', { unitIdentifier });
+              queryBuilder.andWhere('unit.alias = :unitIdentifier', {
+                unitIdentifier
+              });
             }
 
             queryBuilder
@@ -213,16 +243,24 @@ export class ExternalCodingImportService {
               .andWhere('person.workspace_id = :workspaceId', { workspaceId });
 
             if (personCode) {
-              queryBuilder.andWhere('person.code = :personCode', { personCode });
+              queryBuilder.andWhere('person.code = :personCode', {
+                personCode
+              });
             }
             if (personLogin) {
-              queryBuilder.andWhere('person.login = :personLogin', { personLogin });
+              queryBuilder.andWhere('person.login = :personLogin', {
+                personLogin
+              });
             }
             if (personGroup) {
-              queryBuilder.andWhere('person.group = :personGroup', { personGroup });
+              queryBuilder.andWhere('person.group = :personGroup', {
+                personGroup
+              });
             }
             if (bookletName) {
-              queryBuilder.andWhere('bookletinfo.name = :bookletName', { bookletName });
+              queryBuilder.andWhere('bookletinfo.name = :bookletName', {
+                bookletName
+              });
             }
 
             const queryParameters: QueryParameters = {
@@ -245,25 +283,31 @@ export class ExternalCodingImportService {
               queryParameters.bookletName = bookletName;
             }
 
-            const responsesToUpdate = await queryBuilder.setParameters(queryParameters).getMany();
+            const responsesToUpdate = await queryBuilder
+              .setParameters(queryParameters)
+              .getMany();
 
             if (responsesToUpdate.length > 0) {
               // Validate code against coding scheme for each response
-              const validationPromises = responsesToUpdate.map(async response => {
-                const parsedCode = code ? parseInt(code.toString(), 10) : null;
-                const validation = await this.validateCodeAgainstScheme(
-                  response.unit!,
-                  variableId,
-                  parsedCode
-                );
+              const validationPromises = responsesToUpdate.map(
+                async response => {
+                  const parsedCode = code ?
+                    parseInt(code.toString(), 10) :
+                    null;
+                  const validation = await this.validateCodeAgainstScheme(
+                    response.unit!,
+                    variableId,
+                    parsedCode
+                  );
 
-                return {
-                  responseId: response.id,
-                  validatedStatus: validation.status,
-                  validatedScore: validation.score,
-                  validatedCode: parsedCode
-                };
-              });
+                  return {
+                    responseId: response.id,
+                    validatedStatus: validation.status,
+                    validatedScore: validation.score,
+                    validatedCode: parsedCode
+                  };
+                }
+              );
 
               const validationResults = await Promise.all(validationPromises);
 
@@ -275,11 +319,15 @@ export class ExternalCodingImportService {
                     .createQueryBuilder()
                     .update(ResponseEntity)
                     .set({
-                      status_v2: statusStringToNumber(validation.validatedStatus) || null,
+                      status_v2:
+                        statusStringToNumber(validation.validatedStatus) ||
+                        null,
                       code_v2: validation.validatedCode,
                       score_v2: validation.validatedScore
                     })
-                    .where('id = :responseId', { responseId: validation.responseId })
+                    .where('id = :responseId', {
+                      responseId: validation.responseId
+                    })
                     .execute();
                 }
               }
@@ -287,14 +335,22 @@ export class ExternalCodingImportService {
               // Add comparison data for each affected response
               responsesToUpdate.forEach((response, index) => {
                 const validation = validationResults[index];
-                const responsePersonLogin = response.unit?.booklet?.person?.login || undefined;
-                const responsePersonCode = response.unit?.booklet?.person?.code || undefined;
-                const responsePersonGroup = response.unit?.booklet?.person?.group || undefined;
-                const responseBookletName = response.unit?.booklet?.bookletinfo?.name || undefined;
+                const responsePersonLogin =
+                  response.unit?.booklet?.person?.login || undefined;
+                const responsePersonCode =
+                  response.unit?.booklet?.person?.code || undefined;
+                const responsePersonGroup =
+                  response.unit?.booklet?.person?.group || undefined;
+                const responseBookletName =
+                  response.unit?.booklet?.bookletinfo?.name || undefined;
 
                 // Debug logging to verify data is populated
-                this.logger.debug(`Response ${response.id}: personLogin=${responsePersonLogin}, personCode=${responsePersonCode}, personGroup=${responsePersonGroup}, bookletName=${responseBookletName}`);
-                this.logger.debug(`Validation result: status=${validation.validatedStatus}, score=${validation.validatedScore}, isValid=${validation.validatedStatus === 'CODING_COMPLETE'}`);
+                this.logger.debug(
+                  `Response ${response.id}: personLogin=${responsePersonLogin}, personCode=${responsePersonCode}, personGroup=${responsePersonGroup}, bookletName=${responseBookletName}`
+                );
+                this.logger.debug(
+                  `Validation result: status=${validation.validatedStatus}, score=${validation.validatedScore}, isValid=${validation.validatedStatus === 'CODING_COMPLETE'}`
+                );
 
                 affectedRows.push({
                   unitAlias: response.unit?.alias || unitAlias,
@@ -303,7 +359,8 @@ export class ExternalCodingImportService {
                   personLogin: responsePersonLogin,
                   personGroup: responsePersonGroup,
                   bookletName: responseBookletName,
-                  originalCodedStatus: statusNumberToString(response.status_v1) || '',
+                  originalCodedStatus:
+                    statusNumberToString(response.status_v1) || '',
                   originalCode: response.code_v1,
                   originalScore: response.score_v1,
                   updatedCodedStatus: validation.validatedStatus,
@@ -312,16 +369,24 @@ export class ExternalCodingImportService {
                 });
               });
             } else {
-              const matchingCriteria = [`unit_alias=${unitAlias}`, `variable_id=${variableId}`];
+              const matchingCriteria = [
+                `unit_alias=${unitAlias}`,
+                `variable_id=${variableId}`
+              ];
               if (personCode) matchingCriteria.push(`person_code=${personCode}`);
               if (personLogin) matchingCriteria.push(`person_login=${personLogin}`);
               if (personGroup) matchingCriteria.push(`person_group=${personGroup}`);
               if (bookletName) matchingCriteria.push(`booklet_name=${bookletName}`);
-              errors.push(`No response found for ${matchingCriteria.join(', ')}`);
+              errors.push(
+                `No response found for ${matchingCriteria.join(', ')}`
+              );
             }
           } catch (rowError) {
             errors.push(`Error processing row: ${rowError.message}`);
-            this.logger.error(`Error processing row: ${rowError.message}`, rowError.stack);
+            this.logger.error(
+              `Error processing row: ${rowError.message}`,
+              rowError.stack
+            );
           }
         }
 
@@ -337,9 +402,12 @@ export class ExternalCodingImportService {
         `External coding preview completed. Processed ${processedRows} rows, ${updatedRows} response records would be updated.` :
         `External coding import completed. Processed ${processedRows} rows, updated ${updatedRows} response records.`;
       this.logger.log(message);
-      progressCallback?.(100, body.previewOnly ?
-        `Preview completed: ${updatedRows} of ${processedRows} rows would be updated` :
-        `Import completed: ${updatedRows} of ${processedRows} rows updated`);
+      progressCallback?.(
+        100,
+        body.previewOnly ?
+          `Preview completed: ${updatedRows} of ${processedRows} rows would be updated` :
+          `Import completed: ${updatedRows} of ${processedRows} rows updated`
+      );
 
       // Invalidate cache if rows were actually updated (not preview mode)
       if (updatedRows > 0 && !body.previewOnly) {
@@ -354,9 +422,14 @@ export class ExternalCodingImportService {
         affectedRows
       };
     } catch (error) {
-      this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error importing external coding: ${error.message}`,
+        error.stack
+      );
       progressCallback?.(0, `Import failed: ${error.message}`);
-      throw new Error(`Could not import external coding data: ${error.message}`);
+      throw new Error(
+        `Could not import external coding data: ${error.message}`
+      );
     }
   }
 
@@ -385,10 +458,16 @@ export class ExternalCodingImportService {
       }>;
     }> {
     // Set previewOnly to false for actual application
-    return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback);
+    return this.importExternalCoding(
+      workspaceId,
+      { ...body, previewOnly: false },
+      progressCallback
+    );
   }
 
-  private async getCodingSchemeForUnit(unit: Unit): Promise<CodingScheme | null> {
+  private async getCodingSchemeForUnit(
+    unit: Unit
+  ): Promise<CodingScheme | null> {
     try {
       // Get the unit's test file to access the coding scheme reference
       const testFile = await this.fileUploadRepository.findOne({
@@ -423,7 +502,10 @@ export class ExternalCodingImportService {
       // Parse and return the coding scheme
       return new CodingScheme(Buffer.from(codingSchemeFile.data));
     } catch (error) {
-      this.logger.error(`Error loading coding scheme for unit ${unit.id}: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error loading coding scheme for unit ${unit.id}: ${error.message}`,
+        error.stack
+      );
       return null;
     }
   }
@@ -446,7 +528,8 @@ export class ExternalCodingImportService {
       }
 
       const variableCoding = Array.isArray(codingScheme.variableCodings) ?
-        codingScheme.variableCodings.find(vc => vc.id === variableId) : null;
+        codingScheme.variableCodings.find(vc => vc.id === variableId) :
+        null;
 
       if (!variableCoding) {
         // Variable not found in coding scheme, leave as CODING_INCOMPLETE
@@ -485,7 +568,10 @@ export class ExternalCodingImportService {
         status: 'CODING_COMPLETE'
       };
     } catch (error) {
-      this.logger.error(`Error validating code against scheme: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error validating code against scheme: ${error.message}`,
+        error.stack
+      );
       // On error, leave as CODING_INCOMPLETE
       return {
         isValid: false,
@@ -501,10 +587,15 @@ export class ExternalCodingImportService {
       const buffer = Buffer.from(fileData, 'base64');
       let rowCount = 0;
 
-      fastCsv.parseString(buffer.toString(), { headers: true })
+      fastCsv
+        .parseString(buffer.toString(), { headers: true })
         .on('error', error => reject(error))
         .on('data', row => {
-          if (Object.values(row).some(value => value && value.toString().trim() !== '')) {
+          if (
+            Object.values(row).some(
+              value => value && value.toString().trim() !== ''
+            )
+          ) {
             results.push(row);
             rowCount += 1;
 
@@ -515,12 +606,16 @@ export class ExternalCodingImportService {
 
             // Memory protection: limit to 200k rows to prevent memory overflow
             if (rowCount > 200000) {
-              reject(new Error('File too large. Maximum 200,000 rows supported.'));
+              reject(
+                new Error('File too large. Maximum 200,000 rows supported.')
+              );
             }
           }
         })
         .on('end', () => {
-          this.logger.log(`CSV parsing completed. Total rows: ${results.length}`);
+          this.logger.log(
+            `CSV parsing completed. Total rows: ${results.length}`
+          );
           resolve(results);
         });
     });
@@ -543,7 +638,9 @@ export class ExternalCodingImportService {
     headerRow.eachCell((cell, colNumber) => {
       headers[colNumber] = cell.text || cell.value?.toString() || '';
     });
-    this.logger.log(`Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`);
+    this.logger.log(
+      `Starting Excel parsing. Total rows: ${worksheet.rowCount - 1}`
+    );
 
     // Memory protection: limit to 200k rows
     const maxRows = Math.min(worksheet.rowCount, 200001); // +1 for header row
@@ -564,7 +661,11 @@ export class ExternalCodingImportService {
       });
 
       // Only add non-empty rows
-      if (Object.values(rowData).some(value => value && value.toString().trim() !== '')) {
+      if (
+        Object.values(rowData).some(
+          value => value && value.toString().trim() !== ''
+        )
+      ) {
         results.push(rowData);
       }
 
@@ -590,6 +691,8 @@ export class ExternalCodingImportService {
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(
+      `Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`
+    );
   }
 }
