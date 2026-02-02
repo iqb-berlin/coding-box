@@ -43,7 +43,9 @@ describe('CodingManagementComponent', () => {
       fetchResponsesByStatus: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
       searchResponses: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
       resetCodingVersion: jest.fn().mockReturnValue(of({ message: 'Success' })),
-      downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve())
+      downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve()),
+      hasGeogebraResponses: jest.fn().mockReturnValue(of(false)),
+      downloadCodingList: jest.fn()
     };
 
     mockUiService = {
@@ -166,17 +168,6 @@ describe('CodingManagementComponent', () => {
         100
       );
     });
-
-    // Note: Dialog tests commented out due to MatDialog injection complexity
-    // it('should open download dialog when downloadResults is emitted', () => {
-    //   component.onDownloadResults();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
-
-    // it('should open reset dialog when resetVersion is emitted', () => {
-    //   component.onResetVersion();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
   });
 
   describe('Response Filters Integration', () => {
@@ -188,7 +179,9 @@ describe('CodingManagementComponent', () => {
         code: '',
         group: '',
         bookletName: '',
-        variableId: ''
+        variableId: '',
+        geogebra: false,
+        personLogin: ''
       };
 
       component.onFilterChange(filterParams);
@@ -207,7 +200,9 @@ describe('CodingManagementComponent', () => {
         code: '',
         group: '',
         bookletName: '',
-        variableId: ''
+        variableId: '',
+        geogebra: false,
+        personLogin: ''
       };
 
       component.onFilterChange(filterParams);
@@ -268,24 +263,6 @@ describe('CodingManagementComponent', () => {
   });
 
   describe('Dialog Methods', () => {
-    // Note: These tests are commented out due to MatDialog injection complexity in Angular 17+
-    // The dialog methods should be tested manually or with integration tests
-
-    // it('should call dialog.open when opening auto code dialog', () => {
-    //   component.onAutoCode();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
-
-    // it('should call dialog.open when opening export dialog', () => {
-    //   component.fetchCodingList();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
-
-    // it('should call dialog.open when opening export coding book', () => {
-    //   component.openExportCodingBook();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
-
     it('should toggle manual coding view', () => {
       expect(component.showManualCoding).toBe(false);
 
@@ -295,16 +272,6 @@ describe('CodingManagementComponent', () => {
       component.toggleManualCoding();
       expect(component.showManualCoding).toBe(false);
     });
-
-    // it('should call dialog.open when opening variable analysis', () => {
-    //   component.fetchVariableAnalysis();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
-
-    // it('should call dialog.open when opening unit variables', () => {
-    //   component.fetchUnitVariables();
-    //   expect(mockDialog.open).toHaveBeenCalled();
-    // });
   });
 
   describe('Data Fetching', () => {

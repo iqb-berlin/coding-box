@@ -58,7 +58,7 @@ describe('CodingTrainingBackendService', () => {
   describe('updateCoderTrainingLabel', () => {
     it('should update label', () => {
       service.updateCoderTrainingLabel(1, 10, 'New').subscribe();
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10`);
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`);
       expect(req.request.method).toBe('PUT');
       req.flush({});
     });

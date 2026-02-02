@@ -68,17 +68,24 @@ describe('CodingResultsComparisonComponent', () => {
         {
           unitName: 'Unit1',
           variableId: 'Var1',
-          testperson: 'Test1',
-          trainings: [
+          testPerson: 'Test1',
+          personLogin: 'Login1',
+          personCode: 'Code1',
+          personGroup: 'Group1',
+          coders: [
             {
               trainingId: 1,
               trainingLabel: 'Training 1',
+              coderId: 101,
+              coderName: 'Coder 101',
               code: 'A',
               score: null
             },
             {
               trainingId: 2,
               trainingLabel: 'Training 2',
+              coderId: 102,
+              coderName: 'Coder 102',
               code: 'A',
               score: null
             }
@@ -87,17 +94,24 @@ describe('CodingResultsComparisonComponent', () => {
         {
           unitName: 'Unit2',
           variableId: 'Var2',
-          testperson: 'Test2',
-          trainings: [
+          testPerson: 'Test2',
+          personLogin: 'Login2',
+          personCode: 'Code2',
+          personGroup: 'Group2',
+          coders: [
             {
               trainingId: 1,
               trainingLabel: 'Training 1',
+              coderId: 101,
+              coderName: 'Coder 101',
               code: 'B',
               score: null
             },
             {
               trainingId: 2,
               trainingLabel: 'Training 2',
+              coderId: 102,
+              coderName: 'Coder 102',
               code: 'C',
               score: null
             }
@@ -106,24 +120,33 @@ describe('CodingResultsComparisonComponent', () => {
         {
           unitName: 'Unit3',
           variableId: 'Var3',
-          testperson: 'Test3',
-          trainings: [
+          testPerson: 'Test3',
+          personLogin: 'Login3',
+          personCode: 'Code3',
+          personGroup: 'Group3',
+          coders: [
             {
               trainingId: 1,
               trainingLabel: 'Training 1',
+              coderId: 101,
+              coderName: 'Coder 101',
               code: 'D',
               score: null
             },
             {
               trainingId: 2,
               trainingLabel: 'Training 2',
-              code: null,
+              coderId: 102,
+              coderName: 'Coder 102',
+              code: 'E',
               score: null
             }
           ]
         }
       ];
 
+      component.dataSource.data = component.comparisonData;
+      component.selectedCodersFromTrainings = new Set(['1_101', '2_102']);
       component.calculateStatistics();
 
       expect(component.totalComparisons).toBe(3);
@@ -174,6 +197,8 @@ describe('CodingResultsComparisonComponent', () => {
         }
       ];
 
+      component.dataSource.data = component.withinTrainingData;
+      component.codersFormControl.setValue([1, 2]);
       component.calculateStatistics();
 
       expect(component.totalComparisons).toBe(2);
