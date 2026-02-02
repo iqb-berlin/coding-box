@@ -28,17 +28,25 @@ export interface DuplicateValueGroupDto {
   }[];
 }
 
+export interface EmptyResponseAnalysisDto {
+  total: number;
+  items: EmptyResponseDto[];
+  page?: number;
+  pageSize?: number;
+}
+
+export interface DuplicateValueAnalysisDto {
+  total: number;
+  totalResponses: number;
+  groups: DuplicateValueGroupDto[];
+  isAggregationApplied: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface ResponseAnalysisDto {
-  emptyResponses: {
-    total: number;
-    items: EmptyResponseDto[];
-  };
-  duplicateValues: {
-    total: number;
-    totalResponses: number;
-    groups: DuplicateValueGroupDto[];
-    isAggregationApplied: boolean;
-  };
+  emptyResponses: EmptyResponseAnalysisDto;
+  duplicateValues: DuplicateValueAnalysisDto;
   matchingFlags: string[];
   analysisTimestamp: string;
 }

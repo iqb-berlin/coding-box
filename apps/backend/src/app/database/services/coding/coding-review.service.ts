@@ -21,7 +21,10 @@ export class CodingReviewService {
   async getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false,
+    includeRelations: boolean = true
   ): Promise<{
       data: Array<{
         responseId: number;
@@ -35,6 +38,7 @@ export class CodingReviewService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -47,9 +51,9 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId}`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts})`
       );
-      const doubleCodedResponseIds = await this.codingJobUnitRepository
+      const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
         .select('cju.response_id', 'responseId')
         .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
@@ -58,8 +62,21 @@ export class CodingReviewService {
         .where('cj.workspace_id = :workspaceId', { workspaceId })
         .andWhere('cju.code IS NOT NULL') // Only include coded responses
         .groupBy('cju.response_id')
-        .having('COUNT(DISTINCT cju.coding_job_id) > 1') // Multiple jobs coded this response
-        .getRawMany();
+        .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs coded this response
+
+      if (onlyConflicts) {
+        // A conflict exists if there are different codes for the same response.
+        // We use COALESCE to handle NULL codes as a distinct value (-999999).
+        // If all codes are the same, COUNT(DISTINCT ...) will be 1.
+        // If there are differences, it will be > 1.
+        query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+      }
+
+      if (excludeTrainings) {
+        query.andWhere('cj.training_id IS NULL');
+      }
+
+      const doubleCodedResponseIds = await query.getRawMany();
 
       const responseIds = doubleCodedResponseIds.map(row => row.responseId);
 
@@ -76,17 +93,23 @@ export class CodingReviewService {
       const endIndex = Math.min(startIndex + limit, responseIds.length);
       const paginatedResponseIds = responseIds.slice(startIndex, endIndex);
 
+      const relations = includeRelations ? [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.person'
+      ] : [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user'
+      ];
+
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: { response_id: In(paginatedResponseIds) },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.person'
-        ]
+        relations
       });
 
       const responseGroups = new Map<
@@ -103,6 +126,7 @@ export class CodingReviewService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -135,6 +159,7 @@ export class CodingReviewService {
             coderId: coder.user_id,
             coderName: coder.user?.username || `Coder ${coder.user_id}`,
             jobId: unit.coding_job_id,
+            jobName: unit.coding_job?.name || '',
             code: unit.code,
             score: unit.score,
             notes: unit.notes,
@@ -193,13 +218,13 @@ export class CodingReviewService {
         try {
           // Get the selected coder's coding_job_unit entry
           const selectedCodingJobUnit =
-                        await this.codingJobUnitRepository.findOne({
-                          where: {
-                            response_id: decision.responseId,
-                            coding_job_id: decision.selectedJobId
-                          },
-                          relations: ['response', 'coding_job']
-                        });
+            await this.codingJobUnitRepository.findOne({
+              where: {
+                response_id: decision.responseId,
+                coding_job_id: decision.selectedJobId
+              },
+              relations: ['response', 'coding_job']
+            });
 
           if (!selectedCodingJobUnit) {
             this.logger.warn(
@@ -278,35 +303,43 @@ export class CodingReviewService {
     }
   }
 
-  async getWorkspaceCohensKappaSummary(workspaceId: number): Promise<{
-    coderPairs: Array<{
-      coder1Id: number;
-      coder1Name: string;
-      coder2Id: number;
-      coder2Name: string;
-      kappa: number | null;
-      agreement: number;
-      totalSharedResponses: number;
-      validPairs: number;
-      interpretation: string;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-    };
-  }> {
+  async getWorkspaceCohensKappaSummary(
+    workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true
+  ): Promise<{
+      coderPairs: Array<{
+        coder1Id: number;
+        coder1Name: string;
+        coder2Id: number;
+        coder2Name: string;
+        kappa: number | null;
+        agreement: number;
+        totalSharedResponses: number;
+        validPairs: number;
+        interpretation: string;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+      };
+    }> {
     try {
       this.logger.log(
-        `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`
+        `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}${excludeTrainings ? ' (excluding trainings)' : ''}`
       );
 
       const doubleCodedData = await this.getDoubleCodedVariablesForReview(
         workspaceId,
         1,
-        10000
+        10000,
+        false, // onlyConflicts = false (needed for correct Kappa calculation)
+        excludeTrainings, // use passed parameter
+        true // includeRelations = true (needed for correct unique variable counting)
       ); // Get all data
 
       if (doubleCodedData.total === 0) {
@@ -317,7 +350,8 @@ export class CodingReviewService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
           }
         };
       }
@@ -349,28 +383,28 @@ export class CodingReviewService {
             uniqueCoders.add(coder2.coderId);
 
             const pairKey =
-                            coder1.coderId < coder2.coderId ?
-                              `${coder1.coderId}-${coder2.coderId}` :
-                              `${coder2.coderId}-${coder1.coderId}`;
+              coder1.coderId < coder2.coderId ?
+                `${coder1.coderId}-${coder2.coderId}` :
+                `${coder2.coderId}-${coder1.coderId}`;
 
             if (!coderPairData.has(pairKey)) {
               coderPairData.set(pairKey, {
                 coder1Id:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder1.coderId :
-                                      coder2.coderId,
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderId :
+                    coder2.coderId,
                 coder1Name:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder1.coderName :
-                                      coder2.coderName,
+                  coder1.coderId < coder2.coderId ?
+                    coder1.coderName :
+                    coder2.coderName,
                 coder2Id:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder2.coderId :
-                                      coder1.coderId,
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderId :
+                    coder1.coderId,
                 coder2Name:
-                                    coder1.coderId < coder2.coderId ?
-                                      coder2.coderName :
-                                      coder1.coderName,
+                  coder1.coderId < coder2.coderId ?
+                    coder2.coderName :
+                    coder1.coderName,
                 codes: []
               });
             }
@@ -392,8 +426,6 @@ export class CodingReviewService {
       }
 
       const coderPairs = [];
-      let totalKappa = 0;
-      let validKappaCount = 0;
 
       for (const pair of coderPairData.values()) {
         const kappaResults = this.codingStatisticsService.calculateCohensKappa([
@@ -403,23 +435,54 @@ export class CodingReviewService {
         if (kappaResults.length > 0) {
           const result = kappaResults[0];
           coderPairs.push(result);
+        }
+      }
 
+      // Calculate mean kappa
+      // Reference: R eatPrep meanKappa function
+      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
+      // R default: weighted.mean(dfr$kappa, dfr$N)
+      // R alternative: mean(dfr$kappa, na.rm = TRUE)
+      let averageKappa: number | null;
+
+      if (weightedMean) {
+        // Weighted mean: weight each pair's kappa by number of valid pairs (N)
+        // This matches the R default behavior: weighted.mean(dfr$kappa, dfr$N)
+        let totalWeightedKappa = 0;
+        let totalWeight = 0;
+
+        for (const result of coderPairs) {
+          if (result.kappa !== null && !Number.isNaN(result.kappa)) {
+            const weight = result.validPairs; // N = number of valid pairs
+            totalWeightedKappa += result.kappa * weight;
+            totalWeight += weight;
+          }
+        }
+
+        averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
+      } else {
+        // Simple arithmetic mean (unweighted)
+        // This matches R behavior with weight.mean = FALSE
+        let totalKappa = 0;
+        let validKappaCount = 0;
+
+        for (const result of coderPairs) {
           if (result.kappa !== null && !Number.isNaN(result.kappa)) {
             totalKappa += result.kappa;
             validKappaCount += 1;
           }
         }
-      }
 
-      const averageKappa =
-                validKappaCount > 0 ? totalKappa / validKappaCount : null;
+        averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
+      }
 
       const workspaceSummary = {
         totalDoubleCodedResponses: doubleCodedData.total,
         totalCoderPairs: coderPairs.length,
         averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
         variablesIncluded: uniqueVariables.size,
-        codersIncluded: uniqueCoders.size
+        codersIncluded: uniqueCoders.size,
+        weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
       };
 
       this.logger.log(

@@ -239,7 +239,10 @@ export class CodingJobService {
       whereClause.workspace_id = workspaceId;
     }
 
-    const codingJob = await this.codingJobRepository.findOne({ where: whereClause });
+    const codingJob = await this.codingJobRepository.findOne({
+      where: whereClause,
+      relations: ['training']
+    });
     if (!codingJob) {
       if (workspaceId !== undefined) {
         throw new NotFoundException(`Coding job with ID ${id} not found in workspace ${workspaceId}`);
@@ -492,7 +495,8 @@ export class CodingJobService {
     variableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
   }> {
     const codingJob = await this.codingJobRepository.findOne({
-      where: { id }
+      where: { id },
+      relations: ['training']
     });
 
     if (!codingJob) {

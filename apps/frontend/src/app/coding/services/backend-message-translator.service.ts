@@ -74,17 +74,17 @@ export class BackendMessageTranslatorService {
       return this.translateService.instant('test-person-coding.job-deleted-by-id', { id: jobDeletedMatch[1] });
     }
 
-    const trainingCreatedMatch = message.match(/^Successfully created (\d+) coding jobs?$/i);
+    const trainingCreatedMatch = message.match(/^Successfully created (\d+) coder training jobs?$/i);
     if (trainingCreatedMatch) {
       return this.translateService.instant('trainings.create.success', { count: trainingCreatedMatch[1] });
     }
 
-    const trainingUpdatedMatch = message.match(/^Training label updated to: (.+)$/i);
+    const trainingUpdatedMatch = message.match(/^Successfully updated coder training label to "(.+)"$/i);
     if (trainingUpdatedMatch) {
       return this.translateService.instant('trainings.update.success', { label: trainingUpdatedMatch[1] });
     }
 
-    const trainingDeletedMatch = message.match(/^Training '(.+)' with (\d+) coding jobs? has been deleted$/i);
+    const trainingDeletedMatch = message.match(/^Successfully deleted coder training "(.+)" with (\d+) associated jobs?$/i);
     if (trainingDeletedMatch) {
       return this.translateService.instant('trainings.delete.success', {
         label: trainingDeletedMatch[1],
@@ -92,17 +92,17 @@ export class BackendMessageTranslatorService {
       });
     }
 
-    const trainingCreateErrorMatch = message.match(/^Failed to create coding jobs: (.+)$/i);
+    const trainingCreateErrorMatch = message.match(/^Error creating coder training jobs: (.+)$/i);
     if (trainingCreateErrorMatch) {
       return this.translateService.instant('trainings.create.error.generic', { error: trainingCreateErrorMatch[1] });
     }
 
-    const trainingUpdateErrorMatch = message.match(/^Failed to update training label: (.+)$/i);
+    const trainingUpdateErrorMatch = message.match(/^Error updating coder training label: (.+)$/i);
     if (trainingUpdateErrorMatch) {
       return this.translateService.instant('trainings.update.error.generic', { error: trainingUpdateErrorMatch[1] });
     }
 
-    const trainingNotFoundMatch = message.match(/^Training with ID (\d+) not found in workspace (\d+)$/i);
+    const trainingNotFoundMatch = message.match(/^Coder training with ID (\d+) not found in workspace (\d+)$/i);
     if (trainingNotFoundMatch) {
       return this.translateService.instant('trainings.update.error.not-found', {
         trainingId: trainingNotFoundMatch[1],
@@ -110,7 +110,7 @@ export class BackendMessageTranslatorService {
       });
     }
 
-    const trainingDeleteErrorMatch = message.match(/^Failed to delete training: (.+)$/i);
+    const trainingDeleteErrorMatch = message.match(/^Error deleting coder training: (.+)$/i);
     if (trainingDeleteErrorMatch) {
       return this.translateService.instant('trainings.delete.error.generic', { error: trainingDeleteErrorMatch[1] });
     }

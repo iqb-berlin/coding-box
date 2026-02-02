@@ -1,9 +1,11 @@
 .cohens-kappa-container {
-  padding: 0;
-  max-width: none;
-  margin: 0;
+  padding: 20px;
 
   .content-section {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+
     .loading-container {
       display: flex;
       flex-direction: column;
@@ -20,6 +22,36 @@
 
     .workspace-kappa-card {
       margin-bottom: 24px;
+
+      .toggles-container {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        padding: 12px 16px;
+        background-color: #f5f5f5;
+        border-radius: 8px;
+        margin-bottom: 16px;
+
+        .toggle-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .info-icon {
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+            color: #666;
+            cursor: help;
+          }
+
+          .weighting-method-label {
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+          }
+        }
+      }
 
       .kappa-stats {
         display: grid;
@@ -183,7 +215,8 @@
                   gap: 8px;
                   font-weight: 500;
 
-                  .coder1, .coder2 {
+                  .coder1,
+                  .coder2 {
                     color: #1976d2;
                   }
 
@@ -198,7 +231,9 @@
                   gap: 20px;
                   align-items: center;
 
-                  .kappa-value, .agreement-value, .interpretation {
+                  .kappa-value,
+                  .agreement-value,
+                  .interpretation {
                     display: flex;
                     flex-direction: column;
                     align-items: center;

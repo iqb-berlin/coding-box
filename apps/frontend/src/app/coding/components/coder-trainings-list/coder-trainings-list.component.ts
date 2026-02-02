@@ -12,7 +12,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatInputModule } from '@angular/material/input';
+
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTableModule } from '@angular/material/table';
 import { MatCardModule } from '@angular/material/card';
@@ -41,7 +41,7 @@ import { BackendMessageTranslatorService } from '../../services/backend-message-
     TranslateModule,
     MatButtonModule,
     MatIconModule,
-    MatInputModule,
+
     MatProgressSpinnerModule,
     MatTableModule,
     MatCardModule,
@@ -65,15 +65,13 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
 
   @Input() showCreateButton = true;
   @Output() onCreateTraining = new EventEmitter<void>();
+  @Output() onEditTraining = new EventEmitter<CoderTraining>(); // New
 
   coderTrainings: CoderTraining[] = [];
   originalData: CoderTraining[] = [];
   selectedTrainingName: string | null = null;
   isLoading = false;
   displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'created_at'];
-
-  editingTrainingId: number | null = null;
-  editingLabel = '';
 
   ngOnInit(): void {
     this.loadCoderTrainings();
@@ -111,62 +109,8 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     });
   }
 
-  startEditTraining(training: CoderTraining): void {
-    this.editingTrainingId = training.id;
-    this.editingLabel = training.label;
-  }
-
-  cancelEditTraining(): void {
-    this.editingTrainingId = null;
-    this.editingLabel = '';
-  }
-
-  saveEditTraining(): void {
-    if (!this.editingTrainingId || !this.editingLabel.trim()) {
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.snackBar.open(
-        this.translate.instant('error.noWorkspaceSelected'),
-        this.translate.instant('common.close'),
-        { duration: 3000 }
-      );
-      return;
-    }
-
-    this.codingTrainingBackendService.updateCoderTrainingLabel(workspaceId, this.editingTrainingId, this.editingLabel.trim())
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: response => {
-          if (response.success) {
-            const translatedMessage = response.message ?
-              this.backendMessageTranslator.translateMessage(response.message) :
-              this.translate.instant('trainings.update.success', { label: this.editingLabel });
-            this.snackBar.open(translatedMessage, this.translate.instant('common.close'), { duration: 3000 });
-            this.editingTrainingId = null;
-            this.editingLabel = '';
-            this.loadCoderTrainings();
-          } else {
-            const translatedError = response.message ?
-              this.backendMessageTranslator.translateMessage(response.message) :
-              this.translate.instant('error.general', { error: response.message });
-            this.snackBar.open(
-              translatedError,
-              this.translate.instant('common.close'),
-              { duration: 5000 }
-            );
-          }
-        },
-        error: error => {
-          this.snackBar.open(
-            this.translate.instant('coding.trainings.edit.error.generic', { error: error.message }),
-            this.translate.instant('common.close'),
-            { duration: 5000 }
-          );
-        }
-      });
+  requestFullEdit(training: CoderTraining): void {
+    this.onEditTraining.emit(training);
   }
 
   createTraining(): void {
@@ -198,8 +142,10 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     }
 
     this.dialog.open(CodingResultsComparisonComponent, {
-      width: '90vw',
-      height: '80vh',
+      width: '95vw',
+      height: '95vh',
+      maxWidth: '95vw',
+      maxHeight: '95vh',
       data: {
         workspaceId,
         selectedTraining: training
@@ -223,8 +169,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
       .subscribe({
         next: jobs => {
           this.dialog.open(TrainingJobsDialogComponent, {
-            width: '80vw',
-            maxWidth: '1000px',
+            width: '90vw',
             data: {
               training,
               jobs
