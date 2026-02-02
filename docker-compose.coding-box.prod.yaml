@@ -48,7 +48,7 @@ services:
     image: ${REGISTRY_PATH}iqbberlin/coding-box-frontend:${TAG}
     environment:
       - OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-iqb}
+      - OIDC_REALM=${OIDC_REALM}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
       - BACKEND_URL=${BACKEND_URL:-api/}
     volumes:

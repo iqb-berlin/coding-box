@@ -159,7 +159,7 @@ export class AuthController {
   }
 
   /**
-   * Validate an access token against Keycloak
+   * Validate an access token against OpenID Connect Provider
    * @param tokenData - Object containing the access token
    * @returns User information from the token
    */
@@ -182,7 +182,7 @@ export class AuthController {
     description: 'Token is valid, returns user information',
     schema: {
       type: 'object',
-      description: 'User information from Keycloak'
+      description: 'User information from OpenID Connect Provider'
     }
   })
   @ApiUnauthorizedResponse({
