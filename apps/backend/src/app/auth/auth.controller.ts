@@ -8,7 +8,7 @@ import {
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
-import { KeycloakAuthService, KeycloakUserInfo } from './service/keycloak-auth.service';
+import { OidcAuthService, KeycloakUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 
@@ -19,7 +19,7 @@ export class AuthController {
 
   constructor(
     private readonly oauth2ClientCredentialsService: OAuth2ClientCredentialsService,
-    private readonly keycloakAuthService: KeycloakAuthService,
+    private readonly oidcAuthService: OidcAuthService,
     private readonly authService: AuthService,
     private readonly configService: ConfigService
   ) {}
@@ -64,16 +64,16 @@ export class AuthController {
           return true;
         }
 
-        // Validate against the given KEYCLOAK_URL and prevent redirects to it for security
-        const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
-        if (keycloakUrl) {
+        // Validate against the given OIDC_PROVIDER_URL and prevent redirects to it for security
+        const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
+        if (oidcProviderUrl) {
           try {
-            const keycloakOrigin = new URL(keycloakUrl).origin;
-            if (redirectUrl.origin === keycloakOrigin) {
+            const oidcProviderOrigin = new URL(oidcProviderUrl).origin;
+            if (redirectUrl.origin === oidcProviderOrigin) {
               return false;
             }
           } catch {
-            // Invalid KEYCLOAK_URL, ignore
+            // @TODO: Implement proper error handling
           }
         }
 
@@ -223,7 +223,7 @@ export class AuthController {
     const loginCallbackUri = this.getCallbackUri();
 
     // Get authorization URL with proper OAuth redirect_uri (callback)
-    const authUrl = this.keycloakAuthService.getAuthorizationUrl(state, loginCallbackUri);
+    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, loginCallbackUri);
     res.redirect(authUrl);
   }
 
@@ -278,9 +278,9 @@ export class AuthController {
       }
 
       const callbackUri = this.getCallbackUri();
-      const tokenResponse = await this.keycloakAuthService.exchangeCodeForToken(code, callbackUri);
+      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, callbackUri);
 
-      const userInfo = await this.keycloakAuthService.getUserInfo(tokenResponse.access_token);
+      const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
 
       const userData: CreateUserDto = {
         identity: userInfo.sub,
@@ -377,7 +377,7 @@ export class AuthController {
         return;
       }
 
-      await this.keycloakAuthService.logoutWithRefreshToken(logoutData.refresh_token);
+      await this.oidcAuthService.logoutWithRefreshToken(logoutData.refresh_token);
 
       this.logger.log('Successfully logged out from Keycloak SSO session');
       res.json({
@@ -422,7 +422,7 @@ export class AuthController {
     this.logger.log('Redirecting to Keycloak profile management');
 
     try {
-      const profileUrl = this.keycloakAuthService.getProfileUrl(redirectUri);
+      const profileUrl = this.oidcAuthService.getProfileUrl(redirectUri);
       res.redirect(profileUrl);
     } catch (error) {
       this.logger.error('Profile redirect failed:', error);

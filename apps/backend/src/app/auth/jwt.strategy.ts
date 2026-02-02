@@ -7,7 +7,7 @@ import { passportJwtSecret } from 'jwks-rsa';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
-    const keycloakUrl = configService.get('KEYCLOAK_URL');
+    const oidcProviderUrl = configService.get('OIDC_PROVIDER_URL');
     const keycloakRealm = configService.get('KEYCLOAK_REALM');
 
     super({
@@ -17,9 +17,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         cache: true,
         rateLimit: true,
         jwksRequestsPerMinute: 5,
-        jwksUri: `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/certs`
+        jwksUri: `${oidcProviderUrl}/realms/${keycloakRealm}/protocol/openid-connect/certs`
       }),
-      issuer: `${keycloakUrl}realms/${keycloakRealm}`,
+      issuer: `${oidcProviderUrl}/realms/${keycloakRealm}`,
       algorithms: ['RS256']
     });
   }
