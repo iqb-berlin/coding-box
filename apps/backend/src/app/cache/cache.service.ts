@@ -324,4 +324,27 @@ export class CacheService {
       return null;
     }
   }
+
+  /**
+   * Delete values by pattern
+   * @param pattern The pattern to match (e.g. "prefix:*")
+   */
+  async deleteByPattern(pattern: string): Promise<void> {
+    try {
+      let cursor = '0';
+      do {
+        const reply = await this.redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+        cursor = reply[0];
+        const keys = reply[1];
+        if (keys.length > 0) {
+          await this.redis.del(...keys);
+        }
+      } while (cursor !== '0');
+    } catch (error) {
+      this.logger.error(
+        `Error deleting by pattern: ${error.message}`,
+        error.stack
+      );
+    }
+  }
 }

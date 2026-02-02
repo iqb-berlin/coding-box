@@ -15,7 +15,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
-  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap, BehaviorSubject
+  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap
 } from 'rxjs';
 import { PageEvent, MatPaginatorModule } from '@angular/material/paginator';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -52,6 +52,8 @@ import {
   WorkspaceSettingsService,
   ResponseMatchingFlag
 } from '../../../ws-admin/services/workspace-settings.service';
+import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
+import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 
 @Component({
   selector: 'coding-box-coding-management-manual',
@@ -169,9 +171,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
 
-  private thresholdChangeSubject = new BehaviorSubject<number>(
-    this.duplicateAggregationThreshold
-  );
+  private thresholdChangeSubject = new Subject<number>();
 
   private statisticsRefreshSubject = new Subject<void>();
 
@@ -271,8 +271,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.validationStateService.validationProgress$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => {
+      .subscribe((progress: ValidationProgress | null) => {
         this.validationProgress = progress;
+        if (!progress) {
+          this.isLoading = false;
+          return;
+        }
+
         this.isLoading =
           progress.status === 'loading' || progress.status === 'processing';
 
@@ -308,7 +313,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         debounceTime(800), // Wait for user to stop typing
         takeUntil(this.destroy$)
       )
-      .subscribe(threshold => {
+      .subscribe((threshold: number) => {
         const workspaceId = this.appService.selectedWorkspaceId;
         if (workspaceId) {
           this.workspaceSettingsService.setAggregationThreshold(workspaceId, threshold)
@@ -566,7 +571,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview: { totalCasesToCode: number; completedCases: number; completionPercentage: number; } | null) => {
           this.codingProgressOverview = overview;
         },
         error: () => {
@@ -591,7 +596,35 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview: {
+          totalVariables: number;
+          coveredVariables: number;
+          coveredByDraft: number;
+          coveredByPendingReview: number;
+          coveredByApproved: number;
+          conflictedVariables: number;
+          missingVariables: number;
+          partiallyAbgedeckteVariablen?: number;
+          fullyAbgedeckteVariablen?: number;
+          coveragePercentage: number;
+          variableCaseCounts: {
+            unitName: string;
+            variableId: string;
+            caseCount: number;
+          }[];
+          coverageByStatus: {
+            draft: string[];
+            pending_review: string[];
+            approved: string[];
+            conflicted: Array<{
+              variableKey: string;
+              conflictingDefinitions: Array<{
+                id: number;
+                status: string;
+              }>;
+            }>;
+          };
+        } | null) => {
           this.variableCoverageOverview = overview;
         },
         error: () => {
@@ -616,7 +649,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: overview => {
+        next: (overview: {
+          totalCasesToCode: number;
+          casesInJobs: number;
+          doubleCodedCases: number;
+          singleCodedCases: number;
+          unassignedCases: number;
+          coveragePercentage: number;
+        } | null) => {
           this.caseCoverageOverview = overview;
         },
         error: () => {
@@ -641,7 +681,26 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         })
       )
       .subscribe({
-        next: summary => {
+        next: (summary: {
+          coderPairs: Array<{
+            coder1Id: number;
+            coder1Name: string;
+            coder2Id: number;
+            coder2Name: string;
+            kappa: number | null;
+            agreement: number;
+            totalSharedResponses: number;
+            validPairs: number;
+            interpretation: string;
+          }>;
+          workspaceSummary: {
+            totalDoubleCodedResponses: number;
+            totalCoderPairs: number;
+            averageKappa: number | null;
+            variablesIncluded: number;
+            codersIncluded: number;
+          };
+        } | null) => {
           this.workspaceKappaSummary = summary;
         },
         error: () => {
@@ -687,7 +746,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getCodingStatistics(workspaceId, 'v1')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: statistics => {
+        next: (statistics: { statusCounts: { [key: string]: number } }) => {
           this.statusDistribution = {
             CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
@@ -718,7 +777,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getCodingStatistics(workspaceId, 'v2')
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: statistics => {
+        next: (statistics: CodingStatistics) => {
           this.statusDistributionV2 = {
             CODING_INCOMPLETE: statistics.statusCounts['8'] || 0,
             CODING_COMPLETE: statistics.statusCounts['5'] || 0,
@@ -821,7 +880,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: packages => {
           const totalResponses = packages.reduce(
-            (total, pkg) => total + pkg.responses.length,
+            (total: number, pkg: { responses: unknown[] }) => total + pkg.responses.length,
             0
           );
 
@@ -862,7 +921,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .getResponseMatchingMode(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: flags => {
+        next: (flags: ResponseMatchingFlag[]) => {
           this.responseMatchingFlags = flags;
           this.isLoadingMatchingMode = false;
         },
@@ -882,7 +941,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.workspaceSettingsService
       .getAggregationThreshold(workspaceId)
       .pipe(takeUntil(this.destroy$))
-      .subscribe(threshold => {
+      .subscribe((threshold: number) => {
         this.duplicateAggregationThreshold = threshold;
       });
   }
@@ -937,6 +996,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           }
           return of(null);
         }),
+        finalize(() => {
+          this.isLoadingMatchingMode = false;
+          this.isLoadingResponseAnalysis = false;
+        }),
         takeUntil(this.destroy$)
       )
       .subscribe({
@@ -945,9 +1008,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.onResponseMatchingModeChanged();
         },
         error: () => {
-          // Error handling is mostly done in the individual methods (toasts),
-          // but we ensure loading states are reset if needed.
-          this.isLoadingMatchingMode = false;
+          // Error handling is mostly done in the individual methods (toasts)
         }
       });
   }
@@ -1025,15 +1086,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.duplicatePageIndex + 1,
         this.duplicatePageSize
       )
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: analysis => {
-          this.responseAnalysis = analysis;
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
           this.isLoadingResponseAnalysis = false;
+        })
+      )
+      .subscribe({
+        next: (analysis: ResponseAnalysisDto) => {
+          this.responseAnalysis = analysis;
         },
         error: () => {
           this.responseAnalysis = null;
-          this.isLoadingResponseAnalysis = false;
         }
       });
   }
@@ -1064,7 +1128,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       data: { count: totalResponses }
     });
 
-    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: unknown) => {
       if (!confirmed) {
         return;
       }
@@ -1075,7 +1139,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         .applyEmptyResponseCoding(workspaceId)
         .pipe(takeUntil(this.destroy$))
         .subscribe({
-          next: result => {
+          next: (result: { success: boolean; updatedCount: number; message: string; }) => {
             this.isApplyingEmptyCoding = false;
 
             if (result.success) {
@@ -1149,7 +1213,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       data: dialogData
     });
 
-    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: unknown) => {
       if (!confirmed) {
         return;
       }
@@ -1225,7 +1289,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: boolean) => {
+    dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: unknown) => {
       if (!confirmed) {
         return;
       }
@@ -1309,10 +1373,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.isApplyingDuplicateAggregation = true;
     this.testPersonCodingService
       .applyDuplicateAggregation(workspaceId, threshold, true)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: result => {
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
           this.isApplyingDuplicateAggregation = false;
+          this.isLoadingResponseAnalysis = false;
+        })
+      )
+      .subscribe({
+        next: (result: {
+          success: boolean;
+          aggregatedGroups: number;
+          aggregatedResponses: number;
+          uniqueCodingCases: number;
+          message: string;
+        }) => {
           if (result.success) {
             this.showSuccess(
               this.translateService.instant('coding-management-manual.duplicate-aggregation.auto-updated') || 'Aggregation aktualisiert'
@@ -1320,9 +1395,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             this.loadResponseAnalysis();
             this.refreshAllStatistics();
           }
-        },
-        error: () => {
-          this.isApplyingDuplicateAggregation = false;
         }
       });
   }

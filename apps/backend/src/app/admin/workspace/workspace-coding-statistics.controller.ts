@@ -402,6 +402,12 @@ export class WorkspaceCodingStatisticsController {
     description: 'Filter by variable ID',
     type: String
   })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder training jobs (default: true)',
+    type: Boolean
+  })
   @ApiOkResponse({
     description:
       "Cohen's Kappa statistics for double-coded variables with workspace summary.",
@@ -457,7 +463,8 @@ export class WorkspaceCodingStatisticsController {
     @WorkspaceId() workspace_id: number,
       @Query('weightedMean') weightedMean?: string,
       @Query('unitName') unitName?: string,
-      @Query('variableId') variableId?: string
+      @Query('variableId') variableId?: string,
+      @Query('excludeTrainings') excludeTrainings?: string
   ): Promise<{
         variables: Array<{
           unitName: string;
@@ -490,12 +497,14 @@ export class WorkspaceCodingStatisticsController {
       );
 
       // Get all double-coded data
+      const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
       const doubleCodedData =
         await this.codingReviewService.getDoubleCodedVariablesForReview(
           workspace_id,
           1,
           10000,
-          true // Exclude coder training jobs
+          false, // onlyConflicts = false (needed for correct Kappa calculation)
+          isExcludeTrainings
         ); // Get all data
 
       // Group by unit and variable
@@ -669,6 +678,12 @@ export class WorkspaceCodingStatisticsController {
     description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder training jobs (default: true)',
+    type: Boolean
+  })
   @ApiOkResponse({
     description:
       "Workspace-wide Cohen's Kappa statistics for double-coded incomplete variables.",
@@ -747,7 +762,8 @@ export class WorkspaceCodingStatisticsController {
   })
   async getWorkspaceCohensKappaSummary(
     @WorkspaceId() workspace_id: number,
-      @Query('weightedMean') weightedMean?: string
+      @Query('weightedMean') weightedMean?: string,
+      @Query('excludeTrainings') excludeTrainings?: string
   ): Promise<{
         coderPairs: Array<{
           coder1Id: number;
@@ -770,9 +786,11 @@ export class WorkspaceCodingStatisticsController {
         };
       }> {
     const useWeightedMean = weightedMean !== 'false'; // Default true
+    const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
     return this.codingReviewService.getWorkspaceCohensKappaSummary(
       workspace_id,
-      useWeightedMean
+      useWeightedMean,
+      isExcludeTrainings
     );
   }
 
