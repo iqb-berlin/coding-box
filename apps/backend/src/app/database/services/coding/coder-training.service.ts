@@ -374,9 +374,15 @@ export class CoderTrainingService {
   ): Promise<Array<{
       unitName: string;
       variableId: string;
-      trainings: Array<{
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      coders: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }>;
@@ -388,7 +394,12 @@ export class CoderTrainingService {
         workspace_id: workspaceId,
         id: In(trainingIds)
       },
-      relations: ['codingJobs.codingJobUnits'],
+      relations: [
+        'codingJobs',
+        'codingJobs.codingJobUnits',
+        'codingJobs.codingJobCoders',
+        'codingJobs.codingJobCoders.user'
+      ],
       order: { label: 'ASC' }
     });
 
@@ -396,16 +407,32 @@ export class CoderTrainingService {
       return [];
     }
 
-    const unitVariableMap = new Map<string, { unitName: string; variableId: string }>();
+    // Map by Response ID to ensure we compare the EXACT same student response
+    // Key: responseId
+    const responseMap = new Map<number, {
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+    }>();
 
+    // Identify all unique responses involved across all selected trainings
     trainings.forEach(training => {
       training.codingJobs?.forEach(job => {
         job.codingJobUnits?.forEach(unit => {
-          const unitVariableKey = `${unit.unit_name}:${unit.variable_id}`;
-          if (!unitVariableMap.has(unitVariableKey)) {
-            unitVariableMap.set(unitVariableKey, {
+          if (unit.response_id && !responseMap.has(unit.response_id)) {
+            const personGroup = unit.person_group || '';
+            const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
+
+            responseMap.set(unit.response_id, {
               unitName: unit.unit_name,
-              variableId: unit.variable_id
+              variableId: unit.variable_id,
+              personCode: unit.person_code,
+              personLogin: unit.person_login,
+              personGroup: personGroup,
+              testPerson
             });
           }
         });
@@ -415,55 +442,93 @@ export class CoderTrainingService {
     const comparisonData: Array<{
       unitName: string;
       variableId: string;
-      trainings: Array<{
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      coders: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }>;
     }> = [];
 
-    for (const [, unitVar] of unitVariableMap.entries()) {
-      const trainingsData: Array<{
+    // For each unique response, find how it was coded in each training by ALL coders
+    for (const [responseId, info] of responseMap.entries()) {
+      const codersData: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }> = [];
 
       for (const training of trainings) {
-        let code: string | null = null;
-        let score: number | null = null;
+        if (training.codingJobs) {
+          for (const job of training.codingJobs) {
+            // Find if this job (coder) has a unit for this response
+            const unit = job.codingJobUnits?.find(u => u.response_id === responseId);
 
-        training.codingJobs?.forEach(job => {
-          job.codingJobUnits?.forEach(unit => {
-            if (unit.unit_name === unitVar.unitName && unit.variable_id === unitVar.variableId) {
+            // Determine coder info
+            // Assuming one coder per job for now, which is standard in this system
+            const coderUser = job.codingJobCoders?.[0]?.user;
+
+            // If no user assigned (rare), use job name? CoderTrainingService logic usually ensures assignment.
+            // But let's be safe.
+            const coderName = coderUser ? coderUser.username : `Job ${job.id}`;
+
+            if (unit) {
+              // This coder HAS this response assigned
+              let code: string | null = null;
+              let score: number | null = null;
+
               if (unit.code !== null) {
-                code = unit.code.toString(); // Codes are stored as numbers in DB
+                code = unit.code.toString();
               }
               if (unit.score !== null) {
                 score = unit.score;
               }
-            }
-          });
-        });
 
-        trainingsData.push({
-          trainingId: training.id,
-          trainingLabel: training.label,
-          code,
-          score
-        });
+              codersData.push({
+                trainingId: training.id,
+                trainingLabel: training.label,
+                coderId: job.id, // Use Job ID as unique identifier for "Coder in this Training Context" to be safe? Or User ID?
+                // The frontend uses JobId for "Within Training".
+                // Ideally we use JobId because a user could be in multiple trainings or even multiple times in same training (unlikely but possible).
+                // Let's use Job ID to be consistent with "Within Training" logic which uses `c.jobId`.
+                coderName: coderName,
+                code,
+                score
+              });
+            }
+          }
+        }
       }
 
+      // Only add row if we have data? The map was built from EXISTENT units, so at least one coder must have it involved.
       comparisonData.push({
-        unitName: unitVar.unitName,
-        variableId: unitVar.variableId,
-        trainings: trainingsData
+        unitName: info.unitName,
+        variableId: info.variableId,
+        personCode: info.personCode,
+        personLogin: info.personLogin,
+        personGroup: info.personGroup,
+        testPerson: info.testPerson,
+        coders: codersData
       });
     }
 
-    this.logger.log(`Generated comparison data for ${comparisonData.length} unit/variable combinations across ${trainings.length} trainings`);
+    // Sort by Unit, Variable, then Person
+    comparisonData.sort((a, b) => {
+      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+      if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
+      return a.personLogin.localeCompare(b.personLogin);
+    });
+
+    this.logger.log(`Generated comparison data for ${comparisonData.length} unique responses across ${trainings.length} trainings`);
 
     return comparisonData;
   }

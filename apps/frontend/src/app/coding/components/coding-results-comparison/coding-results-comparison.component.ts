@@ -28,10 +28,15 @@ import { CoderTraining } from '../../models/coder-training.model';
 interface TrainingComparison {
   unitName: string;
   variableId: string;
-  testperson?: string;
-  trainings: Array<{
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  testPerson: string;
+  coders: Array<{
     trainingId: number;
     trainingLabel: string;
+    coderId: number;
+    coderName: string;
     code: string | null;
     score: number | null;
   }>;
@@ -125,6 +130,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   isLoadingKappa = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
   displayedColumns: string[] = ['index', 'unitName', 'variableId', 'personLogin', 'personCode', 'personGroup', 'match'];
+  dynamicCoderColumns: string[] = [];
   availableTrainings: CoderTraining[] = [];
   selectedTrainings = new SelectionModel<number>(true, []);
   comparisonData: TrainingComparison[] = [];
@@ -135,6 +141,11 @@ export class CodingResultsComparisonComponent implements OnInit {
   availableCoders: Array<{ jobId: number; coderName: string }> = [];
   codersFormControl = new FormControl<number[]>([]);
   selectedCoderIds = new SelectionModel<number>(true, []);
+
+  // For Between Trainings Mode
+  availableCodersFromTrainings: Array<{ trainingId: number; trainingLabel: string; coderId: number; coderName: string }> = [];
+  codersFromTrainingsFormControl = new FormControl<string[]>([]); // Storing composite keys like "trainingId_coderId"
+  selectedCodersFromTrainings = new Set<string>();
 
   totalComparisons = 0;
   matchingComparisons = 0;
@@ -210,6 +221,12 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.selectedTrainingForWithin = null;
     this.comparisonData = [];
     this.withinTrainingData = [];
+    this.availableCoders = [];
+    this.availableCodersFromTrainings = [];
+    this.codersFormControl.setValue([]);
+    this.codersFromTrainingsFormControl.setValue([]);
+    this.selectedCodersFromTrainings.clear();
+    this.selectedCoderIds.clear();
     this.dataSource.data = [];
     this.updateDisplayedColumns();
   }
@@ -219,6 +236,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.loadComparison();
     } else {
       this.comparisonData = [];
+      this.availableCodersFromTrainings = [];
+      this.codersFromTrainingsFormControl.setValue([]);
+      this.selectedCodersFromTrainings.clear();
       this.dataSource.data = [];
       this.updateDisplayedColumns();
     }
@@ -229,6 +249,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.loadComparison();
     } else {
       this.withinTrainingData = [];
+      this.availableCoders = [];
+      this.codersFormControl.setValue([]);
+      this.selectedCoderIds.clear();
       this.dataSource.data = [];
       this.updateDisplayedColumns();
     }
@@ -236,14 +259,20 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   private updateDisplayedColumns(): void {
     const baseColumns = ['index', 'unitName', 'variableId'];
+    this.dynamicCoderColumns = [];
 
     if (this.comparisonMode === 'between-trainings') {
-      const trainingColumns = this.selectedTrainings.selected.map(trainingId => {
-        const training = this.availableTrainings.find(t => t.id === trainingId);
-        return training ? `training_${trainingId}` : '';
-      }).filter(col => col);
-      // For between trainings, we only show testperson as we don't have detailed person info consistency guaranteed
-      this.displayedColumns = [...baseColumns, 'testperson', 'match', ...trainingColumns];
+      const personColumns = ['personLogin', 'personCode', 'personGroup'];
+
+      // Generate columns for selected coders
+      this.availableCodersFromTrainings.forEach(coder => {
+        const key = `${coder.trainingId}_${coder.coderId}`;
+        if (this.selectedCodersFromTrainings.has(key)) {
+          this.dynamicCoderColumns.push(`coder_${key}`);
+        }
+      });
+
+      this.displayedColumns = [...baseColumns, ...personColumns, 'match', ...this.dynamicCoderColumns];
     } else if (this.comparisonMode === 'within-training') {
       // For within training, we show detailed person info
       const personColumns = ['personLogin', 'personCode', 'personGroup'];
@@ -251,12 +280,62 @@ export class CodingResultsComparisonComponent implements OnInit {
       if (this.selectedTrainingForWithin && this.withinTrainingData.length > 0) {
         // Filter columns based on selected coders
         const selectedCoderIds = this.codersFormControl.value || [];
-        const coderColumns = selectedCoderIds.map(jobId => `coder_${jobId}`);
-        this.displayedColumns = [...baseColumns, ...personColumns, 'match', ...coderColumns];
+        this.dynamicCoderColumns = selectedCoderIds.map(jobId => `coder_${jobId}`);
+        this.displayedColumns = [...baseColumns, ...personColumns, 'match', ...this.dynamicCoderColumns];
       } else {
         this.displayedColumns = [...baseColumns, ...personColumns, 'match'];
       }
     }
+  }
+
+  onCodersFromTrainingsSelectionChange(): void {
+    const selectedKeys = this.codersFromTrainingsFormControl.value || [];
+    this.selectedCodersFromTrainings = new Set(selectedKeys);
+    this.updateDisplayedColumns();
+    // Filter rows to only show those that have data for SELECTED coders
+    this.dataSource.data = this.comparisonData.filter(d => this.hasAnyCode(d));
+    this.calculateStatistics();
+  }
+
+  getCoderFromTrainingColumnName(key: string): string {
+    const parts = key.split('_');
+    if (parts.length !== 2) return key;
+    const trainingId = parseInt(parts[0], 10);
+    const coderId = parseInt(parts[1], 10);
+    const coder = this.availableCodersFromTrainings.find(c => c.trainingId === trainingId && c.coderId === coderId);
+    return coder ? `${coder.trainingLabel} - ${coder.coderName}` : key;
+  }
+
+  getCoderName(jobId: number): string {
+    const coder = this.availableCoders.find(c => c.jobId === jobId);
+    return coder ? coder.coderName : `Kodierer ${jobId}`;
+  }
+
+  getCoderFromTrainingCode(comparison: TrainingComparison, key: string): string | null {
+    const parts = key.split('_');
+    if (parts.length !== 2) return null;
+    const trainingId = parseInt(parts[0], 10);
+    const coderId = parseInt(parts[1], 10);
+    const coder = comparison.coders.find(c => c.trainingId === trainingId && c.coderId === coderId);
+    return coder ? coder.code : null;
+  }
+
+  getCoderFromTrainingScore(comparison: TrainingComparison, key: string): number | null {
+    const parts = key.split('_');
+    if (parts.length !== 2) return null;
+    const trainingId = parseInt(parts[0], 10);
+    const coderId = parseInt(parts[1], 10);
+    const coder = comparison.coders.find(c => c.trainingId === trainingId && c.coderId === coderId);
+    return coder ? coder.score : null;
+  }
+
+  hasCoderFromTrainingCodeOrScore(comparison: TrainingComparison, key: string): boolean {
+    const parts = key.split('_');
+    if (parts.length !== 2) return false;
+    const trainingId = parseInt(parts[0], 10);
+    const coderId = parseInt(parts[1], 10);
+    const coder = comparison.coders.find(c => c.trainingId === trainingId && c.coderId === coderId);
+    return !!(coder && (coder.code !== null || coder.score !== null));
   }
 
   calculateStatistics(): void {
@@ -265,7 +344,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     const doubleCodedItems = data.filter(item => this.countSelectedCodes(item) >= 2);
 
     const total = doubleCodedItems.length;
-    const matching = doubleCodedItems.filter(item => this.areCodesMatching(item)).length;
+    const matching = doubleCodedItems.filter(item => this.areCodesTheSame(item)).length;
 
     this.totalComparisons = total;
     this.matchingComparisons = matching;
@@ -274,30 +353,33 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   private countSelectedCodes(comparison: TrainingComparison | WithinTrainingComparison): number {
     let codes: (string | null)[];
-    if ('trainings' in comparison) {
-      const selectedIds = this.selectedTrainings.selected;
-      codes = comparison.trainings
-        .filter(t => selectedIds.includes(t.trainingId))
-        .map(t => t.code);
+    if (this.comparisonMode === 'between-trainings') {
+      const item = comparison as TrainingComparison;
+      // Filter by selected coders from trainings
+      codes = item.coders
+        .filter(c => this.selectedCodersFromTrainings.has(`${c.trainingId}_${c.coderId}`))
+        .map(c => c.code);
     } else {
+      const item = comparison as WithinTrainingComparison;
       const selectedIds = this.codersFormControl.value || [];
-      codes = comparison.coders
+      codes = item.coders
         .filter(c => selectedIds.includes(c.jobId))
         .map(c => c.code);
     }
     return codes.filter(c => c !== null).length;
   }
 
-  private areCodesMatching(comparison: TrainingComparison | WithinTrainingComparison): boolean {
+  areCodesTheSame(comparison: TrainingComparison | WithinTrainingComparison): boolean {
     let codes: (string | null)[];
-    if ('trainings' in comparison) {
-      const selectedIds = this.selectedTrainings.selected;
-      codes = comparison.trainings
-        .filter(t => selectedIds.includes(t.trainingId))
-        .map(t => t.code);
+    if (this.comparisonMode === 'between-trainings') {
+      const item = comparison as TrainingComparison;
+      codes = item.coders
+        .filter(c => this.selectedCodersFromTrainings.has(`${c.trainingId}_${c.coderId}`))
+        .map(c => c.code);
     } else {
+      const item = comparison as WithinTrainingComparison;
       const selectedIds = this.codersFormControl.value || [];
-      codes = comparison.coders
+      codes = item.coders
         .filter(c => selectedIds.includes(c.jobId))
         .map(c => c.code);
     }
@@ -305,6 +387,25 @@ export class CodingResultsComparisonComponent implements OnInit {
     if (filteredCodes.length === 0) return true;
     const first = filteredCodes[0];
     return filteredCodes.every(code => code === first);
+  }
+
+  hasAnyCode(comparison: TrainingComparison | WithinTrainingComparison): boolean {
+    let codes: (string | null)[];
+    if (this.comparisonMode === 'between-trainings') {
+      const item = comparison as TrainingComparison;
+      codes = item.coders
+        .filter(c => this.selectedCodersFromTrainings.has(`${c.trainingId}_${c.coderId}`))
+        .map(c => c.code);
+    } else {
+      const item = comparison as WithinTrainingComparison;
+      // Check ALL coders for this item if selected? Or just any code existence?
+      // Logic: Show row if ANY selected coder has a code?
+      const selectedIds = this.codersFormControl.value || [];
+      codes = item.coders
+        .filter(c => selectedIds.includes(c.jobId))
+        .map(c => c.code);
+    }
+    return codes.some(c => c !== null);
   }
 
   loadComparison(): void {
@@ -318,8 +419,46 @@ export class CodingResultsComparisonComponent implements OnInit {
       const trainingIds = this.selectedTrainings.selected.join(',');
       this.codingTrainingBackendService.compareTrainingCodingResults(this.data.workspaceId, trainingIds).subscribe({
         next: data => {
-          this.comparisonData = data.filter(d => this.hasAnyCode(d));
-          this.dataSource.data = this.comparisonData;
+          this.comparisonData = data;
+
+          // Extract all unique coders available in the data
+          const codersMap = new Map<string, { trainingId: number; trainingLabel: string; coderId: number; coderName: string }>();
+          this.comparisonData.forEach(item => {
+            item.coders.forEach(c => {
+              const key = `${c.trainingId}_${c.coderId}`;
+              if (!codersMap.has(key)) {
+                codersMap.set(key, {
+                  trainingId: c.trainingId,
+                  trainingLabel: c.trainingLabel,
+                  coderId: c.coderId,
+                  coderName: c.coderName
+                });
+              }
+            });
+          });
+
+          this.availableCodersFromTrainings = Array.from(codersMap.values()).sort((a, b) => {
+            if (a.trainingId !== b.trainingId) return a.trainingId - b.trainingId;
+            return a.coderName.localeCompare(b.coderName);
+          });
+
+          const previousSelection = this.codersFromTrainingsFormControl.value || [];
+          const allKeys = this.availableCodersFromTrainings.map(c => `${c.trainingId}_${c.coderId}`);
+
+          let newSelection: string[];
+          if (previousSelection.length === 0) {
+            newSelection = allKeys;
+          } else {
+            const currentlySelectedTrainings = new Set(previousSelection.map(key => key.split('_')[0]));
+            newSelection = allKeys.filter(key => {
+              const [trainingId] = key.split('_');
+              return previousSelection.includes(key) || !currentlySelectedTrainings.has(trainingId);
+            });
+          }
+
+          this.codersFromTrainingsFormControl.setValue(newSelection);
+          this.selectedCodersFromTrainings = new Set(newSelection);
+          this.dataSource.data = this.comparisonData.filter(d => this.hasAnyCode(d));
           this.updateDisplayedColumns();
           this.calculateStatistics();
           this.isLoading = false;
@@ -338,7 +477,6 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.isLoading = true;
       this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, this.selectedTrainingForWithin).subscribe({
         next: data => {
-          // First map all data to ensure we have the correct structure
           const mappedData: WithinTrainingComparison[] = data.map(item => ({
             unitName: item.unitName,
             variableId: item.variableId,
@@ -411,66 +549,12 @@ export class CodingResultsComparisonComponent implements OnInit {
     return !!(coder && (coder.code !== null || coder.score !== null));
   }
 
-  getTrainingColumnName(trainingId: number): string {
-    const training = this.availableTrainings.find(t => t.id === trainingId);
-    return training ? training.label : `Training ${trainingId}`;
-  }
-
-  getTrainingCode(comparison: TrainingComparison, trainingId: number): string | null {
-    const training = comparison.trainings.find(t => t.trainingId === trainingId);
-    return training ? training.code : null;
-  }
-
-  getTrainingScore(comparison: TrainingComparison, trainingId: number): number | null {
-    const training = comparison.trainings.find(t => t.trainingId === trainingId);
-    return training ? training.score : null;
-  }
-
-  hasCodeOrScore(comparison: TrainingComparison, trainingId: number): boolean {
-    const training = comparison.trainings.find(t => t.trainingId === trainingId);
-    return !!(training && (training.code !== null || training.score !== null));
-  }
-
   applyFilter(event: Event): void {
     this.dataSource.filter = (event.target as HTMLInputElement)?.value?.trim().toLowerCase() || '';
   }
 
   trackByCoder(index: number, coder: { jobId: number; coderName: string }): number {
     return coder.jobId;
-  }
-
-  areCodesTheSame(comparison: TrainingComparison | WithinTrainingComparison): boolean {
-    let codes: (string | null)[];
-    if ('trainings' in comparison) {
-      const selectedIds = this.selectedTrainings.selected;
-      codes = comparison.trainings
-        .filter(t => selectedIds.includes(t.trainingId))
-        .map(t => t.code);
-    } else {
-      const selectedIds = this.codersFormControl.value || [];
-      codes = comparison.coders
-        .filter(c => selectedIds.includes(c.jobId))
-        .map(c => c.code);
-    }
-    if (codes.length === 0) return true;
-    const first = codes[0];
-    return codes.every(code => code === first);
-  }
-
-  hasAnyCode(comparison: TrainingComparison | WithinTrainingComparison): boolean {
-    let codes: (string | null)[];
-    if ('trainings' in comparison) {
-      const selectedIds = this.selectedTrainings.selected;
-      codes = comparison.trainings
-        .filter(t => selectedIds.includes(t.trainingId))
-        .map(t => t.code);
-    } else {
-      const selectedIds = this.codersFormControl.value || [];
-      codes = comparison.coders
-        .filter(c => selectedIds.includes(c.jobId))
-        .map(c => c.code);
-    }
-    return codes.some(c => c !== null);
   }
 
   loadKappaStatistics(): void {

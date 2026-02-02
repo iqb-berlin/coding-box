@@ -28,6 +28,22 @@
         {{ training.label }} ({{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}, erstellt: {{
         training.created_at | date:'dd.MM.yyyy HH:mm' }})
       </mat-checkbox>
+
+      <div class="coder-selection" *ngIf="availableCodersFromTrainings.length > 0">
+        <mat-form-field class="full-width-select">
+          <mat-label>Kodierer filtern</mat-label>
+          <mat-select [formControl]="codersFromTrainingsFormControl" multiple (selectionChange)="onCodersFromTrainingsSelectionChange()">
+            <mat-select-trigger>
+              {{codersFromTrainingsFormControl.value?.length || 0}} Kodierer ausgewählt
+              <span *ngIf="(codersFromTrainingsFormControl.value?.length || 0) === availableCodersFromTrainings.length"
+                class="all-selected-hint">(Alle)</span>
+            </mat-select-trigger>
+            <mat-option *ngFor="let coder of availableCodersFromTrainings" [value]="coder.trainingId + '_' + coder.coderId">
+              {{coder.trainingLabel}}: {{coder.coderName}}
+            </mat-option>
+          </mat-select>
+        </mat-form-field>
+      </div>
     </div>
 
     <div class="training-selection" *ngIf="comparisonMode === 'within-training'">
@@ -261,38 +277,35 @@
             </td>
           </ng-container>
 
-          <!-- Dynamic Training Columns (between trainings mode) -->
-          <ng-container *ngFor="let trainingId of selectedTrainings.selected" [matColumnDef]="'training_' + trainingId">
+          <!-- Dynamic Columns -->
+          <ng-container *ngFor="let col of dynamicCoderColumns" [matColumnDef]="col">
             <th mat-header-cell *matHeaderCellDef>
-              {{ getTrainingColumnName(trainingId) }}
+              <ng-container *ngIf="comparisonMode === 'between-trainings'">
+                {{ getCoderFromTrainingColumnName(col.substring(6)) }}
+              </ng-container>
+              <ng-container *ngIf="comparisonMode === 'within-training'">
+                {{ getCoderName(+col.substring(6)) }}
+              </ng-container>
             </th>
-            <td mat-cell *matCellDef="let comparison"
-              [class]="hasCodeOrScore(comparison, trainingId) ? 'has-data' : 'no-data'">
-              <div class="code-display" *ngIf="hasCodeOrScore(comparison, trainingId)">
-                <span class="code">Code: <strong>{{ getTrainingCode(comparison, trainingId) ?? '-' }}</strong></span>
-                <span class="score">Score: {{ getTrainingScore(comparison, trainingId) ?? '-' }}</span>
+            <td mat-cell *matCellDef="let element">
+              <div class="code-cell">
+                <ng-container *ngIf="comparisonMode === 'between-trainings'">
+                  <span *ngIf="hasCoderFromTrainingCodeOrScore(element, col.substring(6))">
+                    Code: <strong>{{ getCoderFromTrainingCode(element, col.substring(6)) }}</strong><br>
+                    Score: {{ getCoderFromTrainingScore(element, col.substring(6)) }}
+                  </span>
+                  <span *ngIf="!hasCoderFromTrainingCodeOrScore(element, col.substring(6))" class="no-data">-</span>
+                </ng-container>
+                <ng-container *ngIf="comparisonMode === 'within-training'">
+                    <!-- jobId is in col.substring(6) -->
+                    <span *ngIf="hasCoderCodeOrScore(element, +col.substring(6))">
+                      Code: <strong>{{ getCoderCode(element, +col.substring(6)) }}</strong><br>
+                      Score: {{ getCoderScore(element, +col.substring(6)) }}
+                    </span>
+                    <span *ngIf="!hasCoderCodeOrScore(element, +col.substring(6))" class="no-data">-</span>
+                </ng-container>
               </div>
-              <span class="no-code" *ngIf="!hasCodeOrScore(comparison, trainingId)">Nicht kodiert</span>
             </td>
-          </ng-container>
-
-          <!-- Dynamic Coder Columns (within training mode) -->
-          <ng-container
-            *ngIf="comparisonMode === 'within-training' && selectedTrainingForWithin && withinTrainingData.length > 0">
-            <ng-container *ngFor="let coder of withinTrainingData[0].coders; trackBy: trackByCoder"
-              [matColumnDef]="'coder_' + coder.jobId">
-              <th mat-header-cell *matHeaderCellDef>
-                {{ coder.coderName }}
-              </th>
-              <td mat-cell *matCellDef="let comparison"
-                [class]="hasCoderCodeOrScore(comparison, coder.jobId) ? 'has-data' : 'no-data'">
-                <div class="code-display" *ngIf="hasCoderCodeOrScore(comparison, coder.jobId)">
-                  <span class="code">Code: <strong>{{ getCoderCode(comparison, coder.jobId) ?? '-' }}</strong></span>
-                  <span class="score">Score: {{ getCoderScore(comparison, coder.jobId) ?? '-' }}</span>
-                </div>
-                <span class="no-code" *ngIf="!hasCoderCodeOrScore(comparison, coder.jobId)">Nicht kodiert</span>
-              </td>
-            </ng-container>
           </ng-container>
 
           <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
