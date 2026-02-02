@@ -2,7 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { KeycloakUserInfo } from './keycloak-auth.service';
+import { KeycloakUserInfo } from './oidc-auth.service';
 
 export interface ClientCredentialsTokenResponse {
   access_token: string;
@@ -32,14 +32,14 @@ export class OAuth2ClientCredentialsService {
    * @returns Promise<ClientCredentialsTokenResponse>
    */
   async getAccessToken(clientCredentials: ClientCredentialsRequest): Promise<ClientCredentialsTokenResponse> {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
+    const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
     const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
 
-    if (!keycloakUrl || !keycloakRealm) {
+    if (!oidcProviderUrl || !keycloakRealm) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const tokenEndpoint = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/token`;
+    const tokenEndpoint = `${oidcProviderUrl}/realms/${keycloakRealm}/protocol/openid-connect/token`;
 
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
@@ -75,14 +75,14 @@ export class OAuth2ClientCredentialsService {
    * @returns Promise<KeycloakUserInfo> - User info from Keycloak
    */
   async validateAccessToken(accessToken: string): Promise<KeycloakUserInfo> {
-    const keycloakUrl = this.configService.get<string>('KEYCLOAK_URL');
+    const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
     const keycloakRealm = this.configService.get<string>('KEYCLOAK_REALM');
 
-    if (!keycloakUrl || !keycloakRealm) {
+    if (!oidcProviderUrl || !keycloakRealm) {
       throw new UnauthorizedException('Keycloak configuration is missing');
     }
 
-    const userinfoEndpoint = `${keycloakUrl}realms/${keycloakRealm}/protocol/openid-connect/userinfo`;
+    const userinfoEndpoint = `${oidcProviderUrl}/realms/${keycloakRealm}/protocol/openid-connect/userinfo`;
 
     try {
       const response = await firstValueFrom(
