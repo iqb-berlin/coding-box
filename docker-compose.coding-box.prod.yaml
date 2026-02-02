@@ -49,7 +49,7 @@ services:
     environment:
       - OIDC_PROVIDER_URL=${OIDC_PROVIDER_URL}
       - OIDC_REALM=${OIDC_REALM}
-      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
+      - OAUTH2_CLIENT_ID=${OAUTH2_CLIENT_ID}
       - BACKEND_URL=${BACKEND_URL:-api/}
     volumes:
       - "./config/frontend/default.conf.template:/etc/nginx/templates/default.conf.template:ro"
