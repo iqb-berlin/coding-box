@@ -8,6 +8,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
@@ -41,6 +43,8 @@ interface KappaStatistics {
     MatProgressSpinnerModule,
     MatDialogModule,
     MatTooltipModule,
+    MatSlideToggleModule,
+    FormsModule,
     TranslateModule
   ]
 })
@@ -52,11 +56,13 @@ export class CohensKappaStatisticsComponent implements OnInit {
   constructor(
     @Optional() public dialogRef: MatDialogRef<CohensKappaStatisticsComponent>,
     @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
-  ) {}
+  ) { }
 
   isLoading = false;
   kappaStatistics: KappaStatistics[] = [];
   showInterpretationScale = false;
+  useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
+  excludeTrainings = true; // Default: exclude trainings
 
   workspaceKappaSummary: {
     coderPairs: Array<{
@@ -76,6 +82,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       averageKappa: number | null;
       variablesIncluded: number;
       codersIncluded: number;
+      weightingMethod: 'weighted' | 'unweighted';
     };
   } | null = null;
 
@@ -90,7 +97,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId)
+    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId, this.useWeightedMean, this.excludeTrainings)
       .pipe()
       .subscribe({
         next: summary => {
@@ -111,7 +118,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getCohensKappaStatistics(workspaceId).subscribe({
+    this.testPersonCodingService.getCohensKappaStatistics(workspaceId, this.useWeightedMean, this.excludeTrainings).subscribe({
       next: response => {
         this.kappaStatistics = response.variables;
         this.isLoading = false;
@@ -121,6 +128,16 @@ export class CohensKappaStatisticsComponent implements OnInit {
         this.isLoading = false;
       }
     });
+  }
+
+  toggleWeightingMethod(): void {
+    this.loadWorkspaceKappaSummary();
+    this.loadKappaStatistics();
+  }
+
+  toggleExcludeTrainings(): void {
+    this.loadWorkspaceKappaSummary();
+    this.loadKappaStatistics();
   }
 
   getKappaClass(kappa: number | null): string {

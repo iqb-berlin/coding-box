@@ -166,4 +166,14 @@ export class WorkspaceService {
         })
       );
   }
+
+  getIgnoredUnits(workspaceId: number): Observable<string[]> {
+    return this.http.get<string[]>(`${this.serverUrl}admin/workspace/${workspaceId}/files/ignored-units`, { headers: this.authHeader })
+      .pipe(catchError(() => of([])));
+  }
+
+  saveIgnoredUnits(workspaceId: number, ignoredUnits: string[]): Observable<boolean> {
+    return this.http.put<boolean>(`${this.serverUrl}admin/workspace/${workspaceId}/files/ignored-units`, { ignoredUnits }, { headers: this.authHeader })
+      .pipe(map(() => true), catchError(() => of(false)));
+  }
 }

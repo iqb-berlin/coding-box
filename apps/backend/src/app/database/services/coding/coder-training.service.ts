@@ -6,7 +6,11 @@ import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTraining } from '../../entities/coder-training.entity';
+import { CoderTrainingVariable } from '../../entities/coder-training-variable.entity';
+import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
+import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
 interface CoderTrainingResponse {
@@ -42,6 +46,9 @@ interface CoderTrainingWithJobs {
   created_at: Date;
   updated_at: Date;
   jobsCount: number;
+  assigned_variables?: JobDefinitionVariable[];
+  assigned_variable_bundles?: JobDefinitionVariableBundle[];
+  assigned_coders?: number[];
 }
 
 @Injectable()
@@ -59,9 +66,15 @@ export class CoderTrainingService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     @InjectRepository(CoderTraining)
     private coderTrainingRepository: Repository<CoderTraining>,
+    @InjectRepository(CoderTrainingVariable)
+    private coderTrainingVariableRepository: Repository<CoderTrainingVariable>,
+    @InjectRepository(CoderTrainingBundle)
+    private coderTrainingBundleRepository: Repository<CoderTrainingBundle>,
+    @InjectRepository(CoderTrainingCoder)
+    private coderTrainingCoderRepository: Repository<CoderTrainingCoder>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>
-  ) {}
+  ) { }
 
   private sampleResponses(
     responses: CoderTrainingResponse[],
@@ -183,7 +196,9 @@ export class CoderTrainingService {
     selectedCoders: { id: number; name: string }[],
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
     trainingLabel: string,
-    missingsProfileId?: number
+    missingsProfileId?: number,
+    assignedVariables?: JobDefinitionVariable[],
+    assignedVariableBundles?: JobDefinitionVariableBundle[]
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
@@ -191,13 +206,45 @@ export class CoderTrainingService {
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
       coderTraining.label = trainingLabel;
+      // assigned_variables etc. are now relations and not set directly here
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
 
       const savedTraining = await this.coderTrainingRepository.save(coderTraining);
       const trainingId = savedTraining.id;
 
-      this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}'`);
+      // Save assigned variables
+      if (assignedVariables) {
+        for (const variable of assignedVariables) {
+          const trainingVariable = new CoderTrainingVariable();
+          trainingVariable.coder_training_id = trainingId;
+          trainingVariable.variable_id = variable.variableId;
+          trainingVariable.unit_name = variable.unitName;
+          trainingVariable.sample_count = variable.sampleCount || 10;
+          await this.coderTrainingVariableRepository.save(trainingVariable);
+        }
+      }
+
+      // Save assigned bundles
+      if (assignedVariableBundles) {
+        for (const bundle of assignedVariableBundles) {
+          const trainingBundle = new CoderTrainingBundle();
+          trainingBundle.coder_training_id = trainingId;
+          trainingBundle.variable_bundle_id = bundle.id;
+          trainingBundle.sample_count = bundle.sampleCount || 10;
+          await this.coderTrainingBundleRepository.save(trainingBundle);
+        }
+      }
+
+      // Save assigned coders
+      for (const coder of selectedCoders) {
+        const trainingCoder = new CoderTrainingCoder();
+        trainingCoder.coder_training_id = trainingId;
+        trainingCoder.user_id = coder.id;
+        await this.coderTrainingCoderRepository.save(trainingCoder);
+      }
+
+      this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
       const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
 
@@ -260,6 +307,7 @@ export class CoderTrainingService {
           codingJobUnit.booklet_name = response.bookletName;
           codingJobUnit.person_login = response.personLogin;
           codingJobUnit.person_code = response.personCode;
+          codingJobUnit.is_open = true;
           await this.codingJobUnitRepository.save(codingJobUnit);
 
           this.logger.log(`Added coding job unit for response ${response.responseId} to training job ${jobId} for coder ${coderName}`);
@@ -295,7 +343,7 @@ export class CoderTrainingService {
 
     const trainings = await this.coderTrainingRepository.find({
       where: { workspace_id: workspaceId },
-      relations: ['codingJobs'],
+      relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders'],
       order: { created_at: 'DESC' }
     });
 
@@ -305,7 +353,18 @@ export class CoderTrainingService {
       label: training.label,
       created_at: training.created_at,
       updated_at: training.updated_at,
-      jobsCount: training.codingJobs?.length || 0
+      jobsCount: training.codingJobs?.length || 0,
+      assigned_variables: training.variables?.map(v => ({
+        variableId: v.variable_id,
+        unitName: v.unit_name,
+        sampleCount: v.sample_count
+      })),
+      assigned_variable_bundles: training.bundles?.map(b => ({
+        id: b.variable_bundle_id,
+        name: b.bundle?.name || 'Unknown Bundle',
+        sampleCount: b.sample_count
+      })),
+      assigned_coders: training.coders?.map(c => c.user_id)
     }));
   }
 
@@ -315,9 +374,15 @@ export class CoderTrainingService {
   ): Promise<Array<{
       unitName: string;
       variableId: string;
-      trainings: Array<{
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      coders: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }>;
@@ -329,7 +394,12 @@ export class CoderTrainingService {
         workspace_id: workspaceId,
         id: In(trainingIds)
       },
-      relations: ['codingJobs.codingJobUnits'],
+      relations: [
+        'codingJobs',
+        'codingJobs.codingJobUnits',
+        'codingJobs.codingJobCoders',
+        'codingJobs.codingJobCoders.user'
+      ],
       order: { label: 'ASC' }
     });
 
@@ -337,16 +407,32 @@ export class CoderTrainingService {
       return [];
     }
 
-    const unitVariableMap = new Map<string, { unitName: string; variableId: string }>();
+    // Map by Response ID to ensure we compare the EXACT same student response
+    // Key: responseId
+    const responseMap = new Map<number, {
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+    }>();
 
+    // Identify all unique responses involved across all selected trainings
     trainings.forEach(training => {
       training.codingJobs?.forEach(job => {
         job.codingJobUnits?.forEach(unit => {
-          const unitVariableKey = `${unit.unit_name}:${unit.variable_id}`;
-          if (!unitVariableMap.has(unitVariableKey)) {
-            unitVariableMap.set(unitVariableKey, {
+          if (unit.response_id && !responseMap.has(unit.response_id)) {
+            const personGroup = unit.person_group || '';
+            const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
+
+            responseMap.set(unit.response_id, {
               unitName: unit.unit_name,
-              variableId: unit.variable_id
+              variableId: unit.variable_id,
+              personCode: unit.person_code,
+              personLogin: unit.person_login,
+              personGroup: personGroup,
+              testPerson
             });
           }
         });
@@ -356,55 +442,93 @@ export class CoderTrainingService {
     const comparisonData: Array<{
       unitName: string;
       variableId: string;
-      trainings: Array<{
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      coders: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }>;
     }> = [];
 
-    for (const [, unitVar] of unitVariableMap.entries()) {
-      const trainingsData: Array<{
+    // For each unique response, find how it was coded in each training by ALL coders
+    for (const [responseId, info] of responseMap.entries()) {
+      const codersData: Array<{
         trainingId: number;
         trainingLabel: string;
+        coderId: number;
+        coderName: string;
         code: string | null;
         score: number | null;
       }> = [];
 
       for (const training of trainings) {
-        let code: string | null = null;
-        let score: number | null = null;
+        if (training.codingJobs) {
+          for (const job of training.codingJobs) {
+            // Find if this job (coder) has a unit for this response
+            const unit = job.codingJobUnits?.find(u => u.response_id === responseId);
 
-        training.codingJobs?.forEach(job => {
-          job.codingJobUnits?.forEach(unit => {
-            if (unit.unit_name === unitVar.unitName && unit.variable_id === unitVar.variableId) {
+            // Determine coder info
+            // Assuming one coder per job for now, which is standard in this system
+            const coderUser = job.codingJobCoders?.[0]?.user;
+
+            // If no user assigned (rare), use job name? CoderTrainingService logic usually ensures assignment.
+            // But let's be safe.
+            const coderName = coderUser ? coderUser.username : `Job ${job.id}`;
+
+            if (unit) {
+              // This coder HAS this response assigned
+              let code: string | null = null;
+              let score: number | null = null;
+
               if (unit.code !== null) {
-                code = unit.code.toString(); // Codes are stored as numbers in DB
+                code = unit.code.toString();
               }
               if (unit.score !== null) {
                 score = unit.score;
               }
-            }
-          });
-        });
 
-        trainingsData.push({
-          trainingId: training.id,
-          trainingLabel: training.label,
-          code,
-          score
-        });
+              codersData.push({
+                trainingId: training.id,
+                trainingLabel: training.label,
+                coderId: job.id, // Use Job ID as unique identifier for "Coder in this Training Context" to be safe? Or User ID?
+                // The frontend uses JobId for "Within Training".
+                // Ideally we use JobId because a user could be in multiple trainings or even multiple times in same training (unlikely but possible).
+                // Let's use Job ID to be consistent with "Within Training" logic which uses `c.jobId`.
+                coderName: coderName,
+                code,
+                score
+              });
+            }
+          }
+        }
       }
 
+      // Only add row if we have data? The map was built from EXISTENT units, so at least one coder must have it involved.
       comparisonData.push({
-        unitName: unitVar.unitName,
-        variableId: unitVar.variableId,
-        trainings: trainingsData
+        unitName: info.unitName,
+        variableId: info.variableId,
+        personCode: info.personCode,
+        personLogin: info.personLogin,
+        personGroup: info.personGroup,
+        testPerson: info.testPerson,
+        coders: codersData
       });
     }
 
-    this.logger.log(`Generated comparison data for ${comparisonData.length} unit/variable combinations across ${trainings.length} trainings`);
+    // Sort by Unit, Variable, then Person
+    comparisonData.sort((a, b) => {
+      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+      if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
+      return a.personLogin.localeCompare(b.personLogin);
+    });
+
+    this.logger.log(`Generated comparison data for ${comparisonData.length} unique responses across ${trainings.length} trainings`);
 
     return comparisonData;
   }
@@ -417,6 +541,8 @@ export class CoderTrainingService {
       unitName: string;
       variableId: string;
       personCode: string;
+      personLogin: string;
+      personGroup: string;
       testPerson: string;
       givenAnswer: string;
       coders: Array<{
@@ -440,20 +566,32 @@ export class CoderTrainingService {
       return [];
     }
 
-    const unitVariableMap = new Map<string, { unitName: string; variableId: string; personCode: string; testPerson: string; givenAnswer: string }>();
+    const unitVariableMap = new Map<string, {
+      responseId: number;
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      givenAnswer: string
+    }>();
 
     training.codingJobs.forEach(job => {
       job.codingJobUnits?.forEach(unit => {
-        const unitVariableKey = `${unit.unit_name}:${unit.variable_id}:${unit.person_code}`;
+        const unitVariableKey = unit.response_id.toString();
         if (!unitVariableMap.has(unitVariableKey)) {
           const givenAnswer = unit.response?.value || '';
           const personGroup = unit.response?.unit?.booklet?.person?.group || '';
           const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
 
           unitVariableMap.set(unitVariableKey, {
+            responseId: unit.response_id,
             unitName: unit.unit_name,
             variableId: unit.variable_id,
             personCode: unit.person_code,
+            personLogin: unit.person_login,
+            personGroup: personGroup,
             testPerson,
             givenAnswer
           });
@@ -480,7 +618,7 @@ export class CoderTrainingService {
           `Coder ${job.name}`;
 
         job.codingJobUnits?.forEach(unit => {
-          if (unit.unit_name === unitVar.unitName && unit.variable_id === unitVar.variableId && unit.person_code === unitVar.personCode) {
+          if (unit.response_id === unitVar.responseId) {
             if (unit.code !== null) {
               code = unit.code.toString();
             }
@@ -502,6 +640,8 @@ export class CoderTrainingService {
         unitName: unitVar.unitName,
         variableId: unitVar.variableId,
         personCode: unitVar.personCode,
+        personLogin: unitVar.personLogin,
+        personGroup: unitVar.personGroup,
         testPerson: unitVar.testPerson,
         givenAnswer: unitVar.givenAnswer,
         coders: codersData
@@ -511,6 +651,171 @@ export class CoderTrainingService {
     this.logger.log(`Generated within-training comparison data for ${comparisonData.length} unit/variable combinations across ${training.codingJobs.length} coders`);
 
     return comparisonData;
+  }
+
+  async updateCoderTraining(
+    workspaceId: number,
+    trainingId: number,
+    trainingLabel: string,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    missingsProfileId?: number,
+    assignedVariables?: JobDefinitionVariable[],
+    assignedVariableBundles?: JobDefinitionVariableBundle[]
+  ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
+    try {
+      this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
+
+      const training = await this.coderTrainingRepository.findOne({
+        where: { id: trainingId, workspace_id: workspaceId },
+        relations: ['codingJobs', 'variables', 'bundles', 'coders']
+      });
+
+      if (!training) {
+        return { success: false, message: 'Training nicht gefunden' };
+      }
+
+      // Check if critical configuration changed (coders or variables)
+      const currentCoderIds = training.coders?.map(c => c.user_id).sort() || [];
+      const newCoderIds = selectedCoders.map(c => c.id).sort();
+      const codersChanged = JSON.stringify(currentCoderIds) !== JSON.stringify(newCoderIds);
+
+      const currentVariables = training.variables?.map(v => ({
+        variableId: v.variable_id,
+        unitName: v.unit_name,
+        sampleCount: v.sample_count
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+
+      const newVariables = assignedVariables?.map(v => ({
+        variableId: v.variableId,
+        unitName: v.unitName,
+        sampleCount: v.sampleCount || 10
+      })).sort((a, b) => (a.variableId + a.unitName).localeCompare(b.variableId + b.unitName)) || [];
+
+      const variablesChanged = JSON.stringify(currentVariables) !== JSON.stringify(newVariables);
+
+      const currentBundles = training.bundles?.map(b => ({
+        id: b.variable_bundle_id
+      })).sort((a, b) => a.id - b.id) || [];
+
+      const newBundles = assignedVariableBundles?.map(b => ({
+        id: b.id
+      })).sort((a, b) => a.id - b.id) || [];
+
+      const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
+
+      training.label = trainingLabel;
+      training.updated_at = new Date();
+
+      await this.coderTrainingRepository.save(training);
+
+      if (codersChanged || variablesChanged || bundlesChanged) {
+        this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
+
+        // Delete existing configuration relations
+        await this.coderTrainingVariableRepository.delete({ coder_training_id: trainingId });
+        await this.coderTrainingBundleRepository.delete({ coder_training_id: trainingId });
+        await this.coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
+
+        // Save new configuration relations
+        if (assignedVariables) {
+          for (const variable of assignedVariables) {
+            const trainingVariable = new CoderTrainingVariable();
+            trainingVariable.coder_training_id = trainingId;
+            trainingVariable.variable_id = variable.variableId;
+            trainingVariable.unit_name = variable.unitName;
+            trainingVariable.sample_count = variable.sampleCount || 10;
+            await this.coderTrainingVariableRepository.save(trainingVariable);
+          }
+        }
+
+        if (assignedVariableBundles) {
+          for (const bundle of assignedVariableBundles) {
+            const trainingBundle = new CoderTrainingBundle();
+            trainingBundle.coder_training_id = trainingId;
+            trainingBundle.variable_bundle_id = bundle.id;
+            trainingBundle.sample_count = bundle.sampleCount || 10;
+            await this.coderTrainingBundleRepository.save(trainingBundle);
+          }
+        }
+
+        for (const coder of selectedCoders) {
+          const trainingCoder = new CoderTrainingCoder();
+          trainingCoder.coder_training_id = trainingId;
+          trainingCoder.user_id = coder.id;
+          await this.coderTrainingCoderRepository.save(trainingCoder);
+        }
+        this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
+
+        // Delete existing jobs and their associations
+        for (const job of training.codingJobs || []) {
+          await this.codingJobUnitRepository.delete({ coding_job_id: job.id });
+          await this.codingJobVariableRepository.delete({ coding_job_id: job.id });
+          await this.codingJobCoderRepository.delete({ coding_job_id: job.id });
+          await this.codingJobRepository.delete(job.id);
+        }
+
+        // Generate and create new jobs
+        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
+
+        const jobs: TrainingJob[] = [];
+        let jobsCreatedCount = 0;
+
+        for (const trainingPackage of trainingPackages) {
+          const coderId = trainingPackage.coderId;
+          const coderName = trainingPackage.coderName;
+
+          const codingJob = new CodingJob();
+          codingJob.name = `${trainingLabel}-${coderName}`;
+          codingJob.workspace_id = workspaceId;
+          codingJob.training_id = trainingId;
+          codingJob.missings_profile_id = missingsProfileId;
+          codingJob.created_at = new Date();
+          codingJob.updated_at = new Date();
+
+          const savedJob = await this.codingJobRepository.save(codingJob);
+          const jobId = savedJob.id;
+
+          jobsCreatedCount += 1;
+          jobs.push({
+            coderId,
+            coderName,
+            jobId,
+            jobName: codingJob.name
+          });
+
+          const codingJobCoder = new CodingJobCoder();
+          codingJobCoder.coding_job_id = jobId;
+          codingJobCoder.user_id = coderId;
+          await this.codingJobCoderRepository.save(codingJobCoder);
+
+          const processedVariables = new Set<string>();
+          for (const response of trainingPackage.responses) {
+            const variableKey = `${response.variableId}:${response.unitName}`;
+            if (!processedVariables.has(variableKey)) {
+              const codingJobVariable = new CodingJobVariable();
+              codingJobVariable.coding_job_id = jobId;
+              codingJobVariable.variable_id = response.variableId;
+              codingJobVariable.unit_name = response.unitName;
+              await this.codingJobVariableRepository.save(codingJobVariable);
+              processedVariables.add(variableKey);
+            }
+          }
+        }
+
+        return {
+          success: true,
+          message: 'Training erfolgreich aktualisiert und neue Kodierungsaufträge erstellt',
+          jobsCreated: jobsCreatedCount,
+          jobs
+        };
+      }
+
+      return { success: true, message: 'Training erfolgreich aktualisiert' };
+    } catch (error) {
+      this.logger.error(`Error updating coder training: ${error.message}`, error.stack);
+      return { success: false, message: `Fehler beim Aktualisieren des Trainings: ${error.message}` };
+    }
   }
 
   async updateCoderTrainingLabel(workspaceId: number, trainingId: number, newLabel: string): Promise<{ success: boolean; message: string }> {
@@ -649,5 +954,123 @@ export class CoderTrainingService {
         message: errorMessage
       };
     }
+  }
+
+  /**
+   * Transform within-training comparison data to format expected by Cohen's Kappa calculation
+   * This allows reuse of existing Cohen's Kappa calculation logic
+   */
+  transformToCoderPairs(
+    comparisonData: Array<{
+      unitName: string;
+      variableId: string;
+      personCode: string;
+      personLogin: string;
+      personGroup: string;
+      testPerson: string;
+      givenAnswer: string;
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+      }>;
+    }>
+  ): Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      unitName: string;
+      variableId: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores: Array<{ score1: number | null; score2: number | null }>;
+    }> {
+    this.logger.log(`Transforming ${comparisonData.length} comparison items to coder pairs format`);
+
+    // Group by unit/variable to get all responses for each variable
+    const variableMap = new Map<string, typeof comparisonData>();
+
+    for (const item of comparisonData) {
+      const key = `${item.unitName}:${item.variableId}`;
+      if (!variableMap.has(key)) {
+        variableMap.set(key, []);
+      }
+      variableMap.get(key)!.push(item);
+    }
+
+    const allCoderPairs: Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      unitName: string;
+      variableId: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores: Array<{ score1: number | null; score2: number | null }>;
+    }> = [];
+
+    // For each variable, create coder pairs
+    for (const [variableKey, items] of variableMap.entries()) {
+      if (items.length === 0) continue;
+
+      // Get all unique coders from the first item (all items should have same coders)
+      const coders = items[0].coders;
+
+      if (coders.length < 2) {
+        this.logger.warn(`Variable ${variableKey} has less than 2 coders, skipping`);
+        continue;
+      }
+
+      // Create all possible pairs of coders
+      for (let i = 0; i < coders.length; i++) {
+        for (let j = i + 1; j < coders.length; j++) {
+          const coder1 = coders[i];
+          const coder2 = coders[j];
+
+          // Collect code and score pairs for this coder pair across all responses
+          const codePairs: Array<{ code1: number | null; code2: number | null }> = [];
+          const scorePairs: Array<{ score1: number | null; score2: number | null }> = [];
+
+          for (const item of items) {
+            const coder1Data = item.coders.find(c => c.jobId === coder1.jobId);
+            const coder2Data = item.coders.find(c => c.jobId === coder2.jobId);
+
+            if (coder1Data && coder2Data) {
+              // Convert string codes to numbers (codes are stored as strings in the comparison data)
+              const code1 = coder1Data.code !== null ? parseInt(coder1Data.code, 10) : null;
+              const code2 = coder2Data.code !== null ? parseInt(coder2Data.code, 10) : null;
+
+              codePairs.push({
+                code1: Number.isNaN(code1) ? null : code1,
+                code2: Number.isNaN(code2) ? null : code2
+              });
+
+              // Collect score pairs
+              scorePairs.push({
+                score1: coder1Data.score,
+                score2: coder2Data.score
+              });
+            }
+          }
+
+          if (codePairs.length > 0) {
+            allCoderPairs.push({
+              coder1Id: coder1.jobId,
+              coder1Name: coder1.coderName,
+              coder2Id: coder2.jobId,
+              coder2Name: coder2.coderName,
+              unitName: items[0].unitName,
+              variableId: items[0].variableId,
+              codes: codePairs,
+              scores: scorePairs
+            });
+          }
+        }
+      }
+    }
+
+    this.logger.log(`Created ${allCoderPairs.length} coder pairs from ${variableMap.size} variables`);
+    return allCoderPairs;
   }
 }

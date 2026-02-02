@@ -71,6 +71,9 @@ import { getFileIcon } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
 import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
+import {
+  GithubReleasesDialogComponent
+} from '../github-releases-dialog/github-releases-dialog.component';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 
 @Component({
@@ -779,6 +782,22 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     dialogRef.afterClosed().subscribe(result => {
       if (result === true) {
         this.resourcePackagesModified = true;
+      }
+    });
+  }
+
+  openGithubReleasesDialog(): void {
+    const dialogRef = this.dialog.open(GithubReleasesDialogComponent, {
+      width: '800px',
+      maxWidth: '95vw',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === true) {
+        this.loadTestFiles();
       }
     });
   }

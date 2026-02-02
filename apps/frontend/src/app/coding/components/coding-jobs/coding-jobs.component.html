@@ -1,217 +1,208 @@
 <div class="fx-column-start-start fx-gap-10 container">
   @if (isLoading) {
-    <mat-spinner></mat-spinner>
+  <mat-spinner></mat-spinner>
   }
   @if (!isLoading) {
-    <div class="fx-row-center-center-stretch fx-gap-16 header-row">
-      <div class="fx-row-center-center fx-gap-16 filters-row">
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Name filtern</mat-label>
-          <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
-            <mat-option [value]="null">Alle Namen</mat-option>
-            <mat-option *ngFor="let job of originalData" [value]="job.name">
-              {{job.name}}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Kodierer filtern</mat-label>
-          <mat-select [(value)]="selectedCoderId" (selectionChange)="onCoderFilterChange()">
-            <mat-option [value]="null">Alle Kodierer</mat-option>
-            <mat-option *ngFor="let coder of allCoders" [value]="coder.id">
-              {{coder.displayName || coder.name}}
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Status filtern</mat-label>
-          <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
-            <mat-option [value]="null">Alle Status</mat-option>
-            <mat-option value="active">Aktiv</mat-option>
-            <mat-option value="completed">Abgeschlossen</mat-option>
-            <mat-option value="results_applied">Ergebnisse angewendet</mat-option>
-            <mat-option value="pending">Ausstehend</mat-option>
-            <mat-option value="paused">Pausiert</mat-option>
-            <mat-option value="open">Offen</mat-option>
-            <mat-option value="review">Zur Überprüfung</mat-option>
-          </mat-select>
-        </mat-form-field>
-
-        <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Nach Training filtern</mat-label>
-          <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
-            <mat-option [value]="null">Kein Training</mat-option>
-            <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
-              {{training.label}}
-            </mat-option>
-          </mat-select>
+  <div class="fx-row-center-center-stretch fx-gap-16 header-row">
+    <div class="fx-row-center-center fx-gap-16 filters-row">
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Name filtern</mat-label>
+        <mat-select [(value)]="selectedJobName" (selectionChange)="onJobNameFilterChange()">
+          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option *ngFor="let job of originalData" [value]="job.name">
+            {{job.name}}
+          </mat-option>
+        </mat-select>
       </mat-form-field>
-      </div>
 
-      <div class="fx-row-center-center fx-gap-16">
-        <button mat-button (click)="bulkApplyCodingResults()" class="bulk-apply-button">
-          <mat-icon>rule</mat-icon>
-          Alle Ergebnisse anwenden
-        </button>
-        <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()" [disabled]="selection.selected.length === 0" class="bulk-delete-button">
-          <mat-icon>delete_sweep</mat-icon>
-          {{ selection.selected.length }} löschen
-        </button>
-        <button mat-button (click)="openDoubleCodedReviewDialog()">
-          <mat-icon>compare</mat-icon>
-          Doppelkodierung-Review
-        </button>
-        <button mat-button (click)="openCohensKappaStatisticsDialog()">
-          <mat-icon>analytics</mat-icon>
-          Cohen's Kappa
-        </button>
-      </div>
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Kodierer filtern</mat-label>
+        <mat-select [(value)]="selectedCoderId" (selectionChange)="onCoderFilterChange()">
+          <mat-option [value]="null">Alle Kodierer</mat-option>
+          <mat-option *ngFor="let coder of allCoders" [value]="coder.id">
+            {{coder.displayName || coder.name}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Status filtern</mat-label>
+        <mat-select [(value)]="selectedStatus" (selectionChange)="onStatusFilterChange()">
+          <mat-option [value]="null">Alle Status</mat-option>
+          <mat-option value="active">Aktiv</mat-option>
+          <mat-option value="completed">Abgeschlossen</mat-option>
+          <mat-option value="results_applied">Ergebnisse angewendet</mat-option>
+          <mat-option value="pending">Ausstehend</mat-option>
+          <mat-option value="paused">Pausiert</mat-option>
+          <mat-option value="open">Offen</mat-option>
+          <mat-option value="review">Zur Überprüfung</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Nach Training filtern</mat-label>
+        <mat-select [(value)]="selectedTrainingId" (selectionChange)="onTrainingFilterChange()">
+          <mat-option [value]="null">Alle Trainings</mat-option>
+          <mat-option value="none">Ohne Training</mat-option>
+          <mat-option *ngFor="let training of coderTrainings" [value]="training.id">
+            {{training.label}}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
     </div>
 
-    <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
-      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
-      <mat-row *matRowDef="let row; columns: displayedColumns;">
-      </mat-row>
+    <div class="fx-row-center-center fx-gap-16">
+      <button mat-button (click)="bulkApplyCodingResults()" class="bulk-apply-button">
+        <mat-icon>rule</mat-icon>
+        Alle Ergebnisse anwenden
+      </button>
+      <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()"
+        [disabled]="selection.selected.length === 0" class="bulk-delete-button">
+        <mat-icon>delete_sweep</mat-icon>
+        {{ selection.selected.length }} löschen
+      </button>
+      <button mat-button (click)="openDoubleCodedReviewDialog()">
+        <mat-icon>compare</mat-icon>
+        Doppelkodierung-Review
+      </button>
+      <button mat-button (click)="openCohensKappaStatisticsDialog()">
+        <mat-icon>analytics</mat-icon>
+        Cohen's Kappa
+      </button>
+    </div>
+  </div>
 
-      <ng-container matColumnDef="select">
-        <mat-header-cell *matHeaderCellDef>
-          <mat-checkbox (change)="$event ? masterToggle() : null"
-                        [checked]="selection.hasValue() && isAllSelected()"
-                        [indeterminate]="selection.hasValue() && !isAllSelected()"
-                        [aria-label]="checkboxLabel()">
-          </mat-checkbox>
-        </mat-header-cell>
-        <mat-cell *matCellDef="let row">
-          <mat-checkbox (change)="$event ? selection.toggle(row) : null"
-                        [checked]="selection.isSelected(row)"
-                        [aria-label]="checkboxLabel(row)">
-          </mat-checkbox>
-        </mat-cell>
-      </ng-container>
+  <mat-table [dataSource]="dataSource" matSort class="coding-jobs-table">
+    <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
+    <mat-row *matRowDef="let row; columns: displayedColumns;">
+    </mat-row>
 
-      <ng-container matColumnDef="actions">
-        <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          <button mat-icon-button (click)="startCodingJob(element)"
-                  matTooltip="Kodierjob starten"
-                  aria-label="Kodierjob starten">
-            <mat-icon>play_arrow</mat-icon>
-          </button>
-          <button mat-icon-button (click)="deleteCodingJob(element)"
-                  matTooltip="Kodierjob löschen"
-                  aria-label="Kodierjob löschen">
-            <mat-icon>delete</mat-icon>
-          </button>
-          <button mat-icon-button (click)="viewCodingResults(element)"
-                  matTooltip="Ergebnisse anzeigen"
-                  aria-label="Ergebnisse anzeigen">
-            <mat-icon>assessment</mat-icon>
-          </button>
-          @if ((element.totalUnits || 0) > 0 && (element.openUnits || 0) > 0) {
-            <button mat-icon-button (click)="restartCodingJob(element)"
-                    [matTooltip]="'Ansicht mit offenen Fälle'"
-                    aria-label="Ansicht mit offenen Fälle">
-              <mat-icon>restart_alt</mat-icon>
-            </button>
-          }
-          <button mat-icon-button (click)="applyCodingResults(element)"
-                  matTooltip="Ergebnisse anwenden"
-                  aria-label="Ergebnisse anwenden"
-                  [disabled]="element.status !== 'completed'">
-            <mat-icon>check_circle</mat-icon>
-          </button>
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="select">
+      <mat-header-cell *matHeaderCellDef>
+        <mat-checkbox (change)="$event ? masterToggle() : null" [checked]="selection.hasValue() && isAllSelected()"
+          [indeterminate]="selection.hasValue() && !isAllSelected()" [aria-label]="checkboxLabel()">
+        </mat-checkbox>
+      </mat-header-cell>
+      <mat-cell *matCellDef="let row">
+        <mat-checkbox (change)="$event ? selection.toggle(row) : null" [checked]="selection.isSelected(row)"
+          [aria-label]="checkboxLabel(row)">
+        </mat-checkbox>
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="name">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{getDisplayName(element)}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="actions">
+      <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        <button mat-icon-button (click)="startCodingJob(element)" matTooltip="Kodierjob starten"
+          aria-label="Kodierjob starten">
+          <mat-icon>play_arrow</mat-icon>
+        </button>
+        <button mat-icon-button (click)="deleteCodingJob(element)" matTooltip="Kodierjob löschen"
+          aria-label="Kodierjob löschen">
+          <mat-icon>delete</mat-icon>
+        </button>
+        <button mat-icon-button (click)="viewCodingResults(element)" matTooltip="Ergebnisse anzeigen"
+          aria-label="Ergebnisse anzeigen">
+          <mat-icon>assessment</mat-icon>
+        </button>
+        @if ((element.totalUnits || 0) > 0 && (element.openUnits || 0) > 0 && !element.training_id && !element.training) {
+        <button mat-icon-button (click)="restartCodingJob(element)" [matTooltip]="'Ansicht mit offenen Fälle'"
+          aria-label="Ansicht mit offenen Fälle">
+          <mat-icon>restart_alt</mat-icon>
+        </button>
+        }
+        <button mat-icon-button (click)="applyCodingResults(element)" matTooltip="Ergebnisse anwenden"
+          aria-label="Ergebnisse anwenden"
+          [disabled]="element.status !== 'completed' || !!element.training?.id || !!element.training_id">
+          <mat-icon>check_circle</mat-icon>
+        </button>
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="description">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{element.description}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="name">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{getDisplayName(element)}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="status">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          <span [ngClass]="getStatusClass(element.status)">{{getStatusText(element.status)}}</span>
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="description">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.description}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="assignedCoders">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Zugewiesene Kodierer</mat-header-cell>
-        <mat-cell *matCellDef="let element" class="assigned-coders-cell" [matTooltip]="getFullCoderNames(element)">
-          {{getAssignedCoderNames(element)}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="status">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Status</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        <span [ngClass]="getStatusClass(element.status)">{{getStatusText(element.status)}}</span>
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="variables">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen</mat-header-cell>
-        <mat-cell *matCellDef="let element" class="variables-cell" [matTooltip]="getFullVariables(element)">
-          {{getVariables(element)}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="assignedCoders">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Zugewiesene Kodierer</mat-header-cell>
+      <mat-cell *matCellDef="let element" class="assigned-coders-cell" [matTooltip]="getFullCoderNames(element)">
+        {{getAssignedCoderNames(element)}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="variableBundles">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Variablenbündel</mat-header-cell>
-        <mat-cell *matCellDef="let element" class="variable-bundles-cell" [matTooltip]="getFullVariableBundles(element)">
-          {{getVariableBundles(element)}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="variables">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Variablen</mat-header-cell>
+      <mat-cell *matCellDef="let element" class="variables-cell" [matTooltip]="getFullVariables(element)">
+        {{getVariables(element)}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="progress">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{getProgress(element)}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="variableBundles">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Variablenbündel</mat-header-cell>
+      <mat-cell *matCellDef="let element" class="variable-bundles-cell" [matTooltip]="getFullVariableBundles(element)">
+        {{getVariableBundles(element)}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="createdAt">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="progress">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Fortschritt</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{getProgress(element)}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="updatedAt">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
-        <mat-cell *matCellDef="let element">
-          {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="createdAt">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}
+      </mat-cell>
+    </ng-container>
 
-      <ng-container matColumnDef="hasIssues">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Probleme</mat-header-cell>
-        <mat-cell *matCellDef="let element" [class.has-issues]="element.hasIssues">
-          @if (element.hasIssues) {
-            <mat-icon matTooltip="Kodierungsprobleme vorhanden" class="issues-icon">warning</mat-icon>
-          } @else {
-            <mat-icon matTooltip="Keine Probleme" class="no-issues-icon">check_circle</mat-icon>
-          }
-        </mat-cell>
-      </ng-container>
+    <ng-container matColumnDef="updatedAt">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
+      <mat-cell *matCellDef="let element">
+        {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
+      </mat-cell>
+    </ng-container>
 
-    </mat-table>
+    <ng-container matColumnDef="hasIssues">
+      <mat-header-cell *matHeaderCellDef mat-sort-header>Probleme</mat-header-cell>
+      <mat-cell *matCellDef="let element" [class.has-issues]="element.hasIssues">
+        @if (element.hasIssues) {
+        <mat-icon matTooltip="Kodierungsprobleme vorhanden" class="issues-icon">warning</mat-icon>
+        } @else {
+        <mat-icon matTooltip="Keine Probleme" class="no-issues-icon">check_circle</mat-icon>
+        }
+      </mat-cell>
+    </ng-container>
 
-    <mat-paginator
-      [pageSizeOptions]="[10, 25, 50, 100]"
-      showFirstLastButtons
-      [length]="dataSource.data.length"
-      *ngIf="dataSource.data.length > 0">
-    </mat-paginator>
+  </mat-table>
 
-    @if (dataSource.data.length === 0) {
-      <div class="no-data-message">
-        <p>Keine Kodierjobs vorhanden. Erstellen Sie eine neue Kodierjob-Definition mit dem Button oben.</p>
-      </div>
-    }
+  <mat-paginator [pageSizeOptions]="[10, 25, 50, 100]" showFirstLastButtons [length]="dataSource.data.length"
+    *ngIf="dataSource.data.length > 0">
+  </mat-paginator>
+
+  @if (dataSource.data.length === 0) {
+  <div class="no-data-message">
+    <p>Keine Kodierjobs vorhanden. Erstellen Sie eine neue Kodierjob-Definition mit dem Button oben.</p>
+  </div>
+  }
   }
 </div>

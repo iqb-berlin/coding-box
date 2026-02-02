@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
-import { WorkspaceFilesService } from '../workspace';
+import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
 import { CodingListService } from './coding-list.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingListQueryService } from './coding-list-query.service';
@@ -26,7 +26,8 @@ describe('CodingListService', () => {
     const queryService = new CodingListQueryService(
       fileUploadRepository,
       responseRepository,
-      workspaceFilesService
+      workspaceFilesService,
+      {} as unknown as WorkspaceCoreService
     );
     const streamService = {} as unknown as CodingListStreamService;
 

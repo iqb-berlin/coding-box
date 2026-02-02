@@ -40,6 +40,7 @@ import { ResponseFiltersComponent } from './components/response-filters/response
 import { ResponseTableComponent } from './components/response-table/response-table.component';
 import { SearchResponseItem } from '../../../models/coding-interfaces';
 import { ItemListDialogComponent } from '../../../shared/dialogs/item-list-dialog/item-list-dialog.component';
+import { ReviewListDialogComponent } from './components/review-list-dialog/review-list-dialog.component';
 
 @Component({
   selector: 'app-coding-management',
@@ -94,6 +95,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   referenceStatistics: CodingStatistics | null = null;
   referenceVersion: StatisticsVersion | null = null;
   statisticsLoaded = false;
+  isGeogebraAvailable = false;
 
   currentStatusFilter: string | null = null;
   pageSizeOptions = [100, 200, 500, 1000];
@@ -110,7 +112,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     code: '',
     group: '',
     bookletName: '',
-    variableId: ''
+    variableId: '',
+    geogebra: false,
+    personLogin: ''
   };
 
   private destroy$ = new Subject<void>();
@@ -124,6 +128,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           if (autoFetch) {
             this.fetchCodingStatistics();
           }
+        });
+
+      this.codingManagementService.hasGeogebraResponses()
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(available => {
+          this.isGeogebraAvailable = available;
         });
     }
 
@@ -193,7 +203,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   onFilterChange(filterParams: FilterParams): void {
     this.filterParams = filterParams;
 
-    if (!filterParams.codedStatus) {
+    if (!filterParams.codedStatus && !filterParams.personLogin && !filterParams.unitName && !filterParams.bookletName && !filterParams.variableId && !filterParams.code && !filterParams.group) {
       this.data = [];
       this.totalRecords = 0;
       this.currentStatusFilter = null;
@@ -214,7 +224,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       code: '',
       group: '',
       bookletName: '',
-      variableId: ''
+      variableId: '',
+      geogebra: false,
+      personLogin: ''
     };
     this.data = [];
     this.totalRecords = 0;
@@ -235,7 +247,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       );
     } else {
       const hasActiveFilters = Object.values(this.filterParams).some(
-        value => value.trim() !== ''
+        value => (typeof value === 'string' ? value.trim() !== '' : !!value)
       );
 
       if (hasActiveFilters) {
@@ -262,6 +274,28 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   onShowUnitXml(unitId: number): void {
     this.uiService.showUnitXmlDialog(unitId);
+  }
+
+  onReviewClick(): void {
+    if (!this.data || this.data.length === 0) {
+      this.snackBar.open(
+        this.translateService.instant('coding-management.messages.no-data-to-review'),
+        this.translateService.instant('coding-management.actions.close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    this.dialog.open(ReviewListDialogComponent, {
+      width: '95vw',
+      height: '95vh',
+      maxWidth: '100vw',
+      panelClass: 'full-screen-dialog',
+      data: {
+        responses: this.data,
+        title: this.translateService.instant('coding-management.actions.review-session')
+      }
+    });
   }
 
   // Data Fetching Methods
@@ -324,7 +358,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.isLoading = true;
 
     const hasActiveFilters = Object.values(this.filterParams).some(
-      value => value.trim() !== ''
+      value => (typeof value === 'string' ? value.trim() !== '' : !!value)
     );
 
     if (!hasActiveFilters) {
@@ -358,7 +392,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           booklet_id: item.bookletName || '',
           person_code: item.personCode || '',
           person_group: item.personGroup || '',
-          variable_page: item.variablePage || '0'
+          variable_page: item.variablePage || '0',
+          code_v1: item.code_v1,
+          code_v2: item.code_v2,
+          code_v3: item.code_v3,
+          status_v1: item.status_v1,
+          status_v2: item.status_v2,
+          status_v3: item.status_v3
         })) as Success[];
         this.totalRecords = response.total;
         this.isLoading = false;

@@ -246,6 +246,8 @@ export class WorkspaceTestResultsResponseController {
       @Query('group') group?: string,
       @Query('code') code?: string,
       @Query('version') version?: 'v1' | 'v2' | 'v3',
+      @Query('geogebra') geogebra?: string,
+      @Query('personLogin') personLogin?: string,
                                          @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
                                          @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<ResponseSearchResult> {
@@ -265,7 +267,9 @@ export class WorkspaceTestResultsResponseController {
           codedStatus,
           group,
           code,
-          version
+          version,
+          geogebra: geogebra === 'true',
+          personLogin
         },
         { page, limit }
       );
@@ -275,5 +279,19 @@ export class WorkspaceTestResultsResponseController {
         `Failed to search for responses. ${error.message}`
       );
     }
+  }
+
+  @Get(':workspace_id/responses/geogebra-existence')
+  @ApiOperation({
+    summary: 'Check if Geogebra responses exist',
+    description: 'Returns true if there are any Geogebra unit responses in the workspace'
+  })
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({ description: 'Geogebra existence checked' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async hasGeogebraResponses(
+    @WorkspaceId() workspaceId: number
+  ): Promise<boolean> {
+    return this.workspaceTestResultsService.hasGeogebraResponses(workspaceId);
   }
 }

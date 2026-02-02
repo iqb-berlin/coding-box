@@ -34,21 +34,9 @@
       <ng-container matColumnDef="label">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.label' | translate }}</th>
         <td mat-cell *matCellDef="let training">
-          <div class="training-label" *ngIf="editingTrainingId !== training.id">
+          <div class="training-label">
             <mat-icon>school</mat-icon>
             <span>{{ training.label }}</span>
-          </div>
-          <div class="training-label editing" *ngIf="editingTrainingId === training.id">
-            <mat-icon>school</mat-icon>
-            <mat-form-field appearance="outline" class="edit-input">
-              <input matInput [(ngModel)]="editingLabel" (keyup.enter)="saveEditTraining()" (keyup.escape)="cancelEditTraining()" #editInput>
-            </mat-form-field>
-            <button mat-icon-button (click)="saveEditTraining()" [disabled]="!editingLabel.trim()">
-              <mat-icon>check</mat-icon>
-            </button>
-            <button mat-icon-button (click)="cancelEditTraining()">
-              <mat-icon>close</mat-icon>
-            </button>
           </div>
         </td>
       </ng-container>
@@ -73,16 +61,18 @@
         <th mat-header-cell *matHeaderCellDef>{{ 'common.actions' | translate }}</th>
         <td mat-cell *matCellDef="let training">
           <div class="action-buttons">
-            <button mat-icon-button title="{{ 'coding.trainings.compare.button' | translate }}" (click)="openResultsComparison(training)">
+            <button mat-icon-button title="{{ 'coding.trainings.compare.button' | translate }}"
+              (click)="openResultsComparison(training)">
               <mat-icon>compare</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'coding.trainings.action.details' | translate }}" (click)="showTrainingJobs(training)">
+            <button mat-icon-button title="{{ 'coding.trainings.action.details' | translate }}"
+              (click)="showTrainingJobs(training)">
               <mat-icon>visibility</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'common.edit' | translate }}" (click)="startEditTraining(training)" *ngIf="editingTrainingId !== training.id">
+            <button mat-icon-button title="{{ 'common.edit' | translate }}" (click)="requestFullEdit(training)">
               <mat-icon>edit</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'common.delete' | translate }}" (click)="deleteTraining(training)" *ngIf="editingTrainingId !== training.id">
+            <button mat-icon-button title="{{ 'common.delete' | translate }}" (click)="deleteTraining(training)">
               <mat-icon>delete</mat-icon>
             </button>
           </div>

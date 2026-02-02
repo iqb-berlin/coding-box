@@ -105,3 +105,86 @@ describe('WorkspaceFilesService.handleFile', () => {
     ).rejects.toBeInstanceOf(Error);
   });
 });
+
+describe('WorkspaceFilesService.deleteTestFiles', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockQueryBuilder = {
+    delete: jest.fn().mockReturnThis(),
+    from: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    execute: jest.fn().mockResolvedValue({ affected: 1 })
+  };
+
+  const mockFileUploadRepository = {
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+  };
+
+  const mockCodingStatisticsService = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      mockCodingStatisticsService as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should use createQueryBuilder to delete files', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['1', '2', '3'];
+
+    await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(mockFileUploadRepository.createQueryBuilder).toHaveBeenCalled();
+    expect(mockQueryBuilder.delete).toHaveBeenCalled();
+    expect(mockQueryBuilder.from).toHaveBeenCalled();
+    expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+      'workspace_id = :workspaceId',
+      { workspaceId }
+    );
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'id IN (:...ids)',
+      { ids: [1, 2, 3] }
+    );
+    expect(mockQueryBuilder.execute).toHaveBeenCalled();
+  });
+
+  it('should filter out invalid IDs', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['1', 'nan', '3'];
+
+    await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'id IN (:...ids)',
+      { ids: [1, 3] }
+    );
+  });
+
+  it('should invalidate coding statistics cache', async () => {
+    const service = makeService();
+    const workspaceId = 1;
+    const fileIds = ['1'];
+
+    await service.deleteTestFiles(workspaceId, fileIds);
+
+    expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
+  });
+});

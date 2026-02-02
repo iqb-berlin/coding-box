@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
@@ -80,6 +80,26 @@ interface ExpandedFilesLists {
   metadata: boolean;
 }
 
+interface SectionSummary {
+  complete: number;
+  incomplete: number;
+  missingFiles: number;
+  missingFileNames: string[];
+}
+
+interface ValidationSummary {
+  totalTestTakers: number;
+  validTestTakerXmls: number;
+  invalidTestTakerXmls: number;
+  booklets: SectionSummary;
+  units: SectionSummary;
+  schemes: SectionSummary;
+  schemer: SectionSummary;
+  definitions: SectionSummary;
+  player: SectionSummary;
+  metadata: SectionSummary;
+}
+
 @Component({
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
@@ -97,7 +117,7 @@ interface ExpandedFilesLists {
   ],
   styleUrls: ['./files-validation.component.scss']
 })
-export class FilesValidationDialogComponent {
+export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
 
@@ -127,6 +147,8 @@ export class FilesValidationDialogComponent {
   allSelected = false;
   isResolvingDuplicates = false;
 
+  ignoredUnits = new Set<string>();
+
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
@@ -137,6 +159,133 @@ export class FilesValidationDialogComponent {
 
   isConsidering = false;
   consideringProgress = 0;
+
+  summary: ValidationSummary = {
+    totalTestTakers: 0,
+    validTestTakerXmls: 0,
+    invalidTestTakerXmls: 0,
+    booklets: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    units: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    schemes: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    schemer: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    definitions: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    player: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    },
+    metadata: {
+      complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+    }
+  };
+
+  expandedSummaryLists: Set<string> = new Set();
+
+  toggleSummaryList(section: string): void {
+    if (this.expandedSummaryLists.has(section)) {
+      this.expandedSummaryLists.delete(section);
+    } else {
+      this.expandedSummaryLists.add(section);
+    }
+  }
+
+  isSummaryListExpanded(section: string): boolean {
+    return this.expandedSummaryLists.has(section);
+  }
+
+  private calculateSummary(): void {
+    if (!this.data.validationResults) return;
+
+    const summaryData: ValidationSummary = {
+      totalTestTakers: this.data.validationResults.length,
+      validTestTakerXmls: 0,
+      invalidTestTakerXmls: 0,
+      booklets: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      units: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      schemes: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      schemer: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      definitions: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      player: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      },
+      metadata: {
+        complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+      }
+    };
+
+    const missingFilesSets = {
+      booklets: new Set<string>(),
+      units: new Set<string>(),
+      schemes: new Set<string>(),
+      schemer: new Set<string>(),
+      definitions: new Set<string>(),
+      player: new Set<string>(),
+      metadata: new Set<string>()
+    };
+
+    this.data.validationResults.forEach(val => {
+      if (val.testTakerSchemaValid === false) {
+        summaryData.invalidTestTakerXmls += 1;
+      } else {
+        summaryData.validTestTakerXmls += 1;
+      }
+
+      const updateSectionStats = (section: keyof typeof missingFilesSets, data: DataValidation) => {
+        if (this.isSectionComplete(data, section)) {
+          summaryData[section].complete += 1;
+        } else {
+          summaryData[section].incomplete += 1;
+        }
+
+        // Collect missing files
+        if (data.files) {
+          data.files.forEach(f => {
+            if (!f.exists) {
+              // For units, check if ignored
+              if (section === 'units' && this.isUnitIgnored(f.filename)) {
+                return;
+              }
+              missingFilesSets[section].add(f.filename);
+            }
+          });
+        }
+      };
+
+      updateSectionStats('booklets', val.booklets);
+      updateSectionStats('units', val.units);
+      updateSectionStats('schemes', val.schemes);
+      updateSectionStats('schemer', val.schemer);
+      updateSectionStats('definitions', val.definitions);
+      updateSectionStats('player', val.player);
+      updateSectionStats('metadata', val.metadata);
+    });
+
+    // Sort missing files and assign to summary
+    (Object.keys(missingFilesSets) as (keyof typeof missingFilesSets)[]).forEach(section => {
+      summaryData[section].missingFileNames = Array.from(missingFilesSets[section]).sort();
+      summaryData[section].missingFiles = summaryData[section].missingFileNames.length;
+    });
+
+    this.summary = summaryData;
+  }
 
   private isKnownTestTaker(item: FilteredTestTaker): boolean {
     return item.consider === true || item.consider === false;
@@ -210,6 +359,7 @@ export class FilesValidationDialogComponent {
             metadata: false
           });
         });
+        this.calculateSummary();
       }
 
       if (this.data.filteredTestTakers) {
@@ -239,6 +389,89 @@ export class FilesValidationDialogComponent {
         this.unusedTestFiles = this.data.unusedTestFiles;
       }
     }
+  }
+
+  ngOnInit(): void {
+    if (this.data.workspaceId) {
+      this.loadIgnoredUnits();
+    }
+  }
+
+  loadIgnoredUnits(): void {
+    if (!this.data.workspaceId) return;
+    this.workspaceService.getIgnoredUnits(this.data.workspaceId).subscribe(units => {
+      this.ignoredUnits = new Set(units.map(u => u.toUpperCase()));
+    });
+  }
+
+  isUnitIgnored(unit: string): boolean {
+    return !!unit && this.ignoredUnits.has(unit.toUpperCase());
+  }
+
+  toggleUnitIgnore(unit: string): void {
+    if (!unit || !this.data.workspaceId) return;
+    const normalized = unit.toUpperCase();
+    let message = '';
+
+    if (this.ignoredUnits.has(normalized)) {
+      this.ignoredUnits.delete(normalized);
+      message = 'Aufgabe wiederhergestellt';
+    } else {
+      this.ignoredUnits.add(normalized);
+      message = 'Aufgabe ignoriert';
+    }
+
+    this.workspaceService.saveIgnoredUnits(this.data.workspaceId, Array.from(this.ignoredUnits)).subscribe({
+      next: success => {
+        if (success) {
+          this.snackBar.open(message, 'OK', { duration: 3000 });
+          if (this.data.workspaceId) {
+            this.testResultService.invalidateCache(this.data.workspaceId);
+          }
+        } else {
+          // Revert change on failure
+          if (this.ignoredUnits.has(normalized)) {
+            this.ignoredUnits.delete(normalized);
+          } else {
+            this.ignoredUnits.add(normalized);
+          }
+          this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+        }
+      },
+      error: () => {
+        // Revert change on error
+        if (this.ignoredUnits.has(normalized)) {
+          this.ignoredUnits.delete(normalized);
+        } else {
+          this.ignoredUnits.add(normalized);
+        }
+        this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+      }
+    });
+  }
+
+  isSectionComplete(data: DataValidation, sectionType: string): boolean {
+    if (data.complete) return true;
+    if (!data.missing || data.missing.length === 0) return true;
+    if (sectionType === 'units') {
+      const visibleMissing = data.missing.filter(u => !this.isUnitIgnored(u));
+      return visibleMissing.length === 0;
+    }
+    // Check if missing items depends on ignored units (e.g. Schemes for ignored units?)
+    // For simplicity, we only filter "missing units" in the Units section for now.
+    // Ideally, if a unit is ignored, its missing resources should probably also be ignored?
+    // But currently we only implement ignoring UNITS.
+    return false;
+  }
+
+  getFilteredMissingCount(data: DataValidation, sectionType: string): number {
+    const missingCount = this.getMissingCount(data);
+    if (sectionType === 'units') {
+      const missingFiles = data.files.filter(f => !f.exists);
+      const ignoredMissing = missingFiles.filter(f => this.isUnitIgnored(f.filename));
+      return Math.max(0, missingCount - ignoredMissing.length);
+    }
+    return missingCount;
   }
 
   filesDeleted = false;

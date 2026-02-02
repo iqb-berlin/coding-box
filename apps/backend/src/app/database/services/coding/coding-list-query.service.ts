@@ -6,6 +6,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { CodingItem } from './coding-item-builder.service';
 
 /**
@@ -25,8 +26,9 @@ export class CodingListQueryService {
     private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
-    private readonly workspaceFilesService: WorkspaceFilesService
-  ) {}
+    private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly workspaceCoreService: WorkspaceCoreService
+  ) { }
 
   /**
    * Get the complete coding list for a workspace.
@@ -91,7 +93,13 @@ export class CodingListQueryService {
         })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
+
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
+      if (ignoredUnits.length > 0) {
+        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+      }
 
       const [responses, total] = await queryBuilder.getManyAndCount();
 
@@ -217,6 +225,11 @@ export class CodingListQueryService {
       .andWhere('response.status_v1 = :status', {
         status: statusStringToNumber('CODING_INCOMPLETE')
       });
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
 
     interface VocsScheme {
       variableCodings?: { id: string; sourceType?: string }[];

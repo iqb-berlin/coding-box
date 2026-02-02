@@ -22,9 +22,15 @@ export interface CreateCoderTrainingJobsResponse {
 export interface TrainingCodingResult {
   unitName: string;
   variableId: string;
-  trainings: Array<{
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  testPerson: string;
+  coders: Array<{
     trainingId: number;
     trainingLabel: string;
+    coderId: number;
+    coderName: string;
     code: string | null;
     score: number | null;
   }>;
@@ -34,6 +40,8 @@ export interface WithinTrainingCodingResult {
   unitName: string;
   variableId: string;
   personCode: string;
+  personLogin: string;
+  personGroup: string;
   testPerson: string;
   givenAnswer: string;
   coders: Array<{
@@ -77,14 +85,18 @@ export class CodingTrainingBackendService {
       sampleCount: number;
     }[],
     trainingLabel: string,
-    missingsProfileId?: number
+    missingsProfileId?: number,
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
+    assignedVariableBundles?: { id: number; name: string }[]
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<CreateCoderTrainingJobsResponse>(url, {
       trainingLabel,
       selectedCoders,
       variableConfigs,
-      missingsProfileId
+      missingsProfileId,
+      assignedVariables,
+      assignedVariableBundles
     }, { headers: this.authHeader });
   }
 
@@ -93,14 +105,24 @@ export class CodingTrainingBackendService {
     return this.http.get<CoderTraining[]>(url, { headers: this.authHeader });
   }
 
-  updateCoderTrainingLabel(
+  updateCoderTraining(
     workspaceId: number,
     trainingId: number,
-    newLabel: string
-  ): Observable<{ success: boolean; message: string }> {
+    label: string,
+    selectedCoders: { id: number; name: string }[],
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    missingsProfileId?: number,
+    assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
+    assignedVariableBundles?: { id: number; name: string }[]
+  ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
-    return this.http.put<{ success: boolean; message: string }>(url, {
-      label: newLabel
+    return this.http.put<{ success: boolean; message: string; jobsCreated?: number }>(url, {
+      label,
+      selectedCoders,
+      variableConfigs,
+      missingsProfileId,
+      assignedVariables,
+      assignedVariableBundles
     }, { headers: this.authHeader });
   }
 
@@ -110,6 +132,17 @@ export class CodingTrainingBackendService {
   ): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.delete<{ success: boolean; message: string }>(url, { headers: this.authHeader });
+  }
+
+  updateCoderTrainingLabel(
+    workspaceId: number,
+    trainingId: number,
+    newLabel: string
+  ): Observable<{ success: boolean; message: string }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/label`;
+    return this.http.put<{ success: boolean; message: string }>(url, {
+      label: newLabel
+    }, { headers: this.authHeader });
   }
 
   compareTrainingCodingResults(
@@ -137,5 +170,65 @@ export class CodingTrainingBackendService {
   ): Observable<CodingJobForTraining[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/jobs`;
     return this.http.get<CodingJobForTraining[]>(url, { headers: this.authHeader });
+  }
+
+  getTrainingCohensKappa(
+    workspaceId: number,
+    trainingId: number,
+    weightedMean: boolean = true,
+    level: 'code' | 'score' = 'code'
+  ): Observable<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+        calculationLevel: 'code' | 'score';
+      };
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/cohens-kappa?weightedMean=${weightedMean}&level=${level}`;
+    return this.http.get<{
+      variables: Array<{
+        unitName: string;
+        variableId: string;
+        coderPairs: Array<{
+          coder1Id: number;
+          coder1Name: string;
+          coder2Id: number;
+          coder2Name: string;
+          kappa: number | null;
+          agreement: number;
+          totalItems: number;
+          validPairs: number;
+          interpretation: string;
+        }>;
+      }>;
+      workspaceSummary: {
+        totalDoubleCodedResponses: number;
+        totalCoderPairs: number;
+        averageKappa: number | null;
+        variablesIncluded: number;
+        codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
+        calculationLevel: 'code' | 'score';
+      };
+    }>(url, { headers: this.authHeader });
   }
 }

@@ -27,6 +27,7 @@ import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { ResponseManagementService } from './response-management.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 interface PersonWhere {
   code: string;
@@ -65,7 +66,8 @@ export class WorkspaceTestResultsService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => CodingListService))
     private readonly codingListService: CodingListService,
-    private readonly responseManagementService: ResponseManagementService
+    private readonly responseManagementService: ResponseManagementService,
+    private readonly workspaceCoreService: WorkspaceCoreService
   ) { }
 
   async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
@@ -87,6 +89,12 @@ export class WorkspaceTestResultsService {
       where: { workspace_id: workspaceId, consider: true }
     });
 
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    let normalizedIgnoredUnits: string[] = [];
+    if (ignoredUnits.length > 0) {
+      normalizedIgnoredUnits = ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, ''));
+    }
+
     const groupRows = await this.personsRepository
       .createQueryBuilder('person')
       .select('DISTINCT person.group', 'group')
@@ -105,26 +113,34 @@ export class WorkspaceTestResultsService {
       .getRawMany();
     const uniqueBooklets = bookletRows.length;
 
-    const unitRows = await this.unitRepository
+    const unitKeyQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .getRawMany();
+      .andWhere('person.consider = :consider', { consider: true });
+
+    if (normalizedIgnoredUnits.length > 0) {
+      unitKeyQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
+    }
+    const unitRows = await unitKeyQuery.getRawMany();
     const uniqueUnits = unitRows.length;
 
-    const uniqueResponses = await this.responseRepository
+    const uniqueResponsesQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .getCount();
+      .andWhere('person.consider = :consider', { consider: true });
 
-    const statusRows = await this.responseRepository
+    if (normalizedIgnoredUnits.length > 0) {
+      uniqueResponsesQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
+    }
+    const uniqueResponses = await uniqueResponsesQuery.getCount();
+
+    const statusRowsQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
@@ -133,8 +149,12 @@ export class WorkspaceTestResultsService {
       .andWhere('person.consider = :consider', { consider: true })
       .select('response.status', 'status')
       .addSelect('COUNT(response.id)', 'count')
-      .groupBy('response.status')
-      .getRawMany<{ status: string | number; count: string | number }>();
+      .groupBy('response.status');
+
+    if (normalizedIgnoredUnits.length > 0) {
+      statusRowsQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
+    }
+    const statusRows = await statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
 
     const responseStatusCounts: Record<string, number> = {};
     (statusRows || []).forEach(r => {
@@ -255,6 +275,9 @@ export class WorkspaceTestResultsService {
       this.logger.log(
         `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
       );
+
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, '')));
 
       const booklets = await this.bookletRepository
         .createQueryBuilder('booklet')
@@ -397,13 +420,15 @@ export class WorkspaceTestResultsService {
         id: booklet.id,
         name: booklet.bookletinfo.name,
         logs: bookletLogsMap.get(booklet.id) || [],
-        units: (unitsMap.get(booklet.id) || []).map(unit => ({
-          id: unit.id,
-          name: unit.name,
-          alias: unit.alias,
-          results: unitResultMap.get(unit.id) || [],
-          tags: unitTagsMap.get(unit.id) || []
-        }))
+        units: (unitsMap.get(booklet.id) || [])
+          .filter(unit => !ignoredSet.has(unit.name.toUpperCase()))
+          .map(unit => ({
+            id: unit.id,
+            name: unit.name,
+            alias: unit.alias,
+            results: unitResultMap.get(unit.id) || [],
+            tags: unitTagsMap.get(unit.id) || []
+          }))
       }));
     } catch (error) {
       this.logger.error(
@@ -734,6 +759,13 @@ export class WorkspaceTestResultsService {
       .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      // Strip .xml extension from ignored units to match unit names
+      const normalizedIgnoredUnits = ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, ''));
+      qb.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
+    }
 
     if (code) {
       qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -2630,6 +2662,8 @@ export class WorkspaceTestResultsService {
       group?: string;
       code?: string;
       version?: 'v1' | 'v2' | 'v3';
+      geogebra?: boolean;
+      personLogin?: string;
     },
     options: { page?: number; limit?: number } = {}
   ): Promise<{
@@ -2727,6 +2761,22 @@ export class WorkspaceTestResultsService {
         query.andWhere('person.code = :code', { code: searchParams.code });
       }
 
+      if (searchParams.personLogin) {
+        query.andWhere('person.login ILIKE :personLogin', {
+          personLogin: `%${searchParams.personLogin}%`
+        });
+      }
+
+      if (searchParams.geogebra) {
+        query.andWhere(
+          'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
+          { ggPrefix: 'UEsD%' }
+        );
+        const version = searchParams.version || 'v1';
+        query.addOrderBy(`response.code_${version}`, 'ASC');
+        query.addOrderBy('person.code', 'ASC');
+      }
+
       const total = await query.getCount();
 
       if (total === 0) {
@@ -2778,6 +2828,12 @@ export class WorkspaceTestResultsService {
           code,
           score,
           codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+          code_v1: response.code_v1,
+          code_v2: response.code_v2,
+          code_v3: response.code_v3,
+          status_v1: statusNumberToString(response.status_v1) || 'UNSET',
+          status_v2: statusNumberToString(response.status_v2) || 'UNSET',
+          status_v3: statusNumberToString(response.status_v3) || 'UNSET',
           unitId: response.unit.id,
           unitName: response.unit.name,
           unitAlias: response.unit.alias,
@@ -3662,5 +3718,19 @@ export class WorkspaceTestResultsService {
       booklets: booklets.map(b => b.name),
       units: units.map(u => u.name)
     };
+  }
+
+  async hasGeogebraResponses(workspaceId: number): Promise<boolean> {
+    const count = await this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' })
+      .getCount();
+
+    return count > 0;
   }
 }
