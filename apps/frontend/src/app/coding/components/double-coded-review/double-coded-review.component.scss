@@ -1,3 +1,28 @@
+:host {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
+.dialog-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+
+  mat-dialog-content {
+    flex-grow: 1;
+    overflow: auto;
+  }
+
+  mat-dialog-actions {
+    flex-shrink: 0;
+    margin-bottom: 0;
+    padding-right: 24px;
+    padding-bottom: 16px;
+  }
+}
+
 .double-coded-review-container {
   padding: 0;
   max-width: none;
@@ -359,59 +384,72 @@
 
         .coder-results-cell {
           position: relative;
+          padding-top: 10px;
 
           .conflict-icon {
             position: absolute;
-            top: -4px;
+            top: 2px;
             left: -4px;
-            font-size: 20px;
-            width: 20px;
-            height: 20px;
+            font-size: 18px;
+            width: 18px;
+            height: 18px;
           }
 
-          .coder-result-item {
-            margin-bottom: 12px;
-            padding: 8px 12px;
-            background-color: #f8f9fa;
-            border-radius: 6px;
-            border-left: 4px solid #1976d2;
+          .coder-results-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
 
-            &:last-child {
-              margin-bottom: 0;
-            }
-
-            .coder-name {
-              font-weight: 500;
-              color: #1976d2;
-              margin-bottom: 4px;
-              display: block;
-            }
-
-            .coder-details {
+            .coder-result-row {
               display: flex;
-              gap: 16px;
-              flex-wrap: wrap;
               align-items: center;
+              gap: 12px;
+              padding: 6px 10px;
+              background-color: #f5f7fa;
+              border-radius: 4px;
+              border-left: 3px solid #1976d2;
 
-              .code-value {
-                font-weight: 500;
-                color: #333;
+              .coder-name-badge {
+                font-weight: 600;
+                font-size: 13px;
+                color: #1976d2;
+                min-width: 60px;
+                display: flex;
+                align-items: center;
+                gap: 4px;
+
+                .job-name {
+                  font-weight: 400;
+                  font-size: 11px;
+                  color: #757575;
+                }
               }
 
-              .score-value {
-                color: #666;
-                font-size: 14px;
+              .coder-value, .coder-score {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                font-size: 13px;
+
+                .label {
+                  color: #666;
+                  font-size: 11px;
+                  text-transform: uppercase;
+                }
+
+                .value {
+                  font-weight: 500;
+                  color: #333;
+                }
               }
 
-              .notes-indicator {
+              .note-icon {
+                font-size: 16px;
+                width: 16px;
+                height: 16px;
                 color: #ff9800;
                 cursor: help;
-
-                mat-icon {
-                  font-size: 18px;
-                  width: 18px;
-                  height: 18px;
-                }
+                margin-left: auto;
               }
             }
           }
@@ -448,6 +486,24 @@
       mat-card-actions {
         padding: 16px 24px;
         justify-content: flex-end;
+
+        .actions-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+
+          .help-icon {
+            color: #757575;
+            cursor: help;
+            font-size: 20px;
+            width: 20px;
+            height: 20px;
+
+            &:hover {
+              color: #1976d2;
+            }
+          }
+        }
       }
     }
   }
@@ -466,6 +522,35 @@
       }
     }
   }
+}
+
+// Global Reset for Paginator to not break layout if needed (optional)
+::ng-deep .mat-mdc-paginator {
+  background: transparent;
+}
+
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+  
+  button {
+    transform: scale(0.8);
+  }
+}
+
+// Fix for dialog actions whitespace
+mat-dialog-actions {
+  min-height: auto;
+  padding: 8px 0;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+// Ensure container doesn't add extra padding at bottom that conflicts with actions
+.double-coded-review-container {
+  padding-bottom: 0 !important;
 }
 
 @media (max-width: 768px) {

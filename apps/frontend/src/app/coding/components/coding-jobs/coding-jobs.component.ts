@@ -841,10 +841,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   openDoubleCodedReviewDialog(): void {
     this.dialog.open(DoubleCodedReviewComponent, {
-      width: '90vw',
-      maxWidth: '1400px',
-      height: '90vh',
-      maxHeight: '900px',
+      width: '98vw',
+      maxWidth: '100vw',
+      height: '95vh',
+      maxHeight: '100vh',
       data: {}
     });
   }
@@ -853,8 +853,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     this.dialog.open(CohensKappaStatisticsComponent, {
       width: '90vw',
       maxWidth: '1400px',
-      height: '90vh',
-      maxHeight: '900px',
+      height: '95vh',
       data: {}
     });
   }

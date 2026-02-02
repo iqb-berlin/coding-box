@@ -171,6 +171,12 @@ export class WorkspaceCodingReviewController {
     description: 'Number of items per page (default: 50, max: 100)',
     type: Number
   })
+  @ApiQuery({
+    name: 'excludeTrainings',
+    required: false,
+    description: 'Exclude coder trainings from the review list (default: false)',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Double-coded variables retrieved for review',
     schema: {
@@ -199,6 +205,7 @@ export class WorkspaceCodingReviewController {
                     coderId: { type: 'number', description: 'Coder user ID' },
                     coderName: { type: 'string', description: 'Coder name' },
                     jobId: { type: 'number', description: 'Coding job ID' },
+                    jobName: { type: 'string', description: 'Name of the coding job' },
                     code: {
                       type: 'number',
                       nullable: true,
@@ -238,15 +245,21 @@ export class WorkspaceCodingReviewController {
   async getDoubleCodedVariablesForReview(
     @WorkspaceId() workspace_id: number,
                    @Query('page') page: number = 1,
-                   @Query('limit') limit: number = 50
+                   @Query('limit') limit: number = 50,
+                   @Query('onlyConflicts') onlyConflicts?: string,
+                   @Query('excludeTrainings') excludeTrainings?: string
   ): Promise<DoubleCodedReviewResponse> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
+    const isOnlyConflicts = onlyConflicts === 'true';
+    const isExcludeTrainings = excludeTrainings === 'true';
 
     return this.codingReviewService.getDoubleCodedVariablesForReview(
       workspace_id,
       validPage,
-      validLimit
+      validLimit,
+      isOnlyConflicts,
+      isExcludeTrainings
     );
   }
 
