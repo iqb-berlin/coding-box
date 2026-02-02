@@ -22,9 +22,15 @@ export interface CreateCoderTrainingJobsResponse {
 export interface TrainingCodingResult {
   unitName: string;
   variableId: string;
-  trainings: Array<{
+  personCode: string;
+  personLogin: string;
+  personGroup: string;
+  testPerson: string;
+  coders: Array<{
     trainingId: number;
     trainingLabel: string;
+    coderId: number;
+    coderName: string;
     code: string | null;
     score: number | null;
   }>;

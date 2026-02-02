@@ -324,7 +324,11 @@ export class WorkspaceCoderTrainingController {
         properties: {
           unitName: { type: 'string', description: 'Name of the unit' },
           variableId: { type: 'string', description: 'Variable ID' },
-          trainings: {
+          personCode: { type: 'string', description: 'Person Code' },
+          personLogin: { type: 'string', description: 'Person Login' },
+          personGroup: { type: 'string', description: 'Person Group' },
+          testPerson: { type: 'string', description: 'Test Person' },
+          coders: {
             type: 'array',
             items: {
               type: 'object',
@@ -334,6 +338,8 @@ export class WorkspaceCoderTrainingController {
                   type: 'string',
                   description: 'Training label'
                 },
+                coderId: { type: 'number', description: 'Coder (Job) ID' },
+                coderName: { type: 'string', description: 'Coder Name' },
                 code: {
                   type: 'string',
                   description: 'Code given by coders in this training'
@@ -356,9 +362,15 @@ export class WorkspaceCoderTrainingController {
       Array<{
         unitName: string;
         variableId: string;
-        trainings: Array<{
+        personCode: string;
+        personLogin: string;
+        personGroup: string;
+        testPerson: string;
+        coders: Array<{
           trainingId: number;
           trainingLabel: string;
+          coderId: number;
+          coderName: string;
           code: string | null;
           score: number | null;
         }>;
