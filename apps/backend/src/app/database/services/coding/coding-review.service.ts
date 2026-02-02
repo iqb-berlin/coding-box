@@ -23,7 +23,8 @@ export class CodingReviewService {
     page: number = 1,
     limit: number = 50,
     onlyConflicts: boolean = false,
-    excludeTrainings: boolean = false
+    excludeTrainings: boolean = false,
+    includeRelations: boolean = true
   ): Promise<{
       data: Array<{
         responseId: number;
@@ -92,17 +93,23 @@ export class CodingReviewService {
       const endIndex = Math.min(startIndex + limit, responseIds.length);
       const paginatedResponseIds = responseIds.slice(startIndex, endIndex);
 
+      const relations = includeRelations ? [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user',
+        'response',
+        'response.unit',
+        'response.unit.booklet',
+        'response.unit.booklet.person'
+      ] : [
+        'coding_job',
+        'coding_job.codingJobCoders',
+        'coding_job.codingJobCoders.user'
+      ];
+
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: { response_id: In(paginatedResponseIds) },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user',
-          'response',
-          'response.unit',
-          'response.unit.booklet',
-          'response.unit.booklet.person'
-        ]
+        relations
       });
 
       const responseGroups = new Map<
@@ -298,7 +305,8 @@ export class CodingReviewService {
 
   async getWorkspaceCohensKappaSummary(
     workspaceId: number,
-    weightedMean: boolean = true
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true
   ): Promise<{
       coderPairs: Array<{
         coder1Id: number;
@@ -322,14 +330,16 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}`
+        `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}${excludeTrainings ? ' (excluding trainings)' : ''}`
       );
 
       const doubleCodedData = await this.getDoubleCodedVariablesForReview(
         workspaceId,
         1,
         10000,
-        true // Exclude coder training jobs
+        false, // onlyConflicts = false (needed for correct Kappa calculation)
+        excludeTrainings, // use passed parameter
+        true // includeRelations = true (needed for correct unique variable counting)
       ); // Get all data
 
       if (doubleCodedData.total === 0) {

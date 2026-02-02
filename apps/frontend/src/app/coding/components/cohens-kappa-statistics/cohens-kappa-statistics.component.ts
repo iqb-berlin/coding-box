@@ -62,6 +62,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
   kappaStatistics: KappaStatistics[] = [];
   showInterpretationScale = false;
   useWeightedMean = true; // Default to weighted mean (matching R reference implementation)
+  excludeTrainings = true; // Default: exclude trainings
 
   workspaceKappaSummary: {
     coderPairs: Array<{
@@ -96,7 +97,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId, this.useWeightedMean)
+    this.testPersonCodingService.getWorkspaceCohensKappaSummary(workspaceId, this.useWeightedMean, this.excludeTrainings)
       .pipe()
       .subscribe({
         next: summary => {
@@ -117,7 +118,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
       return;
     }
 
-    this.testPersonCodingService.getCohensKappaStatistics(workspaceId, this.useWeightedMean).subscribe({
+    this.testPersonCodingService.getCohensKappaStatistics(workspaceId, this.useWeightedMean, this.excludeTrainings).subscribe({
       next: response => {
         this.kappaStatistics = response.variables;
         this.isLoading = false;
@@ -130,7 +131,11 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   toggleWeightingMethod(): void {
-    this.useWeightedMean = !this.useWeightedMean;
+    this.loadWorkspaceKappaSummary();
+    this.loadKappaStatistics();
+  }
+
+  toggleExcludeTrainings(): void {
     this.loadWorkspaceKappaSummary();
     this.loadKappaStatistics();
   }

@@ -18,7 +18,6 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { CodingReviewService } from '../../database/services/coding';
 import {
-  CohensKappaSummary,
   DoubleCodedReviewResponse,
   DoubleCodedResolutionResponse
 } from './dto/workspace-coding.interfaces';
@@ -29,131 +28,6 @@ export class WorkspaceCodingReviewController {
   constructor(
     private codingReviewService: CodingReviewService
   ) { }
-
-  @Get(':workspace_id/coding/cohens-kappa')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiTags('coding')
-  @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiQuery({
-    name: 'weightedMean',
-    required: false,
-    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'unitName',
-    required: false,
-    description: 'Filter by unit name',
-    type: String
-  })
-  @ApiQuery({
-    name: 'variableId',
-    required: false,
-    description: 'Filter by variable ID',
-    type: String
-  })
-  @ApiOkResponse({
-    description:
-      "Cohen's Kappa statistics for double-coded variables with workspace summary.",
-    schema: {
-      type: 'object',
-      properties: {
-        variables: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              unitName: { type: 'string', description: 'Name of the unit' },
-              variableId: { type: 'string', description: 'Variable ID' },
-              coderPairs: {
-                type: 'array',
-                items: {
-                  type: 'object',
-                  properties: {
-                    coder1Id: { type: 'number', description: 'First coder ID' },
-                    coder1Name: {
-                      type: 'string',
-                      description: 'First coder name'
-                    },
-                    coder2Id: {
-                      type: 'number',
-                      description: 'Second coder ID'
-                    },
-                    coder2Name: {
-                      type: 'string',
-                      description: 'Second coder name'
-                    },
-                    kappa: {
-                      type: 'number',
-                      nullable: true,
-                      description: "Cohen's Kappa coefficient"
-                    },
-                    agreement: {
-                      type: 'number',
-                      description: 'Observed agreement percentage'
-                    },
-                    totalItems: {
-                      type: 'number',
-                      description: 'Total items coded by both coders'
-                    },
-                    validPairs: {
-                      type: 'number',
-                      description: 'Number of valid coding pairs'
-                    },
-                    interpretation: {
-                      type: 'string',
-                      description: 'Interpretation of the Kappa value'
-                    }
-                  }
-                },
-                description: "Cohen's Kappa statistics for each coder pair"
-              }
-            }
-          },
-          description: "Per-variable Cohen's Kappa statistics"
-        },
-        workspaceSummary: {
-          type: 'object',
-          properties: {
-            totalDoubleCodedResponses: {
-              type: 'number',
-              description: 'Total number of double-coded responses'
-            },
-            totalCoderPairs: {
-              type: 'number',
-              description: 'Total number of coder pairs analyzed'
-            },
-            averageKappa: {
-              type: 'number',
-              nullable: true,
-              description: "Average Cohen's Kappa across all coder pairs"
-            },
-            variablesIncluded: {
-              type: 'number',
-              description: 'Number of variables included in the analysis'
-            },
-            codersIncluded: {
-              type: 'number',
-              description: 'Number of coders included in the analysis'
-            },
-            weightingMethod: {
-              type: 'string',
-              enum: ['weighted', 'unweighted'],
-              description: 'Method used to calculate mean kappa'
-            }
-          },
-          description: 'Workspace-wide summary statistics'
-        }
-      }
-    }
-  })
-  async getCohensKappa(
-    @WorkspaceId() workspace_id: number,
-      @Query('weightedMean') weightedMean?: string
-  ): Promise<CohensKappaSummary> {
-    const useWeightedMean = weightedMean !== 'false'; // Default true
-    return this.codingReviewService.getWorkspaceCohensKappaSummary(workspace_id, useWeightedMean);
-  }
 
   @Get(':workspace_id/coding/double-coded-review')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)

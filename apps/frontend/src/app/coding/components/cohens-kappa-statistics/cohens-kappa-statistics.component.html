@@ -23,20 +23,32 @@
             kodierten Variablen.</mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <!-- Weighted Mean Toggle -->
-          <div class="weighting-toggle-container">
-            <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
-              Gewichteter Mittelwert
-            </mat-slide-toggle>
-            <mat-icon class="info-icon"
-              matTooltip="Gewichteter Mittelwert (Standard): Gewichtet jedes Kodierer-Paar-Kappa nach der Anzahl der kodierten Elemente. Dies entspricht der R eatPrep-Implementierung (weighted.mean). Ungewichteter Mittelwert: Einfacher arithmetischer Durchschnitt aller Kappa-Werte."
-              matTooltipPosition="right">
-              info
-            </mat-icon>
-            <span class="weighting-method-label">
-              ({{ workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet'
-              }})
-            </span>
+          <!-- Toggles -->
+          <div class="toggles-container">
+            <div class="toggle-item">
+              <mat-slide-toggle [(ngModel)]="excludeTrainings" (change)="toggleExcludeTrainings()" color="primary">
+                Kodierer-Trainings ausschließen
+              </mat-slide-toggle>
+              <mat-icon class="info-icon"
+                matTooltip="Zuklappen: Schließt alle Kodieraufträge aus, die mit einem Kodiertraining verknüpft sind. Aufklappen: Bezieht auch Trainingsdaten in die Cohen's Kappa Statistik ein."
+                matTooltipPosition="right">
+                info
+              </mat-icon>
+            </div>
+
+            <div class="toggle-item">
+              <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
+                Gewichteter Mittelwert
+              </mat-slide-toggle>
+              <mat-icon class="info-icon"
+                matTooltip="Gewichteter Mittelwert (Standard): Gewichtet jedes Kodierer-Paar-Kappa nach der Anzahl der kodierten Elemente. Dies entspricht der R eatPrep-Implementierung (weighted.mean). Ungewichteter Mittelwert: Einfacher arithmetischer Durchschnitt aller Kappa-Werte."
+                matTooltipPosition="right">
+                info
+              </mat-icon>
+              <span class="weighting-method-label">
+                ({{ workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet' }})
+              </span>
+            </div>
           </div>
 
           <div class="kappa-stats">

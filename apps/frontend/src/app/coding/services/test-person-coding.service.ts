@@ -773,6 +773,7 @@ export class TestPersonCodingService {
   getCohensKappaStatistics(
     workspaceId: number,
     weightedMean: boolean = true,
+    excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string
   ): Observable<{
@@ -802,6 +803,7 @@ export class TestPersonCodingService {
     let params = new HttpParams();
 
     params = params.set('weightedMean', weightedMean.toString());
+    params = params.set('excludeTrainings', excludeTrainings.toString());
 
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -856,7 +858,8 @@ export class TestPersonCodingService {
 
   getWorkspaceCohensKappaSummary(
     workspaceId: number,
-    weightedMean: boolean = true
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true
   ): Observable<{
       coderPairs: Array<{
         coder1Id: number;
@@ -878,7 +881,9 @@ export class TestPersonCodingService {
         weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
-    const params = new HttpParams().set('weightedMean', weightedMean.toString());
+    const params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
     return this.http
       .get<{
       coderPairs: Array<{
