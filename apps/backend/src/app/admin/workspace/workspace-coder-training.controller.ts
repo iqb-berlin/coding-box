@@ -868,14 +868,22 @@ export class WorkspaceCoderTrainingController {
     // 3. Calculate Cohen's Kappa for each pair (reuse existing logic)
     const kappaResults = this.codingStatisticsService.calculateCohensKappa(coderPairs, calculationLevel);
 
-    // 4. Group by variable (extract from comparison data)
-    // For simplicity, we'll group all results under a single "Training" variable for now
-    // In a more sophisticated implementation, we'd track which variable each pair belongs to
-    const variables = [{
-      unitName: 'Training',
-      variableId: 'all',
-      coderPairs: kappaResults
-    }];
+    // 4. Group by variable
+    const variableMap = new Map<string, { unitName: string; variableId: string; coderPairs: typeof kappaResults }>();
+
+    kappaResults.forEach(result => {
+      const key = `${result.unitName}:${result.variableId}`;
+      if (!variableMap.has(key)) {
+        variableMap.set(key, {
+          unitName: result.unitName as string,
+          variableId: result.variableId as string,
+          coderPairs: []
+        });
+      }
+      variableMap.get(key)!.coderPairs.push(result);
+    });
+
+    const variables = Array.from(variableMap.values());
 
     // 5. Calculate summary statistics
     let totalWeightedKappa = 0;
@@ -907,15 +915,16 @@ export class WorkspaceCoderTrainingController {
       averageKappa = validKappaCount > 0 ? totalKappa / validKappaCount : null;
     }
 
-    const totalResponses = kappaResults.length > 0 ? kappaResults[0].totalItems : 0;
+    const totalDoubleCodedResponses = comparisonData.filter(d => d.coders.filter(c => c.code !== null).length >= 2
+    ).length;
 
     return {
       variables,
       workspaceSummary: {
-        totalDoubleCodedResponses: totalResponses,
+        totalDoubleCodedResponses,
         totalCoderPairs: kappaResults.length,
         averageKappa,
-        variablesIncluded: 1, // For now, treating all as one training variable
+        variablesIncluded: variableMap.size,
         codersIncluded: uniqueCoders.size,
         weightingMethod: useWeightedMean ? 'weighted' : 'unweighted',
         calculationLevel

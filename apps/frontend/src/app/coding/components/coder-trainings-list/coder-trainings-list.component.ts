@@ -142,8 +142,9 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     }
 
     this.dialog.open(CodingResultsComparisonComponent, {
-      width: '90vw',
-      height: 'auto',
+      width: '95vw',
+      height: '95vh',
+      maxWidth: '95vw',
       maxHeight: '95vh',
       data: {
         workspaceId,

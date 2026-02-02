@@ -916,6 +916,8 @@ export class CoderTrainingService {
       coder1Name: string;
       coder2Id: number;
       coder2Name: string;
+      unitName: string;
+      variableId: string;
       codes: Array<{ code1: number | null; code2: number | null }>;
       scores: Array<{ score1: number | null; score2: number | null }>;
     }> {
@@ -937,6 +939,8 @@ export class CoderTrainingService {
       coder1Name: string;
       coder2Id: number;
       coder2Name: string;
+      unitName: string;
+      variableId: string;
       codes: Array<{ code1: number | null; code2: number | null }>;
       scores: Array<{ score1: number | null; score2: number | null }>;
     }> = [];
@@ -991,6 +995,8 @@ export class CoderTrainingService {
               coder1Name: coder1.coderName,
               coder2Id: coder2.jobId,
               coder2Name: coder2.coderName,
+              unitName: items[0].unitName,
+              variableId: items[0].variableId,
               codes: codePairs,
               scores: scorePairs
             });

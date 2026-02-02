@@ -1,22 +1,43 @@
-.comparison-container {
-  min-width: 600px;
-  max-width: 100%;
-  width: 100%;
-  padding: 24px 24px 0 24px;
+.dialog-layout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 
-  .dialog-header {
-    margin-bottom: 24px;
+  [mat-dialog-title] {
+    margin: 0;
+    padding: 16px 24px 8px 24px;
 
-    h2 {
-      margin: 0 0 8px 0;
-      color: #3f51b5;
-    }
+    .dialog-header {
+      margin-bottom: 12px;
 
-    span {
-      color: #666;
-      font-size: 14px;
+      h2 {
+        margin: 0 0 4px 0;
+        color: #3f51b5;
+        line-height: 1.2;
+        font-size: 1.25rem;
+      }
+
+      span {
+        color: #666;
+        font-size: 13px;
+      }
     }
   }
+
+  [mat-dialog-actions] {
+    padding: 8px 24px 12px 24px;
+    margin: 0;
+    min-height: auto;
+  }
+}
+
+.comparison-container {
+  padding: 0 24px;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  overflow: auto;
 
   .training-selection {
     margin-bottom: 16px;
@@ -505,4 +526,16 @@
       }
     }
   }
+}
+
+.inline-spinner {
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 10px;
+}
+
+.weighting-toggle-container, .level-toggle-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
 }

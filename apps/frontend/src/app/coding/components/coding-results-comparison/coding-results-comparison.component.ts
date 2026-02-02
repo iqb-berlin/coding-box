@@ -52,6 +52,37 @@ interface WithinTrainingComparison {
   }>;
 }
 
+interface KappaCoderPair {
+  coder1Id: number;
+  coder1Name: string;
+  coder2Id: number;
+  coder2Name: string;
+  kappa: number | null;
+  agreement: number;
+  totalItems: number;
+  validPairs: number;
+  interpretation: string;
+}
+
+interface KappaVariable {
+  unitName: string;
+  variableId: string;
+  coderPairs: KappaCoderPair[];
+}
+
+interface KappaStatistics {
+  variables: KappaVariable[];
+  workspaceSummary: {
+    totalDoubleCodedResponses: number;
+    totalCoderPairs: number;
+    averageKappa: number | null;
+    meanAgreement?: number | null;
+    variablesIncluded: number;
+    codersIncluded: number;
+    weightingMethod: 'weighted' | 'unweighted';
+  };
+}
+
 @Component({
   selector: 'coding-box-coding-results-comparison',
   templateUrl: './coding-results-comparison.component.html',
@@ -80,15 +111,20 @@ interface WithinTrainingComparison {
 })
 export class CodingResultsComparisonComponent implements OnInit {
   @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @ViewChild(MatPaginator) set matPaginator(mp: MatPaginator) {
+    if (mp) {
+      this.dataSource.paginator = mp;
+    }
+  }
 
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
   isLoading = false;
+  isLoadingKappa = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
-  displayedColumns: string[] = ['unitName', 'variableId', 'personLogin', 'personCode', 'personGroup', 'match'];
+  displayedColumns: string[] = ['index', 'unitName', 'variableId', 'personLogin', 'personCode', 'personGroup', 'match'];
   availableTrainings: CoderTraining[] = [];
   selectedTrainings = new SelectionModel<number>(true, []);
   comparisonData: TrainingComparison[] = [];
@@ -105,36 +141,13 @@ export class CodingResultsComparisonComponent implements OnInit {
   matchingPercentage = 0;
 
   // Cohen's Kappa properties
-  kappaStatistics: {
-    variables: Array<{
-      unitName: string;
-      variableId: string;
-      coderPairs: Array<{
-        coder1Id: number;
-        coder1Name: string;
-        coder2Id: number;
-        coder2Name: string;
-        kappa: number | null;
-        agreement: number;
-        totalItems: number;
-        validPairs: number;
-        interpretation: string;
-      }>;
-    }>;
-    workspaceSummary: {
-      totalDoubleCodedResponses: number;
-      totalCoderPairs: number;
-      averageKappa: number | null;
-      meanAgreement?: number | null;
-      variablesIncluded: number;
-      codersIncluded: number;
-      weightingMethod: 'weighted' | 'unweighted';
-    };
-  } | null = null;
+  kappaStatistics: KappaStatistics | null = null;
 
   showKappaStatistics = false;
   useWeightedMean = true;
   useCodeLevel = true; // true = code level, false = score level
+
+  originalKappaStatistics: KappaStatistics | null = null; // Store original for filtering
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
@@ -169,7 +182,6 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
   }
 
   loadCoderTrainings(): Promise<void> {
@@ -223,7 +235,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private updateDisplayedColumns(): void {
-    const baseColumns = ['unitName', 'variableId'];
+    const baseColumns = ['index', 'unitName', 'variableId'];
 
     if (this.comparisonMode === 'between-trainings') {
       const trainingColumns = this.selectedTrainings.selected.map(trainingId => {
@@ -238,7 +250,8 @@ export class CodingResultsComparisonComponent implements OnInit {
 
       if (this.selectedTrainingForWithin && this.withinTrainingData.length > 0) {
         // Filter columns based on selected coders
-        const coderColumns = this.selectedCoderIds.selected.map(jobId => `coder_${jobId}`);
+        const selectedCoderIds = this.codersFormControl.value || [];
+        const coderColumns = selectedCoderIds.map(jobId => `coder_${jobId}`);
         this.displayedColumns = [...baseColumns, ...personColumns, 'match', ...coderColumns];
       } else {
         this.displayedColumns = [...baseColumns, ...personColumns, 'match'];
@@ -247,12 +260,51 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   calculateStatistics(): void {
-    const data = this.comparisonMode === 'between-trainings' ? this.comparisonData : this.withinTrainingData;
-    const total = data.length;
-    const matching = data.filter(item => this.areCodesTheSame(item)).length;
+    const data = this.dataSource.data;
+    // Only count items with at least two codes from selected sources
+    const doubleCodedItems = data.filter(item => this.countSelectedCodes(item) >= 2);
+
+    const total = doubleCodedItems.length;
+    const matching = doubleCodedItems.filter(item => this.areCodesMatching(item)).length;
+
     this.totalComparisons = total;
     this.matchingComparisons = matching;
     this.matchingPercentage = total > 0 ? Math.round((matching / total) * 100) : 0;
+  }
+
+  private countSelectedCodes(comparison: TrainingComparison | WithinTrainingComparison): number {
+    let codes: (string | null)[];
+    if ('trainings' in comparison) {
+      const selectedIds = this.selectedTrainings.selected;
+      codes = comparison.trainings
+        .filter(t => selectedIds.includes(t.trainingId))
+        .map(t => t.code);
+    } else {
+      const selectedIds = this.codersFormControl.value || [];
+      codes = comparison.coders
+        .filter(c => selectedIds.includes(c.jobId))
+        .map(c => c.code);
+    }
+    return codes.filter(c => c !== null).length;
+  }
+
+  private areCodesMatching(comparison: TrainingComparison | WithinTrainingComparison): boolean {
+    let codes: (string | null)[];
+    if ('trainings' in comparison) {
+      const selectedIds = this.selectedTrainings.selected;
+      codes = comparison.trainings
+        .filter(t => selectedIds.includes(t.trainingId))
+        .map(t => t.code);
+    } else {
+      const selectedIds = this.codersFormControl.value || [];
+      codes = comparison.coders
+        .filter(c => selectedIds.includes(c.jobId))
+        .map(c => c.code);
+    }
+    const filteredCodes = codes.filter(c => c !== null);
+    if (filteredCodes.length === 0) return true;
+    const first = filteredCodes[0];
+    return filteredCodes.every(code => code === first);
   }
 
   loadComparison(): void {
@@ -286,7 +338,8 @@ export class CodingResultsComparisonComponent implements OnInit {
       this.isLoading = true;
       this.codingTrainingBackendService.compareWithinTrainingCodingResults(this.data.workspaceId, this.selectedTrainingForWithin).subscribe({
         next: data => {
-          this.withinTrainingData = data.filter(d => this.hasAnyCode(d)).map(item => ({
+          // First map all data to ensure we have the correct structure
+          const mappedData: WithinTrainingComparison[] = data.map(item => ({
             unitName: item.unitName,
             variableId: item.variableId,
             testperson: item.testPerson,
@@ -296,9 +349,9 @@ export class CodingResultsComparisonComponent implements OnInit {
             coders: item.coders
           }));
 
-          // Extract available coders from the first data item (assuming all items have same coders structure)
-          if (this.withinTrainingData.length > 0) {
-            this.availableCoders = this.withinTrainingData[0].coders.map(c => ({
+          // Determine available coders from all data items
+          if (mappedData.length > 0) {
+            this.availableCoders = mappedData[0].coders.map(c => ({
               jobId: c.jobId,
               coderName: c.coderName
             }));
@@ -312,7 +365,9 @@ export class CodingResultsComparisonComponent implements OnInit {
             this.selectedCoderIds.clear();
           }
 
-          this.dataSource.data = this.withinTrainingData;
+          this.withinTrainingData = mappedData;
+          // Now filter based on the (now initialized) selection
+          this.dataSource.data = this.withinTrainingData.filter(d => this.hasAnyCode(d));
           this.updateDisplayedColumns();
           this.calculateStatistics();
           // Automatically load Kappa statistics to show Mean Agreement in summary
@@ -332,6 +387,13 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.selectedCoderIds.clear();
     this.selectedCoderIds.select(...selectedIds);
     this.updateDisplayedColumns();
+
+    if (this.comparisonMode === 'within-training') {
+      this.dataSource.data = this.withinTrainingData.filter(d => this.hasAnyCode(d));
+    }
+
+    this.calculateStatistics();
+    this.filterKappaStatistics();
   }
 
   getCoderCode(comparison: WithinTrainingComparison, jobId: number): string | null {
@@ -380,9 +442,15 @@ export class CodingResultsComparisonComponent implements OnInit {
   areCodesTheSame(comparison: TrainingComparison | WithinTrainingComparison): boolean {
     let codes: (string | null)[];
     if ('trainings' in comparison) {
-      codes = comparison.trainings.map(t => t.code);
+      const selectedIds = this.selectedTrainings.selected;
+      codes = comparison.trainings
+        .filter(t => selectedIds.includes(t.trainingId))
+        .map(t => t.code);
     } else {
-      codes = comparison.coders.map(c => c.code);
+      const selectedIds = this.codersFormControl.value || [];
+      codes = comparison.coders
+        .filter(c => selectedIds.includes(c.jobId))
+        .map(c => c.code);
     }
     if (codes.length === 0) return true;
     const first = codes[0];
@@ -392,9 +460,15 @@ export class CodingResultsComparisonComponent implements OnInit {
   hasAnyCode(comparison: TrainingComparison | WithinTrainingComparison): boolean {
     let codes: (string | null)[];
     if ('trainings' in comparison) {
-      codes = comparison.trainings.map(t => t.code);
+      const selectedIds = this.selectedTrainings.selected;
+      codes = comparison.trainings
+        .filter(t => selectedIds.includes(t.trainingId))
+        .map(t => t.code);
     } else {
-      codes = comparison.coders.map(c => c.code);
+      const selectedIds = this.codersFormControl.value || [];
+      codes = comparison.coders
+        .filter(c => selectedIds.includes(c.jobId))
+        .map(c => c.code);
     }
     return codes.some(c => c !== null);
   }
@@ -404,6 +478,7 @@ export class CodingResultsComparisonComponent implements OnInit {
       return;
     }
 
+    this.isLoadingKappa = true;
     const level = this.useCodeLevel ? 'code' : 'score';
     this.codingTrainingBackendService
       .getTrainingCohensKappa(
@@ -414,10 +489,12 @@ export class CodingResultsComparisonComponent implements OnInit {
       )
       .subscribe({
         next: stats => {
-          this.kappaStatistics = stats;
-          this.calculateMeanAgreement();
+          this.originalKappaStatistics = stats;
+          this.filterKappaStatistics();
+          this.isLoadingKappa = false;
         },
         error: () => {
+          this.isLoadingKappa = false;
           this.snackBar.open(
             this.translate.instant('coding.trainings.kappa.error'),
             this.translate.instant('common.close'),
@@ -425,6 +502,75 @@ export class CodingResultsComparisonComponent implements OnInit {
           );
         }
       });
+  }
+
+  filterKappaStatistics(): void {
+    if (!this.originalKappaStatistics) return;
+
+    const selectedCoderIds = this.codersFormControl.value || [];
+
+    // Deep copy
+    const filteredStats = JSON.parse(JSON.stringify(this.originalKappaStatistics));
+
+    // Filter coder pairs for each variable
+    filteredStats.variables = filteredStats.variables.map((variable: KappaVariable) => {
+      variable.coderPairs = variable.coderPairs.filter((pair: KappaCoderPair) => selectedCoderIds.includes(pair.coder1Id) && selectedCoderIds.includes(pair.coder2Id)
+      );
+      return variable;
+    }).filter((variable: KappaVariable) => variable.coderPairs.length > 0);
+
+    this.kappaStatistics = filteredStats;
+    this.calculateMeanAgreement();
+    this.updateSummaryFromFiltered();
+  }
+
+  updateSummaryFromFiltered(): void {
+    if (!this.kappaStatistics) return;
+
+    // Recalculate totalDoubleCodedResponses based on selected coders and withinTrainingData
+    const selectedCoderIds = this.codersFormControl.value || [];
+    this.kappaStatistics.workspaceSummary.totalDoubleCodedResponses = this.withinTrainingData.filter(d => {
+      const coderCodes = d.coders
+        .filter(c => selectedCoderIds.includes(c.jobId))
+        .map(c => c.code)
+        .filter(c => c !== null);
+      return coderCodes.length >= 2;
+    }).length;
+
+    let totalWeight = 0;
+    let pairCount = 0;
+
+    this.kappaStatistics.variables.forEach(variable => {
+      variable.coderPairs.forEach(pair => {
+        if (pair.validPairs > 0) {
+          totalWeight += pair.validPairs;
+          pairCount += 1;
+        }
+      });
+    });
+
+    // Recalculate average Kappa similarly
+    let totalKappaWeighted = 0;
+    let totalKappaSum = 0;
+
+    this.kappaStatistics.variables.forEach(variable => {
+      variable.coderPairs.forEach(pair => {
+        if (pair.validPairs > 0 && pair.kappa !== null) {
+          totalKappaWeighted += pair.kappa * pair.validPairs;
+          totalKappaSum += pair.kappa;
+        }
+      });
+    });
+
+    const meanKappaWeighted = totalWeight > 0 ? totalKappaWeighted / totalWeight : null;
+    const meanKappaArithmetic = pairCount > 0 ? totalKappaSum / pairCount : null;
+
+    this.kappaStatistics.workspaceSummary.averageKappa = this.useWeightedMean ?
+      meanKappaWeighted : meanKappaArithmetic;
+
+    this.kappaStatistics.workspaceSummary.totalCoderPairs = pairCount;
+    this.kappaStatistics.workspaceSummary.codersIncluded = this.codersFormControl.value?.length || 0;
+    this.kappaStatistics.workspaceSummary.variablesIncluded = this.kappaStatistics.variables.length;
   }
 
   calculateMeanAgreement(): void {
@@ -461,12 +607,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   toggleWeightingMethod(): void {
-    this.useWeightedMean = !this.useWeightedMean;
     this.loadKappaStatistics();
   }
 
   toggleCalculationLevel(): void {
-    this.useCodeLevel = !this.useCodeLevel;
     this.loadKappaStatistics();
   }
 }

@@ -184,7 +184,7 @@
               <mat-form-field appearance="outline" class="sample-count-field density-compact"
                 [class.insufficient-input]="isManualVariableInsufficient(item)">
                 <mat-label>Anzahl Stichproben</mat-label>
-                <input matInput type="number" formControlName="sampleCount" min="1" max="1000">
+                <input matInput type="number" formControlName="sampleCount" min="1" [max]="getAvailableCount(item)">
                 <mat-hint *ngIf="isManualVariableInsufficient(item)" class="warn-text">
                   Max. {{getAvailableCount(item)}} Fälle verfügbar
                 </mat-hint>
