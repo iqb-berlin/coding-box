@@ -7,6 +7,9 @@ import { CodingJobVariableBundle } from '../database/entities/coding-job-variabl
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
 import { CoderTraining } from '../database/entities/coder-training.entity';
+import { CoderTrainingVariable } from '../database/entities/coder-training-variable.entity';
+import { CoderTrainingBundle } from '../database/entities/coder-training-bundle.entity';
+import { CoderTrainingCoder } from '../database/entities/coder-training-coder.entity';
 import { MissingsProfile } from '../database/entities/missings-profile.entity';
 import { VariableBundle } from '../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../database/entities/response.entity';
@@ -51,6 +54,9 @@ import { WorkspaceModule } from '../workspace/workspace.module';
       CodingJobUnit,
       JobDefinition,
       CoderTraining,
+      CoderTrainingVariable,
+      CoderTrainingBundle,
+      CoderTrainingCoder,
       MissingsProfile,
       VariableBundle,
       ResponseEntity,

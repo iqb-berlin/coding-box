@@ -7,153 +7,186 @@
   <mat-dialog-content class="cohens-kappa-container">
     <div class="content-section">
       @if (isLoading) {
-        <div class="loading-container">
-          <mat-spinner diameter="40"></mat-spinner>
-          <p>Statistiken werden geladen...</p>
-        </div>
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <p>Statistiken werden geladen...</p>
+      </div>
       } @else {
-        <!-- Workspace-wide Cohen's Kappa Statistics -->
-        <mat-card class="workspace-kappa-card" *ngIf="workspaceKappaSummary">
-          <mat-card-header>
-            <mat-card-title>
-              <mat-icon>analytics</mat-icon>
-              Inter-Rater Zuverlässigkeit (Cohen's Kappa)
-            </mat-card-title>
-            <mat-card-subtitle>Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt kodierten Variablen.</mat-card-subtitle>
-          </mat-card-header>
-          <mat-card-content>
-            <div class="kappa-stats">
-              <div class="stat-item">
-                <span class="stat-label">Durchschnittliches Kappa:</span>
-                <span class="stat-value kappa"
-                      [class.kappa-excellent]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.8"
-                      [class.kappa-good]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.6 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.8"
-                      [class.kappa-fair]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.4 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.6"
-                      [class.kappa-poor]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa < 0.4">
-                  {{workspaceKappaSummary.workspaceSummary.averageKappa != null ? (workspaceKappaSummary.workspaceSummary.averageKappa | number:'1.0-3') : 'N/A'}}
-                </span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Kodierer-Paare analysiert:</span>
-                <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalCoderPairs}}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Doppelt kodierte Antworten:</span>
-                <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalDoubleCodedResponses}}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Kodierer einbezogen:</span>
-                <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.codersIncluded}}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Variablen einbezogen:</span>
-                <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.variablesIncluded}}</span>
-              </div>
+      <!-- Workspace-wide Cohen's Kappa Statistics -->
+      <mat-card class="workspace-kappa-card" *ngIf="workspaceKappaSummary">
+        <mat-card-header>
+          <mat-card-title>
+            <mat-icon>analytics</mat-icon>
+            Inter-Rater Zuverlässigkeit (Cohen's Kappa)
+          </mat-card-title>
+          <mat-card-subtitle>Arbeitsbereichsübergreifende Analyse der Übereinstimmung zwischen Kodierern bei doppelt
+            kodierten Variablen.</mat-card-subtitle>
+        </mat-card-header>
+        <mat-card-content>
+          <!-- Toggles -->
+          <div class="toggles-container">
+            <div class="toggle-item">
+              <mat-slide-toggle [(ngModel)]="excludeTrainings" (change)="toggleExcludeTrainings()" color="primary">
+                Kodierer-Trainings ausschließen
+              </mat-slide-toggle>
+              <mat-icon class="info-icon"
+                matTooltip="Zuklappen: Schließt alle Kodieraufträge aus, die mit einem Kodiertraining verknüpft sind. Aufklappen: Bezieht auch Trainingsdaten in die Cohen's Kappa Statistik ein."
+                matTooltipPosition="right">
+                info
+              </mat-icon>
             </div>
-            <div class="kappa-interpretation" *ngIf="workspaceKappaSummary?.workspaceSummary?.averageKappa !== null">
-              <div class="interpretation-text">
-                <strong>Interpretation:</strong>
-                <span [class]="getKappaInterpretationClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
-                  {{getKappaInterpretationText(workspaceKappaSummary.workspaceSummary.averageKappa)}}
-                </span>
-              </div>
+
+            <div class="toggle-item">
+              <mat-slide-toggle [(ngModel)]="useWeightedMean" (change)="toggleWeightingMethod()" color="primary">
+                Gewichteter Mittelwert
+              </mat-slide-toggle>
+              <mat-icon class="info-icon"
+                matTooltip="Gewichteter Mittelwert (Standard): Gewichtet jedes Kodierer-Paar-Kappa nach der Anzahl der kodierten Elemente. Dies entspricht der R eatPrep-Implementierung (weighted.mean). Ungewichteter Mittelwert: Einfacher arithmetischer Durchschnitt aller Kappa-Werte."
+                matTooltipPosition="right">
+                info
+              </mat-icon>
+              <span class="weighting-method-label">
+                ({{ workspaceKappaSummary.workspaceSummary.weightingMethod === 'weighted' ? 'Gewichtet' : 'Ungewichtet' }})
+              </span>
             </div>
-          </mat-card-content>
-        </mat-card>
+          </div>
 
-        <!-- Cohen's Kappa Statistics Section -->
-        <mat-card class="kappa-card">
-          <mat-card-header>
-            <mat-card-title>
-              <mat-icon>analytics</mat-icon>
-              Detaillierte Cohen's Kappa Statistiken
-            </mat-card-title>
-            <mat-card-subtitle>Variablenspezifische Analyse der Übereinstimmung zwischen Kodierer-Paaren.</mat-card-subtitle>
-          </mat-card-header>
+          <div class="kappa-stats">
+            <div class="stat-item">
+              <span class="stat-label">Durchschnittliches Kappa:</span>
+              <span class="stat-value kappa"
+                [class.kappa-excellent]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.8"
+                [class.kappa-good]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.6 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.8"
+                [class.kappa-fair]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.4 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.6"
+                [class.kappa-poor]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa < 0.4">
+                {{workspaceKappaSummary.workspaceSummary.averageKappa != null ?
+                (workspaceKappaSummary.workspaceSummary.averageKappa | number:'1.0-3') : 'N/A'}}
+              </span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Kodierer-Paare analysiert:</span>
+              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalCoderPairs}}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Doppelt kodierte Antworten:</span>
+              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.totalDoubleCodedResponses}}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Kodierer einbezogen:</span>
+              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.codersIncluded}}</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">Variablen einbezogen:</span>
+              <span class="stat-value">{{workspaceKappaSummary.workspaceSummary.variablesIncluded}}</span>
+            </div>
+          </div>
+          <div class="kappa-interpretation" *ngIf="workspaceKappaSummary.workspaceSummary.averageKappa !== null">
+            <div class="interpretation-text">
+              <strong>Interpretation:</strong>
+              <span [class]="getKappaInterpretationClass(workspaceKappaSummary.workspaceSummary.averageKappa)">
+                {{getKappaInterpretationText(workspaceKappaSummary.workspaceSummary.averageKappa)}}
+              </span>
+            </div>
+          </div>
+        </mat-card-content>
+      </mat-card>
 
-          <!-- Collapsible Interpretation Scale -->
-          <div class="interpretation-scale-container">
-            <button mat-button class="scale-toggle-btn" (click)="toggleInterpretationScale()" [attr.aria-expanded]="showInterpretationScale">
-              <mat-icon>{{ showInterpretationScale ? 'expand_less' : 'expand_more' }}</mat-icon>
-              <span>Interpretationsskala {{ showInterpretationScale ? 'ausblenden' : 'einblenden' }}</span>
-            </button>
+      <!-- Cohen's Kappa Statistics Section -->
+      <mat-card class="kappa-card">
+        <mat-card-header>
+          <mat-card-title>
+            <mat-icon>analytics</mat-icon>
+            Detaillierte Cohen's Kappa Statistiken
+          </mat-card-title>
+          <mat-card-subtitle>Variablenspezifische Analyse der Übereinstimmung zwischen
+            Kodierer-Paaren.</mat-card-subtitle>
+        </mat-card-header>
 
-            <div class="interpretation-scale" *ngIf="showInterpretationScale">
-              <div class="scale-header">
-                <mat-icon class="scale-icon">📊</mat-icon>
-                <span class="scale-title">Cohen's Kappa Interpretationsskala</span>
+        <!-- Collapsible Interpretation Scale -->
+        <div class="interpretation-scale-container">
+          <button mat-button class="scale-toggle-btn" (click)="toggleInterpretationScale()"
+            [attr.aria-expanded]="showInterpretationScale">
+            <mat-icon>{{ showInterpretationScale ? 'expand_less' : 'expand_more' }}</mat-icon>
+            <span>Interpretationsskala {{ showInterpretationScale ? 'ausblenden' : 'einblenden' }}</span>
+          </button>
+
+          <div class="interpretation-scale" *ngIf="showInterpretationScale">
+            <div class="scale-header">
+              <mat-icon class="scale-icon">📊</mat-icon>
+              <span class="scale-title">Cohen's Kappa Interpretationsskala</span>
+            </div>
+            <div class="scale-items">
+              <div class="scale-item">
+                <span class="scale-range" style="color: #d32f2f; font-weight: bold;">⬤ < 0.20:</span>
+                    <span class="scale-label">Schlechte Übereinstimmung</span>
               </div>
-              <div class="scale-items">
-                <div class="scale-item">
-                  <span class="scale-range" style="color: #d32f2f; font-weight: bold;">⬤ < 0.20:</span>
-                  <span class="scale-label">Schlechte Übereinstimmung</span>
-                </div>
-                <div class="scale-item">
-                  <span class="scale-range" style="color: #f57c00; font-weight: bold;">⬤ 0.21 - 0.40:</span>
-                  <span class="scale-label">Schwache Übereinstimmung</span>
-                </div>
-                <div class="scale-item">
-                  <span class="scale-range" style="color: #fbc02d; font-weight: bold;">⬤ 0.41 - 0.60:</span>
-                  <span class="scale-label">Mäßige Übereinstimmung</span>
-                </div>
-                <div class="scale-item">
-                  <span class="scale-range" style="color: #388e3c; font-weight: bold;">⬤ 0.61 - 0.80:</span>
-                  <span class="scale-label">Substantielle Übereinstimmung</span>
-                </div>
-                <div class="scale-item">
-                  <span class="scale-range" style="color: #1976d2; font-weight: bold;">⬤ > 0.81:</span>
-                  <span class="scale-label">Nahezu perfekte Übereinstimmung</span>
-                </div>
+              <div class="scale-item">
+                <span class="scale-range" style="color: #f57c00; font-weight: bold;">⬤ 0.21 - 0.40:</span>
+                <span class="scale-label">Schwache Übereinstimmung</span>
+              </div>
+              <div class="scale-item">
+                <span class="scale-range" style="color: #fbc02d; font-weight: bold;">⬤ 0.41 - 0.60:</span>
+                <span class="scale-label">Mäßige Übereinstimmung</span>
+              </div>
+              <div class="scale-item">
+                <span class="scale-range" style="color: #388e3c; font-weight: bold;">⬤ 0.61 - 0.80:</span>
+                <span class="scale-label">Substantielle Übereinstimmung</span>
+              </div>
+              <div class="scale-item">
+                <span class="scale-range" style="color: #1976d2; font-weight: bold;">⬤ > 0.81:</span>
+                <span class="scale-label">Nahezu perfekte Übereinstimmung</span>
               </div>
             </div>
           </div>
-          <mat-card-content>
-            <div class="kappa-info">
-              <p>Diese Statistiken zeigen die Cohen's Kappa Werte für jede Variable und jedes Kodierer-Paar, das diese Variable bearbeitet hat.</p>
+        </div>
+        <mat-card-content>
+          <div class="kappa-info">
+            <p>Diese Statistiken zeigen die Cohen's Kappa Werte für jede Variable und jedes Kodierer-Paar, das diese
+              Variable bearbeitet hat.</p>
 
-              @if (kappaStatistics.length === 0) {
-                <div class="no-kappa-data">
-                  <mat-icon>info</mat-icon>
-                  <p>Keine Cohen's Kappa Statistiken verfügbar</p>
-                </div>
-              } @else {
-                <div class="kappa-results">
-                  @for (stat of kappaStatistics; track stat.unitName + stat.variableId) {
-                    <div class="kappa-unit-variable">
-                      <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
-                      <div class="kappa-pairs">
-                        @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
-                          <div class="kappa-pair">
-                            <div class="coder-names">
-                              <span class="coder1">{{ pair.coder1Name }}</span>
-                              <span class="vs">vs</span>
-                              <span class="coder2">{{ pair.coder2Name }}</span>
-                            </div>
-                            <div class="kappa-values">
-                              <div class="kappa-value">
-                                <span class="label">Kappa:</span>
-                                <span class="value" [class]="getKappaClass(pair.kappa)">
-                                  {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
-                                </span>
-                              </div>
-                              <div class="agreement-value">
-                                <span class="label">Übereinstimmung:</span>
-                                <span class="value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
-                              </div>
-                              <div class="interpretation">
-                                <span class="interpretation-text">{{ getTranslatedInterpretation(pair.interpretation) }}</span>
-                              </div>
-                            </div>
-                          </div>
-                        }
+            @if (kappaStatistics.length === 0) {
+            <div class="no-kappa-data">
+              <mat-icon>info</mat-icon>
+              <p>Keine Cohen's Kappa Statistiken verfügbar</p>
+            </div>
+            } @else {
+            <div class="kappa-results">
+              @for (stat of kappaStatistics; track stat.unitName + stat.variableId) {
+              <div class="kappa-unit-variable">
+                <h4>{{ stat.unitName }} - {{ stat.variableId }}</h4>
+                <div class="kappa-pairs">
+                  @for (pair of stat.coderPairs; track pair.coder1Id + '-' + pair.coder2Id) {
+                  <div class="kappa-pair">
+                    <div class="coder-names">
+                      <span class="coder1">{{ pair.coder1Name }}</span>
+                      <span class="vs">vs</span>
+                      <span class="coder2">{{ pair.coder2Name }}</span>
+                    </div>
+                    <div class="kappa-values">
+                      <div class="kappa-value">
+                        <span class="label">Kappa:</span>
+                        <span class="value" [class]="getKappaClass(pair.kappa)">
+                          {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
+                        </span>
+                      </div>
+                      <div class="agreement-value">
+                        <span class="label">Übereinstimmung:</span>
+                        <span class="value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
+                      </div>
+                      <div class="interpretation">
+                        <span class="interpretation-text">{{ getTranslatedInterpretation(pair.interpretation) }}</span>
                       </div>
                     </div>
+                  </div>
                   }
                 </div>
+              </div>
               }
             </div>
-          </mat-card-content>
-        </mat-card>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
       }
     </div>
   </mat-dialog-content>

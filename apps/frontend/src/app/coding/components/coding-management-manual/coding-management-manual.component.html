@@ -1,4 +1,4 @@
-<div class="fx-column-start-start fx-gap-10 coding-container">
+<div class="fx-column-start-stretch fx-gap-10 coding-container">
 
   <div
     *ngIf="validationProgress && (validationProgress.status === 'loading' || validationProgress.status === 'processing')"
@@ -52,8 +52,8 @@
       <hr>
 
       <!-- Aggregation Configuration and Actions -->
-      <div class="manual-coding-sections-container" *ngIf="responseAnalysis">
-        <div class="aggregation-config" *ngIf="responseAnalysis">
+      <div class="manual-coding-sections-container" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
+        <div class="aggregation-config" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
           <h3 class="subsection-title">
             <mat-icon>settings</mat-icon>
             {{ 'coding-management-manual.duplicate-aggregation.config-title' | translate }}
@@ -67,10 +67,10 @@
                 <div class="config-grid">
                   <div class="settings-control threshold-control">
                     <mat-form-field appearance="outline" class="density-compact">
-                      <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate }}</mat-label>
+                      <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate
+                        }}</mat-label>
                       <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
-                             (ngModelChange)="onThresholdChanged($event)"
-                             min="2" max="100" step="1">
+                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1">
                     </mat-form-field>
 
                     <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
@@ -116,7 +116,7 @@
         </div>
 
         <!-- Response Analysis Section -->
-        <div class="response-analysis-section">
+        <div class="response-analysis-section statistics-section" [class.blurred-content]="isLoadingResponseAnalysis">
           <h3 class="subsection-title">
             <mat-icon>analytics</mat-icon>
             {{ 'coding-management-manual.response-analysis.title' | translate }}
@@ -152,28 +152,34 @@
               </div>
               <div *ngIf="showEmptyResponsesDetails && responseAnalysis.emptyResponses.total > 0"
                 class="analysis-details">
-                <table class="analysis-table">
-                  <thead>
-                    <tr>
-                      <th>{{ 'coding-management-manual.response-analysis.table.unit' | translate }}</th>
-                      <th>{{ 'coding-management-manual.response-analysis.table.variable' | translate }}</th>
-                      <th>{{ 'coding-management-manual.response-analysis.table.person' | translate }}</th>
-                      <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr *ngFor="let item of responseAnalysis.emptyResponses.items | slice:0:50">
-                      <td>{{ item.unitAlias || item.unitName }}</td>
-                      <td>{{ item.variableId }}</td>
-                      <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
-                      <td>{{ item.bookletName }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-                <p *ngIf="responseAnalysis.emptyResponses.total > 50" class="more-items-hint">
-                  {{ 'coding-management-manual.response-analysis.showing-first-50' | translate:{ total:
-                  responseAnalysis.emptyResponses.total } }}
-                </p>
+                <div class="table-responsive">
+                  <table class="analysis-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'coding-management-manual.response-analysis.table.unit' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.variable' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.person' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let item of responseAnalysis.emptyResponses.items">
+                        <td>{{ item.unitAlias || item.unitName }}</td>
+                        <td>{{ item.variableId }}</td>
+                        <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
+                        <td>{{ item.bookletName }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <mat-paginator [length]="responseAnalysis.emptyResponses.total"
+                  [pageSize]="emptyPageSize"
+                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
+                  [pageIndex]="emptyPageIndex"
+                  (page)="onEmptyPageChange($event)"
+                  aria-label="Select page of empty responses">
+                </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
                     [disabled]="isApplyingEmptyCoding"
@@ -217,7 +223,7 @@
 
               <div *ngIf="showDuplicateValuesDetails && responseAnalysis.duplicateValues.total > 0"
                 class="analysis-details">
-                <div *ngFor="let group of responseAnalysis.duplicateValues.groups | slice:0:20" class="duplicate-group">
+                <div *ngFor="let group of responseAnalysis.duplicateValues.groups" class="duplicate-group">
                   <div class="duplicate-group-header">
                     <strong>{{ group.unitAlias || group.unitName }}</strong> / {{ group.variableId }}
                     <span class="duplicate-value">"{{ group.normalizedValue | slice:0:50 }}{{
@@ -237,14 +243,15 @@
                     </li>
                   </ul>
                 </div>
-                <p *ngIf="responseAnalysis.duplicateValues.total > 20" class="more-items-hint">
-                  {{ 'coding-management-manual.response-analysis.showing-first-20-groups' | translate:{ total:
-                  responseAnalysis.duplicateValues.total } }}
-                </p>
 
+                <mat-paginator [length]="responseAnalysis.duplicateValues.total"
+                  [pageSize]="duplicatePageSize"
+                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
+                  [pageIndex]="duplicatePageIndex"
+                  (page)="onDuplicatePageChange($event)"
+                  aria-label="Select page of duplicate groups">
+                </mat-paginator>
               </div>
-
-
             </div>
 
             <p class="analysis-timestamp">
@@ -258,255 +265,263 @@
               <span>{{ 'coding-management-manual.response-analysis.no-data' | translate }}</span>
             </div>
           </div>
+
+          <!-- Loading Overlay for Response Analysis -->
+          <div *ngIf="isLoadingResponseAnalysis" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.response-analysis' | translate }}</div>
+            </div>
+          </div>
         </div>
-        <hr>
+      </div>
 
-        <div class="statistics-content">
-          <!-- Coding Progress Overview -->
-          <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section"
-            [class.blurred-content]="isLoadingCodingProgress">
-            <div class="statistics-card">
-              <h2 class="section-title">Kodierungsfortschritt</h2>
-              <div class="coverage-stats">
-                <div class="stat-item">
-                  <span class="stat-label">Gesamt zu kodierende Fälle:</span>
-                  <span class="stat-value">{{codingProgressOverview.totalCasesToCode}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Abgeschlossene Fälle:</span>
-                  <span class="stat-value covered">{{codingProgressOverview.completedCases}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Ausstehende Fälle:</span>
-                  <span class="stat-value missing">{{codingProgressOverview.totalCasesToCode -
-                    codingProgressOverview.completedCases}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Fertigstellungsrate:</span>
-                  <span class="stat-value percentage">{{codingProgressOverview.completionPercentage |
-                    number:'1.1-1'}}%</span>
-                </div>
+      <div class="statistics-content">
+        <!-- Coding Progress Overview -->
+        <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section"
+          [class.blurred-content]="isLoadingCodingProgress">
+          <div class="statistics-card">
+            <h2 class="section-title">Kodierungsfortschritt</h2>
+            <div class="coverage-stats">
+              <div class="stat-item">
+                <span class="stat-label">Gesamt zu kodierende Fälle:</span>
+                <span class="stat-value">{{codingProgressOverview.totalCasesToCode}}</span>
               </div>
-              <div class="coverage-bar">
-                <div class="coverage-fill" [style.width.%]="codingProgressOverview.completionPercentage"></div>
+              <div class="stat-item">
+                <span class="stat-label">Abgeschlossene Fälle:</span>
+                <span class="stat-value covered">{{codingProgressOverview.completedCases}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Ausstehende Fälle:</span>
+                <span class="stat-value missing">{{codingProgressOverview.totalCasesToCode -
+                  codingProgressOverview.completedCases}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Fertigstellungsrate:</span>
+                <span class="stat-value percentage">{{codingProgressOverview.completionPercentage |
+                  number:'1.1-1'}}%</span>
               </div>
             </div>
-            <div *ngIf="isLoadingCodingProgress" class="loading-overlay">
-              <div class="loading-content">
-                <mat-spinner diameter="40"></mat-spinner>
-                <div class="loading-text">{{ 'coding-management-manual.loading.coding-progress' | translate }}</div>
-              </div>
+            <div class="coverage-bar">
+              <div class="coverage-fill" [style.width.%]="codingProgressOverview.completionPercentage"></div>
             </div>
           </div>
-
-          <div class="job-definitions-container">
-            <coding-box-coding-job-definitions (bulkCreationCompleted)="reloadCodingJobsList()"
-              (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
+          <div *ngIf="isLoadingCodingProgress" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.coding-progress' | translate }}</div>
+            </div>
           </div>
+        </div>
 
-          <!-- Variable Coverage Statistics -->
-          <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section"
-            [class.blurred-content]="isLoadingVariableCoverage">
-            <div class="statistics-card">
-              <h2 class="section-title">
-                Variablenabdeckung
-                <button mat-icon-button (click)="refreshAllStatistics()" matTooltip="Statistiken manuell aktualisieren">
-                  <mat-icon>refresh</mat-icon>
-                </button>
-                <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge"
-                  matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
-                  <mat-icon>warning</mat-icon>
-                  {{variableCoverageOverview.conflictedVariables}} Konflikte
-                </span>
-              </h2>
+        <div class="job-definitions-container">
+          <coding-box-coding-job-definitions (bulkCreationCompleted)="reloadCodingJobsList()"
+            (jobDefinitionChanged)="onJobDefinitionChanged()"></coding-box-coding-job-definitions>
+        </div>
 
-              <!-- Overall Coverage Stats -->
-              <div class="coverage-stats">
-                <div class="stat-item">
-                  <span class="stat-label">Gesamt Variablen:</span>
-                  <span class="stat-value">{{variableCoverageOverview.totalVariables}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Abgedeckte Variablen:</span>
-                  <span class="stat-value covered">{{variableCoverageOverview.coveredVariables}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Fehlende Variablen:</span>
-                  <span class="stat-value missing">{{variableCoverageOverview.missingVariables}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Vollständig abgedeckt:</span>
-                  <span class="stat-value covered">{{variableCoverageOverview.fullyAbgedeckteVariablen}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Partiell abgedeckt:</span>
-                  <span class="stat-value partial">{{variableCoverageOverview.partiallyAbgedeckteVariablen}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Abdeckungsrate:</span>
-                  <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage |
-                    number:'1.1-1'}}%</span>
-                </div>
+        <!-- Variable Coverage Statistics -->
+        <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section"
+          [class.blurred-content]="isLoadingVariableCoverage">
+          <div class="statistics-card">
+            <h2 class="section-title">
+              Variablenabdeckung
+              <button mat-icon-button (click)="refreshAllStatistics()" matTooltip="Statistiken manuell aktualisieren">
+                <mat-icon>refresh</mat-icon>
+              </button>
+              <span *ngIf="variableCoverageOverview.conflictedVariables > 0" class="conflict-badge"
+                matTooltip="Es gibt Konflikte bei der Variablenzuordnung">
+                <mat-icon>warning</mat-icon>
+                {{variableCoverageOverview.conflictedVariables}} Konflikte
+              </span>
+            </h2>
+
+            <!-- Overall Coverage Stats -->
+            <div class="coverage-stats">
+              <div class="stat-item">
+                <span class="stat-label">Gesamt Variablen:</span>
+                <span class="stat-value">{{variableCoverageOverview.totalVariables}}</span>
               </div>
+              <div class="stat-item">
+                <span class="stat-label">Abgedeckte Variablen:</span>
+                <span class="stat-value covered">{{variableCoverageOverview.coveredVariables}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Fehlende Variablen:</span>
+                <span class="stat-value missing">{{variableCoverageOverview.missingVariables}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Vollständig abgedeckt:</span>
+                <span class="stat-value covered">{{variableCoverageOverview.fullyAbgedeckteVariablen}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Partiell abgedeckt:</span>
+                <span class="stat-value partial">{{variableCoverageOverview.partiallyAbgedeckteVariablen}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Abdeckungsrate:</span>
+                <span class="stat-value percentage">{{variableCoverageOverview.coveragePercentage |
+                  number:'1.1-1'}}%</span>
+              </div>
+            </div>
 
-              <!-- Status Breakdown -->
-              <div class="status-breakdown">
-                <h3 class="breakdown-title">Abdeckung nach Status</h3>
-                <div class="status-stats">
-                  <div class="status-item draft">
-                    <mat-icon class="status-icon">edit</mat-icon>
-                    <div class="status-content">
-                      <span class="status-label">Entwurf:</span>
-                      <span class="status-value">{{variableCoverageOverview.coveredByDraft}}</span>
-                    </div>
-                  </div>
-                  <div class="status-item pending">
-                    <mat-icon class="status-icon">schedule</mat-icon>
-                    <div class="status-content">
-                      <span class="status-label">Warten auf Genehmigung:</span>
-                      <span class="status-value">{{variableCoverageOverview.coveredByPendingReview}}</span>
-                    </div>
-                  </div>
-                  <div class="status-item approved">
-                    <mat-icon class="status-icon">check_circle</mat-icon>
-                    <div class="status-content">
-                      <span class="status-label">Genehmigt:</span>
-                      <span class="status-value">{{variableCoverageOverview.coveredByApproved}}</span>
-                    </div>
-                  </div>
-                  <div class="status-item conflict" *ngIf="variableCoverageOverview.conflictedVariables > 0">
-                    <mat-icon class="status-icon">error</mat-icon>
-                    <div class="status-content">
-                      <span class="status-label">Konflikte:</span>
-                      <span class="status-value">{{variableCoverageOverview.conflictedVariables}}</span>
-                    </div>
+            <!-- Status Breakdown -->
+            <div class="status-breakdown">
+              <h3 class="breakdown-title">Abdeckung nach Status</h3>
+              <div class="status-stats">
+                <div class="status-item draft">
+                  <mat-icon class="status-icon">edit</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Entwurf:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByDraft}}</span>
                   </div>
                 </div>
-              </div>
-
-              <!-- Conflicts Details -->
-              <div class="conflicts-section" *ngIf="variableCoverageOverview.coverageByStatus.conflicted.length > 0">
-                <h3 class="conflicts-title">
-                  <mat-icon>warning</mat-icon>
-                  Variablenkonflikte
-                </h3>
-                <div class="conflicts-list">
-                  <div *ngFor="let conflict of variableCoverageOverview.coverageByStatus.conflicted"
-                    class="conflict-item">
-                    <div class="conflict-variable">
-                      <mat-icon>code</mat-icon>
-                      <span>{{conflict.variableKey}}</span>
-                    </div>
-                    <div class="conflict-definitions">
-                      <span class="conflict-label">Zugeordnet zu:</span>
-                      <span *ngFor="let def of conflict.conflictingDefinitions; let last = last"
-                        class="conflict-definition">
-                        Definition #{{def.id}} ({{getStatusLabel(def.status)}}){{!last ? ', ' : ''}}
-                      </span>
-                    </div>
+                <div class="status-item pending">
+                  <mat-icon class="status-icon">schedule</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Warten auf Genehmigung:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByPendingReview}}</span>
+                  </div>
+                </div>
+                <div class="status-item approved">
+                  <mat-icon class="status-icon">check_circle</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Genehmigt:</span>
+                    <span class="status-value">{{variableCoverageOverview.coveredByApproved}}</span>
+                  </div>
+                </div>
+                <div class="status-item conflict" *ngIf="variableCoverageOverview.conflictedVariables > 0">
+                  <mat-icon class="status-icon">error</mat-icon>
+                  <div class="status-content">
+                    <span class="status-label">Konflikte:</span>
+                    <span class="status-value">{{variableCoverageOverview.conflictedVariables}}</span>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <div class="coverage-bar">
-                <div class="coverage-fill" [style.width.%]="variableCoverageOverview.coveragePercentage"></div>
+            <!-- Conflicts Details -->
+            <div class="conflicts-section" *ngIf="variableCoverageOverview.coverageByStatus.conflicted.length > 0">
+              <h3 class="conflicts-title">
+                <mat-icon>warning</mat-icon>
+                Variablenkonflikte
+              </h3>
+              <div class="conflicts-list">
+                <div *ngFor="let conflict of variableCoverageOverview.coverageByStatus.conflicted"
+                  class="conflict-item">
+                  <div class="conflict-variable">
+                    <mat-icon>code</mat-icon>
+                    <span>{{conflict.variableKey}}</span>
+                  </div>
+                  <div class="conflict-definitions">
+                    <span class="conflict-label">Zugeordnet zu:</span>
+                    <span *ngFor="let def of conflict.conflictingDefinitions; let last = last"
+                      class="conflict-definition">
+                      Definition #{{def.id}} ({{getStatusLabel(def.status)}}){{!last ? ', ' : ''}}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
-            <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
-              <div class="loading-content">
-                <mat-spinner diameter="40"></mat-spinner>
-                <div class="loading-text">{{ 'coding-management-manual.loading.variable-coverage' | translate }}</div>
-              </div>
+
+            <div class="coverage-bar">
+              <div class="coverage-fill" [style.width.%]="variableCoverageOverview.coveragePercentage"></div>
             </div>
           </div>
-
-          <div class="coding-jobs-container">
-            <h3>Kodierjobs</h3>
-            <coding-box-coding-jobs (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
-          </div>
-
-          <!-- Case Coverage Statistics -->
-          <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section"
-            [class.blurred-content]="isLoadingCaseCoverage">
-            <div class="statistics-card">
-              <h2 class="section-title">Fälle in Kodierjobs</h2>
-              <div class="coverage-stats">
-                <div class="stat-item">
-                  <span class="stat-label">Gesamt zu kodierende Fälle:</span>
-                  <span class="stat-value">{{caseCoverageOverview.totalCasesToCode}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Fälle in Jobs:</span>
-                  <span class="stat-value covered">{{caseCoverageOverview.casesInJobs}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Doppelt kodierte Fälle:</span>
-                  <span class="stat-value">{{caseCoverageOverview.doubleCodedCases}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Einfach kodierte Fälle:</span>
-                  <span class="stat-value">{{caseCoverageOverview.singleCodedCases}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Nicht zugewiesene Fälle:</span>
-                  <span class="stat-value missing">{{caseCoverageOverview.unassignedCases}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">Abdeckungsrate:</span>
-                  <span class="stat-value percentage">{{caseCoverageOverview.coveragePercentage |
-                    number:'1.1-1'}}%</span>
-                </div>
-              </div>
-              <div class="coverage-bar">
-                <div class="coverage-fill" [style.width.%]="caseCoverageOverview.coveragePercentage"></div>
-              </div>
-            </div>
-            <div *ngIf="isLoadingCaseCoverage" class="loading-overlay">
-              <div class="loading-content">
-                <mat-spinner diameter="40"></mat-spinner>
-                <div class="loading-text">{{ 'coding-management-manual.loading.case-coverage' | translate }}</div>
-              </div>
+          <div *ngIf="isLoadingVariableCoverage" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.variable-coverage' | translate }}</div>
             </div>
           </div>
+        </div>
 
-          <!-- Applied Results Section -->
-          <div *ngIf="appliedResultsOverview" class="applied-results-section">
-            <div class="statistics-card">
-              <h2 class="section-title">{{ 'applied-results-overview.title' | translate }}</h2>
-              <div class="coverage-stats">
-                <div class="stat-item">
-                  <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
-                  <span class="stat-value">{{appliedResultsOverview.totalIncompleteResponses}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{ 'applied-results-overview.applied-results' | translate }}</span>
-                  <span class="stat-value covered">{{appliedResultsOverview.appliedResponses}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{ 'applied-results-overview.remaining' | translate }}</span>
-                  <span class="stat-value missing">{{appliedResultsOverview.remainingResponses}}</span>
-                </div>
-                <div class="stat-item">
-                  <span class="stat-label">{{ 'applied-results-overview.completion-progress' | translate }}</span>
-                  <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage |
-                    number:'1.1-1'}}%</span>
-                </div>
+        <div class="coding-jobs-container">
+          <h3>Kodierjobs</h3>
+          <coding-box-coding-jobs (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
+        </div>
+
+        <!-- Case Coverage Statistics -->
+        <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section"
+          [class.blurred-content]="isLoadingCaseCoverage">
+          <div class="statistics-card">
+            <h2 class="section-title">Fälle in Kodierjobs</h2>
+            <div class="coverage-stats">
+              <div class="stat-item">
+                <span class="stat-label">Gesamt zu kodierende Fälle:</span>
+                <span class="stat-value">{{caseCoverageOverview.totalCasesToCode}}</span>
               </div>
-              <div class="coverage-bar">
-                <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>
+              <div class="stat-item">
+                <span class="stat-label">Fälle in Jobs:</span>
+                <span class="stat-value covered">{{caseCoverageOverview.casesInJobs}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Doppelt kodierte Fälle:</span>
+                <span class="stat-value">{{caseCoverageOverview.doubleCodedCases}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Einfach kodierte Fälle:</span>
+                <span class="stat-value">{{caseCoverageOverview.singleCodedCases}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Nicht zugewiesene Fälle:</span>
+                <span class="stat-value missing">{{caseCoverageOverview.unassignedCases}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">Abdeckungsrate:</span>
+                <span class="stat-value percentage">{{caseCoverageOverview.coveragePercentage |
+                  number:'1.1-1'}}%</span>
               </div>
             </div>
+            <div class="coverage-bar">
+              <div class="coverage-fill" [style.width.%]="caseCoverageOverview.coveragePercentage"></div>
+            </div>
           </div>
+          <div *ngIf="isLoadingCaseCoverage" class="loading-overlay">
+            <div class="loading-content">
+              <mat-spinner diameter="40"></mat-spinner>
+              <div class="loading-text">{{ 'coding-management-manual.loading.case-coverage' | translate }}</div>
+            </div>
+          </div>
+        </div>
 
-          <div class="coder-training-list-container">
-            <h3>Kodierer-Schulungen</h3>
-            <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()">
-            </coding-box-coder-trainings-list>
+        <!-- Applied Results Section -->
+        <div *ngIf="appliedResultsOverview" class="applied-results-section">
+          <div class="statistics-card">
+            <h2 class="section-title">{{ 'applied-results-overview.title' | translate }}</h2>
+            <div class="coverage-stats">
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
+                <span class="stat-value">{{appliedResultsOverview.totalIncompleteResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.applied-results' | translate }}</span>
+                <span class="stat-value covered">{{appliedResultsOverview.appliedResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.remaining' | translate }}</span>
+                <span class="stat-value missing">{{appliedResultsOverview.remainingResponses}}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">{{ 'applied-results-overview.completion-progress' | translate }}</span>
+                <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage |
+                  number:'1.1-1'}}%</span>
+              </div>
+            </div>
+            <div class="coverage-bar">
+              <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>
+            </div>
           </div>
-          <div class="variable-bundle-container">
-            <h3>Variablenbündel</h3>
-            <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
-          </div>
+        </div>
+
+        <div class="coder-training-list-container">
+          <h3>Kodierer-Schulungen</h3>
+          <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()"
+            (onEditTraining)="openTrainingEdit($event)">
+          </coding-box-coder-trainings-list>
+        </div>
+        <div class="variable-bundle-container">
+          <h3>Variablenbündel</h3>
+          <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
         </div>
       </div>
     </div>
@@ -519,7 +534,8 @@
     <!-- Coder Training Component -->
     <div *ngIf="showCoderTraining" class="coder-training-overlay">
       <div class="coder-training-modal">
-        <coding-box-coder-training (close)="closeCoderTraining()" (startTraining)="onTrainingStart($event)">
+        <coding-box-coder-training [editTraining]="editTraining" (close)="closeCoderTraining()"
+          (startTraining)="onTrainingStart($event)">
         </coding-box-coder-training>
       </div>
     </div>

@@ -390,8 +390,28 @@ export class WorkspaceCodingAnalysisController {
       }
     }
   })
-  async getResponseAnalysis(@WorkspaceId() workspace_id: number) {
-    return this.codingAnalysisService.getResponseAnalysis(workspace_id);
+  async getResponseAnalysis(
+  @WorkspaceId() workspace_id: number,
+    @Query('threshold') threshold?: number,
+    @Query('emptyPage') emptyPage?: number,
+    @Query('emptyLimit') emptyLimit?: number,
+    @Query('duplicatePage') duplicatePage?: number,
+    @Query('duplicateLimit') duplicateLimit?: number
+  ) {
+    const validThreshold = threshold ? Math.max(2, threshold) : 2;
+    const vEmptyPage = emptyPage ? Math.max(1, emptyPage) : 1;
+    const vEmptyLimit = emptyLimit ? Math.max(1, emptyLimit) : 50;
+    const vDuplicatePage = duplicatePage ? Math.max(1, duplicatePage) : 1;
+    const vDuplicateLimit = duplicateLimit ? Math.max(1, duplicateLimit) : 50;
+
+    return this.codingAnalysisService.getResponseAnalysis(
+      workspace_id,
+      validThreshold,
+      vEmptyPage,
+      vEmptyLimit,
+      vDuplicatePage,
+      vDuplicateLimit
+    );
   }
 
   @Post(':workspace_id/coding/apply-duplicate-aggregation')

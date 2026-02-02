@@ -14,6 +14,7 @@ import {
   ValidateCodingCompletenessRequestDto
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
+import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -566,79 +567,31 @@ export class TestPersonCodingService {
       );
   }
 
-  getResponseAnalysis(workspaceId: number): Observable<{
-    emptyResponses: {
-      total: number;
-      items: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        bookletName: string;
-        responseId: number;
-      }[];
-    };
-    duplicateValues: {
-      total: number;
-      totalResponses: number;
-      groups: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        normalizedValue: string;
-        originalValue: string;
-        occurrences: {
-          personLogin: string;
-          personCode: string;
-          bookletName: string;
-          responseId: number;
-          value: string;
-        }[];
-      }[];
-      isAggregationApplied: boolean;
-    };
-    matchingFlags: string[];
-    analysisTimestamp: string;
-  }> {
+  getResponseAnalysis(
+    workspaceId: number,
+    threshold?: number,
+    emptyPage?: number,
+    emptyLimit?: number,
+    duplicatePage?: number,
+    duplicateLimit?: number
+  ): Observable<ResponseAnalysisDto> {
+    let params = new HttpParams();
+    if (threshold) {
+      params = params.set('threshold', threshold.toString());
+    }
+    if (emptyPage) params = params.set('emptyPage', emptyPage.toString());
+    if (emptyLimit) params = params.set('emptyLimit', emptyLimit.toString());
+    if (duplicatePage) {
+      params = params.set('duplicatePage', duplicatePage.toString());
+    }
+    if (duplicateLimit) {
+      params = params.set('duplicateLimit', duplicateLimit.toString());
+    }
+
     return this.http
-      .get<{
-      emptyResponses: {
-        total: number;
-        items: {
-          unitName: string;
-          unitAlias: string | null;
-          variableId: string;
-          personLogin: string;
-          personCode: string;
-          bookletName: string;
-          responseId: number;
-        }[];
-      };
-      duplicateValues: {
-        total: number;
-        totalResponses: number;
-        groups: {
-          unitName: string;
-          unitAlias: string | null;
-          variableId: string;
-          normalizedValue: string;
-          originalValue: string;
-          occurrences: {
-            personLogin: string;
-            personCode: string;
-            bookletName: string;
-            responseId: number;
-            value: string;
-          }[];
-        }[];
-        isAggregationApplied: boolean;
-      };
-      matchingFlags: string[];
-      analysisTimestamp: string;
-    }>(
+      .get<ResponseAnalysisDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
-      { headers: this.authHeader }
+      { headers: this.authHeader, params }
     )
       .pipe(
         catchError(() => of({
@@ -648,7 +601,7 @@ export class TestPersonCodingService {
           },
           matchingFlags: [],
           analysisTimestamp: new Date().toISOString()
-        }))
+        } as ResponseAnalysisDto))
       );
   }
 
@@ -713,7 +666,9 @@ export class TestPersonCodingService {
   getDoubleCodedVariablesForReview(
     workspaceId: number,
     page: number = 1,
-    limit: number = 50
+    limit: number = 50,
+    onlyConflicts: boolean = false,
+    excludeTrainings: boolean = false
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -727,6 +682,7 @@ export class TestPersonCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -739,7 +695,9 @@ export class TestPersonCodingService {
     }> {
     const params = new HttpParams()
       .set('page', page.toString())
-      .set('limit', limit.toString());
+      .set('limit', limit.toString())
+      .set('onlyConflicts', onlyConflicts.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
 
     return this.http
       .get<{
@@ -755,6 +713,7 @@ export class TestPersonCodingService {
           coderId: number;
           coderName: string;
           jobId: number;
+          jobName: string;
           code: number | null;
           score: number | null;
           notes: string | null;
@@ -813,6 +772,8 @@ export class TestPersonCodingService {
 
   getCohensKappaStatistics(
     workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true,
     unitName?: string,
     variableId?: string
   ): Observable<{
@@ -840,6 +801,9 @@ export class TestPersonCodingService {
       };
     }> {
     let params = new HttpParams();
+
+    params = params.set('weightedMean', weightedMean.toString());
+    params = params.set('excludeTrainings', excludeTrainings.toString());
 
     if (unitName) {
       params = params.set('unitName', unitName);
@@ -871,6 +835,7 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa`,
@@ -884,14 +849,17 @@ export class TestPersonCodingService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
           }
         }))
       );
   }
 
   getWorkspaceCohensKappaSummary(
-    workspaceId: number
+    workspaceId: number,
+    weightedMean: boolean = true,
+    excludeTrainings: boolean = true
   ): Observable<{
       coderPairs: Array<{
         coder1Id: number;
@@ -910,8 +878,12 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }> {
+    const params = new HttpParams()
+      .set('weightedMean', weightedMean.toString())
+      .set('excludeTrainings', excludeTrainings.toString());
     return this.http
       .get<{
       coderPairs: Array<{
@@ -931,10 +903,11 @@ export class TestPersonCodingService {
         averageKappa: number | null;
         variablesIncluded: number;
         codersIncluded: number;
+        weightingMethod: 'weighted' | 'unweighted';
       };
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/cohens-kappa/workspace-summary`,
-      { headers: this.authHeader }
+      { headers: this.authHeader, params }
     )
       .pipe(
         catchError(() => of({
@@ -944,7 +917,8 @@ export class TestPersonCodingService {
             totalCoderPairs: 0,
             averageKappa: null,
             variablesIncluded: 0,
-            codersIncluded: 0
+            codersIncluded: 0,
+            weightingMethod: 'weighted' as 'weighted' | 'unweighted'
           }
         }))
       );

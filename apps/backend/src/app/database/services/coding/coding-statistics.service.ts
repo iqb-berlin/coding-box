@@ -380,19 +380,28 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   /**
    * Calculate Cohen's Kappa for inter-rater agreement between coders
    * @param coderPairs Array of coder pairs with their coding data
+   * @param level Calculation level: 'code' for code-level kappa, 'score' for score-level kappa
    * @returns Cohen's Kappa coefficient and related statistics
    */
-  calculateCohensKappa(coderPairs: Array<{
-    coder1Id: number;
-    coder1Name: string;
-    coder2Id: number;
-    coder2Name: string;
-    codes: Array<{ code1: number | null; code2: number | null }>;
-  }>): Array<{
+  calculateCohensKappa(
+    coderPairs: Array<{
       coder1Id: number;
       coder1Name: string;
       coder2Id: number;
       coder2Name: string;
+      unitName?: string;
+      variableId?: string;
+      codes: Array<{ code1: number | null; code2: number | null }>;
+      scores?: Array<{ score1: number | null; score2: number | null }>;
+    }>,
+    level: 'code' | 'score' = 'code'
+  ): Array<{
+      coder1Id: number;
+      coder1Name: string;
+      coder2Id: number;
+      coder2Name: string;
+      unitName?: string;
+      variableId?: string;
       kappa: number;
       agreement: number;
       totalItems: number;
@@ -402,10 +411,13 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     const results = [];
 
     for (const pair of coderPairs) {
-      const { codes } = pair;
+      // Select data based on calculation level
+      const dataToUse = level === 'score' && pair.scores ?
+        pair.scores.map(s => ({ code1: s.score1, code2: s.score2 })) :
+        pair.codes;
 
-      // Filter out pairs where either coder has null code
-      const validCodes = codes.filter(c => c.code1 !== null && c.code2 !== null);
+      // Filter out pairs where either coder has null value
+      const validCodes = dataToUse.filter(c => c.code1 !== null && c.code2 !== null);
 
       if (validCodes.length === 0) {
         results.push({
@@ -413,9 +425,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           coder1Name: pair.coder1Name,
           coder2Id: pair.coder2Id,
           coder2Name: pair.coder2Name,
+          unitName: pair.unitName,
+          variableId: pair.variableId,
           kappa: null,
           agreement: 0,
-          totalItems: codes.length,
+          totalItems: dataToUse.length,
           validPairs: 0,
           interpretation: 'No valid coding pairs'
         });
@@ -428,23 +442,23 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         codeSet.add(c.code1!);
         codeSet.add(c.code2!);
       });
-      const uniqueCodes = Array.from(codeSet).sort();
+      const uniqueCodesArr = Array.from(codeSet).sort((a, b) => a - b);
 
       const matrix: number[][] = [];
-      for (let i = 0; i < uniqueCodes.length; i++) {
-        matrix[i] = new Array(uniqueCodes.length).fill(0);
+      for (let i = 0; i < uniqueCodesArr.length; i++) {
+        matrix[i] = new Array(uniqueCodesArr.length).fill(0);
       }
 
       // Fill confusion matrix
       validCodes.forEach(c => {
-        const rowIndex = uniqueCodes.indexOf(c.code1!);
-        const colIndex = uniqueCodes.indexOf(c.code2!);
+        const rowIndex = uniqueCodesArr.indexOf(c.code1!);
+        const colIndex = uniqueCodesArr.indexOf(c.code2!);
         matrix[rowIndex][colIndex] += 1;
       });
 
       // Calculate observed agreement (Po)
       let observedAgreement = 0;
-      for (let i = 0; i < uniqueCodes.length; i++) {
+      for (let i = 0; i < uniqueCodesArr.length; i++) {
         observedAgreement += matrix[i][i];
       }
       observedAgreement /= validCodes.length;
@@ -455,19 +469,28 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       const colTotals = matrix[0].map((_, colIndex) => matrix.reduce((sum, row) => sum + row[colIndex], 0)
       );
 
-      for (let i = 0; i < uniqueCodes.length; i++) {
+      for (let i = 0; i < uniqueCodesArr.length; i++) {
         expectedAgreement += (rowTotals[i] * colTotals[i]) / (validCodes.length * validCodes.length);
       }
 
       // Calculate Cohen's Kappa
+      // Reference: R eatPrep meanKappa function
+      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
+      // R implementation sets kappa = 1 when coders agree perfectly:
+      // if(is.na(kap[["value"]])) { if(identical(dat.ij[,1],dat.ij[,2])) { kap[["value"]] <- 1 } }
       let kappa: number;
-      if (expectedAgreement === 1) {
-        kappa = 1; // Perfect expected agreement
+      if (observedAgreement === 1) {
+        // Perfect observed agreement - coders agree on all items
+        kappa = 1;
+      } else if (expectedAgreement === 1) {
+        // Perfect expected agreement
+        kappa = 1;
       } else {
+        // Standard Cohen's Kappa formula: κ = (Po - Pe) / (1 - Pe)
         kappa = (observedAgreement - expectedAgreement) / (1 - expectedAgreement);
       }
 
-      // Handle edge cases
+      // Handle edge cases (fallback for NaN/Infinite values)
       if (Number.isNaN(kappa) || !Number.isFinite(kappa)) {
         kappa = 0;
       }
@@ -493,9 +516,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         coder1Name: pair.coder1Name,
         coder2Id: pair.coder2Id,
         coder2Name: pair.coder2Name,
+        unitName: pair.unitName,
+        variableId: pair.variableId,
         kappa: Math.round(kappa * 1000) / 1000, // Round to 3 decimal places
         agreement: Math.round(observedAgreement * 1000) / 1000,
-        totalItems: codes.length,
+        totalItems: dataToUse.length,
         validPairs: validCodes.length,
         interpretation
       });

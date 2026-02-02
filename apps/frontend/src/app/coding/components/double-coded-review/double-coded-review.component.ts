@@ -7,24 +7,27 @@ import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule, PageEvent, MatPaginatorIntl } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 
 interface CoderResult {
   coderId: number;
   coderName: string;
   jobId: number;
+  jobName: string;
   code: number | null;
   score: number | null;
   notes: string | null;
@@ -62,10 +65,12 @@ interface DoubleCodedItem {
     MatInputModule,
     MatSnackBarModule,
     MatDialogModule,
+    MatTooltipModule,
     FormsModule,
     ReactiveFormsModule,
     TranslateModule
-  ]
+  ],
+  providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }]
 })
 export class DoubleCodedReviewComponent implements OnInit {
   private testPersonCodingService = inject(TestPersonCodingService);
@@ -91,7 +96,7 @@ export class DoubleCodedReviewComponent implements OnInit {
   allData: DoubleCodedItem[] = [];
   totalItems = 0;
   currentPage = 1;
-  pageSize = 10;
+  pageSize = 50;
   isLoading = false;
   showOnlyConflicts = true;
 
@@ -99,17 +104,7 @@ export class DoubleCodedReviewComponent implements OnInit {
 
   ngOnInit(): void {
     this.initializeForm();
-    this.setupFilterPredicate();
     this.loadData();
-  }
-
-  private setupFilterPredicate(): void {
-    this.dataSource.filterPredicate = (data: DoubleCodedItem, filter: string): boolean => {
-      if (filter === 'conflicts-only') {
-        return this.hasConflict(data);
-      }
-      return true;
-    };
   }
 
   private initializeForm(): void {
@@ -117,9 +112,7 @@ export class DoubleCodedReviewComponent implements OnInit {
   }
 
   getCurrentItems(): DoubleCodedItem[] {
-    return this.dataSource.filteredData && this.dataSource.filteredData.length > 0 ?
-      this.dataSource.filteredData :
-      this.dataSource.data;
+    return this.dataSource.data;
   }
 
   getItemControlName(item: DoubleCodedItem): string {
@@ -136,16 +129,18 @@ export class DoubleCodedReviewComponent implements OnInit {
       this.selectionForm.removeControl(key);
     });
 
-    // Determine the current set of rows to base the form on (respect active filter)
-    const currentItems = this.getCurrentItems();
+    // Determine the current set of rows to base the form on
+    const currentItems = this.dataSource.data;
 
-    // Add form controls for each visible/filtered item
+    // Add form controls for each visible item
     currentItems.forEach(item => {
       const controlName = this.getItemControlName(item);
       const defaultValue = item.coderResults.length > 0 ? item.coderResults[0].coderId.toString() : '';
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
 
-      // Add comment control for conflicting items
+      // Add comment control for conflicting items or always if we want to allow comments
+      // Logic: If we are in conflict view, all items are conflicts.
+      // If we are in all view, we check hasConflict.
       if (this.hasConflict(item)) {
         const commentControlName = this.getCommentControlName(item);
         this.selectionForm.addControl(commentControlName, new FormControl(''));
@@ -162,13 +157,12 @@ export class DoubleCodedReviewComponent implements OnInit {
   }
 
   onFilterChange(): void {
-    this.dataSource.filter = this.showOnlyConflicts ? 'conflicts-only' : '';
-    // Rebuild form controls to match the currently visible (filtered) rows
-    this.updateForm();
+    this.currentPage = 1;
+    this.loadData();
   }
 
   areAllVisibleConflictsResolved(): boolean {
-    const currentItems = this.getCurrentItems();
+    const currentItems = this.dataSource.data;
     return currentItems.every(item => {
       if (!this.hasConflict(item)) {
         return true; // Non-conflicting items don't need resolution
@@ -179,8 +173,9 @@ export class DoubleCodedReviewComponent implements OnInit {
     });
   }
 
-  getConflictCount(): number {
-    return this.allData.filter(item => this.hasConflict(item)).length;
+  // NOTE: This now returns total count based on current filter (e.g. total conflicts if filtered)
+  getTotalCount(): number {
+    return this.totalItems;
   }
 
   getVisibleConflictCount(): number {
@@ -188,7 +183,7 @@ export class DoubleCodedReviewComponent implements OnInit {
   }
 
   getUnresolvedCount(): number {
-    const currentItems = this.getCurrentItems();
+    const currentItems = this.dataSource.data;
     return currentItems.filter(item => {
       if (!this.hasConflict(item)) return false;
       const controlName = this.getItemControlName(item);
@@ -212,7 +207,9 @@ export class DoubleCodedReviewComponent implements OnInit {
     this.testPersonCodingService.getDoubleCodedVariablesForReview(
       workspaceId,
       this.currentPage,
-      this.pageSize
+      this.pageSize,
+      this.showOnlyConflicts, // Pass filter to service
+      true // Exclude trainings
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
@@ -221,9 +218,6 @@ export class DoubleCodedReviewComponent implements OnInit {
         }));
         this.dataSource.data = this.allData;
         this.totalItems = response.total;
-
-        // Apply conflict filter if enabled
-        this.onFilterChange();
 
         this.updateForm();
         this.isLoading = false;
@@ -280,28 +274,9 @@ export class DoubleCodedReviewComponent implements OnInit {
     const currentItems = this.getCurrentItems();
 
     currentItems.forEach(item => {
-      const controlName = this.getItemControlName(item);
-      const selectedCoderId = this.selectionForm.get(controlName)?.value;
-
-      if (selectedCoderId) {
-        const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
-        if (selectedResult) {
-          const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
-            responseId: item.responseId,
-            selectedJobId: selectedResult.jobId
-          };
-
-          // Add comment if provided for conflicting items
-          if (this.hasConflict(item)) {
-            const commentControlName = this.getCommentControlName(item);
-            const comment = this.selectionForm.get(commentControlName)?.value;
-            if (comment && comment.trim()) {
-              decision.resolutionComment = comment.trim();
-            }
-          }
-
-          decisions.push(decision);
-        }
+      const decision = this.getDecisionForItem(item);
+      if (decision) {
+        decisions.push(decision);
       }
     });
 
@@ -312,6 +287,60 @@ export class DoubleCodedReviewComponent implements OnInit {
       return;
     }
 
+    this.sendDecisions(workspaceId, decisions);
+  }
+
+  applySingleDecision(item: DoubleCodedItem): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.translateService.get('double-coded-review.errors.no-workspace-selected').subscribe(message => {
+        this.showError(message);
+      });
+      return;
+    }
+
+    const decision = this.getDecisionForItem(item);
+
+    if (!decision) {
+      this.translateService.get('double-coded-review.errors.no-decision-for-item').subscribe(message => {
+        this.showError(message);
+      });
+      return;
+    }
+
+    this.sendDecisions(workspaceId, [decision]);
+  }
+
+  private getDecisionForItem(item: DoubleCodedItem): { responseId: number; selectedJobId: number; resolutionComment?: string } | null {
+    const controlName = this.getItemControlName(item);
+    const selectedCoderId = this.selectionForm.get(controlName)?.value;
+
+    if (selectedCoderId) {
+      const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
+      if (selectedResult) {
+        const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
+          responseId: item.responseId,
+          selectedJobId: selectedResult.jobId
+        };
+
+        // Add comment if provided for conflicting items
+        if (this.hasConflict(item)) {
+          const commentControlName = this.getCommentControlName(item);
+          const comment = this.selectionForm.get(commentControlName)?.value;
+          if (comment && comment.trim()) {
+            decision.resolutionComment = comment.trim();
+          }
+        }
+        return decision;
+      }
+    }
+    return null;
+  }
+
+  private sendDecisions(
+    workspaceId: number,
+    decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>
+  ): void {
     this.isLoading = true;
     this.testPersonCodingService.applyDoubleCodedResolutions(workspaceId, { decisions }).subscribe({
       next: response => {
@@ -322,7 +351,9 @@ export class DoubleCodedReviewComponent implements OnInit {
         });
 
         // Reset to page 1 and reload data
-        this.currentPage = 1;
+        // For single item apply, we might want to stay on page, but reloading is safer for consistency
+        // If applying single item, maybe define if we stay?
+        // Let's stick to reload for now.
         this.loadData();
       },
       error: () => {

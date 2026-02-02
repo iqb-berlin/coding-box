@@ -35,6 +35,9 @@ import { CodingJobUnit } from './entities/coding-job-unit.entity';
 import { JobDefinition } from './entities/job-definition.entity';
 import { MissingsProfile } from './entities/missings-profile.entity';
 import { CoderTraining } from './entities/coder-training.entity';
+import { CoderTrainingVariable } from './entities/coder-training-variable.entity';
+import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
+import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 
 @Module({
   imports: [
@@ -81,6 +84,9 @@ import { CoderTraining } from './entities/coder-training.entity';
           CodingJobUnit,
           JobDefinition,
           CoderTraining,
+          CoderTrainingVariable,
+          CoderTrainingBundle,
+          CoderTrainingCoder,
           MissingsProfile
         ],
         synchronize: false

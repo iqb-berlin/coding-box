@@ -19,11 +19,13 @@ export type CaseOrderingMode = 'continuous' | 'alternating';
 export interface JobDefinitionVariable {
   unitName: string;
   variableId: string;
+  sampleCount?: number;
 }
 
 export interface JobDefinitionVariableBundle {
   id: number;
   name: string;
+  sampleCount?: number;
 }
 
 @Entity({ name: 'job_definitions' })
