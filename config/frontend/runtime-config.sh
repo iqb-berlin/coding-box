@@ -9,7 +9,7 @@ window.RUNTIME_CONFIG = {
   keycloak: {
     url: "${OIDC_PROVIDER_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de}",
     realm: "${OIDC_REALM:-iqb}",
-    clientId: "${KEYCLOAK_CLIENT_ID:-coding-box}"
+    clientId: "${OAUTH2_CLIENT_ID:-coding-box}"
   },
   backendUrl: "${BACKEND_URL:-api}"
 };
