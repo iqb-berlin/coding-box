@@ -15,8 +15,9 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
-  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap
+  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap, BehaviorSubject
 } from 'rxjs';
+import { PageEvent, MatPaginatorModule } from '@angular/material/paginator';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { CodingJobDefinitionsComponent } from '../coding-job-definitions/coding-job-definitions.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
@@ -76,7 +77,8 @@ import {
     FormsModule,
     MatCheckboxModule,
     MatFormFieldModule,
-    MatInputModule
+    MatInputModule,
+    MatPaginatorModule
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
@@ -159,9 +161,18 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   duplicateAggregationThreshold = 2;
   isApplyingDuplicateAggregation = false;
 
+  emptyPageIndex = 0;
+  emptyPageSize = 50;
+  duplicatePageIndex = 0;
+  duplicatePageSize = 50;
+
   // Debouncing for job definition changes
   private jobDefinitionChangeSubject = new Subject<void>();
-  private thresholdChangeSubject = new Subject<number>();
+
+  private thresholdChangeSubject = new BehaviorSubject<number>(
+    this.duplicateAggregationThreshold
+  );
+
   private statisticsRefreshSubject = new Subject<void>();
 
   codingProgressOverview: {
@@ -1006,7 +1017,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     this.isLoadingResponseAnalysis = true;
     this.testPersonCodingService
-      .getResponseAnalysis(workspaceId)
+      .getResponseAnalysis(
+        workspaceId,
+        this.duplicateAggregationThreshold,
+        this.emptyPageIndex + 1,
+        this.emptyPageSize,
+        this.duplicatePageIndex + 1,
+        this.duplicatePageSize
+      )
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: analysis => {
@@ -1247,7 +1265,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   onThresholdChanged(newValue: number): void {
+    this.emptyPageIndex = 0;
+    this.duplicatePageIndex = 0;
     this.thresholdChangeSubject.next(newValue);
+  }
+
+  onEmptyPageChange(event: PageEvent): void {
+    this.emptyPageIndex = event.pageIndex;
+    this.emptyPageSize = event.pageSize;
+    this.loadResponseAnalysis();
+  }
+
+  onDuplicatePageChange(event: PageEvent): void {
+    this.duplicatePageIndex = event.pageIndex;
+    this.duplicatePageSize = event.pageSize;
+    this.loadResponseAnalysis();
   }
 
   private processAutoApplyAggregation(threshold: number): void {
