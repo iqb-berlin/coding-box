@@ -7,8 +7,8 @@ import { passportJwtSecret } from 'jwks-rsa';
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
-    const oidcProviderUrl = configService.get('OIDC_PROVIDER_URL');
-    const oidcRealm = configService.get('OIDC_REALM');
+    const oidcIssuer = configService.get('OIDC_ISSUER');
+    const oidcJwksUri = configService.get('OIDC_JWKS_URI');
 
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -17,9 +17,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         cache: true,
         rateLimit: true,
         jwksRequestsPerMinute: 5,
-        jwksUri: `${oidcProviderUrl}/realms/${oidcRealm}/protocol/openid-connect/certs`
+        jwksUri: `${oidcJwksUri}`
       }),
-      issuer: `${oidcProviderUrl}/realms/${oidcRealm}`,
+      issuer: `${oidcIssuer}`,
       algorithms: ['RS256']
     });
   }

@@ -2,7 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
-import { KeycloakUserInfo } from './oidc-auth.service';
+import { OidcUserInfo } from './oidc-auth.service';
 
 export interface ClientCredentialsTokenResponse {
   access_token: string;
@@ -32,14 +32,11 @@ export class OAuth2ClientCredentialsService {
    * @returns Promise<ClientCredentialsTokenResponse>
    */
   async getAccessToken(clientCredentials: ClientCredentialsRequest): Promise<ClientCredentialsTokenResponse> {
-    const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-    const oidcRealm = this.configService.get<string>('OIDC_REALM');
+    const oidcTokenEndpoint = this.configService.get<string>('OIDC_TOKEN_ENDPOINT');
 
-    if (!oidcProviderUrl || !oidcRealm) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!oidcTokenEndpoint) {
+      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
     }
-
-    const tokenEndpoint = `${oidcProviderUrl}/realms/${oidcRealm}/protocol/openid-connect/token`;
 
     const params = new URLSearchParams();
     params.append('grant_type', 'client_credentials');
@@ -54,7 +51,7 @@ export class OAuth2ClientCredentialsService {
       this.logger.log(`Requesting access token for client: ${clientCredentials.client_id}`);
 
       const response = await firstValueFrom(
-        this.httpService.post(tokenEndpoint, params.toString(), {
+        this.httpService.post(oidcTokenEndpoint, params.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
@@ -70,23 +67,20 @@ export class OAuth2ClientCredentialsService {
   }
 
   /**
-   * Validate an access token against Keycloak's userinfo endpoint
+   * Validate an access token against OIDC Provider userinfo endpoint
    * @param accessToken - The access token to validate
-   * @returns Promise<KeycloakUserInfo> - User info from Keycloak
+   * @returns Promise<OidcUserInfo> - User info from OIDC Provider
    */
-  async validateAccessToken(accessToken: string): Promise<KeycloakUserInfo> {
-    const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-    const oidcRealm = this.configService.get<string>('OIDC_REALM');
+  async validateAccessToken(accessToken: string): Promise<OidcUserInfo> {
+    const oidcUserInfoEndpoint = this.configService.get<string>('OIDC_USERINFO_ENDPOINT');
 
-    if (!oidcProviderUrl || !oidcRealm) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!oidcUserInfoEndpoint) {
+      throw new UnauthorizedException('OpenID Connect userinfo endpoint configuration is missing');
     }
-
-    const userinfoEndpoint = `${oidcProviderUrl}/realms/${oidcRealm}/protocol/openid-connect/userinfo`;
 
     try {
       const response = await firstValueFrom(
-        this.httpService.get(userinfoEndpoint, {
+        this.httpService.get(oidcUserInfoEndpoint, {
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
