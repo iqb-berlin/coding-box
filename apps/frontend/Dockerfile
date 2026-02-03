@@ -23,10 +23,6 @@ ARG PROJECT
 USER root
 RUN chown -R nginx:root /usr/share/nginx/html
 
-# Kopieren und ausführbar machen des Konfigurationsscripts
-COPY --chown=nginx:root config/frontend/runtime-config.sh /docker-entrypoint.d/
-RUN chmod +x /docker-entrypoint.d/runtime-config.sh
-
 USER nginx
 
 COPY --chown=nginx:root config/frontend/default.conf.http-template /etc/nginx/templates/default.conf.template
