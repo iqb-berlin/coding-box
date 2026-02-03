@@ -2,7 +2,7 @@ import {
   CanActivate, ExecutionContext, Injectable, UnauthorizedException
 } from '@nestjs/common';
 import { AuthService } from '../../auth/service/auth.service';
-import { UsersService } from '../../database/services/users.service';
+import { UsersService } from '../../database/services/users';
 
 @Injectable()
 export class WorkspaceGuard implements CanActivate {
@@ -15,7 +15,7 @@ export class WorkspaceGuard implements CanActivate {
     context: ExecutionContext
   ) {
     const req = context.switchToHttp().getRequest();
-    const userIdentity = req.user.id; // This is the Keycloak UUID
+    const userIdentity = req.user.id; // This is the OIDC Provider UUID
     const params = req.params;
 
     const user = await this.usersService.findUserByIdentity(userIdentity);
