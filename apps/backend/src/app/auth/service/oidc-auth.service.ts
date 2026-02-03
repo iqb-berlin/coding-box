@@ -3,7 +3,17 @@ import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 
-export interface KeycloakTokenResponse {
+export interface OidcConfiguration {
+  issuer: string;
+  account_endpoint: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  userinfo_endpoint: string;
+  end_session_endpoint: string;
+  jwks_uri: string;
+}
+
+export interface OidcTokenResponse {
   access_token: string;
   token_type: string;
   expires_in: number;
@@ -12,7 +22,7 @@ export interface KeycloakTokenResponse {
   id_token?: string;
 }
 
-export interface KeycloakUserInfo {
+export interface OidcUserInfo {
   sub: string;
   preferred_username: string;
   given_name?: string;
@@ -26,8 +36,7 @@ export interface KeycloakUserInfo {
 @Injectable()
 export class OidcAuthService {
   private readonly logger = new Logger(OidcAuthService.name);
-  private readonly oidcProviderUrl: string;
-  private readonly oidcRealm: string;
+  private readonly oidcConfiguration: OidcConfiguration;
   private readonly oAuth2ClientId: string;
   private readonly oAuth2ClientSecret: string;
 
@@ -35,24 +44,27 @@ export class OidcAuthService {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService
   ) {
-    this.oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-    this.oidcRealm = this.configService.get<string>('OIDC_REALM');
+    this.oidcConfiguration.issuer = this.configService.get<string>('OIDC_ISSUER');
+    this.oidcConfiguration.authorization_endpoint = this.configService.get<string>('OIDC_AUTHORIZATION_ENDPOINT');
+    this.oidcConfiguration.token_endpoint = this.configService.get<string>('OIDC_TOKEN_ENDPOINT');
+    this.oidcConfiguration.userinfo_endpoint = this.configService.get<string>('OIDC_USERINFO_ENDPOINT');
+    this.oidcConfiguration.jwks_uri = this.configService.get<string>('OIDC_JWKS_URI');
+    this.oidcConfiguration.end_session_endpoint = this.configService.get<string>('OIDC_END_SESSION_ENDPOINT');
     this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID');
     this.oAuth2ClientSecret = this.configService.get<string>('OAUTH2_CLIENT_SECRET');
   }
 
   /**
-   * Generate the Keycloak authorization URL for the Authorization Code flow
+   * Generate the OpenID Connect authorization URL for the Authorization Code flow
    * @param state - Random state parameter for security
    * @param redirectUri - Callback URL after authentication
    * @returns Authorization URL
    */
   getAuthorizationUrl(state: string, redirectUri: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!this.oidcConfiguration.authorization_endpoint || !this.oAuth2ClientId) {
+      throw new UnauthorizedException('OpenID Connect configuration is missing');
     }
 
-    const authUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/auth`;
     const params = new URLSearchParams({
       response_type: 'code',
       client_id: this.oAuth2ClientId,
@@ -61,21 +73,19 @@ export class OidcAuthService {
       scope: 'openid profile email'
     });
 
-    return `${authUrl}?${params.toString()}`;
+    return `${this.oidcConfiguration.authorization_endpoint}?${params.toString()}`;
   }
 
   /**
    * Exchange authorization code for access token
-   * @param code - Authorization code from Keycloak
+   * @param code - Authorization code from OpenID Connect Provider
    * @param redirectUri - The same redirect URI used in authorization request
-   * @returns Token response from Keycloak
+   * @returns Token response from OpenID Connect Provider
    */
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<KeycloakTokenResponse> {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId || !this.oAuth2ClientSecret) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+  async exchangeCodeForToken(code: string, redirectUri: string): Promise<OidcTokenResponse> {
+    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId || !this.oAuth2ClientSecret) {
+      throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
     }
-
-    const tokenEndpoint = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/token`;
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
@@ -89,7 +99,7 @@ export class OidcAuthService {
       this.logger.log('Exchanging authorization code for access token');
 
       const response = await firstValueFrom(
-        this.httpService.post(tokenEndpoint, params.toString(), {
+        this.httpService.post(this.oidcConfiguration.token_endpoint, params.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
@@ -105,20 +115,18 @@ export class OidcAuthService {
   }
 
   /**
-   * Get user information from Keycloak using access token
-   * @param accessToken - Access token from Keycloak
+   * Get user information from OpenID Connect Provider using access token
+   * @param accessToken - Access token from OpenID Connect Provider
    * @returns User information
    */
-  async getUserInfo(accessToken: string): Promise<KeycloakUserInfo> {
-    if (!this.oidcProviderUrl || !this.oidcRealm) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+  async getUserInfo(accessToken: string): Promise<OidcUserInfo> {
+    if (!this.oidcConfiguration.userinfo_endpoint) {
+      throw new UnauthorizedException('OpenID Connect userinfo endpoint configuration is missing');
     }
-
-    const userinfoEndpoint = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/userinfo`;
 
     try {
       const response = await firstValueFrom(
-        this.httpService.get(userinfoEndpoint, {
+        this.httpService.get(this.oidcConfiguration.userinfo_endpoint, {
           headers: {
             Authorization: `Bearer ${accessToken}`
           }
@@ -132,37 +140,34 @@ export class OidcAuthService {
   }
 
   /**
-   * Generate Keycloak logout URL
+   * Generate OpenID Connect Provider logout URL
    * @param idToken - ID token for proper logout
    * @param redirectUri - URL to redirect after logout
    * @returns Logout URL
    */
   getLogoutUrl(idToken: string, redirectUri: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!this.oidcConfiguration.end_session_endpoint || !this.oAuth2ClientId) {
+      throw new UnauthorizedException('OpenID Connect end session endpoint configuration is missing');
     }
 
-    const logoutUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/logout`;
     const params = new URLSearchParams({
       client_id: this.oAuth2ClientId,
       id_token_hint: idToken,
       post_logout_redirect_uri: redirectUri
     });
 
-    return `${logoutUrl}?${params.toString()}`;
+    return `${this.oidcConfiguration.end_session_endpoint}?${params.toString()}`;
   }
 
   /**
-   * POST logout to Keycloak to terminate SSO session
+   * POST logout to OpenID Connect Provider to terminate SSO session
    * @param refreshToken - Refresh token to invalidate
    * @returns Promise that resolves when logout is complete
    */
   async logoutWithRefreshToken(refreshToken: string): Promise<void> {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!this.oidcConfiguration.end_session_endpoint || !this.oAuth2ClientId) {
+      throw new UnauthorizedException('OpenID Connect end session endpoint configuration is missing');
     }
-
-    const logoutEndpoint = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/protocol/openid-connect/logout`;
 
     const params = new URLSearchParams({
       client_id: this.oAuth2ClientId,
@@ -175,42 +180,41 @@ export class OidcAuthService {
     }
 
     try {
-      this.logger.log('Performing POST logout to Keycloak');
+      this.logger.log('Performing POST logout to OpenID Connect Provider');
 
       await firstValueFrom(
-        this.httpService.post(logoutEndpoint, params.toString(), {
+        this.httpService.post(this.oidcConfiguration.end_session_endpoint, params.toString(), {
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded'
           }
         })
       );
 
-      this.logger.log('Successfully logged out from Keycloak SSO session');
+      this.logger.log('Successfully logged out from OpenID Connect Provider SSO session');
     } catch (error) {
-      this.logger.error('Failed to logout from Keycloak:', error.response?.data || error.message);
-      throw new UnauthorizedException('Failed to logout from Keycloak');
+      this.logger.error('Failed to logout from OpenID Connect Provider:', error.response?.data || error.message);
+      throw new UnauthorizedException('Failed to logout from OpenID Connect Provider');
     }
   }
 
   /**
-   * Generate Keycloak profile management URL
+   * Generate OpenID Connect Provider profile management URL
    * @param redirectUri - Optional URL to redirect back to after profile management
    * @returns Profile management URL
    */
   getProfileUrl(redirectUri?: string): string {
-    if (!this.oidcProviderUrl || !this.oidcRealm || !this.oAuth2ClientId) {
-      throw new UnauthorizedException('Keycloak configuration is missing');
+    if (!this.oidcConfiguration.account_endpoint || !this.oAuth2ClientId) {
+      throw new UnauthorizedException('OpenID Connect account endpoint configuration is missing');
     }
 
-    const profileUrl = `${this.oidcProviderUrl}/realms/${this.oidcRealm}/account`;
     if (redirectUri) {
       const params = new URLSearchParams({
         referrer: this.oAuth2ClientId,
         referrer_uri: redirectUri
       });
-      return `${profileUrl}?${params.toString()}`;
+      return `${this.oidcConfiguration.account_endpoint}?${params.toString()}`;
     }
 
-    return profileUrl;
+    return this.oidcConfiguration.account_endpoint;
   }
 }

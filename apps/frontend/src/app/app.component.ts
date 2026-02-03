@@ -98,7 +98,7 @@ export class AppComponent implements OnInit, OnDestroy {
     }
 
     this.authService.login();
-    this.appService.keycloakLogin(user).subscribe(success => {
+    this.appService.oidcLogin(user).subscribe(success => {
       if (success) {
         this.appService.setNeedsReAuthentication(false);
       }
