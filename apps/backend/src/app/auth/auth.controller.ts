@@ -8,7 +8,7 @@ import {
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
-import { OidcAuthService, KeycloakUserInfo } from './service/oidc-auth.service';
+import { OidcAuthService, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
 
@@ -190,21 +190,21 @@ export class AuthController {
   })
   async validateToken(
     @Body() tokenData: { access_token: string }
-  ): Promise<KeycloakUserInfo> {
+  ): Promise<OidcUserInfo> {
     this.logger.log('Token validation request');
 
     return this.oauth2ClientCredentialsService.validateAccessToken(tokenData.access_token);
   }
 
   /**
-   * Initiate Keycloak login using Authorization Code flow
+   * Initiate OpenID Connect Provider login using Authorization Code flow
    * @param res - Express response object for redirecting
    * @param redirectUri - Optional redirect URI after successful authentication
    */
   @Get('login')
   @ApiOperation({
-    summary: 'Initiate Keycloak login',
-    description: 'Redirects user to Keycloak login page using Authorization Code flow'
+    summary: 'Initiate OpenID Connect Provider login',
+    description: 'Redirects user to OpenID Connect Provider login page using Authorization Code flow'
   })
   @ApiQuery({
     name: 'redirect_uri',
@@ -215,7 +215,7 @@ export class AuthController {
     @Res() res: Response,
       @Query('redirect_uri') redirectUri?: string
   ): Promise<void> {
-    this.logger.log('Initiating Keycloak login');
+    this.logger.log('Initiating OpenID Connect Provider login');
 
     // Encode redirect URI in state parameter to avoid duplicate redirect_uri parameters
     const baseState = Math.random().toString(36).substring(2, 15);
@@ -228,24 +228,24 @@ export class AuthController {
   }
 
   /**
-   * Handle Keycloak callback after authentication
-   * @param code - Authorization code from Keycloak
+   * Handle OpenID Connect Provider callback after authentication
+   * @param code - Authorization code from OpenID Connect Provider
    * @param state - State parameter for security
    * @param res - Express response object
    */
   @Get('callback')
   @ApiOperation({
-    summary: 'Handle Keycloak authentication callback',
+    summary: 'Handle OpenID Connect Provider authentication callback',
     description: 'Processes the authorization code and creates user session'
   })
-  @ApiQuery({ name: 'code', description: 'Authorization code from Keycloak' })
+  @ApiQuery({ name: 'code', description: 'Authorization code from OpenID Connect Provider' })
   @ApiQuery({ name: 'state', description: 'State parameter for security' })
   async callback(
     @Query('code') code: string,
       @Query('state') state: string,
       @Res() res: Response
   ): Promise<void> {
-    this.logger.log('Processing Keycloak callback');
+    this.logger.log('Processing OpenID Connect Provider callback');
 
     try {
       if (!code) {
@@ -288,14 +288,14 @@ export class AuthController {
         firstName: userInfo.given_name || '',
         lastName: userInfo.family_name || '',
         email: userInfo.email || '',
-        issuer: 'keycloak',
+        issuer: 'coding-box',
         isAdmin: userInfo.realm_access?.roles?.includes('admin') || false
       };
 
-      // Store user in database but use Keycloak access token directly
-      await this.authService.storeKeycloakUser(userData);
+      // Store user in database but use OpenID Connect Provider access token directly
+      await this.authService.storeOidcProviderUser(userData);
 
-      // Return Keycloak tokens directly instead of creating internal ones
+      // Return OpenID Connect Provider tokens directly instead of creating internal ones
       if (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) {
         let redirectUrl: URL;
         if (finalRedirectUri.startsWith('http')) {
@@ -324,7 +324,7 @@ export class AuthController {
         });
       }
     } catch (error) {
-      this.logger.error('Keycloak callback failed:', error);
+      this.logger.error('OpenID Connect Provider callback failed:', error);
       // Decode redirect URI from state for error handling too
       let errorRedirectUri;
       if (state && typeof state === 'string' && state.includes(':')) {
@@ -345,8 +345,8 @@ export class AuthController {
 
   @Post('logout')
   @ApiOperation({
-    summary: 'Logout from Keycloak SSO',
-    description: 'Performs POST logout to Keycloak to terminate SSO session using refresh token'
+    summary: 'Logout from OpenID Connect Provider SSO',
+    description: 'Performs POST logout to OpenID Connect Provider to terminate SSO session using refresh token'
   })
   @ApiBody({
     schema: {
@@ -365,7 +365,7 @@ export class AuthController {
     @Body() logoutData: { refresh_token: string },
       @Res() res: Response
   ): Promise<void> {
-    this.logger.log('Processing Keycloak SSO logout');
+    this.logger.log('Processing OpenID Connect Provider SSO logout');
 
     try {
       if (!logoutData.refresh_token) {
@@ -379,9 +379,9 @@ export class AuthController {
 
       await this.oidcAuthService.logoutWithRefreshToken(logoutData.refresh_token);
 
-      this.logger.log('Successfully logged out from Keycloak SSO session');
+      this.logger.log('Successfully logged out from OpenID Connect Provider SSO session');
       res.json({
-        message: 'Successfully logged out from Keycloak SSO session',
+        message: 'Successfully logged out from OpenID Connect Provider SSO session',
         success: true
       });
     } catch (error) {
@@ -401,14 +401,14 @@ export class AuthController {
   }
 
   /**
-   * Redirect to Keycloak profile management page
+   * Redirect to OpenID Connect Provider profile management page
    * @param res - Express response object for redirecting
    * @param redirectUri - Optional redirect URI to return to after profile management
    */
   @Get('profile')
   @ApiOperation({
     summary: 'Redirect to profile management',
-    description: 'Redirects user to Keycloak account management page for profile editing'
+    description: 'Redirects user to OpenID Connect Provider account management page for profile editing'
   })
   @ApiQuery({
     name: 'redirect_uri',
@@ -419,7 +419,7 @@ export class AuthController {
     @Res() res: Response,
       @Query('redirect_uri') redirectUri?: string
   ): Promise<void> {
-    this.logger.log('Redirecting to Keycloak profile management');
+    this.logger.log('Redirecting to OpenID Connect Provider profile management');
 
     try {
       const profileUrl = this.oidcAuthService.getProfileUrl(redirectUri);
