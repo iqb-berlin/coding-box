@@ -215,8 +215,8 @@ export class UsersService {
     await this.usersRepository.delete(ids);
   }
 
-  async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
-    const { username, identity, issuer } = keycloakUser;
+  async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
+    const { username, identity, issuer } = oidcPdUser;
     const existingUser = await this.usersRepository.findOne({
       where: [
         { username },
@@ -239,8 +239,8 @@ export class UsersService {
 
       return existingUser.id;
     }
-    this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
-    const newUser = this.usersRepository.create(keycloakUser);
+    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
+    const newUser = this.usersRepository.create(oidcPdUser);
     await this.usersRepository.save(newUser);
 
     return newUser.id;
