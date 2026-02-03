@@ -34,11 +34,11 @@ export class AppController {
     };
   }
 
-  @Post('keycloak-login')
+  @Post('oidc-login')
   @ApiTags('auth')
-  @ApiOkResponse({ description: 'Keycloak login successful.' })
-  async keycloakLogin(@Body() user: CreateUserDto) {
-    const token = await this.authService.keycloakLogin(user);
+  @ApiOkResponse({ description: 'OpenID Connect login successful.' })
+  async oidcLogin(@Body() user: CreateUserDto) {
+    const token = await this.authService.loginOidcProviderUser(user);
     return `"${token}"`;
   }
 

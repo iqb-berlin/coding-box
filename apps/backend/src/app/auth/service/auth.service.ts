@@ -12,11 +12,11 @@ export class AuthService {
   ) {
   }
 
-  async storeKeycloakUser(user: CreateUserDto) {
+  async storeOidcProviderUser(user: CreateUserDto) {
     const {
       username, lastName, firstName, email, identity, issuer, isAdmin
     } = user;
-    const userId = await this.usersService.createKeycloakUser({
+    const userId = await this.usersService.createOidcProviderUser({
       identity: identity,
       username: username,
       email: email,
@@ -25,15 +25,15 @@ export class AuthService {
       issuer: issuer,
       isAdmin: isAdmin
     });
-    this.logger.log(`Keycloak User with id '${userId}' stored in database.`);
+    this.logger.log(`OIDC Provider User with id '${userId}' stored in database.`);
     return userId;
   }
 
-  async keycloakLogin(user: CreateUserDto) {
+  async loginOidcProviderUser(user: CreateUserDto) {
     const {
       username, lastName, firstName, email, identity, issuer, isAdmin
     } = user;
-    const userId = await this.usersService.createKeycloakUser({
+    const userId = await this.usersService.createOidcProviderUser({
       identity: identity,
       username: username,
       email: email,
@@ -42,7 +42,7 @@ export class AuthService {
       issuer: issuer,
       isAdmin: isAdmin
     });
-    this.logger.log(`Keycloak User with id '${userId}' is logging in.`);
+    this.logger.log(`OIDC Provider User with id '${userId}' is logging in.`);
     const payload = {
       userId: userId, username: username, sub: user
     };
