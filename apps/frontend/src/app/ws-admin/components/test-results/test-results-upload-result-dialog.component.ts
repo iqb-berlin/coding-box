@@ -43,7 +43,7 @@ export class TestResultsUploadResultDialogComponent {
   constructor(
     private dialogRef: MatDialogRef<TestResultsUploadResultDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: TestResultsUploadResultDialogData
-  ) {}
+  ) { }
 
   get result(): TestResultsUploadResultDto {
     return this.data.result;
@@ -84,10 +84,14 @@ export class TestResultsUploadResultDialogComponent {
 
   getCategoryLabel(category: string): string {
     const labels: Record<string, string> = {
-      log_format: 'Log Format',
-      unit_not_found: 'Unit Not Found',
-      invalid_unit: 'Invalid Unit',
-      other: 'Other'
+      log_format: 'Log-Format ungültig',
+      unit_not_found: 'Unit nicht gefunden',
+      invalid_unit: 'Ungültige Unit',
+      laststate: 'Letzter Status Fehler',
+      missing_booklet: 'Booklet fehlt',
+      missing_status: 'Status fehlt',
+      invalid_status: 'Status ungültig',
+      other: 'Sonstiges'
     };
     return labels[category] || category;
   }

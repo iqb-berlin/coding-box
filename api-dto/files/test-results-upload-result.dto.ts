@@ -20,7 +20,7 @@ export class TestResultsUploadStatsDto {
 
 export type TestResultsUploadIssueDto = {
   level: 'error' | 'warning';
-  category?: 'log_format' | 'unit_not_found' | 'invalid_unit' | 'other';
+  category?: 'log_format' | 'unit_not_found' | 'invalid_unit' | 'laststate' | 'missing_booklet' | 'missing_status' | 'invalid_status' | 'other';
   message: string;
   fileName?: string;
   rowIndex?: number;
