@@ -410,52 +410,8 @@ export class UsersService {
     await this.deleteUsersWithStudyManagerInvariant(ids);
   }
 
-  private async deleteUsersWithStudyManagerInvariant(userIds: number[]): Promise<void> {
-    const uniqueUserIds = Array.from(new Set(userIds));
-    if (uniqueUserIds.length === 0) {
-      return;
-    }
-
-    await this.usersRepository.manager.transaction(async manager => {
-      const usersRepository = manager.getRepository(User);
-      const workspaceUsersRepository = manager.getRepository(WorkspaceUser);
-      await lockUserRows(manager, uniqueUserIds);
-      const membershipsToDelete = await workspaceUsersRepository.find({
-        where: { userId: In(uniqueUserIds) }
-      });
-      const affectedWorkspaceIds = Array.from(new Set(
-        membershipsToDelete.map(entry => entry.workspaceId)
-      ));
-      const lockedWorkspaceUsers = await lockWorkspaceUserRows(manager, affectedWorkspaceIds);
-      const userIdSet = new Set(uniqueUserIds);
-      const lockedMembershipsToDelete = lockedWorkspaceUsers
-        .filter(entry => userIdSet.has(entry.userId));
-      const affectedManagerWorkspaceIds = Array.from(new Set(
-        lockedMembershipsToDelete
-          .filter(entry => entry.accessLevel === 3)
-          .map(entry => entry.workspaceId)
-      ));
-
-      assertStudyManagersRemain(
-        affectedManagerWorkspaceIds,
-        lockedWorkspaceUsers,
-        [],
-        lockedMembershipsToDelete
-      );
-
-      await usersRepository.delete(uniqueUserIds);
-    });
-  }
-
-  async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
-    const {
-      username, identity, issuer, isAdmin = false
-    } = keycloakUser;
-
-    if (!username || !identity || !issuer) {
-      throw new BadRequestException('Keycloak user requires username, identity and issuer.');
-    }
-
+  async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
+    const { username, identity, issuer } = oidcPdUser;
     const existingUser = await this.usersRepository.findOne({
       where: [
         { identity, issuer },
@@ -481,13 +437,8 @@ export class UsersService {
 
       return existingUser.id;
     }
-    this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
-    const newUser = this.usersRepository.create({
-      username,
-      identity,
-      issuer,
-      isAdmin: !!isAdmin
-    });
+    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
+    const newUser = this.usersRepository.create(oidcPdUser);
     await this.usersRepository.save(newUser);
 
     return newUser.id;

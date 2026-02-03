@@ -68,10 +68,12 @@ export class AppController {
     };
   }
 
-  private assertTokenMatchesRequestedIdentity(requestedIdentity: string, tokenIdentity?: string): void {
-    if (!tokenIdentity || tokenIdentity !== requestedIdentity) {
-      throw new ForbiddenException('Requested identity does not match the authenticated user');
-    }
+  @Post('oidc-login')
+  @ApiTags('auth')
+  @ApiOkResponse({ description: 'OpenID Connect login successful.' })
+  async oidcLogin(@Body() user: CreateUserDto) {
+    const token = await this.authService.loginOidcProviderUser(user);
+    return `"${token}"`;
   }
 
   @Post('tc_authentication')
