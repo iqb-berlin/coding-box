@@ -10,9 +10,15 @@ x-env-redis: &env-redis
   REDIS_PORT: 6379
   REDIS_PREFIX: coding-box
 
-x-env-keycloak: &env-keycloak
+x-env-oidc-provider: &env-oidc-provider
   OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL}
-  OIDC_REALM: ${OIDC_REALM}
+  OIDC_ISSUER: ${OIDC_ISSUER}
+  OIDC_ACCOUNT_ENDPOINT: ${OIDC_ACCOUNT_ENDPOINT}
+  OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT}
+  OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT}
+  OIDC_USERINFO_ENDPOINT: ${OIDC_USERINFO_ENDPOINT}
+  OIDC_END_SESSION_ENDPOINT: ${OIDC_END_SESSION_ENDPOINT}
+  OIDC_JWKS_URI: ${OIDC_JWKS_URI}
   OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
   OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
 
@@ -66,7 +72,7 @@ services:
     environment:
       API_HOST: backend
       BACKEND_CALLBACK_BASE_PATH: api/auth/callback
-      <<: [ *env-redis, *env-postgres, *env-keycloak ]
+      <<: [ *env-redis, *env-postgres, *env-oidc-provider ]
     networks:
       - application-network
 
