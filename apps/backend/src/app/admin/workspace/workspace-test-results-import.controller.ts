@@ -43,9 +43,9 @@ export class WorkspaceTestResultsImportController {
     workspaceId: number
   ): Promise<void> {
     const versionKey =
-            this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-              workspaceId
-            );
+      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
+        workspaceId
+      );
     const nextVersion = await this.cacheService.incr(versionKey);
     await this.jobQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
@@ -71,7 +71,7 @@ export class WorkspaceTestResultsImportController {
     type: Number,
     required: true,
     description:
-            'The ID of the workspace to which test results should be uploaded.'
+      'The ID of the workspace to which test results should be uploaded.'
   })
   @ApiParam({
     name: 'resultType',
@@ -79,7 +79,7 @@ export class WorkspaceTestResultsImportController {
     required: true,
     description: 'Type of results to upload (logs or responses)'
   })
-  @UseInterceptors(FilesInterceptor('files'))
+  @UseInterceptors(FilesInterceptor('files', 10, { dest: '/tmp' }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -114,19 +114,19 @@ export class WorkspaceTestResultsImportController {
     name: 'personMatchMode',
     required: false,
     description:
-            'Person matching mode for import (strict: group+login+code; loose: login+code). Default: strict.'
+      'Person matching mode for import (strict: group+login+code; loose: login+code). Default: strict.'
   })
   @ApiQuery({
     name: 'overwriteMode',
     required: false,
     description:
-            'Overwrite mode for existing test results: skip (default), merge (insert missing only), replace (delete matching scope then import).'
+      'Overwrite mode for existing test results: skip (default), merge (insert missing only), replace (delete matching scope then import).'
   })
   @ApiQuery({
     name: 'scope',
     required: false,
     description:
-            'Scope for import/overwrite: person (default, only persons included in upload) or workspace (potentially affects whole workspace).'
+      'Scope for import/overwrite: person (default, only persons included in upload) or workspace (potentially affects whole workspace).'
   })
   @ApiQuery({ name: 'groupName', required: false })
   @ApiQuery({ name: 'bookletName', required: false })
@@ -162,7 +162,7 @@ export class WorkspaceTestResultsImportController {
 
     try {
       const mode =
-                (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
+        (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
       const requestedOverwriteMode = (overwriteMode || '').toLowerCase();
       const finalOverwriteMode = (() => {
         if (!shouldOverwrite) {
@@ -185,30 +185,30 @@ export class WorkspaceTestResultsImportController {
         'unit',
         'response'
       ] as const;
-            type UploadScope = (typeof allowedScopes)[number];
-            const normalizedScope: UploadScope = (
-              allowedScopes as readonly string[]
-            ).includes(finalScope) ?
-              (finalScope as UploadScope) :
-              'person';
-            const result = await this.uploadResults.uploadTestResults(
-              workspace_id,
-              files,
-              resultType,
-              shouldOverwrite,
-              mode,
-              finalOverwriteMode,
-              normalizedScope,
-              {
-                groupName,
-                bookletName,
-                unitNameOrAlias,
-                variableId,
-                subform
-              }
-            );
-            await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
-            return result;
+      type UploadScope = (typeof allowedScopes)[number];
+      const normalizedScope: UploadScope = (
+        allowedScopes as readonly string[]
+      ).includes(finalScope) ?
+        (finalScope as UploadScope) :
+        'person';
+      const result = await this.uploadResults.uploadTestResults(
+        workspace_id,
+        files,
+        resultType,
+        shouldOverwrite,
+        mode,
+        finalOverwriteMode,
+        normalizedScope,
+        {
+          groupName,
+          bookletName,
+          unitNameOrAlias,
+          variableId,
+          subform
+        }
+      );
+      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+      return result;
     } catch (error) {
       logger.error('Error uploading test results!');
       throw new BadRequestException(

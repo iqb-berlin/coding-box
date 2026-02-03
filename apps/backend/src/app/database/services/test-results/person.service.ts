@@ -121,9 +121,9 @@ export class PersonService {
       try {
         if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
           if (!row.bookletname) {
-            const msg = `Missing booklet name in row: ${JSON.stringify(row)}`;
+            const msg = `Missing booklet name for Group: ${row.groupname}, Login: ${row.loginname}, Code: ${row.code}, Unit: ${row.unitname || row.originalUnitId}`;
             logger.warn(msg);
-            issues.push({ level: 'warning', message: msg, category: 'other' });
+            issues.push({ level: 'warning', message: msg, category: 'missing_booklet' });
             continue;
           }
           if (!bookletIds.has(row.bookletname)) {
@@ -313,7 +313,7 @@ export class PersonService {
         const parsedResponses = this.parseResponses(row.responses);
         const subforms = this.extractSubforms(parsedResponses);
         const variables = this.extractVariablesFromSubforms(subforms);
-        const laststate = this.parseLastState(row.laststate);
+        const laststate = this.parseLastState(row.laststate, row, issues);
 
         person.booklets = person.booklets.map(b => (b.id === booklet.id ?
           { ...b, units: [...b.units, this.createUnit(row, laststate, subforms, variables, parsedResponses)] } :
@@ -365,10 +365,16 @@ export class PersonService {
     return variables;
   }
 
-  private parseLastState(laststate: string): TcMergeLastState[] {
+  private parseLastState(laststate: string, row: Response, issues: TestResultsUploadIssueDto[]): TcMergeLastState[] {
     try {
       if (!laststate || typeof laststate !== 'string' || laststate.trim() === '') {
-        this.logger.warn('Last state is empty or invalid.');
+        const msg = `Last state is empty for person: ${row.groupname}-${row.loginname}-${row.code}, unit: ${row.unitname}, booklet: ${row.bookletname}`;
+        this.logger.warn(msg);
+        issues.push({
+          level: 'warning',
+          message: msg,
+          category: 'laststate'
+        });
         return [];
       }
 
@@ -379,7 +385,13 @@ export class PersonService {
         Array.isArray(parsed) ||
         parsed === null
       ) {
-        this.logger.error('Parsed last state is not a valid object.');
+        const msg = `Last state is invalid (not an object) for person: ${row.groupname}-${row.loginname}-${row.code}, unit: ${row.unitname}, booklet: ${row.bookletname}`;
+        this.logger.error(msg);
+        issues.push({
+          level: 'warning',
+          message: msg,
+          category: 'laststate'
+        });
         return [];
       }
 
@@ -388,7 +400,13 @@ export class PersonService {
         value: String(value)
       }));
     } catch (error) {
-      this.logger.error(`Error parsing last state: ${error.message}`);
+      const msg = `Error parsing last state: ${error.message} for person: ${row.groupname}-${row.loginname}-${row.code}, unit: ${row.unitname}, booklet: ${row.bookletname}`;
+      this.logger.error(msg);
+      issues.push({
+        level: 'warning',
+        message: msg,
+        category: 'laststate'
+      });
       return [];
     }
   }
