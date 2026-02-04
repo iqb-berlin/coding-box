@@ -23,6 +23,10 @@ describe('CodingVersionService', () => {
     update: jest.fn()
   };
 
+  const mockCodingStatisticsService = {
+    invalidateCache: jest.fn().mockResolvedValue(undefined)
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -30,6 +34,10 @@ describe('CodingVersionService', () => {
         {
           provide: getRepositoryToken(ResponseEntity),
           useValue: mockResponseRepository
+        },
+        {
+          provide: 'CodingStatisticsService',
+          useValue: mockCodingStatisticsService
         }
       ]
     }).compile();
@@ -69,6 +77,8 @@ describe('CodingVersionService', () => {
           score_v1: null
         }
       );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
     });
 
     it('should reset v2 version and cascade to v3', async () => {
@@ -98,6 +108,9 @@ describe('CodingVersionService', () => {
           score_v3: null
         }
       );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(2);
     });
 
     it('should reset v3 version without cascade', async () => {
@@ -124,6 +137,8 @@ describe('CodingVersionService', () => {
           score_v3: null
         }
       );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
     });
 
     it('should apply unit filters when provided', async () => {
