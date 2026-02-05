@@ -70,7 +70,6 @@ services:
       redis:
         condition: service_healthy
     environment:
-      API_HOST: backend
       BACKEND_CALLBACK_BASE_PATH: api/auth/callback
       <<: [ *env-redis, *env-postgres, *env-oidc-provider ]
     networks:
