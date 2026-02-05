@@ -21,6 +21,7 @@ x-env-oidc-provider: &env-oidc-provider
   OIDC_JWKS_URI: ${OIDC_JWKS_URI}
   OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
   OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+  OAUTH2_REDIRECT_URL: //${SERVER_NAME}/api/auth/callback
 
 services:
   redis:
@@ -70,7 +71,6 @@ services:
       redis:
         condition: service_healthy
     environment:
-      BACKEND_CALLBACK_BASE_PATH: api/auth/callback
       <<: [ *env-redis, *env-postgres, *env-oidc-provider ]
     networks:
       - application-network
