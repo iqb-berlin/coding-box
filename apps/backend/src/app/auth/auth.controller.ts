@@ -25,21 +25,14 @@ export class AuthController {
   ) {}
 
   /**
-   * Helper method to construct complete callback URI with proper host
+   * Helper method to construct complete Url for the client-side OAuth2 endpoint.
+   * @returns The complete Url for the client-side OAuth2 endpoint.
    */
-  private getCallbackUri(): string {
-    const backendUrl = process.env.BACKEND_URL;
+  private getOAuth2Endpoint(): string {
+    const relativeOAuth2Url = process.env.OAUTH2_REDIRECT_URL;
+    const scheme = process.env.NODE_ENV === 'production' ? 'https:' : 'http:';
 
-    if (backendUrl && backendUrl.startsWith('http')) {
-      return `${backendUrl}api/auth/callback`;
-    }
-    const protocol = process.env.NODE_ENV === 'production' ? 'https' : 'http';
-    const host = process.env.SERVER_NAME || 'localhost';
-    const port = process.env.API_PORT || '3333';
-    const callbackBasePath = process.env.BACKEND_CALLBACK_BASE_PATH || 'auth/callback';
-
-    const hostWithPort = host === 'localhost' ? `${host}:${port}` : host;
-    return `${protocol}://${hostWithPort}/${callbackBasePath}`.replace(/\/+/g, '/').replace(':/', '://');
+    return scheme + relativeOAuth2Url;
   }
 
   private isAllowedRedirect(url: string): boolean {
@@ -53,9 +46,9 @@ export class AuthController {
       }
 
       if (url.startsWith('http')) {
-        const redirectCallbackUri = this.getCallbackUri();
-        const callbackUrl = new URL(redirectCallbackUri);
-        const allowedOrigin = callbackUrl.origin;
+        const oAuth2Endpoint = this.getOAuth2Endpoint();
+        const oAuth2Url = new URL(oAuth2Endpoint);
+        const allowedOrigin = oAuth2Url.origin;
 
         const redirectUrl = new URL(url);
 
@@ -220,10 +213,10 @@ export class AuthController {
     // Encode redirect URI in state parameter to avoid duplicate redirect_uri parameters
     const baseState = Math.random().toString(36).substring(2, 15);
     const state = redirectUri ? `${baseState}:${encodeURIComponent(redirectUri)}` : baseState;
-    const loginCallbackUri = this.getCallbackUri();
+    const oAuth2Endpoint = this.getOAuth2Endpoint();
 
     // Get authorization URL with proper OAuth redirect_uri (callback)
-    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, loginCallbackUri);
+    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, oAuth2Endpoint);
     res.redirect(authUrl);
   }
 
@@ -277,8 +270,8 @@ export class AuthController {
         }
       }
 
-      const callbackUri = this.getCallbackUri();
-      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, callbackUri);
+      const oAuth2Endpoint = this.getOAuth2Endpoint();
+      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, oAuth2Endpoint);
 
       const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
 
@@ -302,8 +295,8 @@ export class AuthController {
           redirectUrl = new URL(finalRedirectUri);
         } else {
           // Relative URL, construct absolute
-          const callbackUrl = new URL(callbackUri);
-          redirectUrl = new URL(finalRedirectUri, callbackUrl.origin);
+          const oAuth2Url = new URL(oAuth2Endpoint);
+          redirectUrl = new URL(finalRedirectUri, oAuth2Url.origin);
         }
         redirectUrl.searchParams.set('token', tokenResponse.access_token);
         if (tokenResponse.id_token) {
