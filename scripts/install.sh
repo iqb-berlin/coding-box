@@ -16,8 +16,20 @@ declare -A ENV_VARS
 ENV_VARS[POSTGRES_USER]=root
 ENV_VARS[POSTGRES_PASSWORD]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
 ENV_VARS[POSTGRES_DB]="${APP_NAME}"
-
-declare ENV_VAR_ORDER=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB)
+ENV_VARS[OIDC_PROVIDER_URL]=https://keycloak.${server_name}
+ENV_VARS[OIDC_ISSUER]=https://keycloak.${server_name}/auth/realms/coding-box
+ENV_VARS[OIDC_ACCOUNT_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/account
+ENV_VARS[OIDC_AUTHORIZATION_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/auth
+ENV_VARS[OIDC_TOKEN_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/token
+ENV_VARS[OIDC_USERINFO_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/userinfo
+ENV_VARS[OIDC_END_SESSION_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/logout
+ENV_VARS[OIDC_JWKS_URI]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/certs
+ENV_VARS[OAUTH2_CLIENT_ID]=coding-box
+ENV_VARS[OAUTH2_CLIENT_SECRET]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
+ENV_VARS[OAUTH2_REDIRECT_URL]="//${server_name}/api/auth/callback"
+declare ENV_VAR_ORDER=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB OIDC_PROVIDER_URL OIDC_ISSUER OIDC_ACCOUNT_ENDPOINT
+  OIDC_AUTHORIZATION_ENDPOINT OIDC_TOKEN_ENDPOINT OIDC_USERINFO_ENDPOINT OIDC_END_SESSION_ENDPOINT OIDC_JWKS_URI
+  OAUTH2_CLIENT_ID OAUTH2_CLIENT_SECRET OAUTH2_REDIRECT_URL)
 
 declare TRAEFIK_DIR
 declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
@@ -25,11 +37,11 @@ declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
 
 get_release_version() {
   declare latest_release
-  latest_release=$(curl --silent "${REPO_API}/releases/latest" | \
-    grep tag_name | \
-    cut -d : -f 2,3 | \
-    tr -d \" | \
-    tr -d , | \
+  latest_release=$(curl --silent "${REPO_API}/releases/latest" |
+    grep tag_name |
+    cut -d : -f 2,3 |
+    tr -d \" |
+    tr -d , |
     tr -d " ")
 
   while read -p '1. Please name the desired release tag: ' -er -i "${latest_release}" TARGET_VERSION; do
@@ -307,12 +319,16 @@ customize_settings() {
   sed -i.bak "s|^TAG=.*|TAG=${TARGET_VERSION}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
 
   declare server_name
+  declare resolver
   if [ -n "${TRAEFIK_DIR}" ]; then
     server_name=$(grep -oP 'SERVER_NAME=\K[^*]*' "${TRAEFIK_DIR}/.env.traefik")
+    resolver=$(grep -oP 'TLS_CERTIFICATE_RESOLVER=\K[^*]*' "${TRAEFIK_DIR}/.env.traefik")
   else
     read -p "SERVER_NAME: " -er -i "${server_name}" server_name
   fi
   sed -i.bak "s|^SERVER_NAME=.*|SERVER_NAME=${server_name}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+  sed -i.bak "s|TLS_CERTIFICATE_RESOLVER.*|TLS_CERTIFICATE_RESOLVER=${resolver}|" ".env.${APP_NAME}" &&
+    rm ".env.${APP_NAME}.bak"
 
   declare env_var_name
   for env_var_name in "${ENV_VAR_ORDER[@]}"; do
@@ -345,27 +361,27 @@ customize_settings() {
 application_start() {
   printf "'%s' installation done.\n\n" "${APP_NAME}"
 
-    declare is_start_now
-    read -p "Do you want to start ${APP_NAME} now? [Y/n] " -er -n 1 is_start_now
-    printf '\n'
-    if [[ ! ${is_start_now} =~ [nN] ]]; then
-      if ! test "$(docker network ls -q --filter name=app-net)"; then
-        docker network create app-net
-      fi
-      docker compose \
-        --env-file ".env.${APP_NAME}" \
-        --file "docker-compose.${APP_NAME}.yaml" \
-        --file "docker-compose.${APP_NAME}.prod.yaml" \
-        pull
-      docker compose \
-        --env-file ".env.${APP_NAME}" \
-        --file "docker-compose.${APP_NAME}.yaml" \
-        --file "docker-compose.${APP_NAME}.prod.yaml" \
-        up -d
-    else
-      printf "'%s' installation script finished.\n" "${APP_NAME}"
-      exit 0
+  declare is_start_now
+  read -p "Do you want to start ${APP_NAME} now? [Y/n] " -er -n 1 is_start_now
+  printf '\n'
+  if [[ ! ${is_start_now} =~ [nN] ]]; then
+    if ! test "$(docker network ls -q --filter name=app-net)"; then
+      docker network create app-net
     fi
+    docker compose \
+        --env-file ".env.${APP_NAME}" \
+        --file "docker-compose.${APP_NAME}.yaml" \
+        --file "docker-compose.${APP_NAME}.prod.yaml" \
+      pull
+    docker compose \
+        --env-file ".env.${APP_NAME}" \
+        --file "docker-compose.${APP_NAME}.yaml" \
+        --file "docker-compose.${APP_NAME}.prod.yaml" \
+      up -d
+  else
+    printf "'%s' installation script finished.\n" "${APP_NAME}"
+    exit 0
+  fi
 }
 
 main() {
