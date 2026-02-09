@@ -104,7 +104,9 @@ import {
 
 import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
+import { PendingUploadBatch, TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 import {
   OverwriteMode,
@@ -314,6 +316,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private fileService = inject(FileService);
   private responseService = inject(ResponseService);
   private unitService = inject(UnitService);
+  private uploadStateService = inject(TestResultsUploadStateService);
   private statisticsService = inject(CodingStatisticsService);
   private variableAnalysisService = inject(VariableAnalysisService);
   private appService = inject(AppService);
@@ -388,6 +391,27 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe(searchText => {
         this.createTestResultsList(0, this.pageSize, searchText);
       });
+
+    // Sync with upload state service
+    this.uploadStateService.uploadingBatches$.subscribe((batches: PendingUploadBatch[]) => {
+      const myBatch = batches.find((b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId);
+      if (myBatch) {
+        this.isUploadingResults = true;
+        this.uploadingMessage = `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`;
+        this.isLoading = true;
+      } else {
+        this.isUploadingResults = false;
+      }
+    });
+
+    this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
+      if (wsId === this.appService.selectedWorkspaceId) {
+        this.loadWorkspaceOverview();
+        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+        this.isLoading = false;
+        this.isUploadingResults = false;
+      }
+    });
 
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
@@ -1433,7 +1457,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 subform: options.subform
               };
 
-              // Backward compatibility: old behavior treated overwriteExisting=false as strict skip.
               const overwriteExisting = overwriteMode !== 'skip';
 
               this.isLoading = true;
@@ -1457,44 +1480,36 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   scope,
                   filters
                 )
-                .subscribe((uploadResult: TestResultsUploadResultDto) => {
-                  if (this.appService.selectedWorkspaceId) {
-                    this.testResultService.invalidateCache(
-                      this.appService.selectedWorkspaceId
-                    );
-                  }
+                .subscribe({
+                  next: (jobs: TestResultsUploadJobDto[]) => {
+                    const beforeOverview = this.overview || {
+                      testPersons: 0,
+                      testGroups: 0,
+                      uniqueBooklets: 0,
+                      uniqueUnits: 0,
+                      uniqueResponses: 0,
+                      responseStatusCounts: {},
+                      sessionBrowserCounts: {},
+                      sessionOsCounts: {},
+                      sessionScreenCounts: {}
+                    };
 
-                  this.loadWorkspaceOverview();
-
-                  this.snackBar.open(
-                    `Upload abgeschlossen: Δ Testpersonen ${uploadResult.delta.testPersons}, Δ Responses ${uploadResult.delta.uniqueResponses}`,
-                    'OK',
-                    { duration: 5000 }
-                  );
-
-                  // Explicitly set these flags so the dialog knows what was imported
-                  // (similar to how TestCenterImportComponent logic works)
-                  uploadResult.importedResponses = resultType === 'responses';
-                  uploadResult.importedLogs = resultType === 'logs';
-
-                  this.dialog.open(TestResultsUploadResultDialogComponent, {
-                    width: '1000px',
-                    maxWidth: '95vw',
-                    data: {
+                    this.uploadStateService.registerBatch({
+                      workspaceId: this.appService.selectedWorkspaceId,
+                      jobIds: jobs.map(j => j.jobId),
                       resultType,
-                      result: uploadResult
-                    }
-                  });
-
-                  setTimeout(() => {
-                    this.createTestResultsList(
-                      this.pageIndex,
-                      this.pageSize,
-                      this.getCurrentSearchText()
-                    );
-                  }, 1000);
-                  this.isLoading = false;
-                  this.isUploadingResults = false;
+                      beforeOverview,
+                      initialIssues: [],
+                      progress: 0,
+                      completedCount: 0,
+                      totalJobs: jobs.length
+                    });
+                  },
+                  error: err => {
+                    this.isLoading = false;
+                    this.isUploadingResults = false;
+                    this.snackBar.open(`Fehler beim Upload-Start: ${err.message}`, 'Fehler', { duration: 5000 });
+                  }
                 });
             }
           );
