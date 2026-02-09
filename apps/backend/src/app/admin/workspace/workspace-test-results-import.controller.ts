@@ -153,6 +153,8 @@ export class WorkspaceTestResultsImportController {
       @Query('variableId') variableId?: string,
       @Query('subform') subform?: string
   ): Promise<TestResultsUploadJobDto[]> {
+    const startTime = Date.now();
+
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -163,7 +165,7 @@ export class WorkspaceTestResultsImportController {
     const shouldOverwrite = overwriteExisting !== 'false';
 
     this.logger.log(
-      `Uploading test results with overwriteExisting=${shouldOverwrite}`
+      `Uploading ${files.length} test results file(s) with overwriteExisting=${shouldOverwrite}`
     );
 
     try {
@@ -196,9 +198,19 @@ export class WorkspaceTestResultsImportController {
         (finalScope as UploadScope) :
         'person';
 
-      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+      // Non-blocking cache invalidation - fire and forget
+      const t1 = Date.now();
+      this.invalidateFlatResponseFilterOptionsCache(workspace_id)
+        .then(() => {
+          this.logger.log(`Cache invalidation completed in ${Date.now() - t1}ms`);
+        })
+        .catch(err => {
+          this.logger.error(`Cache invalidation failed: ${err.message}`, err.stack);
+        });
 
-      return await this.uploadResults.uploadTestResults(
+      // Queue upload jobs
+      const t2 = Date.now();
+      const result = await this.uploadResults.uploadTestResults(
         workspace_id,
         files,
         resultType,
@@ -214,8 +226,26 @@ export class WorkspaceTestResultsImportController {
           subform
         }
       );
+
+      const totalTime = Date.now() - startTime;
+      const queueTime = Date.now() - t2;
+      this.logger.log(
+        `Upload request completed - Queue time: ${queueTime}ms, Total time: ${totalTime}ms, Jobs queued: ${result.length}`
+      );
+
+      if (totalTime > 5000) {
+        this.logger.warn(
+          `Upload request took ${totalTime}ms - investigate potential performance issues`
+        );
+      }
+
+      return result;
     } catch (error) {
-      this.logger.error('Error queuing test results upload!', error);
+      const totalTime = Date.now() - startTime;
+      this.logger.error(
+        `Error queuing test results upload after ${totalTime}ms!`,
+        error
+      );
       throw new BadRequestException(
         'Uploading test results failed to queue. Please try again.'
       );
