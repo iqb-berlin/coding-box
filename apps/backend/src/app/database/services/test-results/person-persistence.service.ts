@@ -57,7 +57,7 @@ export class PersonPersistenceService {
     private bookletSessionRepository: Repository<Session>,
     @InjectRepository(UnitLog)
     private unitLogRepository: Repository<UnitLog>
-  ) {}
+  ) { }
 
   /**
    * Mark persons as not to be considered
@@ -286,8 +286,7 @@ export class PersonPersistenceService {
     );
 
     if (existingBooklet && overwriteMode === 'skip') {
-      this.logger.log(`Booklet ${booklet.id} already exists for person ${person.id}, skipping (overwriteMode=skip)`);
-      return;
+      this.logger.log(`Booklet ${booklet.id} already exists for person ${person.id}, proceeding to merge new units (overwriteMode=skip)`);
     }
 
     if (Array.isArray(booklet.units) && booklet.units.length > 0) {

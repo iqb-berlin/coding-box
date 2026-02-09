@@ -1,6 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue, JobOptions, Job } from 'bull';
+import { FileIo } from '../admin/workspace/file-io.interface';
+
+export interface TestResultsUploadJobData {
+  workspaceId: number;
+  file: FileIo;
+  resultType: 'logs' | 'responses';
+  overwriteExisting: boolean;
+  personMatchMode?: 'strict' | 'loose';
+  overwriteMode?: 'skip' | 'merge' | 'replace';
+  scope?: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response';
+  scopeFilters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string };
+}
 
 export interface TestPersonCodingJobData {
   workspaceId: number;
@@ -88,7 +100,8 @@ export class JobQueueService {
     @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
     @InjectQueue('data-export') private dataExportQueue: Queue,
     @InjectQueue('flat-response-filter-options')
-    private flatResponseFilterOptionsQueue: Queue
+    private flatResponseFilterOptionsQueue: Queue,
+    @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue
   ) { }
 
   async addTestPersonCodingJob(
@@ -139,6 +152,20 @@ export class JobQueueService {
       },
       options
     );
+  }
+
+  async addUploadJob(
+    data: TestResultsUploadJobData,
+    options?: JobOptions
+  ): Promise<Job<TestResultsUploadJobData>> {
+    this.logger.log(
+      `Adding upload job for workspace ${data.workspaceId}, file: ${data.file.originalname}`
+    );
+    return this.testResultsUploadQueue.add(data, options);
+  }
+
+  async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData>> {
+    return this.testResultsUploadQueue.getJob(jobId);
   }
 
   async getTestPersonCodingJobs(

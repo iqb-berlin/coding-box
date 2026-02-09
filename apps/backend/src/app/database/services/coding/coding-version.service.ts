@@ -1,7 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, forwardRef, Inject
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 @Injectable()
 export class CodingVersionService {
@@ -9,7 +12,9 @@ export class CodingVersionService {
 
   constructor(
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    @Inject(forwardRef(() => CodingStatisticsService))
+    private codingStatisticsService: CodingStatisticsService
   ) { }
 
   async resetCodingVersion(
@@ -106,6 +111,16 @@ export class CodingVersionService {
           ', '
         )}`
       );
+
+      // Invalidate statistics cache for all affected versions
+      this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version ${version}`);
+      await this.codingStatisticsService.invalidateCache(workspaceId, version);
+
+      if (version === 'v2') {
+        // Also invalidate v3 cache when v2 is reset (cascade)
+        this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
+        await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
+      }
 
       return {
         affectedResponseCount,

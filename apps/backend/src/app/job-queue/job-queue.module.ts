@@ -6,6 +6,7 @@ import { TestPersonCodingProcessor } from './processors/test-person-coding.proce
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
+import { UploadResultsProcessor } from './processors/upload-results.processor';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
@@ -37,6 +38,9 @@ import { CacheModule } from '../cache/cache.module';
     BullModule.registerQueue({
       name: 'flat-response-filter-options'
     }),
+    BullModule.registerQueue({
+      name: 'test-results-upload'
+    }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
     CacheModule
@@ -46,7 +50,8 @@ import { CacheModule } from '../cache/cache.module';
     TestPersonCodingProcessor,
     CodingStatisticsProcessor,
     ExportJobProcessor,
-    FlatResponseFilterOptionsProcessor
+    FlatResponseFilterOptionsProcessor,
+    UploadResultsProcessor
   ],
   exports: [JobQueueService]
 })
