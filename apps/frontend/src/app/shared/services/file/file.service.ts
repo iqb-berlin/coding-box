@@ -5,7 +5,7 @@ import {
   map,
   Observable,
   of,
-  switchMap, throwError, tap
+  switchMap, throwError
 } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
@@ -14,10 +14,10 @@ import { FileValidationResultDto } from '../../../../../../../api-dto/files/file
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../../../injection-tokens';
-import { TestResultService } from '../test-result/test-result.service';
 
 export interface BookletUnit {
   id: number;
@@ -46,7 +46,6 @@ interface PaginatedResponse<T> {
 export class FileService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
-  private testResultService = inject(TestResultService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -150,7 +149,7 @@ export class FileService {
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: string = 'person',
     filters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string }
-  ): Observable<TestResultsUploadResultDto> {
+  ): Observable<TestResultsUploadJobDto[]> {
     const formData = new FormData();
     if (files) {
       for (let i = 0; i < files.length; i++) {
@@ -167,14 +166,27 @@ export class FileService {
     if (filters?.variableId) q.set('variableId', filters.variableId);
     if (filters?.subform) q.set('subform', filters.subform);
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}?${q.toString()}`;
-    return this.http.post<TestResultsUploadResultDto>(url, formData, {
+    return this.http.post<TestResultsUploadJobDto[]>(url, formData, {
       headers: this.authHeader
-    }).pipe(
-      tap(() => {
-        // Invalidate cache after uploading test results
-        this.testResultService.invalidateCache(workspaceId);
-      })
-    );
+    });
+  }
+
+  getUploadJobStatus(workspaceId: number, jobId: string): Observable<{
+    id: string;
+    status: 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused';
+    progress: number;
+    result?: TestResultsUploadResultDto;
+    error?: unknown;
+  }> {
+    return this.http.get<{
+      id: string;
+      status: 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused';
+      progress: number;
+      result?: TestResultsUploadResultDto;
+      error?: unknown;
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/status/${jobId}`, {
+      headers: this.authHeader
+    });
   }
 
   getUnitDef(workspaceId: number, unit: string, authToken?: string): Observable<FilesDto[]> {
