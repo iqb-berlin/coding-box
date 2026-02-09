@@ -7,7 +7,10 @@ import {
   UseGuards,
   UseInterceptors,
   UploadedFiles,
-  ParseIntPipe
+  ParseIntPipe,
+  Logger,
+  Get,
+  NotFoundException
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -21,18 +24,20 @@ import {
   ApiBadRequestResponse
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/test-results';
-import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsImportController {
+  private readonly logger = new Logger(WorkspaceTestResultsImportController.name);
+
   constructor(
     private uploadResults: UploadResultsService,
     private cacheService: CacheService,
@@ -98,8 +103,9 @@ export class WorkspaceTestResultsImportController {
   })
   @ApiTags('workspace')
   @ApiOkResponse({
-    description: 'Test results successfully uploaded.',
-    type: TestResultsUploadResultDto
+    description: 'Test results upload queued successfully.',
+    type: TestResultsUploadJobDto,
+    isArray: true
   })
   @ApiBadRequestResponse({
     description: 'Invalid request. Please check your input data.'
@@ -146,7 +152,7 @@ export class WorkspaceTestResultsImportController {
       @Query('unitNameOrAlias') unitNameOrAlias?: string,
       @Query('variableId') variableId?: string,
       @Query('subform') subform?: string
-  ): Promise<TestResultsUploadResultDto> {
+  ): Promise<TestResultsUploadJobDto[]> {
     if (!workspace_id || Number.isNaN(workspace_id)) {
       throw new BadRequestException('Invalid workspace_id.');
     }
@@ -156,7 +162,7 @@ export class WorkspaceTestResultsImportController {
     }
     const shouldOverwrite = overwriteExisting !== 'false';
 
-    logger.log(
+    this.logger.log(
       `Uploading test results with overwriteExisting=${shouldOverwrite}`
     );
 
@@ -164,18 +170,16 @@ export class WorkspaceTestResultsImportController {
       const mode =
         (personMatchMode || '').toLowerCase() === 'loose' ? 'loose' : undefined;
       const requestedOverwriteMode = (overwriteMode || '').toLowerCase();
-      const finalOverwriteMode = (() => {
-        if (!shouldOverwrite) {
-          return 'skip';
-        }
+      let finalOverwriteMode: 'skip' | 'merge' | 'replace' = 'skip';
+
+      if (shouldOverwrite) {
         if (requestedOverwriteMode === 'replace') {
-          return 'replace';
+          finalOverwriteMode = 'replace';
+        } else if (requestedOverwriteMode === 'merge') {
+          finalOverwriteMode = 'merge';
         }
-        if (requestedOverwriteMode === 'merge') {
-          return 'merge';
-        }
-        return 'skip';
-      })();
+      }
+
       const finalScope = (scope || '').toLowerCase();
       const allowedScopes = [
         'workspace',
@@ -191,7 +195,10 @@ export class WorkspaceTestResultsImportController {
       ).includes(finalScope) ?
         (finalScope as UploadScope) :
         'person';
-      const result = await this.uploadResults.uploadTestResults(
+
+      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
+
+      return await this.uploadResults.uploadTestResults(
         workspace_id,
         files,
         resultType,
@@ -207,13 +214,70 @@ export class WorkspaceTestResultsImportController {
           subform
         }
       );
-      await this.invalidateFlatResponseFilterOptionsCache(workspace_id);
-      return result;
     } catch (error) {
-      logger.error('Error uploading test results!');
+      this.logger.error('Error queuing test results upload!', error);
       throw new BadRequestException(
-        'Uploading test results failed. Please try again.'
+        'Uploading test results failed to queue. Please try again.'
       );
     }
+  }
+
+  @Get(':workspace_id/upload/status/:job_id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get the status of an upload job',
+    description: 'Returns the status and result of a background upload job'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'job_id',
+    type: String,
+    required: true,
+    description: 'The ID of the job'
+  })
+  @ApiOkResponse({
+    description: 'Job status retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: ['completed', 'waiting', 'active', 'delayed', 'failed', 'paused'] },
+        progress: { type: 'number' },
+        result: { type: 'object' },
+        error: { type: 'object' }
+      }
+    }
+  })
+  async getJobStatus(
+  @WorkspaceId() workspaceId: number,
+    @Param('job_id') jobId: string
+  ) {
+    const job = await this.jobQueueService.getUploadJob(jobId);
+    if (!job) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+
+    if (job.data.workspaceId !== workspaceId) {
+      throw new NotFoundException(`Job ${jobId} not found`);
+    }
+
+    const state = await job.getState();
+    const progress = await job.progress();
+    const result = job.returnvalue;
+    const error = job.failedReason;
+
+    return {
+      id: job.id,
+      status: state,
+      progress,
+      result,
+      error
+    };
   }
 }

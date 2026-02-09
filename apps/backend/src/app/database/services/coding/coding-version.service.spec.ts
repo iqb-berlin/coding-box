@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { CodingVersionService } from './coding-version.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingStatisticsService } from './coding-statistics.service';
 
 describe('CodingVersionService', () => {
   let service: CodingVersionService;
@@ -36,7 +37,7 @@ describe('CodingVersionService', () => {
           useValue: mockResponseRepository
         },
         {
-          provide: 'CodingStatisticsService',
+          provide: CodingStatisticsService,
           useValue: mockCodingStatisticsService
         }
       ]

@@ -1,12 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { Job } from 'bull';
 import { createMock } from '@golevelup/ts-jest';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import { UploadResultsService } from './upload-results.service';
 import { PersonService } from './person.service';
+import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
-  let personService: PersonService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -27,12 +31,15 @@ describe('UploadResultsService', () => {
               issues: []
             })
           })
+        },
+        {
+          provide: JobQueueService,
+          useValue: createMock<JobQueueService>()
         }
       ]
     }).compile();
 
     service = module.get<UploadResultsService>(UploadResultsService);
-    personService = module.get<PersonService>(PersonService);
   });
 
   it('should be defined', () => {
@@ -46,17 +53,28 @@ describe('UploadResultsService', () => {
 test-group;test-user;code;booklet1;unit1;id1;123456789;KEY:VALUE
 test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
 
+      const filePath = path.join(os.tmpdir(), 'test-logs.csv');
+      fs.writeFileSync(filePath, fileContent);
+
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
         originalname: 'test.csv',
         mimetype: 'text/csv',
         size: fileContent.length,
         fieldname: 'file',
-        encoding: 'utf-8'
+        encoding: 'utf-8',
+        path: filePath
       };
 
       // Act
-      const result = await service.uploadTestResults(1, [file], 'logs');
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
 
       // Assert
       expect(result.expected.uniqueUnits).toBe(1);
@@ -68,17 +86,28 @@ test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
 test-group;test-user;code;booklet1;unit1;id1;[];""
 test-group;test-user;code;booklet1;unit1;id2;[];""`;
 
+      const filePath = path.join(os.tmpdir(), 'test-responses.csv');
+      fs.writeFileSync(filePath, fileContent);
+
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
         originalname: 'test.csv',
         mimetype: 'text/csv',
         size: fileContent.length,
         fieldname: 'file',
-        encoding: 'utf-8'
+        encoding: 'utf-8',
+        path: filePath
       };
 
       // Act
-      const result = await service.uploadTestResults(1, [file], 'responses');
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses'
+        }
+      }));
 
       // Assert
       expect(result.expected.uniqueUnits).toBe(1);
@@ -91,17 +120,28 @@ test-group;test-user;code;booklet1;unit1;id2;[];""`;
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;"[{""content"":""[{\\""id\\"":\\""var1\\"",\\""status\\"":\\""UNKNOWN\\""}]""}]";""`;
 
+      const filePath = path.join(os.tmpdir(), 'test-invalid.csv');
+      fs.writeFileSync(filePath, fileContent);
+
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
         originalname: 'test.csv',
         mimetype: 'text/csv',
         size: fileContent.length,
         fieldname: 'file',
-        encoding: 'utf-8'
+        encoding: 'utf-8',
+        path: filePath
       };
 
       // Act
-      const result = await service.uploadTestResults(1, [file], 'responses');
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses'
+        }
+      }));
 
       // Assert
       expect(result.responseStatusCounts?.INVALID).toBe(1);
