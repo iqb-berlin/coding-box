@@ -9,7 +9,6 @@ import { Unit } from './unit.entity';
 @Index(['unitid', 'variableid']) // Composite index for common query patterns
 @Index(['unitid', 'status']) // Composite index for filtering by status
 @Index(['status_v1']) // Index for filtering by coded status
-@Index(['value']) // Index for searching by value
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
     id: number;

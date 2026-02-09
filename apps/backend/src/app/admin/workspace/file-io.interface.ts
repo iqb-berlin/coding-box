@@ -5,4 +5,7 @@ export interface FileIo {
   mimetype: string;
   buffer: Buffer;
   size: number;
+  path?: string;
+  destination?: string;
+  filename?: string;
 }

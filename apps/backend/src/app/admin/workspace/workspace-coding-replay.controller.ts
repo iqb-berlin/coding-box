@@ -55,7 +55,10 @@ export class WorkspaceCodingReplayController {
       @Query('authToken') authToken: string,
       @Req() req: Request
   ): Promise<{ replayUrl: string }> {
-    const serverUrl = `${req.protocol}://${req.get('host')}`;
+    // Use x-forwarded-proto header if present (set by reverse proxy) to ensure
+    // HTTPS URLs are generated when the app is behind a proxy, preventing mixed content errors
+    const protocol = req.get('x-forwarded-proto') || req.protocol;
+    const serverUrl = `${protocol}://${req.get('host')}`;
     return this.codingReplayService.generateReplayUrlForResponse(
       workspace_id,
       responseId,
