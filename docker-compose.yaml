@@ -10,7 +10,7 @@ x-env-redis: &env-redis
   REDIS_PORT: 6379
   REDIS_PREFIX: coding-box
 
-x-env-oidc-provider: &env-oidc-provider
+x-env-oidc: &env-oidc
   OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL}
   OIDC_ISSUER: ${OIDC_ISSUER}
   OIDC_ACCOUNT_ENDPOINT: ${OIDC_ACCOUNT_ENDPOINT}
@@ -21,7 +21,7 @@ x-env-oidc-provider: &env-oidc-provider
   OIDC_JWKS_URI: ${OIDC_JWKS_URI}
   OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
   OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
-  OAUTH2_REDIRECT_URL: //${SERVER_NAME}/api/auth/callback
+  OAUTH2_REDIRECT_URL: ${OAUTH2_REDIRECT_URL}
 
 services:
   redis:
@@ -71,7 +71,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      <<: [ *env-redis, *env-postgres, *env-oidc-provider ]
+      <<: [ *env-redis, *env-postgres, *env-oidc ]
     networks:
       - application-network
 
