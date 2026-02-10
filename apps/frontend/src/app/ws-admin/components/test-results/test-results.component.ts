@@ -1395,7 +1395,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           };
 
           this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '1200px',
+            width: '90vw',
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
