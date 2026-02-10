@@ -431,12 +431,16 @@ export class UploadResultsService {
       throw new Error(`Too many files: ${originalFiles.length}`);
     }
 
-    const jobDtos: TestResultsUploadJobDto[] = [];
+    const jobPromises = originalFiles.map(file => {
+      // Create lightweight job payload - prevent passing buffer to Redis
+      const jobFile = { ...file };
+      if (jobFile.buffer) {
+        delete jobFile.buffer;
+      }
 
-    for (const file of originalFiles) {
-      const job = await this.jobQueueService.addUploadJob({
+      return this.jobQueueService.addUploadJob({
         workspaceId: workspace_id,
-        file,
+        file: jobFile,
         resultType,
         overwriteExisting,
         personMatchMode: personMatchMode || 'strict',
@@ -444,8 +448,10 @@ export class UploadResultsService {
         scope,
         scopeFilters
       });
-      jobDtos.push({ jobId: job.id.toString() });
-    }
+    });
+
+    const jobs = await Promise.all(jobPromises);
+    const jobDtos = jobs.map(job => ({ jobId: job.id.toString() }));
 
     return jobDtos;
   }
