@@ -136,9 +136,10 @@ export class WorkspaceFilesController {
   @Query() query: { fileIds: string },
     @Param('workspace_id') workspace_id: number
   ) {
+    const fileIds = query.fileIds.split(/[,;]/).map(id => id.trim()).filter(id => id.length > 0);
     return this.workspaceFilesService.deleteTestFiles(
       workspace_id,
-      query.fileIds.split(';')
+      fileIds
     );
   }
 
@@ -281,7 +282,7 @@ export class WorkspaceFilesController {
     try {
       const overwrite = (overwriteExisting || '').toLowerCase() === 'true';
       const overwriteIds = (overwriteFileIds || '')
-        .split(';')
+        .split(/[,;]/)
         .map(s => s.trim())
         .filter(Boolean);
       return await this.workspaceFilesService.uploadTestFiles(
