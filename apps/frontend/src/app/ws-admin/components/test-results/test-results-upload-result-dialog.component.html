@@ -1,5 +1,5 @@
 <h2 mat-dialog-title>
-  Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Responses' }})
+  Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})
 </h2>
 
 <div mat-dialog-content>
@@ -39,7 +39,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Booklets</td>
+            <td class="row-label">Testhefte</td>
             <td class="num">{{ result.expected.uniqueBooklets }}</td>
             <td class="num">{{ result.before.uniqueBooklets }}</td>
             <td class="num">{{ result.after.uniqueBooklets }}</td>
@@ -49,7 +49,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Units</td>
+            <td class="row-label">Aufgaben</td>
             <td class="num">{{ result.expected.uniqueUnits }}</td>
             <td class="num">{{ result.before.uniqueUnits }}</td>
             <td class="num">{{ result.after.uniqueUnits }}</td>
@@ -77,14 +77,14 @@
     <div class="section log-coverage-section">
       <div class="section-title">Log Abdeckung</div>
       <div class="kv">
-        <div class="k">Booklets mit Logs</div>
+        <div class="k">Testhefte mit Logs</div>
         <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
-        <div class="k">Units mit Logs</div>
+        <div class="k">Aufgaben mit Logs</div>
         <div class="v">{{ result.logMetrics.unitsWithLogs }} / {{ result.logMetrics.totalUnits }}</div>
-        <div class="k">Abdeckung (Booklets)</div>
+        <div class="k">Abdeckung (Testhefte)</div>
         <div class="v">{{ (result.logMetrics.totalBooklets > 0 ? (result.logMetrics.bookletsWithLogs /
           result.logMetrics.totalBooklets * 100) : 0) | number:'1.0-1' }}%</div>
-        <div class="k">Abdeckung (Units)</div>
+        <div class="k">Abdeckung (Aufgaben)</div>
         <div class="v">{{ (result.logMetrics.totalUnits > 0 ? (result.logMetrics.unitsWithLogs /
           result.logMetrics.totalUnits * 100) : 0) | number:'1.0-1' }}%</div>
       </div>
@@ -179,10 +179,10 @@
           <mat-select [(ngModel)]="selectedCategory">
             <mat-option [value]="null">Alle Kategorien</mat-option>
             <mat-option value="log_format">Log-Format ungültig</mat-option>
-            <mat-option value="unit_not_found">Unit nicht gefunden</mat-option>
-            <mat-option value="invalid_unit">Ungültige Unit</mat-option>
+            <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
+            <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
             <mat-option value="laststate">Letzter Status Fehler</mat-option>
-            <mat-option value="missing_booklet">Booklet fehlt</mat-option>
+            <mat-option value="missing_booklet">Testheft fehlt</mat-option>
             <mat-option value="missing_status">Status fehlt</mat-option>
             <mat-option value="invalid_status">Status ungültig</mat-option>
             <mat-option value="other">Sonstiges</mat-option>
