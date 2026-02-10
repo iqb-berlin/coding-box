@@ -88,7 +88,7 @@ export class FileService {
       switchMap(() => this.http
         .delete(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
           headers: this.authHeader,
-          params: { fileIds: batch.join(';') }
+          params: { fileIds: batch.join(',') }
         })
         .pipe(
           map(() => true),
@@ -133,7 +133,7 @@ export class FileService {
     }
 
     const overwriteIdsQuery = (overwriteFileIds && overwriteFileIds.length > 0) ?
-      `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(';'))}` :
+      `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(','))}` :
       '';
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload?overwriteExisting=${overwriteExisting}${overwriteIdsQuery}`;
     return this.http.post<TestFilesUploadResultDto>(url, formData, {
