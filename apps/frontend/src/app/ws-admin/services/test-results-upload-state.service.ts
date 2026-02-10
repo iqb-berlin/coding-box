@@ -168,7 +168,7 @@ export class TestResultsUploadStateService {
       );
 
       this.dialog.open(TestResultsUploadResultDialogComponent, {
-        width: '1000px',
+        width: '90vw',
         maxWidth: '95vw',
         data: {
           resultType: batch.resultType,
