@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction
+  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription
 } from 'rxjs';
 import {
   catchError, map, switchMap, takeWhile, finalize
@@ -9,7 +9,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { CodingVersionService } from './coding-version.service';
+import { CodingVersionService, ResetVersionJobStatus } from './coding-version.service';
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
@@ -64,6 +64,14 @@ export class CodingManagementService {
 
   private _isLoadingStatistics = new BehaviorSubject<boolean>(false);
   isLoadingStatistics$ = this._isLoadingStatistics.asObservable();
+
+  private _resetProgress = new BehaviorSubject<number | null>(null);
+  resetProgress$ = this._resetProgress.asObservable();
+
+  private _resetJobId = new BehaviorSubject<string | null>(null);
+  resetJobId$ = this._resetJobId.asObservable();
+
+  private resetPollingSubscription: Subscription | null = null;
 
   fetchCodingStatistics(version: StatisticsVersion): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -251,10 +259,79 @@ export class CodingManagementService {
     return this.responseService.hasGeogebraResponses(workspaceId);
   }
 
-  resetCodingVersion(version: StatisticsVersion): Observable<{ affectedResponseCount: number; cascadeResetVersions: ('v2' | 'v3')[]; message: string } | null> {
+  checkActiveResetJob(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) return of(null);
-    return this.versionService.resetCodingVersion(workspaceId, version);
+    if (!workspaceId) return;
+
+    this.versionService.getActiveResetVersionJob(workspaceId).subscribe(activeJob => {
+      if (activeJob.hasActiveJob && activeJob.jobId) {
+        this._resetJobId.next(activeJob.jobId);
+        this._resetProgress.next(activeJob.progress ?? 0);
+        this.startResetPolling(workspaceId, activeJob.jobId);
+      }
+    });
+  }
+
+  resetCodingVersion(version: StatisticsVersion): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.versionService.resetCodingVersion(workspaceId, version).subscribe({
+      next: ({ jobId }) => {
+        this._resetJobId.next(jobId);
+        this._resetProgress.next(0);
+        this.startResetPolling(workspaceId, jobId);
+      },
+      error: err => {
+        if (err.status === 409) {
+          this.showErrorSnackbar(err.error?.message || 'coding-management.descriptions.error-reset-conflict', false);
+        } else {
+          this.showErrorSnackbar('coding-management.descriptions.error-reset');
+        }
+      }
+    });
+  }
+
+  private startResetPolling(workspaceId: number, jobId: string): void {
+    this.stopResetPolling();
+
+    this.resetPollingSubscription = timer(0, 2000).pipe(
+      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)),
+      takeWhile(
+        (status: ResetVersionJobStatus) => ['pending', 'processing'].includes(status.status),
+        true
+      )
+    ).subscribe((status: ResetVersionJobStatus) => {
+      this._resetProgress.next(status.progress);
+
+      if (status.status === 'completed') {
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
+
+        if (status.result) {
+          let cascadeText = '';
+          if (status.result.cascadeResetVersions?.length > 0) {
+            cascadeText = ` (+ ${status.result.cascadeResetVersions.join(', ')})`;
+          }
+          this.snackBar.open(
+            `${status.result.affectedResponseCount} Antworten zurückgesetzt${cascadeText}`,
+            'Schließen',
+            { duration: 5000, panelClass: ['success-snackbar'] }
+          );
+        }
+      } else if (status.status === 'failed') {
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
+        this.showErrorSnackbar('coding-management.descriptions.error-reset');
+      }
+    });
+  }
+
+  private stopResetPolling(): void {
+    if (this.resetPollingSubscription) {
+      this.resetPollingSubscription.unsubscribe();
+      this.resetPollingSubscription = null;
+    }
   }
 
   // --- Download Helpers ---

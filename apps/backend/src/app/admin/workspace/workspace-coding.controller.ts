@@ -4,13 +4,15 @@ import {
   Param,
   Post,
   Query,
-  UseGuards
+  UseGuards,
+  ConflictException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
   ApiParam,
   ApiQuery,
-  ApiTags
+  ApiTags,
+  ApiConflictResponse
 } from '@nestjs/swagger';
 import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -20,6 +22,7 @@ import {
   CodingJobService, CodingProcessService, CodingResponseQueryService, CodingResultsService
 } from '../../database/services/coding';
 import { ResponseEntity } from '../../database/entities/response.entity';
+import { JobQueueService } from '../../job-queue/job-queue.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -28,7 +31,8 @@ export class WorkspaceCodingController {
     private codingProcessService: CodingProcessService,
     private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService,
-    private codingResultsService: CodingResultsService
+    private codingResultsService: CodingResultsService,
+    private jobQueueService: JobQueueService
   ) { }
 
   @Get(':workspace_id/coding')
@@ -45,11 +49,22 @@ export class WorkspaceCodingController {
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
+  @ApiConflictResponse({
+    description: 'A reset coding version job is running for this workspace'
+  })
   async codeTestPersons(
     @Query('testPersons') testPersons: string,
       @WorkspaceId() workspace_id: number,
       @Query('autoCoderRun') autoCoderRun: string
   ): Promise<CodingStatistics> {
+    // Check for active reset jobs (mutual blocking)
+    const activeResetJob = await this.jobQueueService.getActiveResetCodingVersionJob(workspace_id);
+    if (activeResetJob) {
+      throw new ConflictException(
+        `A reset coding version job is already running for this workspace (job ${activeResetJob.id}). Please wait until it completes.`
+      );
+    }
+
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
     return this.codingProcessService.codeTestPersons(
       workspace_id,

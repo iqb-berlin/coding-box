@@ -75,11 +75,24 @@
   height: 2px;
 }
 
-.reset-button-spinner {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+.reset-progress-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+
+  .reset-progress-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+  }
+
+  .reset-progress-label {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.6);
+    white-space: nowrap;
+  }
 }
 
 .statistics-content {
