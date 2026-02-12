@@ -89,6 +89,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   isLoadingStatistics = false;
   isDownloadInProgress = false;
   showManualCoding = false;
+  resetProgress: number | null = null;
 
   // Statistics state
   codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
@@ -162,6 +163,19 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(isLoading => {
         this.isLoadingStatistics = isLoading;
       });
+
+    this.codingManagementService.resetProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.resetProgress = progress;
+        if (progress === null && this.statisticsLoaded) {
+          this.fetchCodingStatistics();
+          this.refreshTableData();
+        }
+      });
+
+    // Check for active reset job (persists across navigation)
+    this.codingManagementService.checkActiveResetJob();
   }
 
   ngOnDestroy(): void {
@@ -516,51 +530,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
-    this.isLoading = true;
-    this.codingManagementService.resetCodingVersion(version).subscribe({
-      next: result => {
-        this.isLoading = false;
-        if (result) {
-          let cascadeText = '';
-          if (result.cascadeResetVersions && result.cascadeResetVersions.length > 0) {
-            cascadeText = this.translateService.instant(
-              'coding-management.statistics.reset-cascade-suffix',
-              { versions: result.cascadeResetVersions.join(', ') }
-            );
-          }
-          const message = this.translateService.instant(
-            'coding-management.statistics.reset-success',
-            {
-              count: result.affectedResponseCount,
-              version: version,
-              cascade: cascadeText
-            }
-          );
-
-          this.snackBar.open(
-            message,
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['success-snackbar']
-            }
-          );
-        }
-        this.fetchCodingStatistics();
-        this.refreshTableData();
-      },
-      error: () => {
-        this.isLoading = false;
-        this.snackBar.open(
-          this.translateService.instant('coding-management.descriptions.error-reset'),
-          'Schließen',
-          {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          }
-        );
-      }
-    });
+    this.codingManagementService.resetCodingVersion(version);
   }
 
   private openDownloadCodingResultsDialog(): void {

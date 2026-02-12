@@ -1,11 +1,11 @@
 @if (!statisticsLoaded && !isLoading) {
   <div class="statistics-placeholder">
     <div class="statistics-icon-container">
-      <button 
-        mat-fab 
-        color="primary" 
-        (click)="onLoadStatistics()" 
-        [matTooltip]="'coding-management.tooltips.load-statistics' | translate" 
+      <button
+        mat-fab
+        color="primary"
+        (click)="onLoadStatistics()"
+        [matTooltip]="'coding-management.tooltips.load-statistics' | translate"
         class="statistics-load-button">
         <mat-icon>analytics</mat-icon>
       </button>
@@ -33,8 +33,8 @@
           </mat-select>
         </mat-form-field>
         <div class="button-group">
-          <button 
-            mat-icon-button 
+          <button
+            mat-icon-button
             (click)="onDownloadResults()"
             [matTooltip]="'coding-management.download-dialog.download-tooltip' | translate"
             color="primary"
@@ -53,18 +53,20 @@
             [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate"
             color="primary"
             class="reset-version-button"
-            [disabled]="isLoading || isDownloadInProgress">
+            [disabled]="isLoading || isDownloadInProgress || resetProgress !== null">
             <mat-icon>restart_alt</mat-icon>
           </button>
-          @if (isLoading) {
-            <mat-progress-spinner
-              mode="indeterminate"
-              diameter="24"
-              strokeWidth="3"
-              class="reset-button-spinner">
-            </mat-progress-spinner>
-          }
         </div>
+        @if (resetProgress !== null) {
+          <div class="reset-progress-container">
+            <mat-progress-bar
+              mode="determinate"
+              [value]="resetProgress"
+              class="reset-progress-bar">
+            </mat-progress-bar>
+            <span class="reset-progress-label">{{ 'coding-management.reset-dialog.resetting' | translate }} {{ resetProgress }}%</span>
+          </div>
+        }
       </div>
     </div>
     <mat-divider></mat-divider>

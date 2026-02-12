@@ -54,7 +54,8 @@
         <app-statistics-card [codingStatistics]="codingStatistics" [referenceStatistics]="referenceStatistics"
           [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion"
           [isLoading]="isLoadingStatistics" [isDownloadInProgress]="isDownloadInProgress"
-          [statisticsLoaded]="statisticsLoaded" (versionChange)="onVersionChange($event)"
+          [statisticsLoaded]="statisticsLoaded" [resetProgress]="resetProgress"
+          (versionChange)="onVersionChange($event)"
           (loadStatistics)="fetchCodingStatistics()" (downloadResults)="onDownloadResults()"
           (resetVersion)="onResetVersion()" (statusClick)="onStatusClick($event)">
         </app-statistics-card>
