@@ -3,10 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
 } from 'typeorm';
-import {
-  VariableCodingData,
-  CodingScheme
-} from '@iqbspecs/coding-scheme';
+import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
@@ -46,7 +43,7 @@ export class CodingProcessService {
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
     private workspaceFilesService: WorkspaceFilesService
-  ) { }
+  ) {}
 
   private codingSchemeCache: Map<
   string,
@@ -829,6 +826,12 @@ export class CodingProcessService {
             codedResponse.code_v1 = codedResult?.code;
             codedResponse.status_v1 = codedStatus;
             codedResponse.score_v1 = codedResult?.score;
+            codedResponse.code_v2 = null;
+            codedResponse.status_v2 = null;
+            codedResponse.score_v2 = null;
+            codedResponse.code_v3 = null;
+            codedResponse.status_v3 = null;
+            codedResponse.score_v3 = null;
           } else if (autoCoderRun === 2) {
             codedResponse.code_v3 = codedResult?.code;
             codedResponse.status_v3 = codedStatus;
