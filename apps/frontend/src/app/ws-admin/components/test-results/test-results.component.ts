@@ -59,7 +59,10 @@ import { TestResultsImportDialogComponent } from './test-results-import-dialog.c
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
 import { SessionDistributionsDialogComponent } from './session-distributions-dialog.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { TestResultBackendService, TestResultExportJob } from '../../../shared/services/test-result/test-result-backend.service';
+import {
+  TestResultBackendService,
+  TestResultExportJob
+} from '../../../shared/services/test-result/test-result-backend.service';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -103,10 +106,16 @@ import {
 } from './export-options-dialog.component';
 
 import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
-import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  TestResultsUploadIssueDto,
+  TestResultsUploadResultDto
+} from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
-import { PendingUploadBatch, TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
+import {
+  PendingUploadBatch,
+  TestResultsUploadStateService
+} from '../../services/test-results-upload-state.service';
 import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
 import {
   OverwriteMode,
@@ -393,21 +402,29 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
 
     // Sync with upload state service
-    this.uploadStateService.uploadingBatches$.subscribe((batches: PendingUploadBatch[]) => {
-      const myBatch = batches.find((b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId);
-      if (myBatch) {
-        this.isUploadingResults = true;
-        this.uploadingMessage = `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`;
-        this.isLoading = true;
-      } else {
-        this.isUploadingResults = false;
+    this.uploadStateService.uploadingBatches$.subscribe(
+      (batches: PendingUploadBatch[]) => {
+        const myBatch = batches.find(
+          (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
+        );
+        if (myBatch) {
+          this.isUploadingResults = true;
+          this.uploadingMessage = `Verarbeite... ${myBatch.progress}% (${myBatch.completedCount}/${myBatch.totalJobs} Dateien)`;
+          this.isLoading = true;
+        } else {
+          this.isUploadingResults = false;
+        }
       }
-    });
+    );
 
     this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
-        this.createTestResultsList(this.pageIndex, this.pageSize, this.getCurrentSearchText());
+        this.createTestResultsList(
+          this.pageIndex,
+          this.pageSize,
+          this.getCurrentSearchText()
+        );
         this.isLoading = false;
         this.isUploadingResults = false;
       }
@@ -467,11 +484,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
                   type as
-                  | 'variables'
-                  | 'variableTypes'
-                  | 'responseStatus'
-                  | 'testTakers'
-                  | 'groupResponses'
+                    | 'variables'
+                    | 'variableTypes'
+                    | 'responseStatus'
+                    | 'testTakers'
+                    | 'groupResponses'
                 );
               }
             },
@@ -479,11 +496,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
                 type as
-                | 'variables'
-                | 'variableTypes'
-                | 'responseStatus'
-                | 'testTakers'
-                | 'groupResponses'
+                  | 'variables'
+                  | 'variableTypes'
+                  | 'responseStatus'
+                  | 'testTakers'
+                  | 'groupResponses'
               );
             }
           });
@@ -827,7 +844,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '700px',
       data: {
         logs: this.logs,
-        title: `Logs für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Logs für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -844,7 +862,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         tags: this.unitTags,
-        title: `Tags für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Tags für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -868,7 +887,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       data: {
         unitId: this.selectedUnit.id as number,
         notes: this.unitNotes,
-        title: `Notizen für Unit: ${this.selectedUnit.alias || 'Unbenannte Einheit'
+        title: `Notizen für Unit: ${
+          this.selectedUnit.alias || 'Unbenannte Einheit'
         }`
       }
     });
@@ -1363,12 +1383,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             };
           };
 
-          const logMetrics = payload.uploadResult ? {
-            bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
-            totalBooklets: payload.uploadResult.totalBooklets ?? 0,
-            unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
-            totalUnits: payload.uploadResult.totalUnits ?? 0
-          } : payload.logMetrics;
+          const logMetrics = payload.uploadResult ?
+            {
+              bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
+              totalBooklets: payload.uploadResult.totalBooklets ?? 0,
+              unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
+              totalUnits: payload.uploadResult.totalUnits ?? 0
+            } :
+            payload.logMetrics;
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -1463,22 +1485,34 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               this.isUploadingResults = true;
 
               if (resultType === 'responses') {
-                this.uploadingMessage = 'Importiere Antworten...';
+                this.uploadingMessage = 'Importiere Antworten... (0%)';
               } else if (resultType === 'logs') {
-                this.uploadingMessage = 'Importiere Logs...';
+                this.uploadingMessage = 'Importiere Logs... (0%)';
               } else {
-                this.uploadingMessage = 'Ergebnisse werden hochgeladen...';
+                this.uploadingMessage = 'Ergebnisse werden hochgeladen... (0%)';
               }
 
+              const file = inputElement.files![0];
               this.fileService
-                .uploadTestResults(
+                .uploadTestResultsChunked(
                   this.appService.selectedWorkspaceId,
-                  inputElement.files,
+                  file,
                   resultType,
-                  overwriteExisting,
-                  overwriteMode,
-                  scope,
-                  filters
+                  {
+                    overwriteExisting,
+                    overwriteMode,
+                    scope,
+                    filters
+                  },
+                  (percent: number) => {
+                    if (resultType === 'responses') {
+                      this.uploadingMessage = `Importiere Antworten... (${percent}%)`;
+                    } else if (resultType === 'logs') {
+                      this.uploadingMessage = `Importiere Logs... (${percent}%)`;
+                    } else {
+                      this.uploadingMessage = `Ergebnisse werden hochgeladen... (${percent}%)`;
+                    }
+                  }
                 )
                 .subscribe({
                   next: (jobs: TestResultsUploadJobDto[]) => {
@@ -1508,7 +1542,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   error: err => {
                     this.isLoading = false;
                     this.isUploadingResults = false;
-                    this.snackBar.open(`Fehler beim Upload-Start: ${err.message}`, 'Fehler', { duration: 5000 });
+                    this.snackBar.open(
+                      `Fehler beim Upload-Start: ${err.message}`,
+                      'Fehler',
+                      { duration: 5000 }
+                    );
                   }
                 });
             }
@@ -1581,7 +1619,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '400px',
       data: <ConfirmDialogData>{
         title: 'Unit löschen',
-        content: `Möchten Sie die Unit "${unit.alias || 'Unbenannte Einheit'
+        content: `Möchten Sie die Unit "${
+          unit.alias || 'Unbenannte Einheit'
         }" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`,
         confirmButtonLabel: 'Löschen',
         showCancel: true
@@ -1609,7 +1648,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 }
 
                 this.snackBar.open(
-                  `Unit "${unit.alias || 'Unbenannte Einheit'
+                  `Unit "${
+                    unit.alias || 'Unbenannte Einheit'
                   }" wurde erfolgreich gelöscht.`,
                   'Erfolg',
                   { duration: 3000 }

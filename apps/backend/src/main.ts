@@ -16,7 +16,6 @@ async function bootstrap() {
   app.useStaticAssets('./packages', { prefix: '/api/packages' });
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);
-  app.use(json({ limit: '50mb' }));
   app.enableCors();
 
   // Enable Swagger-UI
