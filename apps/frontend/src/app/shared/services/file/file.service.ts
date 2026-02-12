@@ -2,10 +2,15 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError,
+  concat,
+  defer,
+  last,
   map,
   Observable,
   of,
-  switchMap, throwError
+  switchMap,
+  tap,
+  throwError
 } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
@@ -15,6 +20,10 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
+import {
+  ChunkedUploadInitResponseDto,
+  ChunkedUploadChunkResponseDto
+} from '../../../../../../../api-dto/files/chunked-upload.dto';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -70,10 +79,12 @@ export class FileService {
     if (fileSize) params = params.set('fileSize', fileSize);
     if (searchText) params = params.set('searchText', searchText);
 
-    return this.http.get<PaginatedResponse<FilesInListDto> & { fileTypes: string[] }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files`,
-      { headers: this.authHeader, params }
-    );
+    return this.http.get<
+    PaginatedResponse<FilesInListDto> & { fileTypes: string[] }
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
+      headers: this.authHeader,
+      params
+    });
   }
 
   deleteFiles(workspaceId: number, fileIds: number[]): Observable<boolean> {
@@ -84,33 +95,40 @@ export class FileService {
       batches.push(fileIds.slice(i, i + batchSize));
     }
 
-    return batches.reduce<Observable<boolean>>((acc, batch) => acc.pipe(
-      switchMap(() => this.http
-        .delete(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
-          headers: this.authHeader,
-          params: { fileIds: batch.join(',') }
-        })
-        .pipe(
-          map(() => true),
-          catchError(() => of(false))
+    return batches.reduce<Observable<boolean>>(
+      (acc, batch) => acc.pipe(
+        switchMap(() => this.http
+          .delete(`${this.serverUrl}admin/workspace/${workspaceId}/files`, {
+            headers: this.authHeader,
+            params: { fileIds: batch.join(',') }
+          })
+          .pipe(
+            map(() => true),
+            catchError(() => of(false))
+          )
         )
-      )
-    ), of(true));
+      ),
+      of(true)
+    );
   }
 
-  downloadFile(workspaceId: number, fileId: number): Observable<FileDownloadDto> {
+  downloadFile(
+    workspaceId: number,
+    fileId: number
+  ): Observable<FileDownloadDto> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/${fileId}/download`;
     return this.http.get<FileDownloadDto>(url, { headers: this.authHeader });
   }
 
-  validateFiles(workspace_id: number): Observable<boolean | FileValidationResultDto> {
+  validateFiles(
+    workspace_id: number
+  ): Observable<boolean | FileValidationResultDto> {
     return this.http
       .get<FileValidationResultDto>(
       `${this.serverUrl}admin/workspace/${workspace_id}/files/validation`,
-      { headers: this.authHeader })
-      .pipe(
-        catchError(() => of(false))
-      );
+      { headers: this.authHeader }
+    )
+      .pipe(catchError(() => of(false)));
   }
 
   uploadTestFiles(
@@ -132,9 +150,10 @@ export class FileService {
       }
     }
 
-    const overwriteIdsQuery = (overwriteFileIds && overwriteFileIds.length > 0) ?
-      `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(','))}` :
-      '';
+    const overwriteIdsQuery =
+      overwriteFileIds && overwriteFileIds.length > 0 ?
+        `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(','))}` :
+        '';
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload?overwriteExisting=${overwriteExisting}${overwriteIdsQuery}`;
     return this.http.post<TestFilesUploadResultDto>(url, formData, {
       headers: this.authHeader
@@ -148,7 +167,13 @@ export class FileService {
     overwriteExisting: boolean = true,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: string = 'person',
-    filters?: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string }
+    filters?: {
+      groupName?: string;
+      bookletName?: string;
+      unitNameOrAlias?: string;
+      variableId?: string;
+      subform?: string;
+    }
   ): Observable<TestResultsUploadJobDto[]> {
     const formData = new FormData();
     if (files) {
@@ -171,145 +196,295 @@ export class FileService {
     });
   }
 
-  getUploadJobStatus(workspaceId: number, jobId: string): Observable<{
-    id: string;
-    status: 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused';
-    progress: number;
-    result?: TestResultsUploadResultDto;
-    error?: unknown;
-  }> {
-    return this.http.get<{
+  uploadTestResultsChunked(
+    workspaceId: number,
+    file: File,
+    resultType: 'logs' | 'responses',
+    options: {
+      overwriteExisting?: boolean;
+      overwriteMode?: 'skip' | 'merge' | 'replace';
+      scope?: string;
+      filters?: {
+        groupName?: string;
+        bookletName?: string;
+        unitNameOrAlias?: string;
+        variableId?: string;
+        subform?: string;
+      };
+    },
+    onProgress?: (percent: number) => void
+  ): Observable<TestResultsUploadJobDto[]> {
+    const initUrl = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${resultType}/init`;
+
+    return this.http
+      .post<ChunkedUploadInitResponseDto>(
+      initUrl,
+      {
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type || 'text/csv'
+      },
+      { headers: this.authHeader }
+    )
+      .pipe(
+        switchMap(initResp => {
+          const { uploadId, chunkSize, totalChunks } = initResp;
+
+          const chunkUploads$ = Array.from({ length: totalChunks }, (_, i) => {
+            const start = i * chunkSize;
+            const end = Math.min(start + chunkSize, file.size);
+            const blob = file.slice(start, end);
+            const chunkUrl = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${uploadId}/chunk/${i}`;
+
+            return defer(() => this.http
+              .put<ChunkedUploadChunkResponseDto>(chunkUrl, blob, {
+              headers: {
+                ...this.authHeader,
+                'Content-Type': 'application/octet-stream'
+              }
+            })
+              .pipe(
+                tap(() => {
+                  if (onProgress) {
+                    onProgress(Math.round(((i + 1) / totalChunks) * 100));
+                  }
+                })
+              )
+            );
+          });
+
+          return concat(...chunkUploads$).pipe(
+            last(),
+            switchMap(() => {
+              const completeUrl = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${uploadId}/complete`;
+              return this.http.post<TestResultsUploadJobDto[]>(
+                completeUrl,
+                {
+                  overwriteExisting: options.overwriteExisting,
+                  overwriteMode: options.overwriteMode,
+                  scope: options.scope,
+                  ...(options.filters || {})
+                },
+                { headers: this.authHeader }
+              );
+            })
+          );
+        })
+      );
+  }
+
+  getUploadJobStatus(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{
       id: string;
-      status: 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused';
+      status:
+      | 'completed'
+      | 'waiting'
+      | 'active'
+      | 'delayed'
+      | 'failed'
+      | 'paused';
       progress: number;
       result?: TestResultsUploadResultDto;
       error?: unknown;
-    }>(`${this.serverUrl}admin/workspace/${workspaceId}/upload/status/${jobId}`, {
-      headers: this.authHeader
-    });
+    }> {
+    return this.http.get<{
+      id: string;
+      status:
+      | 'completed'
+      | 'waiting'
+      | 'active'
+      | 'delayed'
+      | 'failed'
+      | 'paused';
+      progress: number;
+      result?: TestResultsUploadResultDto;
+      error?: unknown;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/upload/status/${jobId}`,
+      {
+        headers: this.authHeader
+      }
+    );
   }
 
-  getUnitDef(workspaceId: number, unit: string, authToken?: string): Observable<FilesDto[]> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+  getUnitDef(
+    workspaceId: number,
+    unit: string,
+    authToken?: string
+  ): Observable<FilesDto[]> {
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
     return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/${unit}/unitDef`,
-      { headers });
+      { headers }
+    );
   }
 
-  getPlayer(workspaceId: number, player: string, authToken?: string): Observable<FilesDto[]> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+  getPlayer(
+    workspaceId: number,
+    player: string,
+    authToken?: string
+  ): Observable<FilesDto[]> {
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
     return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/player/${player}`,
-      { headers });
+      { headers }
+    );
   }
 
-  getUnit(workspaceId: number,
-          unitId: string,
-          authToken?: string
+  getUnit(
+    workspaceId: number,
+    unitId: string,
+    authToken?: string
   ): Observable<FilesDto[]> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
     return this.http.get<FilesDto[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}`,
-      { headers });
-  }
-
-  getUnitContentXml(workspaceId: number, unitId: string): Observable<string | null> {
-    return this.http.get<{ content: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/content`,
-      { headers: this.authHeader }
-    ).pipe(
-      map(response => response.content),
-      catchError(() => of(null))
+      { headers }
     );
   }
 
-  getTestTakerContentXml(workspaceId: number, testTakerId: string): Observable<string | null> {
-    return this.http.get<{ content: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/testtakers/${testTakerId}/content`,
-      { headers: this.authHeader }
-    ).pipe(
-      map(response => response.content),
-      catchError(() => of(null))
-    );
+  getUnitContentXml(
+    workspaceId: number,
+    unitId: string
+  ): Observable<string | null> {
+    return this.http
+      .get<{
+      content: string;
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/content`, { headers: this.authHeader })
+      .pipe(
+        map(response => response.content),
+        catchError(() => of(null))
+      );
   }
 
-  getCodingSchemeFile(workspaceId: number, codingSchemeRef: string): Observable<FileDownloadDto | null> {
-    return this.http.get<FileDownloadDto | null>(
+  getTestTakerContentXml(
+    workspaceId: number,
+    testTakerId: string
+  ): Observable<string | null> {
+    return this.http
+      .get<{
+      content: string;
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/files/testtakers/${testTakerId}/content`, { headers: this.authHeader })
+      .pipe(
+        map(response => response.content),
+        catchError(() => of(null))
+      );
+  }
+
+  getCodingSchemeFile(
+    workspaceId: number,
+    codingSchemeRef: string
+  ): Observable<FileDownloadDto | null> {
+    return this.http
+      .get<FileDownloadDto | null>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/coding-scheme/${codingSchemeRef}`,
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of(null))
-    );
+    )
+      .pipe(catchError(() => of(null)));
   }
 
   createDummyTestTakerFile(workspaceId: number): Observable<boolean> {
-    return this.http.post<boolean>(
+    return this.http
+      .post<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/create-dummy-testtaker`,
       {},
       { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of(false))
-    );
+    )
+      .pipe(catchError(() => of(false)));
   }
 
-  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<BookletUnit[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`,
-      { headers }
-    ).pipe(
-      catchError(() => of([]))
-    );
+  getBookletUnits(
+    workspaceId: number,
+    bookletId: string,
+    authToken?: string
+  ): Observable<BookletUnit[]> {
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    return this.http
+      .get<
+    BookletUnit[]
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/units`, { headers })
+      .pipe(catchError(() => of([])));
   }
 
-  getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<BookletInfoDto>(
+  getBookletInfo(
+    workspaceId: number,
+    bookletId: string,
+    authToken?: string
+  ): Observable<BookletInfoDto> {
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    return this.http
+      .get<BookletInfoDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/booklet/${bookletId}/info`,
       { headers }
-    ).pipe(
-      catchError(error => throwError(() => error))
-    );
+    )
+      .pipe(catchError(error => throwError(() => error)));
   }
 
-  getUnitInfo(workspaceId: number, unitId: string, authToken?: string): Observable<UnitInfoDto> {
-    const headers = authToken ? { Authorization: `Bearer ${authToken}` } : this.authHeader;
-    return this.http.get<UnitInfoDto>(
+  getUnitInfo(
+    workspaceId: number,
+    unitId: string,
+    authToken?: string
+  ): Observable<UnitInfoDto> {
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    return this.http
+      .get<UnitInfoDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/info`,
       { headers }
-    ).pipe(
-      catchError(error => throwError(() => error))
-    );
+    )
+      .pipe(catchError(error => throwError(() => error)));
   }
 
-  getUnitsWithFileIds(workspaceId: number): Observable<{ id: number; unitId: string; fileName: string; data: string }[]> {
-    return this.http.get<{ id: number; unitId: string; fileName: string; data: string }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`,
-      { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of([]))
-    );
+  getUnitsWithFileIds(
+    workspaceId: number
+  ): Observable<
+    { id: number; unitId: string; fileName: string; data: string }[]
+    > {
+    return this.http
+      .get<
+    { id: number; unitId: string; fileName: string; data: string }[]
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/units-with-file-ids`, { headers: this.authHeader })
+      .pipe(catchError(() => of([])));
   }
 
-  getVariableInfoForScheme(workspaceId: number, schemeFileId: string): Observable<VariableInfo[]> {
-    return this.http.get<VariableInfo[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/variable-info/${schemeFileId}`,
-      { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of([]))
-    );
+  getVariableInfoForScheme(
+    workspaceId: number,
+    schemeFileId: string
+  ): Observable<VariableInfo[]> {
+    return this.http
+      .get<
+    VariableInfo[]
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/variable-info/${schemeFileId}`, { headers: this.authHeader })
+      .pipe(catchError(() => of([])));
   }
 
-  getItemIdsFromMetadata(workspaceId: number): Observable<{ fileId: string; id: number; items: string[] }[]> {
-    return this.http.get<{ fileId: string; id: number; items: string[] }[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/item-ids`,
-      { headers: this.authHeader }
-    ).pipe(
-      catchError(() => of([]))
-    );
+  getItemIdsFromMetadata(
+    workspaceId: number
+  ): Observable<{ fileId: string; id: number; items: string[] }[]> {
+    return this.http
+      .get<
+    { fileId: string; id: number; items: string[] }[]
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/item-ids`, { headers: this.authHeader })
+      .pipe(catchError(() => of([])));
   }
 
-  getGithubReleases(workspaceId: number, type: 'aspect-player' | 'schemer'): Observable<GithubReleaseShort[]> {
+  getGithubReleases(
+    workspaceId: number,
+    type: 'aspect-player' | 'schemer'
+  ): Observable<GithubReleaseShort[]> {
     return this.http.get<GithubReleaseShort[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/github/releases/${type}`,
       { headers: this.authHeader }
