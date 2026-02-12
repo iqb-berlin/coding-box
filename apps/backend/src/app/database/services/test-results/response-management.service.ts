@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, QueryRunner } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -11,10 +11,9 @@ export class ResponseManagementService {
 
   constructor(
     @InjectRepository(ResponseEntity)
-    private readonly responseRepository: Repository<ResponseEntity>,
     private readonly connection: DataSource,
     private readonly journalService: JournalService
-  ) { }
+  ) {}
 
   async updateResponsesInDatabase(
     allCodedResponses: CodedResponse[],
@@ -66,6 +65,9 @@ export class ResponseManagementService {
               | 'code_v1'
               | 'status_v1'
               | 'score_v1'
+              | 'code_v2'
+              | 'status_v2'
+              | 'score_v2'
               | 'code_v3'
               | 'status_v3'
               | 'score_v3'
@@ -82,11 +84,27 @@ export class ResponseManagementService {
                 updateData.score_v1 = response.score_v1;
               }
 
+              if (response.code_v2 !== undefined) {
+                updateData.code_v2 = response.code_v2;
+              }
+              if (response.status_v2 !== undefined) {
+                updateData.status_v2 =
+                  response.status_v2 === null ?
+                    null :
+                    statusStringToNumber(response.status_v2);
+              }
+              if (response.score_v2 !== undefined) {
+                updateData.score_v2 = response.score_v2;
+              }
+
               if (response.code_v3 !== undefined) {
                 updateData.code_v3 = response.code_v3;
               }
               if (response.status_v3 !== undefined) {
-                const statusNumber = statusStringToNumber(response.status_v3);
+                const statusNumber =
+                  response.status_v3 === null ?
+                    null :
+                    statusStringToNumber(response.status_v3);
                 updateData.status_v3 = statusNumber;
                 this.logger.debug(
                   `Response ${response.id}: status_v3='${response.status_v3}' -> statusNumber=${statusNumber}`
