@@ -83,6 +83,7 @@
       *ngFor="let item of codingIssueOptionCodes;" [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
       (click)="isReadOnly ? null : onSelect(item.id)">
       <div class="code-content">
+        <span class="shortcut-icon" *ngIf="getShortcutLabel(item.id)">{{ getShortcutLabel(item.id) }}</span>
         <span class="uncertain-text">{{ item.label }}</span>
       </div>
     </div>
