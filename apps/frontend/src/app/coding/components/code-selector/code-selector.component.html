@@ -11,37 +11,41 @@
   <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
   <div class="progress-actions">
     @if (unitsData) {
-    <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
-      class="nav-button prev-button">
-      <mat-icon>chevron_left</mat-icon>
-    </button>
+    <div class="nav-controls">
+      <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
+        class="nav-button prev-button">
+        <mat-icon>chevron_left</mat-icon>
+      </button>
 
-    <div class="unit-position">
-      <span class="current-position">{{ currentNavigationIndex }}</span>
-      <span class="position-separator">/</span>
-      <span class="total-units">{{ totalNavigationUnits }}</span>
+      <div class="unit-position">
+        <span class="current-position">{{ currentNavigationIndex }}</span>
+        <span class="position-separator">/</span>
+        <span class="total-units">{{ totalNavigationUnits }}</span>
+      </div>
+
+      <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe"
+        class="nav-button next-button">
+        <mat-icon>chevron_right</mat-icon>
+      </button>
     </div>
-
-    <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe"
-      class="nav-button next-button">
-      <mat-icon>chevron_right</mat-icon>
-    </button>
     }
 
-    <button mat-icon-button (click)="onNavigateClick()" class="navigate-button"
-      matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
-      <mat-icon>directions</mat-icon>
-    </button>
-    <button mat-icon-button (click)="onCommentClick()" class="comment-button"
-      matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
-      <mat-icon>comment</mat-icon>
-    </button>
-    @if (hasCodingJob && !isCodingJobCompleted) {
-    <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob" class="pause-button"
-      matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
-      <mat-icon>pause</mat-icon>
-    </button>
-    }
+    <div class="action-controls">
+      <button mat-icon-button (click)="onNavigateClick()" class="navigate-button"
+        matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+        <mat-icon>directions</mat-icon>
+      </button>
+      <button mat-icon-button (click)="onCommentClick()" class="comment-button"
+        matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+        <mat-icon>comment</mat-icon>
+      </button>
+      @if (hasCodingJob && !isCodingJobCompleted) {
+      <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob" class="pause-button"
+        matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
+        <mat-icon>pause</mat-icon>
+      </button>
+      }
+    </div>
   </div>
   }
 
