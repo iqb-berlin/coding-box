@@ -361,7 +361,6 @@ export class CodeSelectorComponent implements OnChanges {
     }
 
     if (targetId !== null) {
-      // Check if this option is actually available in the current list
       const optionExists = this.selectableItems.some(item => item.id === targetId);
       if (optionExists) {
         event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
