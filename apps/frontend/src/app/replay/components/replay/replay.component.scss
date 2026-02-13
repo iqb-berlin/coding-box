@@ -20,7 +20,10 @@
 
   .unit-player-container {
     flex: 1;
-    overflow: auto;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
   }
 
   .code-selector-container {
@@ -29,8 +32,8 @@
     background-color: #f9f9f9;
     border-left: none;
     padding: 16px;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
     display: flex;
     flex-direction: column;
   }
@@ -161,11 +164,11 @@
 
 .watermark {
   position: absolute;
-  bottom: 15px;
-  right: 15px;
+  bottom: 10px;
+  right: 10px;
   font-size: 14px;
   color: rgba(0, 0, 0, 0.35);
-  z-index: 100;
+  z-index: 5;
   pointer-events: none;
   user-select: none;
   white-space: nowrap;
@@ -173,16 +176,9 @@
   max-width: 300px;
   overflow: hidden;
   font-weight: 500;
-}
-
-.watermark.code-selector-active {
-  right: 470px;
-}
-
-@media (max-width: 1200px) {
-  .watermark.code-selector-active {
-    right: 15px;
-  }
+  background-color: rgba(255, 255, 255, 0.7);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .coding-progress {

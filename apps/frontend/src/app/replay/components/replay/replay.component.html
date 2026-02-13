@@ -12,11 +12,14 @@
   <div class="replay-content">
     <div class="unit-player-container">
       @if (!!player && unitDef) {
-      @for (key of [reloadKey]; track key) {
+      @for (key of [reloadKey]; track $index) {
       <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
         [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
       </coding-box-unit-player>
       }
+      }
+      @if (testPerson && unitId) {
+      <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
       }
     </div>
 
@@ -43,7 +46,7 @@
   </div>
   } @else {
   @if (!!player && unitDef) {
-  @for (key of [reloadKey]; track key) {
+  @for (key of [reloadKey]; track $index) {
   <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
     [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
   </coding-box-unit-player>
@@ -53,11 +56,7 @@
 
 
 
-  @if (testPerson && unitId) {
-  <div
-    [class]="'watermark' + (isCodingMode && codingService.codingScheme && codingService.currentVariableId ? ' code-selector-active' : '')">
-    {{ testPerson }} - {{ unitId }}</div>
-  }
+
 
   @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
   <div class="completion-overlay">

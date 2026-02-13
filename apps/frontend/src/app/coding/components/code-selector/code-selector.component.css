@@ -66,7 +66,6 @@
   margin-left: 24px;
   margin-top: 4px;
   color: rgba(0, 0, 0, 0.78);
-  overflow-x: auto;
 }
 
 .code-instruction img {
@@ -174,16 +173,40 @@
 
 .progress-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 12px;
-  margin-bottom: 16px;
-  padding: 8px 0;
+  margin-bottom: 8px;
+  padding: 4px 0;
+}
+
+.nav-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 100%;
+  width: fit-content;
 }
 
 .selector-content {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
 .codes-section {
@@ -193,10 +216,17 @@
   flex-direction: column;
 }
 
+.codes-section>div {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .scrollable-codes {
   flex: 1;
   overflow-y: auto;
-  max-height: none;
+  min-height: 0;
 }
 
 .fixed-section {
@@ -211,7 +241,7 @@
 }
 
 .nav-button {
-  margin: 0 8px;
+  margin: 0 2px;
 }
 
 .unit-position {
