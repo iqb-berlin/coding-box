@@ -1,124 +1,94 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode" (window:keydown)="onKeyDown($any($event))">
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode"
+  [class.resizing]="isResizing" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
   @if (isCodingMode || isBookletReplayMode) {
-    @if (isBookletReplayMode && !!player && unitDef) {
-      <coding-box-units-replay
-        [unitsData]="unitsData"
-        [freeNavigation]="isBookletReplayMode"
-        (unitChanged)="handleUnitChanged($event)">
-      </coding-box-units-replay>
-    }
+  @if (isBookletReplayMode && !!player && unitDef) {
+  <coding-box-units-replay [unitsData]="unitsData" [freeNavigation]="isBookletReplayMode"
+    (unitChanged)="handleUnitChanged($event)">
+  </coding-box-units-replay>
+  }
 
-    <div class="replay-content">
-      <div class="unit-player-container">
-        @if (!!player && unitDef) {
-          @for (key of [reloadKey]; track key) {
-            <coding-box-unit-player
-              [unitDef]="unitDef"
-              [unitPlayer]="player"
-              [unitResponses]="responses"
-              [pageId]="page"
-              [printMode]="isPrintMode"
-              (invalidPage)="checkPageError($event)">
-            </coding-box-unit-player>
-          }
-        }
-      </div>
-
-      @if (isCodingMode && codingService.codingScheme && codingService.currentVariableId) {
-        <div class="code-selector-container">
-          <app-code-selector
-            [codingScheme]="codingService.codingScheme"
-            [variableId]="codingService.currentVariableId"
-            [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
-            [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
-            [coderNotes]="getCoderNotes()"
-            [showProgress]="!!codingService.codingJobId"
-            [completedCount]="getCompletedCount()"
-            [totalUnits]="totalUnits"
-            [progressPercentage]="getProgressPercentage()"
-            [openCount]="getOpenCount()"
-            [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
-            [hasCodingJob]="!!codingService.codingJobId"
-            [isCodingJobCompleted]="codingService.isCodingJobCompleted"
-            [isPausingJob]="codingService.isPausingJob"
-            [unitsData]="unitsData"
-            [codingService]="codingService"
-            [showScore]="codingService.showScore"
-            [allowComments]="codingService.allowComments"
-            [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
-            [isReadOnly]="codingService.isCodingJobFinalized"
-            (codeSelected)="onCodeSelected($event)"
-            (notesChanged)="onNotesChanged($event)"
-            (openNavigateDialog)="openNavigateDialog()"
-            (openCommentDialog)="openCommentDialog()"
-            (pauseCodingJob)="pauseCodingJob()"
-            (unitChanged)="handleUnitChanged($event)">
-          </app-code-selector>
-        </div>
+  <div class="replay-content">
+    <div class="unit-player-container">
+      @if (!!player && unitDef) {
+      @for (key of [reloadKey]; track key) {
+      <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
+        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
+      </coding-box-unit-player>
+      }
       }
     </div>
-  } @else {
-    @if (!!player && unitDef) {
-      @for (key of [reloadKey]; track key) {
-        <coding-box-unit-player
-          [unitDef]="unitDef"
-          [unitPlayer]="player"
-          [unitResponses]="responses"
-          [pageId]="page"
-          [printMode]="isPrintMode"
-          (invalidPage)="checkPageError($event)">
-        </coding-box-unit-player>
-      }
+
+    @if (isCodingMode && codingService.codingScheme && codingService.currentVariableId) {
+    <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
+    <div class="code-selector-container" [style.width.px]="codePanelWidth" [style.min-width.px]="codePanelWidth">
+      <app-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"
+        [preSelectedCodeId]="getPreSelectedCodeId(codingService.currentVariableId)"
+        [preSelectedCodingIssueOptionId]="getPreSelectedCodingIssueOptionId(codingService.currentVariableId)"
+        [coderNotes]="getCoderNotes()" [showProgress]="!!codingService.codingJobId"
+        [completedCount]="getCompletedCount()" [totalUnits]="totalUnits" [progressPercentage]="getProgressPercentage()"
+        [openCount]="getOpenCount()" [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
+        [hasCodingJob]="!!codingService.codingJobId" [isCodingJobCompleted]="codingService.isCodingJobCompleted"
+        [isPausingJob]="codingService.isPausingJob" [unitsData]="unitsData" [codingService]="codingService"
+        [showScore]="codingService.showScore" [allowComments]="codingService.allowComments"
+        [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
+        [isReadOnly]="codingService.isCodingJobFinalized" (codeSelected)="onCodeSelected($event)"
+        (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
+        (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
+        (unitChanged)="handleUnitChanged($event)">
+      </app-code-selector>
+    </div>
     }
+  </div>
+  } @else {
+  @if (!!player && unitDef) {
+  @for (key of [reloadKey]; track key) {
+  <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
+    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
+  </coding-box-unit-player>
+  }
+  }
   }
 
 
 
   @if (testPerson && unitId) {
-    <div [class]="'watermark' + (isCodingMode && codingService.codingScheme && codingService.currentVariableId ? ' code-selector-active' : '')">{{ testPerson }} - {{ unitId }}</div>
+  <div
+    [class]="'watermark' + (isCodingMode && codingService.codingScheme && codingService.currentVariableId ? ' code-selector-active' : '')">
+    {{ testPerson }} - {{ unitId }}</div>
   }
 
   @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
-    <div class="completion-overlay">
-      <div class="completion-dialog">
-        <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
-        <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
-        <div class="completion-buttons">
-          <button
-            mat-button
-            (click)="dismissCompletionOverlay()"
-            class="close-button">
-            {{ 'common.close' | translate }}
-          </button>
-          <button
-            mat-raised-button
-            color="primary"
-            (click)="submitCodingJob()"
-            [disabled]="codingService.isSubmittingJob"
-            class="submit-button">
-            {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate) }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  @if (codingService.isCodingJobPaused && !isBookletReplayMode) {
-    <div class="pause-overlay">
-      <div class="pause-dialog">
-        <h2>{{ 'replay.coding-job-paused' | translate }}</h2>
-        <button
-          mat-raised-button
-          color="primary"
-          (click)="resumeCodingJob()"
-          [disabled]="codingService.isResumingJob"
-          class="resume-button">
-          {{ codingService.isResumingJob ? ('replay.resuming-coding-job' | translate) : ('replay.resume-coding' | translate) }}
+  <div class="completion-overlay">
+    <div class="completion-dialog">
+      <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
+      <p>{{ 'replay.ALL_REPLAYS_CODED_MESSAGE' | translate }}</p>
+      <div class="completion-buttons">
+        <button mat-button (click)="dismissCompletionOverlay()" class="close-button">
+          {{ 'common.close' | translate }}
+        </button>
+        <button mat-raised-button color="primary" (click)="submitCodingJob()" [disabled]="codingService.isSubmittingJob"
+          class="submit-button">
+          {{ codingService.isSubmittingJob ? ('replay.SUBMITTING_JOB' | translate) : ('replay.SUBMIT_JOB' | translate)
+          }}
         </button>
       </div>
     </div>
+  </div>
+  }
+
+  @if (codingService.isCodingJobPaused && !isBookletReplayMode) {
+  <div class="pause-overlay">
+    <div class="pause-dialog">
+      <h2>{{ 'replay.coding-job-paused' | translate }}</h2>
+      <button mat-raised-button color="primary" (click)="resumeCodingJob()" [disabled]="codingService.isResumingJob"
+        class="resume-button">
+        {{ codingService.isResumingJob ? ('replay.resuming-coding-job' | translate) : ('replay.resume-coding' |
+        translate) }}
+      </button>
+    </div>
+  </div>
   }
 
 </div>
