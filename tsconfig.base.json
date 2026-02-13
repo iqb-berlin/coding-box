@@ -12,21 +12,14 @@
     "importHelpers": true,
     "target": "es2015",
     "module": "esnext",
-    "lib": [
-      "es2017",
-      "dom"
-    ],
+    "lib": ["es2017", "dom"],
     "paths": {
-      "@coding-box-lib/api-dto": [
-        "libs/api-dto/src/index.ts"
-      ]
+      "@coding-box-lib/api-dto": ["api-dto"],
+      "@coding-box-lib/api-dto/*": ["api-dto/*"]
     },
     "skipLibCheck": true,
     "skipDefaultLibCheck": true,
     "baseUrl": "."
   },
-  "exclude": [
-    "node_modules",
-    "tmp"
-  ]
+  "exclude": ["node_modules", "tmp"]
 }

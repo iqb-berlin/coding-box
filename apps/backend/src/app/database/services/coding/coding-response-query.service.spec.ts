@@ -54,7 +54,9 @@ describe('CodingResponseQueryService', () => {
       ]
     }).compile();
 
-    service = module.get<CodingResponseQueryService>(CodingResponseQueryService);
+    service = module.get<CodingResponseQueryService>(
+      CodingResponseQueryService
+    );
     jest.clearAllMocks();
   });
 
@@ -73,7 +75,13 @@ describe('CodingResponseQueryService', () => {
       mockQueryBuilder.getCount.mockResolvedValue(2);
       mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
 
-      const result = await service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v1', 1, 100);
+      const result = await service.getResponsesByStatus(
+        1,
+        'CODING_COMPLETE',
+        'v1',
+        1,
+        100
+      );
 
       expect(result).toEqual({
         data: mockResponses,
@@ -94,7 +102,13 @@ describe('CodingResponseQueryService', () => {
       mockQueryBuilder.getCount.mockResolvedValue(1);
       mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
 
-      const result = await service.getResponsesByStatus(1, 'CODING_INCOMPLETE', 'v2', 1, 100);
+      const result = await service.getResponsesByStatus(
+        1,
+        'CODING_INCOMPLETE',
+        'v2',
+        1,
+        100
+      );
 
       expect(result).toEqual({
         data: mockResponses,
@@ -115,7 +129,13 @@ describe('CodingResponseQueryService', () => {
       mockQueryBuilder.getCount.mockResolvedValue(1);
       mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
 
-      const result = await service.getResponsesByStatus(1, 'CODING_STARTED', 'v3', 1, 100);
+      const result = await service.getResponsesByStatus(
+        1,
+        'CODING_STARTED',
+        'v3',
+        1,
+        100
+      );
 
       expect(result).toEqual({
         data: mockResponses,
@@ -136,7 +156,13 @@ describe('CodingResponseQueryService', () => {
       mockQueryBuilder.getCount.mockResolvedValue(25);
       mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
 
-      const result = await service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v1', 2, 10);
+      const result = await service.getResponsesByStatus(
+        1,
+        'CODING_COMPLETE',
+        'v1',
+        2,
+        10
+      );
 
       expect(result).toEqual({
         data: mockResponses,
@@ -151,7 +177,13 @@ describe('CodingResponseQueryService', () => {
     it('should return empty result for invalid status', async () => {
       (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(null);
 
-      const result = await service.getResponsesByStatus(1, 'INVALID_STATUS', 'v1', 1, 100);
+      const result = await service.getResponsesByStatus(
+        1,
+        'INVALID_STATUS',
+        'v1',
+        1,
+        100
+      );
 
       expect(result).toEqual({
         data: [],
@@ -180,11 +212,15 @@ describe('CodingResponseQueryService', () => {
 
     it('should throw error on database failure', async () => {
       (statusConverter.statusStringToNumber as jest.Mock).mockReturnValue(1);
-      mockQueryBuilder.getCount.mockRejectedValue(new Error('Database error'));
+      const dbError = new Error('Database error');
+      mockQueryBuilder.getCount.mockImplementationOnce(() => Promise.reject(dbError)
+      );
 
       await expect(
         service.getResponsesByStatus(1, 'CODING_COMPLETE', 'v1', 1, 100)
-      ).rejects.toThrow('Could not retrieve responses. Please check the database connection or query.');
+      ).rejects.toThrow(
+        'Could not retrieve responses. Please check the database connection or query.'
+      );
     });
   });
 });

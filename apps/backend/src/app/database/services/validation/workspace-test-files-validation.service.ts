@@ -8,7 +8,10 @@ import addFormats from 'ajv-formats';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 
-import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import {
+  FileValidationResultDto,
+  FilteredTestTaker
+} from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
@@ -54,7 +57,10 @@ type ValidationData = {
 
 @Injectable()
 export class WorkspaceTestFilesValidationService {
-  private readonly logger = new Logger(WorkspaceTestFilesValidationService.name);
+  private readonly logger = new Logger(
+    WorkspaceTestFilesValidationService.name
+  );
+
   private codingSchemeValidator: ValidateFunction | null = null;
 
   constructor(
@@ -64,28 +70,46 @@ export class WorkspaceTestFilesValidationService {
     private personsRepository: Repository<Persons>,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
     private workspaceCoreService: WorkspaceCoreService
-  ) { }
+  ) {}
 
-  async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
+  async validateTestFiles(
+    workspaceId: number
+  ): Promise<FileValidationResultDto> {
     try {
-      this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
+      this.logger.log(
+        `Starting batched test file validation for workspace ${workspaceId}`
+      );
 
-      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults, ignoredUnits] = await Promise.all([
+      const [
+        bookletMap,
+        unitMap,
+        resourceIds,
+        xmlSchemaResults,
+        codingSchemeResults,
+        ignoredUnits
+      ] = await Promise.all([
         this.preloadBookletToUnits(workspaceId),
         this.preloadUnitRefs(workspaceId),
         this.getAllResourceIds(workspaceId),
-        this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(workspaceId),
+        this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(
+          workspaceId
+        ),
         this.validateAllCodingSchemes(workspaceId),
         this.workspaceCoreService.getIgnoredUnits(workspaceId)
       ]);
 
       const ignoredUnitsSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
-      const summarizeSchemaResults = (label: string, results: Map<string, { schemaValid: boolean; errors: string[] }>): void => {
+      const summarizeSchemaResults = (
+        label: string,
+        results: Map<string, { schemaValid: boolean; errors: string[] }>
+      ): void => {
         const entries = Array.from(results.entries());
         const ok = entries.filter(([, r]) => r.schemaValid).length;
         const failed = entries.length - ok;
-        this.logger.log(`${label} validation results for workspace ${workspaceId}: total=${entries.length}, ok=${ok}, failed=${failed}`);
+        this.logger.log(
+          `${label} validation results for workspace ${workspaceId}: total=${entries.length}, ok=${ok}, failed=${failed}`
+        );
         if (failed > 0) {
           const maxFailedToLog = 20;
           const failedPreview = entries
@@ -95,15 +119,22 @@ export class WorkspaceTestFilesValidationService {
               key,
               errors: (r.errors || []).slice(0, 5)
             }));
-          this.logger.warn(`${label} validation failed for workspace ${workspaceId}: ${JSON.stringify(failedPreview)}`);
+          this.logger.warn(
+            `${label} validation failed for workspace ${workspaceId}: ${JSON.stringify(failedPreview)}`
+          );
           if (failed > maxFailedToLog) {
-            this.logger.warn(`${label} validation: ${failed - maxFailedToLog} more failed file(s) not logged (preview limit reached).`);
+            this.logger.warn(
+              `${label} validation: ${failed - maxFailedToLog} more failed file(s) not logged (preview limit reached).`
+            );
           }
         }
       };
 
       summarizeSchemaResults('XSD schema', xmlSchemaResults);
-      summarizeSchemaResults('JSON schema (coding scheme)', codingSchemeResults);
+      summarizeSchemaResults(
+        'JSON schema (coding scheme)',
+        codingSchemeResults
+      );
       const resourceIdsArray = Array.from(resourceIds);
 
       const validationResults: ValidationData[] = [];
@@ -111,8 +142,15 @@ export class WorkspaceTestFilesValidationService {
       const usedTestTakerFileIds = new Set<string>();
 
       let filteredTestTakers: FilteredTestTaker[] = [];
-      const loginOccurrences = new Map<string, { testTaker: string; mode: string }[]>();
-      const modesNotToFilter = ['run-hot-return', 'run-hot-restart', 'run-trial'];
+      const loginOccurrences = new Map<
+      string,
+      { testTaker: string; mode: string }[]
+      >();
+      const modesNotToFilter = [
+        'run-hot-return',
+        'run-hot-restart',
+        'run-trial'
+      ];
       const shouldFilterMode = (loginMode: string) => !modesNotToFilter.includes(loginMode);
 
       const BATCH_SIZE = 20;
@@ -120,7 +158,10 @@ export class WorkspaceTestFilesValidationService {
       let hasTestTakers = false;
 
       let testTakersBatch = await this.fileUploadRepository.find({
-        where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
+        where: {
+          workspace_id: workspaceId,
+          file_type: In(['TestTakers', 'Testtakers'])
+        },
         skip: offset,
         take: BATCH_SIZE
       });
@@ -178,14 +219,19 @@ export class WorkspaceTestFilesValidationService {
 
         offset += BATCH_SIZE;
         testTakersBatch = await this.fileUploadRepository.find({
-          where: { workspace_id: workspaceId, file_type: In(['TestTakers', 'Testtakers']) },
+          where: {
+            workspace_id: workspaceId,
+            file_type: In(['TestTakers', 'Testtakers'])
+          },
           skip: offset,
           take: BATCH_SIZE
         });
       }
 
       if (!hasTestTakers) {
-        this.logger.warn(`No TestTakers found in workspace with ID ${workspaceId}.`);
+        this.logger.warn(
+          `No TestTakers found in workspace with ID ${workspaceId}.`
+        );
         return {
           testTakersFound: false,
           validationResults: this.createEmptyValidationData()
@@ -206,11 +252,18 @@ export class WorkspaceTestFilesValidationService {
           occurrences
         }));
 
-      this.logger.log(`Found ${duplicateTestTakers.length} duplicate test takers across files`);
+      this.logger.log(
+        `Found ${duplicateTestTakers.length} duplicate test takers across files`
+      );
 
       if (filteredTestTakers.length > 0) {
-        const uniqueLogins = Array.from(new Set(filteredTestTakers.map(item => item.login)));
-        const considerByLogin = await this.getPersonsConsiderStatus(workspaceId, uniqueLogins);
+        const uniqueLogins = Array.from(
+          new Set(filteredTestTakers.map(item => item.login))
+        );
+        const considerByLogin = await this.getPersonsConsiderStatus(
+          workspaceId,
+          uniqueLogins
+        );
         filteredTestTakers = filteredTestTakers
           .filter(item => considerByLogin.has(item.login))
           .map(item => ({
@@ -222,24 +275,35 @@ export class WorkspaceTestFilesValidationService {
       if (validationResults.length > 0) {
         return {
           testTakersFound: true,
-          filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
-          duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
-          unusedTestFiles: unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
+          filteredTestTakers:
+            filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+          duplicateTestTakers:
+            duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+          unusedTestFiles:
+            unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
           validationResults
         };
       }
 
       return {
         testTakersFound: true,
-        filteredTestTakers: filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
-        duplicateTestTakers: duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
-        unusedTestFiles: unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
+        filteredTestTakers:
+          filteredTestTakers.length > 0 ? filteredTestTakers : undefined,
+        duplicateTestTakers:
+          duplicateTestTakers.length > 0 ? duplicateTestTakers : undefined,
+        unusedTestFiles:
+          unusedTestFiles.length > 0 ? unusedTestFiles : undefined,
         validationResults: this.createEmptyValidationData()
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error during test file validation for workspace ID ${workspaceId}: ${message}`, error instanceof Error ? error.stack : undefined);
-      throw new Error(`Error during test file validation for workspace ID ${workspaceId}: ${message}`);
+      this.logger.error(
+        `Error during test file validation for workspace ID ${workspaceId}: ${message}`,
+        error instanceof Error ? error.stack : undefined
+      );
+      throw new Error(
+        `Error during test file validation for workspace ID ${workspaceId}: ${message}`
+      );
     }
   }
 
@@ -248,7 +312,9 @@ export class WorkspaceTestFilesValidationService {
     validationResults: ValidationData[],
     usedTestTakerFileIds: Set<string>,
     allResourceIds: string[]
-  ): Promise<Array<{ id: number; fileId: string; filename: string; fileType: string }>> {
+  ): Promise<
+    Array<{ id: number; fileId: string; filename: string; fileType: string }>
+    > {
     const usedTokens = new Set<string>();
 
     const addPlayerPatchTokens = (token: string | undefined | null): void => {
@@ -260,7 +326,8 @@ export class WorkspaceTestFilesValidationService {
         return;
       }
 
-      const reg = /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
+      const reg =
+        /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
       const match = normalizedToken.match(reg);
       if (!match) {
         return;
@@ -277,7 +344,11 @@ export class WorkspaceTestFilesValidationService {
 
       const prefix = `${module}-${major}.${minor}.`;
       allResourceIds.forEach(id => {
-        if (id && typeof id === 'string' && id.toUpperCase().startsWith(prefix)) {
+        if (
+          id &&
+          typeof id === 'string' &&
+          id.toUpperCase().startsWith(prefix)
+        ) {
           usedTokens.add(id.toUpperCase());
         }
       });
@@ -358,7 +429,10 @@ export class WorkspaceTestFilesValidationService {
       }));
   }
 
-  private async getPersonsNotConsidered(workspaceId: number, loginNames: string[]): Promise<string[]> {
+  private async getPersonsNotConsidered(
+    workspaceId: number,
+    loginNames: string[]
+  ): Promise<string[]> {
     const BATCH_SIZE = 500;
     const notConsideredLogins: string[] = [];
 
@@ -377,7 +451,10 @@ export class WorkspaceTestFilesValidationService {
     return notConsideredLogins;
   }
 
-  private async getPersonsConsiderStatus(workspaceId: number, loginNames: string[]): Promise<Map<string, boolean>> {
+  private async getPersonsConsiderStatus(
+    workspaceId: number,
+    loginNames: string[]
+  ): Promise<Map<string, boolean>> {
     const BATCH_SIZE = 500;
     const considerByLogin = new Map<string, boolean>();
 
@@ -399,7 +476,9 @@ export class WorkspaceTestFilesValidationService {
     return considerByLogin;
   }
 
-  private async preloadBookletToUnits(workspaceId: number): Promise<Map<string, string[]>> {
+  private async preloadBookletToUnits(
+    workspaceId: number
+  ): Promise<Map<string, string[]>> {
     const bookletMap = new Map<string, string[]>();
     const BATCH_SIZE = 100;
     let offset = 0;
@@ -423,7 +502,9 @@ export class WorkspaceTestFilesValidationService {
           bookletMap.set(booklet.file_id.toUpperCase(), unitIds);
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
-          this.logger.warn(`Failed to parse booklet ${booklet.file_id}: ${message}`);
+          this.logger.warn(
+            `Failed to parse booklet ${booklet.file_id}: ${message}`
+          );
         }
       }
       offset += BATCH_SIZE;
@@ -437,7 +518,9 @@ export class WorkspaceTestFilesValidationService {
     return bookletMap;
   }
 
-  private async preloadUnitRefs(workspaceId: number): Promise<Map<string, UnitRefs>> {
+  private async preloadUnitRefs(
+    workspaceId: number
+  ): Promise<Map<string, UnitRefs>> {
     const unitMap = new Map<string, UnitRefs>();
     const BATCH_SIZE = 200;
     let offset = 0;
@@ -464,14 +547,22 @@ export class WorkspaceTestFilesValidationService {
 
           $('Unit').each((_, element) => {
             const codingSchemeRef = $(element).find('CodingSchemeRef').text();
-            const schemerRefAttr = $(element).find('CodingSchemeRef').attr('schemer');
+            const schemerRefAttr = $(element)
+              .find('CodingSchemeRef')
+              .attr('schemer');
             const definitionRef = $(element).find('DefinitionRef').text();
-            const playerRefAttr = $(element).find('DefinitionRef').attr('player');
-            const playerRef = playerRefAttr ? playerRefAttr.replace('@', '-') : '';
+            const playerRefAttr = $(element)
+              .find('DefinitionRef')
+              .attr('player');
+            const playerRef = playerRefAttr ?
+              playerRefAttr.replace('@', '-') :
+              '';
 
             const metadataRef = $(element).find('Metadata > Reference').text();
 
-            const schemerRef = schemerRefAttr ? schemerRefAttr.replace('@', '-') : '';
+            const schemerRef = schemerRefAttr ?
+              schemerRefAttr.replace('@', '-') :
+              '';
 
             if (codingSchemeRef) refs.codingSchemeRefs.push(codingSchemeRef.toUpperCase());
             if (schemerRef) refs.schemerRefs.push(schemerRef.toUpperCase());
@@ -541,7 +632,9 @@ export class WorkspaceTestFilesValidationService {
         .take(BATCH_SIZE)
         .getRawMany();
     }
-    this.logger.log(`Preloaded ${resourceIds.size} unique resource IDs/filenames for workspace ${workspaceId}`);
+    this.logger.log(
+      `Preloaded ${resourceIds.size} unique resource IDs/filenames for workspace ${workspaceId}`
+    );
     return resourceIds;
   }
 
@@ -582,7 +675,10 @@ export class WorkspaceTestFilesValidationService {
     return false;
   }
 
-  private static playerRefExists(ref: string, allResourceIds: string[]): boolean {
+  private static playerRefExists(
+    ref: string,
+    allResourceIds: string[]
+  ): boolean {
     if (allResourceIds.includes(ref)) {
       return true;
     }
@@ -596,7 +692,8 @@ export class WorkspaceTestFilesValidationService {
       return true;
     }
 
-    const reg = /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
+    const reg =
+      /^(\D+?)[@V-]?(\d+)\.(\d+)(?:\.(\d+))?(?:-\S+?)?(?:\.(\D{3,4}))?$/;
     const match = normalizedRef.match(reg);
 
     if (!match) {
@@ -613,7 +710,9 @@ export class WorkspaceTestFilesValidationService {
     }
 
     const prefix = `${module}-${major}.${minor}.`;
-    return allResourceIds.some(id => id && typeof id === 'string' && id.toUpperCase().startsWith(prefix));
+    return allResourceIds.some(
+      id => id && typeof id === 'string' && id.toUpperCase().startsWith(prefix)
+    );
   }
 
   private processTestTakerWithCache(
@@ -623,7 +722,10 @@ export class WorkspaceTestFilesValidationService {
     resourceIds: Set<string>,
     resourceIdsArray: string[],
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
-    codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>,
+    codingSchemeResults: Map<
+    string,
+    { schemaValid: boolean; errors: string[] }
+    >,
     ignoredUnits: Set<string>
   ): ValidationData | null {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
@@ -640,7 +742,10 @@ export class WorkspaceTestFilesValidationService {
     const missingBooklets: string[] = [];
     const bookletFiles: FileStatus[] = [];
     const uniqueUnits = new Set<string>();
-    const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
+    const missingUnitsPerBooklet: {
+      booklet: string;
+      missingUnits: string[];
+    }[] = [];
 
     for (const bookletId of uniqueBooklets) {
       const exists = bookletMap.has(bookletId);
@@ -674,11 +779,20 @@ export class WorkspaceTestFilesValidationService {
     const unitFiles: FileStatus[] = [];
     const unitsWithoutPlayer: string[] = [];
 
-    const missingCodingSchemeRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
-    const missingDefinitionRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
-    const missingPlayerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
-    const missingMetadataRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
-    const missingSchemerRefsByUnit: { unit: string; missingRefs: string[] }[] = [];
+    const missingCodingSchemeRefsByUnit: {
+      unit: string;
+      missingRefs: string[];
+    }[] = [];
+    const missingDefinitionRefsByUnit: {
+      unit: string;
+      missingRefs: string[];
+    }[] = [];
+    const missingPlayerRefsByUnit: { unit: string; missingRefs: string[] }[] =
+      [];
+    const missingMetadataRefsByUnit: { unit: string; missingRefs: string[] }[] =
+      [];
+    const missingSchemerRefsByUnit: { unit: string; missingRefs: string[] }[] =
+      [];
 
     const allCodingSchemeRefs = new Set<string>();
     const allSchemerRefs = new Set<string>();
@@ -691,7 +805,11 @@ export class WorkspaceTestFilesValidationService {
       const isIgnored = ignoredUnits.has(unitId);
       const schemaKey = `Unit:${unitId}`;
       const schemaInfo = xmlSchemaResults.get(schemaKey);
-      const status: FileStatus = { filename: unitId, exists, ignored: isIgnored };
+      const status: FileStatus = {
+        filename: unitId,
+        exists,
+        ignored: isIgnored
+      };
       if (schemaInfo) {
         status.schemaValid = schemaInfo.schemaValid;
         if (!schemaInfo.schemaValid) {
@@ -716,17 +834,28 @@ export class WorkspaceTestFilesValidationService {
         refs?.playerRefs.forEach(r => allPlayerRefs.add(r));
         refs?.metadataRefs.forEach(r => allMetadataRefs.add(r));
 
-        const codingSchemeMissingForUnit = (refs?.codingSchemeRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        const codingSchemeMissingForUnit = (
+          refs?.codingSchemeRefs || []
+        ).filter(r => !this.resourceExists(r, resourceIds));
         if (codingSchemeMissingForUnit.length > 0) {
-          missingCodingSchemeRefsByUnit.push({ unit: unitId, missingRefs: codingSchemeMissingForUnit });
+          missingCodingSchemeRefsByUnit.push({
+            unit: unitId,
+            missingRefs: codingSchemeMissingForUnit
+          });
         }
 
         const schemerMissingForUnit = (refs?.schemerRefs || []).filter(r => {
           if (this.resourceExists(r, resourceIds)) return false;
-          if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+          if (
+            WorkspaceTestFilesValidationService.playerRefExists(
+              r,
+              resourceIdsArray
+            )
+          ) return false;
 
           if (r.startsWith('IQB-SCHEMER-1.1')) {
-            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-')
+            );
             if (hasFallback) return false;
           }
           return true;
@@ -738,77 +867,114 @@ export class WorkspaceTestFilesValidationService {
           });
         }
 
-        const definitionMissingForUnit = (refs?.definitionRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        const definitionMissingForUnit = (refs?.definitionRefs || []).filter(
+          r => !this.resourceExists(r, resourceIds)
+        );
         if (definitionMissingForUnit.length > 0) {
-          missingDefinitionRefsByUnit.push({ unit: unitId, missingRefs: definitionMissingForUnit });
+          missingDefinitionRefsByUnit.push({
+            unit: unitId,
+            missingRefs: definitionMissingForUnit
+          });
         }
 
         const playerMissingForUnit = (refs?.playerRefs || []).filter(r => {
           if (this.resourceExists(r, resourceIds)) return false;
-          return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          return !WorkspaceTestFilesValidationService.playerRefExists(
+            r,
+            resourceIdsArray
+          );
         });
         if (playerMissingForUnit.length > 0) {
-          missingPlayerRefsByUnit.push({ unit: unitId, missingRefs: playerMissingForUnit });
+          missingPlayerRefsByUnit.push({
+            unit: unitId,
+            missingRefs: playerMissingForUnit
+          });
         }
 
-        const metadataMissingForUnit = (refs?.metadataRefs || []).filter(r => !this.resourceExists(r, resourceIds));
+        const metadataMissingForUnit = (refs?.metadataRefs || []).filter(
+          r => !this.resourceExists(r, resourceIds)
+        );
         if (metadataMissingForUnit.length > 0) {
-          missingMetadataRefsByUnit.push({ unit: unitId, missingRefs: metadataMissingForUnit });
+          missingMetadataRefsByUnit.push({
+            unit: unitId,
+            missingRefs: metadataMissingForUnit
+          });
         }
       }
     }
 
-    const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(r => !this.resourceExists(r, resourceIds));
-    const missingSchemerRefs = Array.from(allSchemerRefs)
-      .filter(r => {
-        if (this.resourceExists(r, resourceIds)) return false;
-        if (WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)) return false;
+    const missingCodingSchemeRefs = Array.from(allCodingSchemeRefs).filter(
+      r => !this.resourceExists(r, resourceIds)
+    );
+    const missingSchemerRefs = Array.from(allSchemerRefs).filter(r => {
+      if (this.resourceExists(r, resourceIds)) return false;
+      if (
+        WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
+      ) return false;
 
-        if (r.startsWith('IQB-SCHEMER-1.1')) {
-          const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
-          if (hasFallback) return false;
-        }
+      if (r.startsWith('IQB-SCHEMER-1.1')) {
+        const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-')
+        );
+        if (hasFallback) return false;
+      }
 
-        return true;
-      });
-    const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(r => !this.resourceExists(r, resourceIds));
+      return true;
+    });
+    const missingDefinitionRefs = Array.from(allDefinitionRefs).filter(
+      r => !this.resourceExists(r, resourceIds)
+    );
     const missingPlayerRefs = Array.from(allPlayerRefs).filter(r => {
       if (this.resourceExists(r, resourceIds)) return false;
-      return !WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+      return !WorkspaceTestFilesValidationService.playerRefExists(
+        r,
+        resourceIdsArray
+      );
     });
-    const missingMetadataRefs = Array.from(allMetadataRefs).filter(r => !this.resourceExists(r, resourceIds));
+    const missingMetadataRefs = Array.from(allMetadataRefs).filter(
+      r => !this.resourceExists(r, resourceIds)
+    );
 
     const allBookletsExist = missingBooklets.length === 0;
     const allUnitsExist = missingUnits.length === 0;
 
     const unitComplete = allBookletsExist && allUnitsExist;
 
-    const schemeFiles: FileStatus[] = Array.from(allCodingSchemeRefs).map(r => {
-      const filename = r;
-      const exists = this.resourceExists(r, resourceIds);
-      const status: FileStatus = { filename, exists };
+    const schemeFiles: FileStatus[] = Array.from(allCodingSchemeRefs).map(
+      r => {
+        const filename = r;
+        const exists = this.resourceExists(r, resourceIds);
+        const status: FileStatus = { filename, exists };
 
-      const key = r.toUpperCase();
-      const schemaInfo = codingSchemeResults.get(key);
-      if (schemaInfo) {
-        status.schemaValid = schemaInfo.schemaValid;
-        if (!schemaInfo.schemaValid) {
-          status.schemaErrors = schemaInfo.errors;
+        const key = r.toUpperCase();
+        const schemaInfo = codingSchemeResults.get(key);
+        if (schemaInfo) {
+          status.schemaValid = schemaInfo.schemaValid;
+          if (!schemaInfo.schemaValid) {
+            status.schemaErrors = schemaInfo.errors;
+          }
         }
+        return status;
       }
-      return status;
-    });
+    );
 
     return {
       testTaker: testTaker.file_id,
       testTakerSchemaValid: (() => {
-        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const testTakerId = (
+          testTaker.file_id ||
+          testTaker.filename ||
+          ''
+        ).toUpperCase();
         const schemaKey = `${testTaker.file_type}:${testTakerId}`;
         const schemaInfo = xmlSchemaResults.get(schemaKey);
         return schemaInfo ? schemaInfo.schemaValid : undefined;
       })(),
       testTakerSchemaErrors: (() => {
-        const testTakerId = (testTaker.file_id || testTaker.filename || '').toUpperCase();
+        const testTakerId = (
+          testTaker.file_id ||
+          testTaker.filename ||
+          ''
+        ).toUpperCase();
         const schemaKey = `${testTaker.file_type}:${testTakerId}`;
         const schemaInfo = xmlSchemaResults.get(schemaKey);
         if (!schemaInfo || schemaInfo.schemaValid) {
@@ -839,16 +1005,24 @@ export class WorkspaceTestFilesValidationService {
         missing: missingSchemerRefs,
         missingRefsPerUnit: missingSchemerRefsByUnit,
         files: Array.from(allSchemerRefs).map(r => {
-          let exists = this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray);
+          let exists =
+            this.resourceExists(r, resourceIds) ||
+            WorkspaceTestFilesValidationService.playerRefExists(
+              r,
+              resourceIdsArray
+            );
           let schemaValid: boolean | undefined;
           let schemaErrors: string[] | undefined;
 
           if (!exists && r.startsWith('IQB-SCHEMER-1.1')) {
-            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-'));
+            const hasFallback = resourceIdsArray.some(id => id.toUpperCase().startsWith('IQB-SCHEMER-')
+            );
             if (hasFallback) {
               exists = true;
               schemaValid = false;
-              schemaErrors = ['IQB-SCHEMER-1.1 ist veraltet. Es wird die neueste verfügbare Schemer-Version verwendet.'];
+              schemaErrors = [
+                'IQB-SCHEMER-1.1 ist veraltet. Es wird die neueste verfügbare Schemer-Version verwendet.'
+              ];
             }
           }
 
@@ -864,7 +1038,10 @@ export class WorkspaceTestFilesValidationService {
         complete: missingDefinitionRefs.length === 0,
         missing: missingDefinitionRefs,
         missingRefsPerUnit: missingDefinitionRefsByUnit,
-        files: Array.from(allDefinitionRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
+        files: Array.from(allDefinitionRefs).map(r => ({
+          filename: r,
+          exists: this.resourceExists(r, resourceIds)
+        }))
       },
       player: {
         complete: missingPlayerRefs.length === 0,
@@ -872,47 +1049,58 @@ export class WorkspaceTestFilesValidationService {
         missingRefsPerUnit: missingPlayerRefsByUnit,
         files: Array.from(allPlayerRefs).map(r => ({
           filename: r,
-          exists: this.resourceExists(r, resourceIds) || WorkspaceTestFilesValidationService.playerRefExists(r, resourceIdsArray)
+          exists:
+            this.resourceExists(r, resourceIds) ||
+            WorkspaceTestFilesValidationService.playerRefExists(
+              r,
+              resourceIdsArray
+            )
         }))
-
       },
       metadata: {
         complete: missingMetadataRefs.length === 0,
         missing: missingMetadataRefs,
         missingRefsPerUnit: missingMetadataRefsByUnit,
-        files: Array.from(allMetadataRefs).map(r => ({ filename: r, exists: this.resourceExists(r, resourceIds) }))
+        files: Array.from(allMetadataRefs).map(r => ({
+          filename: r,
+          exists: this.resourceExists(r, resourceIds)
+        }))
       }
     };
   }
 
   private createEmptyValidationData(): ValidationData[] {
-    return [{
-      testTaker: '',
-      booklets: {
-        complete: false,
-        missing: [],
-        files: []
-      },
-      units: {
-        complete: false,
-        missing: [],
-        missingUnitsPerBooklet: [],
-        unitsWithoutPlayer: [],
-        files: []
-      },
-      schemes: { complete: false, missing: [], files: [] },
-      schemer: { complete: false, missing: [], files: [] },
-      definitions: { complete: false, missing: [], files: [] },
-      player: { complete: false, missing: [], files: [] },
-      metadata: { complete: false, missing: [], files: [] }
-    }];
+    return [
+      {
+        testTaker: '',
+        booklets: {
+          complete: false,
+          missing: [],
+          files: []
+        },
+        units: {
+          complete: false,
+          missing: [],
+          missingUnitsPerBooklet: [],
+          unitsWithoutPlayer: [],
+          files: []
+        },
+        schemes: { complete: false, missing: [], files: [] },
+        schemer: { complete: false, missing: [], files: [] },
+        definitions: { complete: false, missing: [], files: [] },
+        player: { complete: false, missing: [], files: [] },
+        metadata: { complete: false, missing: [], files: [] }
+      }
+    ];
   }
 
   private getCodingSchemeValidator(): ValidateFunction {
     if (!this.codingSchemeValidator) {
       const ajv = new Ajv({ allErrors: true, strict: false });
       addFormats(ajv);
-      this.codingSchemeValidator = ajv.compile(codingSchemeSchema as unknown as Record<string, unknown>);
+      this.codingSchemeValidator = ajv.compile(
+        codingSchemeSchema as unknown as Record<string, unknown>
+      );
     }
     return this.codingSchemeValidator;
   }
@@ -920,7 +1108,10 @@ export class WorkspaceTestFilesValidationService {
   private async validateAllCodingSchemes(
     workspaceId: number
   ): Promise<Map<string, { schemaValid: boolean; errors: string[] }>> {
-    const results = new Map<string, { schemaValid: boolean; errors: string[] }>();
+    const results = new Map<
+    string,
+    { schemaValid: boolean; errors: string[] }
+    >();
 
     const schemerFiles = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Schemer' },
@@ -944,7 +1135,9 @@ export class WorkspaceTestFilesValidationService {
         if (!metaDataElement.length) {
           results.set(key, {
             schemaValid: false,
-            errors: ['No <script type="application/ld+json"> block found in HTML']
+            errors: [
+              'No <script type="application/ld+json"> block found in HTML'
+            ]
           });
           continue;
         }
@@ -953,7 +1146,10 @@ export class WorkspaceTestFilesValidationService {
         try {
           metadata = JSON.parse(metaDataElement.text());
         } catch (parseError) {
-          const message = parseError instanceof Error ? parseError.message : 'Unknown JSON parse error';
+          const message =
+            parseError instanceof Error ?
+              parseError.message :
+              'Unknown JSON parse error';
           results.set(key, {
             schemaValid: false,
             errors: [`Invalid JSON in ld+json: ${message}`]
@@ -963,7 +1159,9 @@ export class WorkspaceTestFilesValidationService {
 
         const valid = validator(metadata);
         if (!valid) {
-          const errors = (validator.errors || []).map(e => `${e.instancePath} ${e.message}`);
+          const errors = (validator.errors || []).map(
+            e => `${e.instancePath} ${e.message}`
+          );
           results.set(key, { schemaValid: false, errors });
           const maxErrors = 10;
           this.logger.warn(
@@ -974,7 +1172,10 @@ export class WorkspaceTestFilesValidationService {
           this.logger.debug(`JSON schema validation ok: Schemer:${key}`);
         }
       } catch (e) {
-        const message = e instanceof Error ? e.message : 'Unknown coding scheme validation error';
+        const message =
+          e instanceof Error ?
+            e.message :
+            'Unknown coding scheme validation error';
         results.set(key, { schemaValid: false, errors: [message] });
         this.logger.error(
           `JSON schema validation error: Schemer:${key}: ${message}`,

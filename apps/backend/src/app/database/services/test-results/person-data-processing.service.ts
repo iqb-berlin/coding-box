@@ -31,7 +31,7 @@ export class PersonDataProcessingService {
    * @returns Array of Person objects with unique combinations
    */
   createPersonList(
-    rows: Array<{ groupname: string; loginname: string; code: string }>,
+    rows: { groupname: string; loginname: string; code: string }[],
     workspace_id: number
   ): Person[] {
     if (!Array.isArray(rows)) {
@@ -40,7 +40,9 @@ export class PersonDataProcessingService {
     }
 
     if (typeof workspace_id !== 'number' || workspace_id <= 0) {
-      this.logger.error('Invalid input: workspace_id must be a positive number');
+      this.logger.error(
+        'Invalid input: workspace_id must be a positive number'
+      );
       return [];
     }
 
@@ -65,7 +67,9 @@ export class PersonDataProcessingService {
           });
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`);
+        this.logger.error(
+          `Error processing row at index ${index}: ${error.message}`
+        );
       }
     });
 
@@ -89,9 +93,15 @@ export class PersonDataProcessingService {
 
     for (const row of rows) {
       try {
-        if (row.groupname === person.group && row.loginname === person.login && row.code === person.code) {
+        if (
+          row.groupname === person.group &&
+          row.loginname === person.login &&
+          row.code === person.code
+        ) {
           if (!row.bookletname) {
-            this.logger.warn(`Missing booklet name in row: ${JSON.stringify(row)}`);
+            this.logger.warn(
+              `Missing booklet name in row: ${JSON.stringify(row)}`
+            );
             continue;
           }
           if (!bookletIds.has(row.bookletname)) {
@@ -112,7 +122,9 @@ export class PersonDataProcessingService {
     }
 
     person.booklets = booklets;
-    this.logger.log(`Successfully assigned ${booklets.length} booklets to person ${person.login}.`);
+    this.logger.log(
+      `Successfully assigned ${booklets.length} booklets to person ${person.login}.`
+    );
     return person;
   }
 
@@ -170,7 +182,8 @@ export class PersonDataProcessingService {
             const parsedResult = this.parseLoadCompleteLog(logEntryValue);
             if (parsedResult) {
               booklet.sessions.push({
-                browser: `${parsedResult.browserName} ${parsedResult.browserVersion}`.trim(),
+                browser:
+                  `${parsedResult.browserName} ${parsedResult.browserVersion}`.trim(),
                 os: parsedResult.osName,
                 screen: `${parsedResult.screenSizeWidth} x ${parsedResult.screenSizeHeight}`,
                 ts: timestamp,
@@ -225,11 +238,26 @@ export class PersonDataProcessingService {
         const laststate = this.parseLastState(row.laststate);
 
         person.booklets = person.booklets.map(b => (b.id === booklet.id ?
-          { ...b, units: [...b.units, this.createUnit(row, laststate, subforms, variables, parsedResponses)] } :
+          {
+            ...b,
+            units: [
+              ...b.units,
+              this.createUnit(
+                row,
+                laststate,
+                subforms,
+                variables,
+                parsedResponses
+              )
+            ]
+          } :
           b)
         );
       } catch (error) {
-        this.logger.error(`Error processing row for person ${person.login}: ${error.message}`, error.stack);
+        this.logger.error(
+          `Error processing row for person ${person.login}: ${error.message}`,
+          error.stack
+        );
       }
     }
     return person;
@@ -242,30 +270,48 @@ export class PersonDataProcessingService {
    * @param rows - Array of log rows
    * @returns Booklet object with assigned unit logs
    */
-  assignUnitLogsToBooklet(booklet: TcMergeBooklet, rows: Log[]): TcMergeBooklet {
+  assignUnitLogsToBooklet(
+    booklet: TcMergeBooklet,
+    rows: Log[]
+  ): TcMergeBooklet {
     if (!booklet || !Array.isArray(booklet.units)) {
-      this.logger.error("Invalid booklet provided. Booklet must contain a valid 'units' array.");
+      this.logger.error(
+        "Invalid booklet provided. Booklet must contain a valid 'units' array."
+      );
       return booklet;
     }
 
     if (!Array.isArray(rows)) {
-      this.logger.error('Invalid rows provided. Expecting an array of Log items.');
+      this.logger.error(
+        'Invalid rows provided. Expecting an array of Log items.'
+      );
       return booklet;
     }
 
     const unitMap = new Map<string, TcMergeUnit>();
     booklet.units.forEach(unit => {
       if (unit && unit.id) {
-        unitMap.set(unit.id, { ...unit, logs: Array.isArray(unit.logs) ? [...unit.logs] : [] });
+        unitMap.set(unit.id, {
+          ...unit,
+          logs: Array.isArray(unit.logs) ? [...unit.logs] : []
+        });
       } else {
-        this.logger.warn("Skipping invalid unit without 'id' in booklet units.");
+        this.logger.warn(
+          "Skipping invalid unit without 'id' in booklet units."
+        );
       }
     });
 
     rows.forEach((row, index) => {
       try {
-        if (!row || typeof row.bookletname !== 'string' || typeof row.unitname !== 'string') {
-          this.logger.warn(`Skipping invalid row at index ${index}. Row must contain 'bookletname' and 'unitname'.`);
+        if (
+          !row ||
+          typeof row.bookletname !== 'string' ||
+          typeof row.unitname !== 'string'
+        ) {
+          this.logger.warn(
+            `Skipping invalid row at index ${index}. Row must contain 'bookletname' and 'unitname'.`
+          );
           return;
         }
 
@@ -273,7 +319,9 @@ export class PersonDataProcessingService {
 
         const logEntryParts = row.logentry?.split('=');
         if (!logEntryParts || logEntryParts.length < 2) {
-          this.logger.warn(`Skipping invalid log entry in row at index ${index}: ${row.logentry}`);
+          this.logger.warn(
+            `Skipping invalid log entry in row at index ${index}: ${row.logentry}`
+          );
           return;
         }
 
@@ -298,7 +346,10 @@ export class PersonDataProcessingService {
           unitMap.set(row.unitname, newUnit);
         }
       } catch (error) {
-        this.logger.error(`Error processing row at index ${index}: ${error.message}`, row);
+        this.logger.error(
+          `Error processing row at index ${index}: ${error.message}`,
+          row
+        );
       }
     });
 
@@ -330,16 +381,17 @@ export class PersonDataProcessingService {
    * @returns Array of subforms with responses
    */
   extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
-    return parsedResponses
-      .map(chunk => {
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm, responses: chunkContent };
-        } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
-          return { id: chunk.subForm, responses: [] };
-        }
-      });
+    return parsedResponses.map(chunk => {
+      try {
+        const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
+        return { id: chunk.subForm, responses: chunkContent };
+      } catch (error) {
+        this.logger.error(
+          `Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`
+        );
+        return { id: chunk.subForm, responses: [] };
+      }
+    });
   }
 
   /**
@@ -363,7 +415,11 @@ export class PersonDataProcessingService {
    */
   parseLastState(laststate: string): TcMergeLastState[] {
     try {
-      if (!laststate || typeof laststate !== 'string' || laststate.trim() === '') {
+      if (
+        !laststate ||
+        typeof laststate !== 'string' ||
+        laststate.trim() === ''
+      ) {
         this.logger.warn('Last state is empty or invalid.');
         return [];
       }
@@ -396,20 +452,24 @@ export class PersonDataProcessingService {
    * @returns Parsed session information or null if parsing fails
    */
   parseLoadCompleteLog(logEntry: string): {
-    browserVersion: string,
-    browserName: string,
-    osName: string,
-    device: string,
-    screenSizeWidth: number,
-    screenSizeHeight: number,
-    loadTime: number
+    browserVersion: string;
+    browserName: string;
+    osName: string;
+    device: string;
+    screenSizeWidth: number;
+    screenSizeHeight: number;
+    loadTime: number;
   } | null {
     try {
       const keyValues = logEntry.slice(1, -1).split(',');
       const parsedResult: { [key: string]: string | number | undefined } = {};
       keyValues.forEach(pair => {
-        const [key, value] = pair.split(':', 2).map(part => part.trim().replace(/\\/g, ''));
-        parsedResult[key] = !Number.isNaN(Number(value)) ? Number(value) : value || undefined;
+        const [key, value] = pair
+          .split(':', 2)
+          .map(part => part.trim().replace(/\\/g, ''));
+        parsedResult[key] = !Number.isNaN(Number(value)) ?
+          Number(value) :
+          value || undefined;
       });
 
       return {
@@ -422,7 +482,9 @@ export class PersonDataProcessingService {
         loadTime: Number(parsedResult.loadTime) || 0
       };
     } catch (error) {
-      this.logger.error(`Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`);
+      this.logger.error(
+        `Failed to parse LOADCOMPLETE log entry: ${logEntry} - ${error.message}`
+      );
       return null;
     }
   }
@@ -469,8 +531,10 @@ export class PersonDataProcessingService {
    * @returns True if row matches person
    */
   doesRowMatchPerson(row: Response, person: Person): boolean {
-    return row.groupname === person.group &&
+    return (
+      row.groupname === person.group &&
       row.loginname === person.login &&
-      row.code === person.code;
+      row.code === person.code
+    );
   }
 }

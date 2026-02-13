@@ -12,13 +12,17 @@ import {
   WidthType,
   PageNumber,
   ITableCellBorders,
-  Header, FileChild
+  Header,
+  FileChild
 } from 'docx';
 import * as cheerio from 'cheerio';
 // Using type-only import to avoid dependency warning
 import type { AnyNode, Element } from 'domhandler';
 import {
-  BookVariable, CodeBookContentSetting, CodebookUnitDto, ItemMetadata
+  BookVariable,
+  CodeBookContentSetting,
+  CodebookUnitDto,
+  ItemMetadata
 } from './codebook.interfaces';
 
 /**
@@ -40,19 +44,22 @@ export class CodebookDocxGenerator {
       let missings: Paragraph[] = [];
       codingBookUnits.forEach(variableCoding => {
         missings = this.getMissings(variableCoding);
-        if (variableCoding.variables.length || !contentSetting.hasOnlyVarsWithCodes) {
-          units.push(...(this.createDocXForUnit(
-            variableCoding.items || [],
-            variableCoding.variables,
-            contentSetting,
-            this.getUnitHeader(variableCoding)
-          ) as FileChild[]));
+        if (
+          variableCoding.variables.length ||
+          !contentSetting.hasOnlyVarsWithCodes
+        ) {
+          units.push(
+            ...(this.createDocXForUnit(
+              variableCoding.items || [],
+              variableCoding.variables,
+              contentSetting,
+              this.getUnitHeader(variableCoding)
+            ) as FileChild[])
+          );
         }
       });
       const b64string = await Packer.toBase64String(
-        this.setDocXDocument(
-          units,
-          missings)
+        this.setDocXDocument(units, missings)
       );
       return Buffer.from(b64string, 'base64');
     }
@@ -98,34 +105,47 @@ export class CodebookDocxGenerator {
     try {
       variableCoding.missings.forEach(missing => {
         if (missing.code && missing.label && missing.description) {
-          missings.push(new Paragraph({
-            children: [new TextRun({ text: `${missing.code} ${missing.label}`, bold: true })],
-            spacing: {
-              after: 20
-            }
-          }));
-          missings.push(new Paragraph({
-            text: `${missing.description}`,
-            spacing: {
-              after: 100
-            }
-          }));
+          missings.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: `${missing.code} ${missing.label}`,
+                  bold: true
+                })
+              ],
+              spacing: {
+                after: 20
+              }
+            })
+          );
+          missings.push(
+            new Paragraph({
+              text: `${missing.description}`,
+              spacing: {
+                after: 100
+              }
+            })
+          );
         } else {
-          missings.push(new Paragraph({
-            text: 'kein valides Missing ',
-            spacing: {
-              after: 200
-            }
-          }));
+          missings.push(
+            new Paragraph({
+              text: 'kein valides Missing ',
+              spacing: {
+                after: 200
+              }
+            })
+          );
         }
       });
     } catch {
-      missings.push(new Paragraph({
-        text: 'kein validen Missings gefunden',
-        spacing: {
-          after: 200
-        }
-      }));
+      missings.push(
+        new Paragraph({
+          text: 'kein validen Missings gefunden',
+          spacing: {
+            after: 200
+          }
+        })
+      );
     }
     return missings;
   }
@@ -165,7 +185,10 @@ export class CodebookDocxGenerator {
    * @param contentSetting Codebook content settings
    * @returns List of table rows
    */
-  private static getCodeRows(variable: BookVariable, contentSetting: CodeBookContentSetting): TableRow[] {
+  private static getCodeRows(
+    variable: BookVariable,
+    contentSetting: CodeBookContentSetting
+  ): TableRow[] {
     const rows: TableRow[] = [];
     const headerRow = new TableRow({
       tableHeader: true,
@@ -176,14 +199,16 @@ export class CodebookDocxGenerator {
             size: this.getColumnWidths(contentSetting)[0],
             type: WidthType.DXA
           },
-          children: [new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Code',
-                bold: true
-              })
-            ]
-          })]
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Code',
+                  bold: true
+                })
+              ]
+            })
+          ]
         }),
         new TableCell({
           borders: this.TableBoarders,
@@ -191,14 +216,16 @@ export class CodebookDocxGenerator {
             size: this.getColumnWidths(contentSetting)[1],
             type: WidthType.DXA
           },
-          children: [new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Label',
-                bold: true
-              })
-            ]
-          })]
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Label',
+                  bold: true
+                })
+              ]
+            })
+          ]
         }),
         new TableCell({
           borders: this.TableBoarders,
@@ -206,14 +233,16 @@ export class CodebookDocxGenerator {
             size: this.getColumnWidths(contentSetting)[2],
             type: WidthType.DXA
           },
-          children: [new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Beschreibung',
-                bold: true
-              })
-            ]
-          })]
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Beschreibung',
+                  bold: true
+                })
+              ]
+            })
+          ]
         })
       ]
     });
@@ -226,14 +255,16 @@ export class CodebookDocxGenerator {
             size: this.getColumnWidths(contentSetting)[3],
             type: WidthType.DXA
           },
-          children: [new Paragraph({
-            children: [
-              new TextRun({
-                text: 'Score',
-                bold: true
-              })
-            ]
-          })]
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: 'Score',
+                  bold: true
+                })
+              ]
+            })
+          ]
         })
       );
     }
@@ -262,7 +293,7 @@ export class CodebookDocxGenerator {
               size: this.getColumnWidths(contentSetting)[2],
               type: WidthType.DXA
             },
-            children: this.htmlToDocx(code.description, contentSetting)
+            children: this.htmlToDocx(code.description)
           })
         ]
       });
@@ -288,8 +319,12 @@ export class CodebookDocxGenerator {
    * @param contentSetting Codebook content settings
    * @returns List of column widths
    */
-  private static getColumnWidths(contentSetting: CodeBookContentSetting): number[] {
-    return contentSetting.showScore ? [1000, 2000, 5000, 1000] : [1000, 2000, 6000];
+  private static getColumnWidths(
+    contentSetting: CodeBookContentSetting
+  ): number[] {
+    return contentSetting.showScore ?
+      [1000, 2000, 5000, 1000] :
+      [1000, 2000, 6000];
   }
 
   /**
@@ -342,26 +377,33 @@ export class CodebookDocxGenerator {
    * @param varItems List of item metadata
    * @returns List of paragraphs with variable items
    */
-  private static getVariableItems(variable: BookVariable, varItems: ItemMetadata[]): Paragraph[] {
+  private static getVariableItems(
+    variable: BookVariable,
+    varItems: ItemMetadata[]
+  ): Paragraph[] {
     const paragraphs: Paragraph[] = [];
     const items = varItems.filter(item => {
       const variableId = variable.id.replace(/\./g, '_');
       return item[variableId] !== undefined;
     });
     if (items.length) {
-      paragraphs.push(new Paragraph({
-        text: 'Items:',
-        spacing: {
-          after: 100
-        }
-      }));
-      items.forEach(item => {
-        paragraphs.push(new Paragraph({
-          text: `${item.key} ${item.label}`,
-          bullet: {
-            level: 0
+      paragraphs.push(
+        new Paragraph({
+          text: 'Items:',
+          spacing: {
+            after: 100
           }
-        }));
+        })
+      );
+      items.forEach(item => {
+        paragraphs.push(
+          new Paragraph({
+            text: `${item.key} ${item.label}`,
+            bullet: {
+              level: 0
+            }
+          })
+        );
       });
     }
     return paragraphs;
@@ -378,7 +420,8 @@ export class CodebookDocxGenerator {
     codeBookVariable: BookVariable
   ): Paragraph[] {
     return codeBookVariable.generalInstruction ?
-      this.htmlToDocx(codeBookVariable.generalInstruction, contentSetting) : [];
+      this.htmlToDocx(codeBookVariable.generalInstruction) :
+      [];
   }
 
   /**
@@ -387,7 +430,10 @@ export class CodebookDocxGenerator {
    * @param contentSetting Codebook content settings
    * @returns Table with codes
    */
-  private static getCodeTable(codeBookVariable: BookVariable, contentSetting: CodeBookContentSetting): Table {
+  private static getCodeTable(
+    codeBookVariable: BookVariable,
+    contentSetting: CodeBookContentSetting
+  ): Table {
     return new Table({
       rows: this.getCodeRows(codeBookVariable, contentSetting),
       width: {
@@ -423,7 +469,10 @@ export class CodebookDocxGenerator {
    * @param missings List of paragraphs with missings
    * @returns Document
    */
-  private static setDocXDocument(children: FileChild[], missings: Paragraph[]): Document {
+  private static setDocXDocument(
+    children: FileChild[],
+    missings: Paragraph[]
+  ): Document {
     const doc = new Document({
       creator: 'IQB-Kodierbox',
       title: 'Codebook',
@@ -501,16 +550,18 @@ export class CodebookDocxGenerator {
             })
           },
           children: [
-            ...(missings.length > 0 ? [
-              new Paragraph({
-                text: 'Missings',
-                heading: HeadingLevel.HEADING_1,
-                spacing: {
-                  after: 200
-                }
-              }),
-              ...missings
-            ] : []),
+            ...(missings.length > 0 ?
+              [
+                new Paragraph({
+                  text: 'Missings',
+                  heading: HeadingLevel.HEADING_1,
+                  spacing: {
+                    after: 200
+                  }
+                }),
+                ...missings
+              ] :
+              []),
             ...children
           ]
         }
@@ -526,7 +577,8 @@ export class CodebookDocxGenerator {
    * @returns List of paragraphs
    */
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private static htmlToDocx(html: string, contentSetting: CodeBookContentSetting): Paragraph[] {
+  private static htmlToDocx(
+    html: string): Paragraph[] {
     const paragraphs: Paragraph[] = [];
     if (!html) return paragraphs;
 
@@ -549,7 +601,10 @@ export class CodebookDocxGenerator {
    * @param nodes List of nodes
    * @param paragraphs List of paragraphs
    */
-  private static processChildNodes(nodes: AnyNode[], paragraphs: Paragraph[]): void {
+  private static processChildNodes(
+    nodes: AnyNode[],
+    paragraphs: Paragraph[]
+  ): void {
     for (const node of nodes) {
       if (node.type === 'text') {
         if ('data' in node && node.data && node.data.trim()) {
@@ -566,7 +621,11 @@ export class CodebookDocxGenerator {
             paragraphs.push(new Paragraph({ children: textRuns }));
           }
         } else if (tagName === 'ul' || tagName === 'ol') {
-          this.processListElements(element.children, paragraphs, tagName === 'ol');
+          this.processListElements(
+            element.children,
+            paragraphs,
+            tagName === 'ol'
+          );
         } else if (element.children && element.children.length > 0) {
           this.processChildNodes(element.children, paragraphs);
         }
@@ -579,7 +638,10 @@ export class CodebookDocxGenerator {
    * @param nodes List of nodes
    * @param textRuns List of text runs
    */
-  private static processInlineElements(nodes: AnyNode[], textRuns: TextRun[]): void {
+  private static processInlineElements(
+    nodes: AnyNode[],
+    textRuns: TextRun[]
+  ): void {
     for (const node of nodes) {
       if (node.type === 'text') {
         if ('data' in node && node.data && node.data.trim()) {
@@ -593,7 +655,9 @@ export class CodebookDocxGenerator {
           if (element.children) {
             for (const child of element.children) {
               if (child.type === 'text' && child.data) {
-                textRuns.push(new TextRun({ text: child.data.trim(), bold: true }));
+                textRuns.push(
+                  new TextRun({ text: child.data.trim(), bold: true })
+                );
               }
             }
           }
@@ -601,7 +665,9 @@ export class CodebookDocxGenerator {
           if (element.children) {
             for (const child of element.children) {
               if (child.type === 'text' && child.data) {
-                textRuns.push(new TextRun({ text: child.data.trim(), italics: true }));
+                textRuns.push(
+                  new TextRun({ text: child.data.trim(), italics: true })
+                );
               }
             }
           }
@@ -618,7 +684,11 @@ export class CodebookDocxGenerator {
    * @param paragraphs List of paragraphs
    * @param isOrdered Whether the list is ordered
    */
-  private static processListElements(nodes: AnyNode[], paragraphs: Paragraph[], isOrdered: boolean): void {
+  private static processListElements(
+    nodes: AnyNode[],
+    paragraphs: Paragraph[],
+    isOrdered: boolean
+  ): void {
     let index = 1;
     for (const node of nodes) {
       if (node.type === 'tag') {
@@ -627,17 +697,21 @@ export class CodebookDocxGenerator {
           const textRuns: TextRun[] = [];
           this.processInlineElements(element.children, textRuns);
           if (textRuns.length > 0) {
-            paragraphs.push(new Paragraph({
-              children: textRuns,
-              bullet: {
-                level: 0
-              },
-              numbering: isOrdered ? {
-                reference: 'default-numbering',
-                level: 0,
-                instance: index += 1
-              } : undefined
-            }));
+            paragraphs.push(
+              new Paragraph({
+                children: textRuns,
+                bullet: {
+                  level: 0
+                },
+                numbering: isOrdered ?
+                  {
+                    reference: 'default-numbering',
+                    level: 0,
+                    instance: (index += 1)
+                  } :
+                  undefined
+              })
+            );
           }
         }
       }

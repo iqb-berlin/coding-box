@@ -49,10 +49,12 @@ export class WorkspacePlayerService {
     private personsRepository: Repository<Persons>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>
-
   ) {}
 
-  async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {
+  async findPlayer(
+    workspaceId: number,
+    playerName: string
+  ): Promise<FilesDto[]> {
     if (!workspaceId || typeof workspaceId !== 'number') {
       this.logger.error(`Invalid workspaceId provided: ${workspaceId}`);
       throw new Error('Invalid workspaceId parameter');
@@ -63,7 +65,9 @@ export class WorkspacePlayerService {
       throw new Error('Invalid playerName parameter');
     }
 
-    this.logger.log(`Attempting to retrieve files for player '${playerName}' in workspace ${workspaceId}`);
+    this.logger.log(
+      `Attempting to retrieve files for player '${playerName}' in workspace ${workspaceId}`
+    );
 
     try {
       // Parse the player name to extract module, major, minor, and optional patch version
@@ -88,7 +92,9 @@ export class WorkspacePlayerService {
           .getMany();
 
         if (exactMinorPlayers.length > 0) {
-          this.logger.log(`Found ${exactMinorPlayers.length} player(s) with exact match ${module}-${majorVersion}.${minorVersion}.x in workspace ${workspaceId}`);
+          this.logger.log(
+            `Found ${exactMinorPlayers.length} player(s) with exact match ${module}-${majorVersion}.${minorVersion}.x in workspace ${workspaceId}`
+          );
           exactMinorPlayers.sort((a, b) => {
             const partsA = a.file_id.split('.');
             const partsB = b.file_id.split('.');
@@ -97,7 +103,9 @@ export class WorkspacePlayerService {
             return patchB - patchA; // Descending order
           });
 
-          this.logger.log(`Selecting player with highest patch version: ${exactMinorPlayers[0].file_id}`);
+          this.logger.log(
+            `Selecting player with highest patch version: ${exactMinorPlayers[0].file_id}`
+          );
           return [exactMinorPlayers[0]];
         }
 
@@ -105,11 +113,15 @@ export class WorkspacePlayerService {
         const similarPlayers = await this.fileUploadRepository
           .createQueryBuilder('file')
           .where('file.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('file.file_id LIKE :pattern', { pattern: `${module}-${majorVersion}.%` })
+          .andWhere('file.file_id LIKE :pattern', {
+            pattern: `${module}-${majorVersion}.%`
+          })
           .getMany();
 
         if (similarPlayers.length > 0) {
-          this.logger.log(`No exact minor version match found. Found ${similarPlayers.length} player(s) with module ${module} and major version ${majorVersion} in workspace ${workspaceId}`);
+          this.logger.log(
+            `No exact minor version match found. Found ${similarPlayers.length} player(s) with module ${module} and major version ${majorVersion} in workspace ${workspaceId}`
+          );
 
           // Sort by minor and patch version (descending) and return the highest one
           similarPlayers.sort((a, b) => {
@@ -127,7 +139,9 @@ export class WorkspacePlayerService {
             return patchB - patchA; // Descending order by patch
           });
 
-          this.logger.log(`Automatically selecting player with highest minor.patch version: ${similarPlayers[0].file_id}`);
+          this.logger.log(
+            `Automatically selecting player with highest minor.patch version: ${similarPlayers[0].file_id}`
+          );
           return [similarPlayers[0]];
         }
       }
@@ -141,23 +155,31 @@ export class WorkspacePlayerService {
       });
 
       if (files.length > 0) {
-        this.logger.log(`Found ${files.length} file(s) for player '${playerName}' in workspace ${workspaceId}`);
+        this.logger.log(
+          `Found ${files.length} file(s) for player '${playerName}' in workspace ${workspaceId}`
+        );
         return files;
       }
 
-      this.logger.warn(`No files found for player '${playerName}' in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No files found for player '${playerName}' in workspace ${workspaceId}`
+      );
       return [];
     } catch (error) {
       this.logger.error(
         `Failed to retrieve files for player '${playerName}' in workspace ${workspaceId}`,
         error.stack
       );
-      throw new Error(`An error occurred while fetching files for player '${playerName}': ${error.message}`);
+      throw new Error(
+        `An error occurred while fetching files for player '${playerName}': ${error.message}`
+      );
     }
   }
 
   async findUnitDef(workspaceId: number, unitId: string): Promise<FilesDto[]> {
-    this.logger.log(`Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`);
+    this.logger.log(
+      `Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`
+    );
     try {
       const files = await this.fileUploadRepository.find({
         select: ['file_id', 'filename', 'data'],
@@ -168,9 +190,13 @@ export class WorkspacePlayerService {
       });
 
       if (files.length === 0) {
-        this.logger.warn(`No unit definition found for unit: ${unitId} in workspace: ${workspaceId}`);
+        this.logger.warn(
+          `No unit definition found for unit: ${unitId} in workspace: ${workspaceId}`
+        );
       } else {
-        this.logger.log(`Successfully retrieved ${files.length} file(s) for unit: ${unitId}`);
+        this.logger.log(
+          `Successfully retrieved ${files.length} file(s) for unit: ${unitId}`
+        );
       }
       return files;
     } catch (error) {
@@ -184,38 +210,45 @@ export class WorkspacePlayerService {
 
   async findUnit(workspace_id: number, unitId: string): Promise<FileUpload[]> {
     this.logger.log('Returning unit for unitId', unitId);
-    return this.fileUploadRepository.find(
-      { where: { file_id: `${unitId}`, workspace_id: workspace_id } });
+    return this.fileUploadRepository.find({
+      where: { file_id: `${unitId}`, workspace_id: workspace_id }
+    });
   }
 
   async findTestPersons(id: number): Promise<number[]> {
     this.logger.log('Returning all test persons for workspace ', id);
-    const persons = await this.personsRepository
-      .find({
-        select: ['id'],
-        where: { workspace_id: id },
-        order: { id: 'ASC' }
-      });
+    const persons = await this.personsRepository.find({
+      select: ['id'],
+      where: { workspace_id: id },
+      order: { id: 'ASC' }
+    });
 
     return persons.map(person => person.id);
   }
 
-  async findTestPersonUnits(id: number, testPerson: string): Promise<ResponseEntity[]> {
+  async findTestPersonUnits(
+    id: number,
+    testPerson: string
+  ): Promise<ResponseEntity[]> {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
-    const res = this.responseRepository
-      .find({
-        select: ['unitid'],
-        // where: { testPerson: testPerson },
-        order: { unitid: 'ASC' }
-      });
+    const res = this.responseRepository.find({
+      select: ['unitid'],
+      // where: { testPerson: testPerson },
+      order: { unitid: 'ASC' }
+    });
     if (res) {
       return res;
     }
     return [];
   }
 
-  async getBookletUnits(workspaceId: number, bookletId: string): Promise<BookletUnit[]> {
-    this.logger.log(`Getting units for booklet ${bookletId} in workspace ${workspaceId}`);
+  async getBookletUnits(
+    workspaceId: number,
+    bookletId: string
+  ): Promise<BookletUnit[]> {
+    this.logger.log(
+      `Getting units for booklet ${bookletId} in workspace ${workspaceId}`
+    );
 
     const bookletFiles = await this.fileUploadRepository.find({
       where: {
@@ -225,12 +258,29 @@ export class WorkspacePlayerService {
     });
 
     if (!bookletFiles || bookletFiles.length === 0) {
-      this.logger.error(`Booklet file with ID ${bookletId} not found in workspace ${workspaceId}`);
-      throw new NotFoundException(`Booklet file with ID ${bookletId} not found`);
+      this.logger.error(
+        `Booklet file with ID ${bookletId} not found in workspace ${workspaceId}`
+      );
+      throw new NotFoundException(
+        `Booklet file with ID ${bookletId} not found`
+      );
     }
 
     const bookletFile = bookletFiles[0];
     const bookletData = bookletFile.data;
+
+    if (
+      !bookletData ||
+      typeof bookletData !== 'string' ||
+      bookletData.trim().length === 0
+    ) {
+      this.logger.error(
+        `Booklet file with ID ${bookletId} has invalid or empty data in workspace ${workspaceId}`
+      );
+      throw new NotFoundException(
+        `Booklet file with ID ${bookletId} has invalid or empty content`
+      );
+    }
 
     const units: BookletUnit[] = [];
     let parsedBookletId = 0;
@@ -248,16 +298,30 @@ export class WorkspacePlayerService {
 
         const indexTracker = { currentIndex: 0 };
 
-        this.logger.log(`Starting to process booklet structure with ID: ${parsedBookletId}`);
+        this.logger.log(
+          `Starting to process booklet structure with ID: ${parsedBookletId}`
+        );
 
-        this.processUnitsAndTestlets(unitsElement, units, parsedBookletId, indexTracker);
+        this.processUnitsAndTestlets(
+          unitsElement,
+          units,
+          parsedBookletId,
+          indexTracker
+        );
 
-        this.logger.log(`Finished processing booklet structure. Final index: ${indexTracker.currentIndex}`);
+        this.logger.log(
+          `Finished processing booklet structure. Final index: ${indexTracker.currentIndex}`
+        );
 
-        this.logger.log(`Found ${units.length} total units in booklet ${bookletId}`);
+        this.logger.log(
+          `Found ${units.length} total units in booklet ${bookletId}`
+        );
       }
     } catch (error) {
-      this.logger.error(`Error parsing booklet XML: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error parsing booklet XML: ${error.message}`,
+        error.stack
+      );
       throw new Error(`Error parsing booklet XML: ${error.message}`);
     }
 
@@ -288,7 +352,9 @@ export class WorkspacePlayerService {
       this.logger.log(`Processing ${element.Testlet.length} Testlet elements`);
       element.Testlet.forEach((testlet: TestletElement) => {
         if (testlet && testlet.$) {
-          this.logger.log(`Processing Testlet with ID: ${testlet.$.id || 'unknown'}`);
+          this.logger.log(
+            `Processing Testlet with ID: ${testlet.$.id || 'unknown'}`
+          );
         }
         this.processUnitsAndTestlets(testlet, units, bookletId, indexTracker);
       });

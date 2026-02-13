@@ -6,7 +6,9 @@ import { FileIo } from '../../../admin/workspace/file-io.interface';
 export class WorkspaceFileParsingService {
   private readonly logger = new Logger(WorkspaceFileParsingService.name);
 
-  async extractUnitInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+  async extractUnitInfo(
+    xmlDocument: cheerio.CheerioAPI
+  ): Promise<Record<string, unknown>> {
     try {
       const result: Record<string, unknown> = {};
       const metadata = xmlDocument('Metadata');
@@ -100,7 +102,9 @@ export class WorkspaceFileParsingService {
     }
   }
 
-  async extractBookletInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+  async extractBookletInfo(
+    xmlDocument: cheerio.CheerioAPI
+  ): Promise<Record<string, unknown>> {
     try {
       const result: Record<string, unknown> = {};
       const metadata = xmlDocument('Metadata');
@@ -151,7 +155,9 @@ export class WorkspaceFileParsingService {
     }
   }
 
-  async extractTestTakersInfo(xmlDocument: cheerio.CheerioAPI): Promise<Record<string, unknown>> {
+  async extractTestTakersInfo(
+    xmlDocument: cheerio.CheerioAPI
+  ): Promise<Record<string, unknown>> {
     try {
       const result: Record<string, unknown> = {};
 
@@ -232,7 +238,9 @@ export class WorkspaceFileParsingService {
     try {
       const playerCode = file.buffer.toString();
       const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent('script[type="application/ld+json"]');
+      const metaDataElement = playerContent(
+        'script[type="application/ld+json"]'
+      );
       const metadata = JSON.parse(metaDataElement.text());
       const id = metadata.id || metadata['@id'];
       const version = metadata.version;
@@ -251,7 +259,9 @@ export class WorkspaceFileParsingService {
     try {
       const schemerCode = file.buffer.toString();
       const schemerContent = cheerio.load(schemerCode);
-      const metaDataElement = schemerContent('script[type="application/ld+json"]');
+      const metaDataElement = schemerContent(
+        'script[type="application/ld+json"]'
+      );
       const metadata = JSON.parse(metaDataElement.text());
       return this.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
     } catch (error) {
@@ -263,7 +273,8 @@ export class WorkspaceFileParsingService {
     if (!file?.originalname) {
       throw new Error('Invalid file: originalname is required.');
     }
-    const filePathParts = decodeURIComponent(file.originalname).split('/')
+    const filePathParts = decodeURIComponent(file.originalname)
+      .split('/')
       .map(part => part.trim());
     const fileName = filePathParts.pop();
     if (!fileName) {

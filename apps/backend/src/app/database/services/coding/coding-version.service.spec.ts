@@ -1,11 +1,18 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { Logger } from '@nestjs/common';
 import { CodingVersionService } from './coding-version.service';
-import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { ResponseEntity } from '../../entities/response.entity';
 
 describe('CodingVersionService', () => {
   let service: CodingVersionService;
+
+  beforeAll(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+  });
   const mockQueryBuilder = {
     leftJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
@@ -60,7 +67,9 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }, { id: 2 }, { id: 3 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(3);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 3 });
 
       const result = await service.resetCodingVersion(workspaceId, version);
@@ -78,8 +87,13 @@ describe('CodingVersionService', () => {
           score_v1: null
         }
       );
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(
+        1,
+        'v1'
+      );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(
+        1
+      );
     });
 
     it('should reset v2 version and cascade to v3', async () => {
@@ -88,7 +102,9 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }, { id: 2 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(2);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 2 });
 
       const result = await service.resetCodingVersion(workspaceId, version);
@@ -96,7 +112,8 @@ describe('CodingVersionService', () => {
       expect(result).toEqual({
         affectedResponseCount: 2,
         cascadeResetVersions: ['v3'],
-        message: 'Successfully reset 2 responses for version v2 and v3 (cascade)'
+        message:
+          'Successfully reset 2 responses for version v2 and v3 (cascade)'
       });
       expect(mockResponseRepository.update).toHaveBeenCalledWith(
         { id: expect.anything() },
@@ -109,9 +126,17 @@ describe('CodingVersionService', () => {
           score_v3: null
         }
       );
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(2);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(
+        1,
+        'v2'
+      );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(
+        1,
+        'v3'
+      );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(
+        2
+      );
     });
 
     it('should reset v3 version without cascade', async () => {
@@ -120,7 +145,9 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(1);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 1 });
 
       const result = await service.resetCodingVersion(workspaceId, version);
@@ -138,8 +165,13 @@ describe('CodingVersionService', () => {
           score_v3: null
         }
       );
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
-      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(
+        1,
+        'v3'
+      );
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(
+        1
+      );
     });
 
     it('should apply unit filters when provided', async () => {
@@ -149,7 +181,9 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(1);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 1 });
 
       await service.resetCodingVersion(workspaceId, version, unitFilters);
@@ -167,7 +201,9 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(1);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 1 });
 
       await service.resetCodingVersion(
