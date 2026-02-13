@@ -25,11 +25,29 @@
 
   .code-selector-container {
     width: 350px;
-    min-width: 350px;
+    min-width: 250px;
     background-color: #f9f9f9;
-    border-left: 1px solid #ddd;
+    border-left: none;
     padding: 16px;
     overflow-y: auto;
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .resize-handle {
+    width: 5px;
+    cursor: col-resize;
+    background-color: #ddd;
+    flex-shrink: 0;
+    transition: background-color 0.15s ease;
+    position: relative;
+    z-index: 5;
+
+    &:hover,
+    &:active {
+      background-color: #1976d2;
+    }
   }
 
   @media (max-width: 1200px) {
@@ -50,6 +68,16 @@
     position: sticky;
     top: 0;
     z-index: 10;
+  }
+}
+
+.resizing {
+  cursor: col-resize;
+  user-select: none;
+
+  .unit-player-container,
+  .code-selector-container {
+    pointer-events: none;
   }
 }
 
@@ -226,6 +254,7 @@
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(100%);
   }

@@ -102,6 +102,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   workspaceId: number = 0;
 
+  // Resize handle state
+  codePanelWidth: number = 350;
+  isResizing: boolean = false;
+  private resizeStartX: number = 0;
+  private resizeStartWidth: number = 0;
+  private readonly MIN_PANEL_WIDTH = 250;
+  private readonly MAX_PANEL_WIDTH_RATIO = 0.6;
+
   ngOnInit(): void {
     this.replayStartTime = performance.now();
     this.subscribeRouter();
@@ -866,6 +874,27 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
+  }
+
+  // --- Resize handle ---
+  onResizeStart(event: MouseEvent): void {
+    event.preventDefault();
+    this.isResizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.codePanelWidth;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onResizeMove(event: MouseEvent): void {
+    if (!this.isResizing) return;
+    const dx = this.resizeStartX - event.clientX; // dragging left = wider panel
+    const maxWidth = window.innerWidth * this.MAX_PANEL_WIDTH_RATIO;
+    this.codePanelWidth = Math.min(maxWidth, Math.max(this.MIN_PANEL_WIDTH, this.resizeStartWidth + dx));
+  }
+
+  @HostListener('document:mouseup')
+  onResizeEnd(): void {
+    this.isResizing = false;
   }
 
   private loadCodingSchemeForCodingJob(): void {
