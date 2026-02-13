@@ -85,6 +85,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       fromEvent(this.iFrameElement, 'load')
         .pipe(takeUntil(this.ngUnsubscribe))
         .subscribe(() => {
+          this.forwardKeyEvents();
           // Wait a bit for the content to render properly
           setTimeout(() => {
             this.calculateIFrameHeight();
@@ -141,6 +142,28 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
       this.updateIframeContent(unitPlayer.replace('&quot;', ''));
+    }
+  }
+
+  private forwardKeyEvents(): void {
+    if (this.iFrameElement?.contentWindow) {
+      fromEvent(this.iFrameElement.contentWindow, 'keydown')
+        .pipe(takeUntil(this.ngUnsubscribe))
+        .subscribe((event: Event) => {
+          const keyboardEvent = event as KeyboardEvent;
+          const newEvent = new KeyboardEvent('keydown', {
+            key: keyboardEvent.key,
+            code: keyboardEvent.code,
+            ctrlKey: keyboardEvent.ctrlKey,
+            shiftKey: keyboardEvent.shiftKey,
+            altKey: keyboardEvent.altKey,
+            metaKey: keyboardEvent.metaKey,
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          window.dispatchEvent(newEvent);
+        });
     }
   }
 
