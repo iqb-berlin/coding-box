@@ -218,6 +218,38 @@ describe('CodingVersionService', () => {
       expect(mockResponseRepository.update).toHaveBeenCalledTimes(2);
     });
 
+    it('should call progressCallback with expected progress values', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const mockResponses = [{ id: 1 }, { id: 2 }];
+      const progressCallback = jest.fn().mockResolvedValue(undefined);
+
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 2 });
+
+      await service.resetCodingVersion(workspaceId, version, undefined, undefined, progressCallback);
+
+      expect(progressCallback).toHaveBeenCalledWith(0);
+      expect(progressCallback).toHaveBeenCalledWith(5);
+      expect(progressCallback).toHaveBeenCalledWith(10);
+      expect(progressCallback).toHaveBeenCalledWith(100);
+      expect(progressCallback.mock.calls.length).toBeGreaterThanOrEqual(4);
+    });
+
+    it('should call progressCallback with 100 when no responses match', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const progressCallback = jest.fn().mockResolvedValue(undefined);
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+
+      await service.resetCodingVersion(workspaceId, version, undefined, undefined, progressCallback);
+
+      expect(progressCallback).toHaveBeenCalledWith(0);
+      expect(progressCallback).toHaveBeenCalledWith(100);
+    });
+
     it('should throw error on database failure', async () => {
       const workspaceId = 1;
       const version = 'v1';

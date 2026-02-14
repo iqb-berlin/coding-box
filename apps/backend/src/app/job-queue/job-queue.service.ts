@@ -22,6 +22,13 @@ export interface TestPersonCodingJobData {
   autoCoderRun?: number;
 }
 
+export interface ResetCodingVersionJobData {
+  workspaceId: number;
+  version: 'v1' | 'v2' | 'v3';
+  unitFilters?: string[];
+  variableFilters?: string[];
+}
+
 export interface FlatResponseFilterOptionsJobData {
   workspaceId: number;
   processingDurationThresholdMs: number;
@@ -101,7 +108,8 @@ export class JobQueueService {
     @InjectQueue('data-export') private dataExportQueue: Queue,
     @InjectQueue('flat-response-filter-options')
     private flatResponseFilterOptionsQueue: Queue,
-    @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue
+    @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue,
+    @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue
   ) { }
 
   async addTestPersonCodingJob(
@@ -380,6 +388,73 @@ export class JobQueueService {
       );
       return false;
     }
+  }
+
+  // --- Reset Coding Version Queue Methods ---
+
+  async addResetCodingVersionJob(
+    data: ResetCodingVersionJobData,
+    options?: JobOptions
+  ): Promise<Job<ResetCodingVersionJobData>> {
+    this.logger.log(
+      `Adding reset coding version job for workspace ${data.workspaceId}, version ${data.version}`
+    );
+    return this.resetCodingVersionQueue.add(data, options);
+  }
+
+  async getResetCodingVersionJob(
+    jobId: string
+  ): Promise<Job<ResetCodingVersionJobData>> {
+    return this.resetCodingVersionQueue.getJob(jobId);
+  }
+
+  async getActiveResetCodingVersionJob(
+    workspaceId: number
+  ): Promise<Job<ResetCodingVersionJobData> | null> {
+    const jobs = await this.resetCodingVersionQueue.getJobs([
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    return jobs.find(job => job.data.workspaceId === workspaceId) || null;
+  }
+
+  async hasActiveJobsForWorkspace(
+    workspaceId: number
+  ): Promise<{ blocked: boolean; reason?: string }> {
+    // Check reset-coding-version queue
+    const resetJobs = await this.resetCodingVersionQueue.getJobs([
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    const activeResetJob = resetJobs.find(
+      job => job.data.workspaceId === workspaceId
+    );
+    if (activeResetJob) {
+      return {
+        blocked: true,
+        reason: `A reset coding version job is already running for this workspace (job ${activeResetJob.id})`
+      };
+    }
+
+    // Check test-person-coding queue
+    const codingJobs = await this.testPersonCodingQueue.getJobs([
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    const activeCodingJob = codingJobs.find(
+      job => job.data.workspaceId === workspaceId
+    );
+    if (activeCodingJob) {
+      return {
+        blocked: true,
+        reason: `An auto-coding job is already running for this workspace (job ${activeCodingJob.id})`
+      };
+    }
+
+    return { blocked: false };
   }
 
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
