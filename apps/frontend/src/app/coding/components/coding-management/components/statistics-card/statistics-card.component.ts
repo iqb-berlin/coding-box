@@ -47,6 +47,7 @@ export class StatisticsCardComponent {
   @Input() isLoading = false;
   @Input() isDownloadInProgress = false;
   @Input() statisticsLoaded = false;
+  @Input() resetProgress: number | null = null;
 
   @Output() versionChange = new EventEmitter<'v1' | 'v2' | 'v3'>();
   @Output() loadStatistics = new EventEmitter<void>();

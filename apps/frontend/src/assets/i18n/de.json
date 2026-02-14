@@ -907,7 +907,8 @@
       "irreversible-warning": "Diese Aktion kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass Sie ein Backup der Daten haben.",
       "cancel-button": "Abbrechen",
       "confirm-button": "Ja, zurücksetzen",
-      "reset-tooltip": "Kodierversion zurücksetzen"
+      "reset-tooltip": "Kodierversion zurücksetzen",
+      "resetting": "Zurücksetzen..."
     },
     "download-dialog": {
       "title": "Kodierergebnisse herunterladen",

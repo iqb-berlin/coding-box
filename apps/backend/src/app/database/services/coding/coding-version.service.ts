@@ -21,7 +21,8 @@ export class CodingVersionService {
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     unitFilters?: string[],
-    variableFilters?: string[]
+    variableFilters?: string[],
+    progressCallback?: (progress: number) => Promise<void>
   ): Promise<{
       affectedResponseCount: number;
       cascadeResetVersions: ('v2' | 'v3')[];
@@ -33,6 +34,8 @@ export class CodingVersionService {
           ','
         )}, variables=${variableFilters?.join(',')}`
       );
+
+      if (progressCallback) await progressCallback(0);
 
       // Determine which versions to reset
       const versionsToReset: ('v1' | 'v2' | 'v3')[] = [version];
@@ -60,11 +63,16 @@ export class CodingVersionService {
         });
       }
 
+      if (progressCallback) await progressCallback(5);
+
       const countQueryBuilder = baseQueryBuilder.clone();
       const affectedResponseCount = await countQueryBuilder.getCount();
 
+      if (progressCallback) await progressCallback(10);
+
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
+        if (progressCallback) await progressCallback(100);
         return {
           affectedResponseCount: 0,
           cascadeResetVersions: version === 'v2' ? ['v3'] : [],
@@ -81,6 +89,7 @@ export class CodingVersionService {
 
       const batchSize = 5000;
       let offset = 0;
+      const totalBatches = Math.ceil(affectedResponseCount / batchSize);
 
       for (; ;) {
         const batchQueryBuilder = baseQueryBuilder
@@ -104,6 +113,16 @@ export class CodingVersionService {
         );
 
         offset += batchSize;
+
+        if (progressCallback) {
+          const batchNumber = Math.ceil(offset / batchSize);
+          // Progress: 10% (counting) to 90% (batches done), leaving 10% for cache invalidation
+          const batchProgress = Math.min(
+            Math.floor(10 + (batchNumber / totalBatches) * 80),
+            90
+          );
+          await progressCallback(batchProgress);
+        }
       }
 
       this.logger.log(
@@ -121,6 +140,8 @@ export class CodingVersionService {
         this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
         await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
       }
+
+      if (progressCallback) await progressCallback(100);
 
       return {
         affectedResponseCount,
