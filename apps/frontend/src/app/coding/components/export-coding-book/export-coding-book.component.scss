@@ -238,3 +238,49 @@
   flex-direction: row;
   gap: 16px;
 }
+
+// Codebook generation progress section
+.codebook-progress-section {
+  padding: 12px 24px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  &.completed,
+  &.failed {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
+}
+
+.progress-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-label {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.progress-percentage {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.87);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1.5s linear infinite;
+}

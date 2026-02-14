@@ -7,6 +7,7 @@ import { CodingStatisticsProcessor } from './processors/coding-statistics.proces
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
 import { UploadResultsProcessor } from './processors/upload-results.processor';
+import { CodebookGenerationProcessor } from './processors/codebook-generation.processor';
 import { ResetCodingVersionProcessor } from './processors/reset-coding-version.processor';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
@@ -43,6 +44,9 @@ import { CacheModule } from '../cache/cache.module';
       name: 'test-results-upload'
     }),
     BullModule.registerQueue({
+      name: 'codebook-generation'
+    }),
+    BullModule.registerQueue({
       name: 'reset-coding-version'
     }),
     forwardRef(() => CodingModule),
@@ -56,6 +60,7 @@ import { CacheModule } from '../cache/cache.module';
     ExportJobProcessor,
     FlatResponseFilterOptionsProcessor,
     UploadResultsProcessor,
+    CodebookGenerationProcessor,
     ResetCodingVersionProcessor
   ],
   exports: [JobQueueService]

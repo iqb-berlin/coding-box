@@ -18,8 +18,12 @@ import { MatTableDataSource, MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
+import {
+  Subject, Subscription, interval
+} from 'rxjs';
+import {
+  debounceTime, distinctUntilChanged, switchMap, takeUntil
+} from 'rxjs/operators';
 import { CodeBookContentSetting } from '../../../../../../../api-dto/coding/codebook-content-setting';
 import { CodingExportService } from '../../services/coding-export.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
@@ -99,6 +103,12 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   isValidating = false;
   validationCacheKey: string | null = null;
 
+  codebookJobId: string | null = null;
+  codebookJobStatus: 'idle' | 'pending' | 'processing' | 'completed' | 'failed' = 'idle';
+  codebookJobProgress = 0;
+  codebookJobError: string | null = null;
+  private codebookPollingSubscription: Subscription | null = null;
+
   constructor(
     private exportService: CodingExportService,
     private missingsProfileService: MissingsProfileService,
@@ -138,6 +148,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroy$.next();
     this.destroy$.complete();
+    this.stopCodebookPolling();
   }
 
   applyFilter(event: Event): void {
@@ -246,32 +257,101 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
 
     this.contentOptions.missingsProfile = this.selectedMissingsProfile.toString();
-    this.appService.dataLoading = true;
-    this.exportService.getCodingBook(
+    this.codebookJobStatus = 'pending';
+    this.codebookJobProgress = 0;
+    this.codebookJobError = null;
+    this.codebookJobId = null;
+
+    this.exportService.startCodebookJob(
       workspaceId,
       this.contentOptions.missingsProfile,
       this.contentOptions,
       this.unitList
     ).subscribe({
-      next: blob => {
-        if (blob) {
-          // Create a download link for the blob
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
-          const fileExtension = this.contentOptions.exportFormat.toLowerCase();
-          a.href = url;
-          a.download = `codebook_${timestamp}.${fileExtension}`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        }
-        this.appService.dataLoading = false;
+      next: response => {
+        this.codebookJobId = response.jobId;
+        this.startCodebookPolling(workspaceId, response.jobId);
       },
       error: () => {
-        this.appService.dataLoading = false;
+        this.codebookJobStatus = 'failed';
+        this.codebookJobError = 'Failed to start codebook generation job';
       }
     });
+  }
+
+  private startCodebookPolling(workspaceId: number, jobId: string): void {
+    this.stopCodebookPolling();
+
+    this.codebookPollingSubscription = interval(1500)
+      .pipe(
+        takeUntil(this.destroy$),
+        switchMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId))
+      )
+      .subscribe({
+        next: status => {
+          if (!status.status && status.error) {
+            this.codebookJobStatus = 'failed';
+            this.codebookJobError = status.error;
+            this.stopCodebookPolling();
+            return;
+          }
+
+          this.codebookJobProgress = status.progress || 0;
+
+          if (status.status === 'completed') {
+            this.codebookJobStatus = 'completed';
+            this.stopCodebookPolling();
+            this.downloadCodebookResult(workspaceId, jobId);
+          } else if (status.status === 'failed') {
+            this.codebookJobStatus = 'failed';
+            this.codebookJobError = status.error || 'Codebook generation failed';
+            this.stopCodebookPolling();
+          } else if (status.status === 'processing') {
+            this.codebookJobStatus = 'processing';
+          } else {
+            this.codebookJobStatus = 'pending';
+          }
+        },
+        error: () => {
+          this.codebookJobStatus = 'failed';
+          this.codebookJobError = 'Failed to get job status';
+          this.stopCodebookPolling();
+        }
+      });
+  }
+
+  private stopCodebookPolling(): void {
+    if (this.codebookPollingSubscription) {
+      this.codebookPollingSubscription.unsubscribe();
+      this.codebookPollingSubscription = null;
+    }
+  }
+
+  private downloadCodebookResult(workspaceId: number, jobId: string): void {
+    this.exportService.downloadCodebookFile(workspaceId, jobId).subscribe({
+      next: blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
+        const fileExtension = this.contentOptions.exportFormat.toLowerCase();
+        a.href = url;
+        a.download = `codebook_${timestamp}.${fileExtension}`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      error: () => {
+        this.codebookJobError = 'Failed to download codebook file';
+      }
+    });
+  }
+
+  resetCodebookJob(): void {
+    this.codebookJobId = null;
+    this.codebookJobStatus = 'idle';
+    this.codebookJobProgress = 0;
+    this.codebookJobError = null;
+    this.stopCodebookPolling();
   }
 }

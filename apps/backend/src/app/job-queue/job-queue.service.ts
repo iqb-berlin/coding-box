@@ -22,16 +22,44 @@ export interface TestPersonCodingJobData {
   autoCoderRun?: number;
 }
 
+export interface FlatResponseFilterOptionsJobData {
+  workspaceId: number;
+  processingDurationThresholdMs: number;
+}
+
+export interface CodebookGenerationJobData {
+  workspaceId: number;
+  missingsProfile: number;
+  contentOptions: {
+    exportFormat: string;
+    missingsProfile: string;
+    hasOnlyManualCoding: boolean;
+    hasGeneralInstructions: boolean;
+    hasDerivedVars: boolean;
+    hasOnlyVarsWithCodes: boolean;
+    hasClosedVars: boolean;
+    codeLabelToUpper: boolean;
+    showScore: boolean;
+    hideItemVarRelation: boolean;
+  };
+  unitIds: number[];
+}
+
+export interface CodebookJobResult {
+  fileId: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  workspaceId: number;
+  exportFormat: string;
+  createdAt: number;
+}
+
 export interface ResetCodingVersionJobData {
   workspaceId: number;
   version: 'v1' | 'v2' | 'v3';
   unitFilters?: string[];
   variableFilters?: string[];
-}
-
-export interface FlatResponseFilterOptionsJobData {
-  workspaceId: number;
-  processingDurationThresholdMs: number;
 }
 
 export interface ExportJobData {
@@ -109,6 +137,7 @@ export class JobQueueService {
     @InjectQueue('flat-response-filter-options')
     private flatResponseFilterOptionsQueue: Queue,
     @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue,
+    @InjectQueue('codebook-generation') private codebookGenerationQueue: Queue,
     @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue
   ) { }
 
@@ -388,6 +417,20 @@ export class JobQueueService {
       );
       return false;
     }
+  }
+
+  async addCodebookGenerationJob(
+    data: CodebookGenerationJobData,
+    options?: JobOptions
+  ): Promise<Job<CodebookGenerationJobData>> {
+    this.logger.log(
+      `Adding codebook generation job for workspace ${data.workspaceId} with ${data.unitIds.length} units`
+    );
+    return this.codebookGenerationQueue.add(data, options);
+  }
+
+  async getCodebookGenerationJob(jobId: string): Promise<Job<CodebookGenerationJobData>> {
+    return this.codebookGenerationQueue.getJob(jobId);
   }
 
   // --- Reset Coding Version Queue Methods ---
