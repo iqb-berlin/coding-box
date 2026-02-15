@@ -62,6 +62,10 @@ export interface ResetCodingVersionJobData {
   variableFilters?: string[];
 }
 
+export interface ValidationTaskJobData {
+  taskId: number;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
@@ -138,7 +142,8 @@ export class JobQueueService {
     private flatResponseFilterOptionsQueue: Queue,
     @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue,
     @InjectQueue('codebook-generation') private codebookGenerationQueue: Queue,
-    @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue
+    @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue,
+    @InjectQueue('validation-task') private validationTaskQueue: Queue
   ) { }
 
   async addTestPersonCodingJob(
@@ -449,6 +454,20 @@ export class JobQueueService {
     jobId: string
   ): Promise<Job<ResetCodingVersionJobData>> {
     return this.resetCodingVersionQueue.getJob(jobId);
+  }
+
+  async addValidationTaskJob(
+    data: ValidationTaskJobData,
+    options?: JobOptions
+  ): Promise<Job<ValidationTaskJobData>> {
+    this.logger.log(`Adding validation task job for task ${data.taskId}`);
+    return this.validationTaskQueue.add(data, options);
+  }
+
+  async getValidationTaskJob(
+    jobId: string
+  ): Promise<Job<ValidationTaskJobData>> {
+    return this.validationTaskQueue.getJob(jobId);
   }
 
   async getActiveResetCodingVersionJob(
