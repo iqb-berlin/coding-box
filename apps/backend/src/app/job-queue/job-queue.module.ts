@@ -9,6 +9,7 @@ import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-f
 import { UploadResultsProcessor } from './processors/upload-results.processor';
 import { CodebookGenerationProcessor } from './processors/codebook-generation.processor';
 import { ResetCodingVersionProcessor } from './processors/reset-coding-version.processor';
+import { ValidationTaskProcessor } from './processors/validation-task.processor';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
@@ -49,6 +50,9 @@ import { CacheModule } from '../cache/cache.module';
     BullModule.registerQueue({
       name: 'reset-coding-version'
     }),
+    BullModule.registerQueue({
+      name: 'validation-task'
+    }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
     CacheModule
@@ -61,7 +65,8 @@ import { CacheModule } from '../cache/cache.module';
     FlatResponseFilterOptionsProcessor,
     UploadResultsProcessor,
     CodebookGenerationProcessor,
-    ResetCodingVersionProcessor
+    ResetCodingVersionProcessor,
+    ValidationTaskProcessor
   ],
   exports: [JobQueueService]
 })
