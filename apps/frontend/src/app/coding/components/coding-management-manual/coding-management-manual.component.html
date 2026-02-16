@@ -120,13 +120,17 @@
           <h3 class="subsection-title">
             <mat-icon>analytics</mat-icon>
             {{ 'coding-management-manual.response-analysis.title' | translate }}
-            <button mat-icon-button (click)="refreshResponseAnalysis()"
-              matTooltip="{{ 'coding-management-manual.response-analysis.refresh' | translate }}"
-              [disabled]="isLoadingResponseAnalysis">
-              <mat-icon>refresh</mat-icon>
+
+            <button mat-icon-button (click)="restartAnalysis()" matTooltip="Antwortanalyse neu berechnen"
+              [disabled]="isLoadingResponseAnalysis || responseAnalysis?.isCalculating">
+              <mat-icon>autorenew</mat-icon>
             </button>
-            <span *ngIf="isLoadingResponseAnalysis" class="loading-indicator">
+            <span *ngIf="isLoadingResponseAnalysis || responseAnalysis?.isCalculating" class="loading-indicator">
               <mat-spinner diameter="16"></mat-spinner>
+              <span *ngIf="responseAnalysis?.isCalculating" style="margin-left: 8px; font-size: 12px;">
+                Berechnung läuft... <span *ngIf="responseAnalysis?.progress != null">({{ responseAnalysis?.progress
+                  }}%)</span>
+              </span>
             </span>
           </h3>
           <p class="subsection-description">{{ 'coding-management-manual.response-analysis.description' | translate }}
@@ -159,7 +163,9 @@
                         <th>{{ 'coding-management-manual.response-analysis.table.unit' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.variable' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.person' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.group' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.value' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -167,22 +173,21 @@
                         <td>{{ item.unitAlias || item.unitName }}</td>
                         <td>{{ item.variableId }}</td>
                         <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
+                        <td>{{ item.personGroup }}</td>
                         <td>{{ item.bookletName }}</td>
+                        <td class="value-cell">{{ item.value || '(leer)' }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
-                <mat-paginator [length]="responseAnalysis.emptyResponses.total"
-                  [pageSize]="emptyPageSize"
-                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
-                  [pageIndex]="emptyPageIndex"
-                  (page)="onEmptyPageChange($event)"
-                  aria-label="Select page of empty responses">
+                <mat-paginator [length]="responseAnalysis.emptyResponses.total" [pageSize]="emptyPageSize"
+                  [pageSizeOptions]="[5, 10, 25, 50, 100]" [pageIndex]="emptyPageIndex"
+                  (page)="onEmptyPageChange($event)" aria-label="Select page of empty responses">
                 </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
-                    [disabled]="isApplyingEmptyCoding"
+                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating"
                     [matTooltip]="'coding-management-manual.response-analysis.apply-empty-coding-tooltip' | translate">
                     <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
                     <mat-spinner *ngIf="isApplyingEmptyCoding" diameter="20"></mat-spinner>
@@ -244,12 +249,9 @@
                   </ul>
                 </div>
 
-                <mat-paginator [length]="responseAnalysis.duplicateValues.total"
-                  [pageSize]="duplicatePageSize"
-                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
-                  [pageIndex]="duplicatePageIndex"
-                  (page)="onDuplicatePageChange($event)"
-                  aria-label="Select page of duplicate groups">
+                <mat-paginator [length]="responseAnalysis.duplicateValues.total" [pageSize]="duplicatePageSize"
+                  [pageSizeOptions]="[5, 10, 20, 50, 100]" [pageIndex]="duplicatePageIndex"
+                  (page)="onDuplicatePageChange($event)" aria-label="Select page of duplicate groups">
                 </mat-paginator>
               </div>
             </div>

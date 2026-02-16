@@ -66,6 +66,13 @@ export interface ValidationTaskJobData {
   taskId: number;
 }
 
+export interface CodingAnalysisJobData {
+  workspaceId: number;
+  matchingFlags: string[]; // passed as string array, converted in processor if needed or kept as is
+  threshold: number;
+  cacheKey: string;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
@@ -143,7 +150,8 @@ export class JobQueueService {
     @InjectQueue('test-results-upload') private testResultsUploadQueue: Queue,
     @InjectQueue('codebook-generation') private codebookGenerationQueue: Queue,
     @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue,
-    @InjectQueue('validation-task') private validationTaskQueue: Queue
+    @InjectQueue('validation-task') private validationTaskQueue: Queue,
+    @InjectQueue('response-analysis') private responseAnalysisQueue: Queue
   ) { }
 
   async addTestPersonCodingJob(
@@ -468,6 +476,31 @@ export class JobQueueService {
     jobId: string
   ): Promise<Job<ValidationTaskJobData>> {
     return this.validationTaskQueue.getJob(jobId);
+  }
+
+  async addCodingAnalysisJob(
+    data: CodingAnalysisJobData,
+    options?: JobOptions
+  ): Promise<Job<CodingAnalysisJobData>> {
+    this.logger.log(`Adding coding analysis job for workspace ${data.workspaceId}`);
+    return this.responseAnalysisQueue.add(data, options);
+  }
+
+  async getCodingAnalysisJob(
+    jobId: string
+  ): Promise<Job<CodingAnalysisJobData>> {
+    return this.responseAnalysisQueue.getJob(jobId);
+  }
+
+  async getActiveCodingAnalysisJob(
+    workspaceId: number
+  ): Promise<Job<CodingAnalysisJobData> | null> {
+    const jobs = await this.responseAnalysisQueue.getJobs([
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    return jobs.find(job => job.data.workspaceId === workspaceId) || null;
   }
 
   async getActiveResetCodingVersionJob(
