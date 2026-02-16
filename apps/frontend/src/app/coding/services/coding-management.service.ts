@@ -392,62 +392,82 @@ export class CodingManagementService {
     return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
   }
 
+  downloadProgress$ = new BehaviorSubject<number | null>(null);
+
   private async performBackgroundDownload(
     workspaceId: number,
     version: StatisticsVersion,
     format: ExportFormat,
     includeReplayUrls: boolean
   ): Promise<void> {
-    const snackBarRef = this.snackBar.open(
-      this.translateService.instant('coding-management.download-dialog.download-started', { version, format }),
-      this.translateService.instant('close'),
-      { duration: 0, panelClass: ['info-snackbar'] }
-    );
+    this.downloadProgress$.next(0);
 
     try {
-      if (format === 'json') {
-        await this.downloadResultsAsJson(workspaceId, version, includeReplayUrls);
-      } else if (format === 'csv') {
-        await this.downloadResultsGeneric(workspaceId, version, format, includeReplayUrls);
-      } else if (format === 'excel') {
-        await this.downloadResultsGeneric(workspaceId, version, format, includeReplayUrls);
+      // Start the job
+      const jobStartResult = await this.exportService.startExportJob(
+        workspaceId,
+        'results-by-version',
+        version,
+        format,
+        includeReplayUrls
+      ).toPromise();
+
+      if (!jobStartResult) {
+        this.showErrorSnackbar('Failed to start export job', false);
+        this.downloadProgress$.next(null);
+        return;
       }
+      const { jobId } = jobStartResult;
 
-      snackBarRef.dismiss();
-      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete', { version, format }));
-    } catch (error) {
-      snackBarRef.dismiss();
-      this.showErrorSnackbar('coding-management.download-dialog.download-failed');
-    }
-  }
-
-  private downloadResultsGeneric(workspaceId: number, version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (format === 'csv') {
-        this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-          .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.csv`); resolve(); }, error: reject });
-      } else if (format === 'excel') {
-        this.exportService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
-          .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.xlsx`); resolve(); }, error: reject });
-      }
-    });
-  }
-
-  private downloadResultsAsJson(workspaceId: number, version: StatisticsVersion, includeReplayUrls: boolean): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-        .pipe(catchError(() => { reject(new Error('Failed')); return of(null); }))
-        .subscribe(async blob => {
-          if (!blob) { reject(new Error('No data')); return; }
-          try {
-            const jsonBlob = await this.convertCsvBlobToJsonBlob(blob as Blob);
-            this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
-            resolve();
-          } catch (e) {
-            reject(e);
+      // Poll for status
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const subscription = timer(0, 2000).pipe(
+          switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
+          takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+        ).subscribe({
+          next: status => {
+            if (status.status === 'completed') {
+              subscription.unsubscribe();
+              this.downloadProgress$.next(100);
+              // Job done, download file
+              this.exportService.downloadExportFile(workspaceId, jobId).subscribe({
+                next: fileBlob => resolve(fileBlob),
+                error: reject
+              });
+            } else if (status.status === 'failed' || status.status === 'cancelled') {
+              subscription.unsubscribe();
+              reject(new Error(status.error || 'Job failed'));
+            } else {
+              // Update progress
+              const progress = Math.round(status.progress || 0);
+              this.downloadProgress$.next(progress);
+            }
+          },
+          error: err => {
+            subscription.unsubscribe();
+            reject(err);
           }
         });
-    });
+      });
+
+      // Handle file download
+      if (format === 'json') {
+        const jsonBlob = await this.convertCsvBlobToJsonBlob(blob);
+        this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
+      } else {
+        const ext = format === 'csv' ? 'csv' : 'xlsx';
+        this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
+      }
+      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
+    } catch (error) {
+      console.error('Download failed:', error);
+      this.showErrorSnackbar(
+        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
+        false
+      );
+    } finally {
+      this.downloadProgress$.next(null);
+    }
   }
 
   // --- Private Helpers ---

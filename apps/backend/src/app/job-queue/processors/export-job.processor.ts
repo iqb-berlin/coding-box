@@ -27,7 +27,7 @@ export class ExportJobProcessor {
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
     private jobQueueService: JobQueueService
-  ) {}
+  ) { }
 
   private async checkCancellation(
     job: Job<ExportJobData>,
@@ -66,7 +66,8 @@ export class ExportJobProcessor {
       'detailed',
       'coding-times',
       'test-results',
-      'test-logs'
+      'test-logs',
+      'results-by-version'
     ];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
@@ -85,7 +86,11 @@ export class ExportJobProcessor {
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
-      const fileExt = job.data.exportType === 'detailed' ? 'csv' : 'xlsx';
+      const isCsv =
+        job.data.exportType === 'detailed' ||
+        (job.data.exportType === 'results-by-version' &&
+          job.data.format !== 'excel');
+      const fileExt = isCsv ? 'csv' : 'xlsx';
       const fileName = `export_${job.id}_${Date.now()}.${fileExt}`;
       filePath = path.join(tempDir, fileName);
       this.logger.log(`Generating export file: ${filePath}`);
@@ -100,6 +105,45 @@ export class ExportJobProcessor {
 
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
+        case 'results-by-version': {
+          const onProgress = async (percentage: number) => {
+            // Map 0-100% of sub-task to 20-90% of overall job
+            const jobProgress = 20 + Math.round((percentage / 100) * 70);
+            await job.progress(jobProgress);
+            await checkCancellation();
+          };
+
+          if (job.data.format === 'excel') {
+            buffer = await this.codingExportService.exportCodingResultsByVersionAsExcel(
+              job.data.workspaceId,
+              job.data.version,
+              job.data.authToken || '',
+              job.data.serverUrl || '',
+              job.data.includeReplayUrl || false,
+              onProgress
+            );
+          } else {
+            // CSV Stream
+            const stream = await this.codingExportService.exportCodingResultsByVersionAsCsv(
+              job.data.workspaceId,
+              job.data.version,
+              job.data.authToken || '',
+              job.data.serverUrl || '',
+              job.data.includeReplayUrl || false,
+              onProgress
+            );
+
+            const writeStream = fs.createWriteStream(filePath);
+            await new Promise((resolve, reject) => {
+              stream.pipe(writeStream);
+              writeStream.on('finish', resolve);
+              writeStream.on('error', reject);
+              stream.on('error', reject);
+            });
+          }
+          break;
+        }
+
         case 'aggregated':
           buffer = await this.codingExportService.exportCodingResultsAggregated(
             job.data.workspaceId,
