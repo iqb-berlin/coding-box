@@ -500,6 +500,8 @@
     "has-closed-vars": "Geschlossen kodierte Variablen",
     "show-score": "Bewertung anzeigen",
     "codebook-content": "Codebook Inhalte",
+    "codebook-generating": "Codebook wird generiert...",
+    "codebook-completed": "Codebook erfolgreich generiert",
     "export-format": "Exportformat",
     "code-label-to-upper": "Code-Label in Großbuchstaben",
     "hide-item-var-relation": "Item-Variable-Relation ausblenden",
