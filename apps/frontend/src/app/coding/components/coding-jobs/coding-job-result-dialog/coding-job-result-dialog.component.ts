@@ -407,7 +407,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${testPerson}@${result.bookletName}/${unitName}/0/${result.variableId}`],
+              [`replay/${testPerson}/${unitName}/0/${result.variableId}`],
               { queryParams: queryParams })
           );
 
