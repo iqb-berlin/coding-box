@@ -58,7 +58,7 @@
 
 
 
-  @if (codingService.isCodingJobCompleted && !isBookletReplayMode) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode) {
   <div class="completion-overlay">
     <div class="completion-dialog">
       <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>
