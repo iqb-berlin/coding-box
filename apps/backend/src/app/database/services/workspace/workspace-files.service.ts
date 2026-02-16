@@ -7,7 +7,9 @@ import * as cheerio from 'cheerio';
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import FileUpload, { StructuredFileData } from '../../entities/file_upload.entity';
+import FileUpload, {
+  StructuredFileData
+} from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
@@ -57,7 +59,7 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
-  ) { }
+  ) {}
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
     this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
@@ -388,7 +390,9 @@ ${bookletRefs}
     }
   }
 
-  async getItemIdsFromMetadataFiles(workspaceId: number): Promise<{ fileId: string; id: number; items: string[] }[]> {
+  async getItemIdsFromMetadataFiles(
+    workspaceId: number
+  ): Promise<{ fileId: string; id: number; items: string[] }[]> {
     try {
       const metadataFiles = await this.fileUploadRepository.find({
         where: {
@@ -419,13 +423,17 @@ ${bookletRefs}
             }
           }
         } catch (e) {
-          this.logger.warn(`Failed to parse metadata file ${file.filename}: ${e.message}`);
+          this.logger.warn(
+            `Failed to parse metadata file ${file.filename}: ${e.message}`
+          );
         }
       });
 
       return result.sort((a, b) => a.fileId.localeCompare(b.fileId));
     } catch (error) {
-      this.logger.error(`Error fetching item IDs from metadata files: ${error.message}`);
+      this.logger.error(
+        `Error fetching item IDs from metadata files: ${error.message}`
+      );
       return [];
     }
   }
@@ -496,7 +504,7 @@ ${bookletRefs}
       const isConflict = (
         value: unknown
       ): value is TestFilesUploadConflictDto & { conflict: true } => !!value &&
-      typeof value === 'object' &&
+        typeof value === 'object' &&
         (value as { conflict?: unknown }).conflict === true;
 
       settled.forEach((result, idx) => {
@@ -755,7 +763,8 @@ ${bookletRefs}
         const maxErrors = 10;
         const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
         this.logger.warn(
-          `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length
+          `XSD validation failed on upload: ${file.originalname} (errors: ${
+            xmlValidation.errors.length
           }) ${JSON.stringify(errorsPreview)}`
         );
         throw this.unsupportedFile(
@@ -1075,23 +1084,33 @@ ${bookletRefs}
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
 
-      this.logger.log(`[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`);
+      this.logger.log(
+        `[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`
+      );
       if (overwriteAllowList) {
-        this.logger.log(`[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`);
+        this.logger.log(
+          `[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`
+        );
       }
 
       const overwriteAllowed =
         overwriteExisting &&
         (!overwriteAllowList || overwriteAllowList.has(fileIdNormalized));
 
-      this.logger.log(`[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`);
+      this.logger.log(
+        `[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`
+      );
 
       if (existing && !overwriteAllowed) {
         if (overwriteExisting && overwriteAllowList) {
-          this.logger.log(`[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`);
+          this.logger.log(
+            `[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`
+          );
           return await Promise.resolve();
         }
-        this.logger.log(`[OctetStream] Conflict detected for ${fileIdNormalized}`);
+        this.logger.log(
+          `[OctetStream] Conflict detected for ${fileIdNormalized}`
+        );
         return {
           conflict: true,
           fileId: fileUpload.file_id,
@@ -1174,23 +1193,26 @@ ${bookletRefs}
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
     return Object.values(
-      rows.reduce((agg, response) => {
-        const key = [response.test_person, response.unit_id].join('@@@@@@');
-        if (agg[key]) {
-          if (!agg[key].responses.length && response.responses.length) {
-            agg[key].responses = response.responses;
+      rows.reduce(
+        (agg, response) => {
+          const key = [response.test_person, response.unit_id].join('@@@@@@');
+          if (agg[key]) {
+            if (!agg[key].responses.length && response.responses.length) {
+              agg[key].responses = response.responses;
+            }
+            if (
+              !Object.keys(agg[key].unit_state || {}).length &&
+              Object.keys(response.unit_state || {}).length
+            ) {
+              agg[key].unit_state = response.unit_state;
+            }
+          } else {
+            agg[key] = response;
           }
-          if (
-            !Object.keys(agg[key].unit_state || {}).length &&
-            Object.keys(response.unit_state || {}).length
-          ) {
-            agg[key].unit_state = response.unit_state;
-          }
-        } else {
-          agg[key] = response;
-        }
-        return agg;
-      }, <{ [key: string]: ResponseDto }>{})
+          return agg;
+        },
+        <{ [key: string]: ResponseDto }>{}
+      )
     );
   }
 
@@ -2083,7 +2105,8 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${
+              (e as Error).message
             }`
           );
         }
@@ -2398,7 +2421,8 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${
+              (e as Error).message
             }`
           );
         }
