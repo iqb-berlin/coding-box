@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
@@ -164,27 +165,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
-
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
   }
 
   async exportCodingResultsByVersionAsExcel(
@@ -193,28 +183,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx"`
-    );
-
-    res.send(excelData);
   }
 
   private async generateReplayUrlWithPageLookup(

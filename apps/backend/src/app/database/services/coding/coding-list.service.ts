@@ -39,7 +39,7 @@ export class CodingListService {
     private readonly fileCacheService: CodingFileCacheService,
     private readonly queryService: CodingListQueryService,
     private readonly streamService: CodingListStreamService
-  ) {}
+  ) { }
 
   /**
    * Get variable page map for a unit.
@@ -134,14 +134,16 @@ export class CodingListService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ) {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
   }
 
@@ -154,14 +156,16 @@ export class CodingListService {
     version: 'v1' | 'v2' | 'v3',
     authToken?: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
   }
 }

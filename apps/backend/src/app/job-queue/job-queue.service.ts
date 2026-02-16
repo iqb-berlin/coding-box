@@ -83,7 +83,10 @@ export interface ExportJobData {
   | 'detailed'
   | 'coding-times'
   | 'test-results'
-  | 'test-logs';
+  | 'test-logs'
+  | 'results-by-version';
+  version?: 'v1' | 'v2' | 'v3';
+  format?: 'csv' | 'json' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
   anonymizeCoders?: boolean;
@@ -97,6 +100,7 @@ export interface ExportJobData {
   includeDoubleCoded?: boolean;
   excludeAutoCoded?: boolean;
   authToken?: string;
+  serverUrl?: string;
   isCancelled?: boolean;
   testResultFilters?: {
     groupNames?: string[];

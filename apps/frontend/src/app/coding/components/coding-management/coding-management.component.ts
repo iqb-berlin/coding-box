@@ -90,6 +90,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   isDownloadInProgress = false;
   showManualCoding = false;
   resetProgress: number | null = null;
+  downloadProgress: number | null = null;
 
   // Statistics state
   codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
@@ -172,6 +173,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
           this.fetchCodingStatistics();
           this.refreshTableData();
         }
+      });
+
+    this.codingManagementService.downloadProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.downloadProgress = progress;
+        this.isDownloadInProgress = progress !== null;
       });
 
     // Check for active reset job (persists across navigation)

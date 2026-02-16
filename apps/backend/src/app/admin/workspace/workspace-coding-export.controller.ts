@@ -216,14 +216,25 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    return this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
+    const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls,
-      res
+      includeReplayUrls
     );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.csv"`
+    );
+
+    // Excel compatibility: UTF-8 BOM
+    res.write('\uFEFF');
+    csvStream.pipe(res);
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
@@ -274,14 +285,26 @@ export class WorkspaceCodingExportController {
                    includeReplayUrls: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    return this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
+    const buffer = await this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls,
-      res
+      includeReplayUrls
     );
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    );
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="coding-results-${version}-${new Date()
+        .toISOString()
+        .slice(0, 10)}.xlsx"`
+    );
+
+    res.send(buffer);
   }
 
   @Get(':workspace_id/coding/export/aggregated')
@@ -798,7 +821,7 @@ export class WorkspaceCodingExportController {
     res.send(buffer);
   }
 
-  @Post(':workspace_id/coding/export/job')
+  @Post(':workspace_id/coding/export')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -815,7 +838,8 @@ export class WorkspaceCodingExportController {
             'by-coder',
             'by-variable',
             'detailed',
-            'coding-times'
+            'coding-times',
+            'results-by-version'
           ],
           description: 'Type of export to generate'
         },
@@ -855,12 +879,14 @@ export class WorkspaceCodingExportController {
   })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
-      @Body() body: Omit<ExportJobData, 'workspaceId'>
+      @Req() req: Request,
+      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
   ): Promise<{ jobId: string; message: string }> {
     try {
       const job = await this.jobQueueService.addExportJob({
         ...body,
-        workspaceId: workspace_id
+        workspaceId: workspace_id,
+        userId: (req.user as { id: number }).id
       });
 
       this.logger.log(

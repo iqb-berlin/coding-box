@@ -337,7 +337,8 @@ export class CodingListStreamService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ) {
     this.logger.log(
       `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
@@ -347,9 +348,14 @@ export class CodingListStreamService {
 
     (async () => {
       try {
+        const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
         const batchSize = 5000;
         let lastId = 0;
         let totalWritten = 0;
+
+        // Progress base: 0-10% (setup), 10-90% (processing), 90-100% (writing/finalize) - managed by caller usually, but here we cover the processing part.
+        // Let's assume this function covers a significant portion. The caller might scale it.
+        // We will report 0-100% of *this* process.
 
         for (; ;) {
           const responses = await this.responseFilterService.getResponsesBatch(
@@ -393,6 +399,12 @@ export class CodingListStreamService {
           }
 
           lastId = responses[responses.length - 1].id;
+
+          if (progressCallback && totalRows > 0) {
+            const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
+            await progressCallback(percentage);
+          }
+
           await new Promise(resolve => {
             setImmediate(resolve);
           });
@@ -424,7 +436,8 @@ export class CodingListStreamService {
     version: 'v1' | 'v2' | 'v3',
     authToken?: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(
       `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
@@ -465,6 +478,8 @@ export class CodingListStreamService {
     let totalWritten = 0;
 
     try {
+      const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
+
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
@@ -507,6 +522,11 @@ export class CodingListStreamService {
           this.logger.log(
             `Excel export progress for version ${version}: ${totalWritten} rows written`
           );
+        }
+
+        if (progressCallback && totalRows > 0) {
+          const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
+          await progressCallback(percentage);
         }
 
         await new Promise(resolve => {

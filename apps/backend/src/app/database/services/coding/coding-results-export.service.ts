@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
-import { Request, Response } from 'express';
+import { Request } from 'express';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
@@ -60,28 +61,15 @@ export class CodingResultsExportService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
-    includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(
+    includeReplayUrls: boolean
+  ): Promise<Readable> {
+    return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
       includeReplayUrls
     );
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
-
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
   }
 
   async exportCodingResultsByVersionAsExcel(
@@ -89,29 +77,15 @@ export class CodingResultsExportService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
-    includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(
+    includeReplayUrls: boolean
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
       includeReplayUrls
     );
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx"`
-    );
-
-    res.send(excelData);
   }
 
   private async generateReplayUrlWithPageLookup(

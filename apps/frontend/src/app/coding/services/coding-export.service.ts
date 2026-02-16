@@ -181,4 +181,70 @@ export class CodingExportService {
       }
     );
   }
+
+  startExportJob(
+    workspaceId: number,
+    exportType: string,
+    version?: 'v1' | 'v2' | 'v3',
+    format?: 'csv' | 'json' | 'excel',
+    includeReplayUrls: boolean = false
+  ): Observable<{ jobId: string; message: string }> {
+    const payload = {
+      exportType,
+      version,
+      format,
+      includeReplayUrl: includeReplayUrls
+    };
+
+    return this.http.post<{ jobId: string; message: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export`,
+      payload
+    );
+  }
+
+  getExportJobStatus(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{
+      status: string;
+      progress: number;
+      result?: {
+        fileId: string;
+        fileName: string;
+        filePath: string;
+        fileSize: number;
+        workspaceId: number;
+        userId: number;
+        exportType: string;
+        createdAt: number;
+      };
+      error?: string;
+    }> {
+    return this.http.get<{
+      status: string;
+      progress: number;
+      result?: {
+        fileId: string;
+        fileName: string;
+        filePath: string;
+        fileSize: number;
+        workspaceId: number;
+        userId: number;
+        exportType: string;
+        createdAt: number;
+      };
+      error?: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`
+    );
+  }
+
+  downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
+    return this.http.get(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`,
+      {
+        responseType: 'blob'
+      }
+    );
+  }
 }
