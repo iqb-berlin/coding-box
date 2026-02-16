@@ -17,6 +17,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
 export class CodingExportService {
@@ -31,7 +32,8 @@ export class CodingExportService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
@@ -277,7 +279,7 @@ export class CodingExportService {
       ]
     });
 
-    if (codingJobUnits.length === 0) {
+    if (codingJobUnits.length === 0 && excludeAutoCoded) {
       throw new Error('No coding jobs found for this workspace');
     }
 
@@ -295,7 +297,13 @@ export class CodingExportService {
       const personBooklets = new Map<string, string>();
       const variableUnitNames = new Map<string, string>();
 
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+      // 1. Process manual coding units
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -351,7 +359,65 @@ export class CodingExportService {
         }
       }
 
-      this.logger.log(`Processed ${codingJobUnits.length} coding job units. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
+      // 2. Process auto-only responses if requested
+      if (!excludeAutoCoded) {
+        const autoOnlyResponses = await this.responseRepository.createQueryBuilder('response')
+          .innerJoinAndSelect('response.unit', 'unit')
+          .innerJoinAndSelect('unit.booklet', 'booklet')
+          .innerJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
+          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('cju.id IS NULL')
+          .andWhere('response.code_v1 IS NOT NULL')
+          .getMany();
+
+        for (const resp of autoOnlyResponses) {
+          if (resp.unit?.name && ignoredSet.has(resp.unit.name.toUpperCase())) continue;
+
+          const person = resp.unit?.booklet?.person;
+          if (!person) continue;
+
+          const testPersonKey = `${person.login}_${person.code}`;
+          const variableId = resp.variableid;
+          const unitName = resp.unit.name;
+          const compositeVariableKey = `${unitName}_${variableId}`;
+
+          if (!testPersonVariableCodes.has(testPersonKey)) {
+            testPersonVariableCodes.set(testPersonKey, new Map());
+            testPersonVariableComments.set(testPersonKey, new Map());
+            testPersonList.push(testPersonKey);
+          }
+
+          if (!testPersonVariableCodes.get(testPersonKey)!.has(compositeVariableKey)) {
+            testPersonVariableCodes.get(testPersonKey)!.set(compositeVariableKey, []);
+            testPersonVariableComments.get(testPersonKey)!.set(compositeVariableKey, []);
+          }
+
+          if (resp.code_v1 !== null) {
+            testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(resp.code_v1);
+          }
+
+          variableSet.add(compositeVariableKey);
+
+          if (!personGroups.has(testPersonKey)) {
+            personGroups.set(testPersonKey, person.group || '');
+          }
+          if (!personBooklets.has(testPersonKey)) {
+            const bookletName = resp.unit?.booklet?.bookletinfo?.name || '';
+            personBooklets.set(testPersonKey, bookletName);
+          }
+          if (!variableUnitNames.has(compositeVariableKey)) {
+            variableUnitNames.set(compositeVariableKey, unitName || '');
+          }
+        }
+      }
+
+      if (testPersonList.length === 0) {
+        throw new Error('No coding results found for this workspace');
+      }
+
+      this.logger.log(`Processed ${codingJobUnits.length} units and potentially auto-only responses. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
 
       const testPersonModalValues = new Map<string, Map<string, { modalValue: number | null; deviationCount: number }>>();
 
@@ -487,7 +553,7 @@ export class CodingExportService {
       ]
     });
 
-    if (codingJobUnits.length === 0) {
+    if (codingJobUnits.length === 0 && excludeAutoCoded) {
       throw new Error('No coding jobs found for this workspace');
     }
 
@@ -508,7 +574,13 @@ export class CodingExportService {
         coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+      // 1. Process manual coding units
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -563,6 +635,64 @@ export class CodingExportService {
         const comment = unit.notes || null;
 
         dataMap.get(rowKey)!.set(coderName, { code, score, comment });
+      }
+
+      // 2. Process auto-only responses if requested
+      if (!excludeAutoCoded) {
+        const autoOnlyResponses = await this.responseRepository.createQueryBuilder('response')
+          .innerJoinAndSelect('response.unit', 'unit')
+          .innerJoinAndSelect('unit.booklet', 'booklet')
+          .innerJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
+          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('cju.id IS NULL')
+          .andWhere('response.code_v1 IS NOT NULL')
+          .getMany();
+
+        const autoCoderName = 'Autocoder';
+        allCoders.add(autoCoderName);
+
+        for (const resp of autoOnlyResponses) {
+          if (resp.unit?.name && ignoredSet.has(resp.unit.name.toUpperCase())) continue;
+
+          const person = resp.unit?.booklet?.person;
+          if (!person) continue;
+
+          const testPersonKey = `${person.login}_${person.code}`;
+          const variableId = resp.variableid;
+          const unitName = resp.unit.name;
+          const compositeVariableKey = `${unitName}_${variableId}`;
+
+          testPersons.add(testPersonKey);
+          variables.add(compositeVariableKey);
+
+          if (!personGroups.has(testPersonKey)) {
+            personGroups.set(testPersonKey, person.group || '');
+          }
+          if (!personBooklets.has(testPersonKey)) {
+            const bookletName = resp.unit?.booklet?.bookletinfo?.name || '';
+            personBooklets.set(testPersonKey, bookletName);
+          }
+          if (!variableUnitNames.has(compositeVariableKey)) {
+            variableUnitNames.set(compositeVariableKey, unitName || '');
+          }
+
+          const rowKey = `${testPersonKey}_${compositeVariableKey}`;
+          if (!dataMap.has(rowKey)) {
+            dataMap.set(rowKey, new Map());
+          }
+
+          dataMap.get(rowKey)!.set(autoCoderName, {
+            code: resp.code_v1,
+            score: resp.score_v1,
+            comment: null
+          });
+        }
+      }
+
+      if (testPersons.size === 0) {
+        throw new Error('No coding results found for this workspace');
       }
 
       // Build headers: Base columns + Coders + Optional columns
@@ -719,7 +849,7 @@ export class CodingExportService {
       ]
     });
 
-    if (codingJobUnits.length === 0) {
+    if (codingJobUnits.length === 0 && excludeAutoCoded) {
       throw new Error('No coding jobs found for this workspace');
     }
 
@@ -742,8 +872,13 @@ export class CodingExportService {
         coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
       }
 
-      // Process all coding job units
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+      // 1. Process all coding job units
       for (const unit of codingJobUnits) {
+        if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -776,6 +911,10 @@ export class CodingExportService {
         const columnKey = `${compositeVariableKey}_${coderName}`;
         variableCoderColumns.add(columnKey);
 
+        if (!variableMetadata.has(compositeVariableKey)) {
+          variableMetadata.set(compositeVariableKey, { unitName, variableId });
+        }
+
         // Cache metadata
         if (!personGroups.has(testPersonKey)) {
           personGroups.set(testPersonKey, person.group || '');
@@ -783,9 +922,6 @@ export class CodingExportService {
         if (!personBooklets.has(testPersonKey)) {
           const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
           personBooklets.set(testPersonKey, bookletName);
-        }
-        if (!variableMetadata.has(compositeVariableKey)) {
-          variableMetadata.set(compositeVariableKey, { unitName: unitName || '', variableId });
         }
 
         // Store coding data
@@ -800,12 +936,72 @@ export class CodingExportService {
         dataMap.get(testPersonKey)!.set(columnKey, { code, score, comment });
       }
 
+      // 2. Process auto-only responses if requested
+      if (!excludeAutoCoded) {
+        const autoOnlyResponses = await this.responseRepository.createQueryBuilder('response')
+          .innerJoinAndSelect('response.unit', 'unit')
+          .innerJoinAndSelect('unit.booklet', 'booklet')
+          .innerJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
+          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('cju.id IS NULL')
+          .andWhere('response.code_v1 IS NOT NULL')
+          .getMany();
+
+        const autoCoderName = 'Autocoder';
+        allCoders.add(autoCoderName);
+
+        for (const resp of autoOnlyResponses) {
+          if (resp.unit?.name && ignoredSet.has(resp.unit.name.toUpperCase())) continue;
+
+          const person = resp.unit?.booklet?.person;
+          if (!person) continue;
+
+          const testPersonKey = `${person.login}_${person.code}`;
+          const variableId = resp.variableid;
+          const unitName = resp.unit.name;
+          const compositeVariableKey = `${unitName}_${variableId}`;
+
+          testPersons.add(testPersonKey);
+
+          const columnKey = `${compositeVariableKey}_${autoCoderName}`;
+          variableCoderColumns.add(columnKey);
+
+          if (!variableMetadata.has(compositeVariableKey)) {
+            variableMetadata.set(compositeVariableKey, { unitName, variableId });
+          }
+
+          if (!personGroups.has(testPersonKey)) {
+            personGroups.set(testPersonKey, person.group || '');
+          }
+          if (!personBooklets.has(testPersonKey)) {
+            const bookletName = resp.unit?.booklet?.bookletinfo?.name || '';
+            personBooklets.set(testPersonKey, bookletName);
+          }
+
+          if (!dataMap.has(testPersonKey)) {
+            dataMap.set(testPersonKey, new Map());
+          }
+
+          dataMap.get(testPersonKey)!.set(columnKey, {
+            code: resp.code_v1,
+            score: resp.score_v1,
+            comment: null
+          });
+        }
+      }
+
+      if (testPersons.size === 0) {
+        throw new Error('No coding results found for this workspace');
+      }
+
       // Build headers: Base columns + Variable_Coder columns + Optional columns
-      const sortedColumns = Array.from(variableCoderColumns).sort();
+      const sortedVariableCoderColumns = Array.from(variableCoderColumns).sort();
       const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
 
       // Create column labels like "Variablenname_Kodierer"
-      const columnLabels = sortedColumns.map(col => {
+      const columnLabels = sortedVariableCoderColumns.map(col => {
         const parts = col.split('_');
         const coderName = parts[parts.length - 1];
         const variableKey = parts.slice(0, -1).join('_');
@@ -841,8 +1037,8 @@ export class CodingExportService {
         const allCodes: number[] = [];
         const allComments: string[] = [];
 
-        for (let i = 0; i < sortedColumns.length; i++) {
-          const columnKey = sortedColumns[i];
+        for (let i = 0; i < sortedVariableCoderColumns.length; i++) {
+          const columnKey = sortedVariableCoderColumns[i];
           const columnLabel = columnLabels[i];
           const coding = personData.get(columnKey);
 
@@ -928,6 +1124,9 @@ export class CodingExportService {
     // Check for cancellation after data fetch
     if (checkCancellation) await checkCancellation();
 
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
     try {
       const jobIds = codingJobs.map(job => job.id);
       const codingJobVariables = await this.codingJobVariableRepository.find({
@@ -978,7 +1177,10 @@ export class CodingExportService {
 
         for (const job of jobs) {
           // Get responses for this job's variables and units
-          const unitIds = job.codingJobUnits.map(ju => ju.response?.unit?.id).filter((id): id is number => id !== undefined);
+          const unitIds = job.codingJobUnits
+            .filter(ju => ju.unit_name && !ignoredSet.has(ju.unit_name.toUpperCase()))
+            .map(ju => ju.response?.unit?.id)
+            .filter((id): id is number => id !== undefined);
           const jobVariables = variablesByJobId.get(job.id) || [];
           const variableIds = jobVariables.map(jv => jv.variable_id);
 
@@ -1195,8 +1397,12 @@ export class CodingExportService {
       .addOrderBy('response.variableid', 'ASC')
       .getRawMany();
 
-    // Filter to only include variables that are in the incomplete set
-    const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+    // Filter to only include variables that are in the incomplete set AND not ignored
+    const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`) &&
+      result.unitName && !ignoredSet.has(result.unitName.toUpperCase())
     );
 
     this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
@@ -1499,7 +1705,7 @@ export class CodingExportService {
       });
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
+    const codingJobUnitsRaw = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
           workspace_id: workspaceId
@@ -1519,7 +1725,14 @@ export class CodingExportService {
       }
     });
 
-    this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+    const codingJobUnits = codingJobUnitsRaw.filter(
+      unit => unit.unit_name && !ignoredSet.has(unit.unit_name.toUpperCase())
+    );
+
+    this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId} after filtering ignored units`);
 
     try {
       let coderNameMapping: Map<string, string> | null = null;
@@ -1677,7 +1890,7 @@ export class CodingExportService {
       });
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
+    const codingJobUnitsRaw = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
           workspace_id: workspaceId
@@ -1719,7 +1932,14 @@ export class CodingExportService {
       }
     });
 
-    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+    const codingJobUnits = codingJobUnitsRaw.filter(
+      unit => unit.response?.unit?.name && !ignoredSet.has(unit.response.unit.name.toUpperCase())
+    );
+
+    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId} after filtering ignored units`);
 
     try {
       let coderNameMapping: Map<string, string> | null = null;

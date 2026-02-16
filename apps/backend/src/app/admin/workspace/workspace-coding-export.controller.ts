@@ -821,7 +821,7 @@ export class WorkspaceCodingExportController {
     res.send(buffer);
   }
 
-  @Post(':workspace_id/coding/export')
+  @Post(':workspace_id/coding/export/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
