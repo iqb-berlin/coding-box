@@ -84,6 +84,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   isCodingMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
+  isReviewMode: boolean = false;
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
   private authToken: string = '';
@@ -188,6 +189,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (deserializedUnits) {
             this.unitsData = deserializedUnits;
+            // Check if this is a review session (contains " - Review: " in name)
+            this.isReviewMode = this.unitsData.name.includes(' - Review: ');
             this.codingService.codingJobId = deserializedUnits.id || null;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
@@ -869,7 +872,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  @HostListener('window:beforeunload', ['$event'])
+  @HostListener('window:beforeunload')
   onBeforeUnload(): void {
     if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
