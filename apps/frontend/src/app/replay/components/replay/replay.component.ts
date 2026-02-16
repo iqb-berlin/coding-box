@@ -84,6 +84,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   unitId: string = '';
   isCodingMode: boolean = false;
   isBookletReplayMode: boolean = false; // for replays without coding features
+  isReviewMode: boolean = false;
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
   private authToken: string = '';
@@ -101,6 +102,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayStartTime: number = 0; // Track when replay viewing starts
   protected reloadKey: number = 0;
   workspaceId: number = 0;
+
+  // Resize handle state
+  codePanelWidth: number = 350;
+  isResizing: boolean = false;
+  private resizeStartX: number = 0;
+  private resizeStartWidth: number = 0;
+  private readonly MIN_PANEL_WIDTH = 250;
+  private readonly MAX_PANEL_WIDTH_RATIO = 0.6;
 
   ngOnInit(): void {
     this.replayStartTime = performance.now();
@@ -180,6 +189,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (deserializedUnits) {
             this.unitsData = deserializedUnits;
+            // Check if this is a review session (contains " - Review: " in name)
+            this.isReviewMode = this.unitsData.name.includes(' - Review: ');
             this.codingService.codingJobId = deserializedUnits.id || null;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
@@ -861,11 +872,32 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  @HostListener('window:beforeunload', ['$event'])
+  @HostListener('window:beforeunload')
   onBeforeUnload(): void {
     if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
+  }
+
+  // --- Resize handle ---
+  onResizeStart(event: MouseEvent): void {
+    event.preventDefault();
+    this.isResizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.codePanelWidth;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onResizeMove(event: MouseEvent): void {
+    if (!this.isResizing) return;
+    const dx = this.resizeStartX - event.clientX; // dragging left = wider panel
+    const maxWidth = window.innerWidth * this.MAX_PANEL_WIDTH_RATIO;
+    this.codePanelWidth = Math.min(maxWidth, Math.max(this.MIN_PANEL_WIDTH, this.resizeStartWidth + dx));
+  }
+
+  @HostListener('document:mouseup')
+  onResizeEnd(): void {
+    this.isResizing = false;
   }
 
   private loadCodingSchemeForCodingJob(): void {

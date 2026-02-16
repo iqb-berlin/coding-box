@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Input, OnChanges, Output, SimpleChanges
+  Component, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -115,18 +115,18 @@ export class CodeSelectorComponent implements OnChanges {
           type: 'codingIssueOption'
         },
         {
-          id: -2,
-          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
-          type: 'codingIssueOption'
-        },
-        {
           id: -3,
-          label: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer'),
+          label: `(mir) ${this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer')}`,
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: this.translateService.instant('code-selector.coding-issue-options.technical-problems'),
+          label: `(mci) ${this.translateService.instant('code-selector.coding-issue-options.technical-problems')} `,
+          type: 'codingIssueOption'
+        },
+        {
+          id: -2,
+          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
           type: 'codingIssueOption'
         }
       ];
@@ -326,6 +326,57 @@ export class CodeSelectorComponent implements OnChanges {
     if (!data) return false;
 
     return data.currentUnitIndex > 0;
+  }
+
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent): void {
+    if (this.isReadOnly || this.selectableItems.length === 0) {
+      return;
+    }
+
+    // Ignore if user is typing in an input/textarea
+    // We check specifically for the tag name to avoid blocking shortcuts when focus is just on the body or a div
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    let targetId: number | null = null;
+
+    switch (event.code) {
+      case 'NumpadDivide':
+      case 'Slash': // Standard key fallback if desired, though user emphasized Numpad
+        targetId = -1; // Code-Vergabe unsicher
+        break;
+      case 'NumpadMultiply':
+        targetId = -3; // Ungültig (Spaßantwort)
+        break;
+      case 'NumpadSubtract':
+      case 'Minus': // Standard key fallback
+        targetId = -4; // Technische Probleme
+        break;
+      case 'NumpadAdd':
+        targetId = -2; // Neuer Code nötig
+        break;
+    }
+
+    if (targetId !== null) {
+      const optionExists = this.selectableItems.some(item => item.id === targetId);
+      if (optionExists) {
+        event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
+        this.onSelect(targetId);
+      }
+    }
+  }
+
+  getShortcutLabel(id: number): string {
+    switch (id) {
+      case -1: return '÷'; // Display for Divide
+      case -3: return '×'; // Display for Multiply
+      case -4: return '-';
+      case -2: return '+';
+      default: return '';
+    }
   }
 
   get totalNavigationUnits(): number {
