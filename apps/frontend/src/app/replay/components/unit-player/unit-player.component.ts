@@ -74,6 +74,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
     if (unitDefChange?.currentValue && unitDefChange.previousValue !== unitDefChange.currentValue) {
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
+    } else if (unitResponsesChange?.currentValue &&
+      unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
+      this.handleResponsesChange(unitResponsesChange.currentValue);
+      this.sendUnitData();
     }
   }
 
@@ -85,6 +89,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       fromEvent(this.iFrameElement, 'load')
         .pipe(takeUntil(this.ngUnsubscribe))
         .subscribe(() => {
+          this.forwardKeyEvents();
           // Wait a bit for the content to render properly
           setTimeout(() => {
             this.calculateIFrameHeight();
@@ -107,18 +112,8 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     try {
       this.unitDef = JSON.parse(newUnitDef);
 
-      if (unitResponsesChange?.currentValue?.responses) {
-        this.dataParts = unitResponsesChange.currentValue.responses.reduce(
-          (acc: { [key: string]: string }, response: { id: string; content: string }) => {
-            try {
-              JSON.parse(response.content);
-              acc[response.id] = response.content;
-            } catch (e) {
-              acc[response.id] = JSON.stringify(response.content);
-            }
-            return acc;
-          }, {}
-        );
+      if (unitResponsesChange?.currentValue) {
+        this.handleResponsesChange(unitResponsesChange.currentValue);
       }
       if (unitPlayerChange && unitPlayerChange.currentValue !== unitPlayerChange.previousValue && this.iFrameElement) {
         const unitPlayerContent = unitPlayerChange.currentValue || this.unitPlayer() || '';
@@ -131,6 +126,22 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     } catch (error) { /* empty */ }
   }
 
+  private handleResponsesChange(unitResponses: ResponseDto): void {
+    if (unitResponses?.responses) {
+      this.dataParts = unitResponses.responses.reduce(
+        (acc: { [key: string]: string }, response: { id: string; content: string }) => {
+          try {
+            JSON.parse(response.content);
+            acc[response.id] = response.content;
+          } catch (e) {
+            acc[response.id] = JSON.stringify(response.content);
+          }
+          return acc;
+        }, {}
+      );
+    }
+  }
+
   constructor() {
     this.subscribeForMessages();
     this.subscribeForValidPages();
@@ -141,6 +152,28 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
       this.updateIframeContent(unitPlayer.replace('&quot;', ''));
+    }
+  }
+
+  private forwardKeyEvents(): void {
+    if (this.iFrameElement?.contentWindow) {
+      fromEvent(this.iFrameElement.contentWindow, 'keydown')
+        .pipe(takeUntil(this.ngUnsubscribe))
+        .subscribe((event: Event) => {
+          const keyboardEvent = event as KeyboardEvent;
+          const newEvent = new KeyboardEvent('keydown', {
+            key: keyboardEvent.key,
+            code: keyboardEvent.code,
+            ctrlKey: keyboardEvent.ctrlKey,
+            shiftKey: keyboardEvent.shiftKey,
+            altKey: keyboardEvent.altKey,
+            metaKey: keyboardEvent.metaKey,
+            bubbles: true,
+            cancelable: true,
+            view: window
+          });
+          window.dispatchEvent(newEvent);
+        });
     }
   }
 
