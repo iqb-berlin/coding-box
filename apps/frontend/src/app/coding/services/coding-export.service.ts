@@ -197,7 +197,7 @@ export class CodingExportService {
     };
 
     return this.http.post<{ jobId: string; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`,
       payload
     );
   }
