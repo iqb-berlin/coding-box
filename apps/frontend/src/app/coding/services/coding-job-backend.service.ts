@@ -258,6 +258,14 @@ export class CodingJobBackendService {
     return this.http.post<number>(url, { incompleteVariables }, { headers: this.authHeader });
   }
 
+  triggerResponseAnalysis(workspaceId: number): Observable<void> {
+    return this.http.post<void>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
+      {},
+      { headers: this.authHeader }
+    );
+  }
+
   saveCodingProgress(
     workspaceId: number,
     codingJobId: number,

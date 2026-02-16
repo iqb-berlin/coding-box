@@ -1291,7 +1291,9 @@
         "unit": "Aufgabe",
         "variable": "Variable",
         "person": "Person",
-        "booklet": "Booklet"
+        "group": "Gruppe",
+        "booklet": "Booklet",
+        "value": "Wert"
       },
       "apply-empty-coding-button": "Kodierung automatisch anwenden",
       "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",

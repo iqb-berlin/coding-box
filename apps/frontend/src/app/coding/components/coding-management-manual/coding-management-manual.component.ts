@@ -127,8 +127,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         variableId: string;
         personLogin: string;
         personCode: string;
+        personGroup: string;
         bookletName: string;
         responseId: number;
+        value: string | null;
       }[];
     };
     duplicateValues: {
@@ -152,6 +154,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     };
     matchingFlags: string[];
     analysisTimestamp: string;
+    isCalculating?: boolean;
+    progress?: number;
   } | null = null;
 
   isLoadingResponseAnalysis = false;
@@ -1051,7 +1055,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private onResponseMatchingModeChanged(): void {
-    this.loadResponseAnalysis();
+    this.restartAnalysis();
 
     this.loadCodingProgressOverview();
     this.loadCaseCoverageOverview();
@@ -1070,7 +1074,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION);
   }
 
-  private loadResponseAnalysis(): void {
+  loadResponseAnalysis(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
@@ -1086,20 +1090,52 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.duplicatePageIndex + 1,
         this.duplicatePageSize
       )
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isLoadingResponseAnalysis = false;
-        })
-      )
+      .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (analysis: ResponseAnalysisDto) => {
+        next: (analysis: ResponseAnalysisDto & { isCalculating?: boolean }) => {
           this.responseAnalysis = analysis;
+          this.isLoadingResponseAnalysis = false;
+
+          if (analysis.isCalculating) {
+            // Poll every 5 seconds if calculating
+            setTimeout(() => {
+              if (this.responseAnalysis?.isCalculating) {
+                this.loadResponseAnalysis();
+              }
+            }, 5000);
+          }
         },
-        error: () => {
+        error: error => {
+          this.isLoadingResponseAnalysis = false;
           this.responseAnalysis = null;
+          this.snackBar.open(
+            `Fehler beim Laden der Antwortanalyse: ${error.message || error}`,
+            'OK',
+            { duration: 3000 }
+          );
         }
       });
+  }
+
+  restartAnalysis(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.isLoadingResponseAnalysis = true;
+    this.codingJobBackendService.triggerResponseAnalysis(workspaceId).subscribe({
+      next: () => {
+        this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
+        this.loadResponseAnalysis(); // Start polling
+      },
+      error: error => {
+        this.isLoadingResponseAnalysis = false;
+        this.snackBar.open(
+          `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
+          'OK',
+          { duration: 3000 }
+        );
+      }
+    });
   }
 
   refreshResponseAnalysis(): void {
@@ -1151,7 +1187,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               );
 
               // Refresh analysis and statistics
-              this.loadResponseAnalysis();
+              this.restartAnalysis();
               this.refreshAllStatistics();
             } else {
               this.showError(
@@ -1392,7 +1428,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             this.showSuccess(
               this.translateService.instant('coding-management-manual.duplicate-aggregation.auto-updated') || 'Aggregation aktualisiert'
             );
-            this.loadResponseAnalysis();
+            this.restartAnalysis();
             this.refreshAllStatistics();
           }
         }

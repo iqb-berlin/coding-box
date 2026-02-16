@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+// Rebuild trigger
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, Brackets } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -20,6 +21,7 @@ import {
 import { CodingValidationService } from './coding-validation.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CacheService } from '../../../cache/cache.service';
+import { JobQueueService } from '../../../job-queue/job-queue.service';
 
 @Injectable()
 export class CodingAnalysisService {
@@ -38,9 +40,17 @@ export class CodingAnalysisService {
     private codingJobService: CodingJobService,
     private codingValidationService: CodingValidationService,
     private codingStatisticsService: CodingStatisticsService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private jobQueueService: JobQueueService
   ) { }
 
+  /**
+     * Analyzes responses for a workspace to identify:
+     * 1. Empty responses (null or empty string values)
+     * 2. Duplicate values (same normalized value across different testperson/variable combinations)
+     *
+     * Uses the response matching settings (ignore case, ignore whitespace) for normalization.
+     */
   /**
      * Analyzes responses for a workspace to identify:
      * 1. Empty responses (null or empty string values)
@@ -55,10 +65,10 @@ export class CodingAnalysisService {
     emptyLimit = 50,
     duplicatePage = 1,
     duplicateLimit = 50
-  ): Promise<ResponseAnalysisDto> {
+  ): Promise<ResponseAnalysisDto & { isCalculating?: boolean; progress?: number }> {
     try {
       this.logger.log(
-        `Starting response analysis for workspace ${workspaceId} with threshold ${threshold} (Empty P${emptyPage} L${emptyLimit}, Duplicates P${duplicatePage} L${duplicateLimit})`
+        `Getting response analysis for workspace ${workspaceId} with threshold ${threshold}`
       );
 
       const matchingFlags = await this.codingJobService.getResponseMatchingMode(
@@ -70,14 +80,32 @@ export class CodingAnalysisService {
 
       // Check cache for the FULL analysis for this threshold
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
-      let fullAnalysis = await this.cacheService.get<ResponseAnalysisDto>(cacheKey);
+      const fullAnalysis = await this.cacheService.get<ResponseAnalysisDto>(cacheKey);
 
-      if (fullAnalysis) {
-        this.logger.log(`Using cached full response analysis for workspace ${workspaceId} (threshold: ${effectiveThreshold})`);
-      } else {
-        fullAnalysis = await this.computeResponseAnalysis(workspaceId, matchingFlags, effectiveThreshold);
-        // Cache the full result for 1 hour (default TTL)
-        await this.cacheService.set(cacheKey, fullAnalysis);
+      // Check if a job is currently running
+      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
+      const isCalculating = !!activeJob;
+      let progress = 0;
+      if (activeJob) {
+        progress = await activeJob.progress();
+      }
+
+      if (!fullAnalysis) {
+        if (!isCalculating) {
+          // If no analysis and no job running, trigger one (or return empty with isCalculating=false and let frontend trigger)
+          // For better UX, let's trigger it automatically if missing
+          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
+          return {
+            ...this.createEmptyAnalysisResult(matchingFlags),
+            isCalculating: true,
+            progress
+          };
+        }
+        return {
+          ...this.createEmptyAnalysisResult(matchingFlags),
+          isCalculating: true,
+          progress
+        };
       }
 
       // Slice the results for pagination
@@ -100,7 +128,9 @@ export class CodingAnalysisService {
           groups: duplicateGroups,
           page: duplicatePage,
           pageSize: duplicateLimit
-        } as DuplicateValueAnalysisDto
+        } as DuplicateValueAnalysisDto,
+        isCalculating,
+        progress
       };
     } catch (error) {
       this.logger.error(
@@ -111,126 +141,37 @@ export class CodingAnalysisService {
     }
   }
 
-  private async computeResponseAnalysis(
+  async startAnalysis(
     workspaceId: number,
-    matchingFlags: ResponseMatchingFlag[],
-    threshold: number
-  ): Promise<ResponseAnalysisDto> {
-    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
-    const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    matchingFlags?: ResponseMatchingFlag[],
+    threshold?: number
+  ): Promise<void> {
+    if (!matchingFlags) {
+      matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+    }
+    if (!threshold) {
+      // Default or fetch
+      threshold = 2; // Simplification, ideally fetch from settings if needed or use default
+    }
+    // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
+    const effectiveThreshold = matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ? 2 : threshold;
 
-    // 1. Identify relevant Unit+Variable combinations
-    this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
-    const relevantVariables = await this.responseRepository
-      .createQueryBuilder('response')
-      .select('response.unitid', 'unitId')
-      .addSelect('response.variableid', 'variableId')
-      .distinct(true)
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
-      .getRawMany();
+    const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
 
-    if (relevantVariables.length === 0) {
-      this.logger.warn(`No relevant variables found for analysis in workspace ${workspaceId}`);
-      return this.createEmptyAnalysisResult(matchingFlags);
+    // Check if job already running
+    const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
+    if (activeJob) {
+      this.logger.log(`Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`);
+      return;
     }
 
-    this.logger.log(`Found ${relevantVariables.length} variable groups to analyze. Processing in chunks...`);
-
-    const emptyResponses: EmptyResponseDto[] = [];
-    const duplicateValueGroups: DuplicateValueGroupDto[] = [];
-    let totalProcessed = 0;
-
-    // Check if aggregation is already applied (marked by code_v2 = -111)
-    const isAggregationApplied = await this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
-      .getCount() > 0;
-
-    // 2. Process in chunks
-    const chunkSize = 50; // Number of variable groups per query
-    for (let i = 0; i < relevantVariables.length; i += chunkSize) {
-      const chunk = relevantVariables.slice(i, i + chunkSize);
-
-      const qb = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
-
-      qb.andWhere(new Brackets(qbInside => {
-        chunk.forEach((item, index) => {
-          const params = { [`uid${index}`]: item.unitId, [`vid${index}`]: item.variableId };
-          if (index === 0) {
-            qbInside.where(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
-          } else {
-            qbInside.orWhere(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
-          }
-        });
-      }));
-
-      const responsesBatch = await qb.getMany();
-      totalProcessed += responsesBatch.length;
-
-      this.analyzeBatch(
-        responsesBatch,
-        matchingFlags,
-        threshold,
-        emptyResponses,
-        duplicateValueGroups
-      );
-
-      // Explicitly free memory if possible (though GC handles function scope)
-      if ((i + chunkSize) % 500 === 0 || (i + chunkSize) >= relevantVariables.length) {
-        this.logger.log(`Processed ${Math.min(i + chunkSize, relevantVariables.length)}/${relevantVariables.length} variable groups...`);
-        if (global.gc) { global.gc(); }
-      }
-    }
-
-    // Sort results
-    emptyResponses.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
-      return a.personLogin.localeCompare(b.personLogin);
-    });
-
-    duplicateValueGroups.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      return a.variableId.localeCompare(b.variableId);
-    });
-
-    const totalDuplicateResponses = duplicateValueGroups.reduce(
-      (sum, group) => sum + group.occurrences.length,
-      0
-    );
-
-    this.logger.log(`Analysis complete. Processed ${totalProcessed} responses.`);
-
-    return {
-      emptyResponses: {
-        total: emptyResponses.length,
-        items: emptyResponses
-      },
-      duplicateValues: {
-        total: duplicateValueGroups.length,
-        totalResponses: totalDuplicateResponses,
-        groups: duplicateValueGroups,
-        isAggregationApplied
-      },
+    await this.jobQueueService.addCodingAnalysisJob({
+      workspaceId,
       matchingFlags: matchingFlags as unknown as string[],
-      analysisTimestamp: new Date().toISOString()
-    };
+      threshold: effectiveThreshold,
+      cacheKey
+    });
+    this.logger.log(`Triggered background response analysis for workspace ${workspaceId}`);
   }
 
   private analyzeBatch(
@@ -247,12 +188,12 @@ export class CodingAnalysisService {
     const responsesByUnitVariable = new Map<string, ResponseEntity[]>();
 
     for (const response of responses) {
-      // Empty Check
+      const value = response.value;
       const isEmptyValue =
-        response.value === null ||
-        response.value === '' ||
-        response.value === '[]' ||
-        response.value === undefined;
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim() === '') ||
+        value === '[]';
 
       if (isEmptyValue) {
         if (response.status_v2 === null) {
@@ -262,8 +203,10 @@ export class CodingAnalysisService {
             variableId: response.variableid,
             personLogin: response.unit?.booklet?.person?.login || '',
             personCode: response.unit?.booklet?.person?.code || '',
+            personGroup: response.unit?.booklet?.person?.group || '',
             bookletName: response.unit?.booklet?.bookletinfo?.name || 'Unknown',
-            responseId: response.id
+            responseId: response.id,
+            value: response.value
           });
         }
         continue; // Skip empty for duplicates

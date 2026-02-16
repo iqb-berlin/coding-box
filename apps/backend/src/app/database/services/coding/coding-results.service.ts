@@ -6,6 +6,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingAnalysisService } from './coding-analysis.service';
 
 @Injectable()
 export class CodingResultsService {
@@ -16,7 +17,8 @@ export class CodingResultsService {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingAnalysisService: CodingAnalysisService
   ) { }
 
   async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
@@ -211,13 +213,18 @@ export class CodingResultsService {
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', {
           statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE')
           ]
         })
-        .andWhere('(response.value IS NULL OR response.value = :emptyString OR response.value = :emptyArrayString)', { emptyString: '', emptyArrayString: '[]' })
+        .andWhere('(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)', {
+          whitespaces: ' \r\n\t',
+          emptyString: '',
+          emptyArrayString: '[]'
+        })
         .andWhere('response.status_v2 IS NULL')
         .getMany();
 
@@ -268,6 +275,7 @@ export class CodingResultsService {
         // Invalidate caches and refresh statistics
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
 
         this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
 
