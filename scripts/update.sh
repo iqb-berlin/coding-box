@@ -432,6 +432,7 @@ prepare_installation_dir() {
   mkdir -p "${APP_DIR}/backup/release"
   mkdir -p "${APP_DIR}/backup/temp"
   mkdir -p "${APP_DIR}/config/frontend"
+  mkdir -p "${APP_DIR}/config/keycloak"
   mkdir -p "${APP_DIR}/scripts/make"
   mkdir -p "${APP_DIR}/scripts/migration"
 }
@@ -549,7 +550,9 @@ check_environment_file_modifications() {
 check_config_files_modifications() {
   printf "8. Configuration template files modification check\n"
 
-  get_modified_file config/frontend/default.conf.http-template config/frontend/default.conf.http-template "conf-file"
+  get_modified_file "config/frontend/default.conf.http-template" "config/frontend/default.conf.http-template" "conf-file"
+  get_modified_file "config/keycloak/${APP_NAME}-realm.json" "config/keycloak/realm/${APP_NAME}-realm.json" "conf-file"
+  get_modified_file "config/keycloak/${APP_NAME}-realm.config.template" "config/keycloak/realm/${APP_NAME}-realm.config.template" "conf-file"
 
   printf "Configuration template files modification check done.\n\n"
 }
