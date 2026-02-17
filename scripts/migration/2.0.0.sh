@@ -80,6 +80,14 @@ update_environment_file() {
   oidc_configuration+="OAUTH2_CLIENT_SECRET=change_me\n"
   printf "%b" "${oidc_configuration}" >>.env.${APP_NAME}
 
+  # Add Keycloak Realm configuration
+  keycloak_configuration="\n# Keycloak Coding Box Realm Admin\n"
+  keycloak_configuration+="REALM_ADMIN_NAME=coding-box-admin\n"
+  keycloak_configuration+="REALM_ADMIN_EMAIL=coding-box-admin@${SERVER_NAME}\n"
+  keycloak_configuration+="REALM_ADMIN_PASSWORD=change_me\n"
+  keycloak_configuration+="REALM_ADMIN_CREATED_TIMESTAMP=\n"
+  printf "%b" "${keycloak_configuration}" >>.env.${APP_NAME}
+
   printf "    Docker environment file '%s' successfully upgraded.\n" .env.${APP_NAME}
 }
 

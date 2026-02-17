@@ -12,25 +12,6 @@ declare MAKE_BASE_DIR_NAME='CODING_BOX_BASE_DIR'
 declare REQUIRED_PACKAGES=("docker -v" "docker compose version")
 declare OPTIONAL_PACKAGES=("make -v")
 
-declare -A ENV_VARS
-ENV_VARS[POSTGRES_USER]=root
-ENV_VARS[POSTGRES_PASSWORD]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
-ENV_VARS[POSTGRES_DB]="${APP_NAME}"
-ENV_VARS[OIDC_PROVIDER_URL]=https://keycloak.${server_name}
-ENV_VARS[OIDC_ISSUER]=https://keycloak.${server_name}/auth/realms/coding-box
-ENV_VARS[OIDC_ACCOUNT_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/account
-ENV_VARS[OIDC_AUTHORIZATION_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/auth
-ENV_VARS[OIDC_TOKEN_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/token
-ENV_VARS[OIDC_USERINFO_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/userinfo
-ENV_VARS[OIDC_END_SESSION_ENDPOINT]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/logout
-ENV_VARS[OIDC_JWKS_URI]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/certs
-ENV_VARS[OAUTH2_CLIENT_ID]=coding-box
-ENV_VARS[OAUTH2_CLIENT_SECRET]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
-ENV_VARS[OAUTH2_REDIRECT_URL]="//${server_name}/api/auth/callback"
-declare ENV_VAR_ORDER=(POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB OIDC_PROVIDER_URL OIDC_ISSUER OIDC_ACCOUNT_ENDPOINT
-  OIDC_AUTHORIZATION_ENDPOINT OIDC_TOKEN_ENDPOINT OIDC_USERINFO_ENDPOINT OIDC_END_SESSION_ENDPOINT OIDC_JWKS_URI
-  OAUTH2_CLIENT_ID OAUTH2_CLIENT_SECRET OAUTH2_REDIRECT_URL)
-
 declare TRAEFIK_DIR
 declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
 declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
@@ -302,6 +283,15 @@ download_files() {
   printf "Downloads done!\n\n"
 }
 
+import_keycloak_realm() {
+  # Download Coding Box Realm
+  # Check Keycloak status
+  # Start/Stop Keycloak
+  # Import Coding Box Realm
+  # Start/Stop Keycloak
+  echo import_keycloak_realm
+}
+
 customize_settings() {
   # Activate environment file
   cp ".env.${APP_NAME}.template" ".env.${APP_NAME}"
@@ -314,10 +304,13 @@ customize_settings() {
   source ".env.${APP_NAME}"
 
   # Setup environment variables
-  printf "5. Set Environment variables (default postgres password is generated randomly):\n\n"
+  printf "5. Docker environment setup\n"
+  printf "Default passwords are generated randomly.\n\n"
 
+  ## Version
   sed -i.bak "s|^TAG=.*|TAG=${TARGET_VERSION}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
 
+  ## Server & TLS Certificate Resolver
   declare server_name
   declare resolver
   if [ -n "${TRAEFIK_DIR}" ]; then
@@ -330,12 +323,122 @@ customize_settings() {
   sed -i.bak "s|TLS_CERTIFICATE_RESOLVER.*|TLS_CERTIFICATE_RESOLVER=${resolver}|" ".env.${APP_NAME}" &&
     rm ".env.${APP_NAME}.bak"
 
-  declare env_var_name
-  for env_var_name in "${ENV_VAR_ORDER[@]}"; do
-    declare env_var_value
-    read -p "${env_var_name}: " -er -i "${ENV_VARS[${env_var_name}]}" env_var_value
-    sed -i.bak "s|^${env_var_name}.*|${env_var_name}=${env_var_value}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+  ## Database
+  printf "5.1 Coding Box DB\n"
+  declare -A env_vars_postgres
+  declare env_vars_order_postgres=(postgres_user postgres_password postgres_db)
+
+  env_vars_postgres[postgres_user]=root
+  env_vars_postgres[postgres_password]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
+  env_vars_postgres[postgres_db]="${APP_NAME}"
+
+  declare env_var_postgres
+  for env_var_postgres in "${env_vars_order_postgres[@]}"; do
+    declare postgres_env_var_name postgres_env_var_value
+    postgres_env_var_name=$(printf %s "${env_var_postgres}" | tr '[:upper:]' '[:lower:]')
+    postgres_env_var_value="${env_vars_postgres[${env_var_postgres}]}"
+
+    read -p "${postgres_env_var_name}: " -er -i "${postgres_env_var_value}" postgres_env_var_value
+    sed -i.bak "s|^${postgres_env_var_name}=.*|${postgres_env_var_name}=${postgres_env_var_value}|" \
+      ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
   done
+
+  ## OpenID Connect
+  printf "\n5.2 OpenID Connect with OAuth2 Authentication\n"
+  declare -A env_vars_oidc
+  declare env_vars_order_oidc=(oidc_provider_url oidc_issuer oidc_account_endpoint oidc_authorization_endpoint
+    oidc_token_endpoint oidc_userinfo_endpoint oidc_end_session_endpoint oidc_jwks_uri oauth2_client_id
+    oauth2_client_secret oauth2_redirect_url)
+
+  env_vars_oidc[oauth2_client_id]=coding-box
+  env_vars_oidc[oauth2_client_secret]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
+  env_vars_oidc[oauth2_redirect_url]="//${server_name}/api/auth/callback"
+
+  declare is_keycloak
+  read -p "Do you want to use the Keycloak identity provider included in the infrastructure? [Y/n] " -er -n 1 is_keycloak
+
+  if [[ ! ${is_keycloak} =~ [nN] ]]; then
+    ### Realm Admin
+    printf "\nKeycloak Realm Admin\n"
+
+    declare -A env_vars_realm_admin
+    declare realm_admin_created_timestamp
+    declare env_vars_order_realm_admin=(realm_admin_name realm_admin_email realm_admin_password)
+
+    env_vars_realm_admin[realm_admin_name]=coding-box-admin
+    env_vars_realm_admin[realm_admin_email]=coding-box-admin@iqb.hu-berlin.de
+    env_vars_realm_admin[realm_admin_password]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
+
+    #    read -p "ADMIN_NAME: " -er -i "${admin_name}" admin_name
+    #    sed -i.bak "s|^ADMIN_NAME=.*|ADMIN_NAME=${admin_name}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    #
+    #    read -p "ADMIN_EMAIL: " -er -i "${admin_email}" admin_email
+    #    sed -i.bak "s|^ADMIN_EMAIL=.*|ADMIN_EMAIL=${admin_email}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    #
+    #    read -p "ADMIN_PASSWORD: " -er -i "${admin_password}" admin_password
+    #    sed -i.bak "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${admin_password}|" ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+
+    declare env_var_realm_admin
+    for env_var_realm_admin in "${env_vars_order_realm_admin[@]}"; do
+      declare admin_env_var_name admin_env_var_value
+      admin_env_var_name=$(printf %s "${env_var_realm_admin}" | tr '[:lower:]' '[:upper:]')
+      admin_env_var_value="${env_vars_realm_admin[${env_var_realm_admin}]}"
+
+      read -p "${admin_env_var_name}: " -er -i "${admin_env_var_value}" admin_env_var_value
+      sed -i.bak "s|^${admin_env_var_name}=.*|${admin_env_var_name}=${admin_env_var_value}|" \
+        ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    done
+
+    realm_admin_created_timestamp=$(date -u +"%s")000
+    sed -i.bak "s|REALM_ADMIN_CREATED_TIMESTAMP=.*|REALM_ADMIN_CREATED_TIMESTAMP=${realm_admin_created_timestamp}|" \
+      ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+
+    ### OpenID Connect
+    printf "\nOpenID Connect Configuration\n"
+
+    env_vars_oidc[oidc_provider_url]=https://keycloak.${server_name}
+    env_vars_oidc[oidc_issuer]=https://keycloak.${server_name}/auth/realms/coding-box
+    env_vars_oidc[oidc_account_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/account
+    env_vars_oidc[oidc_authorization_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/auth
+    env_vars_oidc[oidc_token_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/token
+    env_vars_oidc[oidc_userinfo_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/userinfo
+    env_vars_oidc[oidc_end_session_endpoint]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/logout
+    env_vars_oidc[oidc_jwks_uri]=https://keycloak.${server_name}/auth/realms/iqb/protocol/openid-connect/certs
+
+    declare env_var_oidc
+    for env_var_oidc in "${env_vars_order_oidc[@]}"; do
+      declare oidc_env_var_name oidc_env_var_value
+      oidc_env_var_name=$(printf %s "${env_var_oidc}" | tr '[:lower:]' '[:upper:]')
+      oidc_env_var_value="${env_vars_oidc[${env_var_oidc}]}"
+
+      read -p "${oidc_env_var_name}: " -er -i "${oidc_env_var_value}" oidc_env_var_value
+      sed -i.bak "s|^${oidc_env_var_name}=.*|${oidc_env_var_name}=${oidc_env_var_value}|" \
+        ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    done
+
+    import_keycloak_realm
+
+  else
+    env_vars_oidc[oidc_provider_url]=https://oidc_provider_url
+    env_vars_oidc[oidc_issuer]=https://oidc_provider_url/oidc_issuer_path
+    env_vars_oidc[oidc_account_endpoint]=https://oidc_provider_url/oidc_account_path
+    env_vars_oidc[oidc_authorization_endpoint]=https://oidc_provider_url/oidc_authorization_path
+    env_vars_oidc[oidc_token_endpoint]=https://oidc_provider_url/oidc_token_path
+    env_vars_oidc[oidc_userinfo_endpoint]=https://oidc_provider_url/oidc_userinfo_path
+    env_vars_oidc[oidc_end_session_endpoint]=https://oidc_provider_url/oidc_end_session_path
+    env_vars_oidc[oidc_jwks_uri]=https://oidc_provider_url/oidc_jwks_path
+
+    declare env_var_oidc
+    for env_var_oidc in "${env_vars_order_oidc[@]}"; do
+      declare oidc_env_var_name oidc_env_var_value
+      oidc_env_var_value="${env_vars_oidc[${env_var_oidc}]}"
+      oidc_env_var_name=$(printf %s "${env_var_oidc}" | tr '[:lower:]' '[:upper:]')
+
+      read -p "${oidc_env_var_name}: " -er -i "${oidc_env_var_value}" oidc_env_var_value
+      sed -i.bak "s|^${oidc_env_var_name}=.*|${oidc_env_var_name}=${oidc_env_var_value}|" \
+        ".env.${APP_NAME}" && rm ".env.${APP_NAME}.bak"
+    done
+  fi
 
   # Setup makefiles
   sed -i.bak "s|^${MAKE_BASE_DIR_NAME} :=.*|${MAKE_BASE_DIR_NAME} := \\${APP_DIR}|" \
