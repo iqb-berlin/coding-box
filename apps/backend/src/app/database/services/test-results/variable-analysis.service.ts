@@ -1,219 +1,137 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ResponseEntity } from '../../entities/response.entity';
-import { Unit } from '../../entities/unit.entity';
-import { VariableFrequencyDto } from '../../../admin/variable-analysis/dto/variable-frequency.dto';
+import {
+  ConflictException, Injectable, Logger, NotFoundException
+} from '@nestjs/common';
 import { VariableAnalysisResultDto } from '../../../admin/variable-analysis/dto/variable-analysis-result.dto';
-import { VariableAnalysisJob } from '../../entities/variable-analysis-job.entity';
+import { JobQueueService, VariableAnalysisJobData } from '../../../job-queue/job-queue.service';
+import { VariableAnalysisJobDto } from '../../../admin/variable-analysis/dto/variable-analysis-job.dto';
 
 @Injectable()
 export class VariableAnalysisService {
   private readonly logger = new Logger(VariableAnalysisService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(Unit)
-    private unitRepository: Repository<Unit>,
-    @InjectRepository(VariableAnalysisJob)
-    private jobRepository: Repository<VariableAnalysisJob>
-  ) {}
+    private jobQueueService: JobQueueService
+  ) { }
 
   async createAnalysisJob(
     workspaceId: number,
     unitId?: number,
     variableId?: string
-  ): Promise<VariableAnalysisJob> {
-    const job = this.jobRepository.create({
-      workspace_id: workspaceId,
-      unit_id: unitId,
-      variable_id: variableId,
-      status: 'pending'
-    });
+  ): Promise<VariableAnalysisJobDto> {
+    const existingJobs = await this.getAnalysisJobs(workspaceId);
+    const hasActiveJob = existingJobs.some(j => j.status === 'pending' || j.status === 'processing');
 
-    const savedJob = await this.jobRepository.save(job);
-    this.logger.log(`Created variable analysis job with ID ${savedJob.id}`);
-
-    this.processAnalysisJob(savedJob.id).catch(error => {
-      this.logger.error(`Error processing job ${savedJob.id}: ${error.message}`, error.stack);
-    });
-
-    return savedJob;
-  }
-
-  async getAnalysisJob(jobId: number, workspaceId?: number): Promise<VariableAnalysisJob> {
-    const whereClause: { id: number; workspace_id?: number } = { id: jobId };
-
-    if (workspaceId !== undefined) {
-      whereClause.workspace_id = workspaceId;
+    if (hasActiveJob) {
+      throw new ConflictException(`A variable analysis job is already in progress for workspace ${workspaceId}`);
     }
 
-    const job = await this.jobRepository.findOne({ where: whereClause });
+    const jobData: VariableAnalysisJobData = {
+      workspaceId,
+      unitId,
+      variableId
+    };
+
+    const job = await this.jobQueueService.addVariableAnalysisJob(jobData);
+    this.logger.log(`Created variable analysis job with ID ${job.id}`);
+
+    // Map Bull job to DTO
+    return VariableAnalysisJobDto.fromJob({
+      id: job.id,
+      workspaceId,
+      unitId,
+      variableId,
+      status: 'pending', // Initial status
+      progress: 0,
+      timestamp: Date.now()
+    });
+  }
+
+  async getAnalysisJob(jobId: number | string, workspaceId?: number): Promise<VariableAnalysisJobDto> {
+    const job = await this.jobQueueService.getVariableAnalysisJob(jobId.toString());
+
     if (!job) {
       if (workspaceId !== undefined) {
-        throw new Error(`Job with ID ${jobId} not found in workspace ${workspaceId}`);
+        throw new NotFoundException(`Job with ID ${jobId} not found in workspace ${workspaceId}`);
       } else {
-        throw new Error(`Job with ID ${jobId} not found`);
+        throw new NotFoundException(`Job with ID ${jobId} not found`);
       }
     }
-    return job;
-  }
 
-  async getAnalysisResults(jobId: number, workspaceId?: number): Promise<VariableAnalysisResultDto> {
-    const job = await this.getAnalysisJob(jobId, workspaceId);
-
-    if (job.status !== 'completed') {
-      throw new Error(`Job with ID ${jobId} is not completed (status: ${job.status})`);
+    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+      throw new NotFoundException(`Job with ID ${jobId} not found in workspace ${workspaceId}`);
     }
 
-    if (!job.result) {
+    const state = await job.getState();
+    const progress = await job.progress();
+
+    return VariableAnalysisJobDto.fromJob({
+      id: job.id,
+      workspaceId: job.data.workspaceId,
+      unitId: job.data.unitId,
+      variableId: job.data.variableId,
+      status: state === 'active' ? 'processing' : state, // Map 'active' to 'processing' to match previous enum if needed
+      progress,
+      error: job.failedReason,
+      timestamp: job.timestamp,
+      finishedOn: job.finishedOn
+    });
+  }
+
+  async getAnalysisResults(jobId: number | string, workspaceId?: number): Promise<VariableAnalysisResultDto> {
+    const job = await this.jobQueueService.getVariableAnalysisJob(jobId.toString());
+
+    if (!job) {
+      throw new NotFoundException(`Job with ID ${jobId} not found`);
+    }
+
+    if (workspaceId !== undefined && job.data.workspaceId !== workspaceId) {
+      throw new NotFoundException(`Job with ID ${jobId} not found in workspace ${workspaceId}`);
+    }
+
+    const state = await job.getState();
+    if (state !== 'completed') {
+      throw new Error(`Job with ID ${jobId} is not completed (status: ${state})`);
+    }
+
+    if (!job.returnvalue) {
       throw new Error(`Job with ID ${jobId} has no results`);
     }
 
-    try {
-      return JSON.parse(job.result) as VariableAnalysisResultDto;
-    } catch (error) {
-      this.logger.error(`Error parsing results for job ${jobId}: ${error.message}`, error.stack);
-      throw new Error(`Error parsing results for job ${jobId}`);
-    }
+    return job.returnvalue as VariableAnalysisResultDto;
   }
 
-  async getAnalysisJobs(workspaceId: number): Promise<VariableAnalysisJob[]> {
-    return this.jobRepository.find({
-      where: { workspace_id: workspaceId },
-      order: { created_at: 'DESC' }
-    });
-  }
+  async getAnalysisJobs(workspaceId: number): Promise<VariableAnalysisJobDto[]> {
+    const jobs = await this.jobQueueService.getVariableAnalysisJobs(workspaceId);
 
-  private async processAnalysisJob(jobId: number): Promise<void> {
-    try {
-      // Get the job without workspace filtering since this is an internal method
-      const job = await this.getAnalysisJob(jobId);
-
-      job.status = 'processing';
-      await this.jobRepository.save(job);
-
-      const result = await this.getVariableFrequencies(
-        job.workspace_id,
-        job.unit_id,
-        job.variable_id
-      );
-
-      // Update job with result
-      job.result = JSON.stringify(result);
-      job.status = 'completed';
-      await this.jobRepository.save(job);
-
-      this.logger.log(`Completed variable analysis job with ID ${jobId}`);
-    } catch (error) {
-      try {
-        // Try to get the job again in case it was deleted
-        const job = await this.getAnalysisJob(jobId);
-        job.error = error.message;
-        job.status = 'failed';
-        await this.jobRepository.save(job);
-      } catch (innerError) {
-        // If we can't get the job, just log the error
-        this.logger.error(`Failed to update job ${jobId} with error: ${innerError.message}`, innerError.stack);
-      }
-
-      this.logger.error(`Failed to process job ${jobId}: ${error.message}`, error.stack);
-    }
-  }
-
-  async getVariableFrequencies(
-    workspaceId: number,
-    unitId?: number,
-    variableId?: string
-  ): Promise<VariableAnalysisResultDto> {
-    // Build the query
-    const query = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
-
-    // Add filters
-    if (unitId) {
-      query.andWhere('unit.id = :unitId', { unitId });
-    }
-
-    if (variableId) {
-      query.andWhere('response.variableid LIKE :variableId', { variableId: `%${variableId}%` });
-    }
-
-    // Get distinct combinations of unit name and variable ID
-    const variableCombosQuery = query.clone()
-      .select('unit.id', 'unitId')
-      .addSelect('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .distinct(true)
-      .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableid', 'ASC');
-
-    // Execute the query to get variable combinations
-    const variableCombosResult = await variableCombosQuery.getRawMany();
-    const variableCombos = variableCombosResult.map(result => ({
-      unitId: Number(result.unitId),
-      unitName: result.unitName,
-      variableId: result.variableId
+    // Map to DTOs and sort by creation date
+    const dtos = await Promise.all(jobs.map(async job => {
+      const state = await job.getState();
+      const progress = await job.progress();
+      return VariableAnalysisJobDto.fromJob({
+        id: job.id,
+        workspaceId: job.data.workspaceId,
+        unitId: job.data.unitId,
+        variableId: job.data.variableId,
+        status: state === 'active' ? 'processing' : state,
+        progress,
+        error: job.failedReason,
+        timestamp: job.timestamp,
+        finishedOn: job.finishedOn
+      });
     }));
 
-    // If no variable combinations found, return empty result
-    if (variableCombos.length === 0) {
-      return {
-        variableCombos: [],
-        frequencies: {},
-        total: 0
-      };
-    }
+    return dtos.sort((a, b) => b.created_at.getTime() - a.created_at.getTime());
+  }
 
-    // Get total count of distinct variable combinations
-    const totalQuery = query.clone()
-      .select("COUNT(DISTINCT CONCAT(unit.id, ':', response.variableid))", 'count');
-    const totalResult = await totalQuery.getRawOne();
-    const total = parseInt(totalResult.count, 10);
+  async deleteJob(workspaceId: number, jobId: string | number): Promise<boolean> {
+    return this.jobQueueService.deleteVariableAnalysisJob(jobId.toString());
+  }
 
-    // Get frequencies for each variable combination
-    const frequencies: { [key: string]: VariableFrequencyDto[] } = {};
+  async cancelJob(workspaceId: number, jobId: string | number): Promise<boolean> {
+    return this.jobQueueService.cancelVariableAnalysisJob(jobId.toString());
+  }
 
-    // Process each variable combination
-    for (const combo of variableCombos) {
-      // Create a unique key for this combination
-      const comboKey = `${combo.unitId}:${combo.variableId}`;
-
-      // Get all values for this variable combination
-      const valuesQuery = query.clone()
-        .select('response.value', 'value')
-        .addSelect('COUNT(*)', 'count')
-        .andWhere('unit.id = :unitId', { unitId: combo.unitId })
-        .andWhere('response.variableid = :varId', { varId: combo.variableId })
-        .groupBy('response.value')
-        .orderBy('count', 'DESC');
-
-      const valuesResult = await valuesQuery.getRawMany();
-
-      const totalResponses = valuesResult.reduce((sum, result) => sum + parseInt(result.count, 10), 0);
-
-      // Map to DTOs
-      frequencies[comboKey] = valuesResult.map(result => ({
-        unitId: combo.unitId,
-        unitName: combo.unitName,
-        variableId: combo.variableId,
-        value: result.value || '',
-        count: parseInt(result.count, 10),
-        percentage: (parseInt(result.count, 10) / totalResponses) * 100
-      }));
-    }
-
-    return {
-      variableCombos,
-      frequencies,
-      total
-    };
+  async deleteAllJobs(workspaceId: number): Promise<void> {
+    return this.jobQueueService.deleteVariableAnalysisJobs(workspaceId);
   }
 }

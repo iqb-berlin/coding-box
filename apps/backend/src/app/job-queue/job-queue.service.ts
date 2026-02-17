@@ -73,6 +73,12 @@ export interface CodingAnalysisJobData {
   cacheKey: string;
 }
 
+export interface VariableAnalysisJobData {
+  workspaceId: number;
+  unitId?: number;
+  variableId?: string;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
@@ -156,7 +162,8 @@ export class JobQueueService {
     @InjectQueue('codebook-generation') private codebookGenerationQueue: Queue,
     @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue,
     @InjectQueue('validation-task') private validationTaskQueue: Queue,
-    @InjectQueue('response-analysis') private responseAnalysisQueue: Queue
+    @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
+    @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue
   ) { }
 
   async addTestPersonCodingJob(
@@ -506,6 +513,99 @@ export class JobQueueService {
       'delayed'
     ]);
     return jobs.find(job => job.data.workspaceId === workspaceId) || null;
+  }
+
+  async addVariableAnalysisJob(
+    data: VariableAnalysisJobData,
+    options?: JobOptions
+  ): Promise<Job<VariableAnalysisJobData>> {
+    this.logger.log(`Adding variable analysis job for workspace ${data.workspaceId}`);
+    return this.variableAnalysisQueue.add(data, options);
+  }
+
+  async getVariableAnalysisJob(
+    jobId: string
+  ): Promise<Job<VariableAnalysisJobData>> {
+    return this.variableAnalysisQueue.getJob(jobId);
+  }
+
+  async getVariableAnalysisJobs(
+    workspaceId: number
+  ): Promise<Job<VariableAnalysisJobData>[]> {
+    this.logger.log(`Fetching all variable analysis jobs for workspace ${workspaceId}`);
+    const jobs = await this.variableAnalysisQueue.getJobs([
+      'completed',
+      'failed',
+      'active',
+      'waiting',
+      'delayed'
+    ]);
+    return jobs.filter(job => job.data.workspaceId === workspaceId);
+  }
+
+  async deleteVariableAnalysisJob(jobId: string): Promise<boolean> {
+    const job = await this.variableAnalysisQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Variable analysis job with ID ${jobId} not found`);
+      return false;
+    }
+    try {
+      await job.remove();
+      this.logger.log(`Variable analysis job ${jobId} has been deleted`);
+      return true;
+    } catch (error) {
+      this.logger.error(`Error deleting variable analysis job: ${error.message}`, error.stack);
+      return false;
+    }
+  }
+
+  async deleteVariableAnalysisJobs(workspaceId: number): Promise<void> {
+    const jobs = await this.getVariableAnalysisJobs(workspaceId);
+    this.logger.log(`Deleting all ${jobs.length} variable analysis jobs for workspace ${workspaceId}`);
+
+    for (const job of jobs) {
+      try {
+        const state = await job.getState();
+        if (state === 'active') {
+          await job.discard();
+          // If removal fails for an active job, we at least discarded it to prevent retries
+          await job.remove().catch(() => { });
+        } else {
+          await job.remove();
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to remove variable analysis job ${job.id}: ${error.message}`);
+      }
+    }
+  }
+
+  async cancelVariableAnalysisJob(jobId: string): Promise<boolean> {
+    const job = await this.variableAnalysisQueue.getJob(jobId);
+    if (!job) {
+      this.logger.warn(`Variable analysis job with ID ${jobId} not found`);
+      return false;
+    }
+
+    try {
+      const state = await job.getState();
+
+      if (state === 'waiting' || state === 'delayed') {
+        await job.remove();
+        this.logger.log(`Variable analysis job ${jobId} has been cancelled and removed from queue`);
+        return true;
+      }
+
+      if (state === 'active') {
+        await job.discard();
+        this.logger.log(`Variable analysis job ${jobId} is active, marked for discard`);
+        return true;
+      }
+
+      return true; // Already finished or failed
+    } catch (error) {
+      this.logger.error(`Error cancelling variable analysis job: ${error.message}`, error.stack);
+      return false;
+    }
   }
 
   async getActiveResetCodingVersionJob(

@@ -7,6 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule } from '@angular/material/sort';
 import { MatPaginatorModule, MatPaginatorIntl, PageEvent } from '@angular/material/paginator';
@@ -91,6 +92,7 @@ export interface VariableCombo {
     MatIconModule,
     MatDividerModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatTableModule,
     MatSortModule,
     MatPaginatorModule,
@@ -111,6 +113,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   variableCombos: VariableCombo[] = [];
 
   searchText = '';
+  isInfoVisible = false;
   private searchSubject = new Subject<string>();
   currentPage = 0;
   pageSize = 200;
@@ -122,8 +125,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   jobs: VariableAnalysisJobDto[] = [];
   jobsDisplayedColumns: string[] = ['id', 'status', 'createdAt', 'unitId', 'variableId', 'actions'];
 
+  activeJob: VariableAnalysisJobDto | undefined;
   private refreshSubscription: Subscription | undefined;
-  private readonly POLLING_INTERVAL = 10000; // 10 seconds
+  private readonly POLLING_INTERVAL = 2000; // 2 seconds for faster progress updates
+  private isStartingJob = false;
+  private hasAutoStarted = false;
+  isInitializing = false;
 
   constructor(
     public dialogRef: MatDialogRef<VariableAnalysisDialogComponent>,
@@ -147,12 +154,57 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
     if (this.data.jobs) {
       this.jobs = this.data.jobs;
+      this.isInitializing = false;
+      this.startPolling();
     } else {
-      this.refreshJobs();
+      this.initialize();
     }
+  }
 
+  private initialize(): void {
+    this.isInitializing = true;
+    this.isJobsLoading = true;
+
+    this.variableAnalysisService.getAllJobs(this.data.workspaceId)
+      .subscribe({
+        next: (jobs: VariableAnalysisJobDto[]) => {
+          this.jobs = jobs.filter(job => job.type === 'variable-analysis');
+          this.isJobsLoading = false;
+          this.isInitializing = false;
+
+          // Check for active job
+          const runningJob = this.jobs.find(job => job.status === 'pending' || job.status === 'processing');
+          this.activeJob = runningJob;
+
+          // Auto-load results if none are available and there's a completed job
+          if (!this.data.analysisResults || this.data.analysisResults.variableCombos.length === 0) {
+            const latestCompletedJob = this.jobs.find(j => j.status === 'completed');
+            if (latestCompletedJob) {
+              this.viewJobResults(latestCompletedJob.id);
+            }
+          }
+
+          // Auto-start if no jobs exist at all and we haven't started one yet
+          if (this.jobs.length === 0 && !this.isLoading && !this.isStartingJob && !this.hasAutoStarted) {
+            this.startNewAnalysis();
+          }
+
+          this.startPolling();
+        },
+        error: () => {
+          this.isJobsLoading = false;
+          this.isInitializing = false;
+          this.startPolling(); // Still start polling in case it was a temporary error
+        }
+      });
+  }
+
+  private startPolling(): void {
+    if (this.refreshSubscription) {
+      this.refreshSubscription.unsubscribe();
+    }
     // Start automatic polling for job updates
-    this.refreshSubscription = timer(0, this.POLLING_INTERVAL).subscribe(() => this.refreshJobs());
+    this.refreshSubscription = timer(this.POLLING_INTERVAL, this.POLLING_INTERVAL).subscribe(() => this.refreshJobs());
   }
 
   analyzeVariables(): void {
@@ -267,25 +319,38 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
   }
 
   refreshJobs(): void {
-    this.isJobsLoading = true;
+    if (this.isStartingJob || this.isInitializing) return;
+
     this.variableAnalysisService.getAllJobs(this.data.workspaceId)
       .subscribe({
         next: (jobs: VariableAnalysisJobDto[]) => {
-          this.jobs = jobs.filter(job => job.type === 'variable-analysis');
+          const filteredJobs = jobs.filter(job => job.type === 'variable-analysis');
+
+          // Check for active job change
+          const runningJob = filteredJobs.find(job => job.status === 'pending' || job.status === 'processing');
+
+          // Auto-fetch results if a job just completed
+          if (this.activeJob && !runningJob) {
+            const justCompletedJob = filteredJobs.find(j => j.id === this.activeJob?.id && j.status === 'completed');
+            if (justCompletedJob) {
+              this.viewJobResults(justCompletedJob.id);
+            }
+          }
+
+          this.jobs = filteredJobs;
+          this.activeJob = runningJob;
           this.isJobsLoading = false;
         },
         error: () => {
-          this.snackBar.open(
-            this.translate.instant('variable-analysis.error-loading-jobs'),
-            this.translate.instant('error'),
-            { duration: 3000 }
-          );
           this.isJobsLoading = false;
         }
       });
   }
 
   startNewAnalysis(): void {
+    if (this.isStartingJob || this.activeJob) return;
+    this.isStartingJob = true;
+    this.hasAutoStarted = true;
     this.isJobsLoading = true;
     const loadingSnackBar = this.snackBar.open(
       this.translate.instant('variable-analysis.starting-analysis'),
@@ -298,6 +363,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       this.data.unitId // Optional unit ID, may be undefined
     ).subscribe({
       next: (job: VariableAnalysisJobDto) => {
+        this.isStartingJob = false;
+        this.isJobsLoading = false; // Reset loading flag here too
         loadingSnackBar.dismiss();
         this.snackBar.open(
           this.translate.instant('variable-analysis.analysis-started', { jobId: job.id }),
@@ -306,19 +373,21 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         );
         this.refreshJobs();
       },
-      error: () => {
+      error: error => {
+        this.isStartingJob = false;
         loadingSnackBar.dismiss();
+        const errorMessage = error?.error?.message || error?.message || '';
         this.snackBar.open(
-          this.translate.instant('variable-analysis.error-starting-analysis'),
+          `${this.translate.instant('variable-analysis.error-starting-analysis')}${errorMessage ? `: ${errorMessage}` : ''}`,
           this.translate.instant('error'),
-          { duration: 3000 }
+          { duration: 5000 }
         );
         this.isJobsLoading = false;
       }
     });
   }
 
-  cancelJob(jobId: number): void {
+  cancelJob(jobId: string): void {
     this.isJobsLoading = true;
     this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
       .subscribe({
@@ -339,18 +408,19 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             this.isJobsLoading = false;
           }
         },
-        error: () => {
+        error: error => {
+          const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
-            this.translate.instant('variable-analysis.error-cancelling-job'),
+            `${this.translate.instant('variable-analysis.error-cancelling-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
             this.translate.instant('error'),
-            { duration: 3000 }
+            { duration: 5000 }
           );
           this.isJobsLoading = false;
         }
       });
   }
 
-  deleteJob(jobId: number): void {
+  deleteJob(jobId: string): void {
     const dialogData: ConfirmDialogData = {
       title: this.translate.instant('workspace.please-confirm'),
       content: this.translate.instant('variable-analysis.confirm-delete-job'),
@@ -388,11 +458,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
               this.isJobsLoading = false;
             }
           },
-          error: () => {
+          error: error => {
+            const errorMessage = error?.error?.message || error?.message || '';
             this.snackBar.open(
-              this.translate.instant('variable-analysis.error-deleting-job'),
+              `${this.translate.instant('variable-analysis.error-deleting-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
               this.translate.instant('error'),
-              { duration: 3000 }
+              { duration: 5000 }
             );
             this.isJobsLoading = false;
           }
@@ -400,7 +471,47 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  viewJobResults(jobId: number): void {
+  deleteAllJobs(): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: this.translate.instant('variable-analysis.delete-all-jobs'),
+        content: this.translate.instant('variable-analysis.confirm-delete-all-jobs'),
+        confirmButtonLabel: this.translate.instant('variable-analysis.delete-all-jobs'),
+        showCancel: true
+      } as ConfirmDialogData
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result) {
+        this.isJobsLoading = true;
+        this.variableAnalysisService.deleteAllJobs(this.data.workspaceId)
+          .subscribe({
+            next: () => {
+              this.snackBar.open(
+                this.translate.instant('variable-analysis.all-jobs-deleted'),
+                'OK',
+                { duration: 3000 }
+              );
+              this.jobs = [];
+              this.activeJob = undefined;
+              this.isJobsLoading = false;
+              this.refreshJobs();
+            },
+            error: error => {
+              this.isJobsLoading = false;
+              const errorMessage = error?.error?.message || error?.message || '';
+              this.snackBar.open(
+                `${this.translate.instant('variable-analysis.error-deleting-all-jobs')}${errorMessage ? `: ${errorMessage}` : ''}`,
+                this.translate.instant('error'),
+                { duration: 5000 }
+              );
+            }
+          });
+      }
+    });
+  }
+
+  viewJobResults(jobId: string): void {
     this.isLoading = true;
     const loadingSnackBar = this.snackBar.open(
       this.translate.instant('variable-analysis.loading-results'),

@@ -12,6 +12,7 @@ import { CodebookGenerationProcessor } from './processors/codebook-generation.pr
 import { ResetCodingVersionProcessor } from './processors/reset-coding-version.processor';
 import { ValidationTaskProcessor } from './processors/validation-task.processor';
 import { CodingAnalysisProcessor } from './processors/coding-analysis.processor';
+import { VariableAnalysisProcessor } from './processors/variable-analysis.processor';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
@@ -60,6 +61,9 @@ import { ResponseEntity } from '../database/entities/response.entity';
     BullModule.registerQueue({
       name: 'response-analysis'
     }),
+    BullModule.registerQueue({
+      name: 'variable-analysis'
+    }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
     CacheModule
@@ -76,7 +80,8 @@ import { ResponseEntity } from '../database/entities/response.entity';
     CodebookGenerationProcessor,
     ResetCodingVersionProcessor,
     ValidationTaskProcessor,
-    CodingAnalysisProcessor
+    CodingAnalysisProcessor,
+    VariableAnalysisProcessor
   ],
   exports: [JobQueueService]
 })

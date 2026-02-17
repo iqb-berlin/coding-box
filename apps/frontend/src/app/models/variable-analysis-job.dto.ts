@@ -1,5 +1,5 @@
 export interface VariableAnalysisJobDto {
-  id: number;
+  id: string; // Changed from number to string
   workspace_id: number;
 
   /**
@@ -12,6 +12,7 @@ export interface VariableAnalysisJobDto {
    */
   variable_id?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
   error?: string;
   created_at: Date;
   updated_at: Date;
