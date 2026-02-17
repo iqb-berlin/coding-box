@@ -14,10 +14,17 @@
       </a>
 
       @if (!showManualCoding) {
+      @if (codingListDownloadProgress !== null) {
+      <button mat-raised-button disabled class="progress-button">
+        <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
+        {{ 'coding-management.descriptions.coding-list-progress' | translate:{progress: codingListDownloadProgress} }}
+      </button>
+      } @else {
       <a mat-raised-button color="primary" (click)="fetchCodingList()">
         <mat-icon>list</mat-icon>
         {{ 'coding-management.buttons.coding-list' | translate }}
       </a>
+      }
       }
       @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="openExportCodingBook()">

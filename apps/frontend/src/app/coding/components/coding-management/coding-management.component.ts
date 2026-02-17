@@ -15,6 +15,7 @@ import {
 } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { AppService } from '../../../core/services/app.service';
@@ -56,7 +57,8 @@ import { ReviewListDialogComponent } from './components/review-list-dialog/revie
     TranslateModule,
     StatisticsCardComponent,
     ResponseFiltersComponent,
-    ResponseTableComponent
+    ResponseTableComponent,
+    MatProgressSpinnerModule
   ],
   styleUrls: ['./coding-management.component.scss']
 })
@@ -91,6 +93,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   showManualCoding = false;
   resetProgress: number | null = null;
   downloadProgress: number | null = null;
+  codingListDownloadProgress: number | null = null;
 
   // Statistics state
   codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
@@ -180,6 +183,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(progress => {
         this.downloadProgress = progress;
         this.isDownloadInProgress = progress !== null;
+      });
+
+    this.codingManagementService.codingListDownloadProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.codingListDownloadProgress = progress;
       });
 
     // Check for active reset job (persists across navigation)

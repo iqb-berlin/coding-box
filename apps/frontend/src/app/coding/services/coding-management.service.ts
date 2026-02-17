@@ -340,49 +340,7 @@ export class CodingManagementService {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    switch (format) {
-      case 'csv':
-        this.downloadCodingListAsCsvBackground(workspaceId);
-        break;
-      case 'excel':
-        this.downloadCodingListAsExcelBackground(workspaceId);
-        break;
-      case 'json':
-        this.downloadCodingListAsJsonBackground(workspaceId);
-        break;
-      default:
-      // No default action needed
-    }
-  }
-
-  private downloadCodingListAsCsvBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsCsv(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als CSV'))
-      .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.csv`, 'Kodierliste wurde als CSV nicht erfolgreich heruntergeladen.'));
-  }
-
-  private downloadCodingListAsExcelBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsExcel(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als Excel'))
-      .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.xlsx`, 'Kodierliste wurde als Excel nicht erfolgreich heruntergeladen.'));
-  }
-
-  private downloadCodingListAsJsonBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsCsv(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Abrufen der Kodierliste (JSON)'))
-      .subscribe(async (blob: Blob | null) => {
-        if (!blob) return;
-        try {
-          const jsonBlob = await this.convertCsvBlobToJsonBlob(blob as Blob);
-          this.saveBlob(jsonBlob, `coding-list-${this.getDateString()}.json`);
-          this.showSuccessSnackbar('Kodierliste wurde als JSON erfolgreich heruntergeladen.');
-        } catch (e) {
-          this.showErrorSnackbar('Fehler beim Umwandeln der CSV-Daten in JSON', false);
-        }
-      });
+    this.performBackgroundCodingListDownload(workspaceId, format);
   }
 
   downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
@@ -420,35 +378,7 @@ export class CodingManagementService {
       const { jobId } = jobStartResult;
 
       // Poll for status
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const subscription = timer(0, 2000).pipe(
-          switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
-          takeWhile(status => ['pending', 'processing'].includes(status.status), true)
-        ).subscribe({
-          next: status => {
-            if (status.status === 'completed') {
-              subscription.unsubscribe();
-              this.downloadProgress$.next(100);
-              // Job done, download file
-              this.exportService.downloadExportFile(workspaceId, jobId).subscribe({
-                next: fileBlob => resolve(fileBlob),
-                error: reject
-              });
-            } else if (status.status === 'failed' || status.status === 'cancelled') {
-              subscription.unsubscribe();
-              reject(new Error(status.error || 'Job failed'));
-            } else {
-              // Update progress
-              const progress = Math.round(status.progress || 0);
-              this.downloadProgress$.next(progress);
-            }
-          },
-          error: err => {
-            subscription.unsubscribe();
-            reject(err);
-          }
-        });
-      });
+      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
 
       // Handle file download
       if (format === 'json') {
@@ -460,7 +390,6 @@ export class CodingManagementService {
       }
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
-      console.error('Download failed:', error);
       this.showErrorSnackbar(
         this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
         false
@@ -468,6 +397,82 @@ export class CodingManagementService {
     } finally {
       this.downloadProgress$.next(null);
     }
+  }
+
+  codingListDownloadProgress$ = new BehaviorSubject<number | null>(null);
+
+  private async performBackgroundCodingListDownload(
+    workspaceId: number,
+    format: ExportFormat
+  ): Promise<void> {
+    this.codingListDownloadProgress$.next(0);
+
+    try {
+      this.showInfoSnackbar(this.translateService.instant('coding-management.descriptions.job-started', { defaultValue: 'Export-Job gestartet...' }));
+
+      const jobStartResult = await this.exportService.startExportJob(
+        workspaceId,
+        'coding-list',
+        undefined,
+        format
+      ).toPromise();
+
+      if (!jobStartResult) {
+        this.showErrorSnackbar('Failed to start export job', false);
+        this.codingListDownloadProgress$.next(null);
+        return;
+      }
+      const { jobId } = jobStartResult;
+
+      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.codingListDownloadProgress$);
+
+      const ext = format === 'excel' ? 'xlsx' : format;
+      this.saveBlob(blob, `coding-list-${this.getDateString()}.${ext}`);
+
+      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
+    } catch (error) {
+      this.showErrorSnackbar(
+        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
+        false
+      );
+    } finally {
+      this.codingListDownloadProgress$.next(null);
+    }
+  }
+
+  private pollJobAndProgress(
+    workspaceId: number,
+    jobId: string,
+    progressSubject: BehaviorSubject<number | null>
+  ): Promise<Blob> {
+    return new Promise<Blob>((resolve, reject) => {
+      const subscription = timer(0, 2000).pipe(
+        switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
+        takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+      ).subscribe({
+        next: status => {
+          if (status.status === 'completed') {
+            subscription.unsubscribe();
+            progressSubject.next(100);
+            this.exportService.downloadExportFile(workspaceId, jobId).subscribe({
+              next: fileBlob => resolve(fileBlob),
+              error: reject
+            });
+          } else if (status.status === 'failed' || status.status === 'cancelled') {
+            subscription.unsubscribe();
+            const errorMsg = status.error || 'Job failed';
+            reject(new Error(errorMsg));
+          } else {
+            const progress = Math.round(status.progress || 0);
+            progressSubject.next(progress);
+          }
+        },
+        error: err => {
+          subscription.unsubscribe();
+          reject(err);
+        }
+      });
+    });
   }
 
   // --- Private Helpers ---
@@ -485,13 +490,6 @@ export class CodingManagementService {
     return catchError(() => {
       this.showErrorSnackbar('coding-management.descriptions.error-statistics');
       return of(fallback);
-    });
-  }
-
-  private handleDownloadError<T>(msg: string): OperatorFunction<T, T | null> {
-    return catchError(() => {
-      this.showErrorSnackbar(msg, false);
-      return of(null);
     });
   }
 

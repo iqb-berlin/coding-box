@@ -161,6 +161,72 @@ export class CodingExportService {
     });
   }
 
+  async exportCodingListForJobAsCsv(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    return this.codingListService.getCodingListCsvStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+  }
+
+  async exportCodingListForJobAsExcel(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingListAsExcel(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+  }
+
+  async exportCodingListForJobAsJson(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    const stream = this.codingListService.getCodingListJsonStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+
+    const passThrough = new PassThrough();
+    passThrough.write('[');
+    let first = true;
+
+    stream.on('data', (item: CodingItem) => {
+      if (!first) {
+        passThrough.write(',');
+      } else {
+        first = false;
+      }
+      passThrough.write(JSON.stringify(item));
+    });
+
+    stream.on('end', () => {
+      passThrough.write(']');
+      passThrough.end();
+    });
+
+    stream.on('error', err => {
+      passThrough.emit('error', err);
+    });
+
+    return passThrough;
+  }
+
   async exportCodingResultsByVersionAsCsv(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',

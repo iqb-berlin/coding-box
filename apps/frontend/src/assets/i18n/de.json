@@ -830,7 +830,9 @@
       "coding-variables-title": "Kodiervariablen",
       "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten",
       "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
-      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
+      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt",
+      "job-started": "Export-Job gestartet...",
+      "coding-list-progress": "Kodierliste wird erstellt... {{progress}}%"
     },
     "actions": {
       "review-session": "Review",
@@ -926,7 +928,6 @@
       "notice-title": "Hinweis",
       "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
       "download-button": "Herunterladen",
-      "download-tooltip": "Kodierergebnisse herunterladen",
       "creating-file": "Datei wird erstellt...",
       "unknown-format": "Unbekanntes Format",
       "error-json": "Fehler beim Abrufen der Kodierergebnisse (JSON)",
@@ -937,9 +938,10 @@
       "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
       "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
       "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
-      "download-started": "Download für {{version}} als {{format}} gestartet...",
-      "download-complete": "Download für {{version}} als {{format}} abgeschlossen",
-      "download-failed": "Download fehlgeschlagen"
+      "download-started": "Download gestartet...",
+      "download-failed": "Download fehlgeschlagen",
+      "download-complete": "Download abgeschlossen",
+      "download-tooltip": "Ergebnisse herunterladen"
     },
     "aria": {
       "select-page": "Seiten auswählen"

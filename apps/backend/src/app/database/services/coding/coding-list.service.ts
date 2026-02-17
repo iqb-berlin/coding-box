@@ -74,12 +74,14 @@ export class CodingListService {
   async getCodingListCsvStream(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ) {
     return this.streamService.getCodingListCsvStream(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 
@@ -90,12 +92,14 @@ export class CodingListService {
   async getCodingListAsExcel(
     workspace_id: number,
     authToken?: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingListAsExcel(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 
@@ -106,12 +110,14 @@ export class CodingListService {
   getCodingListJsonStream(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ): JsonStream {
     return this.streamService.getCodingListJsonStream(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 

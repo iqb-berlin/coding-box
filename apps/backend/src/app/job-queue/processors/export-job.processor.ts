@@ -67,7 +67,8 @@ export class ExportJobProcessor {
       'coding-times',
       'test-results',
       'test-logs',
-      'results-by-version'
+      'results-by-version',
+      'coding-list'
     ];
     if (!validExportTypes.includes(job.data.exportType)) {
       const errorMessage = `Unknown export type: ${job.data.exportType}`;
@@ -89,8 +90,13 @@ export class ExportJobProcessor {
       const isCsv =
         job.data.exportType === 'detailed' ||
         (job.data.exportType === 'results-by-version' &&
+          job.data.format !== 'excel') ||
+        (job.data.exportType === 'coding-list' &&
           job.data.format !== 'excel');
-      const fileExt = isCsv ? 'csv' : 'xlsx';
+      let fileExt = isCsv ? 'csv' : 'xlsx';
+      if (job.data.exportType === 'coding-list' && job.data.format === 'json') {
+        fileExt = 'json';
+      }
       const fileName = `export_${job.id}_${Date.now()}.${fileExt}`;
       filePath = path.join(tempDir, fileName);
       this.logger.log(`Generating export file: ${filePath}`);
@@ -130,6 +136,55 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               job.data.includeReplayUrl || false,
+              onProgress
+            );
+
+            const writeStream = fs.createWriteStream(filePath);
+            await new Promise((resolve, reject) => {
+              stream.pipe(writeStream);
+              writeStream.on('finish', resolve);
+              writeStream.on('error', reject);
+              stream.on('error', reject);
+            });
+          }
+          break;
+        }
+
+        case 'coding-list': {
+          const onProgress = async (percentage: number) => {
+            const jobProgress = 20 + Math.round((percentage / 100) * 70);
+            await job.progress(jobProgress);
+            await checkCancellation();
+          };
+
+          if (job.data.format === 'excel') {
+            buffer = await this.codingExportService.exportCodingListForJobAsExcel(
+              job.data.workspaceId,
+              job.data.authToken || '',
+              job.data.serverUrl || '',
+              onProgress
+            );
+          } else if (job.data.format === 'json') {
+            const stream = await this.codingExportService.exportCodingListForJobAsJson(
+              job.data.workspaceId,
+              job.data.authToken || '',
+              job.data.serverUrl || '',
+              onProgress
+            );
+
+            const writeStream = fs.createWriteStream(filePath);
+            await new Promise((resolve, reject) => {
+              stream.pipe(writeStream);
+              writeStream.on('finish', resolve);
+              writeStream.on('error', reject);
+              stream.on('error', reject);
+            });
+          } else {
+            // CSV
+            const stream = await this.codingExportService.exportCodingListForJobAsCsv(
+              job.data.workspaceId,
+              job.data.authToken || '',
+              job.data.serverUrl || '',
               onProgress
             );
 
