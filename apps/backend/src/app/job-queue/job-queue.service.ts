@@ -84,7 +84,8 @@ export interface ExportJobData {
   | 'coding-times'
   | 'test-results'
   | 'test-logs'
-  | 'results-by-version';
+  | 'results-by-version'
+  | 'coding-list';
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'json' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
