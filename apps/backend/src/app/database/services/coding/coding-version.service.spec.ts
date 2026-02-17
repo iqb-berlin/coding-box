@@ -78,6 +78,13 @@ describe('CodingVersionService', () => {
           score_v1: null
         }
       );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status IN (:...codedStatuses)',
+        { codedStatuses: [1, 2, 3] }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 IS NOT NULL'
+      );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
     });
@@ -109,6 +116,9 @@ describe('CodingVersionService', () => {
           score_v3: null
         }
       );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL'
+      );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(2);
@@ -137,6 +147,9 @@ describe('CodingVersionService', () => {
           code_v3: null,
           score_v3: null
         }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL'
       );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
@@ -259,6 +272,31 @@ describe('CodingVersionService', () => {
       await expect(
         service.resetCodingVersion(workspaceId, version)
       ).rejects.toThrow('Failed to reset coding version: Database error');
+    });
+
+    it('should always exclude aggregated duplicates (code -111)', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(response.code_v2 IS NULL OR response.code_v2 != -111)'
+      );
+    });
+
+    it('should only include responses with coded statuses (1, 2, 3)', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status IN (:...codedStatuses)',
+        { codedStatuses: [1, 2, 3] }
+      );
     });
   });
 });

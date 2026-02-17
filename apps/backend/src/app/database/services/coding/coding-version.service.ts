@@ -49,7 +49,18 @@ export class CodingVersionService {
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true });
+        .andWhere('person.consider = :consider', { consider: true })
+        // Only reset responses that are counted in "total responses" statistic:
+        // 1. Status must be one of: NOT_REACHED (1), DISPLAYED (2), VALUE_CHANGED (3)
+        .andWhere('response.status IN (:...codedStatuses)', { codedStatuses: [1, 2, 3] });
+
+      if (version === 'v2') {
+        baseQueryBuilder.andWhere('(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL');
+      } else if (version === 'v3') {
+        baseQueryBuilder.andWhere('(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL');
+      } else {
+        baseQueryBuilder.andWhere('response.status_v1 IS NOT NULL');
+      }
 
       if (unitFilters && unitFilters.length > 0) {
         baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', {
