@@ -258,7 +258,7 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
           .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
-          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
           .getMany();
@@ -536,7 +536,7 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
           .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
-          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
           .getMany();
@@ -835,7 +835,7 @@ export class CodingResultsExportService {
           .innerJoinAndSelect('booklet.person', 'person')
           .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
           .leftJoin('coding_job_unit', 'cju', 'cju.response_id = response.id')
-          .where('booklet.workspace_id = :workspaceId', { workspaceId })
+          .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
           .getMany();
