@@ -74,7 +74,7 @@ export class VariableAnalysisService {
 
   getAnalysisJob(
     workspaceId: number,
-    jobId: number
+    jobId: string
   ): Observable<VariableAnalysisJobDto> {
     return this.http.get<VariableAnalysisJobDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
@@ -89,7 +89,7 @@ export class VariableAnalysisService {
 
   getAnalysisResults(
     workspaceId: number,
-    jobId: number
+    jobId: string
   ): Observable<VariableAnalysisResultDto> {
     return this.http.get<VariableAnalysisResultDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results`,
@@ -104,7 +104,7 @@ export class VariableAnalysisService {
 
   getAllJobs(workspaceId: number): Observable<VariableAnalysisJobDto[]> {
     return this.http.get<VariableAnalysisJobDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/jobs`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,
       { headers: this.authHeader }
     ).pipe(
       catchError(error => {
@@ -114,9 +114,9 @@ export class VariableAnalysisService {
     );
   }
 
-  cancelJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+  cancelJob(workspaceId: number, jobId: string): Observable<JobCancelResult> {
     return this.http.post<JobCancelResult>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/jobs/${jobId}/cancel`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/cancel`,
       null,
       { headers: this.authHeader }
     ).pipe(
@@ -127,13 +127,25 @@ export class VariableAnalysisService {
     );
   }
 
-  deleteJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+  deleteJob(workspaceId: number, jobId: string): Observable<JobCancelResult> {
     return this.http.delete<JobCancelResult>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/jobs/${jobId}`,
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
       { headers: this.authHeader }
     ).pipe(
       catchError(error => {
         logger.error(`Error deleting variable analysis job: ${error.message}`);
+        throw error;
+      })
+    );
+  }
+
+  deleteAllJobs(workspaceId: number): Observable<{ success: boolean }> {
+    return this.http.delete<{ success: boolean }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs`,
+      { headers: this.authHeader }
+    ).pipe(
+      catchError(error => {
+        logger.error(`Error deleting all variable analysis jobs: ${error.message}`);
         throw error;
       })
     );
