@@ -299,57 +299,21 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
           return;
         }
 
-        const units = result.items.map((item: {
-          unitAlias?: string | null;
-          unitName: string;
-          personLogin: string;
-          personCode: string;
-          personGroup?: string;
-          bookletName: string;
-          variableId: string;
-          variableAnchor?: string;
-          replayUrl?: string;
-        }, idx: number) => ({
-          id: idx,
-          name: item.unitAlias || item.unitName,
-          alias: item.unitAlias || null,
-          bookletId: 0,
-          testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
-          variableId: item.variableId,
-          variableAnchor: item.variableAnchor,
-          replayUrl: item.replayUrl
-        }));
-
-        const bookletData = {
-          id: job.id,
-          name: `Coding-Job: ${job.name}`,
-          units,
-          currentUnitIndex: 0
-        };
-
-        const first = units[0];
+        if (!result.firstReplayUrl) {
+          const errorMessage = this.translateService.instant('coding.my-coding-jobs.error-starting-job');
+          this.snackBar.open(errorMessage, this.translateService.instant('close'), { duration: 3000 });
+          return;
+        }
 
         this.appService
           .createToken(job.workspace_id, this.appService.loggedUser?.sub || '', 1)
           .subscribe(token => {
-            const bookletKey = `replay_booklet_${job.id}`;
-            try {
-              localStorage.setItem(bookletKey, JSON.stringify(bookletData));
-            } catch (e) {
-              // ignore
-            }
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(job.id)}&workspaceId=${encodeURIComponent(job.workspace_id)}`;
+            const replayUrl = `${result.firstReplayUrl}?${queryParams}`;
 
-            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
-            const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
-
-            if (replayUrl) {
-              window.open(replayUrl, '_blank');
-              const preparedMessage = this.translateService.instant('coding.my-coding-jobs.preparing-replay', { count: result.total });
-              this.snackBar.open(preparedMessage, this.translateService.instant('close'), { duration: 3000 });
-            } else {
-              const errorMessage = this.translateService.instant('coding.my-coding-jobs.error-starting-job');
-              this.snackBar.open(errorMessage, this.translateService.instant('close'), { duration: 3000 });
-            }
+            window.open(replayUrl, '_blank');
+            const preparedMessage = this.translateService.instant('coding.my-coding-jobs.preparing-replay', { count: result.total });
+            this.snackBar.open(preparedMessage, this.translateService.instant('close'), { duration: 3000 });
           });
       },
       error: () => {

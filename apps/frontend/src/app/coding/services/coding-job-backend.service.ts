@@ -200,37 +200,9 @@ export class CodingJobBackendService {
   startCodingJob(
     workspaceId: number,
     codingJobId: number
-  ): Observable<{
-      total: number;
-      items: Array<{
-        responseId: number;
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        variableAnchor: string;
-        bookletName: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        replayUrl: string;
-      }>;
-    }> {
+  ): Observable<{ total: number; firstReplayUrl: string }> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/start`;
-    return this.http.post<{
-      total: number;
-      items: Array<{
-        responseId: number;
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        variableAnchor: string;
-        bookletName: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        replayUrl: string;
-      }>;
-    }>(url, {}, { headers: this.authHeader });
+    return this.http.post<{ total: number; firstReplayUrl: string }>(url, {}, { headers: this.authHeader });
   }
 
   getCodingIncompleteVariables(
