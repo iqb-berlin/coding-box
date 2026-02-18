@@ -11,13 +11,14 @@
           <mat-label>Name</mat-label>
           <input matInput formControlName="name" placeholder="Name des Variablenbündels" required>
           @if (bundleGroupForm.get('name')?.invalid && bundleGroupForm.get('name')?.touched) {
-            <mat-error>Name ist erforderlich</mat-error>
+          <mat-error>Name ist erforderlich</mat-error>
           }
         </mat-form-field>
 
         <mat-form-field appearance="fill" class="full-width">
           <mat-label>Beschreibung</mat-label>
-          <textarea matInput formControlName="description" placeholder="Beschreibung des Variablenbündels" rows="3"></textarea>
+          <textarea matInput formControlName="description" placeholder="Beschreibung des Variablenbündels"
+            rows="3"></textarea>
         </mat-form-field>
       </div>
 
@@ -30,16 +31,20 @@
           <div class="filter-row">
             <mat-form-field class="filter-field">
               <mat-label>Aufgaben-ID Filter</mat-label>
-              <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
-              <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
+              <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}"
+                placeholder="Filter nach Aufgaben-ID">
+              <button *ngIf="unitNameFilter" matSuffix mat-icon-button aria-label="Clear"
+                (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-form-field>
 
             <mat-form-field class="filter-field">
               <mat-label>Variablen-ID Filter</mat-label>
-              <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
-              <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
+              <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter"
+                [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+              <button *ngIf="variableIdFilter" matSuffix mat-icon-button aria-label="Clear"
+                (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
                 <mat-icon>close</mat-icon>
               </button>
             </mat-form-field>
@@ -58,47 +63,59 @@
         </div>
 
         @if (isLoadingVariableAnalysis) {
-          <div class="loading-container">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p class="loading-text">Lade Variablen...</p>
-          </div>
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p class="loading-text">Lade Variablen...</p>
+        </div>
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length > 0) {
+        <div class="quick-selection-tools">
           <div class="selection-count">
             {{ selectedVariables.selected.length }} von {{ dataSource.filteredData.length }} Variablen ausgewählt
           </div>
+          <div class="selection-actions">
+            <button mat-button color="primary" type="button" (click)="selectAll()">
+              <mat-icon>done_all</mat-icon>
+              Alle auswählen
+            </button>
+            <button mat-button type="button" (click)="deselectAll()"
+              [disabled]="selectedVariables.selected.length === 0">
+              <mat-icon>remove_done</mat-icon>
+              Auswahl aufheben
+            </button>
+          </div>
+        </div>
 
-          <!-- Variables grid view -->
-          <div class="variables-grid-container">
-            <div class="variables-grid">
-              @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
-                <div class="variable-card"
-                     [class.selected]="selectedVariables.isSelected(variable)"
-                     (click)="selectedVariables.toggle(variable)">
-                  <div class="variable-card-header">
-                    <mat-checkbox [checked]="selectedVariables.isSelected(variable)"
-                                  (click)="$event.stopPropagation()"
-                                  (change)="$event ? selectedVariables.toggle(variable) : null">
-                    </mat-checkbox>
-                    <div class="variable-identifiers">
-                      <div class="variable-id">
-                        {{ variable.unitName }}_{{ variable.variableId }}
-                      </div>
-                    </div>
+        <!-- Variables grid view -->
+        <div class="variables-grid-container">
+          <div class="variables-grid">
+            @for (variable of dataSource.filteredData; track variable.unitName + variable.variableId) {
+            <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
+              (click)="selectedVariables.toggle(variable)">
+              <div class="variable-card-header">
+                <mat-checkbox [checked]="selectedVariables.isSelected(variable)" (click)="$event.stopPropagation()"
+                  (change)="$event ? selectedVariables.toggle(variable) : null">
+                </mat-checkbox>
+                <div class="variable-identifiers">
+                  <div class="variable-id">
+                    {{ variable.unitName }}_{{ variable.variableId }}
                   </div>
                 </div>
-              }
+              </div>
             </div>
+            }
           </div>
+        </div>
         }
 
         @if (!isLoadingVariableAnalysis && availableVariables.length === 0) {
-          <div class="empty-state">
-            <mat-icon class="empty-icon">analytics</mat-icon>
-            <h3>Keine Variablen verfügbar</h3>
-            <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie es später erneut.</p>
-          </div>
+        <div class="empty-state">
+          <mat-icon class="empty-icon">analytics</mat-icon>
+          <h3>Keine Variablen verfügbar</h3>
+          <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie
+            es später erneut.</p>
+        </div>
         }
       </div>
     </form>
@@ -106,7 +123,8 @@
 
   <div class="dialog-actions">
     <button mat-button (click)="onCancel()">Abbrechen</button>
-    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
+    <button mat-raised-button color="primary" (click)="onSubmit()"
+      [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
       {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
     </button>
   </div>
