@@ -150,4 +150,69 @@ export class CodingReplayService {
       })
     );
   }
+
+  async generateReplayUrlsForItemsBulk(
+    workspaceId: number,
+    items: Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+    }>,
+    serverUrl: string
+  ): Promise<
+    Array<{
+      responseId: number;
+      unitName: string;
+      unitAlias: string | null;
+      variableId: string;
+      variableAnchor: string;
+      bookletName: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      replayUrl: string;
+    }>
+    > {
+    const uniqueUnitNames = [...new Set(items.map(i => i.unitName))];
+    const variablePageMaps = new Map<string, Map<string, string>>();
+    await Promise.all(
+      uniqueUnitNames.map(async unitName => {
+        try {
+          const pageMap = await this.codingListService.getVariablePageMap(unitName, workspaceId);
+          variablePageMaps.set(unitName, pageMap);
+        } catch (error) {
+          this.logger.warn(`Failed to get variable page map for unit '${unitName}': ${error.message}`);
+          variablePageMaps.set(unitName, new Map());
+        }
+      })
+    );
+
+    return items.map(item => {
+      try {
+        const pageMap = variablePageMaps.get(item.unitName) ?? new Map<string, string>();
+        const variablePage = pageMap.get(item.variableId) || '0';
+        const replayUrl = generateReplayUrl({
+          serverUrl,
+          loginName: item.personLogin,
+          loginCode: item.personCode,
+          loginGroup: item.personGroup,
+          bookletId: item.bookletName,
+          unitId: item.unitName,
+          variablePage,
+          variableAnchor: item.variableId,
+          authToken: ''
+        }).replace('?auth=', '');
+        return { ...item, replayUrl };
+      } catch (error) {
+        this.logger.warn(`Failed to generate replay URL for response ${item.responseId}: ${error.message}`);
+        return { ...item, replayUrl: '' };
+      }
+    });
+  }
 }

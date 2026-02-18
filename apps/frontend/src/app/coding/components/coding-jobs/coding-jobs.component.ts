@@ -40,19 +40,6 @@ import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 
-interface CodingJobItem {
-  responseId: number;
-  unitName: string;
-  unitAlias: string | null;
-  variableId: string;
-  variableAnchor: string;
-  bookletName: string;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  replayUrl: string;
-}
-
 interface BulkApplyResultItem {
   jobId: number;
   jobName: string;
@@ -532,44 +519,18 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
           return;
         }
 
-        // Map responses to a booklet-like structure so we can reuse the Replay booklet navigation
-        const units = startResult.items.map((item: CodingJobItem, idx: number) => ({
-          id: idx,
-          name: item.unitAlias || item.unitName,
-          alias: item.unitAlias || null,
-          bookletId: 0,
-          testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
-          variableId: item.variableId,
-          variableAnchor: item.variableAnchor,
-          replayUrl: item.replayUrl
-        }));
-
-        const bookletData = {
-          id: selectedJob.id,
-          name: `Coding-Job: ${selectedJob.name}`,
-          units,
-          currentUnitIndex: 0
-        };
-
-        const first = units[0];
+        if (!startResult.firstReplayUrl) {
+          this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+          return;
+        }
 
         this.appService
-          .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+          .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
           .subscribe(token => {
-            const bookletKey = `replay_booklet_${selectedJob.id}`;
-            try {
-              localStorage.setItem(bookletKey, JSON.stringify(bookletData));
-            } catch (e) {
-              // ignore
-            }
+            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+            const replayUrl = `${startResult.firstReplayUrl}?${queryParams}`;
 
-            const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
-            const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
-            if (replayUrl) {
-              window.open(replayUrl, '_blank');
-            } else {
-              this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
-            }
+            window.open(replayUrl, '_blank');
             this.snackBar.open(`Kodierjob "${selectedJob.name}" gestartet`, 'Schließen', { duration: 3000 });
           });
       },
@@ -743,43 +704,18 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                   return;
                 }
 
-                const units = restartResult.items.map((item: CodingJobItem, idx: number) => ({
-                  id: idx,
-                  name: item.unitAlias || item.unitName,
-                  alias: item.unitAlias || null,
-                  bookletId: 0,
-                  testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
-                  variableId: item.variableId,
-                  variableAnchor: item.variableAnchor,
-                  replayUrl: item.replayUrl
-                }));
-
-                const bookletData = {
-                  id: restartedJob.id,
-                  name: `Coding-Job: ${restartedJob.name} (Offene Einheiten)`,
-                  units,
-                  currentUnitIndex: 0
-                };
-
-                const first = units[0];
+                if (!restartResult.firstReplayUrl) {
+                  this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
+                  return;
+                }
 
                 this.appService
-                  .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+                  .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
                   .subscribe(token => {
-                    const bookletKey = `replay_booklet_${restartedJob.id}`;
-                    try {
-                      localStorage.setItem(bookletKey, JSON.stringify(bookletData));
-                    } catch (e) {
-                      // ignore
-                    }
+                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+                    const replayUrl = `${restartResult.firstReplayUrl}?${queryParams}`;
 
-                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&bookletKey=${encodeURIComponent(bookletKey)}`;
-                    const replayUrl = first.replayUrl ? `${first.replayUrl}?${queryParams}` : '';
-                    if (replayUrl) {
-                      window.open(replayUrl, '_blank');
-                    } else {
-                      this.snackBar.open('Fehler beim Generieren der Replay-URL', 'Fehler', { duration: 3000 });
-                    }
+                    window.open(replayUrl, '_blank');
                     this.snackBar.open(`${restartResult.total} offene Einheiten für Replay vorbereitet`, 'Schließen', { duration: 3000 });
                   });
               },

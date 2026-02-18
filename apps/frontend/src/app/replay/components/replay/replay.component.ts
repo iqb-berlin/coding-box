@@ -38,6 +38,7 @@ import { CodingJobCommentDialogComponent } from '../../../coding/components/codi
 import { NavigateCodingCasesDialogComponent, NavigateCodingCasesDialogData } from '../navigate-coding-cases-dialog/navigate-coding-cases-dialog.component';
 import { ReplayCodingService } from '../../services/replay-coding.service';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
+import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 
 @Component({
   providers: [ReplayCodingService],
@@ -71,6 +72,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private pageErrorSnackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   codingService = inject(ReplayCodingService);
+  private codingJobBackendService = inject(CodingJobBackendService);
 
   player: string = '';
   unitDef: string = '';
@@ -175,6 +177,32 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
           if (queryParams.unitsData) {
             deserializedUnits = this.deserializeUnitsData(queryParams.unitsData);
+          } else if (queryParams.codingJobId && queryParams.workspaceId) {
+            const jobId = Number(queryParams.codingJobId);
+            const wsId = Number(queryParams.workspaceId);
+            try {
+              const apiUnits = await firstValueFrom(
+                this.codingJobBackendService.getCodingJobUnits(wsId, jobId)
+              );
+              if (apiUnits && apiUnits.length > 0) {
+                deserializedUnits = {
+                  id: jobId,
+                  name: `Coding-Job: ${jobId}`,
+                  units: apiUnits.map((item, idx) => ({
+                    id: idx,
+                    name: item.unitName,
+                    alias: item.unitAlias,
+                    bookletId: 0,
+                    testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
+                    variableId: item.variableId,
+                    variableAnchor: item.variableAnchor
+                  })),
+                  currentUnitIndex: 0
+                };
+              }
+            } catch (e) {
+              // ignore fetch errors — unitsData stays null
+            }
           } else if (queryParams.bookletKey) {
             const key = queryParams.bookletKey as string;
             try {

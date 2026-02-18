@@ -237,24 +237,7 @@ export class WsgCodingJobController {
       type: 'object',
       properties: {
         total: { type: 'number' },
-        items: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: {
-              responseId: { type: 'number' },
-              unitName: { type: 'string' },
-              unitAlias: { type: 'string' },
-              variableId: { type: 'string' },
-              variableAnchor: { type: 'string' },
-              bookletName: { type: 'string' },
-              personLogin: { type: 'string' },
-              personCode: { type: 'string' },
-              personGroup: { type: 'string' },
-              replayUrl: { type: 'string' }
-            }
-          }
-        }
+        firstReplayUrl: { type: 'string' }
       }
     }
   })
@@ -262,7 +245,7 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
       @Req() req: Request
-  ): Promise<{ total: number; items: Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; replayUrl: string }> }> {
+  ): Promise<{ total: number; firstReplayUrl: string }> {
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
@@ -272,14 +255,18 @@ export class WsgCodingJobController {
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
 
+    if (items.length === 0) {
+      return { total: 0, firstReplayUrl: '' };
+    }
+
     const serverUrl = `${req.protocol}://${req.get('host') ?? ''}`;
-    const itemsWithReplayUrls = await this.codingReplayService.generateReplayUrlsForItems(
+    const firstItemWithUrl = await this.codingReplayService.generateReplayUrlsForItemsBulk(
       workspaceId,
-      items,
+      [items[0]],
       serverUrl
     );
 
-    return { total: itemsWithReplayUrls.length, items: itemsWithReplayUrls };
+    return { total: items.length, firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? '' };
   }
 
   @Delete(':id')
