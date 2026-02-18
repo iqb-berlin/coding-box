@@ -1,5 +1,4 @@
 import { Processor, Process } from '@nestjs/bull';
-// Rebuild trigger
 import { Logger } from '@nestjs/common';
 import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -37,15 +36,7 @@ export class CodingAnalysisProcessor {
     this.logger.log(`Processing response analysis for workspace ${workspaceId}...`);
 
     try {
-      // Perform the heavy calculation
-      // Note: We need to access private methods or duplicate logic.
-      // Ideally, CodingAnalysisService should expose a public method for calculation that is used here,
-      // but to avoid circular deps or complex refactoring, we might need to move the logic here or make it public.
-      // For now, let's assume we move the logic here as planned.
-
       const analysis = await this.computeResponseAnalysis(workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, job);
-
-      // Cache the result
       await this.cacheService.set(cacheKey, analysis);
 
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
@@ -113,7 +104,9 @@ export class CodingAnalysisProcessor {
         .leftJoinAndSelect('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
+        .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
+        // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
+        .andWhere('(response.code_v2 != :aggregatedCode OR response.code_v2 IS NULL)', { aggregatedCode: -111 });
 
       qb.andWhere(new Brackets(qbInside => {
         chunk.forEach((item, index) => {
@@ -132,7 +125,6 @@ export class CodingAnalysisProcessor {
       this.analyzeBatch(
         responsesBatch,
         matchingFlags,
-        threshold,
         emptyResponses,
         duplicateValueGroups
       );
@@ -149,6 +141,21 @@ export class CodingAnalysisProcessor {
       }
     }
 
+    const mergedGroupsMap = new Map<string, DuplicateValueGroupDto>();
+    for (const group of duplicateValueGroups) {
+      const key = `${group.unitName}_${group.variableId}_${group.normalizedValue}`;
+      if (mergedGroupsMap.has(key)) {
+        // Merge occurrences into the existing group
+        mergedGroupsMap.get(key)!.occurrences.push(...group.occurrences);
+      } else {
+        mergedGroupsMap.set(key, { ...group, occurrences: [...group.occurrences] });
+      }
+    }
+
+    // Apply threshold filter on merged groups and build the final list
+    const mergedGroups = Array.from(mergedGroupsMap.values())
+      .filter(group => group.occurrences.length >= threshold);
+
     // Sort results
     emptyResponses.sort((a, b) => {
       if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
@@ -156,17 +163,17 @@ export class CodingAnalysisProcessor {
       return a.personLogin.localeCompare(b.personLogin);
     });
 
-    duplicateValueGroups.sort((a, b) => {
+    mergedGroups.sort((a, b) => {
       if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
       return a.variableId.localeCompare(b.variableId);
     });
 
-    const totalDuplicateResponses = duplicateValueGroups.reduce(
+    const totalDuplicateResponses = mergedGroups.reduce(
       (sum, group) => sum + group.occurrences.length,
       0
     );
 
-    this.logger.log(`Analysis complete. Processed ${totalProcessed} responses.`);
+    this.logger.log(`Analysis complete. Processed ${totalProcessed} responses. Found ${mergedGroups.length} duplicate groups.`);
 
     return {
       emptyResponses: {
@@ -174,9 +181,9 @@ export class CodingAnalysisProcessor {
         items: emptyResponses
       },
       duplicateValues: {
-        total: duplicateValueGroups.length,
+        total: mergedGroups.length,
         totalResponses: totalDuplicateResponses,
-        groups: duplicateValueGroups,
+        groups: mergedGroups,
         isAggregationApplied
       },
       matchingFlags: matchingFlags as unknown as string[],
@@ -187,7 +194,6 @@ export class CodingAnalysisProcessor {
   private analyzeBatch(
     responses: ResponseEntity[],
     matchingFlags: ResponseMatchingFlag[],
-    threshold: number,
     emptyResponses: EmptyResponseDto[],
     duplicateValueGroups: DuplicateValueGroupDto[]
   ) {
@@ -201,10 +207,10 @@ export class CodingAnalysisProcessor {
       // Empty Check - IMPROVED LOGIC
       const value = response.value;
       const isEmptyValue =
-                value === null ||
-                value === undefined ||
-                (typeof value === 'string' && value.trim() === '') ||
-                value === '[]';
+        value === null ||
+        value === undefined ||
+        (typeof value === 'string' && value.trim() === '') ||
+        value === '[]';
 
       if (isEmptyValue) {
         if (response.status_v2 === null) {
@@ -223,8 +229,6 @@ export class CodingAnalysisProcessor {
         continue; // Skip empty for duplicates
       }
 
-      // Prepare for Duplicate Check
-      // Key needs to be unique per variable definition
       const key = `${response.unit?.name || response.unitid}_${response.variableid}`;
       if (!responsesByUnitVariable.has(key)) {
         responsesByUnitVariable.set(key, []);
@@ -232,10 +236,7 @@ export class CodingAnalysisProcessor {
       responsesByUnitVariable.get(key)!.push(response);
     }
 
-    // Duplicate Analysis for the batch
     for (const [, groupResponses] of responsesByUnitVariable.entries()) {
-      if (groupResponses.length < threshold) continue;
-
       const valueGroups = new Map<string, ResponseEntity[]>();
       for (const response of groupResponses) {
         const normalizedValue = this.codingJobService.normalizeValue(
@@ -249,8 +250,6 @@ export class CodingAnalysisProcessor {
       }
 
       for (const [normalizedValue, valGroup] of valueGroups.entries()) {
-        if (valGroup.length < threshold) continue;
-
         const first = valGroup[0];
         duplicateValueGroups.push({
           unitName: first.unit?.name || '',

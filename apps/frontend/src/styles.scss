@@ -6,23 +6,30 @@ $iqb-primary: mat.m2-define-palette(mat.$m2-cyan-palette, 900);
 $iqb-accent: mat.m2-define-palette(mat.$m2-light-green-palette, A200);
 $iqb-warn: mat.m2-define-palette(mat.$m2-red-palette);
 
-$iqb-app-theme: mat.m2-define-light-theme((
-  color: (
-    primary: $iqb-primary,
-    accent: $iqb-accent,
-    warn: $iqb-warn,
-  ),
-  typography: mat.m2-define-typography-config(),
-  density: 0
-));
+$iqb-app-theme: mat.m2-define-light-theme((color: (primary: $iqb-primary,
+        accent: $iqb-accent,
+        warn: $iqb-warn,
+      ),
+      typography: mat.m2-define-typography-config(),
+      density: 0));
 @include mat.all-component-themes($iqb-app-theme);
 
 
-html, body { height: 100%; }
-body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Roboto, "Helvetica Neue", sans-serif;
+}
+
 :root {
   --primary: #{mat.m2-get-color-from-palette($iqb-primary)};
   --accent: #{mat.m2-get-color-from-palette($iqb-accent)};
+  --color-warning: #ff9800;
+  --color-success: #4caf50;
 }
 
 // Layout Utility Classes (Flexbox)
@@ -37,33 +44,106 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
 }
 
 // Common patterns
-.fx-row-space-between-center { @include flex-layout(row, space-between, center); }
-.fx-row-space-between-start { @include flex-layout(row, space-between, flex-start); }
-.fx-row-space-between-end { @include flex-layout(row, space-between, flex-end); }
-.fx-row-space-between-stretch { @include flex-layout(row, space-between, stretch); }
-.fx-row-space-around-center { @include flex-layout(row, space-around, center); }
-.fx-row-start-center { @include flex-layout(row, flex-start, center); }
-.fx-row-start-end { @include flex-layout(row, flex-start, flex-end); }
-.fx-row-start-stretch { @include flex-layout(row, flex-start, stretch); }
-.fx-row-start-start { @include flex-layout(row, flex-start, flex-start); }
-.fx-row-end-center { @include flex-layout(row, flex-end, center); }
-.fx-row-end-end { @include flex-layout(row, flex-end, flex-end); }
-.fx-row-end-stretch { @include flex-layout(row, flex-end, stretch); }
-.fx-row-center-center { @include flex-layout(row, center, center); }
-.fx-row-center-start { @include flex-layout(row, center, flex-start); }
-.fx-row-center-stretch { @include flex-layout(row, center, stretch); }
+.fx-row-space-between-center {
+  @include flex-layout(row, space-between, center);
+}
 
-.fx-column-start-start { @include flex-layout(column, flex-start, flex-start); }
-.fx-column-start-center { @include flex-layout(column, flex-start, center); }
-.fx-column-start-stretch { @include flex-layout(column, flex-start, stretch); }
-.fx-column-center-center { @include flex-layout(column, center, center); }
-.fx-column-center-end { @include flex-layout(column, center, flex-end); }
-.fx-column-end-stretch { @include flex-layout(column, flex-end, stretch); }
-.fx-column-space-between-stretch { @include flex-layout(column, space-between, stretch); }
-.fx-column-space-between-end { @include flex-layout(column, space-between, flex-end); }
+.fx-row-space-between-start {
+  @include flex-layout(row, space-between, flex-start);
+}
 
-.fx-flex-fill { flex: 1 1 0; box-sizing: border-box; }
-.fx-wrap { flex-wrap: wrap; }
+.fx-row-space-between-end {
+  @include flex-layout(row, space-between, flex-end);
+}
+
+.fx-row-space-between-stretch {
+  @include flex-layout(row, space-between, stretch);
+}
+
+.fx-row-space-around-center {
+  @include flex-layout(row, space-around, center);
+}
+
+.fx-row-start-center {
+  @include flex-layout(row, flex-start, center);
+}
+
+.fx-row-start-end {
+  @include flex-layout(row, flex-start, flex-end);
+}
+
+.fx-row-start-stretch {
+  @include flex-layout(row, flex-start, stretch);
+}
+
+.fx-row-start-start {
+  @include flex-layout(row, flex-start, flex-start);
+}
+
+.fx-row-end-center {
+  @include flex-layout(row, flex-end, center);
+}
+
+.fx-row-end-end {
+  @include flex-layout(row, flex-end, flex-end);
+}
+
+.fx-row-end-stretch {
+  @include flex-layout(row, flex-end, stretch);
+}
+
+.fx-row-center-center {
+  @include flex-layout(row, center, center);
+}
+
+.fx-row-center-start {
+  @include flex-layout(row, center, flex-start);
+}
+
+.fx-row-center-stretch {
+  @include flex-layout(row, center, stretch);
+}
+
+.fx-column-start-start {
+  @include flex-layout(column, flex-start, flex-start);
+}
+
+.fx-column-start-center {
+  @include flex-layout(column, flex-start, center);
+}
+
+.fx-column-start-stretch {
+  @include flex-layout(column, flex-start, stretch);
+}
+
+.fx-column-center-center {
+  @include flex-layout(column, center, center);
+}
+
+.fx-column-center-end {
+  @include flex-layout(column, center, flex-end);
+}
+
+.fx-column-end-stretch {
+  @include flex-layout(column, flex-end, stretch);
+}
+
+.fx-column-space-between-stretch {
+  @include flex-layout(column, space-between, stretch);
+}
+
+.fx-column-space-between-end {
+  @include flex-layout(column, space-between, flex-end);
+}
+
+.fx-flex-fill {
+  flex: 1 1 0;
+  box-sizing: border-box;
+}
+
+.fx-wrap {
+  flex-wrap: wrap;
+}
 
 // Flex percentages
 @for $i from 1 through 10 {
@@ -73,6 +153,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
     max-width: #{$i * 10%};
   }
 }
+
 .fx-flex-row-33 {
   flex: 1 1 100%;
   box-sizing: border-box;
@@ -90,6 +171,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
 .snackbar-error {
   border: 3px double #ff4d4d;
   background-color: #ff4d4d;
+
   .mat-mdc-button.mat-mdc-snack-bar-action:not(:disabled) {
     color: #ff4d4d !important;
   }
@@ -106,7 +188,7 @@ body { margin: 0; font-family: Roboto, "Helvetica Neue", sans-serif;}
     flex-direction: column;
     overflow: hidden !important; // Container and Surface should not scroll
   }
-  
+
   // Target the component host specifically
   files-validation-dialog {
     display: flex;

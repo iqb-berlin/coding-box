@@ -1722,6 +1722,7 @@
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
     "coding-incomplete": "Gesamt zu kodierende Fälle:",
+    "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
     "completion-progress": "Fertigstellungsfortschritt",

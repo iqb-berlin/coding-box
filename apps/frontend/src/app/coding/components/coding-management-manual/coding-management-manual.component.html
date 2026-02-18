@@ -54,9 +54,13 @@
       <!-- Aggregation Configuration and Actions -->
       <div class="manual-coding-sections-container" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
         <div class="aggregation-config" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
-          <h3 class="subsection-title">
+          <h3 class="subsection-title"
+            [matTooltip]="responseAnalysis?.isCalculating ? 'Einstellungen gesperrt während die Analyse läuft' : ''">
             <mat-icon>settings</mat-icon>
             {{ 'coding-management-manual.duplicate-aggregation.config-title' | translate }}
+            <mat-icon *ngIf="responseAnalysis?.isCalculating"
+              style="font-size: 16px; vertical-align: middle; color: var(--color-warning, #ff9800);"
+              matTooltip="Analyse läuft – Einstellungen gesperrt">lock</mat-icon>
           </h3>
           <p class="subsection-description">
             {{ 'coding-management-manual.duplicate-aggregation.config-description' | translate }}
@@ -70,7 +74,8 @@
                       <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate
                         }}</mat-label>
                       <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
-                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1">
+                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1"
+                        [disabled]="!!responseAnalysis?.isCalculating">
                     </mat-form-field>
 
                     <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
@@ -90,20 +95,21 @@
                     <div class="checkbox-group">
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode" color="primary">
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || responseAnalysis?.isCalculating"
+                        color="primary">
                         {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
                       </mat-checkbox>
 
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE) || responseAnalysis?.isCalculating"
                         color="primary">
                         {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
                       </mat-checkbox>
 
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE) || responseAnalysis?.isCalculating"
                         color="primary">
                         {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
                       </mat-checkbox>
@@ -138,7 +144,8 @@
 
           <div *ngIf="responseAnalysis" class="analysis-summary">
             <!-- Empty Responses Summary -->
-            <div class="analysis-card" [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
+            <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
+              [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
               <div class="analysis-header" (click)="toggleEmptyResponsesDetails()">
                 <div class="analysis-icon-title">
                   <mat-icon [class.warning-icon]="responseAnalysis.emptyResponses.total > 0">
@@ -198,7 +205,8 @@
             </div>
 
             <!-- Duplicate Values Summary -->
-            <div class="analysis-card" [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
+            <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
+              [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
               <div class="analysis-header" (click)="toggleDuplicateValuesDetails()">
                 <div class="analysis-icon-title">
                   <mat-icon [class.warning-icon]="responseAnalysis.duplicateValues.total > 0">
@@ -493,7 +501,14 @@
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
-                <span class="stat-value">{{appliedResultsOverview.totalIncompleteResponses}}</span>
+                <span class="stat-value">{{effectiveCodingCases}}</span>
+              </div>
+              <div class="stat-item" *ngIf="aggregationSavings > 0">
+                <span class="stat-label" style="color: var(--color-success, #4caf50);">
+                  <mat-icon style="font-size: 16px; vertical-align: middle;">layers</mat-icon>
+                  {{ 'applied-results-overview.aggregation-savings' | translate }}
+                </span>
+                <span class="stat-value" style="color: var(--color-success, #4caf50);">-{{aggregationSavings}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.applied-results' | translate }}</span>
@@ -514,6 +529,7 @@
             </div>
           </div>
         </div>
+
 
         <div class="coder-training-list-container">
           <h3>Kodierer-Schulungen</h3>
