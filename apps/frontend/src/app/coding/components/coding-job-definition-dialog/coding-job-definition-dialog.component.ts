@@ -424,7 +424,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const getTotalCases = (unitName?: string, variableId?: string) => {
       const key = makeKey(unitName, variableId);
       const loadedVar = this.variables.find(v => makeKey(v.unitName, v.variableId) === key);
-      return loadedVar?.responseCount || 0;
+      return loadedVar?.uniqueCasesAfterAggregation ?? loadedVar?.responseCount ?? 0;
     };
 
     // Count cases used in each job definition (excluding the current one being edited)
@@ -482,10 +482,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     // Adjust available cases based on cases used in definitions
+    // Use uniqueCasesAfterAggregation as the effective total (respects aggregation grouping)
     this.variables.forEach(v => {
       const key = makeKey(v.unitName, v.variableId);
       const casesUsed = casesUsedInDefinitions.get(key) || 0;
-      const originalAvailable = v.responseCount || 0;
+      const originalAvailable = v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0;
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 
@@ -530,11 +531,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     // Apply availability filter
     if (this.availabilityFilter !== 'all') {
       filteredData = filteredData.filter(v => {
+        const effectiveTotal = v.uniqueCasesAfterAggregation ?? v.responseCount;
         const availableRaw = v.availableCases !== undefined ?
           v.availableCases :
-          v.responseCount ?? 0;
-        const totalRaw = v.responseCount !== undefined ?
-          v.responseCount :
+          effectiveTotal ?? 0;
+        const totalRaw = effectiveTotal !== undefined ?
+          effectiveTotal :
           v.availableCases ?? 0;
 
         const available = Number(availableRaw ?? 0);
@@ -619,7 +621,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   getVariableDisabledReason(variable: Variable): string {
     // Check if no cases are available
     if (variable.availableCases !== undefined && variable.availableCases === 0) {
-      return `Alle ${variable.responseCount || 0} Fälle bereits verteilt`;
+      const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? 0;
+      return `Alle ${effectiveTotal} Fälle bereits verteilt`;
     }
 
     // Check if variable is included in currently selected variable bundle
@@ -647,7 +650,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const isDefinitionMode = this.data.mode === 'definition';
 
     const getAvailableCases = (v: Variable): number => (
-      v.availableCases ?? v.responseCount ?? 0
+      v.availableCases ?? v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0
     );
 
     // Sum all selected variables
@@ -691,11 +694,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getAvailabilityClass(variable: Variable): string {
-    if (variable.availableCases === undefined || variable.responseCount === undefined) {
+    const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount;
+    if (variable.availableCases === undefined || effectiveTotal === undefined) {
       return '';
     }
 
-    const availabilityPercentage = (variable.availableCases / variable.responseCount) * 100;
+    const availabilityPercentage = (variable.availableCases / effectiveTotal) * 100;
 
     if (availabilityPercentage === 100) {
       return 'availability-full';
@@ -706,11 +710,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getAvailabilityText(variable: Variable): string {
-    if (variable.availableCases === undefined || variable.responseCount === undefined) {
-      return `${variable.responseCount || 0}`;
+    const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount;
+    if (variable.availableCases === undefined || effectiveTotal === undefined) {
+      return `${effectiveTotal || 0}`;
     }
 
-    return `${variable.availableCases}/${variable.responseCount}`;
+    return `${variable.availableCases}/${effectiveTotal}`;
   }
 
   isAllSelected(): boolean {

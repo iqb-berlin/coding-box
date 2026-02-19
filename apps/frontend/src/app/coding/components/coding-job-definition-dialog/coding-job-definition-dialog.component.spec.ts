@@ -39,13 +39,13 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   const mockVariables: Variable[] = [
     {
-      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, availableCases: 10
+      unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, availableCases: 10, uniqueCasesAfterAggregation: 10
     },
     {
-      unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 0
+      unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 0, uniqueCasesAfterAggregation: 5
     },
     {
-      unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8, availableCases: 4
+      unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8, availableCases: 4, uniqueCasesAfterAggregation: 8
     }
   ];
 

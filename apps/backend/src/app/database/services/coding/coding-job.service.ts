@@ -1390,12 +1390,10 @@ export class CodingJobService {
     const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
     const warnings: JobCreationWarning[] = [];
 
-    // Get response matching mode for this workspace
+    // Get response matching mode and aggregation threshold for this workspace
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
-
-    // Initialize remaining cases for global cap
-    // let remainingCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ? maxCodingCases : undefined;
-    // We now use per-item quota instead of global decrementing cap
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
 
     const items: DistributionItem[] = [];
     const allVariables: VariableReference[] = [];
@@ -1453,9 +1451,29 @@ export class CodingJobService {
       );
       const totalResponses = responses.length;
 
-      // Calculate aggregation info based on matching mode
+      // Calculate aggregation info based on matching mode, applying threshold exactly as in createDistributedCodingJobs
       const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-      const uniqueCases = aggregatedGroups.length;
+
+      const filteredResponses: SlimResponse[] = [];
+      let uniqueCases = 0;
+
+      if (aggregationThreshold !== null) {
+        // Apply filtering logic: if group size >= threshold, keep 1 representative. Else keep all.
+        aggregatedGroups.forEach(group => {
+          if (group.responses.length >= threshold) {
+            group.responses.sort((a, b) => a.id - b.id);
+            filteredResponses.push(group.responses[0]);
+            uniqueCases += 1;
+          } else {
+            filteredResponses.push(...group.responses);
+            uniqueCases += group.responses.length;
+          }
+        });
+      } else {
+        // Aggregation disabled
+        filteredResponses.push(...responses);
+        uniqueCases = responses.length;
+      }
 
       aggregationInfo[itemKey] = {
         uniqueCases,
@@ -1507,7 +1525,7 @@ export class CodingJobService {
         doubleCodingCount = Math.min(doubleCodingCount, itemQuota);
       }
 
-      const sortedResponses = [...responses].sort((a, b) => {
+      const sortedResponses = [...filteredResponses].sort((a, b) => {
         if (caseOrderingMode === 'alternating') {
           if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
           if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
