@@ -918,7 +918,7 @@ export class CodingJobService {
     });
 
     queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
-    queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+    queryBuilder.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
 
     const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
 
@@ -1330,7 +1330,7 @@ export class CodingJobService {
           statusStringToNumber('INTENDED_INCOMPLETE')
         ]
       })
-      .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};

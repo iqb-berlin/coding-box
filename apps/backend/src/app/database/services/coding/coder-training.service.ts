@@ -105,43 +105,23 @@ export class CoderTrainingService {
       const sampleCount = config.sampleCount;
       const configKey = `${unitId}:${variableId}`;
 
-      this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
+      this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId} (limit ${sampleCount})`);
 
-      const responses = await this.responseRepository.find({
-        where: {
-          status_v1: statusStringToNumber('CODING_INCOMPLETE'),
-          variableid: variableId
-        },
-        relations: ['unit', 'unit.booklet', 'unit.booklet.person', 'unit.booklet.bookletinfo'],
-        select: {
-          id: true,
-          value: true,
-          variableid: true,
-          status_v1: true,
-          code_v1: true,
-          score_v1: true,
-          unit: {
-            id: true,
-            name: true,
-            alias: true,
-            booklet: {
-              id: true,
-              person: {
-                id: true,
-                login: true,
-                code: true,
-                group: true
-              },
-              bookletinfo: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      });
+      // Filter and limit at the DB level to avoid loading all responses into memory
+      const unitResponses = await this.responseRepository
+        .createQueryBuilder('response')
+        .leftJoinAndSelect('response.unit', 'unit')
+        .leftJoinAndSelect('unit.booklet', 'booklet')
+        .leftJoinAndSelect('booklet.person', 'person')
+        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+        .where('response.status_v1 = :status_v1', { status_v1: statusStringToNumber('CODING_INCOMPLETE') })
+        .andWhere('response.variableid = :variableId', { variableId })
+        .andWhere('response.status_v2 IS NULL')
+        .andWhere('unit.alias = :unitId', { unitId })
+        .orderBy('response.id', 'ASC')
+        .take(sampleCount)
+        .getMany();
 
-      const unitResponses = responses.filter(r => r.unit?.alias === unitId);
       this.logger.log(`Found ${unitResponses.length} CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
       const transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
         responseId: r.id,
@@ -296,7 +276,7 @@ export class CoderTrainingService {
           }
         }
 
-        for (const response of trainingPackage.responses) {
+        const codingJobUnits: CodingJobUnit[] = trainingPackage.responses.map(response => {
           const codingJobUnit = new CodingJobUnit();
           codingJobUnit.coding_job_id = jobId;
           codingJobUnit.response_id = response.responseId;
@@ -308,10 +288,10 @@ export class CoderTrainingService {
           codingJobUnit.person_login = response.personLogin;
           codingJobUnit.person_code = response.personCode;
           codingJobUnit.is_open = true;
-          await this.codingJobUnitRepository.save(codingJobUnit);
-
-          this.logger.log(`Added coding job unit for response ${response.responseId} to training job ${jobId} for coder ${coderName}`);
-        }
+          return codingJobUnit;
+        });
+        await this.codingJobUnitRepository.save(codingJobUnits);
+        this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
 
         this.logger.log(`Successfully created training job ${jobId} with ${trainingPackage.responses.length} coding units for coder ${coderName}`);
       }
@@ -407,8 +387,6 @@ export class CoderTrainingService {
       return [];
     }
 
-    // Map by Response ID to ensure we compare the EXACT same student response
-    // Key: responseId
     const responseMap = new Map<number, {
       unitName: string;
       variableId: string;
@@ -496,10 +474,7 @@ export class CoderTrainingService {
               codersData.push({
                 trainingId: training.id,
                 trainingLabel: training.label,
-                coderId: job.id, // Use Job ID as unique identifier for "Coder in this Training Context" to be safe? Or User ID?
-                // The frontend uses JobId for "Within Training".
-                // Ideally we use JobId because a user could be in multiple trainings or even multiple times in same training (unlikely but possible).
-                // Let's use Job ID to be consistent with "Within Training" logic which uses `c.jobId`.
+                coderId: job.id,
                 coderName: coderName,
                 code,
                 score
@@ -509,7 +484,6 @@ export class CoderTrainingService {
         }
       }
 
-      // Only add row if we have data? The map was built from EXISTENT units, so at least one coder must have it involved.
       comparisonData.push({
         unitName: info.unitName,
         variableId: info.variableId,
