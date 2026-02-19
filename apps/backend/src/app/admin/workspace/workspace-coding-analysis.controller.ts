@@ -213,6 +213,10 @@ export class WorkspaceCodingAnalysisController {
           availableCases: {
             type: 'number',
             description: 'Number of cases available for new job assignments'
+          },
+          uniqueCasesAfterAggregation: {
+            type: 'number',
+            description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
           }
         }
       }
@@ -228,6 +232,7 @@ export class WorkspaceCodingAnalysisController {
         responseCount: number;
         casesInJobs: number;
         availableCases: number;
+        uniqueCasesAfterAggregation: number;
       }[]
       > {
     return this.codingValidationService.getCodingIncompleteVariables(

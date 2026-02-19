@@ -12,6 +12,7 @@ import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingJobService } from './coding-job.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -73,7 +74,8 @@ export class CoderTrainingService {
     @InjectRepository(CoderTrainingCoder)
     private coderTrainingCoderRepository: Repository<CoderTrainingCoder>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    private codingJobService: CodingJobService
   ) { }
 
   private sampleResponses(
@@ -96,6 +98,11 @@ export class CoderTrainingService {
   ): Promise<TrainingPackage[]> {
     this.logger.log(`Generating coder training packages for workspace ${workspaceId} with ${selectedCoders.length} coders and ${variableConfigs.length} variable configs`);
 
+    // Load aggregation settings once for this workspace
+    const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
+    const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+    this.logger.log(`Aggregation threshold: ${aggregationThreshold}, matching flags: ${matchingFlags.join(', ')}`);
+
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
 
@@ -105,24 +112,29 @@ export class CoderTrainingService {
       const sampleCount = config.sampleCount;
       const configKey = `${unitId}:${variableId}`;
 
-      this.logger.log(`Querying CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId} (limit ${sampleCount})`);
+      this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
 
-      // Filter and limit at the DB level to avoid loading all responses into memory
+      // Fetch all eligible responses (no DB-level limit — we need the full set to apply aggregation grouping)
       const unitResponses = await this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status_v1', { status_v1: statusStringToNumber('CODING_INCOMPLETE') })
+        .where('response.status_v1 IN (:...statuses)', {
+          statuses: [
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE')
+          ]
+        })
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
         .andWhere('unit.alias = :unitId', { unitId })
         .orderBy('response.id', 'ASC')
-        .take(sampleCount)
         .getMany();
 
-      this.logger.log(`Found ${unitResponses.length} CODING_INCOMPLETE responses for unit ${unitId}, variable ${variableId}`);
+      this.logger.log(`Found ${unitResponses.length} incomplete responses for unit ${unitId}, variable ${variableId}`);
+
       const transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
         responseId: r.id,
         unitAlias: r.unit?.alias || '',
@@ -136,7 +148,45 @@ export class CoderTrainingService {
         variable: r.variableid
       }));
 
-      const sampledResponses = this.sampleResponses(transformedResponses, sampleCount);
+      // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group
+      let responsesForSampling: CoderTrainingResponse[];
+      if (aggregationThreshold !== null) {
+        // Build slim-compatible objects for aggregation
+        const slimResponses = transformedResponses.map(r => ({
+          id: r.responseId,
+          variableid: r.variableId,
+          value: r.value,
+          unitName: r.unitName,
+          unitAlias: r.unitAlias,
+          bookletName: r.bookletName,
+          personLogin: r.personLogin,
+          personCode: r.personCode,
+          personGroup: r.personGroup
+        }));
+        const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(slimResponses, matchingFlags);
+        responsesForSampling = [];
+        for (const group of aggregatedGroups) {
+          if (group.responses.length >= aggregationThreshold) {
+            // Keep only 1 representative (lowest id first)
+            const representative = group.responses.reduce((a, b) => (a.id < b.id ? a : b));
+            const orig = transformedResponses.find(r => r.responseId === representative.id);
+            if (orig) responsesForSampling.push(orig);
+          } else {
+            // Below threshold — all responses are kept individually
+            for (const slimR of group.responses) {
+              const orig = transformedResponses.find(r => r.responseId === slimR.id);
+              if (orig) responsesForSampling.push(orig);
+            }
+          }
+        }
+        this.logger.log(
+          `After aggregation grouping: ${responsesForSampling.length} cases (from ${transformedResponses.length} raw responses) for unit ${unitId}, variable ${variableId}`
+        );
+      } else {
+        responsesForSampling = transformedResponses;
+      }
+
+      const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount);
       sampledResponsesByConfig.set(configKey, sampledResponses);
 
       this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
