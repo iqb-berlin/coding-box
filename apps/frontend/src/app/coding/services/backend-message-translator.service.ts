@@ -76,17 +76,17 @@ export class BackendMessageTranslatorService {
 
     const trainingCreatedMatch = message.match(/^Successfully created (\d+) coder training jobs?$/i);
     if (trainingCreatedMatch) {
-      return this.translateService.instant('trainings.create.success', { count: trainingCreatedMatch[1] });
+      return this.translateService.instant('coding.trainings.create.success', { count: trainingCreatedMatch[1] });
     }
 
     const trainingUpdatedMatch = message.match(/^Successfully updated coder training label to "(.+)"$/i);
     if (trainingUpdatedMatch) {
-      return this.translateService.instant('trainings.update.success', { label: trainingUpdatedMatch[1] });
+      return this.translateService.instant('coding.trainings.update.success', { label: trainingUpdatedMatch[1] });
     }
 
     const trainingDeletedMatch = message.match(/^Successfully deleted coder training "(.+)" with (\d+) associated jobs?$/i);
     if (trainingDeletedMatch) {
-      return this.translateService.instant('trainings.delete.success', {
+      return this.translateService.instant('coding.trainings.delete.success', {
         label: trainingDeletedMatch[1],
         count: trainingDeletedMatch[2]
       });
@@ -94,17 +94,17 @@ export class BackendMessageTranslatorService {
 
     const trainingCreateErrorMatch = message.match(/^Error creating coder training jobs: (.+)$/i);
     if (trainingCreateErrorMatch) {
-      return this.translateService.instant('trainings.create.error.generic', { error: trainingCreateErrorMatch[1] });
+      return this.translateService.instant('coding.trainings.create.error.generic', { error: trainingCreateErrorMatch[1] });
     }
 
     const trainingUpdateErrorMatch = message.match(/^Error updating coder training label: (.+)$/i);
     if (trainingUpdateErrorMatch) {
-      return this.translateService.instant('trainings.update.error.generic', { error: trainingUpdateErrorMatch[1] });
+      return this.translateService.instant('coding.trainings.update.error.generic', { error: trainingUpdateErrorMatch[1] });
     }
 
     const trainingNotFoundMatch = message.match(/^Coder training with ID (\d+) not found in workspace (\d+)$/i);
     if (trainingNotFoundMatch) {
-      return this.translateService.instant('trainings.update.error.not-found', {
+      return this.translateService.instant('coding.trainings.update.error.not-found', {
         trainingId: trainingNotFoundMatch[1],
         workspaceId: trainingNotFoundMatch[2]
       });
@@ -112,7 +112,7 @@ export class BackendMessageTranslatorService {
 
     const trainingDeleteErrorMatch = message.match(/^Error deleting coder training: (.+)$/i);
     if (trainingDeleteErrorMatch) {
-      return this.translateService.instant('trainings.delete.error.generic', { error: trainingDeleteErrorMatch[1] });
+      return this.translateService.instant('coding.trainings.delete.error.generic', { error: trainingDeleteErrorMatch[1] });
     }
 
     const processingBackgroundMatch = message.match(/^Processing (\d+) test persons in the background\. Check job status with jobId: (.+)$/i);
