@@ -213,6 +213,10 @@ export class WorkspaceCodingAnalysisController {
           availableCases: {
             type: 'number',
             description: 'Number of cases available for new job assignments'
+          },
+          uniqueCasesAfterAggregation: {
+            type: 'number',
+            description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
           }
         }
       }
@@ -228,6 +232,7 @@ export class WorkspaceCodingAnalysisController {
         responseCount: number;
         casesInJobs: number;
         availableCases: number;
+        uniqueCasesAfterAggregation: number;
       }[]
       > {
     return this.codingValidationService.getCodingIncompleteVariables(
@@ -386,6 +391,10 @@ export class WorkspaceCodingAnalysisController {
         analysisTimestamp: {
           type: 'string',
           description: 'ISO timestamp of when the analysis was performed'
+        },
+        isCalculating: {
+          type: 'boolean',
+          description: 'Whether the analysis is currently being calculated in the background'
         }
       }
     }
@@ -475,5 +484,18 @@ export class WorkspaceCodingAnalysisController {
       body.threshold,
       body.aggregateMode
     );
+  }
+
+  @Post(':workspace_id/coding/response-analysis')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Response analysis triggered successfully.'
+  })
+  async postTriggerResponseAnalysis(
+    @WorkspaceId() workspace_id: number
+  ): Promise<void> {
+    await this.codingAnalysisService.startAnalysis(workspace_id);
   }
 }

@@ -182,3 +182,140 @@
     background-color: rgba(158, 158, 158, 0.1);
   }
 }
+
+.active-job-container {
+  background-color: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+
+  h3 {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 16px;
+    color: #f57c00;
+  }
+
+  .progress-details {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 8px;
+
+    mat-progress-bar {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+    }
+
+    span {
+      font-weight: 500;
+      font-size: 14px;
+      min-width: 40px;
+    }
+  }
+
+  .job-info {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+  }
+}
+
+.active-badge {
+  background-color: #f57c00;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  margin-left: 6px;
+  font-weight: bold;
+}
+
+.actions-container {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.top-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+
+  .info-toggle {
+    font-size: 13px;
+    color: #666;
+
+    mat-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      margin-right: 4px;
+    }
+  }
+}
+
+.info-block {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+
+  .info-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+
+    mat-icon {
+      font-size: 24px;
+      width: 24px;
+      height: 24px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: #1a73e8;
+    }
+  }
+
+  .info-desc {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #444;
+    margin-bottom: 16px;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+
+    .info-item {
+      background: white;
+      padding: 12px;
+      border-radius: 6px;
+      border-left: 3px solid #1a73e8;
+
+      strong {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 4px;
+        color: #333;
+      }
+
+      p {
+        margin: 0;
+        font-size: 12px;
+        color: #666;
+        line-height: 1.4;
+      }
+    }
+  }
+}

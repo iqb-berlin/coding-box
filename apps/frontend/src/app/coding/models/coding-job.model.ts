@@ -42,6 +42,7 @@ export interface Variable {
   responseCount?: number;
   casesInJobs?: number;
   availableCases?: number;
+  uniqueCasesAfterAggregation?: number;
 }
 
 export interface VariableBundle {

@@ -54,9 +54,13 @@
       <!-- Aggregation Configuration and Actions -->
       <div class="manual-coding-sections-container" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
         <div class="aggregation-config" *ngIf="responseAnalysis || isLoadingResponseAnalysis">
-          <h3 class="subsection-title">
+          <h3 class="subsection-title"
+            [matTooltip]="responseAnalysis?.isCalculating ? 'Einstellungen gesperrt während die Analyse läuft' : ''">
             <mat-icon>settings</mat-icon>
             {{ 'coding-management-manual.duplicate-aggregation.config-title' | translate }}
+            <mat-icon *ngIf="responseAnalysis?.isCalculating"
+              style="font-size: 16px; vertical-align: middle; color: var(--color-warning, #ff9800);"
+              matTooltip="Analyse läuft – Einstellungen gesperrt">lock</mat-icon>
           </h3>
           <p class="subsection-description">
             {{ 'coding-management-manual.duplicate-aggregation.config-description' | translate }}
@@ -70,7 +74,8 @@
                       <mat-label>{{ 'coding-management-manual.duplicate-aggregation.threshold-label' | translate
                         }}</mat-label>
                       <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
-                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1">
+                        (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1"
+                        [disabled]="!!responseAnalysis?.isCalculating">
                     </mat-form-field>
 
                     <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
@@ -90,20 +95,21 @@
                     <div class="checkbox-group">
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode" color="primary">
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || responseAnalysis?.isCalculating"
+                        color="primary">
                         {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
                       </mat-checkbox>
 
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE) || responseAnalysis?.isCalculating"
                         color="primary">
                         {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
                       </mat-checkbox>
 
                       <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
                         (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE) || responseAnalysis?.isCalculating"
                         color="primary">
                         {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
                       </mat-checkbox>
@@ -120,13 +126,17 @@
           <h3 class="subsection-title">
             <mat-icon>analytics</mat-icon>
             {{ 'coding-management-manual.response-analysis.title' | translate }}
-            <button mat-icon-button (click)="refreshResponseAnalysis()"
-              matTooltip="{{ 'coding-management-manual.response-analysis.refresh' | translate }}"
-              [disabled]="isLoadingResponseAnalysis">
-              <mat-icon>refresh</mat-icon>
+
+            <button mat-icon-button (click)="restartAnalysis()" matTooltip="Antwortanalyse neu berechnen"
+              [disabled]="isLoadingResponseAnalysis || responseAnalysis?.isCalculating">
+              <mat-icon>autorenew</mat-icon>
             </button>
-            <span *ngIf="isLoadingResponseAnalysis" class="loading-indicator">
+            <span *ngIf="isLoadingResponseAnalysis || responseAnalysis?.isCalculating" class="loading-indicator">
               <mat-spinner diameter="16"></mat-spinner>
+              <span *ngIf="responseAnalysis?.isCalculating" style="margin-left: 8px; font-size: 12px;">
+                Berechnung läuft... <span *ngIf="responseAnalysis?.progress != null">({{ responseAnalysis?.progress
+                  }}%)</span>
+              </span>
             </span>
           </h3>
           <p class="subsection-description">{{ 'coding-management-manual.response-analysis.description' | translate }}
@@ -134,7 +144,8 @@
 
           <div *ngIf="responseAnalysis" class="analysis-summary">
             <!-- Empty Responses Summary -->
-            <div class="analysis-card" [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
+            <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
+              [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
               <div class="analysis-header" (click)="toggleEmptyResponsesDetails()">
                 <div class="analysis-icon-title">
                   <mat-icon [class.warning-icon]="responseAnalysis.emptyResponses.total > 0">
@@ -159,7 +170,9 @@
                         <th>{{ 'coding-management-manual.response-analysis.table.unit' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.variable' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.person' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.group' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.value' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -167,22 +180,21 @@
                         <td>{{ item.unitAlias || item.unitName }}</td>
                         <td>{{ item.variableId }}</td>
                         <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
+                        <td>{{ item.personGroup }}</td>
                         <td>{{ item.bookletName }}</td>
+                        <td class="value-cell">{{ item.value || '(leer)' }}</td>
                       </tr>
                     </tbody>
                   </table>
                 </div>
 
-                <mat-paginator [length]="responseAnalysis.emptyResponses.total"
-                  [pageSize]="emptyPageSize"
-                  [pageSizeOptions]="[5, 10, 25, 50, 100]"
-                  [pageIndex]="emptyPageIndex"
-                  (page)="onEmptyPageChange($event)"
-                  aria-label="Select page of empty responses">
+                <mat-paginator [length]="responseAnalysis.emptyResponses.total" [pageSize]="emptyPageSize"
+                  [pageSizeOptions]="[5, 10, 25, 50, 100]" [pageIndex]="emptyPageIndex"
+                  (page)="onEmptyPageChange($event)" aria-label="Select page of empty responses">
                 </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
-                    [disabled]="isApplyingEmptyCoding"
+                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating"
                     [matTooltip]="'coding-management-manual.response-analysis.apply-empty-coding-tooltip' | translate">
                     <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
                     <mat-spinner *ngIf="isApplyingEmptyCoding" diameter="20"></mat-spinner>
@@ -193,7 +205,8 @@
             </div>
 
             <!-- Duplicate Values Summary -->
-            <div class="analysis-card" [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
+            <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
+              [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
               <div class="analysis-header" (click)="toggleDuplicateValuesDetails()">
                 <div class="analysis-icon-title">
                   <mat-icon [class.warning-icon]="responseAnalysis.duplicateValues.total > 0">
@@ -244,12 +257,9 @@
                   </ul>
                 </div>
 
-                <mat-paginator [length]="responseAnalysis.duplicateValues.total"
-                  [pageSize]="duplicatePageSize"
-                  [pageSizeOptions]="[5, 10, 20, 50, 100]"
-                  [pageIndex]="duplicatePageIndex"
-                  (page)="onDuplicatePageChange($event)"
-                  aria-label="Select page of duplicate groups">
+                <mat-paginator [length]="responseAnalysis.duplicateValues.total" [pageSize]="duplicatePageSize"
+                  [pageSizeOptions]="[5, 10, 20, 50, 100]" [pageIndex]="duplicatePageIndex"
+                  (page)="onDuplicatePageChange($event)" aria-label="Select page of duplicate groups">
                 </mat-paginator>
               </div>
             </div>
@@ -491,7 +501,14 @@
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
-                <span class="stat-value">{{appliedResultsOverview.totalIncompleteResponses}}</span>
+                <span class="stat-value">{{effectiveCodingCases}}</span>
+              </div>
+              <div class="stat-item" *ngIf="aggregationSavings > 0">
+                <span class="stat-label" style="color: var(--color-success, #4caf50);">
+                  <mat-icon style="font-size: 16px; vertical-align: middle;">layers</mat-icon>
+                  {{ 'applied-results-overview.aggregation-savings' | translate }}
+                </span>
+                <span class="stat-value" style="color: var(--color-success, #4caf50);">-{{aggregationSavings}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.applied-results' | translate }}</span>
@@ -512,6 +529,7 @@
             </div>
           </div>
         </div>
+
 
         <div class="coder-training-list-container">
           <h3>Kodierer-Schulungen</h3>
