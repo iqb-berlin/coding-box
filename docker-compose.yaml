@@ -10,11 +10,18 @@ x-env-redis: &env-redis
   REDIS_PORT: 6379
   REDIS_PREFIX: coding-box
 
-x-env-keycloak: &env-keycloak
-  KEYCLOAK_URL: ${KEYCLOAK_URL}
-  KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-  KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
-  KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+x-env-oidc: &env-oidc
+  OIDC_PROVIDER_URL: ${OIDC_PROVIDER_URL}
+  OIDC_ISSUER: ${OIDC_ISSUER}
+  OIDC_ACCOUNT_ENDPOINT: ${OIDC_ACCOUNT_ENDPOINT}
+  OIDC_AUTHORIZATION_ENDPOINT: ${OIDC_AUTHORIZATION_ENDPOINT}
+  OIDC_TOKEN_ENDPOINT: ${OIDC_TOKEN_ENDPOINT}
+  OIDC_USERINFO_ENDPOINT: ${OIDC_USERINFO_ENDPOINT}
+  OIDC_END_SESSION_ENDPOINT: ${OIDC_END_SESSION_ENDPOINT}
+  OIDC_JWKS_URI: ${OIDC_JWKS_URI}
+  OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+  OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+  OAUTH2_REDIRECT_URL: ${OAUTH2_REDIRECT_URL}
 
 services:
   redis:
@@ -64,9 +71,7 @@ services:
       redis:
         condition: service_healthy
     environment:
-      API_HOST: backend
-      JWT_SECRET: ${JWT_SECRET}
-      <<: [ *env-redis, *env-postgres, *env-keycloak ]
+      <<: [ *env-redis, *env-postgres, *env-oidc ]
     networks:
       - application-network
 

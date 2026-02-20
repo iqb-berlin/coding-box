@@ -7,11 +7,11 @@ mkdir -p /usr/share/nginx/html/assets/config
 cat > /usr/share/nginx/html/assets/config/runtime-config.js <<EOF
 window.RUNTIME_CONFIG = {
   keycloak: {
-    url: "${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}",
-    realm: "${KEYCLOAK_REALM:-iqb}",
-    clientId: "${KEYCLOAK_CLIENT_ID:-coding-box}"
+    url: "${OIDC_PROVIDER_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de}",
+    realm: "${OIDC_REALM:-iqb}",
+    clientId: "${OAUTH2_CLIENT_ID:-coding-box}"
   },
-  backendUrl: "${BACKEND_URL:-api/}"
+  backendUrl: "${BACKEND_URL:-api}"
 };
 EOF
 

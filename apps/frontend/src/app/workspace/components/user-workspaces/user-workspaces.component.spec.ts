@@ -3,19 +3,21 @@ import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesComponent } from './user-workspaces.component';
 import { AuthService } from '../../../core/services/auth.service';
 
-const mockKeycloak = {
-  idTokenParsed: { sub: 'test-user-id', preferred_username: 'test-user' },
-  token: 'mock-token',
-  authenticated: true,
-  loadUserProfile: jest.fn().mockResolvedValue({ username: 'test-user' }),
+const mockAuthService = {
+  isLoggedIn: jest.fn().mockReturnValue(true),
+  getLoggedUser: jest.fn().mockReturnValue({
+    sub: 'test-user-id',
+    preferred_username: 'test-user',
+    realm_access: { roles: ['user'] }
+  }),
+  getToken: jest.fn().mockReturnValue('mock-token'),
+  loadUserProfile: jest.fn().mockResolvedValue({
+    id: 'test-user-id',
+    username: 'test-user'
+  }),
   login: jest.fn(),
   logout: jest.fn(),
-  accountManagement: jest.fn(),
-  realmAccess: { roles: ['user'] }
-};
-
-const mockAuthService = {
-  isLoggedIn: jest.fn().mockReturnValue(true)
+  getRoles: jest.fn().mockReturnValue(['user'])
 };
 
 describe('UserWorkspacesComponent', () => {
@@ -24,8 +26,7 @@ describe('UserWorkspacesComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       providers: [
-        { provide: AuthService, useValue: mockAuthService },
-        { provide: 'Keycloak', useValue: mockKeycloak }
+        { provide: AuthService, useValue: mockAuthService }
       ],
       imports: [TranslateModule.forRoot()]
     }).compileComponents();
