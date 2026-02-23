@@ -316,7 +316,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false): void {
     const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
-    const maxAvailable = variableData?.responseCount || 1000;
+    const maxAvailable = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
 
     const variableGroup = this.fb.group({
@@ -674,7 +674,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const unitId = v.control.get('unitId')?.value;
       const variableId = v.control.get('variableId')?.value;
       const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-      return variableData && (variableData.responseCount || 0) < requestedCount;
+      const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+      return variableData && effectiveCount < requestedCount;
     });
   }
 
@@ -683,14 +684,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const variableId = item.control.get('variableId')?.value;
     const requestedCount = item.control.get('sampleCount')?.value || 0;
     const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-    return !!variableData && (variableData.responseCount || 0) < requestedCount;
+    const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+    return !!variableData && effectiveCount < requestedCount;
   }
 
   getAvailableCount(item: { control: FormGroup }): number {
     const unitId = item.control.get('unitId')?.value;
     const variableId = item.control.get('variableId')?.value;
     const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-    return variableData?.responseCount || 0;
+    return variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
   }
 
   trackByCoderId(index: number, coder: Coder): number {

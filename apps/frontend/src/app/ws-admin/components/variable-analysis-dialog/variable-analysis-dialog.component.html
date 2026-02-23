@@ -7,183 +7,247 @@
     <mat-tab label="{{ 'variable-analysis.analysis-results' | translate }}">
       <div class="dialog-content">
         @if (isLoading) {
-          <div class="loading-container">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p>{{ 'variable-analysis.analyzing-variables' | translate }}</p>
-          </div>
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>{{ 'variable-analysis.analyzing-variables' | translate }}</p>
+        </div>
         } @else {
-          <!-- Search input -->
-          <div class="search-container">
-            <mat-form-field appearance="outline" class="search-field">
-              <mat-label>{{ 'variable-analysis.search-variables' | translate }}</mat-label>
-              <input matInput type="text" [(ngModel)]="searchText" (input)="onSearchChange($event)" placeholder="{{ 'variable-analysis.search-placeholder' | translate }}">
-              <mat-icon matSuffix>search</mat-icon>
-              @if (searchText) {
-                <button mat-icon-button matSuffix (click)="searchText = ''; onSearchChange($event)" aria-label="Clear">
-                  <mat-icon>close</mat-icon>
-                </button>
-              }
-            </mat-form-field>
+        <div class="top-actions">
+          <button mat-button (click)="isInfoVisible = !isInfoVisible" class="info-toggle">
+            <mat-icon>{{ isInfoVisible ? 'expand_less' : 'help_outline' }}</mat-icon>
+            {{ (isInfoVisible ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
+          </button>
+        </div>
+
+        @if (isInfoVisible) {
+        <div class="info-block">
+          <div class="info-header">
+            <mat-icon color="primary">info</mat-icon>
+            <h3>{{ 'variable-analysis.info-title' | translate }}</h3>
+          </div>
+          <p class="info-desc">{{ 'variable-analysis.info-description' | translate }}</p>
+          <div class="info-grid">
+            <div class="info-item">
+              <strong>{{ 'variable-analysis.info-feature-frequencies-title' | translate }}</strong>
+              <p>{{ 'variable-analysis.info-feature-frequencies-desc' | translate }}</p>
+            </div>
+            <div class="info-item">
+              <strong>{{ 'variable-analysis.info-feature-validation-title' | translate }}</strong>
+              <p>{{ 'variable-analysis.info-feature-validation-desc' | translate }}</p>
+            </div>
+            <div class="info-item">
+              <strong>{{ 'variable-analysis.info-feature-background-title' | translate }}</strong>
+              <p>{{ 'variable-analysis.info-feature-background-desc' | translate }}</p>
+            </div>
+          </div>
+        </div>
+        }
+
+        <!-- Search input -->
+        <div class="search-container">
+          <mat-form-field appearance="outline" class="search-field">
+            <mat-label>{{ 'variable-analysis.search-variables' | translate }}</mat-label>
+            <input matInput type="text" [(ngModel)]="searchText" (input)="onSearchChange($event)"
+              placeholder="{{ 'variable-analysis.search-placeholder' | translate }}">
+            <mat-icon matSuffix>search</mat-icon>
+            @if (searchText) {
+            <button mat-icon-button matSuffix (click)="searchText = ''; onSearchChange($event)" aria-label="Clear">
+              <mat-icon>close</mat-icon>
+            </button>
+            }
+          </mat-form-field>
+        </div>
+
+        @if (variableCombos.length === 0) {
+        <div class="empty-state">
+          <mat-icon class="empty-icon">info</mat-icon>
+          <p>{{ 'variable-analysis.no-variables-found' | translate }}</p>
+        </div>
+        } @else {
+        <div class="variables-container">
+          <div class="info-message">
+            <mat-icon>info</mat-icon>
+            <span>{{ 'variable-analysis.max-values-info' | translate:{max: MAX_VALUES_PER_VARIABLE} }}</span>
           </div>
 
-          @if (variableCombos.length === 0) {
-            <div class="empty-state">
-              <mat-icon class="empty-icon">info</mat-icon>
-              <p>{{ 'variable-analysis.no-variables-found' | translate }}</p>
+          @for (combo of variableCombos; track combo) {
+          <div class="variable-section">
+            <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
+
+            <div class="table-container">
+              <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">
+                <!-- Value Column -->
+                <ng-container matColumnDef="value">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.value-column' | translate }}</th>
+                  <td mat-cell *matCellDef="let item">
+                    <div class="value-cell">
+                      @if (item.value === '') {
+                      <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
+                      } @else {
+                      <span>{{ item.value | slice:0:100 }}{{ item.value.length > 100 ? '...' : '' }}</span>
+                      }
+                    </div>
+                  </td>
+                </ng-container>
+
+                <!-- Count Column -->
+                <ng-container matColumnDef="count">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.count-column' | translate }}</th>
+                  <td mat-cell *matCellDef="let item">{{ item.count }}</td>
+                </ng-container>
+
+                <!-- Percentage Column -->
+                <ng-container matColumnDef="percentage">
+                  <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.percentage-column' | translate }}</th>
+                  <td mat-cell *matCellDef="let item">{{ item.percentage | number:'1.1-1' }}%</td>
+                </ng-container>
+
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+              </table>
             </div>
-          } @else {
-            <div class="variables-container">
-              <div class="info-message">
-                <mat-icon>info</mat-icon>
-                <span>{{ 'variable-analysis.max-values-info' | translate:{max: MAX_VALUES_PER_VARIABLE} }}</span>
-              </div>
-
-              @for (combo of variableCombos; track combo) {
-                <div class="variable-section">
-                  <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
-
-                  <div class="table-container">
-                    <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">
-                      <!-- Value Column -->
-                      <ng-container matColumnDef="value">
-                        <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.value-column' | translate }}</th>
-                        <td mat-cell *matCellDef="let item">
-                          <div class="value-cell">
-                            @if (item.value === '') {
-                              <span class="empty-value">{{ 'variable-analysis.empty-value' | translate }}</span>
-                            } @else {
-                              <span>{{ item.value | slice:0:100 }}{{ item.value.length > 100 ? '...' : '' }}</span>
-                            }
-                          </div>
-                        </td>
-                      </ng-container>
-
-                      <!-- Count Column -->
-                      <ng-container matColumnDef="count">
-                        <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.count-column' | translate }}</th>
-                        <td mat-cell *matCellDef="let item">{{ item.count }}</td>
-                      </ng-container>
-
-                      <!-- Percentage Column -->
-                      <ng-container matColumnDef="percentage">
-                        <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.percentage-column' | translate }}</th>
-                        <td mat-cell *matCellDef="let item">{{ item.percentage | number:'1.1-1' }}%</td>
-                      </ng-container>
-
-                      <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                      <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
-                    </table>
-                  </div>
-                </div>
-              }
-
-              <mat-paginator
-                [length]="getTotalFilteredVariables()"
-                [pageSize]="pageSize"
-                [pageSizeOptions]="pageSizeOptions"
-                [pageIndex]="currentPage"
-                (page)="onPageChange($event)"
-                aria-label="Variablen Seiten">
-              </mat-paginator>
-            </div>
+          </div>
           }
+
+          <mat-paginator [length]="getTotalFilteredVariables()" [pageSize]="pageSize"
+            [pageSizeOptions]="pageSizeOptions" [pageIndex]="currentPage" (page)="onPageChange($event)"
+            aria-label="Variablen Seiten">
+          </mat-paginator>
+        </div>
+        }
         }
       </div>
     </mat-tab>
 
     <!-- Analysis Jobs Tab -->
-    <mat-tab label="{{ 'variable-analysis.analysis-jobs' | translate }}">
+    <mat-tab>
+      <ng-template mat-tab-label>
+        {{ 'variable-analysis.analysis-jobs' | translate }}
+        @if (activeJob) {
+        <span class="active-badge">({{ activeJob.progress || 0 }}%)</span>
+        }
+      </ng-template>
       <div class="dialog-content">
         <div class="actions-container">
-          <button mat-raised-button color="primary" (click)="startNewAnalysis()" [disabled]="isJobsLoading">
+          <button mat-raised-button color="primary" (click)="startNewAnalysis()"
+            [disabled]="isJobsLoading || activeJob">
             <mat-icon>add</mat-icon>
             {{ 'variable-analysis.start-new-analysis' | translate }}
           </button>
+
+          @if (jobs.length > 0) {
+          <button mat-raised-button color="warn" (click)="deleteAllJobs()" [disabled]="isJobsLoading">
+            <mat-icon>delete_sweep</mat-icon>
+            {{ 'variable-analysis.delete-all-jobs' | translate }}
+          </button>
+          }
         </div>
 
+        @if (activeJob) {
+        <div class="active-job-container">
+          <h3>{{ 'variable-analysis.analysis-running' | translate }}</h3>
+          <div class="progress-details">
+            <mat-progress-bar mode="determinate" [value]="activeJob.progress || 0"></mat-progress-bar>
+            <span>{{ activeJob.progress || 0 }}%</span>
+          </div>
+          <p class="job-info">
+            {{ 'variable-analysis.id-column' | translate }}: {{ activeJob.id }} |
+            {{ 'variable-analysis.started-at' | translate }}: {{ formatDate(activeJob.created_at) }}
+          </p>
+        </div>
+        }
+
         @if (isJobsLoading) {
-          <div class="loading-container">
-            <mat-spinner diameter="40"></mat-spinner>
-            <p>{{ 'variable-analysis.loading-jobs' | translate }}</p>
-          </div>
+        <div class="loading-container">
+          <mat-spinner diameter="40"></mat-spinner>
+          <p>{{ 'variable-analysis.loading-jobs' | translate }}</p>
+        </div>
         } @else if (jobs.length === 0) {
-          <div class="empty-state">
-            <mat-icon class="empty-icon">info</mat-icon>
-            <p>{{ 'variable-analysis.no-analysis-jobs-found' | translate }}</p>
-          </div>
+        <div class="empty-state">
+          <mat-icon class="empty-icon">info</mat-icon>
+          <p>{{ 'variable-analysis.no-analysis-jobs-found' | translate }}</p>
+        </div>
         } @else {
-          <div class="table-container">
-            <table mat-table [dataSource]="jobs" class="jobs-table">
-              <!-- ID Column -->
-              <ng-container matColumnDef="id">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.id-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">{{ job.id }}</td>
-              </ng-container>
+        <div class="table-container">
+          <table mat-table [dataSource]="jobs" class="jobs-table">
+            <!-- ID Column -->
+            <ng-container matColumnDef="id">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.id-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">{{ job.id }}</td>
+            </ng-container>
 
-              <!-- Status Column -->
-              <ng-container matColumnDef="status">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.status-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">
-                  <span class="status-badge status-{{ job.status }}">{{ getTranslatedStatus(job.status) }}</span>
-                </td>
-              </ng-container>
+            <!-- Status Column -->
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.status-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <span class="status-badge status-{{ job.status }}">{{ getTranslatedStatus(job.status) }}</span>
+                @if (job.status === 'processing' && job.progress !== undefined) {
+                <small> ({{ job.progress }}%)</small>
+                }
+              </td>
+            </ng-container>
 
-              <!-- Created At Column -->
-              <ng-container matColumnDef="createdAt">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.created-at-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">{{ formatDate(job.created_at) }}</td>
-              </ng-container>
+            <!-- Created At Column -->
+            <ng-container matColumnDef="createdAt">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.created-at-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">{{ formatDate(job.created_at) }}</td>
+            </ng-container>
 
-              <!-- Unit ID Column -->
-              <ng-container matColumnDef="unitId">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.unit-id-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">{{ job.unit_id || ('variable-analysis.all' | translate) }}</td>
-              </ng-container>
+            <!-- Unit ID Column -->
+            <ng-container matColumnDef="unitId">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.unit-id-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">{{ job.unit_id || ('variable-analysis.all' | translate) }}</td>
+            </ng-container>
 
-              <!-- Variable ID Column -->
-              <ng-container matColumnDef="variableId">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.variable-id-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">{{ job.variable_id || ('variable-analysis.all' | translate) }}</td>
-              </ng-container>
+            <!-- Variable ID Column -->
+            <ng-container matColumnDef="variableId">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.variable-id-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">{{ job.variable_id || ('variable-analysis.all' | translate) }}</td>
+            </ng-container>
 
-              <!-- Actions Column -->
-              <ng-container matColumnDef="actions">
-                <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.actions-column' | translate }}</th>
-                <td mat-cell *matCellDef="let job">
-                  <!-- View results button for completed jobs -->
-                  @if (job.status === 'completed') {
-                    <button mat-icon-button color="primary" (click)="viewJobResults(job.id)" matTooltip="{{ 'variable-analysis.view-results' | translate }}">
-                      <mat-icon>visibility</mat-icon>
-                    </button>
-                  }
+            <!-- Actions Column -->
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>{{ 'variable-analysis.actions-column' | translate }}</th>
+              <td mat-cell *matCellDef="let job">
+                <!-- View results button for completed jobs -->
+                @if (job.status === 'completed') {
+                <button mat-icon-button color="primary" (click)="viewJobResults(job.id)"
+                  matTooltip="{{ 'variable-analysis.view-results' | translate }}">
+                  <mat-icon>visibility</mat-icon>
+                </button>
+                }
 
-                  <!-- Cancel button for pending or processing jobs -->
-                  @if (job.status === 'pending' || job.status === 'processing') {
-                    <button mat-icon-button color="warn" (click)="cancelJob(job.id)" matTooltip="{{ 'variable-analysis.cancel-job' | translate }}">
-                      <mat-icon>cancel</mat-icon>
-                    </button>
-                  }
+                <!-- Cancel button for pending or processing jobs -->
+                @if (job.status === 'pending' || job.status === 'processing') {
+                <button mat-icon-button color="warn" (click)="cancelJob(job.id)"
+                  matTooltip="{{ 'variable-analysis.cancel-job' | translate }}">
+                  <mat-icon>cancel</mat-icon>
+                </button>
+                }
 
-                  <!-- Delete button for completed, failed, or cancelled jobs -->
-                  @if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
-                    <button mat-icon-button color="warn" (click)="deleteJob(job.id)" matTooltip="{{ 'variable-analysis.delete-job' | translate }}">
-                      <mat-icon>delete</mat-icon>
-                    </button>
-                  }
+                <!-- Delete button for completed, failed, cancelled, or waiting jobs -->
+                @if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled' || job.status
+                === 'waiting') {
+                <button mat-icon-button color="warn" (click)="deleteJob(job.id)"
+                  matTooltip="{{ 'variable-analysis.delete-job' | translate }}">
+                  <mat-icon>delete</mat-icon>
+                </button>
+                }
 
-                  <!-- Error indicator for failed jobs -->
-                  @if (job.status === 'failed') {
-                    <button mat-icon-button color="accent" matTooltip="{{ 'error' | translate }}: {{ job.error || ('unknown' | translate) }}">
-                      <mat-icon>error</mat-icon>
-                    </button>
-                  }
-                </td>
-              </ng-container>
+                <!-- Error indicator for failed jobs -->
+                @if (job.status === 'failed') {
+                <button mat-icon-button color="accent"
+                  matTooltip="{{ 'error' | translate }}: {{ job.error || ('unknown' | translate) }}">
+                  <mat-icon>error</mat-icon>
+                </button>
+                }
+              </td>
+            </ng-container>
 
-              <tr mat-header-row *matHeaderRowDef="jobsDisplayedColumns"></tr>
-              <tr mat-row *matRowDef="let row; columns: jobsDisplayedColumns;"></tr>
-            </table>
-          </div>
+            <tr mat-header-row *matHeaderRowDef="jobsDisplayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: jobsDisplayedColumns;"></tr>
+          </table>
+        </div>
         }
       </div>
     </mat-tab>

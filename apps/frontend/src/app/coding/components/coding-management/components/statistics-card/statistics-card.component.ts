@@ -48,6 +48,7 @@ export class StatisticsCardComponent {
   @Input() isDownloadInProgress = false;
   @Input() statisticsLoaded = false;
   @Input() resetProgress: number | null = null;
+  @Input() downloadProgress: number | null = null;
 
   @Output() versionChange = new EventEmitter<'v1' | 'v2' | 'v3'>();
   @Output() loadStatistics = new EventEmitter<void>();
@@ -82,7 +83,7 @@ export class StatisticsCardComponent {
   getStatusDifference(status: string): number | null {
     if (
       !this.referenceStatistics ||
-            (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
     ) {
       return null;
     }
@@ -98,7 +99,7 @@ export class StatisticsCardComponent {
   getTotalResponsesDifference(): number | null {
     if (
       !this.referenceStatistics ||
-            (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
     ) {
       return null;
     }

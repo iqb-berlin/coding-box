@@ -151,6 +151,7 @@ describe('VariableAnalysisDialogComponent', () => {
 
   describe('startNewAnalysis', () => {
     it('should call service and refresh jobs', () => {
+      component.activeJob = undefined;
       component.startNewAnalysis();
       expect(mockVariableAnalysisService.createAnalysisJob).toHaveBeenCalledWith(1, 10);
       expect(mockVariableAnalysisService.getAllJobs).toHaveBeenCalled();

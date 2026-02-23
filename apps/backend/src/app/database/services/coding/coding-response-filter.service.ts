@@ -77,25 +77,29 @@ export class CodingResponseFilterService {
   }
 
   /**
-   * Get responses in batches for streaming operations.
-   * Uses cursor-based pagination for memory efficiency.
+   * Count total responses matching filter for progress calculation.
    */
-  async getResponsesBatch(
+  async countResponses(
     workspaceId: number,
-    lastId: number,
-    batchSize: number,
     options: ResponseFilterOptions = {}
-  ): Promise<ResponseEntity[]> {
+  ): Promise<number> {
+    const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
+    return queryBuilder.getCount();
+  }
+
+  private async createBatchQueryBuilder(
+    workspaceId: number,
+    options: ResponseFilterOptions
+  ) {
     const status = options.status || 'CODING_INCOMPLETE';
     const considerOnly = options.considerOnly !== false;
     const version = options.version;
 
     const queryBuilder = this.responseRepository
       .createQueryBuilder('response')
-      .leftJoinAndSelect('response.unit', 'unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.person', 'person')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person');
 
     // Establish base conditions
     if (version) {
@@ -108,21 +112,47 @@ export class CodingResponseFilterService {
 
     // Add filters
     queryBuilder
-      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
-      .andWhere('response.id > :lastId', { lastId });
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
 
     if (considerOnly) {
       queryBuilder.andWhere('person.consider = :consider', { consider: true });
     }
 
-    queryBuilder
-      .orderBy('response.id', 'ASC')
-      .take(batchSize);
-
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
     if (ignoredUnits.length > 0) {
       queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
     }
+
+    return queryBuilder;
+  }
+
+  /**
+   * Get responses in batches for streaming operations.
+   * Uses cursor-based pagination for memory efficiency.
+   */
+  async getResponsesBatch(
+    workspaceId: number,
+    lastId: number,
+    batchSize: number,
+    options: ResponseFilterOptions = {}
+  ): Promise<ResponseEntity[]> {
+    const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
+
+    // Add selections for relations needed in result
+    // Note: relations joined in createBatchQueryBuilder need to be selected if we want them.
+    // createBatchQueryBuilder uses leftJoin.
+    // getMany needs selections.
+
+    // Re-apply joins with selection? Or just addSelect?
+    // addSelect needs alias.
+    queryBuilder
+      .addSelect(['unit', 'booklet', 'person'])
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
+
+    queryBuilder
+      .andWhere('response.id > :lastId', { lastId })
+      .orderBy('response.id', 'ASC')
+      .take(batchSize);
 
     return queryBuilder.getMany();
   }
@@ -148,6 +178,7 @@ export class CodingResponseFilterService {
     }
 
     // Check for excluded variable patterns
+    // eslint-disable-next-line
     if (/image|text|audio|frame|video|_0/i.test(variableId)) {
       return false;
     }
@@ -172,6 +203,7 @@ export class CodingResponseFilterService {
     }
 
     // Check for excluded variable patterns
+    // eslint-disable-next-line
     return !/image|text|audio|frame|video|_0/i.test(variableId);
   }
 }

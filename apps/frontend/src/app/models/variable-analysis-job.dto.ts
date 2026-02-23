@@ -12,6 +12,7 @@ export interface VariableAnalysisJobDto {
    */
   variable_id?: string;
   status: 'pending' | 'processing' | 'completed' | 'failed';
+  progress?: number;
   error?: string;
   created_at: Date;
   updated_at: Date;

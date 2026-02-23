@@ -11,6 +11,7 @@ import { CoderTrainingVariable } from '../../entities/coder-training-variable.en
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -27,6 +28,13 @@ describe('CoderTrainingService', () => {
     create: jest.fn()
   };
 
+  const mockCodingJobService = {
+    getAggregationThreshold: jest.fn().mockResolvedValue(null),
+    getResponseMatchingMode: jest.fn().mockResolvedValue([ResponseMatchingFlag.IGNORE_WHITESPACE]),
+    aggregateResponsesByValue: jest.fn().mockReturnValue([]),
+    normalizeValue: jest.fn().mockReturnValue('normalized')
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -39,7 +47,8 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingVariable), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingBundle), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
-        { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository }
+        { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
+        { provide: CodingJobService, useValue: mockCodingJobService }
       ]
     }).compile();
 

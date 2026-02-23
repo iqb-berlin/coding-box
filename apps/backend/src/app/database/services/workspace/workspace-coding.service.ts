@@ -214,6 +214,7 @@ export class WorkspaceCodingService {
       responseCount: number;
       casesInJobs: number;
       availableCases: number;
+      uniqueCasesAfterAggregation: number;
     }[]
     > {
     return this.codingValidationService.getCodingIncompleteVariables(
