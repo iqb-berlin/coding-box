@@ -13,7 +13,7 @@ export class ResponseManagementService {
     @InjectRepository(ResponseEntity)
     private readonly connection: DataSource,
     private readonly journalService: JournalService
-  ) {}
+  ) { }
 
   async updateResponsesInDatabase(
     allCodedResponses: CodedResponse[],
@@ -114,6 +114,34 @@ export class ResponseManagementService {
                 updateData.score_v3 = response.score_v3;
               }
 
+              if (response.isNew) {
+                const newEntity: Partial<ResponseEntity> = {
+                  unitid: response.unitid,
+                  variableid: response.variableid,
+                  value: response.value,
+                  status: response.status,
+                  subform: response.subform || null
+                };
+
+                if (response.code_v1 !== undefined) newEntity.code_v1 = response.code_v1;
+                if (response.status_v1 !== undefined) newEntity.status_v1 = statusStringToNumber(response.status_v1);
+                if (response.score_v1 !== undefined) newEntity.score_v1 = response.score_v1;
+
+                if (response.code_v2 !== undefined) newEntity.code_v2 = response.code_v2;
+                if (response.status_v2 !== undefined) {
+                  newEntity.status_v2 = response.status_v2 === null ? null : statusStringToNumber(response.status_v2);
+                }
+                if (response.score_v2 !== undefined) newEntity.score_v2 = response.score_v2;
+
+                if (response.code_v3 !== undefined) newEntity.code_v3 = response.code_v3;
+                if (response.status_v3 !== undefined) {
+                  newEntity.status_v3 = response.status_v3 === null ? null : statusStringToNumber(response.status_v3);
+                }
+                if (response.score_v3 !== undefined) newEntity.score_v3 = response.score_v3;
+
+                return queryRunner.manager.insert(ResponseEntity, newEntity);
+              }
+
               if (Object.keys(updateData).length > 0) {
                 return queryRunner.manager.update(
                   ResponseEntity,
@@ -188,8 +216,8 @@ export class ResponseManagementService {
 
     if (
       !resolutionMap ||
-            typeof resolutionMap !== 'object' ||
-            Object.keys(resolutionMap).length === 0
+      typeof resolutionMap !== 'object' ||
+      Object.keys(resolutionMap).length === 0
     ) {
       return { resolvedCount: 0, success: true };
     }
