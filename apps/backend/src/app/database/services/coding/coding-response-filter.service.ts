@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
@@ -103,7 +103,8 @@ export class CodingResponseFilterService {
 
     // Establish base conditions
     if (version) {
-      queryBuilder.where(`response.status_${version} IS NOT NULL`);
+      queryBuilder.where(`response.status_${version} IS NOT NULL`)
+        .andWhere(`response.status_${version} NOT IN (:...excludedStatuses)`, { excludedStatuses: EXCLUDED_STATUSES });
     } else {
       queryBuilder.where('response.status_v1 = :status', {
         status: statusStringToNumber(status)
