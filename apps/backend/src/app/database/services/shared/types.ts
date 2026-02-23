@@ -120,9 +120,16 @@ export interface CodingStatisticsWithJob extends CodingStatistics {
 
 export interface CodedResponse {
   id: number;
-  code_v1?: number;
-  status_v1?: string;
-  score_v1?: number;
+  isNew?: boolean;
+  unitid?: number;
+  variableid?: string;
+  value?: string;
+  status?: number;
+  subform?: string | null;
+
+  code_v1?: number | null;
+  status_v1?: string | null;
+  score_v1?: number | null;
   code_v2?: number | null;
   status_v2?: string | null;
   score_v2?: number | null;
