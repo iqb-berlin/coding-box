@@ -17,7 +17,7 @@ const defaultConfig = {
   backendUrl: 'api/',
   keycloak: {
     url: 'https://keycloak.kodierbox.iqb.hu-berlin.de/',
-    realm: 'iqb',
+    realm: 'coding-box',
     clientId: 'coding-box'
   }
 };
