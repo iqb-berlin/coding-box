@@ -65,7 +65,7 @@
     <div class="statistic-item">
       <span class="statistic-label">{{ 'coding-management.statistics.total-responses' | translate }}</span>
       <span class="statistic-value">
-        {{ codingStatistics.totalResponses }}
+        {{ effectiveTotalResponses }}
         @if (getTotalResponsesDifference() !== null) {
         <span class="difference-value" [ngClass]="{
               'difference-positive': getTotalResponsesDifference()! > 0,

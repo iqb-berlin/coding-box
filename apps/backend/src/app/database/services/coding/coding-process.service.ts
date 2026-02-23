@@ -955,13 +955,7 @@ export class CodingProcessService {
   }
 
   private normalizeAutocoderStatus(status: string): string {
-    const nonCodingStatuses = [
-      'UNSET',
-      'NOT_REACHED',
-      'DISPLAYED',
-      'VALUE_CHANGED',
-      'PARTLY_DISPLAYED'
-    ];
+    const nonCodingStatuses = [];
     if (nonCodingStatuses.includes(status)) {
       return 'NO_CODING';
     }

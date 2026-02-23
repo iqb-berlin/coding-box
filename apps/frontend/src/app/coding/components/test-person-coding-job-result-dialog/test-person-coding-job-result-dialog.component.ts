@@ -22,6 +22,7 @@ interface DialogData {
 export class TestPersonCodingJobResultDialogComponent {
   displayedColumns = ['status', 'count'];
   statusRows: { status: string; count: number }[] = [];
+  effectiveTotal = 0;
 
   constructor(
     @Inject(MAT_DIALOG_DATA) public data: DialogData,
@@ -29,10 +30,19 @@ export class TestPersonCodingJobResultDialogComponent {
   ) {
     const result = data.job.result;
     if (result?.statusCounts) {
-      this.statusRows = Object.entries(result.statusCounts).map(([status, count]) => ({
-        status: status || 'test-person-coding.jobs.table.unknown',
-        count
-      }));
+      const ignoredStatuses = [
+        '0', '1', '2', '3', '10',
+        'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+      ];
+
+      this.statusRows = Object.entries(result.statusCounts)
+        .filter(([status]) => !ignoredStatuses.includes(status))
+        .map(([status, count]) => ({
+          status: status || 'test-person-coding.jobs.table.unknown',
+          count
+        }));
+
+      this.effectiveTotal = this.statusRows.reduce((sum, row) => sum + row.count, 0);
     }
   }
 

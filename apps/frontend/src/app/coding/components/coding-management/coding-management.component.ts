@@ -583,7 +583,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   getAvailableStatuses(): string[] {
-    return Object.keys(this.codingStatistics.statusCounts);
+    const ignoredStatuses = [
+      '0', '1', '2', '3', '10',
+      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+    ];
+    return Object.keys(this.codingStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
   }
 
   private refreshTableData(): void {
