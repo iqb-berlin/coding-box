@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, Not } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
   calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping
@@ -195,6 +195,10 @@ export class CodingResultsExportService {
       for (const unit of codingJobUnits) {
         if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
 
+        if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
+          continue;
+        }
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -261,6 +265,7 @@ export class CodingResultsExportService {
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
         for (const resp of autoOnlyResponses) {
@@ -472,6 +477,10 @@ export class CodingResultsExportService {
       for (const unit of codingJobUnits) {
         if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
 
+        if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
+          continue;
+        }
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -539,6 +548,7 @@ export class CodingResultsExportService {
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
         const autoCoderName = 'Autocoder';
@@ -770,6 +780,10 @@ export class CodingResultsExportService {
       for (const unit of codingJobUnits) {
         if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
 
+        if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
+          continue;
+        }
+
         const person = unit.response?.unit?.booklet?.person;
         if (!person) continue;
 
@@ -838,6 +852,7 @@ export class CodingResultsExportService {
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('cju.id IS NULL')
           .andWhere('response.code_v1 IS NOT NULL')
+          .andWhere('response.status_v1 NOT IN (:...excludedStatuses)', { excludedStatuses: EXCLUDED_STATUSES })
           .getMany();
 
         const autoCoderName = 'Autocoder';
@@ -1079,7 +1094,8 @@ export class CodingResultsExportService {
           const responses = await this.responseRepository.find({
             where: {
               unitid: In(unitIds),
-              variableid: In(variableIds)
+              variableid: In(variableIds),
+              status_v1: Not(In(EXCLUDED_STATUSES))
             },
             relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
             select: {
@@ -1356,6 +1372,10 @@ export class CodingResultsExportService {
 
             for (const unit of codingJobUnits) {
               if (unit.code === null || unit.code === undefined) {
+                continue;
+              }
+
+              if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
                 continue;
               }
 
@@ -1650,6 +1670,10 @@ export class CodingResultsExportService {
       csvRows.push(headerColumns.join(';'));
       for (const unit of codingJobUnits) {
         if (unit.code === null || unit.code === undefined) {
+          continue;
+        }
+
+        if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
           continue;
         }
 
