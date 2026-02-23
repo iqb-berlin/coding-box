@@ -17,6 +17,13 @@ const responseStatesNumericMap: { key: number; value: string }[] = [
   { key: 13, value: 'CODE_SELECTION_PENDING' }
 ];
 
+export const EXCLUDED_STATUSES = [
+  0, // UNSET
+  1, // NOT_REACHED
+  2, // DISPLAYED
+  10 // PARTLY_DISPLAYED
+];
+
 const stringToNumberMap = new Map(responseStatesNumericMap.map(entry => [entry.value, entry.key]));
 const numberToStringMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
 
