@@ -74,7 +74,7 @@ export class VariableAnalysisService {
 
   getAnalysisJob(
     workspaceId: number,
-    jobId: string
+    jobId: number
   ): Observable<VariableAnalysisJobDto> {
     return this.http.get<VariableAnalysisJobDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
@@ -89,7 +89,7 @@ export class VariableAnalysisService {
 
   getAnalysisResults(
     workspaceId: number,
-    jobId: string
+    jobId: number
   ): Observable<VariableAnalysisResultDto> {
     return this.http.get<VariableAnalysisResultDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results`,
@@ -114,7 +114,7 @@ export class VariableAnalysisService {
     );
   }
 
-  cancelJob(workspaceId: number, jobId: string): Observable<JobCancelResult> {
+  cancelJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
     return this.http.post<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/cancel`,
       null,
@@ -127,7 +127,7 @@ export class VariableAnalysisService {
     );
   }
 
-  deleteJob(workspaceId: number, jobId: string): Observable<JobCancelResult> {
+  deleteJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
     return this.http.delete<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
       { headers: this.authHeader }

@@ -57,7 +57,7 @@ describe('VariableAnalysisService', () => {
     it('should cancel job', () => {
       service.cancelJob(mockWorkspaceId, 5).subscribe();
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/jobs/5/cancel`);
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/variable-analysis/jobs/5/cancel`);
       expect(req.request.method).toBe('POST');
       req.flush({});
     });

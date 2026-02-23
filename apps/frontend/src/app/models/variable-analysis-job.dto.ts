@@ -1,5 +1,5 @@
 export interface VariableAnalysisJobDto {
-  id: string; // Changed from number to string
+  id: number;
   workspace_id: number;
 
   /**
