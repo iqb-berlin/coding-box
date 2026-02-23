@@ -9,6 +9,44 @@
     }
   </div>
   <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
+  @if (availableVariables.length > 1) {
+  <div class="variable-selector-section">
+    <div class="variable-dropdown-wrapper">
+      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" type="button">
+        <span class="variable-trigger-label">
+          @if (activeVariableKey) {
+          @let prog = getProgressForKey(activeVariableKey);
+          <span class="variable-trigger-name">{{ activeVariableKey.split('::')[0] }} / {{
+            activeVariableKey.split('::')[1] }}</span>
+          <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
+          } @else {
+          Variable wählen
+          }
+        </span>
+        <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+
+      @if (isVariablePanelOpen) {
+      <div class="variable-panel">
+        @for (v of availableVariables; track v.key) {
+        @let prog = getProgressForKey(v.key);
+        <div class="variable-panel-item" [class.active]="v.key === activeVariableKey" (click)="selectVariable(v.key)">
+          <div class="variable-panel-header">
+            <span class="variable-panel-name">{{ v.unitName }} / {{ v.variableId }}</span>
+            <span class="variable-panel-count">{{ prog.coded }}/{{ prog.total }}</span>
+          </div>
+          <div class="variable-panel-bar-track">
+            <div class="variable-panel-bar-fill" [style.width.%]="prog.percentage"
+              [class.complete]="prog.percentage === 100"></div>
+          </div>
+        </div>
+        }
+      </div>
+      }
+    </div>
+  </div>
+  }
+
   <div class="progress-actions">
     @if (unitsData) {
     <div class="nav-controls">
