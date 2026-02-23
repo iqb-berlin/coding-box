@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, forwardRef, Inject
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -10,6 +12,7 @@ import { ValidationResultDto } from '../../../../../../../api-dto/coding/validat
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { CodingJobService } from './coding-job.service';
 
 @Injectable()
 export class CodingValidationService {
@@ -21,7 +24,9 @@ export class CodingValidationService {
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(forwardRef(() => CodingJobService))
+    private codingJobService: CodingJobService
   ) { }
 
   async validateCodingCompleteness(
@@ -202,6 +207,7 @@ export class CodingValidationService {
       responseCount: number;
       casesInJobs: number;
       availableCases: number;
+      uniqueCasesAfterAggregation: number;
     }[]
     > {
     try {
@@ -223,6 +229,7 @@ export class CodingValidationService {
         responseCount: number;
         casesInJobs: number;
         availableCases: number;
+        uniqueCasesAfterAggregation: number;
       }[]
       >(cacheKey);
       if (cachedResult) {
@@ -265,7 +272,7 @@ export class CodingValidationService {
   }
 
   /**
-     * Enrich variables with case information (cases in jobs and available cases)
+     * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
@@ -277,21 +284,87 @@ export class CodingValidationService {
       responseCount: number;
       casesInJobs: number;
       availableCases: number;
+      uniqueCasesAfterAggregation: number;
     }[]
     > {
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
+    // Compute aggregation-reduced counts for all variables at once
+    const aggregationMap = await this.computeUniqueCasesAfterAggregation(workspaceId, variables);
 
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
       const casesInJobs = casesInJobsMap.get(key) || 0;
       const availableCases = Math.max(0, variable.responseCount - casesInJobs);
+      const uniqueCasesAfterAggregation = aggregationMap.get(key) ?? variable.responseCount;
 
       return {
         ...variable,
         casesInJobs,
-        availableCases
+        availableCases,
+        uniqueCasesAfterAggregation
       };
     });
+  }
+
+  /**
+   * Compute the number of unique coding cases per variable after applying aggregation grouping.
+   * When aggregation is disabled (threshold = null), returns responseCount for each variable.
+   */
+  private async computeUniqueCasesAfterAggregation(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string; responseCount: number }[]
+  ): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+
+    if (variables.length === 0) {
+      return result;
+    }
+
+    const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
+
+    if (aggregationThreshold === null) {
+      // Aggregation disabled — unique cases = raw response count
+      variables.forEach(v => {
+        result.set(`${v.unitName}::${v.variableId}`, v.responseCount);
+      });
+      return result;
+    }
+
+    const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+
+    // Fetch slim responses for all variables in one call
+    const slimResponses = await this.codingJobService.getSlimResponsesForVariables(
+      workspaceId,
+      variables.map(v => ({ unitName: v.unitName, variableId: v.variableId }))
+    );
+
+    // Group by variable key and apply aggregation
+    for (const variable of variables) {
+      const key = `${variable.unitName}::${variable.variableId}`;
+      const varResponses = slimResponses.filter(
+        r => r.unitName === variable.unitName && r.variableid === variable.variableId
+      );
+
+      const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(varResponses, matchingFlags);
+
+      let uniqueCases = 0;
+      for (const group of aggregatedGroups) {
+        if (group.responses.length >= aggregationThreshold) {
+          uniqueCases += 1;
+        } else {
+          uniqueCases += group.responses.length;
+        }
+      }
+
+      result.set(key, uniqueCases);
+    }
+
+    this.logger.log(
+      `Computed unique cases after aggregation for ${variables.length} variables in workspace ${workspaceId}`
+    );
+
+    return result;
   }
 
   private async fetchCodingIncompleteVariablesFromDb(

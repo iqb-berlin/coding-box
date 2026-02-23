@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Readable, PassThrough } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
@@ -8,7 +9,7 @@ import { Request, Response } from 'express';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
-  calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping
+  calculateModalValue, getLatestCode, buildCoderNameMapping
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService, CodingItem } from './coding-list.service';
@@ -16,6 +17,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
 export class CodingExportService {
@@ -30,7 +32,8 @@ export class CodingExportService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
@@ -158,33 +161,88 @@ export class CodingExportService {
     });
   }
 
+  async exportCodingListForJobAsCsv(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    return this.codingListService.getCodingListCsvStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+  }
+
+  async exportCodingListForJobAsExcel(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingListAsExcel(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+  }
+
+  async exportCodingListForJobAsJson(
+    workspaceId: number,
+    authToken: string,
+    serverUrl: string,
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    const stream = this.codingListService.getCodingListJsonStream(
+      workspaceId,
+      authToken || '',
+      serverUrl || '',
+      progressCallback
+    );
+
+    const passThrough = new PassThrough();
+    passThrough.write('[');
+    let first = true;
+
+    stream.on('data', (item: CodingItem) => {
+      if (!first) {
+        passThrough.write(',');
+      } else {
+        first = false;
+      }
+      passThrough.write(JSON.stringify(item));
+    });
+
+    stream.on('end', () => {
+      passThrough.write(']');
+      passThrough.end();
+    });
+
+    stream.on('error', err => {
+      passThrough.emit('error', err);
+    });
+
+    return passThrough;
+  }
+
   async exportCodingResultsByVersionAsCsv(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingResultsByVersionCsvStream(
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Readable> {
+    return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
-
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
-
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
   }
 
   async exportCodingResultsByVersionAsExcel(
@@ -193,28 +251,16 @@ export class CodingExportService {
     authToken: string,
     serverUrl: string,
     includeReplayUrls: boolean,
-    res: Response
-  ): Promise<void> {
-    const excelData = await this.codingListService.getCodingResultsByVersionAsExcel(
+    progressCallback?: (percentage: number) => Promise<void>
+  ): Promise<Buffer> {
+    return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
-
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    );
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.xlsx"`
-    );
-
-    res.send(excelData);
   }
 
   private async generateReplayUrlWithPageLookup(
@@ -264,9 +310,12 @@ export class CodingExportService {
     } if (doubleCodingMethod === 'new-column-per-coder') {
       return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded, checkCancellation);
     }
-    this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
 
+    this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -274,188 +323,214 @@ export class CodingExportService {
       if (codingListVariables.length === 0) {
         throw new Error('No manual coding variables found in the coding list for this workspace');
       }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+    }
+
+    // 1. Get all variables to define columns
+    const variableRecords = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .getRawMany();
+
+    const variableSet = new Set<string>();
+    const variableUnitNames = new Map<string, string>();
+    variableRecords.forEach(v => {
+      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        const compositeKey = `${v.unitName}_${v.variableId}`;
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+          variableSet.add(compositeKey);
+          variableUnitNames.set(compositeKey, v.unitName);
+        }
+      }
+    });
+
+    if (!excludeAutoCoded) {
+      const autoVariables = await this.responseRepository.createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('response.code_v1 IS NOT NULL')
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .getRawMany();
+
+      autoVariables.forEach(v => {
+        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+          const compositeKey = `${v.unitName}_${v.variableId}`;
+          variableSet.add(compositeKey);
+          variableUnitNames.set(compositeKey, v.unitName);
+        }
       });
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId
-        }
-      },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.bookletinfo',
-        'response.unit.booklet.person'
-      ]
-    });
+    const variables = Array.from(variableSet).sort();
 
-    if (codingJobUnits.length === 0) {
-      throw new Error('No coding jobs found for this workspace');
+    // 2. Get all distinct test persons metadata
+    const personResults = await this.responseRepository.createQueryBuilder('resp')
+      .innerJoin('resp.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('person.id', 'id')
+      .addSelect('MAX(person.login)', 'login')
+      .addSelect('MAX(person.code)', 'code')
+      .addSelect('MAX(person.group)', 'group')
+      .addSelect('MAX(bookletinfo.name)', 'bookletName')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('person.id')
+      .orderBy('MAX(person.login)', 'ASC')
+      .addOrderBy('MAX(person.code)', 'ASC')
+      .getRawMany();
+
+    if (personResults.length === 0) {
+      throw new Error('No coding results found for this workspace');
     }
 
-    if (checkCancellation) await checkCancellation();
+    // 3. Setup Streaming Workbook
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const worksheet = workbook.addWorksheet('Coding Results');
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Coding Results');
+    const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
+    if (includeReplayUrl) baseHeaders.push('Replay URL');
+    const headers = [...baseHeaders, ...variables];
 
-      const testPersonVariableCodes = new Map<string, Map<string, number[]>>();
-      const testPersonVariableComments = new Map<string, Map<string, string[]>>();
-      const testPersonList: string[] = [];
-      const variableSet = new Set<string>();
-      const personGroups = new Map<string, string>();
-      const personBooklets = new Map<string, string>();
-      const variableUnitNames = new Map<string, string>();
+    worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
-      for (const unit of codingJobUnits) {
-        const person = unit.response?.unit?.booklet?.person;
-        if (!person) continue;
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
 
-        const testPersonKey = `${person.login}_${person.code}`;
-        const variableId = unit.variable_id;
-        const unitName = unit.unit_name;
+    // 4. Batch Process Test Persons
+    const batchSize = 100;
+    for (let i = 0; i < personResults.length; i += batchSize) {
+      if (checkCancellation) await checkCancellation();
+      const batch = personResults.slice(i, i + batchSize);
+      const batchPersonIds = batch.map(p => p.id);
 
-        if (!unitName || !variableId) continue;
+      // Fetch coding results for this batch
+      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .innerJoin('cju.response', 'resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .leftJoin('cjc.user', 'user')
+        .select('person.id', 'personId')
+        .addSelect('cju.unit_name', 'unitName')
+        .addSelect('cju.variable_id', 'variableId')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('cju.notes', 'notes')
+        .addSelect('user.username', 'username')
+        .addSelect('cj.id', 'jobId')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .getRawMany();
 
-        if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
-          if (!manualCodingVariableSet.has(variableKey)) {
-            continue;
-          }
+      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .select('person.id', 'personId')
+        .addSelect('unit.name', 'unitName')
+        .addSelect('resp.variableid', 'variableId')
+        .addSelect('resp.code_v1', 'code_v1')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .andWhere('cju.id IS NULL')
+        .andWhere('resp.code_v1 IS NOT NULL')
+        .getRawMany();
+
+      // Group data by person and variable
+      const personData = new Map<number, Map<string, { codes: number[], comments: string[] }>>();
+
+      manualCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const compositeKey = `${row.unitName}_${row.variableId}`;
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const varData = personData.get(pid)!;
+        if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
+        const d = varData.get(compositeKey)!;
+        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        if (code !== null && code !== undefined) d.codes.push(parseInt(code, 10));
+        if (row.notes) {
+          const coderName = row.username || `Job ${row.jobId}`;
+          d.comments.push(`${coderName}: ${row.notes}`);
         }
+      });
 
-        const compositeVariableKey = `${unitName}_${variableId}`;
+      autoCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const compositeKey = `${row.unitName}_${row.variableId}`;
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const varData = personData.get(pid)!;
+        if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
+        const d = varData.get(compositeKey)!;
+        if (row.code_v1 !== null && row.code_v1 !== undefined) d.codes.push(parseInt(row.code_v1, 10));
+      });
 
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const comment = unit.notes || null;
-
-        if (!testPersonVariableCodes.has(testPersonKey)) {
-          testPersonVariableCodes.set(testPersonKey, new Map());
-          testPersonVariableComments.set(testPersonKey, new Map());
-          testPersonList.push(testPersonKey);
-        }
-
-        if (!testPersonVariableCodes.get(testPersonKey)!.has(compositeVariableKey)) {
-          testPersonVariableCodes.get(testPersonKey)!.set(compositeVariableKey, []);
-          testPersonVariableComments.get(testPersonKey)!.set(compositeVariableKey, []);
-        }
-
-        if (code !== null && code !== undefined) {
-          testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(code);
-        }
-
-        if (comment) {
-          const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || `Job ${unit.coding_job_id}`;
-          testPersonVariableComments.get(testPersonKey)!.get(compositeVariableKey)!.push(`${coderName}: ${comment}`);
-        }
-
-        variableSet.add(compositeVariableKey);
-
-        if (!personGroups.has(testPersonKey)) {
-          personGroups.set(testPersonKey, person.group || '');
-        }
-        if (!personBooklets.has(testPersonKey)) {
-          const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-          personBooklets.set(testPersonKey, bookletName);
-        }
-        if (!variableUnitNames.has(compositeVariableKey)) {
-          variableUnitNames.set(compositeVariableKey, unitName || '');
-        }
-      }
-
-      this.logger.log(`Processed ${codingJobUnits.length} coding job units. Creating Excel file with ${testPersonList.length} test persons and ${variableSet.size} variables.`);
-
-      const testPersonModalValues = new Map<string, Map<string, { modalValue: number | null; deviationCount: number }>>();
-
-      for (const testPersonKey of testPersonList) {
-        testPersonModalValues.set(testPersonKey, new Map());
-        const variableCodes = testPersonVariableCodes.get(testPersonKey)!;
-
-        for (const [variableKey, codes] of variableCodes.entries()) {
-          if (codes.length > 0) {
-            const modalResult = calculateModalValue(codes);
-            testPersonModalValues.get(testPersonKey)!.set(variableKey, modalResult);
-          } else {
-            testPersonModalValues.get(testPersonKey)!.set(variableKey, { modalValue: null, deviationCount: 0 });
-          }
-        }
-      }
-
-      const variables = Array.from(variableSet).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
-      if (includeReplayUrl) {
-        baseHeaders.push('Replay URL');
-      }
-
-      const headers = [...baseHeaders, ...variables];
-
-      worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
-
-      for (const testPersonKey of testPersonList) {
-        const [login, code] = testPersonKey.split('_');
-        const group = personGroups.get(testPersonKey) || '';
-        const bookletName = personBooklets.get(testPersonKey) || '';
-        const modalValues = testPersonModalValues.get(testPersonKey)!;
-        const comments = testPersonVariableComments.get(testPersonKey)!;
-
+      // Write rows
+      for (const p of batch) {
+        const pid = parseInt(p.id, 10);
         const row: Record<string, string | number | null> = {
-          'Test Person Login': login,
-          'Test Person Code': code,
-          'Test Person Group': group
+          'Test Person Login': p.login,
+          'Test Person Code': p.code,
+          'Test Person Group': p.group || ''
         };
+
+        const modalValues = new Map<string, number | null>();
+        const varData = personData.get(pid);
+
+        for (const vKey of variables) {
+          const data = varData?.get(vKey);
+          if (data && data.codes.length > 0) {
+            const modalResult = calculateModalValue(data.codes);
+            modalValues.set(vKey, modalResult.modalValue);
+            row[vKey] = outputCommentsInsteadOfCodes ? data.comments.join(' | ') : (modalResult.modalValue ?? '');
+          } else {
+            row[vKey] = '';
+          }
+        }
 
         if (includeReplayUrl && req) {
           let replayUrl = '';
-          for (const variable of variables) {
-            if (modalValues.has(variable)) {
-              const variableId = variable.split('_').slice(1).join('_');
-              const unitName = variableUnitNames.get(variable) || '';
-              replayUrl = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, variableId, workspaceId, authToken);
+          for (const vKey of variables) {
+            if (modalValues.has(vKey)) {
+              const variableId = vKey.split('_').slice(1).join('_');
+              const unitName = variableUnitNames.get(vKey) || '';
+              replayUrl = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
               break;
             }
           }
           row['Replay URL'] = replayUrl;
         }
 
-        // Add modal values or comments for each variable
-        for (const variable of variables) {
-          const modalData = modalValues.get(variable);
-          const variableComments = comments.get(variable);
-
-          if (outputCommentsInsteadOfCodes) {
-            row[variable] = variableComments ? variableComments.join(' | ') : '';
-          } else {
-            row[variable] = modalData?.modalValue ?? '';
-          }
-        }
-
-        worksheet.addRow(row);
+        worksheet.addRow(row).commit();
       }
 
-      // Style the header row
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
+      // Garbage collection hint
+      if (global.gc) global.gc();
 
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting aggregated coding results (most-frequent): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated coding results: ${error.message}`);
+      await new Promise<void>(resolve => { setImmediate(resolve); });
     }
+
+    await workbook.commit();
+    return Buffer.concat(chunks);
   }
 
   private async exportAggregatedNewRowPerVariable(
@@ -472,222 +547,272 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
+    if (checkCancellation) await checkCancellation();
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const COMMENTS_HEADER = 'Kommentare';
 
-    if (checkCancellation) await checkCancellation();
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
       const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
+      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+    }
+
+    // 1. Get all variables
+    const variableRecords = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .getRawMany();
+
+    const variableSet = new Set<string>();
+    const variableUnitNames = new Map<string, string>();
+    variableRecords.forEach(v => {
+      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        const compositeKey = `${v.unitName}_${v.variableId}`;
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+          variableSet.add(compositeKey);
+          variableUnitNames.set(compositeKey, v.unitName);
+        }
       }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+    });
+
+    if (!excludeAutoCoded) {
+      const autoVariables = await this.responseRepository.createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('response.code_v1 IS NOT NULL')
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .getRawMany();
+
+      autoVariables.forEach(v => {
+        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+          const compositeKey = `${v.unitName}_${v.variableId}`;
+          variableSet.add(compositeKey);
+          variableUnitNames.set(compositeKey, v.unitName);
+        }
       });
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId
-        }
-      },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.person'
-      ]
-    });
+    const sortedVariables = Array.from(variableSet).sort();
 
-    if (codingJobUnits.length === 0) {
-      throw new Error('No coding jobs found for this workspace');
+    // 2. Get all coders
+    const coderRecords = await this.codingJobRepository.createQueryBuilder('cj')
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .innerJoin('cjc.user', 'user')
+      .select('user.username', 'userName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('user.username')
+      .getRawMany();
+
+    const allCoderNames = coderRecords.map(c => c.userName).sort();
+    const coderMapping = new Map<string, string>();
+    if (anonymizeCoders) {
+      allCoderNames.forEach((name, idx) => {
+        coderMapping.set(name, usePseudoCoders ? `Coder ${idx + 1}` : `Coder_${idx + 1}`);
+      });
     }
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Coding Results');
+    // 3. Get all persons
+    const personResults = await this.responseRepository.createQueryBuilder('resp')
+      .innerJoin('resp.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('person.id', 'id')
+      .addSelect('MAX(person.login)', 'login')
+      .addSelect('MAX(person.code)', 'code')
+      .addSelect('MAX(person.group)', 'group')
+      .addSelect('MAX(bookletinfo.name)', 'bookletName')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('person.id')
+      .orderBy('MAX(person.login)', 'ASC')
+      .addOrderBy('MAX(person.code)', 'ASC')
+      .getRawMany();
 
-      const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
-      const testPersons = new Set<string>();
-      const variables = new Set<string>();
-      const personGroups = new Map<string, string>();
-      const personBooklets = new Map<string, string>();
-      const variableUnitNames = new Map<string, string>();
-      const allCoders = new Set<string>();
+    if (personResults.length === 0) {
+      throw new Error('No coding results found for this workspace');
+    }
 
-      let coderMapping: Map<string, string> | null = null;
-      if (anonymizeCoders) {
-        coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
-      }
+    // 4. Setup Streaming Workbook
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const worksheet = workbook.addWorksheet('Coding Results');
 
-      for (const unit of codingJobUnits) {
-        const person = unit.response?.unit?.booklet?.person;
-        if (!person) continue;
+    const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group', 'Unit', 'Variable'];
+    if (includeReplayUrl) baseHeaders.push('Replay URL');
 
-        const testPersonKey = `${person.login}_${person.code}`;
-        const variableId = unit.variable_id;
-        const unitName = unit.unit_name;
+    const coderHeaderNames: string[] = [];
+    allCoderNames.forEach(name => {
+      const displayName = anonymizeCoders ? coderMapping.get(name)! : name;
+      coderHeaderNames.push(`${displayName} Code`, `${displayName} Score`);
+      if (includeComments) coderHeaderNames.push(`${displayName} Note`);
+    });
 
-        if (!unitName || !variableId) continue;
+    const headers = [...baseHeaders, ...coderHeaderNames];
+    if (includeModalValue) headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+    headers.push(COMMENTS_HEADER);
 
-        if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
-          if (!manualCodingVariableSet.has(variableKey)) {
-            continue;
-          }
-        }
+    worksheet.columns = headers.map(h => ({ header: h, key: h, width: h === 'Replay URL' ? 60 : 15 }));
 
-        const compositeVariableKey = `${unitName}_${variableId}`;
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-        // Get coder name from the job's assigned coders (take first coder for the job)
-        const coder = unit.coding_job?.codingJobCoders?.[0];
-        let coderName = coder?.user?.username || `Job ${unit.coding_job_id}`;
+    // 5. Batch Process Test Persons
+    const batchSize = 50;
+    for (let i = 0; i < personResults.length; i += batchSize) {
+      if (checkCancellation) await checkCancellation();
+      const batch = personResults.slice(i, i + batchSize);
+      const batchPersonIds = batch.map(p => p.id);
 
-        if (anonymizeCoders && coderMapping) {
-          coderName = coderMapping.get(coderName) || coderName;
-        }
+      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .innerJoin('cju.response', 'resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .leftJoin('cjc.user', 'user')
+        .select('person.id', 'personId')
+        .addSelect('cju.unit_name', 'unitName')
+        .addSelect('cju.variable_id', 'variableId')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.score_v3', 'score_v3')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.score_v2', 'score_v2')
+        .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.score_v1', 'score_v1')
+        .addSelect('cju.notes', 'notes')
+        .addSelect('user.username', 'username')
+        .addSelect('cj.id', 'jobId')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .getRawMany();
 
-        allCoders.add(coderName);
-        testPersons.add(testPersonKey);
-        variables.add(compositeVariableKey);
+      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .select('person.id', 'personId')
+        .addSelect('unit.name', 'unitName')
+        .addSelect('resp.variableid', 'variableId')
+        .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.score_v1', 'score_v1')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .andWhere('cju.id IS NULL')
+        .andWhere('resp.code_v1 IS NOT NULL')
+        .getRawMany();
 
-        // Cache metadata
-        if (!personGroups.has(testPersonKey)) {
-          personGroups.set(testPersonKey, person.group || '');
-        }
-        if (!personBooklets.has(testPersonKey)) {
-          const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-          personBooklets.set(testPersonKey, bookletName);
-        }
-        if (!variableUnitNames.has(compositeVariableKey)) {
-          variableUnitNames.set(compositeVariableKey, unitName || '');
-        }
+      // Group data by person and variable
+      const personData = new Map<number, Map<string, Map<string, { code: number | null, score: number | null, comment: string | null }>>>();
 
-        const rowKey = `${testPersonKey}_${compositeVariableKey}`;
+      manualCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const compositeKey = `${row.unitName}_${row.variableId}`;
+        const coderName = row.username || `Job ${row.jobId}`;
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const varMap = personData.get(pid)!;
+        if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
+        const coderMap = varMap.get(compositeKey)!;
 
-        // Store coding data
-        if (!dataMap.has(rowKey)) {
-          dataMap.set(rowKey, new Map());
-        }
+        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const score = row.score_v3 ?? row.score_v2 ?? row.score_v1;
+        coderMap.set(coderName, {
+          code: code !== null && code !== undefined ? parseInt(code, 10) : null,
+          score: score !== null && score !== undefined ? parseInt(score, 10) : null,
+          comment: row.notes
+        });
+      });
 
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
-        const comment = unit.notes || null;
+      autoCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const compositeKey = `${row.unitName}_${row.variableId}`;
+        const coderName = 'AUTO';
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const varMap = personData.get(pid)!;
+        if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
+        const coderMap = varMap.get(compositeKey)!;
+        coderMap.set(coderName, {
+          code: row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null,
+          score: row.score_v1 !== null && row.score_v1 !== undefined ? parseInt(row.score_v1, 10) : null,
+          comment: null
+        });
+      });
 
-        dataMap.get(rowKey)!.set(coderName, { code, score, comment });
-      }
+      for (const p of batch) {
+        const pid = parseInt(p.id, 10);
+        const varMap = personData.get(pid);
 
-      // Build headers: Base columns + Coders + Optional columns
-      const coderList = Array.from(allCoders).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group', 'Variable'];
+        for (const vKey of sortedVariables) {
+          const coderDataMap = varMap?.get(vKey);
+          if (!coderDataMap && excludeAutoCoded) continue;
 
-      const headers = [...baseHeaders, ...coderList];
-
-      if (includeModalValue) {
-        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
-      }
-      if (includeComments) {
-        headers.push(COMMENTS_HEADER);
-      }
-      if (includeReplayUrl) {
-        headers.push('Replay URL');
-      }
-
-      worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
-
-      // Create rows: one row per person-variable combination
-      const sortedTestPersons = Array.from(testPersons).sort();
-      const sortedVariables = Array.from(variables).sort();
-
-      for (const testPersonKey of sortedTestPersons) {
-        const [login, code] = testPersonKey.split('_');
-        const group = personGroups.get(testPersonKey) || '';
-        const bookletName = personBooklets.get(testPersonKey) || '';
-
-        for (const compositeVariableKey of sortedVariables) {
-          const rowKey = `${testPersonKey}_${compositeVariableKey}`;
-          const coderData = dataMap.get(rowKey);
-
-          if (!coderData || coderData.size === 0) continue;
-
-          const variableId = compositeVariableKey.split('_').slice(1).join('_');
-          const unitName = variableUnitNames.get(compositeVariableKey) || '';
-
-          const row: Record<string, string | number | null> = {
-            'Test Person Login': login,
-            'Test Person Code': code,
-            'Test Person Group': group,
-            Variable: variableId
+          const row: Record<string, unknown> = {
+            'Test Person Login': p.login,
+            'Test Person Code': p.code,
+            'Test Person Group': p.group || '',
+            Unit: variableUnitNames.get(vKey) || '',
+            Variable: vKey.split('_').slice(1).join('_')
           };
 
-          // Add replay URL
-          if (includeReplayUrl && req) {
-            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, variableId, workspaceId, authToken);
-          }
-
-          // Add coder codes/comments
           const codes: number[] = [];
           const comments: string[] = [];
 
-          for (const coderName of coderList) {
-            const coding = coderData.get(coderName);
-            if (outputCommentsInsteadOfCodes) {
-              row[coderName] = coding?.comment || '';
-            } else {
-              row[coderName] = coding?.code ?? '';
-            }
+          allCoderNames.forEach(coderName => {
+            const data = coderDataMap?.get(coderName);
+            const displayName = anonymizeCoders ? coderMapping.get(coderName)! : coderName;
+            row[`${displayName} Code`] = data?.code ?? '';
+            row[`${displayName} Score`] = data?.score ?? '';
+            if (includeComments) row[`${displayName} Note`] = data?.comment ?? '';
+            if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
+            if (data?.comment) comments.push(`${displayName}: ${data.comment}`);
+          });
 
-            if (coding?.code !== null && coding?.code !== undefined) {
-              codes.push(coding.code);
-            }
-            if (coding?.comment) {
-              comments.push(`${coderName}: ${coding.comment}`);
-            }
+          // Add AUTO if present
+          if (coderDataMap?.has('AUTO')) {
+            const data = coderDataMap.get('AUTO')!;
+            if (data.code !== null && data.code !== undefined) codes.push(data.code);
           }
 
-          // Add modal value
-          if (includeModalValue && codes.length > 0) {
+          if (includeModalValue) {
             const modalResult = calculateModalValue(codes);
-            row[MODAL_VALUE_HEADER] = modalResult.modalValue;
+            row[MODAL_VALUE_HEADER] = modalResult.modalValue ?? '';
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
-          } else if (includeModalValue) {
-            row[MODAL_VALUE_HEADER] = '';
-            row[DEVIATION_COUNT_HEADER] = '';
           }
 
-          // Add comments
-          if (includeComments) {
-            row[COMMENTS_HEADER] = comments.join(' | ');
+          row[COMMENTS_HEADER] = comments.join(' | ');
+
+          if (includeReplayUrl && req) {
+            const unitName = variableUnitNames.get(vKey) || '';
+            const variableId = vKey.split('_').slice(1).join('_');
+            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
           }
 
-          worksheet.addRow(row);
+          worksheet.addRow(row).commit();
         }
       }
 
-      // Style the header row
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting aggregated (new-row-per-variable): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated results: ${error.message}`);
+      if (global.gc) global.gc();
+      await new Promise<void>(resolve => { setImmediate(resolve); });
     }
+
+    await workbook.commit();
+    return Buffer.concat(chunks);
   }
 
   private async exportAggregatedNewColumnPerCoder(
@@ -701,987 +826,730 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-column-per-coder method for workspace ${workspaceId}`);
+    if (checkCancellation) await checkCancellation();
 
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const COMMENTS_HEADER = 'Kommentare';
 
-    if (checkCancellation) await checkCancellation();
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
-    // Get manual coding variables filter if enabled
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
       const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      this.logger.log(`Found ${codingListVariables.length} unique unit-variable combinations for workspace ${workspaceId}`);
-      // Create set of unit-variable combinations
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
+      manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
+    }
+
+    // 1. Get all coders to build mapping
+    const coderRecords = await this.codingJobRepository.createQueryBuilder('cj')
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .innerJoin('cjc.user', 'user')
+      .select('user.username', 'userName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('user.username')
+      .getRawMany();
+    const allCoderNamesList = coderRecords.map(c => c.userName).sort();
+    const coderMapping = new Map<string, string>();
+    if (anonymizeCoders) {
+      allCoderNamesList.forEach((name, idx) => {
+        coderMapping.set(name, usePseudoCoders ? `Coder ${idx + 1}` : `Coder_${idx + 1}`);
       });
     }
 
-    // Get all coding job units with their coders and responses
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId
+    // 2. Get all variable-coder pairs for columns
+    const variableCoderPairs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .innerJoin('cjc.user', 'user')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('user.username', 'userName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('cju.unit_name')
+      .addGroupBy('cju.variable_id')
+      .addGroupBy('user.username')
+      .getRawMany();
+
+    const colSet = new Set<string>();
+    variableCoderPairs.forEach(v => {
+      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
+          const cName = anonymizeCoders ? coderMapping.get(v.userName)! : v.userName;
+          colSet.add(`${v.unitName}_${v.variableId}_${cName}`);
         }
-      },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.person'
-      ]
+      }
     });
 
-    if (codingJobUnits.length === 0) {
-      throw new Error('No coding jobs found for this workspace');
+    if (!excludeAutoCoded) {
+      const autoVariables = await this.responseRepository.createQueryBuilder('response')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('response.code_v1 IS NOT NULL')
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .getRawMany();
+
+      autoVariables.forEach(v => {
+        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+          colSet.add(`${v.unitName}_${v.variableId}_Autocoder`);
+        }
+      });
     }
 
-    try {
-      const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Coding Results');
+    const sortedColumns = Array.from(colSet).sort();
 
-      // Structure: testPersonKey -> variableKey_coderName -> { code, score, comment }
-      const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
-      const testPersons = new Set<string>();
-      const variableCoderColumns = new Set<string>();
-      const personGroups = new Map<string, string>();
-      const personBooklets = new Map<string, string>();
-      const variableMetadata = new Map<string, { unitName: string; variableId: string }>();
-      const allCoders = new Set<string>();
+    // 3. Get all persons
+    const personResults = await this.responseRepository.createQueryBuilder('resp')
+      .innerJoin('resp.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('person.id', 'id')
+      .addSelect('MAX(person.login)', 'login')
+      .addSelect('MAX(person.code)', 'code')
+      .addSelect('MAX(person.group)', 'group')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .groupBy('person.id')
+      .orderBy('MAX(person.login)', 'ASC')
+      .addOrderBy('MAX(person.code)', 'ASC')
+      .getRawMany();
 
-      // Build coder mapping for anonymization
-      let coderMapping: Map<string, string> | null = null;
-      if (anonymizeCoders) {
-        coderMapping = buildCoderMapping(codingJobUnits, usePseudoCoders);
-      }
+    if (personResults.length === 0) {
+      throw new Error('No coding results found for this workspace');
+    }
 
-      // Process all coding job units
-      for (const unit of codingJobUnits) {
-        const person = unit.response?.unit?.booklet?.person;
-        if (!person) continue;
+    // 4. Setup Streaming Workbook
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+    const worksheet = workbook.addWorksheet('Coding Results');
 
-        const testPersonKey = `${person.login}_${person.code}`;
-        const variableId = unit.variable_id;
-        const unitName = unit.unit_name;
+    const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
+    const headers = [...baseHeaders, ...sortedColumns];
+    if (includeModalValue) headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+    if (includeComments) headers.push(COMMENTS_HEADER);
 
-        if (!unitName || !variableId) continue;
+    worksheet.columns = headers.map(h => ({ header: h, key: h, width: 25 }));
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-        if (manualCodingVariableSet) {
-          const variableKey = `${unitName}|${variableId}`;
-          if (!manualCodingVariableSet.has(variableKey)) {
-            continue;
-          }
-        }
+    // 5. Batch Process Test Persons
+    const batchSize = 100;
+    for (let i = 0; i < personResults.length; i += batchSize) {
+      if (checkCancellation) await checkCancellation();
+      const batch = personResults.slice(i, i + batchSize);
+      const batchPersonIds = batch.map(p => p.id);
 
-        const compositeVariableKey = `${unitName}_${variableId}`;
+      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .innerJoin('cju.response', 'resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .leftJoin('cjc.user', 'user')
+        .select('person.id', 'personId')
+        .addSelect('cju.unit_name', 'unitName')
+        .addSelect('cju.variable_id', 'variableId')
+        .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('cju.notes', 'notes')
+        .addSelect('user.username', 'username')
+        .addSelect('cj.id', 'jobId')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .getRawMany();
 
-        // Get coder name from the job's assigned coders (take first coder for the job)
-        const coder = unit.coding_job?.codingJobCoders?.[0];
-        let coderName = coder?.user?.username || `Job ${unit.coding_job_id}`;
+      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .select('person.id', 'personId')
+        .addSelect('unit.name', 'unitName')
+        .addSelect('resp.variableid', 'variableId')
+        .addSelect('resp.code_v1', 'code_v1')
+        .where('person.id IN (:...ids)', { ids: batchPersonIds })
+        .andWhere('cju.id IS NULL')
+        .andWhere('resp.code_v1 IS NOT NULL')
+        .getRawMany();
 
-        if (anonymizeCoders && coderMapping) {
-          coderName = coderMapping.get(coderName) || coderName;
-        }
+      const personData = new Map<number, Map<string, { code: number | null, comment: string | null }>>();
 
-        allCoders.add(coderName);
-        testPersons.add(testPersonKey);
+      manualCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const coderName = row.username || `Job ${row.jobId}`;
+        const displayName = anonymizeCoders ? coderMapping.get(coderName)! : coderName;
+        const columnKey = `${row.unitName}_${row.variableId}_${displayName}`;
 
-        const columnKey = `${compositeVariableKey}_${coderName}`;
-        variableCoderColumns.add(columnKey);
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const dataMapForPerson = personData.get(pid)!;
 
-        // Cache metadata
-        if (!personGroups.has(testPersonKey)) {
-          personGroups.set(testPersonKey, person.group || '');
-        }
-        if (!personBooklets.has(testPersonKey)) {
-          const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-          personBooklets.set(testPersonKey, bookletName);
-        }
-        if (!variableMetadata.has(compositeVariableKey)) {
-          variableMetadata.set(compositeVariableKey, { unitName: unitName || '', variableId });
-        }
-
-        // Store coding data
-        if (!dataMap.has(testPersonKey)) {
-          dataMap.set(testPersonKey, new Map());
-        }
-
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
-        const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
-        const comment = unit.notes || null;
-
-        dataMap.get(testPersonKey)!.set(columnKey, { code, score, comment });
-      }
-
-      // Build headers: Base columns + Variable_Coder columns + Optional columns
-      const sortedColumns = Array.from(variableCoderColumns).sort();
-      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
-
-      // Create column labels like "Variablenname_Kodierer"
-      const columnLabels = sortedColumns.map(col => {
-        const parts = col.split('_');
-        const coderName = parts[parts.length - 1];
-        const variableKey = parts.slice(0, -1).join('_');
-        return `${variableKey}_${coderName}`;
+        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        dataMapForPerson.set(columnKey, {
+          code: code !== null && code !== undefined ? parseInt(code, 10) : null,
+          comment: row.notes
+        });
       });
 
-      const headers = [...baseHeaders, ...columnLabels];
+      autoCoding.forEach(row => {
+        const pid = parseInt(row.personId, 10);
+        const columnKey = `${row.unitName}_${row.variableId}_Autocoder`;
+        if (!personData.has(pid)) personData.set(pid, new Map());
+        const dataMapForPerson = personData.get(pid)!;
+        dataMapForPerson.set(columnKey, {
+          code: row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null,
+          comment: null
+        });
+      });
 
-      if (includeModalValue) {
-        headers.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
-      }
-      if (includeComments) {
-        headers.push(COMMENTS_HEADER);
-      } worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
-
-      // Create rows: one row per person
-      const sortedTestPersons = Array.from(testPersons).sort();
-
-      for (const testPersonKey of sortedTestPersons) {
-        const [login, code] = testPersonKey.split('_');
-        const group = personGroups.get(testPersonKey) || '';
-        const personData = dataMap.get(testPersonKey);
-
-        if (!personData || personData.size === 0) continue;
-
-        const row: Record<string, string | number | null> = {
-          'Test Person Login': login,
-          'Test Person Code': code,
-          'Test Person Group': group
+      for (const p of batch) {
+        const pid = parseInt(p.id, 10);
+        const dataMapForPerson = personData.get(pid);
+        const row: Record<string, unknown> = {
+          'Test Person Login': p.login,
+          'Test Person Code': p.code,
+          'Test Person Group': p.group || ''
         };
 
-        // Add variable-coder data
-        const allCodes: number[] = [];
-        const allComments: string[] = [];
+        const codes: number[] = [];
+        const comments: string[] = [];
 
-        for (let i = 0; i < sortedColumns.length; i++) {
-          const columnKey = sortedColumns[i];
-          const columnLabel = columnLabels[i];
-          const coding = personData.get(columnKey);
-
-          if (outputCommentsInsteadOfCodes) {
-            row[columnLabel] = coding?.comment || '';
-          } else {
-            row[columnLabel] = coding?.code ?? '';
-          }
-
-          if (coding?.code !== null && coding?.code !== undefined) {
-            allCodes.push(coding.code);
-          }
-          if (coding?.comment) {
-            const coderName = columnKey.split('_').slice(-1)[0];
-            allComments.push(`${coderName}: ${coding.comment}`);
+        for (const col of sortedColumns) {
+          const data = dataMapForPerson?.get(col);
+          row[col] = outputCommentsInsteadOfCodes ? data?.comment || '' : data?.code ?? '';
+          if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
+          if (data?.comment) {
+            const coderName = col.split('_').pop();
+            comments.push(`${coderName}: ${data.comment}`);
           }
         }
 
-        // Add modal value
-        if (includeModalValue && allCodes.length > 0) {
-          const modalResult = calculateModalValue(allCodes);
-          row[MODAL_VALUE_HEADER] = modalResult.modalValue;
+        if (includeModalValue) {
+          const modalResult = calculateModalValue(codes);
+          row[MODAL_VALUE_HEADER] = modalResult.modalValue ?? '';
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
-        } else if (includeModalValue) {
-          row[MODAL_VALUE_HEADER] = '';
-          row[DEVIATION_COUNT_HEADER] = '';
         }
 
-        // Add comments
         if (includeComments) {
-          row[COMMENTS_HEADER] = allComments.join(' | ');
+          row[COMMENTS_HEADER] = comments.join(' | ');
         }
 
-        worksheet.addRow(row);
+        worksheet.addRow(row).commit();
       }
 
-      // Style the header row
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FFE0E0E0' }
-      };
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting aggregated (new-column-per-coder): ${error.message}`, error.stack);
-      throw new Error(`Could not export aggregated results: ${error.message}`);
+      if (global.gc) global.gc();
+      await new Promise<void>(resolve => { setImmediate(resolve); });
     }
+
+    await workbook.commit();
+    return Buffer.concat(chunks);
   }
 
-  async exportCodingResultsByCoder(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
+  async exportCodingResultsByCoder(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
-    // Clear page maps cache at start of export
     this.clearPageMapsCache();
-
-    // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
-
-    let manualCodingVariableSet: Set<string> | null = null;
-    if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
-    }
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
+      relations: ['codingJobCoders', 'codingJobCoders.user']
     });
 
     if (codingJobs.length === 0) {
       throw new Error('No coding jobs found for this workspace');
     }
 
-    // Check for cancellation after data fetch
-    if (checkCancellation) await checkCancellation();
+    const coderJobsMap = new Map<string, CodingJob[]>();
+    const allCoderNames = new Set<string>();
 
-    try {
-      const jobIds = codingJobs.map(job => job.id);
+    for (const job of codingJobs) {
+      for (const jc of job.codingJobCoders) {
+        allCoderNames.add(jc.user.username);
+        const coderKey = `${jc.user.username}_${jc.user.id}`;
+        if (!coderJobsMap.has(coderKey)) {
+          coderJobsMap.set(coderKey, []);
+        }
+        coderJobsMap.get(coderKey)!.push(job);
+      }
+    }
+
+    const coderNameMapping = anonymizeCoders ?
+      buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
+      null;
+
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
+
+    for (const [coderKey, jobs] of coderJobsMap) {
+      if (checkCancellation) await checkCancellation();
+      const [coderName] = coderKey.split('_');
+      const displayName = anonymizeCoders && coderNameMapping ? coderNameMapping.get(coderName) || coderName : coderName;
+      const worksheetName = generateUniqueWorksheetName(workbook, displayName);
+      const worksheet = workbook.addWorksheet(worksheetName);
+
+      const jobIds = jobs.map(j => j.id);
       const codingJobVariables = await this.codingJobVariableRepository.find({
         where: { coding_job_id: In(jobIds) }
       });
+      const variableIds = Array.from(new Set(codingJobVariables.map(v => v.variable_id))).sort();
 
-      const variablesByJobId = new Map<number, CodingJobVariable[]>();
-      codingJobVariables.forEach(variable => {
-        if (!variablesByJobId.has(variable.coding_job_id)) {
-          variablesByJobId.set(variable.coding_job_id, []);
-        }
-        variablesByJobId.get(variable.coding_job_id)!.push(variable);
-      });
+      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
+      if (includeReplayUrl) baseHeaders.push('Replay URL');
+      const headers = [...baseHeaders, ...variableIds];
 
-      const workbook = new ExcelJS.Workbook();
-      const coderJobs = new Map<string, CodingJob[]>();
+      worksheet.columns = headers.map(h => ({ header: h, key: h, width: h === 'Replay URL' ? 60 : 15 }));
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
 
-      const allCoderNames = new Set<string>();
-      for (const job of codingJobs) {
-        for (const jobCoder of job.codingJobCoders) {
-          allCoderNames.add(jobCoder.user.username);
-          const coderKey = `${jobCoder.user.username}_${jobCoder.user.id}`;
-          if (!coderJobs.has(coderKey)) {
-            coderJobs.set(coderKey, []);
+      const personResults = await this.responseRepository.createQueryBuilder('resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .select('person.id', 'id')
+        .addSelect('MAX(person.login)', 'login')
+        .addSelect('MAX(person.code)', 'code')
+        .addSelect('MAX(person.group)', 'group')
+        .where('cju.coding_job_id IN (:...jobIds)', { jobIds })
+        .groupBy('person.id')
+        .orderBy('MAX(person.login)', 'ASC')
+        .getRawMany();
+
+      const batchSize = 100;
+      for (let j = 0; j < personResults.length; j += batchSize) {
+        const batch = personResults.slice(j, j + batchSize);
+        const batchIds = batch.map(p => p.id);
+
+        const responses = await this.responseRepository.createQueryBuilder('resp')
+          .innerJoin('resp.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+          .select('resp.variableid', 'variableId')
+          .addSelect('unit.name', 'unitName')
+          .addSelect('resp.code_v1', 'code_v1')
+          .addSelect('resp.code_v2', 'code_v2')
+          .addSelect('resp.code_v3', 'code_v3')
+          .addSelect('cju.notes', 'notes')
+          .addSelect('booklet.person_id', 'pId')
+          .addSelect('bookletinfo.name', 'bookletName')
+          .where('booklet.person_id IN (:...ids)', { ids: batchIds })
+          .andWhere('cju.coding_job_id IN (:...jobIds)', { jobIds })
+          .getRawMany();
+
+        const personDataMap = new Map<number, Record<string, unknown>>();
+        for (const resp of responses) {
+          const pid = parseInt(resp.pId, 10);
+          if (!personDataMap.has(pid)) {
+            personDataMap.set(pid, {});
           }
-          coderJobs.get(coderKey)!.push(job);
-        }
-      }
-
-      const coderNameMapping = anonymizeCoders ?
-        buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
-        null;
-
-      for (const [coderKey, jobs] of coderJobs) {
-        const [coderName] = coderKey.split('_');
-        const displayName = anonymizeCoders && coderNameMapping ? coderNameMapping.get(coderName) || coderName : coderName;
-        const worksheetName = generateUniqueWorksheetName(workbook, displayName);
-        const worksheet = workbook.addWorksheet(worksheetName);
-
-        // Collect all variables and testpersons for this coder
-        const variableSet = new Set<string>();
-        const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
-        const testPersonComments = new Map<string, Map<string, string | null>>();
-        const testPersonList: string[] = [];
-        const personGroups = new Map<string, string>();
-        const personBooklets = new Map<string, string>();
-        const variableUnitNames = new Map<string, string>();
-
-        for (const job of jobs) {
-          // Get responses for this job's variables and units
-          const unitIds = job.codingJobUnits.map(ju => ju.response?.unit?.id).filter((id): id is number => id !== undefined);
-          const jobVariables = variablesByJobId.get(job.id) || [];
-          const variableIds = jobVariables.map(jv => jv.variable_id);
-
-          if (unitIds.length === 0 || variableIds.length === 0) continue;
-
-          const responses = await this.responseRepository.find({
-            where: {
-              unitid: In(unitIds),
-              variableid: In(variableIds)
-            },
-            relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
-            select: {
-              id: true,
-              variableid: true,
-              code_v1: true,
-              score_v1: true,
-              code_v2: true,
-              score_v2: true,
-              code_v3: true,
-              score_v3: true,
-              unit: {
-                id: true,
-                name: true,
-                booklet: {
-                  id: true,
-                  person: {
-                    id: true,
-                    login: true,
-                    code: true,
-                    group: true
-                  }
-                }
-              }
-            }
-          });
-
-          for (const response of responses) {
-            const person = response.unit?.booklet?.person;
-            const testPersonKey = `${person?.login}_${person?.code}`;
-            const variableId = response.variableid;
-            const unitName = response.unit?.name;
-            const compositeKey = unitName ? `${unitName}_${variableId}` : variableId;
-            const latestCoding = getLatestCode(response);
-
-            // Store person group and booklet
-            if (!personGroups.has(testPersonKey)) {
-              personGroups.set(testPersonKey, person?.group || '');
-            }
-            if (!personBooklets.has(testPersonKey)) {
-              personBooklets.set(testPersonKey, response.unit?.booklet?.bookletinfo?.name || '');
-            }
-
-            // Store unit name for this variable
-            if (!variableUnitNames.has(compositeKey)) {
-              variableUnitNames.set(compositeKey, unitName || '');
-            }
-
-            if (!testPersonMap.has(testPersonKey)) {
-              testPersonMap.set(testPersonKey, new Map());
-              testPersonList.push(testPersonKey);
-            }
-
-            testPersonMap.get(testPersonKey)!.set(compositeKey, {
-              code: latestCoding.code,
-              score: latestCoding.score
-            });
-            // Apply manual coding filter if needed
-            if (manualCodingVariableSet) {
-              const variableKey = `${unitName}|${response.variableid}`;
-              if (!manualCodingVariableSet.has(variableKey)) {
-                continue;
-              }
-            }
-
-            variableSet.add(compositeKey);
-          }
-
-          // Fetch comments if needed
-          if (outputCommentsInsteadOfCodes) {
-            for (const unit of job.codingJobUnits) {
-              if (!unit.notes) continue;
-
-              const person = unit.response?.unit?.booklet?.person;
-              const testPersonKey = `${person?.login}_${person?.code}`;
-              const unitName = unit.response?.unit?.name;
-              const compositeKey = unitName ? `${unitName}_${unit.variable_id}` : unit.variable_id;
-
-              if (!testPersonComments.has(testPersonKey)) {
-                testPersonComments.set(testPersonKey, new Map());
-              }
-              testPersonComments.get(testPersonKey)!.set(compositeKey, unit.notes);
-            }
-          }
+          const pData = personDataMap.get(pid)!;
+          const latest = getLatestCode(resp);
+          pData[resp.variableId] = outputCommentsInsteadOfCodes ? resp.notes || '' : latest.code ?? '';
+          pData[`_metadata_${resp.variableId}`] = { unitName: resp.unitName, bookletName: resp.bookletName };
         }
 
-        const variables = Array.from(variableSet).sort();
-
-        if (variables.length === 0) continue;
-
-        const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
-        if (includeReplayUrl) {
-          baseHeaders.push('Replay URL');
-        }
-        const headers = [...baseHeaders, ...variables];
-        worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
-
-        for (const testPersonKey of testPersonList) {
-          const [login, code] = testPersonKey.split('_');
-          const personData = testPersonMap.get(testPersonKey)!;
-          const group = personGroups.get(testPersonKey) || '';
-          const bookletName = personBooklets.get(testPersonKey) || '';
-
-          const row: Record<string, string | number | null> = {
-            'Test Person Login': login,
-            'Test Person Code': code,
-            'Test Person Group': group
+        for (const p of batch) {
+          const pid = parseInt(p.id, 10);
+          const pData = personDataMap.get(pid) || {};
+          const row: Record<string, unknown> = {
+            'Test Person Login': p.login,
+            'Test Person Code': p.code,
+            'Test Person Group': p.group || ''
           };
 
-          // Add replay URL if requested - use first variable with data
           if (includeReplayUrl && req) {
-            let replayUrl = '';
-            for (const variable of variables) {
-              if (personData.has(variable)) {
-                const parts = variable.split('_');
-                const varId = parts[parts.length - 1];
-                const unitName = variableUnitNames.get(variable) || '';
-                replayUrl = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, varId, workspaceId, authToken);
-                break;
-              }
-            }
-            row['Replay URL'] = replayUrl;
-          }
-
-          for (const variable of variables) {
-            const coding = personData.get(variable);
-            if (outputCommentsInsteadOfCodes) {
-              const comments = testPersonComments.get(testPersonKey);
-              const comment = comments?.get(variable);
-              row[variable] = comment || '';
-            } else {
-              row[variable] = coding?.code ?? '';
+            const firstVar = variableIds.find(v => pData[`_metadata_${v}`]);
+            if (firstVar) {
+              const meta = pData[`_metadata_${firstVar}`] as { bookletName: string, unitName: string };
+              row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', meta.bookletName || '', meta.unitName, firstVar, workspaceId, authToken);
             }
           }
 
-          worksheet.addRow(row);
+          for (const vId of variableIds) {
+            row[vId] = pData[vId] ?? '';
+          }
+          worksheet.addRow(row).commit();
         }
-
-        // Style the header row
-        worksheet.getRow(1).font = { bold: true };
-        worksheet.getRow(1).fill = {
-          type: 'pattern',
-          pattern: 'solid',
-          fgColor: { argb: 'FFE0E0E0' }
-        };
       }
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      return Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting coding results by coder: ${error.message}`, error.stack);
-      throw new Error('Could not export coding results by coder. Please check the database connection or query.');
+      await worksheet.commit();
     }
+
+    await workbook.commit();
+    return Buffer.concat(chunks);
   }
 
-  async exportCodingResultsByVariable(workspaceId: number, includeModalValue = false, includeDoubleCoded = false, includeComments = false, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
+  async exportCodingResultsByVariable(
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
-    // Clear page maps cache at start of export
     this.clearPageMapsCache();
     const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
-    const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
-    const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
 
-    // Column header constants
+    const BATCH_SIZE = 100;
+
     const MODAL_VALUE_HEADER = 'Häufigster Wert';
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const DOUBLE_CODED_HEADER = 'Doppelkodierung';
     const COMMENTS_HEADER = 'Kommentare';
 
-    // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
 
-    let incompleteVariables: Array<{ unitName: string; variableId: string }> = [];
-    if (excludeAutoCoded) {
-      incompleteVariables = await this.codingListService.getCodingListVariables(workspaceId);
-
-      if (incompleteVariables.length === 0) {
-        throw new Error('No CODING_INCOMPLETE variables found for this workspace');
-      }
-      this.logger.log(`Found ${incompleteVariables.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
-    }
-
-    // Create a filter set for quick lookup: "unitName|variableId"
-    const incompleteVariableSet = new Set<string>();
-    if (excludeAutoCoded) {
-      incompleteVariables.forEach(variable => {
-        incompleteVariableSet.add(`${variable.unitName}|${variable.variableId}`);
-      });
-    }
-
-    // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
-    const unitVariableResults = await this.responseRepository
-      .createQueryBuilder('response')
+    const unitVariableResults = await this.responseRepository.createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .where('person.workspace_id = :workspaceId', { workspaceId });
+
+    if (excludeAutoCoded) {
+      unitVariableResults.andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+    }
+
+    const combinations = await unitVariableResults
       .groupBy('unit.name')
       .addGroupBy('response.variableid')
       .orderBy('unit.name', 'ASC')
       .addOrderBy('response.variableid', 'ASC')
       .getRawMany();
 
-    // Filter to only include variables that are in the incomplete set
-    const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)
-    );
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
-    this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
+    const filteredCombinations = combinations.filter(c => c.unitName && !ignoredSet.has(c.unitName.toUpperCase()))
+      .slice(0, MAX_WORKSHEETS);
 
-    if (filteredUnitVariableResults.length === 0) {
-      throw new Error('No CODING_INCOMPLETE variables with responses found for this workspace');
+    if (filteredCombinations.length === 0) {
+      throw new Error('No responses found for requested export');
     }
 
-    // Check if we exceed the worksheet limit
-    if (filteredUnitVariableResults.length > MAX_WORKSHEETS) {
-      this.logger.warn(`Too many unit-variable combinations (${filteredUnitVariableResults.length}) for workspace ${workspaceId}. Limiting to ${MAX_WORKSHEETS} worksheets.`);
-      filteredUnitVariableResults.splice(MAX_WORKSHEETS); // Truncate to limit
-    }
+    const chunks: Buffer[] = [];
+    const stream = new PassThrough();
+    stream.on('data', chunk => chunks.push(chunk));
+    const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ stream, useStyles: true, useSharedStrings: false });
 
-    this.logger.log(`Processing ${filteredUnitVariableResults.length} unit-variable combinations in batches of ${BATCH_SIZE}`);
+    for (const { unitName, variableId } of filteredCombinations) {
+      if (checkCancellation) await checkCancellation();
+      const worksheetName = generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
+      const worksheet = workbook.addWorksheet(worksheetName);
 
-    let processedCombinations = 0;
-    let resultBuffer: Buffer;
+      // Get all coders for this variable
+      const personIdsRaw = await this.responseRepository.createQueryBuilder('resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .select('booklet.person_id', 'pId')
+        .where('unit.name = :unitName', { unitName })
+        .andWhere('resp.variableid = :variableId', { variableId })
+        .groupBy('booklet.person_id')
+        .getRawMany();
 
-    try {
-      const workbook = new ExcelJS.Workbook();
+      const pIds = personIdsRaw.map(r => r.pId);
+      if (pIds.length === 0) {
+        await worksheet.commit();
+        continue;
+      }
 
-      // Process in batches to avoid memory spikes
-      for (let i = 0; i < filteredUnitVariableResults.length; i += BATCH_SIZE) {
-        const batch = filteredUnitVariableResults.slice(i, i + BATCH_SIZE);
-        this.logger.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(filteredUnitVariableResults.length / BATCH_SIZE)} (${batch.length} combinations)`);
+      // Find coders involved
+      const coderQuery = await this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'job')
+        .innerJoin('job.codingJobCoders', 'jc')
+        .innerJoin('jc.user', 'user')
+        .select('user.username', 'username')
+        .where('cju.unit_name = :unitName', { unitName })
+        .andWhere('cju.variable_id = :variableId', { variableId })
+        .andWhere('job.workspace_id = :workspaceId', { workspaceId })
+        .groupBy('user.username')
+        .getRawMany();
 
-        // Process each combination in the current batch
-        for (const { unitName, variableId } of batch) {
-          try {
-            // Get coding job units for this specific unit-variable combination
-            const codingJobUnits = await this.codingJobUnitRepository.find({
-              where: {
-                unit_name: unitName,
-                variable_id: variableId,
-                coding_job: {
-                  workspace_id: workspaceId
-                }
-              },
-              relations: [
-                'coding_job',
-                'coding_job.codingJobCoders',
-                'coding_job.codingJobCoders.user',
-                'response',
-                'response.unit',
-                'response.unit.booklet',
-                'response.unit.booklet.person'
-              ],
-              take: MAX_RESPONSES_PER_WORKSHEET * 10
+      const coderNames = coderQuery.map(c => c.username).sort();
+      const coderMapping = anonymizeCoders ? buildCoderNameMapping(coderNames, usePseudoCoders) : null;
+      const displayCoders = coderNames.map(c => coderMapping?.get(c) || c);
+
+      const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
+      if (includeReplayUrl) baseHeaders.push('Replay URL');
+      baseHeaders.push(...displayCoders);
+      if (includeModalValue) baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
+      if (includeDoubleCoded) baseHeaders.push(DOUBLE_CODED_HEADER);
+      if (includeComments) baseHeaders.push(...displayCoders.map(c => `${COMMENTS_HEADER} (${c})`));
+
+      worksheet.columns = baseHeaders.map(h => ({ header: h, key: h, width: h === 'Replay URL' ? 60 : 15 }));
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE0E0E0' } };
+
+      for (let i = 0; i < pIds.length; i += BATCH_SIZE) {
+        const batchIds = pIds.slice(i, i + BATCH_SIZE);
+        const dataQuery = await this.responseRepository.createQueryBuilder('resp')
+          .innerJoin('resp.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+          .leftJoin('cju.coding_job', 'job')
+          .leftJoin('job.codingJobCoders', 'jc')
+          .leftJoin('jc.user', 'user')
+          .select('person.login', 'login')
+          .addSelect('person.code', 'code')
+          .addSelect('person.group', 'group')
+          .addSelect('bookletinfo.name', 'bookletName')
+          .addSelect('resp.code_v1', 'code_v1')
+          .addSelect('resp.code_v2', 'code_v2')
+          .addSelect('resp.code_v3', 'code_v3')
+          .addSelect('resp.status_v1', 'status_v1')
+          .addSelect('user.username', 'username')
+          .addSelect('cju.notes', 'notes')
+          .addSelect('person.id', 'pId')
+          .where('person.id IN (:...batchIds)', { batchIds })
+          .andWhere('unit.name = :unitName', { unitName })
+          .andWhere('resp.variableid = :variableId', { variableId })
+          .getRawMany();
+
+        const personGroup = new Map<number, {
+          login: string,
+          code: string,
+          group: string,
+          bookletName: string,
+          codings: Record<string, { code: number | null, notes: string | null, status: number | null }>,
+          metadata: Record<string, unknown>
+        }>();
+        for (const d of dataQuery) {
+          const pid = parseInt(d.pId, 10);
+          if (!personGroup.has(pid)) {
+            personGroup.set(pid, {
+              login: d.login, code: d.code, group: d.group, bookletName: d.bookletName, codings: {}, metadata: d
             });
-
-            if (codingJobUnits.length === 0) continue;
-
-            const worksheetName = generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
-            const worksheet = workbook.addWorksheet(worksheetName);
-
-            const testPersonMap = new Map<string, Map<string, number | null>>();
-            const testPersonComments = new Map<string, Map<string, string | null>>();
-            const coderSet = new Set<string>();
-            const testPersonData = new Map<string, { login: string; code: string; group: string; booklet: string }>();
-
-            for (const unit of codingJobUnits) {
-              if (unit.code === null || unit.code === undefined) {
-                continue;
-              }
-
-              const person = unit.response?.unit?.booklet?.person;
-              const testPersonKey = `${person?.login || ''}_${person?.code || ''}`;
-
-              const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || 'Unknown';
-              coderSet.add(coderName);
-
-              if (!testPersonData.has(testPersonKey)) {
-                testPersonData.set(testPersonKey, {
-                  login: person?.login || '',
-                  code: person?.code || '',
-                  group: person?.group || '',
-                  booklet: unit.response?.unit?.booklet?.bookletinfo?.name || ''
-                });
-              }
-
-              if (!testPersonMap.has(testPersonKey)) {
-                testPersonMap.set(testPersonKey, new Map());
-              }
-              testPersonMap.get(testPersonKey)!.set(coderName, unit.code);
-
-              if (includeComments) {
-                if (!testPersonComments.has(testPersonKey)) {
-                  testPersonComments.set(testPersonKey, new Map());
-                }
-                if (unit.notes) {
-                  testPersonComments.get(testPersonKey)!.set(coderName, unit.notes);
-                }
-              }
-            }
-
-            if (testPersonMap.size === 0) continue;
-
-            const coderList = Array.from(coderSet).sort();
-            let coderNameMapping: Map<string, string> | null;
-            if (anonymizeCoders && usePseudoCoders) {
-              coderNameMapping = buildCoderNameMapping(coderList, true); // Pseudo mode: deterministic K1/K2 per variable
-            } else if (anonymizeCoders) {
-              coderNameMapping = buildCoderNameMapping(coderList, false); // Regular: random mapping
-            } else {
-              coderNameMapping = null;
-            }
-
-            const displayCoderList = coderNameMapping ?
-              coderList.map(coder => coderNameMapping.get(coder) || coder) :
-              coderList;
-
-            const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
-
-            if (includeReplayUrl) {
-              baseHeaders.push('Replay URL');
-            }
-
-            baseHeaders.push(...displayCoderList);
-
-            if (includeModalValue) {
-              baseHeaders.push(MODAL_VALUE_HEADER, DEVIATION_COUNT_HEADER);
-            }
-
-            if (includeDoubleCoded) {
-              baseHeaders.push(DOUBLE_CODED_HEADER);
-            }
-
-            if (includeComments) {
-              baseHeaders.push(COMMENTS_HEADER);
-            }
-
-            worksheet.columns = baseHeaders.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
-
-            for (const [testPersonKey, codings] of testPersonMap) {
-              const personData = testPersonData.get(testPersonKey)!;
-
-              const row: Record<string, string | number | null> = {
-                'Test Person Login': personData.login,
-                'Test Person Code': personData.code,
-                'Test Person Group': personData.group
-              };
-
-              if (includeReplayUrl && req) {
-                row['Replay URL'] = await this.generateReplayUrlWithPageLookup(
-                  req,
-                  personData.login,
-                  personData.code,
-                  personData.group,
-                  personData.booklet,
-                  unitName,
-                  variableId,
-                  workspaceId,
-                  authToken
-                );
-              }
-
-              // Add coding values for each coder
-              const codeValues: (number | null)[] = [];
-              for (let coderIndex = 0; coderIndex < coderList.length; coderIndex++) {
-                const coder = coderList[coderIndex];
-                const displayCoder = displayCoderList[coderIndex];
-                const code = codings.get(coder) ?? null;
-
-                if (outputCommentsInsteadOfCodes) {
-                  // Output comments instead of codes
-                  const comments = testPersonComments.get(testPersonKey);
-                  const comment = comments?.get(coder);
-                  row[displayCoder] = comment || '';
-                } else {
-                  // Display empty cell for negative codes (coding issues)
-                  row[displayCoder] = (code !== null && code >= 0) ? code : '';
-                }
-
-                // Only include non-negative codes in modal value calculation
-                if (code !== null && code >= 0) {
-                  codeValues.push(code);
-                }
-              }
-
-              // Calculate modal value and deviations if requested
-              if (includeModalValue && codeValues.length > 0) {
-                // Count frequency of each code
-                const frequencyMap = new Map<number, number>();
-                for (const code of codeValues) {
-                  frequencyMap.set(code, (frequencyMap.get(code) || 0) + 1);
-                }
-
-                // Find the maximum frequency
-                let maxFrequency = 0;
-                for (const freq of frequencyMap.values()) {
-                  if (freq > maxFrequency) {
-                    maxFrequency = freq;
-                  }
-                }
-
-                // Collect all codes with the maximum frequency
-                const modalCandidates: number[] = [];
-                for (const [code, freq] of frequencyMap.entries()) {
-                  if (freq === maxFrequency) {
-                    modalCandidates.push(code);
-                  }
-                }
-
-                // Select randomly if there are multiple modal values (tie)
-                const modalValue = modalCandidates.length > 0 ?
-                  modalCandidates[Math.floor(Math.random() * modalCandidates.length)] :
-                  null;
-
-                // Count deviations from modal value (number of coders who used a different code)
-                const deviations = modalValue !== null ?
-                  codeValues.filter(code => code !== modalValue).length :
-                  0;
-
-                row[MODAL_VALUE_HEADER] = modalValue ?? '';
-                row[DEVIATION_COUNT_HEADER] = deviations;
-              } else if (includeModalValue) {
-                row[MODAL_VALUE_HEADER] = '';
-                row[DEVIATION_COUNT_HEADER] = '';
-              }
-
-              if (includeDoubleCoded) {
-                const codedByCount = coderList.filter(coder => {
-                  const code = codings.get(coder) ?? null;
-                  return code !== null && code >= 0;
-                }).length;
-                row[DOUBLE_CODED_HEADER] = codedByCount > 1 ? 1 : 0;
-              }
-
-              if (includeComments) {
-                const comments = testPersonComments.get(testPersonKey);
-                if (comments && comments.size > 0) {
-                  const commentsList = coderList.map(coder => {
-                    const comment = comments.get(coder);
-                    return comment ? `${coder}: ${comment}` : null;
-                  }).filter(c => c !== null);
-                  row[COMMENTS_HEADER] = commentsList.length > 0 ? commentsList.join(' | ') : '';
-                } else {
-                  row[COMMENTS_HEADER] = '';
-                }
-              }
-
-              worksheet.addRow(row);
-            }
-
-            worksheet.getRow(1).font = { bold: true };
-            worksheet.getRow(1).fill = {
-              type: 'pattern',
-              pattern: 'solid',
-              fgColor: { argb: 'FFE0E0E0' }
-            };
-            processedCombinations += 1;
-          } catch (error) {
-            this.logger.error(`Error processing combination ${unitName}_${variableId}: ${error.message}`);
-            // Continue with next combination instead of failing entirely
+          }
+          const p = personGroup.get(pid)!;
+          if (d.username) {
+            const latest = getLatestCode(d);
+            p.codings[d.username] = { code: latest.code, notes: d.notes, status: d.status_v1 };
           }
         }
 
-        // Force cleanup between batches to help with memory management
-        if (global.gc) {
-          global.gc();
+        for (const [, p] of personGroup) {
+          const row: Record<string, unknown> = {
+            'Test Person Login': p.login,
+            'Test Person Code': p.code,
+            'Test Person Group': p.group || ''
+          };
+
+          if (includeReplayUrl && req) {
+            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
+          }
+
+          const codes: (number | null)[] = [];
+          for (const cName of coderNames) {
+            const cData = p.codings[cName];
+            const dName = coderMapping?.get(cName) || cName;
+            row[dName] = outputCommentsInsteadOfCodes ? cData?.notes || '' : cData?.code ?? '';
+            if (cData) codes.push(cData.code);
+          }
+
+          if (includeModalValue) {
+            const modal = calculateModalValue(codes);
+            row[MODAL_VALUE_HEADER] = modal.modalValue ?? '';
+            row[DEVIATION_COUNT_HEADER] = modal.deviationCount;
+          }
+
+          if (includeDoubleCoded) {
+            row[DOUBLE_CODED_HEADER] = codes.length > 1 ? 'Ja' : 'Nein';
+          }
+
+          if (includeComments) {
+            for (const cName of coderNames) {
+              const cData = p.codings[cName];
+              const dName = coderMapping?.get(cName) || cName;
+              row[`${COMMENTS_HEADER} (${dName})`] = cData?.notes || '';
+            }
+          }
+
+          worksheet.addRow(row).commit();
         }
       }
-
-      this.logger.log(`Successfully processed ${processedCombinations} worksheets for workspace ${workspaceId}`);
-
-      const buffer = await workbook.xlsx.writeBuffer();
-      resultBuffer = Buffer.from(buffer);
-    } catch (error) {
-      this.logger.error(`Error exporting coding results by variable: ${error.message}`, error.stack);
-      throw new Error(`Could not export coding results by variable: ${error.message}. This may be due to memory constraints with large datasets.`);
+      await worksheet.commit();
     }
 
-    // Check after try-catch to avoid 'throw of exception caught locally'
-    if (processedCombinations === 0) {
-      throw new Error('No worksheets could be created within the memory limits. Try reducing the dataset size or increasing the limits.');
-    }
-
-    return resultBuffer;
+    await workbook.commit();
+    return Buffer.concat(chunks);
   }
 
-  async exportCodingResultsDetailed(workspaceId: number, outputCommentsInsteadOfCodes = false, includeReplayUrl = false, anonymizeCoders = false, usePseudoCoders = false, authToken = '', req?: Request, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
+  async exportCodingResultsDetailed(
+    workspaceId: number,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
-    // Clear page maps cache at start of export
     this.clearPageMapsCache();
-
-    // Check for cancellation before starting
     if (checkCancellation) await checkCancellation();
 
-    let manualCodingVariableSet: Set<string> | null = null;
-    if (excludeAutoCoded) {
-      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
-      if (codingListVariables.length === 0) {
-        throw new Error('No manual coding variables found in the coding list for this workspace');
-      }
-      manualCodingVariableSet = new Set<string>();
-      codingListVariables.forEach(item => {
-        manualCodingVariableSet.add(`${item.unitName}|${item.variableId}`);
-      });
-    }
-
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId
-        }
-      },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.person'
-      ],
-      order: {
-        created_at: 'ASC'
-      }
-    });
-
-    this.logger.log(`Found ${codingJobUnits.length} coding job units for workspace ${workspaceId}`);
-
     try {
+      let manualCodingVariableSet: Set<string> | null = null;
+      if (excludeAutoCoded) {
+        const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+        if (codingListVariables.length > 0) {
+          manualCodingVariableSet = new Set(codingListVariables.map(v => `${v.unitName}|${v.variableId}`));
+        }
+      }
+
+      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
       let coderNameMapping: Map<string, string> | null = null;
-      if (anonymizeCoders) {
-        if (usePseudoCoders) {
-          coderNameMapping = new Map<string, string>();
-        } else {
-          const allCoders = new Set<string>();
-          for (const unit of codingJobUnits) {
-            const coderName = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
-            if (coderName) {
-              allCoders.add(coderName);
-            }
-          }
-          coderNameMapping = buildCoderNameMapping(Array.from(allCoders), false);
-        }
+      if (anonymizeCoders && !usePseudoCoders) {
+        const coders = await this.codingJobRepository.createQueryBuilder('job')
+          .innerJoin('job.codingJobCoders', 'jc')
+          .innerJoin('jc.user', 'user')
+          .select('user.username', 'username')
+          .where('job.workspace_id = :workspaceId', { workspaceId })
+          .groupBy('user.username')
+          .getRawMany();
+        coderNameMapping = buildCoderNameMapping(coders.map(c => c.username), false);
       }
 
-      const pseudoCoderMappings = new Map<string, Map<string, string>>();
-      const csvRows: string[] = [];
+      const totalCount = await this.codingJobUnitRepository.count({
+        where: { coding_job: { workspace_id: workspaceId } }
+      });
+
+      const chunks: Buffer[] = [];
       const headerColumns = ['"Person"', '"Kodierer"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"'];
-      if (includeReplayUrl) {
-        headerColumns.push('"Replay URL"');
-      }
-      csvRows.push(headerColumns.join(';'));
-      for (const unit of codingJobUnits) {
-        if (unit.code === null || unit.code === undefined) {
-          continue;
-        }
+      if (includeReplayUrl) headerColumns.push('"Replay URL"');
+      chunks.push(Buffer.from(`${headerColumns.join(';')}\n`, 'utf-8'));
 
-        if (manualCodingVariableSet) {
-          const variableKey = `${unit.unit_name}|${unit.variable_id}`;
-          if (!manualCodingVariableSet.has(variableKey)) {
-            continue;
-          }
-        }
+      const batchSize = 500;
+      const pseudoCoderMappings = new Map<string, Map<string, string>>();
+      const escapeCsvField = (field: string): string => `"${field?.toString().replace(/"/g, '""') || ''}"`;
 
-        const person = unit.response?.unit?.booklet?.person;
-        const personId = person?.code || person?.login || '';
+      for (let i = 0; i < totalCount; i += batchSize) {
+        if (checkCancellation) await checkCancellation();
+        const unitsBatch = await this.codingJobUnitRepository.find({
+          where: { coding_job: { workspace_id: workspaceId } },
+          relations: [
+            'coding_job',
+            'coding_job.codingJobCoders',
+            'coding_job.codingJobCoders.user',
+            'response',
+            'response.unit',
+            'response.unit.booklet',
+            'response.unit.booklet.person'
+          ],
+          order: { created_at: 'ASC' },
+          skip: i,
+          take: batchSize
+        });
 
-        let coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+        let batchCsv = '';
+        for (const unit of unitsBatch) {
+          if (unit.code === null || unit.code === undefined) continue;
+          if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+          if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
 
-        if (anonymizeCoders && coder) {
-          if (usePseudoCoders) {
-            const varPersonKey = `${unit.variable_id}_${personId}`;
-            if (!pseudoCoderMappings.has(varPersonKey)) {
-              pseudoCoderMappings.set(varPersonKey, new Map<string, string>());
+          const person = unit.response?.unit?.booklet?.person;
+          const personId = person?.code || person?.login || '';
+          let coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
+
+          if (anonymizeCoders && coder) {
+            if (usePseudoCoders) {
+              const varPersonKey = `${unit.variable_id}_${personId}`;
+              if (!pseudoCoderMappings.has(varPersonKey)) {
+                pseudoCoderMappings.set(varPersonKey, new Map<string, string>());
+              }
+              const varPersonMap = pseudoCoderMappings.get(varPersonKey)!;
+              if (!varPersonMap.has(coder)) {
+                varPersonMap.set(coder, `K${varPersonMap.size + 1}`);
+              }
+              coder = varPersonMap.get(coder)!;
+            } else {
+              coder = coderNameMapping?.get(coder) || coder;
             }
-            const varPersonMap = pseudoCoderMappings.get(varPersonKey)!;
-
-            if (!varPersonMap.has(coder)) {
-              const existingCoders = Array.from(varPersonMap.keys()).sort();
-              existingCoders.push(coder);
-              const sortedCoders = existingCoders.sort();
-              const index = sortedCoders.indexOf(coder);
-              varPersonMap.set(coder, `K${index + 1}`);
-            }
-            coder = varPersonMap.get(coder)!;
-          } else {
-            coder = coderNameMapping?.get(coder) || coder;
           }
+
+          const timestamp = unit.updated_at ? new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
+          const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
+
+          let commentValue = unit.notes || '';
+          if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
+            const issueTexts: Record<number, string> = {
+              1: 'Code-Vergabe unsicher', 2: 'Neuer Code nötig', 3: 'Ungültig (Spaßantwort)', 4: 'Technische Probleme'
+            };
+            commentValue = issueTexts[unit.coding_issue_option] || commentValue;
+          }
+
+          const rowFields = [
+            escapeCsvField(personId),
+            escapeCsvField(coder),
+            escapeCsvField(unit.variable_id),
+            escapeCsvField(commentValue),
+            escapeCsvField(timestamp),
+            escapeCsvField(codeValue)
+          ];
+
+          if (includeReplayUrl && req) {
+            const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
+            const unitName = unit.response?.unit?.name || '';
+            const group = person?.group || '';
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, unit.variable_id, workspaceId, authToken);
+            rowFields.push(escapeCsvField(replayUrl));
+          }
+          batchCsv += `${rowFields.join(';')}\n`;
         }
-
-        const timestamp = unit.updated_at ?
-          new Date(unit.updated_at).toLocaleString('de-DE', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          }).replace(',', '') : '';
-
-        const escapeCsvField = (field: string): string => `"${field.replace(/"/g, '""')}"`;
-
-        const getCodingIssueText = (issueOption: number | null): string => {
-          if (!issueOption) return '';
-          const issueTexts: { [key: number]: string } = {
-            1: 'Code-Vergabe unsicher',
-            2: 'Neuer Code nötig',
-            3: 'Ungültig (Spaßantwort)',
-            4: 'Technische Probleme'
-          };
-          return issueTexts[issueOption] || '';
-        };
-
-        let commentValue: string;
-        if (outputCommentsInsteadOfCodes) {
-          commentValue = unit.notes || '';
-        } else if (unit.coding_issue_option) {
-          commentValue = getCodingIssueText(unit.coding_issue_option);
-        } else if (unit.code === 0) {
-          commentValue = '';
-        } else {
-          commentValue = unit.notes || '';
-        }
-
-        const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
-
-        const rowFields = [
-          escapeCsvField(personId),
-          escapeCsvField(coder),
-          escapeCsvField(unit.variable_id),
-          escapeCsvField(commentValue),
-          escapeCsvField(timestamp),
-          escapeCsvField(codeValue)
-        ];
-
-        if (includeReplayUrl && req) {
-          const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-          const unitName = unit.response?.unit?.name || '';
-          const group = person?.group || '';
-          const replayUrl = await this.generateReplayUrlWithPageLookup(
-            req,
-            person?.login || '',
-            person?.code || '',
-            group,
-            bookletName,
-            unitName,
-            unit.variable_id,
-            workspaceId,
-            authToken
-          );
-          rowFields.push(escapeCsvField(replayUrl));
-        }
-
-        csvRows.push(rowFields.join(';'));
+        chunks.push(Buffer.from(batchCsv, 'utf-8'));
       }
 
-      this.logger.log(`Generated ${csvRows.length - 1} CSV rows for workspace ${workspaceId}`);
-
-      const csvContent = csvRows.join('\n');
-      return Buffer.from(csvContent, 'utf-8');
+      this.logger.log(`Exported detailed results for workspace ${workspaceId}`);
+      return Buffer.concat(chunks);
     } catch (error) {
       this.logger.error(`Error exporting detailed coding results: ${error.message}`, error.stack);
       throw new Error(`Could not export detailed coding results: ${error.message}`);
     }
   }
 
-  async exportCodingTimesReport(workspaceId: number, anonymizeCoders = false, usePseudoCoders = false, excludeAutoCoded = false, checkCancellation?: () => Promise<void>): Promise<Buffer> {
+  async exportCodingTimesReport(
+    workspaceId: number,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Buffer> {
     this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
     // Check for cancellation before starting
@@ -1699,7 +1567,7 @@ export class CodingExportService {
       });
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
+    const codingJobUnitsRaw = await this.codingJobUnitRepository.find({
       where: {
         coding_job: {
           workspace_id: workspaceId
@@ -1741,7 +1609,14 @@ export class CodingExportService {
       }
     });
 
-    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId}`);
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+
+    const codingJobUnits = codingJobUnitsRaw.filter(
+      unit => unit.response?.unit?.name && !ignoredSet.has(unit.response.unit.name.toUpperCase())
+    );
+
+    this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId} after filtering ignored units`);
 
     try {
       let coderNameMapping: Map<string, string> | null = null;

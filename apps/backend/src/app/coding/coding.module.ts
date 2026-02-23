@@ -34,7 +34,8 @@ import {
   CoderTrainingService,
   MissingsProfilesService,
   ExternalCodingImportService,
-  CodingValidationService
+  CodingValidationService,
+  CodingAnalysisService
 } from '../database/services/coding';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
@@ -86,7 +87,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
-    CodingValidationService
+    CodingValidationService,
+    CodingAnalysisService
   ],
   exports: [
     CodingJobService,
@@ -104,7 +106,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     CodingResultsService,
     CodingExportService,
     CodingProcessService,
-    CodingValidationService
+    CodingValidationService,
+    CodingAnalysisService
   ]
 })
 export class CodingModule { }

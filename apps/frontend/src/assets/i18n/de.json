@@ -737,7 +737,18 @@
   },
   "variable-analysis": {
     "analysis-results": "Analyse Ergebnisse",
+    "analysis-running": "Analyse läuft...",
     "analyzing-variables": "Analysiere Variablen...",
+    "info-title": "Was ist die Item/Variablenanalyse?",
+    "info-description": "Dieses Tool bietet einen statistischen Überblick über die im Arbeitsbereich gesammelten Antwortdaten. Es hilft dabei, die Qualität der Daten zu prüfen und Antwortmuster zu erkennen, bevor die finalen Exporte durchgeführt werden.",
+    "info-feature-frequencies-title": "Antwort-Häufigkeiten",
+    "info-feature-frequencies-desc": "Aggregiert alle Teilnehmerantworten und berechnet die Verteilung für jede Variable.",
+    "info-feature-validation-title": "Datenvalidierung",
+    "info-feature-validation-desc": "Hilft bei der Identifizierung von unerwarteten Mustern oder ungültigen Einträgen.",
+    "info-feature-background-title": "Hintergrundverarbeitung",
+    "info-feature-background-desc": "Da Analysen rechenintensiv sein können, werden sie in Hintergrund-Jobs ausgeführt.",
+    "show-info": "Erklärung anzeigen",
+    "hide-info": "Erklärung ausblenden",
     "search-variables": "Variablen suchen",
     "search-placeholder": "Variablenname eingeben...",
     "no-variables-found": "Keine Variablen gefunden.",
@@ -758,6 +769,7 @@
     "created-at-column": "Erstellt am",
     "actions-column": "Aktionen",
     "all": "Alle",
+    "started-at": "Gestartet am",
     "view-results": "Ergebnisse anzeigen",
     "cancel-job": "Auftrag abbrechen",
     "close": "Schließen",
@@ -771,7 +783,12 @@
     "error-deleting-job": "Fehler beim Löschen des Analyse-Auftrags",
     "confirm-delete-job": "Sind Sie sicher, dass Sie diesen Analyse-Auftrag löschen wollen?",
     "delete-job": "Auftrag löschen",
+    "delete-all-jobs": "Alle löschen",
+    "confirm-delete-all-jobs": "Sind Sie sicher, dass Sie ALLE Analyse-Aufträge für diesen Arbeitsbereich löschen wollen?",
+    "all-jobs-deleted": "Alle Analyse-Aufträge erfolgreich gelöscht",
+    "error-deleting-all-jobs": "Fehler beim Löschen aller Analyse-Aufträge",
     "status-pending": "Ausstehend",
+    "status-waiting": "Wartend",
     "status-processing": "Wird bearbeitet",
     "status-completed": "Abgeschlossen",
     "status-failed": "Fehlgeschlagen",
@@ -830,7 +847,9 @@
       "coding-variables-title": "Kodiervariablen",
       "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten",
       "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
-      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
+      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt",
+      "job-started": "Export-Job gestartet...",
+      "coding-list-progress": "Kodierliste wird erstellt... {{progress}}%"
     },
     "actions": {
       "review-session": "Review",
@@ -926,7 +945,6 @@
       "notice-title": "Hinweis",
       "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
       "download-button": "Herunterladen",
-      "download-tooltip": "Kodierergebnisse herunterladen",
       "creating-file": "Datei wird erstellt...",
       "unknown-format": "Unbekanntes Format",
       "error-json": "Fehler beim Abrufen der Kodierergebnisse (JSON)",
@@ -937,9 +955,10 @@
       "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
       "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
       "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
-      "download-started": "Download für {{version}} als {{format}} gestartet...",
-      "download-complete": "Download für {{version}} als {{format}} abgeschlossen",
-      "download-failed": "Download fehlgeschlagen"
+      "download-started": "Download gestartet...",
+      "download-failed": "Download fehlgeschlagen",
+      "download-complete": "Download abgeschlossen",
+      "download-tooltip": "Ergebnisse herunterladen"
     },
     "aria": {
       "select-page": "Seiten auswählen"
@@ -1291,7 +1310,9 @@
         "unit": "Aufgabe",
         "variable": "Variable",
         "person": "Person",
-        "booklet": "Booklet"
+        "group": "Gruppe",
+        "booklet": "Booklet",
+        "value": "Wert"
       },
       "apply-empty-coding-button": "Kodierung automatisch anwenden",
       "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
@@ -1701,6 +1722,7 @@
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
     "coding-incomplete": "Gesamt zu kodierende Fälle:",
+    "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
     "completion-progress": "Fertigstellungsfortschritt",

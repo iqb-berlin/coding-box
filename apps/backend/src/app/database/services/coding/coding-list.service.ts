@@ -39,7 +39,7 @@ export class CodingListService {
     private readonly fileCacheService: CodingFileCacheService,
     private readonly queryService: CodingListQueryService,
     private readonly streamService: CodingListStreamService
-  ) {}
+  ) { }
 
   /**
    * Get variable page map for a unit.
@@ -74,12 +74,14 @@ export class CodingListService {
   async getCodingListCsvStream(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ) {
     return this.streamService.getCodingListCsvStream(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 
@@ -90,12 +92,14 @@ export class CodingListService {
   async getCodingListAsExcel(
     workspace_id: number,
     authToken?: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingListAsExcel(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 
@@ -106,12 +110,14 @@ export class CodingListService {
   getCodingListJsonStream(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>
   ): JsonStream {
     return this.streamService.getCodingListJsonStream(
       workspace_id,
       authToken,
-      serverUrl
+      serverUrl,
+      progressCallback
     );
   }
 
@@ -134,14 +140,16 @@ export class CodingListService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ) {
     return this.streamService.getCodingResultsByVersionCsvStream(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
   }
 
@@ -154,14 +162,16 @@ export class CodingListService {
     version: 'v1' | 'v2' | 'v3',
     authToken?: string,
     serverUrl?: string,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    progressCallback?: (percentage: number) => Promise<void>
   ): Promise<Buffer> {
     return this.streamService.getCodingResultsByVersionAsExcel(
       workspace_id,
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback
     );
   }
 }

@@ -6,6 +6,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingAnalysisService } from './coding-analysis.service';
 
 @Injectable()
 export class CodingResultsService {
@@ -16,7 +17,8 @@ export class CodingResultsService {
     private responseRepository: Repository<ResponseEntity>,
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private codingAnalysisService: CodingAnalysisService
   ) { }
 
   async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
@@ -118,6 +120,88 @@ export class CodingResultsService {
       }
 
       this.logger.log(`Prepared ${responsesToUpdate.length} responses for update, skipped ${skippedReviewCount} requiring review`);
+      // If aggregation is active, find all uncoded responses that share the same normalized value
+      // as a successfully coded response in this job, and apply the same result to them.
+      const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
+      if (aggregationThreshold !== null) {
+        const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+
+        // Collect the response IDs that are already being updated (avoid double-adding)
+        const alreadyUpdatedIds = new Set(responsesToUpdate.map(r => r.responseId));
+
+        // Only propagate results for CODING_COMPLETE responses with a real code
+        const completedUpdates = responsesToUpdate.filter(
+          r => r.status_v2 === statusStringToNumber('CODING_COMPLETE') && r.code_v2 !== null
+        );
+
+        // Fetch the original response values for the units we just coded
+        // (we need value + unit info to find siblings)
+        const codedResponseIds = completedUpdates.map(r => r.responseId);
+        if (codedResponseIds.length > 0) {
+          const codedResponses = await this.responseRepository
+            .createQueryBuilder('response')
+            .leftJoin('response.unit', 'unit')
+            .leftJoin('unit.booklet', 'booklet')
+            .leftJoin('booklet.person', 'person')
+            .select([
+              'response.id',
+              'response.value',
+              'response.variableid',
+              'unit.name'
+            ])
+            .where('response.id IN (:...ids)', { ids: codedResponseIds })
+            .getMany();
+
+          for (const codedResponse of codedResponses) {
+            const update = completedUpdates.find(u => u.responseId === codedResponse.id);
+            if (!update) continue;
+
+            const normalizedValue = this.codingJobService.normalizeValue(codedResponse.value, matchingFlags);
+            const unitName = codedResponse.unit?.name;
+            const variableId = codedResponse.variableid;
+
+            if (!unitName || !variableId) continue;
+
+            // Find all uncoded sibling responses for the same workspace + unit + variable
+            const candidates = await this.responseRepository
+              .createQueryBuilder('response')
+              .leftJoin('response.unit', 'unit')
+              .leftJoin('unit.booklet', 'booklet')
+              .leftJoin('booklet.person', 'person')
+              .select(['response.id', 'response.value'])
+              .where('person.workspace_id = :workspaceId', { workspaceId })
+              .andWhere('person.consider = :consider', { consider: true })
+              .andWhere('response.status_v1 IN (:...statuses)', {
+                statuses: [
+                  statusStringToNumber('CODING_INCOMPLETE'),
+                  statusStringToNumber('INTENDED_INCOMPLETE')
+                ]
+              })
+              .andWhere('unit.name = :unitName', { unitName })
+              .andWhere('response.variableid = :variableId', { variableId })
+              .andWhere('response.status_v2 IS NULL')
+              .andWhere('response.id != :selfId', { selfId: codedResponse.id })
+              .getMany();
+
+            // Filter candidates by normalized value in-memory (handles IGNORE_CASE / IGNORE_WHITESPACE)
+            for (const candidate of candidates) {
+              if (alreadyUpdatedIds.has(candidate.id)) continue;
+              const candidateNorm = this.codingJobService.normalizeValue(candidate.value, matchingFlags);
+              if (candidateNorm === normalizedValue) {
+                responsesToUpdate.push({
+                  responseId: candidate.id,
+                  code_v2: update.code_v2,
+                  score_v2: update.score_v2,
+                  status_v2: update.status_v2
+                });
+                alreadyUpdatedIds.add(candidate.id);
+              }
+            }
+          }
+
+          this.logger.log(`Group sibling propagation complete. Total responses to update: ${responsesToUpdate.length}`);
+        }
+      }
 
       if (responsesToUpdate.length === 0) {
         return {
@@ -211,13 +295,18 @@ export class CodingResultsService {
         .leftJoin('unit.booklet', 'booklet')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', {
           statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE')
           ]
         })
-        .andWhere('(response.value IS NULL OR response.value = :emptyString OR response.value = :emptyArrayString)', { emptyString: '', emptyArrayString: '[]' })
+        .andWhere('(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)', {
+          whitespaces: ' \r\n\t',
+          emptyString: '',
+          emptyArrayString: '[]'
+        })
         .andWhere('response.status_v2 IS NULL')
         .getMany();
 
@@ -268,6 +357,7 @@ export class CodingResultsService {
         // Invalidate caches and refresh statistics
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
+        await this.codingAnalysisService.invalidateCache(workspaceId);
 
         this.logger.log(`Successfully applied coding to ${totalUpdated} empty responses`);
 

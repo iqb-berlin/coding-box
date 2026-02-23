@@ -44,6 +44,12 @@ describe('BackendMessageTranslatorService', () => {
       expect(result).toBe('Job 123 cancelled');
     });
 
+    it('should translate training creation success message', () => {
+      const msg = 'Successfully created 5 coder training jobs';
+      service.translateMessage(msg);
+      expect(translateServiceMock.instant).toHaveBeenCalledWith('coding.trainings.create.success', { count: '5' });
+    });
+
     it('should return original message if no translation found', () => {
       const msg = 'Unknown Error';
       const result = service.translateMessage(msg);

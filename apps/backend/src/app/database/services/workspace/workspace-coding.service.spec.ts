@@ -333,7 +333,7 @@ describe('WorkspaceCodingService', () => {
     it('should delegate to CodingValidationService', async () => {
       const expectedResult = [
         {
-          unitName: 'UNIT_1', variableId: 'var1', responseCount: 5, casesInJobs: 0, availableCases: 5
+          unitName: 'UNIT_1', variableId: 'var1', responseCount: 5, casesInJobs: 0, availableCases: 5, uniqueCasesAfterAggregation: 5
         }
       ];
       mockCodingValidationService.getCodingIncompleteVariables.mockResolvedValue(expectedResult);
