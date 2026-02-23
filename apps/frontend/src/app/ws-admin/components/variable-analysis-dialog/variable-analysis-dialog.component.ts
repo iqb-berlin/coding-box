@@ -342,6 +342,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           this.isJobsLoading = false;
         },
         error: () => {
+          this.snackBar.open(
+            this.translate.instant('variable-analysis.error-loading-jobs'),
+            this.translate.instant('error'),
+            { duration: 3000 }
+          );
           this.isJobsLoading = false;
         }
       });
@@ -387,7 +392,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  cancelJob(jobId: string): void {
+  cancelJob(jobId: number): void {
     this.isJobsLoading = true;
     this.variableAnalysisService.cancelJob(this.data.workspaceId, jobId)
       .subscribe({
@@ -420,7 +425,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       });
   }
 
-  deleteJob(jobId: string): void {
+  deleteJob(jobId: number): void {
     const dialogData: ConfirmDialogData = {
       title: this.translate.instant('workspace.please-confirm'),
       content: this.translate.instant('variable-analysis.confirm-delete-job'),
@@ -511,7 +516,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  viewJobResults(jobId: string): void {
+  viewJobResults(jobId: number): void {
     this.isLoading = true;
     const loadingSnackBar = this.snackBar.open(
       this.translate.instant('variable-analysis.loading-results'),

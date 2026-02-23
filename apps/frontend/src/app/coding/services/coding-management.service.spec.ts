@@ -1,4 +1,6 @@
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import {
+  TestBed, fakeAsync, tick
+} from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
@@ -49,7 +51,10 @@ describe('CodingManagementService', () => {
       getCodingListAsCsv: jest.fn(),
       getCodingListAsExcel: jest.fn(),
       getCodingResultsByVersion: jest.fn(),
-      getCodingResultsByVersionAsExcel: jest.fn()
+      getCodingResultsByVersionAsExcel: jest.fn(),
+      startExportJob: jest.fn(),
+      getExportJobStatus: jest.fn(),
+      downloadExportFile: jest.fn()
     } as unknown as jest.Mocked<CodingExportService>;
 
     versionServiceMock = {
@@ -155,33 +160,38 @@ describe('CodingManagementService', () => {
   });
 
   describe('downloadCodingList', () => {
-    it('should download CSV', () => {
+    it('should download CSV', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
       const mockBlob = new Blob(['csv data'], { type: 'text/csv' });
-      exportServiceMock.getCodingListAsCsv.mockReturnValue(of(mockBlob));
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
 
-      // Spy on saveBlob (private method, but effectively testing side effect via window)
-      // Since saveBlob creates a URL and clicks an anchor, it's hard to test in non-browser env without mocking DOM.
-      // But we can verify backend call.
-
-      // Mock window.URL.createObjectURL
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
       service.downloadCodingList('csv');
+      await new Promise(r => { setTimeout(r, 50); });
 
-      expect(exportServiceMock.getCodingListAsCsv).toHaveBeenCalledWith(1);
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'csv');
+      expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'job-1');
+      expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });
 
-    it('should download Excel', () => {
+    it('should download Excel', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
       const mockBlob = new Blob(['excel data'], { type: 'application/xlsx' });
-      exportServiceMock.getCodingListAsExcel.mockReturnValue(of(mockBlob));
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
 
       global.URL.createObjectURL = jest.fn();
       global.URL.revokeObjectURL = jest.fn();
 
       service.downloadCodingList('excel');
+      await new Promise(r => { setTimeout(r, 50); });
 
-      expect(exportServiceMock.getCodingListAsExcel).toHaveBeenCalledWith(1);
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'excel');
+      expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'job-1');
+      expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });
   });
 });

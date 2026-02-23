@@ -146,17 +146,13 @@ export class CodingAnalysisService {
     matchingFlags?: ResponseMatchingFlag[],
     threshold?: number
   ): Promise<void> {
-    if (!matchingFlags) {
-      matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-    }
-    if (!threshold) {
-      // Default or fetch
-      threshold = 2; // Simplification, ideally fetch from settings if needed or use default
-    }
-    // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
-    const effectiveThreshold = matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ? 2 : threshold;
+    const activeMatchingFlags = matchingFlags || await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const activeThreshold = threshold || 2; // Simplification, ideally fetch from settings if needed or use default
 
-    const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
+    // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
+    const effectiveThreshold = activeMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ? 2 : activeThreshold;
+
+    const cacheKey = this.getCacheKey(workspaceId, activeMatchingFlags, effectiveThreshold);
 
     // Check if job already running
     const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
@@ -167,7 +163,7 @@ export class CodingAnalysisService {
 
     await this.jobQueueService.addCodingAnalysisJob({
       workspaceId,
-      matchingFlags: matchingFlags as unknown as string[],
+      matchingFlags: activeMatchingFlags as unknown as string[],
       threshold: effectiveThreshold,
       cacheKey
     });
