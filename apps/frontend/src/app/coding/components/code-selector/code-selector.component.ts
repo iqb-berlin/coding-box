@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -64,7 +64,14 @@ export class CodeSelectorComponent implements OnChanges {
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   variableManualInstruction: string | null = null;
-  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) { }
+  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.isVariablePanelOpen && !this.elementRef.nativeElement.contains(event.target)) {
+      this.isVariablePanelOpen = false;
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId || changes.missings) {
@@ -168,22 +175,6 @@ export class CodeSelectorComponent implements OnChanges {
         }
       }
     }
-
-    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCode)!
-    ) : null;
-
-    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
-    ) as CodingIssueDto : null;
-
-    if (codeDto || codingIssueOption) {
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: codeDto,
-        codingIssueOption: codingIssueOption
-      });
-    }
   }
 
   getSafeHtml(instructions: string): SafeHtml {
@@ -279,31 +270,61 @@ export class CodeSelectorComponent implements OnChanges {
 
   nextUnit(): void {
     const data = this.unitsData;
-    if (!data) {
-      return;
-    }
+    if (!data) return;
 
-    if (!this.isReadOnly && !this.hasCurrentSelection()) {
-      return;
-    }
+    if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
     const currentIndex = data.currentUnitIndex;
-    const nextIndex = currentIndex + 1;
-    if (nextIndex >= 0 && nextIndex < data.units.length) {
-      this.unitChanged.emit(data.units[nextIndex]);
+    const currentKey = this.activeVariableKey;
+
+    if (currentKey && this.availableVariables.length > 1) {
+      // Stay within the same unit+variable
+      const [unitName, variableId] = currentKey.split('::');
+      for (let i = currentIndex + 1; i < data.units.length; i++) {
+        const u = data.units[i];
+        if ((u.alias || u.name) === unitName && u.variableId === variableId) {
+          this.unitChanged.emit(u);
+          return;
+        }
+      }
+
+      // If we didn't return, we reached the end of the current variable.
+      // Jump to the next variable
+      const currentVarIndex = this.availableVariables.findIndex(v => v.key === currentKey);
+      if (currentVarIndex >= 0 && currentVarIndex < this.availableVariables.length - 1) {
+        const nextVar = this.availableVariables[currentVarIndex + 1];
+        this.jumpToVariable(nextVar.key);
+      }
+    } else {
+      const nextIndex = currentIndex + 1;
+      if (nextIndex < data.units.length) {
+        this.unitChanged.emit(data.units[nextIndex]);
+      }
     }
   }
 
   previousUnit(): void {
     const data = this.unitsData;
-    if (!data || !this.hasPreviousUnit()) {
-      return;
-    }
+    if (!data || !this.hasPreviousUnit()) return;
 
-    const prevIndex = data.currentUnitIndex - 1;
-    if (prevIndex >= 0) {
-      const prevUnit = data.units[prevIndex];
-      this.unitChanged.emit(prevUnit);
+    const currentIndex = data.currentUnitIndex;
+    const currentKey = this.activeVariableKey;
+
+    if (currentKey && this.availableVariables.length > 1) {
+      // Stay within the same unit+variable
+      const [unitName, variableId] = currentKey.split('::');
+      for (let i = currentIndex - 1; i >= 0; i--) {
+        const u = data.units[i];
+        if ((u.alias || u.name) === unitName && u.variableId === variableId) {
+          this.unitChanged.emit(u);
+          return;
+        }
+      }
+    } else {
+      const prevIndex = currentIndex - 1;
+      if (prevIndex >= 0) {
+        this.unitChanged.emit(data.units[prevIndex]);
+      }
     }
   }
 
@@ -311,13 +332,27 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data || !data.units.length) return false;
 
-    const nextIndex = data.currentUnitIndex + 1;
-    const hasNext = nextIndex < data.units.length;
+    const currentIndex = data.currentUnitIndex;
+    const currentKey = this.activeVariableKey;
 
-    if (this.isReadOnly) {
-      return hasNext;
+    if (currentKey && this.availableVariables.length > 1) {
+      const [unitName, variableId] = currentKey.split('::');
+      let hasNext = data.units.slice(currentIndex + 1).some(
+        u => (u.alias || u.name) === unitName && u.variableId === variableId
+      );
+
+      if (!hasNext) {
+        const currentVarIndex = this.availableVariables.findIndex(v => v.key === currentKey);
+        hasNext = currentVarIndex >= 0 && currentVarIndex < this.availableVariables.length - 1;
+      }
+
+      if (this.isReadOnly) return hasNext;
+      return hasNext && this.hasCurrentSelection();
     }
 
+    const nextIndex = currentIndex + 1;
+    const hasNext = nextIndex < data.units.length;
+    if (this.isReadOnly) return hasNext;
     return hasNext && this.hasCurrentSelection();
   }
 
@@ -325,7 +360,17 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return false;
 
-    return data.currentUnitIndex > 0;
+    const currentIndex = data.currentUnitIndex;
+    const currentKey = this.activeVariableKey;
+
+    if (currentKey && this.availableVariables.length > 1) {
+      const [unitName, variableId] = currentKey.split('::');
+      return data.units.slice(0, currentIndex).some(
+        u => (u.alias || u.name) === unitName && u.variableId === variableId
+      );
+    }
+
+    return currentIndex > 0;
   }
 
   @HostListener('window:keydown', ['$event'])
@@ -358,6 +403,8 @@ export class CodeSelectorComponent implements OnChanges {
       case 'NumpadAdd':
         targetId = -2; // Neuer Code nötig
         break;
+      default:
+        break;
     }
 
     if (targetId !== null) {
@@ -385,5 +432,95 @@ export class CodeSelectorComponent implements OnChanges {
 
   get currentNavigationIndex(): number {
     return (this.unitsData?.currentUnitIndex || 0) + 1;
+  }
+
+  isVariablePanelOpen = false;
+
+  toggleVariablePanel(): void {
+    this.isVariablePanelOpen = !this.isVariablePanelOpen;
+  }
+
+  closeVariablePanel(): void {
+    this.isVariablePanelOpen = false;
+  }
+
+  selectVariable(key: string): void {
+    this.isVariablePanelOpen = false;
+    this.jumpToVariable(key);
+  }
+
+  /** Returns coded/total/percentage for any unit+variable key. */
+  getProgressForKey(key: string): { coded: number; total: number; percentage: number } {
+    if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
+    const [unitName, variableId] = key.split('::');
+    const units = this.unitsData.units.filter(
+      u => (u.alias || u.name) === unitName && u.variableId === variableId
+    );
+    const total = units.length;
+    const coded = units.filter(u => this.codingService.isUnitCoded(u)).length;
+    const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
+    return { coded, total, percentage };
+  }
+
+  /** Unique unit+variable combinations available in the current coding job, preserving order of first appearance. */
+  get availableVariables(): { key: string; variableId: string; unitName: string }[] {
+    if (!this.unitsData?.units) return [];
+    const seen = new Set<string>();
+    const result: { key: string; variableId: string; unitName: string }[] = [];
+    for (const unit of this.unitsData.units) {
+      if (unit.variableId) {
+        const key = `${unit.alias || unit.name}::${unit.variableId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({ key, variableId: unit.variableId, unitName: unit.alias || unit.name });
+        }
+      }
+    }
+    return result;
+  }
+
+  /** Composite key (unitName::variableId) for the unit currently being displayed. */
+  get activeVariableKey(): string {
+    if (!this.unitsData?.units) return '';
+    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!unit?.variableId) return '';
+    return `${unit.alias || unit.name}::${unit.variableId}`;
+  }
+
+  /** Progress (coded / total) for the unit+variable of the current unit. */
+  get currentVariableProgress(): { coded: number; total: number; percentage: number } | null {
+    if (!this.unitsData?.units || !this.codingService) return null;
+    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!currentUnit?.variableId) return null;
+    const unitName = currentUnit.alias || currentUnit.name;
+    const varId = currentUnit.variableId;
+    // Count all units with the same unitName+variableId combo
+    const variableUnits = this.unitsData.units.filter(
+      u => (u.alias || u.name) === unitName && u.variableId === varId
+    );
+    const total = variableUnits.length;
+    const coded = variableUnits.filter(u => this.codingService.isUnitCoded(u)).length;
+    const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
+    return { coded, total, percentage };
+  }
+
+  /**
+   * Jump to the first uncoded unit for the given unit+variable key ("unitName::variableId").
+   * Falls back to the first matching unit if all are coded.
+   */
+  jumpToVariable(key: string): void {
+    if (!this.unitsData?.units) return;
+    const [unitName, variableId] = key.split('::');
+    const variableUnits = this.unitsData.units
+      .map((unit, index) => ({ unit, index }))
+      .filter(({ unit }) => (unit.alias || unit.name) === unitName && unit.variableId === variableId);
+    if (variableUnits.length === 0) return;
+
+    // Prefer first uncoded unit
+    const firstUncoded = variableUnits.find(
+      ({ unit }) => !this.codingService.isUnitCoded(unit)
+    );
+    const target = firstUncoded ?? variableUnits[0];
+    this.unitChanged.emit(target.unit);
   }
 }
