@@ -20,20 +20,22 @@ import 'multer';
 import { ResourcePackageService } from '../../database/services/workspace';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from '../workspace/access-level.guard';
+import { WorkspaceGuard } from '../workspace/workspace.guard';
 import { ApiFile } from './api-file.decorator';
 import { fileMimetypeFilter } from './file-mimetype-filter';
 import { ParseFile } from './parse-file-pipe';
 import { ResourcePackageDto } from '../../../../../../api-dto/resource-package/resource-package-dto';
 
 @ApiTags('Admin Resource Packages')
-@Controller('admin/workspace/:workspace_id/resource-packages')
+@Controller('admin/workspace')
 export class ResourcePackageController {
   constructor(
     private resourcePackageService: ResourcePackageService
-  ) {}
+  ) { }
 
-  @Get()
-  @UseGuards(JwtAuthGuard, AccessLevelGuard)
+  @Get(':workspace_id/resource-packages')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
@@ -66,8 +68,9 @@ export class ResourcePackageController {
     return resourcePackages;
   }
 
-  @Delete(':id')
-  @UseGuards(JwtAuthGuard)
+  @Delete(':workspace_id/resource-packages/:id')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiParam({
     name: 'workspace_id',
@@ -91,8 +94,9 @@ export class ResourcePackageController {
     return this.resourcePackageService.removeResourcePackage(workspaceId, id);
   }
 
-  @Delete()
-  @UseGuards(JwtAuthGuard)
+  @Delete(':workspace_id/resource-packages')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiTags('admin resource-packages')
   @ApiParam({
@@ -111,11 +115,11 @@ export class ResourcePackageController {
   async removeIds(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
       @Query('id', new ParseArrayPipe({ items: Number, separator: ',' })) id: number[]
-  ) : Promise<void> {
+  ): Promise<void> {
     return this.resourcePackageService.removeResourcePackages(workspaceId, id);
   }
 
-  @Get(':name')
+  @Get(':workspace_id/resource-packages/:name')
   @Header('Content-Disposition', 'filename="resource-package.zip"')
   @Header('Cache-Control', 'none')
   @Header('Content-Type', 'application/zip')
@@ -143,8 +147,9 @@ export class ResourcePackageController {
     return new StreamableFile(file);
   }
 
-  @Post()
-  @UseGuards(JwtAuthGuard)
+  @Post(':workspace_id/resource-packages')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiParam({
     name: 'workspaceId',
