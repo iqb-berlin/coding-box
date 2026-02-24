@@ -1414,9 +1414,10 @@ ${bookletRefs}
         return [];
       }
 
+      const expectedUnitId = schemeFileId.toUpperCase().replace(/\.VOCS$/, '');
       const filteredUnitFiles = unitFiles.filter(
-        file => file.file_id.toUpperCase() === schemeFileId.toUpperCase() &&
-          !file.file_id.includes('VOCS')
+        file => file.file_id.toUpperCase() === expectedUnitId &&
+          !file.file_id.toUpperCase().includes('VOCS')
       );
 
       if (filteredUnitFiles.length === 0) {

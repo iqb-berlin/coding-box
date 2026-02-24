@@ -820,14 +820,16 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           file.filename.toLowerCase().endsWith('.vocs')
         ) {
           const dialogRef = this.dialog.open(SchemeEditorDialogComponent, {
-            width: '100vw',
-            height: '90vh',
+            width: '95vw',
+            height: '95vh',
+            maxWidth: '1400px',
             data: {
               workspaceId: this.appService.selectedWorkspaceId,
               fileId: file.id,
               fileName: file.filename,
               content: decodedContent
-            }
+            },
+            panelClass: 'scheme-editor-dialog-container'
           });
 
           dialogRef.afterClosed().subscribe(result => {
