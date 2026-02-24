@@ -205,3 +205,55 @@ body {
   max-height: unset !important;
   overflow-y: auto !important;
 }
+
+.scheme-editor-dialog-container {
+  overflow: hidden !important;
+
+  .mat-mdc-dialog-container,
+  .mat-dialog-container,
+  .mat-mdc-dialog-surface {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important;
+  }
+
+  app-scheme-editor-dialog {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden !important;
+  }
+
+  .mat-mdc-dialog-content,
+  mat-dialog-content {
+    flex: 1;
+    max-height: unset !important;
+    overflow: hidden !important;
+  }
+}
+
+.coding-variables-dialog-container {
+  overflow: hidden !important;
+
+  .mat-mdc-dialog-container,
+  .mat-dialog-container,
+  .mat-mdc-dialog-surface {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden !important;
+  }
+
+  coding-box-coding-variables-dialog {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden !important;
+  }
+
+  .mat-mdc-dialog-content,
+  mat-dialog-content {
+    flex: 1;
+    max-height: unset !important;
+    overflow-y: auto !important;
+  }
+}
