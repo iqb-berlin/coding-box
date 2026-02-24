@@ -500,10 +500,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.dialog.open(CodingVariablesDialogComponent, {
-      width: '90%',
+      width: '95vw',
       maxWidth: '1400px',
-      height: '90vh',
-      data: { workspaceId }
+      height: '95vh',
+      data: { workspaceId },
+      panelClass: 'coding-variables-dialog-container'
     });
   }
 

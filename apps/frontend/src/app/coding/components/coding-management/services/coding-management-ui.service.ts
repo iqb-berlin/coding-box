@@ -9,6 +9,7 @@ import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
 import { ContentDialogComponent } from '../../../../shared/dialogs/content-dialog/content-dialog.component';
+import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 
 @Injectable({
   providedIn: 'root'
@@ -182,14 +183,17 @@ export class CodingManagementUiService {
 
         try {
           const decodedData = fileData.base64Data;
-
-          this.dialog.open(ContentDialogComponent, {
+          this.dialog.open(SchemeEditorDialogComponent, {
             width: '80%',
+            height: '80%',
             data: {
-              title: `Kodierschema: ${codingSchemeRef}`,
+              workspaceId: workspaceId,
+              fileId: codingSchemeRef,
+              fileName: codingSchemeRef,
               content: decodedData,
-              isJson: true
-            }
+              readOnly: true
+            },
+            panelClass: 'scheme-editor-dialog-container'
           });
         } catch (error) {
           this.snackBar.open(

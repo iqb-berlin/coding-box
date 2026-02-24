@@ -364,6 +364,17 @@
     "error_title": "Fehler"
   },
   "coding": {
+    "schemer": {
+      "save-success": "Antwortschema erfolgreich gespeichert",
+      "save-error": "Fehler beim Speichern des Antwortschemas",
+      "load-error": "Fehler beim Laden der Antwortschema-Informationen. Der Editor arbeitet ohne Variablen-Validierung.",
+      "decode-error": "Fehler beim Dekodieren der Schemer-HTML",
+      "download-error": "Fehler beim Herunterladen der Schemer-HTML",
+      "fetch-error": "Fehler beim Abrufen der Schemer-Dateien",
+      "schemer-error": "Schemer-Fehler: {{error}}",
+      "unsaved-changes-title": "Ungespeicherte Änderungen",
+      "unsaved-changes-content": "Sie haben ungespeicherte Änderungen. Möchten Sie wirklich schließen?"
+    },
     "comment-dialog": {
       "title": "Kommentar zum Kodierjob",
       "label": "Kommentar",
