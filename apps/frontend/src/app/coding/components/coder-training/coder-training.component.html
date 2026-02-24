@@ -68,6 +68,13 @@
             ({{availableBundles.length}} verfügbare Variablenbündel)
           </span>
         </h3>
+        <div class="header-actions">
+          <button mat-stroked-button color="primary" type="button" (click)="openImportDialog()"
+            [disabled]="isLoadingVariables || isLoadingBundles">
+            <mat-icon>download</mat-icon>
+            Aus Job-Definition importieren
+          </button>
+        </div>
       </div>
 
       <div *ngIf="!isLoadingBundles && availableBundles.length > 0" class="bundle-selection">

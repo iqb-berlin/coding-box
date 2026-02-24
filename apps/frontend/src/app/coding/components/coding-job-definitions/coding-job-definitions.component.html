@@ -1,10 +1,11 @@
 <div class="job-definitions-container">
-  <div class="header-actions">
+  <div class="header-actions" *ngIf="!selectionMode">
     <h3>{{ 'coding-job-definitions.title' | translate }}</h3>
     <button mat-stroked-button color="primary" (click)="createDefinition()">
       <mat-icon>add</mat-icon>
       {{ 'coding-job-definitions.create-new' | translate }}
     </button>
+  </div>
 
 
   <div *ngIf="isLoading" class="loading-container">
@@ -23,24 +24,37 @@
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.actions' | translate }}</th>
         <td mat-cell *matCellDef="let definition" class="actions-cell">
-          <div class="action-buttons">
-            <button mat-icon-button *ngIf="definition.status === 'approved'" (click)="createCodingJobFromDefinition(definition)" title="{{ 'coding-job-definitions.actions.create-coding-jobs' | translate }}">
+          <div class="action-buttons" *ngIf="!selectionMode">
+            <button mat-icon-button *ngIf="definition.status === 'approved'"
+              (click)="createCodingJobFromDefinition(definition)"
+              title="{{ 'coding-job-definitions.actions.create-coding-jobs' | translate }}">
               <mat-icon>play_arrow</mat-icon>
             </button>
-            <button mat-icon-button (click)="editDefinition(definition)" title="{{ 'coding-job-definitions.actions.edit' | translate }}">
+            <button mat-icon-button (click)="editDefinition(definition)"
+              title="{{ 'coding-job-definitions.actions.edit' | translate }}">
               <mat-icon>edit</mat-icon>
             </button>
-            <button mat-icon-button *ngIf="definition.status === 'draft'" (click)="submitForReview(definition)" title="{{ 'coding-job-definitions.actions.submit-for-review' | translate }}">
+            <button mat-icon-button *ngIf="definition.status === 'draft'" (click)="submitForReview(definition)"
+              title="{{ 'coding-job-definitions.actions.submit-for-review' | translate }}">
               <mat-icon>send</mat-icon>
             </button>
-            <button mat-icon-button *ngIf="definition.status === 'pending_review'" (click)="approveDefinition(definition)" title="{{ 'coding-job-definitions.actions.approve' | translate }}">
+            <button mat-icon-button *ngIf="definition.status === 'pending_review'"
+              (click)="approveDefinition(definition)"
+              title="{{ 'coding-job-definitions.actions.approve' | translate }}">
               <mat-icon>check_circle</mat-icon>
             </button>
-            <button mat-icon-button *ngIf="definition.status === 'pending_review'" (click)="rejectDefinition(definition)" title="{{ 'coding-job-definitions.actions.reject' | translate }}">
+            <button mat-icon-button *ngIf="definition.status === 'pending_review'"
+              (click)="rejectDefinition(definition)" title="{{ 'coding-job-definitions.actions.reject' | translate }}">
               <mat-icon>cancel</mat-icon>
             </button>
-            <button mat-icon-button (click)="deleteDefinition(definition)" title="{{ 'coding-job-definitions.actions.delete' | translate }}">
+            <button mat-icon-button (click)="deleteDefinition(definition)"
+              title="{{ 'coding-job-definitions.actions.delete' | translate }}">
               <mat-icon>delete</mat-icon>
+            </button>
+          </div>
+          <div class="action-buttons" *ngIf="selectionMode">
+            <button mat-button color="primary" (click)="selectDefinition(definition)">
+              <mat-icon>download</mat-icon> Importieren
             </button>
           </div>
         </td>
@@ -89,5 +103,4 @@
     <mat-icon>list_alt</mat-icon>
     <p>{{ 'coding-job-definitions.messages.empty-state' | translate }}</p>
   </div>
-</div>
 </div>

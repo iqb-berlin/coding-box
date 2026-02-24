@@ -22,6 +22,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import {
   FormBuilder,
   FormGroup,
@@ -33,11 +34,12 @@ import {
 import {
   Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject
 } from 'rxjs';
+import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { Coder } from '../../models/coder.model';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingJobBackendService, JobDefinition } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
@@ -75,7 +77,8 @@ export interface VariableGrouping {
     ReactiveFormsModule,
     MatIconButton,
     MatTooltip,
-    MatHint
+    MatHint,
+    MatDialogModule
   ],
   templateUrl: './coder-training.component.html',
   styleUrls: ['./coder-training.component.scss']
@@ -88,6 +91,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private changeDetectorRef = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
   private variableBundleService = inject(VariableBundleService);
   private codingJobBackendService = inject(CodingJobBackendService);
@@ -804,6 +808,60 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onClose(): void {
     this.close.emit();
+  }
+
+  openImportDialog(): void {
+    const dialogRef = this.dialog.open(JobDefinitionSelectionDialogComponent, {
+      width: '1200px',
+      height: '80vh',
+      disableClose: false
+    });
+
+    dialogRef.afterClosed().subscribe(selectedJobDef => {
+      if (selectedJobDef) {
+        this.importJobDefinitionSelections(selectedJobDef);
+      }
+    });
+  }
+
+  private importJobDefinitionSelections(jobDef: JobDefinition): void {
+    let varsAdded = 0;
+    let bundlesAdded = 0;
+
+    if (jobDef.assignedVariables && jobDef.assignedVariables.length > 0) {
+      jobDef.assignedVariables.forEach((v: Variable) => {
+        const isAlreadyAdded = this.variablesFormArray.controls.some(c => !c.get('bundleId')?.value &&
+          c.get('variableId')?.value === v.variableId &&
+          c.get('unitId')?.value === v.unitName
+        );
+        if (!isAlreadyAdded) {
+          const defaultSampleCount = v.casesInJobs ?? 10;
+          this.addVariable(v.variableId, v.unitName, defaultSampleCount, undefined, undefined, true);
+          varsAdded += 1;
+        }
+      });
+    }
+
+    if (jobDef.assignedVariableBundles && jobDef.assignedVariableBundles.length > 0) {
+      const currentSelectedIds = Array.from(this.selectedBundleIds);
+      jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
+        if (!currentSelectedIds.includes(b.id)) {
+          this.selectedBundleIds.add(b.id);
+          this.addBundleVariables(b.id, 10);
+          bundlesAdded += 1;
+        }
+      });
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+    }
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+
+    if (varsAdded > 0 || bundlesAdded > 0) {
+      this.showSuccess(`${varsAdded} Variable(n) und ${bundlesAdded} Bündel hinzugefügt.`);
+    } else {
+      this.showSuccess('Alle Variablen und Bündel waren bereits vorhanden.');
+    }
   }
 
   private showError(message: string): void {
