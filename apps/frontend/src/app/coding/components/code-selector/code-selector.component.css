@@ -78,6 +78,10 @@
   color: rgba(0, 0, 0, 0.78);
 }
 
+.code-row:not(.general-instruction-row) .code-instruction {
+  pointer-events: none;
+}
+
 .code-instruction img {
   max-width: none;
 }
