@@ -10,6 +10,8 @@ import {
 import { CodingJob } from './coding-job.entity';
 // eslint-disable-next-line import/no-cycle
 import { VariableBundle } from './variable-bundle.entity';
+// eslint-disable-next-line import/no-cycle
+import { CaseOrderingMode } from './job-definition.entity';
 
 /**
  * Entity for coding job variable bundles (relation between coding jobs and variable bundles)
@@ -24,6 +26,13 @@ export class CodingJobVariableBundle {
 
   @Column()
     variable_bundle_id: number;
+
+  @Column({
+    type: 'enum',
+    enum: ['continuous', 'alternating'],
+    nullable: true
+  })
+    case_ordering_mode: CaseOrderingMode | null;
 
   @CreateDateColumn()
     created_at: Date;

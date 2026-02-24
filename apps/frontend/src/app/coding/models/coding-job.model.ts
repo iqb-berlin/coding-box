@@ -52,4 +52,5 @@ export interface VariableBundle {
   createdAt: Date;
   updatedAt: Date;
   variables: Variable[];
+  caseOrderingMode?: 'continuous' | 'alternating';
 }

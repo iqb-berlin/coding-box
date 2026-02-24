@@ -1001,8 +1001,15 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const isNowSelected = this.selectedVariableBundles.isSelected(bundle);
 
     if (!wasSelected && isNowSelected) {
+      if (!bundle.caseOrderingMode) {
+        bundle.caseOrderingMode = this.codingJobForm.value.caseOrderingMode || 'continuous';
+      }
       this.removeConflictingIndividualSelections(bundle);
     }
+  }
+
+  setBundleOrderingMode(bundle: VariableBundle, mode: 'continuous' | 'alternating'): void {
+    bundle.caseOrderingMode = mode;
   }
 
   private removeConflictingIndividualSelections(bundle: VariableBundle): void {

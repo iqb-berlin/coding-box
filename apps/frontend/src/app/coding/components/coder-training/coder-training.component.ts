@@ -23,6 +23,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatRadioModule } from '@angular/material/radio';
 import {
   FormBuilder,
   FormGroup,
@@ -78,7 +79,8 @@ export interface VariableGrouping {
     MatIconButton,
     MatTooltip,
     MatHint,
-    MatDialogModule
+    MatDialogModule,
+    MatRadioModule
   ],
   templateUrl: './coder-training.component.html',
   styleUrls: ['./coder-training.component.scss']
@@ -136,6 +138,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   constructor() {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
+      caseOrderingMode: ['continuous'],
       variables: this.fb.array([])
     });
 
@@ -254,6 +257,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!this.editTraining) return;
 
     this.trainingForm.get('trainingLabel')?.setValue(this.editTraining.label);
+    if (this.editTraining.case_ordering_mode) {
+      this.trainingForm.get('caseOrderingMode')?.setValue(this.editTraining.case_ordering_mode);
+    }
 
     if (this.editTraining.assigned_coders) {
       this.selectedCoders = new Set(this.editTraining.assigned_coders);
@@ -739,7 +745,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           sampleCount: c.get('sampleCount')?.value
         }));
 
-    const assignedVariableBundles: { id: number; name: string; sampleCount: number }[] = [];
+    const assignedVariableBundles: { id: number; name: string; sampleCount: number; caseOrderingMode?: 'continuous' | 'alternating' }[] = [];
     const seenBundleIds = new Set<number>();
     this.variablesFormArray.controls.forEach(c => {
       const bundleId = c.get('bundleId')?.value;
@@ -748,10 +754,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         assignedVariableBundles.push({
           id: bundleId,
           name: c.get('bundleName')?.value,
-          sampleCount: c.get('sampleCount')?.value || 10
+          sampleCount: c.get('sampleCount')?.value || 10,
+          caseOrderingMode: this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
         });
       }
     });
+
+    const caseOrderingMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
 
     const request$ = this.isEditMode ?
       this.codingTrainingBackendService.updateCoderTraining(
@@ -762,7 +771,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         variableConfigs,
         undefined,
         assignedVariables,
-        assignedVariableBundles
+        assignedVariableBundles,
+        caseOrderingMode
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
         workspaceId,
@@ -771,7 +781,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         trainingLabel,
         undefined,
         assignedVariables,
-        assignedVariableBundles
+        assignedVariableBundles,
+        caseOrderingMode
       );
 
     request$.subscribe({
