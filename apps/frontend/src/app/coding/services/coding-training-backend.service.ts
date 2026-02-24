@@ -87,7 +87,8 @@ export class CodingTrainingBackendService {
     trainingLabel: string,
     missingsProfileId?: number,
     assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string }[]
+    assignedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<CreateCoderTrainingJobsResponse>(url, {
@@ -96,7 +97,8 @@ export class CodingTrainingBackendService {
       variableConfigs,
       missingsProfileId,
       assignedVariables,
-      assignedVariableBundles
+      assignedVariableBundles,
+      caseOrderingMode
     }, { headers: this.authHeader });
   }
 
@@ -113,7 +115,8 @@ export class CodingTrainingBackendService {
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
     missingsProfileId?: number,
     assignedVariables?: { unitName: string; variableId: string; sampleCount: number }[],
-    assignedVariableBundles?: { id: number; name: string }[]
+    assignedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating' }[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.put<{ success: boolean; message: string; jobsCreated?: number }>(url, {
@@ -122,7 +125,8 @@ export class CodingTrainingBackendService {
       variableConfigs,
       missingsProfileId,
       assignedVariables,
-      assignedVariableBundles
+      assignedVariableBundles,
+      caseOrderingMode
     }, { headers: this.authHeader });
   }
 

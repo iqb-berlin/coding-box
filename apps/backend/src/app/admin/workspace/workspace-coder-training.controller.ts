@@ -281,6 +281,7 @@ export class WorkspaceCoderTrainingController {
                      }[];
                      assignedVariables?: JobDefinitionVariable[];
                      assignedVariableBundles?: JobDefinitionVariableBundle[];
+                     caseOrderingMode?: 'continuous' | 'alternating';
                    }
   ): Promise<{
         success: boolean;
@@ -301,7 +302,8 @@ export class WorkspaceCoderTrainingController {
       body.trainingLabel,
       body.missingsProfileId,
       body.assignedVariables,
-      body.assignedVariableBundles
+      body.assignedVariableBundles,
+      body.caseOrderingMode
     );
   }
 
@@ -552,6 +554,7 @@ export class WorkspaceCoderTrainingController {
         }[];
         assignedVariables?: JobDefinitionVariable[];
         assignedVariableBundles?: JobDefinitionVariableBundle[];
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
@@ -566,7 +569,8 @@ export class WorkspaceCoderTrainingController {
       body.variableConfigs,
       body.missingsProfileId,
       body.assignedVariables,
-      body.assignedVariableBundles
+      body.assignedVariableBundles,
+      body.caseOrderingMode
     );
   }
 
