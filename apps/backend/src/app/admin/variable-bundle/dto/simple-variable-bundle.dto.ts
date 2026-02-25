@@ -42,6 +42,16 @@ export class SimpleVariableBundleDto {
     description?: string;
 
   @ApiProperty({
+    description: 'Case ordering mode for the bundle',
+    example: 'continuous',
+    enum: ['continuous', 'alternating'],
+    required: false
+  })
+  @IsString()
+  @IsOptional()
+    caseOrderingMode?: 'continuous' | 'alternating';
+
+  @ApiProperty({
     description: 'The variables in the bundle',
     type: [VariableDto]
   })

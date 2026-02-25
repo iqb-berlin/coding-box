@@ -11,6 +11,7 @@ import { CoderTrainingVariable } from '../../entities/coder-training-variable.en
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 
 describe('CoderTrainingService', () => {
@@ -48,6 +49,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingBundle), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
         { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
+        { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService }
       ]
     }).compile();

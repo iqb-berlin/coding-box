@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
+import { sortUnitsContinuous, sortUnitsAlternating } from '../../../utils/coding-utils';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
@@ -68,6 +69,7 @@ interface SlimResponse {
   personLogin: string;
   personCode: string;
   personGroup: string;
+  variableBundleId?: number;
 }
 
 @Injectable()
@@ -798,7 +800,7 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null; variableBundleId: number | null }[]> {
     const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
 
     if (onlyOpen) {
@@ -809,23 +811,17 @@ export class CodingJobService {
       where: { id: codingJobId }
     });
 
-    const caseOrderingMode = codingJob?.case_ordering_mode || 'continuous';
-    const order = caseOrderingMode === 'alternating' ?
-      {
-        person_login: 'ASC' as const,
-        person_code: 'ASC' as const,
-        person_group: 'ASC' as const,
-        booklet_name: 'ASC' as const,
-        unit_name: 'ASC' as const,
-        variable_id: 'ASC' as const
-      } :
-      {
-        variable_id: 'ASC' as const,
-        unit_name: 'ASC' as const,
-        booklet_name: 'ASC' as const,
-        person_login: 'ASC' as const,
-        person_code: 'ASC' as const
-      };
+    const globalMode = codingJob?.case_ordering_mode || 'continuous';
+
+    const bundles = await this.codingJobVariableBundleRepository.find({
+      where: { coding_job_id: codingJobId },
+      order: { id: 'ASC' }
+    });
+
+    const bundleModes = new Map<number, string>();
+    for (const b of bundles) {
+      bundleModes.set(b.variable_bundle_id, b.case_ordering_mode || globalMode);
+    }
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: whereClause,
@@ -839,12 +835,33 @@ export class CodingJobService {
         'person_login',
         'person_code',
         'person_group',
-        'notes'
-      ],
-      order
+        'notes',
+        'variable_bundle_id'
+      ]
     });
 
-    return codingJobUnits.map(unit => ({
+    const buckets = new Map<number | 'unbundled', CodingJobUnit[]>();
+    for (const b of bundles) {
+      buckets.set(b.variable_bundle_id, []);
+    }
+    buckets.set('unbundled', []);
+
+    for (const unit of codingJobUnits) {
+      const key = unit.variable_bundle_id || 'unbundled';
+      if (!buckets.has(key)) {
+        buckets.set(key, []);
+      }
+      buckets.get(key)!.push(unit);
+    }
+
+    let sortedUnits: CodingJobUnit[] = [];
+    for (const [key, units] of buckets.entries()) {
+      const mode = key === 'unbundled' ? globalMode : (bundleModes.get(key as number) || globalMode);
+      units.sort(mode === 'alternating' ? sortUnitsAlternating : sortUnitsContinuous);
+      sortedUnits = sortedUnits.concat(units);
+    }
+
+    return sortedUnits.map(unit => ({
       responseId: unit.response_id,
       unitName: unit.unit_name,
       unitAlias: unit.unit_alias,
@@ -854,7 +871,8 @@ export class CodingJobService {
       personLogin: unit.person_login,
       personCode: unit.person_code,
       personGroup: unit.person_group,
-      notes: unit.notes
+      notes: unit.notes,
+      variableBundleId: unit.variable_bundle_id
     }));
   }
 
@@ -871,6 +889,7 @@ export class CodingJobService {
       relations: ['variable_bundle']
     });
 
+    const variableBundleMap = new Map<string, number>();
     const allVariables: { unit_name: string; variable_id: string }[] = codingJobVariables.map(v => ({
       unit_name: v.unit_name,
       variable_id: v.variable_id
@@ -882,6 +901,7 @@ export class CodingJobService {
             unit_name: variable.unitName,
             variable_id: variable.variableId
           });
+          variableBundleMap.set(`${variable.unitName}::${variable.variableId}`, bundle.variable_bundle_id);
         });
       }
     });
@@ -922,17 +942,22 @@ export class CodingJobService {
 
     const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
 
-    return raw.map(r => ({
-      id: Number(r.id),
-      variableid: r.variableid,
-      value: r.value ?? null,
-      unitName: r.unitName ?? '',
-      unitAlias: r.unitAlias ?? null,
-      bookletName: r.bookletName ?? '',
-      personLogin: r.personLogin ?? '',
-      personCode: r.personCode ?? '',
-      personGroup: r.personGroup ?? ''
-    }));
+    return raw.map(r => {
+      const unitName = r.unitName ?? '';
+      const variableid = r.variableid;
+      return {
+        id: Number(r.id),
+        variableid: variableid,
+        value: r.value ?? null,
+        unitName: unitName,
+        unitAlias: r.unitAlias ?? null,
+        bookletName: r.bookletName ?? '',
+        personLogin: r.personLogin ?? '',
+        personCode: r.personCode ?? '',
+        personGroup: r.personGroup ?? '',
+        variableBundleId: variableBundleMap.get(`${unitName}::${variableid}`)
+      };
+    });
   }
 
   private async saveCodingJobUnits(codingJobId: number, maxCodingCases?: number, manager?: EntityManager): Promise<void> {
@@ -997,7 +1022,8 @@ export class CodingJobService {
         booklet_name: r.bookletName,
         person_login: r.personLogin,
         person_code: r.personCode,
-        person_group: r.personGroup
+        person_group: r.personGroup,
+        variable_bundle_id: r.variableBundleId || null
       }));
       await repo.save(units);
     }
@@ -1119,7 +1145,8 @@ export class CodingJobService {
         booklet_name: r.bookletName,
         person_login: r.personLogin,
         person_code: r.personCode,
-        person_group: r.personGroup
+        person_group: r.personGroup,
+        variable_bundle_id: r.variableBundleId || null
       }));
       await unitRepo.save(units);
     }

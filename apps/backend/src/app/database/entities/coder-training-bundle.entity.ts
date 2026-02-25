@@ -9,6 +9,7 @@ import {
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
 import { VariableBundle } from './variable-bundle.entity';
+import { CaseOrderingMode } from './job-definition.entity';
 
 @Entity({ name: 'coder_training_bundle' })
 export class CoderTrainingBundle {
@@ -24,6 +25,13 @@ export class CoderTrainingBundle {
 
   @Column({ default: 10 })
     sample_count: number;
+
+  @Column({
+    type: 'enum',
+    enum: ['continuous', 'alternating'],
+    nullable: true
+  })
+    case_ordering_mode: CaseOrderingMode | null;
 
   @ManyToOne(() => CoderTraining, training => training.bundles, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
