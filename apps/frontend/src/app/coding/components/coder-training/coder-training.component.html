@@ -21,6 +21,25 @@
 
     <mat-divider class="section-divider"></mat-divider>
 
+    <!-- Case Ordering Mode Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</h3>
+      </div>
+      <p class="section-description">{{ 'coding-job-definition-dialog.case-ordering-mode.description' | translate }}</p>
+
+      <mat-radio-group formControlName="caseOrderingMode" class="case-ordering-controls">
+        <mat-radio-button value="continuous">
+          {{ 'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}
+        </mat-radio-button>
+        <mat-radio-button value="alternating">
+          {{ 'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}
+        </mat-radio-button>
+      </mat-radio-group>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
     <!-- Coder Selection Section -->
     <div class="section">
       <div class="section-header">
@@ -120,6 +139,19 @@
                     (input)="updateBundleSampleCount(bundleGroup.bundle.id, $any($event.target).value)" min="1"
                     max="1000">
                 </mat-form-field>
+
+                <mat-form-field appearance="outline" class="bundle-case-ordering-field">
+                  <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</mat-label>
+                  <mat-select
+                    [value]="bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value"
+                    (selectionChange)="bundleGroup.bundle.caseOrderingMode = $event.value">
+                    <mat-option value="continuous">{{ 'coding-job-definition-dialog.case-ordering-mode.continuous' |
+                      translate }}</mat-option>
+                    <mat-option value="alternating">{{ 'coding-job-definition-dialog.case-ordering-mode.alternating' |
+                      translate }}</mat-option>
+                  </mat-select>
+                </mat-form-field>
+
                 <button mat-icon-button color="warn" (click)="removeBundle(bundleGroup.bundle.id)"
                   matTooltip="Variablenbündel entfernen">
                   <mat-icon>delete</mat-icon>

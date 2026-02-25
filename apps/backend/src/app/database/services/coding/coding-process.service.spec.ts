@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import FileUpload from '../../entities/file_upload.entity';
@@ -13,8 +14,9 @@ import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 
 jest.mock('@iqb/responses', () => ({
-  CodingFactory: {
-    code: jest.fn()
+  __esModule: true,
+  CodingSchemeFactory: {
+    code: jest.fn(() => [])
   }
 }));
 
@@ -42,6 +44,10 @@ describe('CodingProcessService', () => {
 
   const mockWorkspaceFilesService = {
     getUnitVariableMap: jest.fn()
+  };
+
+  const mockWorkspaceCoreService = {
+    getIgnoredUnits: jest.fn().mockResolvedValue([])
   };
 
   const mockCodingStatisticsService = {
@@ -123,6 +129,7 @@ describe('CodingProcessService', () => {
   }
 
   let mockQueryBuilder: MockQueryBuilder;
+  let mockUnitQueryBuilder: any;
 
   beforeEach(async () => {
     mockQueryBuilder = {
@@ -145,6 +152,13 @@ describe('CodingProcessService', () => {
       getRawOne: jest.fn()
     };
 
+    mockUnitQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+
     const mockQueryRunner = {
       connect: jest.fn(),
       startTransaction: jest.fn(),
@@ -164,7 +178,7 @@ describe('CodingProcessService', () => {
         CodingProcessService,
         { provide: getRepositoryToken(FileUpload), useValue: { find: jest.fn(), findBy: jest.fn(), findOne: jest.fn() } },
         { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
-        { provide: getRepositoryToken(Unit), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Unit), useValue: { find: jest.fn(), createQueryBuilder: jest.fn().mockReturnValue(mockUnitQueryBuilder) } },
         { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn() } },
         {
           provide: getRepositoryToken(ResponseEntity),
@@ -180,6 +194,7 @@ describe('CodingProcessService', () => {
         { provide: JobQueueService, useValue: mockJobQueueService },
         { provide: ResponseManagementService, useValue: mockResponseManagementService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService }
       ]
     }).compile();
@@ -213,7 +228,8 @@ describe('CodingProcessService', () => {
         createMockBooklet(2, '2')
       ]);
 
-      unitRepository.find = jest.fn().mockResolvedValue([
+      mockUnitQueryBuilder = unitRepository.createQueryBuilder('unit');
+      (mockUnitQueryBuilder.getMany as jest.Mock).mockResolvedValue([
         createMockUnit(1, 1, 'TEST_UNIT_1', 'ALIAS_1'),
         createMockUnit(2, 2, 'TEST_UNIT_2', 'ALIAS_2')
       ]);
@@ -260,7 +276,8 @@ describe('CodingProcessService', () => {
       // Override mocks to ensure no data is returned for empty array
       personsRepository.find = jest.fn().mockResolvedValue([]);
       bookletRepository.find = jest.fn().mockResolvedValue([]);
-      unitRepository.find = jest.fn().mockResolvedValue([]);
+      mockUnitQueryBuilder = unitRepository.createQueryBuilder('unit');
+      (mockUnitQueryBuilder.getMany as jest.Mock).mockResolvedValue([]);
       responseRepository.find = jest.fn().mockResolvedValue([]);
 
       const result = await service.processTestPersonsBatch(workspaceId, [], autoCoderRun);
@@ -288,7 +305,8 @@ describe('CodingProcessService', () => {
     });
 
     it('should handle no units found', async () => {
-      unitRepository.find = jest.fn().mockResolvedValue([]);
+      mockUnitQueryBuilder = unitRepository.createQueryBuilder('unit');
+      (mockUnitQueryBuilder.getMany as jest.Mock).mockResolvedValue([]);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 

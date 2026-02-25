@@ -1,10 +1,12 @@
 <div class="dialog-container">
   <h2 class="dialog-title">
     @if (data.mode === 'definition') {
-      {{ (data.isEdit ? 'coding-job-definition-dialog.job-definition.edit' : 'coding-job-definition-dialog.job-definition.create') | translate }}
+    {{ (data.isEdit ? 'coding-job-definition-dialog.job-definition.edit' :
+    'coding-job-definition-dialog.job-definition.create') | translate }}
     }
     @if (data.mode === 'job') {
-      {{ (data.isEdit ? 'coding-job-definition-dialog.job.edit' : 'coding-job-definition-dialog.job.create') | translate }}
+    {{ (data.isEdit ? 'coding-job-definition-dialog.job.edit' : 'coding-job-definition-dialog.job.create') | translate
+    }}
     }
   </h2>
   <mat-divider></mat-divider>
@@ -17,10 +19,11 @@
 
         <mat-form-field appearance="fill" class="full-width">
           <mat-label>{{ 'coding-job-definition-dialog.form-fields.duration-label' | translate }}</mat-label>
-          <input matInput type="number" formControlName="durationSeconds" [placeholder]="'coding-job-definition-dialog.form-fields.duration-placeholder' | translate" min="1">
+          <input matInput type="number" formControlName="durationSeconds"
+            [placeholder]="'coding-job-definition-dialog.form-fields.duration-placeholder' | translate" min="1">
           <mat-hint>{{ 'coding-job-definition-dialog.form-fields.duration-hint' | translate }}</mat-hint>
           @if (codingJobForm.get('durationSeconds')?.invalid && codingJobForm.get('durationSeconds')?.touched) {
-            <mat-error>{{ 'coding-job-definition-dialog.form-fields.duration-error' | translate }}</mat-error>
+          <mat-error>{{ 'coding-job-definition-dialog.form-fields.duration-error' | translate }}</mat-error>
           }
         </mat-form-field>
 
@@ -29,115 +32,122 @@
           <input matInput type="number" formControlName="maxCodingCases" placeholder="z.B. 100" min="1">
           <mat-hint>{{ 'coding-job-definition-dialog.form-fields.max-cases-hint' | translate }}</mat-hint>
           @if (codingJobForm.get('maxCodingCases')?.invalid && codingJobForm.get('maxCodingCases')?.touched) {
-            <mat-error>{{ 'coding-job-definition-dialog.form-fields.max-cases-error' | translate }}</mat-error>
+          <mat-error>{{ 'coding-job-definition-dialog.form-fields.max-cases-error' | translate }}</mat-error>
           }
         </mat-form-field>
 
         <div class="double-coding-section">
           <h4>{{ 'coding-job-definition-dialog.sections.double-coding.title' | translate }}</h4>
-          <p class="section-description">{{ 'coding-job-definition-dialog.sections.double-coding.description' | translate }}</p>
+          <p class="section-description">{{ 'coding-job-definition-dialog.sections.double-coding.description' |
+            translate }}</p>
 
           <div class="double-coding-controls">
             <mat-button-toggle-group [(value)]="doubleCodingMode" (change)="toggleDoubleCodingMode()">
-              <mat-button-toggle value="absolute">{{ 'coding-job-definition-dialog.double-coding.modes.absolute' | translate }}</mat-button-toggle>
-              <mat-button-toggle value="percentage">{{ 'coding-job-definition-dialog.double-coding.modes.percentage' | translate }}</mat-button-toggle>
+              <mat-button-toggle value="absolute">{{ 'coding-job-definition-dialog.double-coding.modes.absolute' |
+                translate }}</mat-button-toggle>
+              <mat-button-toggle value="percentage">{{ 'coding-job-definition-dialog.double-coding.modes.percentage' |
+                translate }}</mat-button-toggle>
             </mat-button-toggle-group>
 
             <mat-form-field appearance="fill" class="double-coding-input">
               <mat-label>{{ getDoubleCodingLabel() }}</mat-label>
-              <input matInput type="number"
-                     [formControl]="currentDoubleCodingControl"
-                     [placeholder]="getDoubleCodingPlaceholder()"
-                     min="0"
-                     [max]="doubleCodingMode === 'percentage' ? 100 : null"
-                     [step]="doubleCodingMode === 'percentage' ? 0.1 : 1">
+              <input matInput type="number" [formControl]="currentDoubleCodingControl"
+                [placeholder]="getDoubleCodingPlaceholder()" min="0"
+                [max]="doubleCodingMode === 'percentage' ? 100 : null"
+                [step]="doubleCodingMode === 'percentage' ? 0.1 : 1">
               @if (doubleCodingMode === 'percentage') {
-                <mat-hint>{{ 'coding-job-definition-dialog.double-coding.percentage-hint' | translate }}</mat-hint>
+              <mat-hint>{{ 'coding-job-definition-dialog.double-coding.percentage-hint' | translate }}</mat-hint>
               }
             </mat-form-field>
           </div>
         </div>
 
         @if (data.mode === 'definition') {
-          <div class="case-ordering-mode-section">
-            <h4>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</h4>
-            <p class="section-description">{{ 'coding-job-definition-dialog.case-ordering-mode.description' | translate }}</p>
+        <div class="case-ordering-mode-section">
+          <h4>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</h4>
+          <p class="section-description">{{ 'coding-job-definition-dialog.case-ordering-mode.description' | translate }}
+          </p>
 
-            <mat-radio-group formControlName="caseOrderingMode" class="case-ordering-controls">
-              <mat-radio-button value="continuous">
-                {{ 'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}
-              </mat-radio-button>
-              <mat-radio-button value="alternating">
-                {{ 'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}
-              </mat-radio-button>
-            </mat-radio-group>
-          </div>
+          <mat-radio-group formControlName="caseOrderingMode" class="case-ordering-controls">
+            <mat-radio-button value="continuous">
+              {{ 'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}
+            </mat-radio-button>
+            <mat-radio-button value="alternating">
+              {{ 'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}
+            </mat-radio-button>
+          </mat-radio-group>
+        </div>
         }
 
         <mat-divider class="section-divider"></mat-divider>
 
         @if (data.mode === 'job') {
-          <div class="coding-display-options-section">
-            <h4>{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h4>
-            <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
+        <div class="coding-display-options-section">
+          <h4>{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h4>
+          <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' |
+            translate }}</p>
 
-            <div class="display-options-controls">
-              <mat-checkbox formControlName="showScore" class="display-option-checkbox">
-                {{ 'coding-job-definition-dialog.coding-display-options.show-score' | translate }}
-              </mat-checkbox>
+          <div class="display-options-controls">
+            <mat-checkbox formControlName="showScore" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.show-score' | translate }}
+            </mat-checkbox>
 
-              <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
-                {{ 'coding-job-definition-dialog.coding-display-options.allow-comments' | translate }}
-              </mat-checkbox>
+            <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.allow-comments' | translate }}
+            </mat-checkbox>
 
-              <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
-                {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
-              </mat-checkbox>
-            </div>
+            <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+              {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
+            </mat-checkbox>
           </div>
+        </div>
         }
 
         <mat-divider class="section-divider"></mat-divider>
 
         @if (data.isEdit && data.mode === 'definition') {
-          <mat-form-field appearance="fill" class="full-width">
-            <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
-            <mat-select formControlName="status">
-              <mat-option value="draft">{{ 'coding-job-definition-dialog.status.definition.draft' | translate }}</mat-option>
-              <mat-option value="pending_review">{{ 'coding-job-definition-dialog.status.definition.pending-review' | translate }}</mat-option>
-              <mat-option value="approved">{{ 'coding-job-definition-dialog.status.definition.approved' | translate }}</mat-option>
-            </mat-select>
-          </mat-form-field>
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
+          <mat-select formControlName="status">
+            <mat-option value="draft">{{ 'coding-job-definition-dialog.status.definition.draft' | translate
+              }}</mat-option>
+            <mat-option value="pending_review">{{ 'coding-job-definition-dialog.status.definition.pending-review' |
+              translate }}</mat-option>
+            <mat-option value="approved">{{ 'coding-job-definition-dialog.status.definition.approved' | translate
+              }}</mat-option>
+          </mat-select>
+        </mat-form-field>
         }
 
         @if (data.isEdit && data.mode === 'job') {
-          <mat-form-field appearance="fill" class="full-width">
-            <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
-            <mat-select formControlName="status">
-              <mat-option value="pending">{{ 'coding-job-definition-dialog.status.job.pending' | translate }}</mat-option>
-              <mat-option value="active">{{ 'coding-job-definition-dialog.status.job.active' | translate }}</mat-option>
-              <mat-option value="completed">{{ 'coding-job-definition-dialog.status.job.completed' | translate }}</mat-option>
-            </mat-select>
-          </mat-form-field>
+        <mat-form-field appearance="fill" class="full-width">
+          <mat-label>{{ 'coding-job-definition-dialog.form-fields.status-label' | translate }}</mat-label>
+          <mat-select formControlName="status">
+            <mat-option value="pending">{{ 'coding-job-definition-dialog.status.job.pending' | translate }}</mat-option>
+            <mat-option value="active">{{ 'coding-job-definition-dialog.status.job.active' | translate }}</mat-option>
+            <mat-option value="completed">{{ 'coding-job-definition-dialog.status.job.completed' | translate
+              }}</mat-option>
+          </mat-select>
+        </mat-form-field>
         }
 
         <mat-divider class="section-divider"></mat-divider>
 
         @if (!data.isEdit) {
-          <div class="coding-job-count-info">
-            <mat-icon class="info-icon">info</mat-icon>
-            <span class="count-label">{{ 'coding-job-definition-dialog.job-count.label' | translate }}</span>
-            <span class="count-value">{{ getCodingJobCount() }}</span>
-            @if (getCodingJobCount() === 0) {
-              <span class="count-description">{{ 'coding-job-definition-dialog.job-count.none' | translate }}</span>
-            }
-            @if (getCodingJobCount() === 1) {
-              <span class="count-description">{{ 'coding-job-definition-dialog.job-count.single' | translate }}</span>
-            }
-            @if (getCodingJobCount() > 1) {
-              <span class="count-description">{{ 'coding-job-definition-dialog.job-count.multiple' | translate }}</span>
-            }
-          </div>
+        <div class="coding-job-count-info">
+          <mat-icon class="info-icon">info</mat-icon>
+          <span class="count-label">{{ 'coding-job-definition-dialog.job-count.label' | translate }}</span>
+          <span class="count-value">{{ getCodingJobCount() }}</span>
+          @if (getCodingJobCount() === 0) {
+          <span class="count-description">{{ 'coding-job-definition-dialog.job-count.none' | translate }}</span>
+          }
+          @if (getCodingJobCount() === 1) {
+          <span class="count-description">{{ 'coding-job-definition-dialog.job-count.single' | translate }}</span>
+          }
+          @if (getCodingJobCount() > 1) {
+          <span class="count-description">{{ 'coding-job-definition-dialog.job-count.multiple' | translate }}</span>
+          }
+        </div>
         }
       </div>
 
@@ -169,45 +179,46 @@
             </div>
 
             @if (selectedVariables.selected.length > 0 || selectedVariableBundles.selected.length > 0) {
-              <mat-expansion-panel class="selection-details">
-                <mat-expansion-panel-header>
-                  <mat-panel-title>
-                    {{ 'coding-job-definition-dialog.selection-summary.details' | translate }}
-                  </mat-panel-title>
-                </mat-expansion-panel-header>
+            <mat-expansion-panel class="selection-details">
+              <mat-expansion-panel-header>
+                <mat-panel-title>
+                  {{ 'coding-job-definition-dialog.selection-summary.details' | translate }}
+                </mat-panel-title>
+              </mat-expansion-panel-header>
 
-                @if (selectedVariables.selected.length > 0) {
-                  <div class="selection-section">
-                    <h5>Ausgewählte Variablen</h5>
-                    <div class="chip-container">
-                      @for (variable of selectedVariables.selected.slice(0, 10); track variable.unitName + variable.variableId) {
-                        <span class="selection-chip">
-                          {{ variable.unitName }}: {{ variable.variableId }}
-                        </span>
-                      }
-                      @if (selectedVariables.selected.length > 10) {
-                        <span class="more-chip">+{{ selectedVariables.selected.length - 10 }} weitere</span>
-                      }
-                    </div>
-                  </div>
-                }
+              @if (selectedVariables.selected.length > 0) {
+              <div class="selection-section">
+                <h5>Ausgewählte Variablen</h5>
+                <div class="chip-container">
+                  @for (variable of selectedVariables.selected.slice(0, 10); track variable.unitName +
+                  variable.variableId) {
+                  <span class="selection-chip">
+                    {{ variable.unitName }}: {{ variable.variableId }}
+                  </span>
+                  }
+                  @if (selectedVariables.selected.length > 10) {
+                  <span class="more-chip">+{{ selectedVariables.selected.length - 10 }} weitere</span>
+                  }
+                </div>
+              </div>
+              }
 
-                @if (selectedVariableBundles.selected.length > 0) {
-                  <div class="selection-section">
-                    <h5>Ausgewählte Variablenbündel</h5>
-                    <div class="chip-container">
-                      @for (bundle of selectedVariableBundles.selected.slice(0, 10); track bundle.id) {
-                        <span class="selection-chip">
-                          {{ bundle.name }} ({{ getVariableCount(bundle) }} Variablen)
-                        </span>
-                      }
-                      @if (selectedVariableBundles.selected.length > 10) {
-                        <span class="more-chip">+{{ selectedVariableBundles.selected.length - 10 }} weitere</span>
-                      }
-                    </div>
-                  </div>
-                }
-              </mat-expansion-panel>
+              @if (selectedVariableBundles.selected.length > 0) {
+              <div class="selection-section">
+                <h5>Ausgewählte Variablenbündel</h5>
+                <div class="chip-container">
+                  @for (bundle of selectedVariableBundles.selected.slice(0, 10); track bundle.id) {
+                  <span class="selection-chip">
+                    {{ bundle.name }} ({{ getVariableCount(bundle) }} Variablen)
+                  </span>
+                  }
+                  @if (selectedVariableBundles.selected.length > 10) {
+                  <span class="more-chip">+{{ selectedVariableBundles.selected.length - 10 }} weitere</span>
+                  }
+                </div>
+              </div>
+              }
+            </mat-expansion-panel>
             }
           </div>
         </div>
@@ -218,53 +229,54 @@
               <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
 
               @if (isLoadingAvailableCoders) {
-                <div class="loading-container">
-                  <mat-spinner diameter="40"></mat-spinner>
-                  <p class="loading-text">Lade verfügbare Kodierer...</p>
-                </div>
+              <div class="loading-container">
+                <mat-spinner diameter="40"></mat-spinner>
+                <p class="loading-text">Lade verfügbare Kodierer...</p>
+              </div>
               }
 
               @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
-                <div class="quick-selection-tools">
-                  <button mat-stroked-button color="primary" type="button" (click)="masterCoderToggle()" class="select-all-button">
-                    <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
-                    {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
-                  </button>
-                  <div class="selection-count">
-                    {{ selectedCoders.selected.length }} von {{ availableCoders.length }} Kodierern ausgewählt
-                  </div>
+              <div class="quick-selection-tools">
+                <button mat-stroked-button color="primary" type="button" (click)="masterCoderToggle()"
+                  class="select-all-button">
+                  <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                  {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                </button>
+                <div class="selection-count">
+                  {{ selectedCoders.selected.length }} von {{ availableCoders.length }} Kodierern ausgewählt
                 </div>
+              </div>
 
-                <div class="coders-grid-container">
-                  <div class="coders-grid">
-                    @for (coder of availableCoders; track coder.id) {
-                        <div class="coder-card"
-                           [class.selected]="selectedCoders.isSelected(coder)"
-                           (click)="selectedCoders.toggle(coder)">
-                        <div class="coder-avatar">
-                          <mat-icon class="avatar-icon">person</mat-icon>
-                        </div>
-                        <div class="coder-details">
-                          <h3 class="coder-name">
-                            {{ coder.displayName || coder.name }}
-                          </h3>
-                          <p class="coder-username">{{ coder.name }}</p>
-                          @if (coder.email) {
-                            <p class="coder-email">{{ coder.email }}</p>
-                          }
-                        </div>
-                      </div>
-                    }
+              <div class="coders-grid-container">
+                <div class="coders-grid">
+                  @for (coder of availableCoders; track coder.id) {
+                  <div class="coder-card" [class.selected]="selectedCoders.isSelected(coder)"
+                    (click)="selectedCoders.toggle(coder)">
+                    <div class="coder-avatar">
+                      <mat-icon class="avatar-icon">person</mat-icon>
+                    </div>
+                    <div class="coder-details">
+                      <h3 class="coder-name">
+                        {{ coder.displayName || coder.name }}
+                      </h3>
+                      <p class="coder-username">{{ coder.name }}</p>
+                      @if (coder.email) {
+                      <p class="coder-email">{{ coder.email }}</p>
+                      }
+                    </div>
                   </div>
+                  }
                 </div>
+              </div>
               }
 
               @if (!isLoadingAvailableCoders && availableCoders.length === 0) {
-                <div class="empty-state">
-                  <mat-icon class="empty-icon">person</mat-icon>
-                  <h3>Keine Kodierer verfügbar</h3>
-                  <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum Arbeitsbereich hinzu.</p>
-                </div>
+              <div class="empty-state">
+                <mat-icon class="empty-icon">person</mat-icon>
+                <h3>Keine Kodierer verfügbar</h3>
+                <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum
+                  Arbeitsbereich hinzu.</p>
+              </div>
               }
             </div>
           </mat-tab>
@@ -274,21 +286,25 @@
               <div class="filter-row">
                 <mat-form-field class="filter-field">
                   <mat-label>Aufgaben-ID Filter</mat-label>
-                  <input matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Aufgaben-ID">
+                  <input matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Aufgaben-ID">
                   @if (unitNameFilter) {
-                    <button type="button" matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter=''; applyFilter()">
-                      <mat-icon>close</mat-icon>
-                    </button>
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="unitNameFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
                   }
                 </mat-form-field>
 
                 <mat-form-field class="filter-field">
                   <mat-label>Variablen-ID Filter</mat-label>
-                  <input matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+                  <input matInput [(ngModel)]="variableIdFilter" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Variablen-ID">
                   @if (variableIdFilter) {
-                    <button type="button" matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter=''; applyFilter()">
-                      <mat-icon>close</mat-icon>
-                    </button>
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="variableIdFilter=''; applyFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
                   }
                 </mat-form-field>
 
@@ -306,9 +322,7 @@
 
               <div class="filter-row availability-filter-row">
                 <span class="filter-label">Verfügbarkeit:</span>
-                <mat-button-toggle-group
-                  [value]="availabilityFilter"
-                  (change)="onAvailabilityChange($event)">
+                <mat-button-toggle-group [value]="availabilityFilter" (change)="onAvailabilityChange($event)">
                   <mat-button-toggle value="all">Alle</mat-button-toggle>
                   <mat-button-toggle value="full">Vollständig verfügbar</mat-button-toggle>
                   <mat-button-toggle value="partial">Teilweise verfügbar</mat-button-toggle>
@@ -318,61 +332,62 @@
             </div>
 
             @if (isLoadingVariableAnalysis) {
-              <div class="loading-container">
-                <mat-spinner diameter="40"></mat-spinner>
-                <p class="loading-text">Lade Variablen...</p>
-              </div>
+            <div class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text">Lade Variablen...</p>
+            </div>
             }
 
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
-              <div class="quick-selection-tools">
-                <button mat-stroked-button color="primary" type="button" (click)="masterToggle()" class="select-all-button">
-                  <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
-                  {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
-                </button>
-                <div class="selection-count">
-                  {{ selectedVariables.selected.length }} von {{ dataSource.data.length }} Variablen ausgewählt
-                </div>
+            <div class="quick-selection-tools">
+              <button mat-stroked-button color="primary" type="button" (click)="masterToggle()"
+                class="select-all-button">
+                <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
+                {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+              </button>
+              <div class="selection-count">
+                {{ selectedVariables.selected.length }} von {{ dataSource.data.length }} Variablen ausgewählt
               </div>
+            </div>
 
-              <div class="variables-grid-container">
-                <div class="variables-grid">
-                  @for (variable of dataSource.data; track variable.unitName + variable.variableId) {
-                    <div class="variable-card"
-                         [class.selected]="selectedVariables.isSelected(variable)"
-                         [class.disabled]="isVariableDisabled(variable)"
-                         [class.clickable]="!isVariableDisabled(variable)"
-                         (click)="!isVariableDisabled(variable) && selectedVariables.toggle(variable)">
-                      <div class="variable-card-header">
-                        <div class="variable-identifiers">
-                          <div class="variable-id">
-                            {{ variable.unitName }}_{{ variable.variableId }}
-                            @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
-                              <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
-                                {{ getAvailabilityText(variable) }} verfügbar
-                              </mat-chip>
-                            } @else if (variable.responseCount != null) {
-                              <span class="response-count">({{ variable.responseCount }})</span>
-                            }
+            <div class="variables-grid-container">
+              <div class="variables-grid">
+                @for (variable of dataSource.data; track variable.unitName + variable.variableId) {
+                <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
+                  [class.disabled]="isVariableDisabled(variable)" [class.clickable]="!isVariableDisabled(variable)"
+                  (click)="!isVariableDisabled(variable) && selectedVariables.toggle(variable)">
+                  <div class="variable-card-header">
+                    <div class="variable-identifiers">
+                      <div class="variable-id">
+                        {{ variable.unitName }}_{{ variable.variableId }}
+                        @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
+                        <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
+                          {{ getAvailabilityText(variable) }} verfügbar
+                        </mat-chip>
+                        } @else if (variable.responseCount != null) {
+                        <span class="response-count">({{ variable.responseCount }})</span>
+                        }
 
-                            @if (isVariableDisabled(variable)) {
-                              <mat-icon class="disabled-indicator" matTooltip="{{ getVariableDisabledReason(variable) }}" matTooltipPosition="above">block</mat-icon>
-                            }
-                          </div>
-                        </div>
+                        @if (isVariableDisabled(variable)) {
+                        <mat-icon class="disabled-indicator" matTooltip="{{ getVariableDisabledReason(variable) }}"
+                          matTooltipPosition="above">block</mat-icon>
+                        }
                       </div>
                     </div>
-                  }
+                  </div>
                 </div>
+                }
               </div>
+            </div>
             }
 
             @if (!isLoadingVariableAnalysis && variables.length === 0) {
-              <div class="empty-state">
-                <mat-icon class="empty-icon">analytics</mat-icon>
-                <h3>Keine Variablen verfügbar</h3>
-                <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie es später erneut.</p>
-              </div>
+            <div class="empty-state">
+              <mat-icon class="empty-icon">analytics</mat-icon>
+              <h3>Keine Variablen verfügbar</h3>
+              <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen
+                Sie es später erneut.</p>
+            </div>
             }
           </mat-tab>
           <mat-tab label="Variablenbündel">
@@ -380,11 +395,13 @@
               <div class="filter-row">
                 <mat-form-field class="filter-field">
                   <mat-label>Name Filter</mat-label>
-                  <input matInput [(ngModel)]="bundleNameFilter" [ngModelOptions]="{standalone: true}" placeholder="Filter nach Namen">
+                  <input matInput [(ngModel)]="bundleNameFilter" [ngModelOptions]="{standalone: true}"
+                    placeholder="Filter nach Namen">
                   @if (bundleNameFilter) {
-                    <button type="button" matSuffix mat-icon-button aria-label="Clear" (click)="bundleNameFilter=''; applyBundleFilter()">
-                      <mat-icon>close</mat-icon>
-                    </button>
+                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                    (click)="bundleNameFilter=''; applyBundleFilter()">
+                    <mat-icon>close</mat-icon>
+                  </button>
                   }
                 </mat-form-field>
 
@@ -402,66 +419,81 @@
 
 
             @if (isLoadingBundles) {
-              <div class="loading-container">
-                <mat-spinner diameter="40"></mat-spinner>
-                <p class="loading-text">Lade Variablenbündel...</p>
-              </div>
+            <div class="loading-container">
+              <mat-spinner diameter="40"></mat-spinner>
+              <p class="loading-text">Lade Variablenbündel...</p>
+            </div>
             }
 
             @if (!isLoadingBundles && variableBundles.length > 0) {
-              <div class="bundles-grid-container">
-                <div class="bundles-grid">
-                  @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
-                    <div class="bundle-card"
-                         [class.selected]="selectedVariableBundles.isSelected(bundle)"
-                         (click)="toggleBundleSelection(bundle)">
-                      <div class="bundle-card-header">
-                        <h3 class="bundle-name">
-                          {{ bundle.name }}
-                        </h3>
-                      </div>
-                        <div class="bundle-card-content">
-                        <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
-                        <div class="bundle-stats">
-                          <span class="variable-count">{{ getVariableCount(bundle) }} Variablen</span>
-                        </div>
-                        <div class="bundle-variables-preview">
-                          @if (getVariableCount(bundle) > 0) {
-                            <div class="variables-preview-header">Enthaltene Variablen:</div>
-                            <div class="variables-preview-list">
-                              @for (variable of bundle.variables.slice(0, 3); track variable.unitName + variable.variableId) {
-                                <div class="variable-preview-item">
-                                  {{ variable.unitName }}: {{ variable.variableId }}
-                                </div>
-                              }
-                              @if (getVariableCount(bundle) > 3) {
-                                <div class="variable-preview-more">
-                                  +{{ getVariableCount(bundle) - 3 }} weitere
-                                </div>
-                              }
-                            </div>
-                          }
-                          @if (getVariableCount(bundle) === 0) {
-                            <div class="variables-preview-empty">Keine Variablen enthalten</div>
-                          }
-                        </div>
-                      </div>
+            <div class="bundles-grid-container">
+              <div class="bundles-grid">
+                @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
+                <div class="bundle-card" [class.selected]="selectedVariableBundles.isSelected(bundle)"
+                  (click)="toggleBundleSelection(bundle)">
+                  <div class="bundle-card-header">
+                    <h3 class="bundle-name">
+                      {{ bundle.name }}
+                    </h3>
+                  </div>
+                  <div class="bundle-card-content">
+                    <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
+                    <div class="bundle-stats">
+                      <span class="variable-count">{{ getVariableCount(bundle) }} Variablen</span>
                     </div>
-                  }
+                    <div class="bundle-variables-preview">
+                      @if (getVariableCount(bundle) > 0) {
+                      <div class="variables-preview-header">Enthaltene Variablen:</div>
+                      <div class="variables-preview-list">
+                        @for (variable of bundle.variables.slice(0, 3); track variable.unitName + variable.variableId) {
+                        <div class="variable-preview-item">
+                          {{ variable.unitName }}: {{ variable.variableId }}
+                        </div>
+                        }
+                        @if (getVariableCount(bundle) > 3) {
+                        <div class="variable-preview-more">
+                          +{{ getVariableCount(bundle) - 3 }} weitere
+                        </div>
+                        }
+                      </div>
+                      @if (selectedVariableBundles.isSelected(bundle) && data.mode === 'definition') {
+                      <div class="bundle-case-ordering-mode-section" (click)="$event.stopPropagation()">
+                        <mat-form-field appearance="fill" class="full-width">
+                          <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate
+                            }}</mat-label>
+                          <mat-select [value]="bundle.caseOrderingMode"
+                            (selectionChange)="setBundleOrderingMode(bundle, $event.value)">
+                            <mat-option value="continuous">{{
+                              'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}</mat-option>
+                            <mat-option value="alternating">{{
+                              'coding-job-definition-dialog.case-ordering-mode.alternating' | translate }}</mat-option>
+                          </mat-select>
+                        </mat-form-field>
+                      </div>
+                      }
+                      }
+                      @if (getVariableCount(bundle) === 0) {
+                      <div class="variables-preview-empty">Keine Variablen enthalten</div>
+                      }
+                    </div>
+                  </div>
                 </div>
+                }
               </div>
+            </div>
 
-              <div class="selection-summary">
-                <p>{{ selectedVariableBundles.selected.length }} Variablenbündel ausgewählt</p>
-              </div>
+            <div class="selection-summary">
+              <p>{{ selectedVariableBundles.selected.length }} Variablenbündel ausgewählt</p>
+            </div>
             }
 
             @if (!isLoadingBundles && variableBundles.length === 0) {
-              <div class="empty-state">
-                <mat-icon class="empty-icon">analytics</mat-icon>
-                <h3>Keine Variablenbündel verfügbar</h3>
-                <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel über die Variablenbündel-Verwaltung.</p>
-              </div>
+            <div class="empty-state">
+              <mat-icon class="empty-icon">analytics</mat-icon>
+              <h3>Keine Variablenbündel verfügbar</h3>
+              <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel
+                über die Variablenbündel-Verwaltung.</p>
+            </div>
             }
           </mat-tab>
         </mat-tab-group>
@@ -473,23 +505,23 @@
     <button mat-button (click)="onCancel()">Abbrechen</button>
 
     @if (data.mode === 'definition') {
-      <button mat-raised-button color="primary" (click)="onSubmit()"
-        [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
-        {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
-      </button>
-      @if (!data.isEdit) {
-        <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
-          [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
-          <mat-icon>send</mat-icon>
-          Zur Prüfung einreichen
-        </button>
-      }
+    <button mat-raised-button color="primary" (click)="onSubmit()"
+      [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
+    </button>
+    @if (!data.isEdit) {
+    <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
+      [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      <mat-icon>send</mat-icon>
+      Zur Prüfung einreichen
+    </button>
+    }
     }
 
     @if (data.mode === 'job') {
-      <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
-        {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
-      </button>
+    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+      {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
+    </button>
     }
   </div>
 </div>
