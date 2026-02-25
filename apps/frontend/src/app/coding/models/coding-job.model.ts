@@ -43,6 +43,7 @@ export interface Variable {
   casesInJobs?: number;
   availableCases?: number;
   uniqueCasesAfterAggregation?: number;
+  isDerived?: boolean;
 }
 
 export interface VariableBundle {

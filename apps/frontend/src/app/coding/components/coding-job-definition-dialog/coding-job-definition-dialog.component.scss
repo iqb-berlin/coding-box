@@ -505,6 +505,26 @@
           }
         }
       }
+
+      .derived-chip {
+        margin-top: 6px;
+        font-size: 0.72rem;
+        min-height: 20px;
+        padding: 2px 8px;
+        background-color: #ede7f6;
+        color: #4527a0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border-radius: 12px;
+
+        .derived-chip-icon {
+          font-size: 14px;
+          width: 14px;
+          height: 14px;
+          color: #4527a0;
+        }
+      }
     }
   }
 }

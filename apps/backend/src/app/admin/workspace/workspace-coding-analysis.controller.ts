@@ -217,6 +217,10 @@ export class WorkspaceCodingAnalysisController {
           uniqueCasesAfterAggregation: {
             type: 'number',
             description: 'Number of unique coding cases after applying aggregation grouping (1 per duplicate group)'
+          },
+          isDerived: {
+            type: 'boolean',
+            description: 'Whether this is a derived variable (computed from other variables)'
           }
         }
       }
@@ -233,6 +237,7 @@ export class WorkspaceCodingAnalysisController {
         casesInJobs: number;
         availableCases: number;
         uniqueCasesAfterAggregation: number;
+        isDerived: boolean;
       }[]
       > {
     return this.codingValidationService.getCodingIncompleteVariables(

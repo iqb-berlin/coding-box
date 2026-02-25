@@ -368,17 +368,22 @@
                         <span class="response-count">({{ variable.responseCount }})</span>
                         }
 
-                        @if (isVariableDisabled(variable)) {
-                        <mat-icon class="disabled-indicator" matTooltip="{{ getVariableDisabledReason(variable) }}"
-                          matTooltipPosition="above">block</mat-icon>
-                        }
+                            @if (isVariableDisabled(variable)) {
+                              <mat-icon class="disabled-indicator" matTooltip="{{ getVariableDisabledReason(variable) }}" matTooltipPosition="above">block</mat-icon>
+                            }
+                          </div>
+                          @if (variable.isDerived) {
+                            <mat-chip class="derived-chip" matTooltip="Abgeleitete Variable" matTooltipPosition="above">
+                              <mat-icon class="derived-chip-icon">merge_type</mat-icon>
+                              Abgeleitet
+                            </mat-chip>
+                          }
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  }
                 </div>
-                }
               </div>
-            </div>
             }
 
             @if (!isLoadingVariableAnalysis && variables.length === 0) {

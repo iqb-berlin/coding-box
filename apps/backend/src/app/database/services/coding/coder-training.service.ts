@@ -14,6 +14,7 @@ import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entiti
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -78,7 +79,8 @@ export class CoderTrainingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   private sampleResponses(
@@ -105,6 +107,14 @@ export class CoderTrainingService {
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
     this.logger.log(`Aggregation threshold: ${aggregationThreshold}, matching flags: ${matchingFlags.join(', ')}`);
+
+    // Build derived variable lookup to skip aggregation for derived vars
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    const derivedVariableSets = new Map<string, Set<string>>();
+    derivedVariableMap.forEach((vars, unitNameKey) => {
+      derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+    });
+    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
     // Pre-sample responses for each variable configuration to ensure consistency across all coders
     const sampledResponsesByConfig: Map<string, CoderTrainingResponse[]> = new Map();
@@ -151,9 +161,11 @@ export class CoderTrainingService {
         variable: r.variableid
       }));
 
-      // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group
+      // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group.
+      // Derived variables have null/empty values — skip aggregation to avoid collapsing all responses into 1 group.
+      const isDerived = isDerivedVariable(unitId, variableId);
       let responsesForSampling: CoderTrainingResponse[];
-      if (aggregationThreshold !== null) {
+      if (!isDerived && aggregationThreshold !== null) {
         // Build slim-compatible objects for aggregation
         const slimResponses = transformedResponses.map(r => ({
           id: r.responseId,
