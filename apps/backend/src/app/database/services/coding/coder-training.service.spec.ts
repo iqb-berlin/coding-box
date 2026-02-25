@@ -13,6 +13,7 @@ import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -36,6 +37,10 @@ describe('CoderTrainingService', () => {
     normalizeValue: jest.fn().mockReturnValue('normalized')
   };
 
+  const mockWorkspaceFilesService = {
+    getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,7 +55,8 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
         { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
-        { provide: CodingJobService, useValue: mockCodingJobService }
+        { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService }
       ]
     }).compile();
 

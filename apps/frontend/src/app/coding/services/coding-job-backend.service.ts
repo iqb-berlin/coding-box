@@ -209,7 +209,15 @@ export class CodingJobBackendService {
     workspaceId: number,
     unitName?: string
   ): Observable<
-    { unitName: string; variableId: string; responseCount: number }[]
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      isDerived: boolean;
+    }[]
     > {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
@@ -218,7 +226,15 @@ export class CodingJobBackendService {
     }
     params = params.set('_t', Date.now().toString());
     return this.http.get<
-    { unitName: string; variableId: string; responseCount: number }[]
+    {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      casesInJobs: number;
+      availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      isDerived: boolean;
+    }[]
     >(url, { params, headers: this.authHeader });
   }
 
