@@ -11,6 +11,7 @@ import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
+import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 
@@ -75,6 +76,8 @@ export class CoderTrainingService {
     private coderTrainingCoderRepository: Repository<CoderTrainingCoder>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(VariableBundle)
+    private variableBundleRepository: Repository<VariableBundle>,
     private codingJobService: CodingJobService
   ) { }
 
@@ -228,7 +231,8 @@ export class CoderTrainingService {
     trainingLabel: string,
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
-    assignedVariableBundles?: JobDefinitionVariableBundle[]
+    assignedVariableBundles?: JobDefinitionVariableBundle[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
@@ -236,6 +240,7 @@ export class CoderTrainingService {
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
       coderTraining.label = trainingLabel;
+      coderTraining.case_ordering_mode = caseOrderingMode || 'continuous';
       // assigned_variables etc. are now relations and not set directly here
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
@@ -262,6 +267,7 @@ export class CoderTrainingService {
           trainingBundle.coder_training_id = trainingId;
           trainingBundle.variable_bundle_id = bundle.id;
           trainingBundle.sample_count = bundle.sampleCount || 10;
+          trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
           await this.coderTrainingBundleRepository.save(trainingBundle);
         }
       }
@@ -278,6 +284,24 @@ export class CoderTrainingService {
 
       const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
 
+      // Build mapping from variable to bundle id
+      const variableToBundleMap = new Map<string, number>();
+      if (assignedVariableBundles && assignedVariableBundles.length > 0) {
+        const bundleIds = assignedVariableBundles.map(b => b.id);
+        if (bundleIds.length > 0) {
+          const fetchedBundles = await this.variableBundleRepository.find({
+            where: { id: In(bundleIds) }
+          });
+          for (const bundle of fetchedBundles) {
+            if (bundle.variables) {
+              for (const v of bundle.variables) {
+                variableToBundleMap.set(`${v.unitName}::${v.variableId}`, bundle.id);
+              }
+            }
+          }
+        }
+      }
+
       const jobs: TrainingJob[] = [];
       let jobsCreated = 0;
 
@@ -293,6 +317,7 @@ export class CoderTrainingService {
         codingJob.description = '';
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = missingsProfileId;
+        codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
 
@@ -338,6 +363,7 @@ export class CoderTrainingService {
           codingJobUnit.person_login = response.personLogin;
           codingJobUnit.person_code = response.personCode;
           codingJobUnit.is_open = true;
+          codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
           return codingJobUnit;
         });
         await this.codingJobUnitRepository.save(codingJobUnits);
@@ -685,7 +711,8 @@ export class CoderTrainingService {
     variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
-    assignedVariableBundles?: JobDefinitionVariableBundle[]
+    assignedVariableBundles?: JobDefinitionVariableBundle[],
+    caseOrderingMode?: 'continuous' | 'alternating'
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
       this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
@@ -729,6 +756,7 @@ export class CoderTrainingService {
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
 
       training.label = trainingLabel;
+      training.case_ordering_mode = caseOrderingMode || 'continuous';
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
@@ -759,6 +787,7 @@ export class CoderTrainingService {
             trainingBundle.coder_training_id = trainingId;
             trainingBundle.variable_bundle_id = bundle.id;
             trainingBundle.sample_count = bundle.sampleCount || 10;
+            trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
             await this.coderTrainingBundleRepository.save(trainingBundle);
           }
         }
@@ -782,6 +811,24 @@ export class CoderTrainingService {
         // Generate and create new jobs
         const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
 
+        // Build mapping from variable to bundle id
+        const variableToBundleMap = new Map<string, number>();
+        if (assignedVariableBundles && assignedVariableBundles.length > 0) {
+          const bundleIds = assignedVariableBundles.map(b => b.id);
+          if (bundleIds.length > 0) {
+            const fetchedBundles = await this.variableBundleRepository.find({
+              where: { id: In(bundleIds) }
+            });
+            for (const bundle of fetchedBundles) {
+              if (bundle.variables) {
+                for (const v of bundle.variables) {
+                  variableToBundleMap.set(`${v.unitName}::${v.variableId}`, bundle.id);
+                }
+              }
+            }
+          }
+        }
+
         const jobs: TrainingJob[] = [];
         let jobsCreatedCount = 0;
 
@@ -794,6 +841,7 @@ export class CoderTrainingService {
           codingJob.workspace_id = workspaceId;
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = missingsProfileId;
+          codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
 
@@ -825,6 +873,24 @@ export class CoderTrainingService {
               processedVariables.add(variableKey);
             }
           }
+
+          const codingJobUnits: CodingJobUnit[] = trainingPackage.responses.map(response => {
+            const codingJobUnit = new CodingJobUnit();
+            codingJobUnit.coding_job_id = jobId;
+            codingJobUnit.response_id = response.responseId;
+            codingJobUnit.unit_name = response.unitName;
+            codingJobUnit.unit_alias = response.unitAlias || null;
+            codingJobUnit.variable_id = response.variableId;
+            codingJobUnit.variable_anchor = response.variableId; // Same as variable_id
+            codingJobUnit.booklet_name = response.bookletName;
+            codingJobUnit.person_login = response.personLogin;
+            codingJobUnit.person_code = response.personCode;
+            codingJobUnit.is_open = true;
+            codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
+            return codingJobUnit;
+          });
+          await this.codingJobUnitRepository.save(codingJobUnits);
+          this.logger.log(`Bulk-inserted ${codingJobUnits.length} coding job units to training job ${jobId} for coder ${coderName}`);
         }
 
         return {

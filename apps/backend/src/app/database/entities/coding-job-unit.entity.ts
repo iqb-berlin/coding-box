@@ -40,6 +40,9 @@ export class CodingJobUnit {
   @Column()
     variable_anchor: string;
 
+  @Column({ nullable: true })
+    variable_bundle_id: number | null;
+
   @Column()
     booklet_name: string;
 

@@ -14,6 +14,7 @@ import { CoderTrainingCoder } from './coder-training-coder.entity';
 import { CoderTrainingVariable } from './coder-training-variable.entity';
 // eslint-disable-next-line import/no-cycle
 import { CoderTrainingBundle } from './coder-training-bundle.entity';
+import { CaseOrderingMode } from './job-definition.entity';
 
 /**
  * Entity for coder training sessions
@@ -29,6 +30,13 @@ export class CoderTraining {
 
   @Column()
     label: string;
+
+  @Column({
+    type: 'enum',
+    enum: ['continuous', 'alternating'],
+    default: 'continuous'
+  })
+    case_ordering_mode: CaseOrderingMode;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.training, { cascade: true })
     codingJobs: CodingJob[];
