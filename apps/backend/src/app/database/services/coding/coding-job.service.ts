@@ -20,6 +20,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -96,7 +97,8 @@ export class CodingJobService {
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
     private connection: Connection,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -1439,6 +1441,14 @@ export class CodingJobService {
 
     const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
 
+    // Build derived variable lookup for this workspace to skip aggregation for derived vars
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    const derivedVariableSets = new Map<string, Set<string>>();
+    derivedVariableMap.forEach((vars, unitNameKey) => {
+      derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+    });
+    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
+
     // Generate warnings for variables that have reduced available cases
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     for (const variable of allVariables) {
@@ -1478,13 +1488,18 @@ export class CodingJobService {
       );
       const totalResponses = responses.length;
 
+      // Derived variables have null/empty string values and must not be aggregated —
+      // aggregation would collapse all their responses into 1 group.
+      // A bundle item is treated as derived only if ALL its variables are derived.
+      const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
+
       // Calculate aggregation info based on matching mode, applying threshold exactly as in createDistributedCodingJobs
       const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
 
       const filteredResponses: SlimResponse[] = [];
       let uniqueCases = 0;
 
-      if (aggregationThreshold !== null) {
+      if (!allItemVarsDerived && aggregationThreshold !== null) {
         // Apply filtering logic: if group size >= threshold, keep 1 representative. Else keep all.
         aggregatedGroups.forEach(group => {
           if (group.responses.length >= threshold) {
@@ -1497,7 +1512,7 @@ export class CodingJobService {
           }
         });
       } else {
-        // Aggregation disabled
+        // Aggregation disabled or derived variable — use all responses as-is
         filteredResponses.push(...responses);
         uniqueCases = responses.length;
       }
@@ -1713,6 +1728,14 @@ export class CodingJobService {
       const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
       const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
 
+      // Build derived variable lookup to skip aggregation for derived vars
+      const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+      const derivedVariableSets = new Map<string, Set<string>>();
+      derivedVariableMap.forEach((vars, unitNameKey) => {
+        derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+      });
+      const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
+
       // Sort coders alphabetically for deterministic distribution
       const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
 
@@ -1753,13 +1776,18 @@ export class CodingJobService {
           }
         }
 
+        // Derived variables have null/empty string values and must not be aggregated —
+        // aggregation would collapse all their responses into 1 group.
+        // A bundle item is treated as derived only if ALL its variables are derived.
+        const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
+
         // Calculate aggregation info based on matching mode
         const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
 
         const filteredResponses: SlimResponse[] = [];
         let uniqueCases = 0;
 
-        if (aggregationThreshold !== null) {
+        if (!allItemVarsDerived && aggregationThreshold !== null) {
           // Apply filtering logic: if group size >= threshold, keep 1. Else keep all.
           aggregatedGroups.forEach(group => {
             if (group.responses.length >= threshold) {
@@ -1772,7 +1800,7 @@ export class CodingJobService {
             }
           });
         } else {
-          // Aggregation disabled
+          // Aggregation disabled or derived variable — use all responses as-is
           filteredResponses.push(...responses);
           uniqueCases = responses.length;
         }

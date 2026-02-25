@@ -41,6 +41,10 @@ import { WorkspaceTestFilesValidationService } from '../validation/workspace-tes
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
   private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
+  // Maps workspaceId → unitName → Set of variable IDs that have INTENDED_INCOMPLETE code in their coding scheme
+  private intendedIncompleteSchemeCache: Map<number, Map<string, Set<string>>> = new Map();
+  // Maps workspaceId → unitName → Set of variable aliases that are derived variables
+  private derivedVariableCache: Map<number, Map<string, Set<string>>> = new Map();
 
   constructor(
     @InjectRepository(FileUpload)
@@ -2017,24 +2021,62 @@ ${bookletRefs}
       });
 
       // Create a map of unitId to parsed coding scheme for quick lookup
+      // Also track which variables have INTENDED_INCOMPLETE code type in their scheme
       const codingSchemeMap = new Map<string, Map<string, string>>();
+      // Maps unitId → Map<schemeId, alias> for translating scheme IDs to response variableids
+      const schemeIdToAliasMap = new Map<string, Map<string, string>>();
+      const intendedIncompleteByUnit = new Map<string, Set<string>>();
       for (const scheme of codingSchemes) {
         try {
           const unitId = scheme.file_id.replace('.VOCS', '');
           const parsedScheme = JSON.parse(scheme.data) as {
-            variableCodings?: { id: string; sourceType?: string }[];
+            variableCodings?: {
+              id: string;
+              alias?: string;
+              sourceType?: string;
+              codes?: Array<{ type?: string }>;
+            }[];
           };
           if (
             parsedScheme.variableCodings &&
             Array.isArray(parsedScheme.variableCodings)
           ) {
             const variableSourceTypes = new Map<string, string>();
+            const idToAlias = new Map<string, string>();
+            // Collect scheme variable IDs (not aliases!) that have INTENDED_INCOMPLETE code type.
+            // These will be translated to aliases during unit XML parsing below.
+            const intendedIncompleteSchemeIds = new Set<string>();
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
               }
+              // Map scheme id → alias for response variableid resolution
+              if (vc.id && vc.alias) {
+                idToAlias.set(vc.id, vc.alias);
+              }
+              // Track variables where any code has type INTENDED_INCOMPLETE
+              if (vc.id && vc.codes && Array.isArray(vc.codes)) {
+                const hasIntendedIncomplete = vc.codes.some(
+                  code => code.type === 'INTENDED_INCOMPLETE'
+                );
+                if (hasIntendedIncomplete) {
+                  intendedIncompleteSchemeIds.add(vc.id);
+                }
+              }
             }
             codingSchemeMap.set(unitId, variableSourceTypes);
+            schemeIdToAliasMap.set(unitId, idToAlias);
+            if (intendedIncompleteSchemeIds.size > 0) {
+              this.logger.debug(
+                `[DEBUG] Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
+              );
+              // Store by unitId so we can resolve to aliases during XML parsing
+              intendedIncompleteByUnit.set(unitId, intendedIncompleteSchemeIds);
+            } else {
+              this.logger.debug(
+                `[DEBUG] Coding scheme for unit "${unitId}" has NO INTENDED_INCOMPLETE code types`
+              );
+            }
           }
         } catch (error) {
           this.logger.error(
@@ -2045,6 +2087,12 @@ ${bookletRefs}
       }
 
       const unitVariables: Map<string, Set<string>> = new Map();
+      // This will hold the final alias-keyed map (replaces the scheme-ID-keyed intendedIncompleteByUnit).
+      // Built during XML parsing where we can translate id → alias.
+      const intendedIncompleteAliasByUnit = new Map<string, Set<string>>();
+      // Tracks derived variable aliases per unit for derivedVariableCache
+      const derivedVariablesByUnit = new Map<string, Set<string>>();
+
       for (const unitFile of unitFiles) {
         try {
           const xmlContent = unitFile.data.toString();
@@ -2059,6 +2107,12 @@ ${bookletRefs}
           ) {
             const unitName = parsedXml.Unit.Metadata.Id;
             const variables = new Set<string>();
+            // Scheme IDs that have INTENDED_INCOMPLETE code type (from the .VOCS file)
+            const schemeIdsWithIntendedIncomplete = intendedIncompleteByUnit.get(unitName);
+            // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
+            const aliasesWithIntendedIncomplete = new Set<string>();
+            // Derived variable aliases for this unit
+            const derivedAliases = new Set<string>();
 
             if (
               parsedXml.Unit.BaseVariables &&
@@ -2072,15 +2126,121 @@ ${bookletRefs}
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
+                  // Use $.id to look up source type in scheme (scheme uses id), fall back to alias
+                  const schemeKey = variable.$.id || variable.$.alias;
                   const unitSourceTypes = codingSchemeMap.get(unitName);
-                  const sourceType = unitSourceTypes?.get(variable.$.alias);
+                  const sourceType = unitSourceTypes?.get(schemeKey);
                   if (sourceType !== 'BASE_NO_VALUE') {
                     variables.add(variable.$.alias);
+                  }
+                  // Check if this variable's scheme ID has INTENDED_INCOMPLETE code type
+                  if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
+                    aliasesWithIntendedIncomplete.add(variable.$.alias);
+                    this.logger.debug(
+                      `[DEBUG] Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    );
                   }
                 }
               }
             }
+
+            // Also include derived variables so that newly added derived vars
+            // with CODING_INCOMPLETE status appear in manual coding
+            if (
+              parsedXml.Unit.DerivedVariables &&
+              parsedXml.Unit.DerivedVariables.Variable
+            ) {
+              const derivedVariables = Array.isArray(
+                parsedXml.Unit.DerivedVariables.Variable
+              ) ?
+                parsedXml.Unit.DerivedVariables.Variable :
+                [parsedXml.Unit.DerivedVariables.Variable];
+
+              this.logger.debug(
+                `[DEBUG] Unit "${unitName}" has ${derivedVariables.length} DerivedVariables in XML`
+              );
+
+              for (const variable of derivedVariables) {
+                const alias = variable.$?.alias;
+                const id = variable.$?.id;
+                const type = variable.$?.type;
+                const schemeKey = id || alias;
+                const unitSourceTypes = codingSchemeMap.get(unitName);
+                const sourceType = unitSourceTypes?.get(schemeKey);
+
+                this.logger.debug(
+                  `[DEBUG] DerivedVariable id="${id}" alias="${alias}" type="${type}" schemeKey="${schemeKey}" sourceType="${sourceType}" in unit "${unitName}"`
+                );
+
+                if (!alias) {
+                  this.logger.debug('[DEBUG]  → SKIPPED: no alias');
+                  continue;
+                }
+                if (type === 'no-value') {
+                  this.logger.debug('[DEBUG]  → SKIPPED: type is no-value');
+                  continue;
+                }
+                if (sourceType === 'BASE_NO_VALUE') {
+                  this.logger.debug('[DEBUG]  → EXCLUDED from cache: sourceType is BASE_NO_VALUE');
+                } else if (sourceType === 'BASE') {
+                  this.logger.debug('[DEBUG]  → EXCLUDED from cache: sourceType is BASE');
+                } else {
+                  variables.add(alias);
+                  derivedAliases.add(alias);
+                  this.logger.debug(`[DEBUG]  → ADDED to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}"`);
+                }
+                // Check if this derived variable's scheme ID has INTENDED_INCOMPLETE code type
+                if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
+                  aliasesWithIntendedIncomplete.add(alias);
+                  this.logger.debug(
+                    `[DEBUG] Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                  );
+                }
+              }
+            } else {
+              this.logger.debug(
+                `[DEBUG] Unit "${unitName}" has NO DerivedVariables in XML`
+              );
+            }
+
             unitVariables.set(unitName, variables);
+
+            // Additionally, include any variables from the coding scheme that are NOT in the unit XML yet.
+            // This covers newly created derived variables that exist in the VOCS but haven't been
+            // written back to the unit XML. Use the alias (= response variableid) as the key.
+            const schemeVarTypes = codingSchemeMap.get(unitName);
+            const idToAlias = schemeIdToAliasMap.get(unitName);
+            if (schemeVarTypes) {
+              for (const [schemeId, sourceType] of schemeVarTypes.entries()) {
+                // Resolve to alias — alias is what response.variableid contains
+                const resolvedAlias = idToAlias?.get(schemeId) ?? schemeId;
+                if (
+                  sourceType !== 'BASE_NO_VALUE' &&
+                  sourceType !== 'BASE' &&
+                  !variables.has(resolvedAlias)
+                ) {
+                  variables.add(resolvedAlias);
+                  derivedAliases.add(resolvedAlias);
+                  this.logger.debug(
+                    `[DEBUG] Unit "${unitName}": added scheme-only variable alias="${resolvedAlias}" (schemeId="${schemeId}", sourceType="${sourceType}") to unitVariableMap`
+                  );
+                  // Also check INTENDED_INCOMPLETE for this scheme-only variable
+                  if (schemeIdsWithIntendedIncomplete?.has(schemeId)) {
+                    aliasesWithIntendedIncomplete.add(resolvedAlias);
+                    this.logger.debug(
+                      `[DEBUG] Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    );
+                  }
+                }
+              }
+            }
+
+            if (aliasesWithIntendedIncomplete.size > 0) {
+              intendedIncompleteAliasByUnit.set(unitName, aliasesWithIntendedIncomplete);
+            }
+            if (derivedAliases.size > 0) {
+              derivedVariablesByUnit.set(unitName, derivedAliases);
+            }
           }
         } catch (e) {
           this.logger.warn(
@@ -2091,8 +2251,17 @@ ${bookletRefs}
       }
 
       this.unitVariableCache.set(workspaceId, unitVariables);
+      // Store alias-based map (not the scheme-ID-based intendedIncompleteByUnit)
+      this.intendedIncompleteSchemeCache.set(workspaceId, intendedIncompleteAliasByUnit);
+      this.derivedVariableCache.set(workspaceId, derivedVariablesByUnit);
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`
+      );
+      this.logger.debug(
+        `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
+        `${intendedIncompleteAliasByUnit.size} units with INTENDED_INCOMPLETE codes. ${
+          Array.from(intendedIncompleteAliasByUnit.entries())
+            .map(([u, vars]) => `${u}: [${Array.from(vars).join(', ')}]`).join(' | ')}`
       );
     } catch (error) {
       this.logger.error(
@@ -2109,6 +2278,34 @@ ${bookletRefs}
       await this.refreshUnitVariableCache(workspaceId);
     }
     return this.unitVariableCache.get(workspaceId) || new Map();
+  }
+
+  /**
+   * Returns a map of unitName → Set of variable IDs that have INTENDED_INCOMPLETE
+   * code type in their coding scheme. Responses with status INTENDED_INCOMPLETE
+   * for these variables should be EXCLUDED from manual coding (they were auto-coded
+   * as intended-incomplete and do not need manual review).
+   */
+  async getIntendedIncompleteSchemeVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.intendedIncompleteSchemeCache.has(workspaceId)) {
+      await this.refreshUnitVariableCache(workspaceId);
+    }
+    return this.intendedIncompleteSchemeCache.get(workspaceId) || new Map();
+  }
+
+  /**
+   * Returns a map of unitName → Set of variable aliases that are derived variables.
+   * Derived variables have their own manual coding tasks (they are not BASE type).
+   */
+  async getDerivedVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.derivedVariableCache.has(workspaceId)) {
+      await this.refreshUnitVariableCache(workspaceId);
+    }
+    return this.derivedVariableCache.get(workspaceId) || new Map();
   }
 
   async getUnitVariableDetails(
