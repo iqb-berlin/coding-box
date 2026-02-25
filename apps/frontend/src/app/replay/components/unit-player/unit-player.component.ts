@@ -130,10 +130,16 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     if (unitResponses?.responses) {
       this.dataParts = unitResponses.responses.reduce(
         (acc: { [key: string]: string }, response: { id: string; content: string }) => {
-          try {
-            JSON.parse(response.content);
-            acc[response.id] = response.content;
-          } catch (e) {
+          if (typeof response.content === 'object' && response.content !== null) {
+            acc[response.id] = JSON.stringify(response.content);
+          } else if (typeof response.content === 'string') {
+            try {
+              JSON.parse(response.content);
+              acc[response.id] = response.content;
+            } catch (e) {
+              acc[response.id] = JSON.stringify(response.content);
+            }
+          } else {
             acc[response.id] = JSON.stringify(response.content);
           }
           return acc;

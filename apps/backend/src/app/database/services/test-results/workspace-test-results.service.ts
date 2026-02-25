@@ -2164,7 +2164,7 @@ export class WorkspaceTestResultsService {
   ): Promise<{
       responses: {
         id: string;
-        content: { id: string; value: string; status: string }[];
+        content: string;
       }[];
     }> {
     const cacheKey = this.cacheService.generateUnitResponseCacheKey(
@@ -2175,7 +2175,7 @@ export class WorkspaceTestResultsService {
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;
-        content: { id: string; value: string; status: string }[];
+        content: string;
       }[];
     }>(cacheKey);
 
@@ -2292,29 +2292,9 @@ export class WorkspaceTestResultsService {
     const responsesByChunk = {};
 
     unit.responses.forEach(response => {
-      let value = response.value;
-      if (typeof value === 'string') {
-        if (value.startsWith('[') && value.endsWith(']')) {
-          try {
-            value = JSON.parse(value);
-          } catch (e) {
-            this.logger.warn(`Failed to parse JSON array: ${value}`);
-          }
-        } else if (value.startsWith('{') && value.endsWith('}')) {
-          try {
-            const jsonArrayString = value
-              .replace(/^\{/, '[')
-              .replace(/}$/, ']');
-            value = JSON.parse(jsonArrayString);
-          } catch (e) {
-            this.logger.warn(`Failed to parse curly brace array: ${value}`);
-          }
-        }
-      }
-
       const mappedResponse = {
         id: response.variableid,
-        value: value,
+        value: response.value,
         status: response.status
       };
 
@@ -2335,7 +2315,7 @@ export class WorkspaceTestResultsService {
 
       return {
         id: chunkKey,
-        content: uniqueResponses
+        content: JSON.stringify(uniqueResponses)
       };
     });
 
