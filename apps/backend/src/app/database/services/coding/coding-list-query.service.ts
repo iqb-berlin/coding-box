@@ -81,18 +81,20 @@ export class CodingListQueryService {
         }
       }
 
-      // 2) Query all coding incomplete responses
+      // 2) Query CODING_INCOMPLETE and INTENDED_INCOMPLETE responses
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 = :status', {
-          status: statusStringToNumber('CODING_INCOMPLETE')
+        .where('response.status_v1 IN (:...statuses)', {
+          statuses: [
+            statusStringToNumber('CODING_INCOMPLETE'),
+            statusStringToNumber('INTENDED_INCOMPLETE')
+          ]
         })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id })
-        .andWhere('person.consider = :consider', { consider: true })
         .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
 
@@ -103,55 +105,50 @@ export class CodingListQueryService {
 
       const [responses, total] = await queryBuilder.getManyAndCount();
 
-      // 3) Build exclusion Set from VOCS files where sourceType == BASE_NO_VALUE
-      interface VocsScheme {
-        variableCodings?: { id: string; sourceType?: string }[];
-      }
+      // 3) Load variable maps from WorkspaceFilesService
+      //    unitVariableMap: unitName → Set of valid variable aliases (includes derived vars, excludes BASE/BASE_NO_VALUE)
+      //    intendedIncompleteSchemeMap: unitName → Set of variable aliases that have INTENDED_INCOMPLETE code type in scheme
+      const [unitVariableMap, intendedIncompleteSchemeMap] = await Promise.all([
+        this.workspaceFilesService.getUnitVariableMap(workspace_id),
+        this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspace_id)
+      ]);
 
-      const vocsFiles = await this.fileUploadRepository.find({
-        where: {
-          workspace_id,
-          file_type: 'Resource',
-          file_id: Like('%.VOCS')
-        },
-        select: ['file_id', 'data']
+      const validVariableSets = new Map<string, Set<string>>();
+      unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
+        validVariableSets.set(unitNameKey.toUpperCase(), variables);
       });
 
-      const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
-      for (const file of vocsFiles) {
-        try {
-          const unitKey = file.file_id.replace('.VOCS', '');
-          const data =
-            typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-          const scheme = data as VocsScheme;
-          const vars = scheme?.variableCodings || [];
-          for (const vc of vars) {
-            if (
-              vc &&
-              vc.id &&
-              vc.sourceType &&
-              vc.sourceType === 'BASE_NO_VALUE'
-            ) {
-              excludedPairs.add(`${unitKey}||${vc.id}`);
-            }
-          }
-        } catch (e) {
-          this.logger.error(
-            `Error parsing VOCS file ${file.file_id}: ${e.message}`
-          );
-        }
-      }
+      const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
+      intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitNameKey: string) => {
+        intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
+      });
 
-      // 4) Map responses to output and filter by excludedPairs, variable id substrings, and empty values
+      const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+      // 4) Filter responses:
+      //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
+      //    - For INTENDED_INCOMPLETE: exclude if coding scheme already has INTENDED_INCOMPLETE code type
+      //    - Also exclude variables matching media substrings and empty values
       const filtered = responses.filter(r => {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
-        const hasExcludedPair = excludedPairs.has(`${unitKey}||${variableId}`);
-        const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(
-          variableId
-        );
         const hasValue = r.value != null && r.value.trim() !== '';
-        return !hasExcludedPair && !hasExcludedSubstring && hasValue;
+
+        if (!hasValue) return false;
+
+        const hasExcludedSubstring = /image|text|audio|frame|video|_0/i.test(variableId);
+        if (hasExcludedSubstring) return false;
+
+        const validVars = validVariableSets.get(unitKey.toUpperCase());
+        if (!validVars?.has(variableId)) return false;
+
+        // For INTENDED_INCOMPLETE responses: exclude if scheme has INTENDED_INCOMPLETE code type
+        if (r.status_v1 !== codingIncompleteStatus) {
+          const schemeVars = intendedIncompleteSchemeVars.get(unitKey.toUpperCase());
+          if (schemeVars?.has(variableId)) return false;
+        }
+
+        return true;
       });
 
       const result = filtered.map(response => {
@@ -196,7 +193,7 @@ export class CodingListQueryService {
       });
 
       this.logger.log(
-        `Found ${sortedResult.length} coding items after filtering derived variables, total raw ${total}`
+        `Found ${sortedResult.length} coding items (CODING_INCOMPLETE + INTENDED_INCOMPLETE) after filtering, total raw ${total}`
       );
       return { items: sortedResult, total };
     } catch (error) {
@@ -219,78 +216,18 @@ export class CodingListQueryService {
       .innerJoin('booklet.person', 'person')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
-      .distinct(true)
+      .addSelect('response.status_v1', 'statusV1')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 = :status', {
-        status: statusStringToNumber('CODING_INCOMPLETE')
-      });
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere("(response.value IS NOT NULL AND response.value != '')");
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    if (ignoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
-    }
-
-    interface VocsScheme {
-      variableCodings?: { id: string; sourceType?: string }[];
-    }
-
-    const vocsFiles = await this.fileUploadRepository.find({
-      where: {
-        workspace_id: workspaceId,
-        file_type: 'Resource',
-        file_id: Like('%.VOCS')
-      },
-      select: ['file_id', 'data']
-    });
-
-    const excludedPairs = new Set<string>(); // key: `${unitKey}||${variableId}`
-    for (const file of vocsFiles) {
-      try {
-        const unitKey = file.file_id.replace('.VOCS', '');
-        const data =
-          typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = data as VocsScheme;
-        const vars = scheme?.variableCodings || [];
-        for (const vc of vars) {
-          if (
-            vc &&
-            vc.id &&
-            vc.sourceType &&
-            vc.sourceType === 'BASE_NO_VALUE'
-          ) {
-            excludedPairs.add(`${unitKey}||${vc.id}`);
-          }
-        }
-      } catch (e) {
-        this.logger.error(
-          `Error parsing VOCS file ${file.file_id}: ${e.message}`
-        );
-      }
-    }
-
-    if (excludedPairs.size > 0) {
-      const exclusionConditions: string[] = [];
-      const exclusionParams: Record<string, string> = {};
-
-      Array.from(excludedPairs).forEach((pair, index) => {
-        const [unitKey, varId] = pair.split('||');
-        const unitParam = `unit${index}`;
-        const varParam = `var${index}`;
-        exclusionConditions.push(
-          `NOT (unit.name = :${unitParam} AND response.variableid = :${varParam})`
-        );
-        exclusionParams[unitParam] = unitKey;
-        exclusionParams[varParam] = varId;
-      });
-
-      queryBuilder.andWhere(
-        `(${exclusionConditions.join(' AND ')})`,
-        exclusionParams
-      );
-    }
-
-    // Exclude media variables and derived variables
+    // Exclude media variables
     queryBuilder.andWhere(
       `response.variableid NOT LIKE 'image%'
        AND response.variableid NOT LIKE 'text%'
@@ -300,30 +237,61 @@ export class CodingListQueryService {
        AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
     );
 
-    queryBuilder.andWhere(
-      "(response.value IS NOT NULL AND response.value != '')"
-    );
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
 
     const rawResults = await queryBuilder.getRawMany();
 
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
-      workspaceId
-    );
+    // Load variable maps from WorkspaceFilesService:
+    //   unitVariableMap: includes all valid variables (derived + base, excluding BASE/BASE_NO_VALUE)
+    //   intendedIncompleteSchemeMap: variables that have INTENDED_INCOMPLETE code type in scheme (should be excluded for INTENDED_INCOMPLETE rows)
+    const [unitVariableMap, intendedIncompleteSchemeMap] = await Promise.all([
+      this.workspaceFilesService.getUnitVariableMap(workspaceId),
+      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId)
+    ]);
 
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables: Set<string>, unitName: string) => {
       validVariableSets.set(unitName.toUpperCase(), variables);
     });
 
-    const filteredResults = rawResults.filter(row => {
-      const unitNamesValidVars = validVariableSets.get(
-        row.unitName?.toUpperCase()
-      );
-      return unitNamesValidVars?.has(row.variableId);
+    const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
+    intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitName: string) => {
+      intendedIncompleteSchemeVars.set(unitName.toUpperCase(), variables);
     });
 
+    const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+    // Deduplicate while applying filters
+    const seen = new Set<string>();
+    const filteredResults: { unitName: string; variableId: string }[] = [];
+
+    for (const row of rawResults) {
+      const unitNameUpper = row.unitName?.toUpperCase();
+      const variableId: string = row.variableId;
+      const statusV1: number = Number(row.statusV1);
+
+      // Must be in valid variable map (derived vars are included here)
+      const validVars = validVariableSets.get(unitNameUpper);
+      if (!validVars?.has(variableId)) continue;
+
+      // For INTENDED_INCOMPLETE rows: skip if scheme has INTENDED_INCOMPLETE code type
+      if (statusV1 !== codingIncompleteStatus) {
+        const schemeVars = intendedIncompleteSchemeVars.get(unitNameUpper);
+        if (schemeVars?.has(variableId)) continue;
+      }
+
+      const key = `${row.unitName}::${variableId}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        filteredResults.push({ unitName: row.unitName, variableId });
+      }
+    }
+
     this.logger.log(
-      `Found ${rawResults.length} CODING_INCOMPLETE variable groups, filtered to ${filteredResults.length} valid variables`
+      `Found ${rawResults.length} CODING_INCOMPLETE + INTENDED_INCOMPLETE variable rows, filtered to ${filteredResults.length} valid distinct variables`
     );
 
     return filteredResults;
