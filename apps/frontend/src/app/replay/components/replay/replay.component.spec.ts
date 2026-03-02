@@ -3,7 +3,7 @@ import { ActivatedRoute } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ReplayComponent } from './replay.component';
 import { environment } from '../../../../environments/environment';
@@ -200,6 +200,30 @@ describe('ReplayComponent', () => {
     expect(component.responses).toBeUndefined();
   });
 
+  it('catchError should reset unit data', () => {
+    // Set some data first
+    component.unitId = 'test-unit';
+    component.player = 'test-player';
+
+    // Access private members safely
+    const privateComponent = component as unknown as {
+      resetUnitData: () => void;
+      catchError: (error: HttpErrorResponse) => void;
+    };
+
+    const resetSpy = jest.spyOn(privateComponent, 'resetUnitData');
+    const error = new HttpErrorResponse({
+      status: 500,
+      statusText: 'Server Error'
+    });
+
+    // Call the private catchError method
+    privateComponent.catchError(error);
+
+    expect(resetSpy).toHaveBeenCalled();
+    expect(component.unitId).toBe('');
+    expect(component.player).toBe('');
+  });
   describe('onKeyDown', () => {
     it('should ignore shortcuts when an input is focused', () => {
       const input = document.createElement('input');
