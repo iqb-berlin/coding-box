@@ -619,8 +619,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     const message = this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     this.openErrorSnackBar(message, 'Schließen');
-
     this.storeErrorInStatistics(message);
+    this.resetUnitData();
   }
 
   private storeErrorInStatistics(errorMessage: string): void {
