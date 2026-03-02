@@ -148,11 +148,7 @@
             <div class="summary-stats">
               <div class="stat-card">
                 <span class="stat-label">Durchschnittliches Kappa</span>
-                <span class="stat-value kappa-value"
-                  [class.kappa-high]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.8"
-                  [class.kappa-moderate]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.6 && (kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.8"
-                  [class.kappa-fair]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) >= 0.4 && (kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.6"
-                  [class.kappa-low]="(kappaStatistics.workspaceSummary.averageKappa ?? 0) < 0.4">
+                <span class="stat-value kappa-value" [class]="'stat-value kappa-value ' + getKappaCellClass(kappaStatistics.workspaceSummary.averageKappa)">
                   {{ kappaStatistics.workspaceSummary.averageKappa !== null ?
                   (kappaStatistics.workspaceSummary.averageKappa | number:'1.3-3') : 'N/A' }}
                 </span>
@@ -176,33 +172,62 @@
             <!-- Detailed Coder Pair Statistics -->
             <div class="coder-pairs-details" *ngIf="kappaStatistics.variables.length > 0">
               <h5>Details nach Kodierer-Paaren</h5>
-              <div class="pairs-container" *ngFor="let variable of kappaStatistics.variables">
-                <div class="pair-card" *ngFor="let pair of variable.coderPairs">
-                  <div class="pair-header">
-                    <strong>{{ pair.coder1Name }} ↔ {{ pair.coder2Name }}</strong>
-                  </div>
-                  <div class="pair-stats">
-                    <div class="pair-stat">
-                      <span class="pair-stat-label">Kappa:</span>
-                      <span class="pair-stat-value kappa-value" [class.kappa-high]="(pair.kappa ?? 0) >= 0.8"
-                        [class.kappa-moderate]="(pair.kappa ?? 0) >= 0.6 && (pair.kappa ?? 0) < 0.8"
-                        [class.kappa-fair]="(pair.kappa ?? 0) >= 0.4 && (pair.kappa ?? 0) < 0.6"
-                        [class.kappa-low]="(pair.kappa ?? 0) < 0.4">
-                        {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
-                      </span>
-                    </div>
-                    <div class="pair-stat">
-                      <span class="pair-stat-label">Übereinstimmung:</span>
-                      <span class="pair-stat-value">{{ (pair.agreement * 100) | number:'1.1-1' }}%</span>
-                    </div>
-                    <div class="pair-stat">
-                      <span class="pair-stat-label">Gültige Paare:</span>
-                      <span class="pair-stat-value">{{ pair.validPairs }} / {{ pair.totalItems }}</span>
-                    </div>
-                    <div class="pair-stat interpretation">
-                      <span class="interpretation-badge">{{ pair.interpretation | translate }}</span>
-                    </div>
-                  </div>
+              <div class="kappa-table-container">
+                <table class="kappa-details-table">
+                  <thead>
+                    <tr>
+                      <th>Variable</th>
+                      <th>Kodierer-Paar</th>
+                      <th>Kappa</th>
+                      <th>Übereinstimmung</th>
+                      <th>Gültige Paare</th>
+                      <th>Interpretation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <ng-container *ngFor="let variable of kappaStatistics.variables">
+                      <tr *ngFor="let pair of variable.coderPairs">
+                        <td>{{ getVariableLabel(variable) }}</td>
+                        <td>{{ pair.coder1Name }} ↔ {{ pair.coder2Name }}</td>
+                        <td>
+                          <span [class]="'kappa-cell ' + getKappaCellClass(pair.kappa)">
+                            {{ pair.kappa !== null ? (pair.kappa | number:'1.3-3') : 'N/A' }}
+                          </span>
+                        </td>
+                        <td>{{ (pair.agreement * 100) | number:'1.1-1' }}%</td>
+                        <td>{{ pair.validPairs }} / {{ pair.totalItems }}</td>
+                        <td><span class="interpretation-badge">{{ pair.interpretation | translate }}</span></td>
+                      </tr>
+                    </ng-container>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="variable-mean-table" *ngIf="variableKappaSummaries.length > 0">
+                <h5>Mittelwerte je Variable</h5>
+                <div class="kappa-table-container">
+                  <table class="kappa-details-table">
+                    <thead>
+                      <tr>
+                        <th>Variable</th>
+                        <th>Mittleres Kappa</th>
+                        <th>Mittlere Übereinstimmung</th>
+                        <th>Fallzahl</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let summary of variableKappaSummaries">
+                        <td>{{ summary.unitName }} - {{ summary.variableId }}</td>
+                        <td>
+                          <span [class]="'kappa-cell ' + getKappaCellClass(summary.meanKappa)">
+                            {{ summary.meanKappa !== null ? (summary.meanKappa | number:'1.3-3') : 'N/A' }}
+                          </span>
+                        </td>
+                        <td>{{ summary.meanAgreement !== null ? (summary.meanAgreement | percent:'1.1-1') : 'N/A' }}</td>
+                        <td>{{ summary.caseCount }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>

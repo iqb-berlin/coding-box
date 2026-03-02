@@ -88,6 +88,15 @@ interface KappaStatistics {
   };
 }
 
+interface VariableKappaSummary {
+  key: string;
+  unitName: string;
+  variableId: string;
+  meanKappa: number | null;
+  meanAgreement: number | null;
+  caseCount: number;
+}
+
 @Component({
   selector: 'coding-box-coding-results-comparison',
   templateUrl: './coding-results-comparison.component.html',
@@ -159,6 +168,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   useCodeLevel = true; // true = code level, false = score level
 
   originalKappaStatistics: KappaStatistics | null = null; // Store original for filtering
+  variableKappaSummaries: VariableKappaSummary[] = [];
 
   constructor(
     public dialogRef: MatDialogRef<CodingResultsComparisonComponent>,
@@ -589,7 +599,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   filterKappaStatistics(): void {
-    if (!this.originalKappaStatistics) return;
+    if (!this.originalKappaStatistics) {
+      this.variableKappaSummaries = [];
+      return;
+    }
 
     const selectedCoderIds = this.codersFormControl.value || [];
 
@@ -604,8 +617,73 @@ export class CodingResultsComparisonComponent implements OnInit {
     }).filter((variable: KappaVariable) => variable.coderPairs.length > 0);
 
     this.kappaStatistics = filteredStats;
+    this.buildVariableKappaSummaries();
     this.calculateMeanAgreement();
     this.updateSummaryFromFiltered();
+  }
+
+  private buildVariableSummaryKey(unitName: string, variableId: string): string {
+    return `${unitName}::${variableId}`;
+  }
+
+  private buildVariableKappaSummaries(): void {
+    if (!this.kappaStatistics) {
+      this.variableKappaSummaries = [];
+      return;
+    }
+
+    this.variableKappaSummaries = this.kappaStatistics.variables.map(variable => {
+      let kappaSum = 0;
+      let kappaCount = 0;
+      let agreementSum = 0;
+      let agreementCount = 0;
+      let caseCount = 0;
+
+      variable.coderPairs.forEach(pair => {
+        if (pair.validPairs > 0) {
+          agreementSum += pair.agreement;
+          agreementCount += 1;
+          caseCount += pair.validPairs;
+        }
+
+        if (pair.kappa !== null && pair.validPairs > 0) {
+          kappaSum += pair.kappa;
+          kappaCount += 1;
+        }
+      });
+
+      return {
+        key: this.buildVariableSummaryKey(variable.unitName, variable.variableId),
+        unitName: variable.unitName,
+        variableId: variable.variableId,
+        meanKappa: kappaCount > 0 ? kappaSum / kappaCount : null,
+        meanAgreement: agreementCount > 0 ? agreementSum / agreementCount : null,
+        caseCount
+      };
+    });
+  }
+
+  getVariableLabel(variable: Pick<KappaVariable, 'unitName' | 'variableId'>): string {
+    return `${variable.unitName} - ${variable.variableId}`;
+  }
+
+  getKappaCellClass(kappa: number | null): string {
+    if (kappa === null) {
+      return 'kappa-na';
+    }
+    if (kappa < 0.4) {
+      return 'kappa-low';
+    }
+    if (kappa < 0.6) {
+      return 'kappa-fair';
+    }
+    if (kappa < 0.81) {
+      return 'kappa-moderate';
+    }
+    if (kappa <= 0.95) {
+      return 'kappa-good';
+    }
+    return 'kappa-perfect';
   }
 
   updateSummaryFromFiltered(): void {

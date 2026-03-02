@@ -287,8 +287,12 @@
                 color: #343a40;
 
                 &.kappa-value {
-                  &.kappa-high {
+                  &.kappa-perfect {
                     color: #28a745;
+                  }
+
+                  &.kappa-good {
+                    color: #20c997;
                   }
 
                   &.kappa-moderate {
@@ -301,6 +305,10 @@
 
                   &.kappa-low {
                     color: #dc3545;
+                  }
+
+                  &.kappa-na {
+                    color: #6c757d;
                   }
                 }
               }
@@ -321,91 +329,78 @@
               font-weight: 600;
             }
 
-            .pairs-container {
-              display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-              gap: 16px;
+            .kappa-table-container {
+              overflow-x: auto;
               margin-bottom: 16px;
 
-              .pair-card {
-                background-color: #ffffff;
+              .kappa-details-table {
+                width: 100%;
+                min-width: 760px;
+                border-collapse: collapse;
+                background-color: #fff;
                 border: 1px solid #dee2e6;
-                border-radius: 6px;
-                padding: 14px;
-                transition: transform 0.2s ease, box-shadow 0.2s ease;
 
-                &:hover {
-                  transform: translateY(-2px);
-                  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08);
+                th,
+                td {
+                  padding: 10px 12px;
+                  border-bottom: 1px solid #eceff1;
+                  text-align: left;
+                  font-size: 13px;
                 }
 
-                .pair-header {
-                  margin-bottom: 12px;
-                  padding-bottom: 8px;
-                  border-bottom: 2px solid #e9ecef;
-
-                  strong {
-                    color: #495057;
-                    font-size: 14px;
-                  }
+                th {
+                  background-color: #f1f3f5;
+                  color: #495057;
+                  font-weight: 600;
                 }
 
-                .pair-stats {
-                  display: flex;
-                  flex-direction: column;
-                  gap: 8px;
-
-                  .pair-stat {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    font-size: 13px;
-
-                    .pair-stat-label {
-                      color: #6c757d;
-                      font-weight: 500;
-                    }
-
-                    .pair-stat-value {
-                      color: #343a40;
-                      font-weight: 600;
-
-                      &.kappa-value {
-                        &.kappa-high {
-                          color: #28a745;
-                        }
-
-                        &.kappa-moderate {
-                          color: #17a2b8;
-                        }
-
-                        &.kappa-fair {
-                          color: #ffc107;
-                        }
-
-                        &.kappa-low {
-                          color: #dc3545;
-                        }
-                      }
-                    }
-
-                    &.interpretation {
-                      margin-top: 4px;
-                      justify-content: center;
-
-                      .interpretation-badge {
-                        background-color: #e9ecef;
-                        color: #495057;
-                        padding: 4px 12px;
-                        border-radius: 12px;
-                        font-size: 11px;
-                        font-weight: 600;
-                        text-transform: uppercase;
-                        letter-spacing: 0.5px;
-                      }
-                    }
-                  }
+                tbody tr:hover {
+                  background-color: #f8f9fa;
                 }
+              }
+            }
+
+            .kappa-cell {
+              font-weight: 700;
+
+              &.kappa-perfect {
+                color: #28a745;
+              }
+
+              &.kappa-good {
+                color: #20c997;
+              }
+
+              &.kappa-moderate {
+                color: #17a2b8;
+              }
+
+              &.kappa-fair {
+                color: #ffc107;
+              }
+
+              &.kappa-low {
+                color: #dc3545;
+              }
+
+              &.kappa-na {
+                color: #6c757d;
+              }
+            }
+
+            .interpretation-badge {
+              background-color: #e9ecef;
+              color: #495057;
+              padding: 4px 10px;
+              border-radius: 10px;
+              font-size: 11px;
+              font-weight: 600;
+              display: inline-block;
+            }
+
+            .variable-mean-table {
+              h5 {
+                margin-top: 0;
               }
             }
           }
