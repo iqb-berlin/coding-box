@@ -15,6 +15,7 @@ import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 const mockQueryBuilder = () => ({
@@ -57,6 +58,7 @@ describe('WorkspaceTestResultsService', () => {
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
+  let codingValidationService: CodingValidationService;
   let dataSource: DataSource;
 
   beforeEach(() => {
@@ -73,6 +75,10 @@ describe('WorkspaceTestResultsService', () => {
     unitTagService = {
       findAllByUnitIds: jest.fn().mockResolvedValue([])
     } as unknown as UnitTagService;
+
+    codingValidationService = {
+      invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    } as unknown as CodingValidationService;
 
     personsRepository = {
       count: jest.fn(),
@@ -107,7 +113,8 @@ describe('WorkspaceTestResultsService', () => {
     dataSource = {
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
-      })
+      }),
+      transaction: jest.fn()
     } as unknown as DataSource;
 
     service = new WorkspaceTestResultsService(
@@ -125,6 +132,7 @@ describe('WorkspaceTestResultsService', () => {
       {} as unknown as JournalService,
       {} as unknown as CacheService,
       {} as unknown as CodingListService,
+      codingValidationService,
       responseManagementService,
       workspaceCoreService
     );
@@ -353,6 +361,89 @@ describe('WorkspaceTestResultsService', () => {
       await service.exportTestResultsToStream(workspaceId, resStream, {});
 
       expect(qb.getMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('deletion methods', () => {
+    it('deleteTestPersons should invalidate cache', async () => {
+      const workspaceId = 1;
+      const testPersonIds = '1,2';
+      const userId = 'user1';
+
+      const personQb = mockQueryBuilder();
+      personQb.getMany.mockResolvedValue([{ id: 1, login: 'l1' }, { id: 2, login: 'l2' }]);
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(personQb);
+      // Mock transaction
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          select: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 1, login: 'l1' }, { id: 2, login: 'l2' }]),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteTestPersons(workspaceId, testPersonIds, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteUnit should invalidate cache', async () => {
+      const workspaceId = 1;
+      const unitId = 101;
+      const userId = 'user1';
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue({ id: 101, name: 'U1' }),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteUnit(workspaceId, unitId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteResponse should invalidate cache', async () => {
+      const workspaceId = 1;
+      const responseId = 500;
+      const userId = 'user1';
+
+      (responseManagementService.deleteResponse as jest.Mock).mockResolvedValue({ success: true });
+
+      await service.deleteResponse(workspaceId, responseId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteBooklet should invalidate cache', async () => {
+      const workspaceId = 1;
+      const bookletId = 202;
+      const userId = 'user1';
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue({ id: 202, bookletinfo: { name: 'B1' } }),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteBooklet(workspaceId, bookletId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
     });
   });
 });
