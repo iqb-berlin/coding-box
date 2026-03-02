@@ -850,6 +850,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   onKeyDown(event: Event): void {
     const keyboardEvent = event as KeyboardEvent;
+
+    // Ignore if user is typing in an input/textarea
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+      if (keyboardEvent.key === 'Enter') {
+        activeElement.blur();
+        keyboardEvent.preventDefault();
+      }
+      return;
+    }
+
     if (this.isCodingMode && this.unitsData) {
       const currentIndex = this.unitsData.currentUnitIndex;
       const currentUnit = this.unitsData.units[currentIndex];
