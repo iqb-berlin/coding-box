@@ -194,6 +194,8 @@
     "my-coding-jobs": "Meine Kodierjobs",
     "coding-management": "Kodierung-Management",
     "job-definitions": "Job-Definitionen",
+    "coding-statistics": "Kodierstatistiken",
+    "manual-coding": "Manuelle Kodierung",
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",

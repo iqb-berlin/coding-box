@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import {
-  ActivatedRoute, RouterLink, RouterLinkActive, RouterOutlet
+  ActivatedRoute, Router, RouterLink, RouterLinkActive, RouterOutlet
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
@@ -24,15 +24,16 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
 })
 export class WsAdminComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   appService = inject(AppService);
   private userBackendService = inject(UserBackendService);
 
   private allNavLinks: string[] = ['test-files', 'test-results', 'coding', 'cleaning', 'export', 'settings'];
   navLinks: string[] = [];
   codingManagerLinks = [
-    { path: 'coding/my-jobs', label: 'ws-admin.my-coding-jobs' },
-    { path: 'coding/management', label: 'ws-admin.coding-management' },
-    { path: 'coding/job-definitions', label: 'ws-admin.job-definitions' }
+    { path: 'coding/statistics', label: 'ws-admin.coding-statistics' },
+    { path: 'coding/manual', label: 'ws-admin.manual-coding' },
+    { path: 'coding/export', label: 'ws-admin.export' }
   ];
 
   accessLevel: number = 0;
@@ -59,6 +60,7 @@ export class WsAdminComponent implements OnInit {
           if (currentUser) {
             this.accessLevel = currentUser.accessLevel;
             this.updateNavLinks();
+            this.handleDefaultNavigation();
           }
         });
       }
@@ -70,6 +72,16 @@ export class WsAdminComponent implements OnInit {
       this.navLinks = ['coding'];
     } else {
       this.navLinks = [...this.allNavLinks];
+    }
+  }
+
+  private handleDefaultNavigation(): void {
+    const currentUrl = this.router.url;
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    // If Coding Manager (level 2) is on the default coding route, redirect to statistics
+    if (this.accessLevel === 2 && currentUrl.endsWith(`/workspace-admin/${workspaceId}/coding`)) {
+      this.router.navigate([`/workspace-admin/${workspaceId}/coding/statistics`]);
     }
   }
 

@@ -32,6 +32,18 @@ export const wsAdminRoutes: Routes = [
           {
             path: 'my-jobs',
             loadComponent: () => import('../coding/components/my-coding-jobs/my-coding-jobs.component').then(m => m.MyCodingJobsComponent)
+          },
+          {
+            path: 'statistics',
+            loadComponent: () => import('../coding/components/coding-statistics-view/coding-statistics-view.component').then(m => m.CodingStatisticsViewComponent)
+          },
+          {
+            path: 'manual',
+            loadComponent: () => import('../coding/components/coding-management-manual/coding-management-manual.component').then(m => m.CodingManagementManualComponent)
+          },
+          {
+            path: 'export',
+            loadComponent: () => import('./components/export/export.component').then(m => m.ExportComponent)
           }
         ]
       },

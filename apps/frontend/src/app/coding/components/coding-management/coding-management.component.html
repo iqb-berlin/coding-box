@@ -1,4 +1,5 @@
 <div class="coding-main-container">
+  @if (!hideActionButtons) {
   <div>
     <div class="action-buttons-toolbar">
       @if (!showManualCoding) {
@@ -52,6 +53,7 @@
       }
     </div>
   </div>
+  }
 
   @if (!showManualCoding) {
   <div class="coding-content-area">
@@ -62,6 +64,7 @@
           [referenceVersion]="referenceVersion" [selectedVersion]="selectedStatisticsVersion"
           [isLoading]="isLoadingStatistics" [isDownloadInProgress]="isDownloadInProgress"
           [statisticsLoaded]="statisticsLoaded" [resetProgress]="resetProgress" [downloadProgress]="downloadProgress"
+          [hideResetButton]="hideActionButtons"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (resetVersion)="onResetVersion()"
           (statusClick)="onStatusClick($event)">
