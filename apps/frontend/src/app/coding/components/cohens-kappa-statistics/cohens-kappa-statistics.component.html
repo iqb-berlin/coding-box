@@ -55,8 +55,9 @@
             <div class="stat-item">
               <span class="stat-label">Durchschnittliches Kappa:</span>
               <span class="stat-value kappa"
-                [class.kappa-excellent]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.8"
-                [class.kappa-good]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.6 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.8"
+                [class.kappa-excellent]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa > 0.95"
+                [class.kappa-good]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.81 && workspaceKappaSummary.workspaceSummary.averageKappa <= 0.95"
+                [class.kappa-substantial]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.6 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.81"
                 [class.kappa-fair]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa >= 0.4 && workspaceKappaSummary.workspaceSummary.averageKappa < 0.6"
                 [class.kappa-poor]="workspaceKappaSummary && workspaceKappaSummary.workspaceSummary.averageKappa != null && workspaceKappaSummary.workspaceSummary.averageKappa < 0.4">
                 {{workspaceKappaSummary.workspaceSummary.averageKappa != null ?
@@ -133,7 +134,11 @@
                 <span class="scale-label">Substantielle Übereinstimmung</span>
               </div>
               <div class="scale-item">
-                <span class="scale-range" style="color: #1976d2; font-weight: bold;">⬤ > 0.81:</span>
+                <span class="scale-range" style="color: #20c997; font-weight: bold;">⬤ 0.81 - 0.95:</span>
+                <span class="scale-label">Gute Übereinstimmung</span>
+              </div>
+              <div class="scale-item">
+                <span class="scale-range" style="color: #1976d2; font-weight: bold;">⬤ > 0.95:</span>
                 <span class="scale-label">Nahezu perfekte Übereinstimmung</span>
               </div>
             </div>

@@ -505,8 +505,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         interpretation = 'kappa.fair';
       } else if (kappa < 0.6) {
         interpretation = 'kappa.moderate';
-      } else if (kappa < 0.8) {
+      } else if (kappa < 0.81) {
         interpretation = 'kappa.substantial';
+      } else if (kappa <= 0.95) {
+        interpretation = 'kappa.good';
       } else {
         interpretation = 'kappa.almost_perfect';
       }
