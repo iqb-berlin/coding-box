@@ -48,6 +48,7 @@ interface CodingResult {
   codingIssueOptionLabel?: string;
   givenCode?: string | number;
   givenScore?: number;
+  notes?: string;
 }
 
 @Component({
@@ -91,6 +92,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     'code',
     'score',
     'codingIssueOption',
+    'notes',
     'actions'
   ];
 
@@ -149,30 +151,40 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
         this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
           next: progressResult => {
-            this.dataSource.data = unitsResult.map(unit => {
-              const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
-              const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
-              const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number; codingIssueOption?: number } | undefined;
+            this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).subscribe({
+              next: notesResult => {
+                this.dataSource.data = unitsResult.map(unit => {
+                  const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
+                  const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+                  const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number; codingIssueOption?: number } | undefined;
+                  const notes = notesResult ? notesResult[progressKey] : undefined;
 
-              return {
-                unitName: unit.unitName,
-                unitAlias: unit.unitAlias,
-                variableId: unit.variableId,
-                variableAnchor: unit.variableAnchor,
-                bookletName: unit.bookletName,
-                personLogin: unit.personLogin,
-                personCode: unit.personCode,
-                personGroup: unit.personGroup,
-                testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
-                code: progress?.id,
-                codeLabel: progress?.label,
-                score: progress?.score,
-                codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined,
-                givenCode: progress?.codingIssueOption && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
-                givenScore: progress?.codingIssueOption && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined
-              };
+                  return {
+                    unitName: unit.unitName,
+                    unitAlias: unit.unitAlias,
+                    variableId: unit.variableId,
+                    variableAnchor: unit.variableAnchor,
+                    bookletName: unit.bookletName,
+                    personLogin: unit.personLogin,
+                    personCode: unit.personCode,
+                    personGroup: unit.personGroup,
+                    testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
+                    code: progress?.id,
+                    codeLabel: progress?.label,
+                    score: progress?.score,
+                    codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined,
+                    givenCode: progress?.codingIssueOption && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
+                    givenScore: progress?.codingIssueOption && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
+                    notes: notes
+                  };
+                });
+                this.isLoading = false;
+              },
+              error: () => {
+                this.snackBar.open('Fehler beim Laden der Notizen', 'Schließen', { duration: 3000 });
+                this.isLoading = false;
+              }
             });
-            this.isLoading = false;
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierergebnisse', 'Schließen', { duration: 3000 });
