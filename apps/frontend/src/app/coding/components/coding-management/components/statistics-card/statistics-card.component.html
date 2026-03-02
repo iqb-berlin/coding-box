@@ -28,6 +28,7 @@
           }
         </mat-select>
       </mat-form-field>
+      @if (!hideActionButtons) {
       <div class="button-group">
         <button mat-icon-button (click)="onDownloadResults()"
           [matTooltip]="'coding-management.download-dialog.download-tooltip' | translate" color="primary"
@@ -43,6 +44,7 @@
         }
         }
       </div>
+      @if (!hideResetButton) {
       <div class="button-group">
         <button mat-icon-button (click)="onResetVersion()"
           [matTooltip]="'coding-management.reset-dialog.reset-tooltip' | translate" color="primary"
@@ -57,6 +59,8 @@
         <span class="reset-progress-label">{{ 'coding-management.reset-dialog.resetting' | translate }} {{ resetProgress
           }}%</span>
       </div>
+      }
+      }
       }
     </div>
   </div>

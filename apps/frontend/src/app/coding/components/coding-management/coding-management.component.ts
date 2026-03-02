@@ -2,6 +2,7 @@ import {
   Component,
   OnInit,
   OnDestroy,
+  Input,
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -63,6 +64,8 @@ import { ReviewListDialogComponent } from './components/review-list-dialog/revie
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  @Input() hideActionButtons = false;
+
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
