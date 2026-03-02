@@ -676,13 +676,44 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return total;
   }
 
+  getTotalDoubleCodedCases(): number {
+    const totalCases = this.getTotalCodingCases();
+    if (totalCases === 0) return 0;
+
+    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.value;
+
+    if (this.doubleCodingMode === 'absolute') {
+      return Math.min(doubleCodingAbsolute || 0, totalCases);
+    }
+
+    return Math.floor(((doubleCodingPercentage || 0) / 100) * totalCases);
+  }
+
+  getTotalCodingTasks(): number {
+    return this.getTotalCodingCases() + this.getTotalDoubleCodedCases();
+  }
+
   getTotalTimeInSeconds(): number {
     const durationPerCase = this.codingJobForm.value.durationSeconds || 1;
-    return this.getTotalCodingCases() * durationPerCase;
+    return this.getTotalCodingTasks() * durationPerCase;
+  }
+
+  getTimePerCoderInSeconds(): number {
+    const totalTime = this.getTotalTimeInSeconds();
+    const numCoders = this.selectedCoders.selected.length;
+    if (numCoders === 0) return totalTime;
+    return Math.ceil(totalTime / numCoders);
   }
 
   getFormattedTotalTime(): string {
-    const seconds = this.getTotalTimeInSeconds();
+    return this.formatTime(this.getTotalTimeInSeconds());
+  }
+
+  getFormattedTimePerCoder(): string {
+    return this.formatTime(this.getTimePerCoderInSeconds());
+  }
+
+  private formatTime(seconds: number): string {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
     return `${min}:${sec.toString().padStart(2, '0')}`;

@@ -319,4 +319,48 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.codingJobForm.patchValue({ maxCodingCases: 100 });
     expect(component.getTotalCodingCases()).toBe(14);
   });
+
+  it('should calculate "Time per coder" correctly with double coding', () => {
+    createComponent();
+
+    // Select 2 coders
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedCoders.select(mockCoders[1]);
+
+    // Select Unit 1 (10 cases)
+    component.selectedVariables.select(mockVariables[0]);
+
+    // Set duration to 60 seconds (1 minute per case)
+    component.codingJobForm.patchValue({ durationSeconds: 60 });
+
+    // Total cases: 10
+    // Total time: 10 * 60 = 600s (10 min)
+    // Time per coder: 600 / 2 = 300s (5 min)
+    expect(component.getTotalTimeInSeconds()).toBe(600);
+    expect(component.getFormattedTotalTime()).toBe('10:00');
+    expect(component.getFormattedTimePerCoder()).toBe('5:00');
+
+    // Add double coding (absolute: 2)
+    component.doubleCodingMode = 'absolute';
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: 2 });
+
+    // Total tasks: 10 (unique) + 2 (double) = 12
+    // Total time: 12 * 60 = 720s (12 min)
+    // Time per coder: 720 / 2 = 360s (6 min)
+    expect(component.getTotalCodingTasks()).toBe(12);
+    expect(component.getTotalTimeInSeconds()).toBe(720);
+    expect(component.getFormattedTotalTime()).toBe('12:00');
+    expect(component.getFormattedTimePerCoder()).toBe('6:00');
+
+    // Switch to percentage (50%)
+    component.doubleCodingMode = 'percentage';
+    component.codingJobForm.patchValue({ doubleCodingPercentage: 50 });
+
+    // Total tasks: 10 + floor(0.5 * 10) = 15
+    // Total time: 15 * 60 = 900s (15 min)
+    // Time per coder: 900 / 2 = 450s (7 min 30 sec)
+    expect(component.getTotalCodingTasks()).toBe(15);
+    expect(component.getFormattedTotalTime()).toBe('15:00');
+    expect(component.getFormattedTimePerCoder()).toBe('7:30');
+  });
 });
