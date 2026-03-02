@@ -1477,14 +1477,8 @@
       "coders": "Kodierer:",
       "total-cases": "Gesamt Kodierfälle:",
       "estimated-time": "Geschätzte Zeit:",
-      "details": "Auswahldetails anzeigen",
-      "selected-variables": "Ausgewählte Variablen",
-      "selected-variable-bundles": "Ausgewählte Variablenbündel"
-    },
-    "tabs": {
-      "coders": "Kodierer",
-      "individual-variables": "Einzelne Variablen",
-      "variable-bundles": "Variablenbündel"
+      "time-per-coder": "Zeit pro Kodierer:",
+      "details": "Auswahldetails anzeigen"
     },
     "filters": {
       "unit-name": "Aufgaben-ID Filter",
