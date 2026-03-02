@@ -20,10 +20,10 @@
         <mat-form-field>
           <mat-label>Suche</mat-label>
           <mat-icon matPrefix>search</mat-icon>
-          <input matInput (keyup)="applyFilter($event)" placeholder="Schulungen filtern...">
+          <input matInput (keyup)="applyTrainingFilter($event)" placeholder="Schulungen filtern...">
         </mat-form-field>
       </div>
-      <mat-checkbox *ngFor="let training of availableTrainings" [checked]="selectedTrainings.isSelected(training.id)"
+      <mat-checkbox *ngFor="let training of filteredTrainings" [checked]="selectedTrainings.isSelected(training.id)"
         (change)="selectedTrainings.toggle(training.id); onTrainingSelectionChange();">
         {{ training.label }} ({{ training.jobsCount }} {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}, erstellt: {{
         training.created_at | date:'dd.MM.yyyy HH:mm' }})
@@ -80,6 +80,48 @@
 
     <div class="comparison-table"
       *ngIf="!isLoading && ((comparisonMode === 'between-trainings' && comparisonData.length > 0) || (comparisonMode === 'within-training' && withinTrainingData.length > 0))">
+
+      <div class="table-filters">
+        <mat-form-field appearance="outline">
+          <mat-label>Aufgabe</mat-label>
+          <input matInput [(ngModel)]="tableFilters.unitName" (ngModelChange)="applyTableFilters()">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Variable</mat-label>
+          <input matInput [(ngModel)]="tableFilters.variableId" (ngModelChange)="applyTableFilters()">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Person Login</mat-label>
+          <input matInput [(ngModel)]="tableFilters.personLogin" (ngModelChange)="applyTableFilters()">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Person Gruppe</mat-label>
+          <input matInput [(ngModel)]="tableFilters.personGroup" (ngModelChange)="applyTableFilters()">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Übereinstimmung</mat-label>
+          <mat-select [(ngModel)]="tableFilters.match" (selectionChange)="applyTableFilters()">
+            <mat-option value="all">Alle</mat-option>
+            <mat-option value="match">Nur Übereinstimmung</mat-option>
+            <mat-option value="differ">Nur Abweichung</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Notizen</mat-label>
+          <mat-select [(ngModel)]="tableFilters.notesMode" (selectionChange)="applyTableFilters()">
+            <mat-option value="all">Alle</mat-option>
+            <mat-option value="none">Keine</mat-option>
+            <mat-option value="with-notes">Mit Notiz</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <button mat-stroked-button type="button" (click)="resetTableFilters()">Filter zurücksetzen</button>
+      </div>
 
       <div class="statistics-section" *ngIf="totalComparisons > 0">
         <h4>Kodierungsübereinstimmung</h4>
@@ -302,6 +344,32 @@
             </td>
           </ng-container>
 
+          <ng-container matColumnDef="replay">
+            <th mat-header-cell *matHeaderCellDef>Replay</th>
+            <td mat-cell *matCellDef="let comparison">
+              <button mat-icon-button type="button" (click)="openReplay(comparison)" matTooltip="Replay inkl. Kodieranweisungen öffnen">
+                <mat-icon>play_circle</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="discussion">
+            <th mat-header-cell *matHeaderCellDef>{{ discussionManagerLabel }}</th>
+            <td mat-cell *matCellDef="let comparison">
+              <div class="discussion-cell">
+                <mat-form-field appearance="outline" class="discussion-input">
+                  <mat-label>Code</mat-label>
+                  <input matInput
+                    [value]="discussionCodeByResponseId[comparison.responseId] || ''"
+                    (input)="onDiscussionCodeInput(comparison, $any($event.target).value)"
+                    (blur)="onDiscussionCodeBlur(comparison)">
+                </mat-form-field>
+                <span class="discussion-score">Score: {{ discussionScoreByResponseId[comparison.responseId] ?? '-' }}</span>
+                <span class="discussion-saving" *ngIf="isSavingDiscussionByResponseId[comparison.responseId]">Speichert ...</span>
+              </div>
+            </td>
+          </ng-container>
+
           <!-- Dynamic Columns -->
           <ng-container *ngFor="let col of dynamicCoderColumns" [matColumnDef]="col">
             <th mat-header-cell *matHeaderCellDef>
@@ -315,19 +383,24 @@
             <td mat-cell *matCellDef="let element">
               <div class="code-cell">
                 <ng-container *ngIf="comparisonMode === 'between-trainings'">
-                  <span *ngIf="hasCoderFromTrainingCodeOrScore(element, col.substring(6))">
-                    Code: <strong>{{ getCoderFromTrainingCode(element, col.substring(6)) }}</strong><br>
-                    Score: {{ getCoderFromTrainingScore(element, col.substring(6)) }}
+                  <span *ngIf="hasCoderFromTrainingCodeOrScore(element, col.substring(6)); else noBetweenCoderData">
+                    <ng-container *ngIf="getCoderFromTraining(element, col.substring(6)) as coder">
+                      Code: <strong>{{ getDisplayCodeAndIssueText(coder.code, coder.codingIssueOption) }}</strong>
+                      <mat-icon *ngIf="coder.notes" class="note-icon" [matTooltip]="coder.notes">comment</mat-icon><br>
+                      Score: {{ coder.score ?? '-' }}
+                    </ng-container>
                   </span>
-                  <span *ngIf="!hasCoderFromTrainingCodeOrScore(element, col.substring(6))" class="no-data">-</span>
+                  <ng-template #noBetweenCoderData><span class="no-data">-</span></ng-template>
                 </ng-container>
                 <ng-container *ngIf="comparisonMode === 'within-training'">
-                    <!-- jobId is in col.substring(6) -->
-                    <span *ngIf="hasCoderCodeOrScore(element, +col.substring(6))">
-                      Code: <strong>{{ getCoderCode(element, +col.substring(6)) }}</strong><br>
-                      Score: {{ getCoderScore(element, +col.substring(6)) }}
-                    </span>
-                    <span *ngIf="!hasCoderCodeOrScore(element, +col.substring(6))" class="no-data">-</span>
+                  <span *ngIf="hasCoderCodeOrScore(element, +col.substring(6)); else noWithinCoderData">
+                    <ng-container *ngIf="getCoderForWithin(element, +col.substring(6)) as coder">
+                      Code: <strong>{{ getDisplayCodeAndIssueText(coder.code, coder.codingIssueOption) }}</strong>
+                      <mat-icon *ngIf="coder.notes" class="note-icon" [matTooltip]="coder.notes">comment</mat-icon><br>
+                      Score: {{ coder.score ?? '-' }}
+                    </ng-container>
+                  </span>
+                  <ng-template #noWithinCoderData><span class="no-data">-</span></ng-template>
                 </ng-container>
               </div>
             </td>

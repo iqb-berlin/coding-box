@@ -315,6 +315,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } = params;
     this.page = page;
     this.anchor = anchor;
+    if (this.isCodingMode && anchor) {
+      this.codingService.currentVariableId = anchor;
+    }
     this.unitId = unitId;
     this.setTestPerson(testPerson);
   }
