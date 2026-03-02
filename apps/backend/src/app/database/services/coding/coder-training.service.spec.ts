@@ -14,6 +14,9 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
+import User from '../../entities/user.entity';
+import { MissingsProfilesService } from './missings-profiles.service';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -53,10 +56,13 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingVariable), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingBundle), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
+        { provide: getRepositoryToken(CoderTrainingDiscussionResult), useValue: mockRepository },
+        { provide: getRepositoryToken(User), useValue: mockRepository },
         { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
-        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService }
+        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } }
       ]
     }).compile();
 
