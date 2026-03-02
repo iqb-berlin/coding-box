@@ -20,6 +20,7 @@ export interface CreateCoderTrainingJobsResponse {
 }
 
 export interface TrainingCodingResult {
+  responseId: number;
   unitName: string;
   variableId: string;
   personCode: string;
@@ -33,10 +34,13 @@ export interface TrainingCodingResult {
     coderName: string;
     code: string | null;
     score: number | null;
+    notes: string | null;
+    codingIssueOption: number | null;
   }>;
 }
 
 export interface WithinTrainingCodingResult {
+  responseId: number;
   unitName: string;
   variableId: string;
   personCode: string;
@@ -44,11 +48,19 @@ export interface WithinTrainingCodingResult {
   personGroup: string;
   testPerson: string;
   givenAnswer: string;
+  replayCode: number | null;
+  replayScore: number | null;
+  discussionCode: number | null;
+  discussionScore: number | null;
+  discussionManagerUserId: number | null;
+  discussionManagerName: string | null;
   coders: Array<{
     jobId: number;
     coderName: string;
     code: string | null;
     score: number | null;
+    notes: string | null;
+    codingIssueOption: number | null;
   }>;
 }
 
@@ -166,6 +178,21 @@ export class CodingTrainingBackendService {
   ): Observable<WithinTrainingCodingResult[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/compare-within-training?trainingId=${trainingId}`;
     return this.http.get<WithinTrainingCodingResult[]>(url, { headers: this.authHeader });
+  }
+
+  saveDiscussionResult(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    code: number | null,
+    score: number | null
+  ): Observable<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}/discussion-result`;
+    return this.http.post<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }>(
+      url,
+      { responseId, code, score },
+      { headers: this.authHeader }
+    );
   }
 
   getCodingJobsForTraining(
