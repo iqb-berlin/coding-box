@@ -198,4 +198,38 @@ describe('ReplayComponent', () => {
     expect(component.page).toBeUndefined();
     expect(component.responses).toBeUndefined();
   });
+
+  describe('onKeyDown', () => {
+    it('should ignore shortcuts when an input is focused', () => {
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      input.focus();
+
+      const event = new KeyboardEvent('keydown', { key: '1', code: 'Digit1' });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      component.onKeyDown(event);
+
+      expect(preventDefaultSpy).not.toHaveBeenCalled();
+
+      document.body.removeChild(input);
+    });
+
+    it('should blur active element and prevent default when Enter is pressed in an input', () => {
+      const textarea = document.createElement('textarea');
+      document.body.appendChild(textarea);
+      textarea.focus();
+      const blurSpy = jest.spyOn(textarea, 'blur');
+
+      const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter' });
+      const preventDefaultSpy = jest.spyOn(event, 'preventDefault');
+
+      component.onKeyDown(event);
+
+      expect(blurSpy).toHaveBeenCalled();
+      expect(preventDefaultSpy).toHaveBeenCalled();
+
+      document.body.removeChild(textarea);
+    });
+  });
 });
