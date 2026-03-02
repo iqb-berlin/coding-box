@@ -828,14 +828,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       disableClose: false
     });
 
-    dialogRef.afterClosed().subscribe(selectedJobDef => {
-      if (selectedJobDef) {
-        this.importJobDefinitionSelections(selectedJobDef);
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.jobDefinition) {
+        this.importJobDefinitionSelections(result.jobDefinition, result.defaultSampleCount);
       }
     });
   }
 
-  private importJobDefinitionSelections(jobDef: JobDefinition): void {
+  private importJobDefinitionSelections(jobDef: JobDefinition, defaultSampleCount: number): void {
     let varsAdded = 0;
     let bundlesAdded = 0;
 
@@ -846,8 +846,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           c.get('unitId')?.value === v.unitName
         );
         if (!isAlreadyAdded) {
-          const defaultSampleCount = v.casesInJobs ?? 10;
-          this.addVariable(v.variableId, v.unitName, defaultSampleCount, undefined, undefined, true);
+          const sampleCount = v.casesInJobs ?? defaultSampleCount;
+          this.addVariable(v.variableId, v.unitName, sampleCount, undefined, undefined, true);
           varsAdded += 1;
         }
       });
@@ -858,7 +858,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
         if (!currentSelectedIds.includes(b.id)) {
           this.selectedBundleIds.add(b.id);
-          this.addBundleVariables(b.id, 10);
+          this.addBundleVariables(b.id, defaultSampleCount);
           bundlesAdded += 1;
         }
       });
