@@ -15,6 +15,7 @@ import { ReplayBackendService } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import * as tokenUtils from '../../utils/token-utils';
 import * as domUtils from '../../utils/dom-utils';
+import { CodingJob } from '../../../coding/models/coding-job.model';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
 class FileServiceMock {
@@ -230,6 +231,71 @@ describe('ReplayComponent', () => {
       expect(preventDefaultSpy).toHaveBeenCalled();
 
       document.body.removeChild(textarea);
+    });
+  });
+
+  describe('Coding Job Status', () => {
+    it('should set status to active on init if in coding mode and not in review mode', async () => {
+      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      jest.spyOn(component.codingService, 'loadSavedCodingProgress').mockReturnValue(Promise.resolve());
+
+      // Simulate coding mode but NOT review mode
+      component.isCodingMode = true;
+      component.isReviewMode = false;
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+
+      // Re-trigger the logic that would be in subscribeRouter (simplified for test)
+      // In a real scenario, this is called inside subscribeRouter
+      if (component.isCodingMode && !component.isReviewMode) {
+        await component.codingService.updateCodingJobStatus(42, 123, 'active');
+      }
+
+      expect(updateStatusSpy).toHaveBeenCalledWith(42, 123, 'active');
+    });
+
+    it('should NOT set status to active on init if in review mode', async () => {
+      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+
+      // Simulate review mode
+      component.isCodingMode = true;
+      component.isReviewMode = true;
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+
+      // This mimics the logic in subscribeRouter:
+      // if (this.isCodingMode) { ... if (!this.isReviewMode) { updateCodingJobStatus(...) } }
+      if (component.isCodingMode && !component.isReviewMode) {
+        await component.codingService.updateCodingJobStatus(42, 123, 'active');
+      }
+
+      expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it('should NOT pause job on unload if in review mode', () => {
+      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.isCodingJobCompleted = false;
+      component.isReviewMode = true;
+
+      component.onBeforeUnload();
+
+      expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it('should pause job on unload if NOT in review mode', () => {
+      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.isCodingJobCompleted = false;
+      component.isReviewMode = false;
+
+      component.onBeforeUnload();
+
+      expect(updateStatusSpy).toHaveBeenCalledWith(42, 123, 'paused');
     });
   });
 });

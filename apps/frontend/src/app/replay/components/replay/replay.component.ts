@@ -231,7 +231,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             }
             if (this.codingService.codingJobId && this.workspaceId) {
               const jobId = this.codingService.codingJobId;
-              this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+              if (!this.isReviewMode) {
+                this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+              }
               await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
               this.codingService.checkCodingJobCompletion(this.unitsData);
             }
@@ -997,7 +999,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   @HostListener('window:beforeunload')
   onBeforeUnload(): void {
-    if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted) {
+    if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted && !this.isReviewMode) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
   }
