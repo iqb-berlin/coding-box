@@ -26,6 +26,7 @@ import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { ResponseManagementService } from './response-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
@@ -66,6 +67,8 @@ export class WorkspaceTestResultsService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => CodingListService))
     private readonly codingListService: CodingListService,
+    @Inject(forwardRef(() => CodingValidationService))
+    private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
     private readonly workspaceCoreService: WorkspaceCoreService
   ) { }
@@ -2466,6 +2469,7 @@ export class WorkspaceTestResultsService {
         }
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
@@ -2538,6 +2542,7 @@ export class WorkspaceTestResultsService {
         );
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
@@ -2553,11 +2558,17 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.responseManagementService.deleteResponse(
+    const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
       userId
     );
+    if (result?.success) {
+      await this.codingValidationService.invalidateIncompleteVariablesCache(
+        workspaceId
+      );
+    }
+    return result;
   }
 
   async deleteBooklet(
@@ -2626,6 +2637,7 @@ export class WorkspaceTestResultsService {
         );
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
