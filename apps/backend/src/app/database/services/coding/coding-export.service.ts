@@ -7,7 +7,7 @@ import {
 import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
 import { statusStringToNumber } from '../../utils/response-status-converter';
-import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
+import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
   calculateModalValue, getLatestCode, buildCoderNameMapping
 } from '../../../utils/coding-utils';
@@ -267,7 +267,7 @@ export class CodingExportService {
   }
 
   private async generateReplayUrlWithPageLookup(
-    req: Request,
+    req: Request | undefined,
     loginName: string,
     loginCode: string,
     group: string,
@@ -275,10 +275,29 @@ export class CodingExportService {
     unitName: string,
     variableId: string,
     workspaceId: number,
-    authToken: string
+    authToken: string,
+    serverUrl?: string
   ): Promise<string> {
     const variablePage = await this.getVariablePage(unitName, variableId, workspaceId);
-    return generateReplayUrlFromRequest(req, {
+    if (req) {
+      return generateReplayUrlFromRequest(req, {
+        loginName,
+        loginCode,
+        loginGroup: group,
+        bookletId,
+        unitId: unitName,
+        variablePage,
+        variableAnchor: variableId,
+        authToken
+      });
+    }
+
+    if (!serverUrl) {
+      return '';
+    }
+
+    return generateReplayUrl({
+      serverUrl,
       loginName,
       loginCode,
       loginGroup: group,
@@ -305,14 +324,15 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ' (including auto-coded)'}`);
 
     this.clearPageMapsCache();
 
     if (doubleCodingMethod === 'new-row-per-variable') {
-      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation, jobDefinitionIds, coderTrainingIds, coderIds);
+      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation, jobDefinitionIds, coderTrainingIds, coderIds, serverUrl);
     } if (doubleCodingMethod === 'new-column-per-coder') {
       return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded, checkCancellation, jobDefinitionIds, coderTrainingIds, coderIds);
     }
@@ -322,6 +342,7 @@ export class CodingExportService {
 
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
     const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -358,7 +379,7 @@ export class CodingExportService {
       }
     });
 
-    if (!excludeAutoCoded) {
+    if (!excludeAutoCoded && !hasScopedJobFilters) {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
@@ -451,6 +472,7 @@ export class CodingExportService {
         .select('person.id', 'personId')
         .addSelect('cju.unit_name', 'unitName')
         .addSelect('cju.variable_id', 'variableId')
+        .addSelect('cju.code', 'cju_code')
         .addSelect('resp.code_v3', 'code_v3')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v1', 'code_v1')
@@ -463,7 +485,7 @@ export class CodingExportService {
 
       const manualCoding = await manualCodingQuery.getRawMany();
 
-      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+      const autoCoding = (excludeAutoCoded || hasScopedJobFilters) ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
@@ -487,7 +509,7 @@ export class CodingExportService {
         const varData = personData.get(pid)!;
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
         const d = varData.get(compositeKey)!;
-        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const code = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
         if (code !== null && code !== undefined) d.codes.push(parseInt(code, 10));
         if (row.notes) {
           const coderName = row.username || `Job ${row.jobId}`;
@@ -528,13 +550,13 @@ export class CodingExportService {
           }
         }
 
-        if (includeReplayUrl && req) {
+        if (includeReplayUrl && (req || serverUrl)) {
           let replayUrl = '';
           for (const vKey of variables) {
             if (modalValues.has(vKey)) {
               const variableId = vKey.split('_').slice(1).join('_');
               const unitName = variableUnitNames.get(vKey) || '';
-              replayUrl = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
+              replayUrl = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken, serverUrl);
               break;
             }
           }
@@ -568,7 +590,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
@@ -579,6 +602,7 @@ export class CodingExportService {
 
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
     const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -611,7 +635,7 @@ export class CodingExportService {
       }
     });
 
-    if (!excludeAutoCoded) {
+    if (!excludeAutoCoded && !hasScopedJobFilters) {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
@@ -729,6 +753,8 @@ export class CodingExportService {
         .select('person.id', 'personId')
         .addSelect('cju.unit_name', 'unitName')
         .addSelect('cju.variable_id', 'variableId')
+        .addSelect('cju.code', 'cju_code')
+        .addSelect('cju.score', 'cju_score')
         .addSelect('resp.code_v3', 'code_v3')
         .addSelect('resp.score_v3', 'score_v3')
         .addSelect('resp.code_v2', 'code_v2')
@@ -744,7 +770,7 @@ export class CodingExportService {
 
       const manualCoding = await manualCodingQuery.getRawMany();
 
-      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+      const autoCoding = (excludeAutoCoded || hasScopedJobFilters) ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
@@ -771,8 +797,8 @@ export class CodingExportService {
         if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
         const coderMap = varMap.get(compositeKey)!;
 
-        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        const score = row.score_v3 ?? row.score_v2 ?? row.score_v1;
+        const code = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const score = row.cju_score ?? row.score_v3 ?? row.score_v2 ?? row.score_v1;
         coderMap.set(coderName, {
           code: code !== null && code !== undefined ? parseInt(code, 10) : null,
           score: score !== null && score !== undefined ? parseInt(score, 10) : null,
@@ -838,10 +864,10 @@ export class CodingExportService {
 
           row[COMMENTS_HEADER] = comments.join(' | ');
 
-          if (includeReplayUrl && req) {
+          if (includeReplayUrl && (req || serverUrl)) {
             const unitName = variableUnitNames.get(vKey) || '';
             const variableId = vKey.split('_').slice(1).join('_');
-            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
+            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken, serverUrl);
           }
 
           worksheet.addRow(row).commit();
@@ -878,6 +904,7 @@ export class CodingExportService {
 
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
     const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -933,7 +960,7 @@ export class CodingExportService {
       }
     });
 
-    if (!excludeAutoCoded) {
+    if (!excludeAutoCoded && !hasScopedJobFilters) {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
@@ -1017,6 +1044,7 @@ export class CodingExportService {
         .select('person.id', 'personId')
         .addSelect('cju.unit_name', 'unitName')
         .addSelect('cju.variable_id', 'variableId')
+        .addSelect('cju.code', 'cju_code')
         .addSelect('resp.code_v1', 'code_v1')
         .addSelect('resp.code_v2', 'code_v2')
         .addSelect('resp.code_v3', 'code_v3')
@@ -1029,7 +1057,7 @@ export class CodingExportService {
 
       const manualCoding = await manualCodingQuery.getRawMany();
 
-      const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
+      const autoCoding = (excludeAutoCoded || hasScopedJobFilters) ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
         .innerJoin('booklet.person', 'person')
@@ -1054,7 +1082,7 @@ export class CodingExportService {
         if (!personData.has(pid)) personData.set(pid, new Map());
         const dataMapForPerson = personData.get(pid)!;
 
-        const code = row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const code = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
         dataMapForPerson.set(columnKey, {
           code: code !== null && code !== undefined ? parseInt(code, 10) : null,
           comment: row.notes
@@ -1127,7 +1155,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -1218,16 +1247,18 @@ export class CodingExportService {
           .innerJoin('resp.unit', 'unit')
           .innerJoin('unit.booklet', 'booklet')
           .leftJoin('booklet.bookletinfo', 'bookletinfo')
+          .innerJoin('booklet.person', 'person')
           .innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
           .select('resp.variableid', 'variableId')
           .addSelect('unit.name', 'unitName')
+          .addSelect('cju.code', 'cju_code')
           .addSelect('resp.code_v1', 'code_v1')
           .addSelect('resp.code_v2', 'code_v2')
           .addSelect('resp.code_v3', 'code_v3')
           .addSelect('cju.notes', 'notes')
-          .addSelect('booklet.person_id', 'pId')
+          .addSelect('person.id', 'pId')
           .addSelect('bookletinfo.name', 'bookletName')
-          .where('booklet.person_id IN (:...ids)', { ids: batchIds })
+          .where('person.id IN (:...ids)', { ids: batchIds })
           .andWhere('cju.coding_job_id IN (:...jobIds)', { jobIds })
           .getRawMany();
 
@@ -1239,7 +1270,8 @@ export class CodingExportService {
           }
           const pData = personDataMap.get(pid)!;
           const latest = getLatestCode(resp);
-          pData[resp.variableId] = outputCommentsInsteadOfCodes ? resp.notes || '' : latest.code ?? '';
+          const code = resp.cju_code ?? latest.code;
+          pData[resp.variableId] = outputCommentsInsteadOfCodes ? resp.notes || '' : code ?? '';
           pData[`_metadata_${resp.variableId}`] = { unitName: resp.unitName, bookletName: resp.bookletName };
         }
 
@@ -1252,11 +1284,11 @@ export class CodingExportService {
             'Test Person Group': p.group || ''
           };
 
-          if (includeReplayUrl && req) {
+          if (includeReplayUrl && (req || serverUrl)) {
             const firstVar = variableIds.find(v => pData[`_metadata_${v}`]);
             if (firstVar) {
               const meta = pData[`_metadata_${firstVar}`] as { bookletName: string, unitName: string };
-              row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', meta.bookletName || '', meta.unitName, firstVar, workspaceId, authToken);
+              row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', meta.bookletName || '', meta.unitName, firstVar, workspaceId, authToken, serverUrl);
             }
           }
 
@@ -1288,7 +1320,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
@@ -1353,10 +1386,11 @@ export class CodingExportService {
       const personIdsRaw = await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
-        .select('booklet.person_id', 'pId')
+        .innerJoin('booklet.person', 'person')
+        .select('person.id', 'pId')
         .where('unit.name = :unitName', { unitName })
         .andWhere('resp.variableid = :variableId', { variableId })
-        .groupBy('booklet.person_id')
+        .groupBy('person.id')
         .getRawMany();
 
       const pIds = personIdsRaw.map(r => r.pId);
@@ -1411,6 +1445,7 @@ export class CodingExportService {
           .addSelect('person.code', 'code')
           .addSelect('person.group', 'group')
           .addSelect('bookletinfo.name', 'bookletName')
+          .addSelect('cju.code', 'cju_code')
           .addSelect('resp.code_v1', 'code_v1')
           .addSelect('resp.code_v2', 'code_v2')
           .addSelect('resp.code_v3', 'code_v3')
@@ -1444,7 +1479,7 @@ export class CodingExportService {
           const p = personGroup.get(pid)!;
           if (d.username) {
             const latest = getLatestCode(d);
-            p.codings[d.username] = { code: latest.code, notes: d.notes, status: d.status_v1 };
+            p.codings[d.username] = { code: d.cju_code ?? latest.code, notes: d.notes, status: d.status_v1 };
           }
         }
 
@@ -1455,8 +1490,8 @@ export class CodingExportService {
             'Test Person Group': p.group || ''
           };
 
-          if (includeReplayUrl && req) {
-            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken);
+          if (includeReplayUrl && (req || serverUrl)) {
+            row['Replay URL'] = await this.generateReplayUrlWithPageLookup(req, p.login, p.code, p.group || '', p.bookletName || '', unitName, variableId, workspaceId, authToken, serverUrl);
           }
 
           const codes: (number | null)[] = [];
@@ -1507,7 +1542,8 @@ export class CodingExportService {
     checkCancellation?: () => Promise<void>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
-    coderIds?: number[]
+    coderIds?: number[],
+    serverUrl?: string
   ): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -1663,11 +1699,11 @@ export class CodingExportService {
             escapeCsvField(discussionScoreValue)
           ];
 
-          if (includeReplayUrl && req) {
+          if (includeReplayUrl && (req || serverUrl)) {
             const bookletName = currentCaseRepresentative.response?.unit?.booklet?.bookletinfo?.name || '';
             const unitName = currentCaseRepresentative.response?.unit?.name || '';
             const group = person?.group || '';
-            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, currentCaseRepresentative.variable_id, workspaceId, authToken);
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, currentCaseRepresentative.variable_id, workspaceId, authToken, serverUrl);
             discussionRowFields.push(escapeCsvField(replayUrl));
           }
 
@@ -1737,11 +1773,11 @@ export class CodingExportService {
             rowFields.push(escapeCsvField(scoreValue));
           }
 
-          if (includeReplayUrl && req) {
+          if (includeReplayUrl && (req || serverUrl)) {
             const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
             const unitName = unit.response?.unit?.name || '';
             const group = person?.group || '';
-            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, unit.variable_id, workspaceId, authToken);
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, unit.variable_id, workspaceId, authToken, serverUrl);
             rowFields.push(escapeCsvField(replayUrl));
           }
 

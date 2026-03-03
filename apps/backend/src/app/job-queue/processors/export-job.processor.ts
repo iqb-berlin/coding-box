@@ -215,7 +215,8 @@ export class ExportJobProcessor {
             checkCancellation,
             job.data.jobDefinitionIds,
             job.data.coderTrainingIds,
-            job.data.coderIds
+            job.data.coderIds,
+            job.data.serverUrl || ''
           );
           break;
 
@@ -232,7 +233,8 @@ export class ExportJobProcessor {
             checkCancellation,
             job.data.jobDefinitionIds,
             job.data.coderTrainingIds,
-            job.data.coderIds
+            job.data.coderIds,
+            job.data.serverUrl || ''
           );
           break;
 
@@ -252,7 +254,8 @@ export class ExportJobProcessor {
             checkCancellation,
             job.data.jobDefinitionIds,
             job.data.coderTrainingIds,
-            job.data.coderIds
+            job.data.coderIds,
+            job.data.serverUrl || ''
           );
           break;
 
@@ -269,7 +272,8 @@ export class ExportJobProcessor {
             checkCancellation,
             job.data.jobDefinitionIds,
             job.data.coderTrainingIds,
-            job.data.coderIds
+            job.data.coderIds,
+            job.data.serverUrl || ''
           );
           break;
 
