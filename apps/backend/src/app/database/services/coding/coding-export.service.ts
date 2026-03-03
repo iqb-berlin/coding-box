@@ -817,8 +817,8 @@ export class CodingExportService {
           allCoderNames.forEach(coderName => {
             const data = coderDataMap?.get(coderName);
             const displayName = anonymizeCoders ? coderMapping.get(coderName)! : coderName;
-            row[`${displayName} Code`] = data?.code ?? '';
-            row[`${displayName} Score`] = data?.score ?? '';
+            row[`${displayName} Code`] = outputCommentsInsteadOfCodes ? (data?.comment ?? '') : (data?.code ?? '');
+            row[`${displayName} Score`] = outputCommentsInsteadOfCodes ? '' : (data?.score ?? '');
             if (includeComments) row[`${displayName} Note`] = data?.comment ?? '';
             if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
             if (data?.comment) comments.push(`${displayName}: ${data.comment}`);
@@ -2014,7 +2014,7 @@ export class CodingExportService {
   }
 
   private applyJobFilters(
-    query: SelectQueryBuilder<any>,
+    query: SelectQueryBuilder<unknown>,
     jobDefinitionIds?: number[],
     coderTrainingIds?: number[],
     coderIds?: number[]
