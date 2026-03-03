@@ -1,3 +1,8 @@
+:host {
+  display: block;
+  height: 100%;
+}
+
 .dialog-layout {
   display: flex;
   flex-direction: column;
@@ -38,6 +43,9 @@
   box-sizing: border-box;
   flex: 1;
   overflow: auto;
+  max-height: none !important; // Override default mat-dialog-content max-height
+  display: flex;
+  flex-direction: column;
 
   .training-selection {
     margin-bottom: 16px;
@@ -95,6 +103,10 @@
   }
 
   .comparison-table {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+
     .table-filters {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -197,6 +209,8 @@
       .kappa-content {
         padding: 20px;
         background-color: #f8f9fa;
+        max-height: 400px;
+        overflow-y: auto;
 
         .loading-container {
           text-align: center;
@@ -422,7 +436,10 @@
     }
 
     .table-container {
-      overflow-x: auto;
+      flex: 1;
+      overflow: auto;
+      min-height: 300px;
+      position: relative; // For sticky headers if needed later
 
       table {
         width: 100%;
@@ -441,6 +458,9 @@
         th {
           font-weight: 600;
           background-color: #f5f5f5;
+          position: sticky;
+          top: 0;
+          z-index: 10;
         }
 
         td {
@@ -572,7 +592,8 @@
   margin-left: 10px;
 }
 
-.weighting-toggle-container, .level-toggle-container {
+.weighting-toggle-container,
+.level-toggle-container {
   display: flex;
   align-items: center;
   margin-bottom: 10px;
