@@ -21,27 +21,18 @@
       <div class="filter-section">
         <h3>{{ 'ws-admin.export-options.filter-jobs-trainings' | translate }}</h3>
         <div class="filter-fields-container">
-          <mat-form-field appearance="outline">
-            <mat-label>{{ 'ws-admin.export-options.job-definitions' | translate }} & {{
-              'ws-admin.export-options.coder-trainings' | translate }}</mat-label>
-            <mat-select [(ngModel)]="selectedCombinedJobIds" multiple>
-              <mat-select-trigger>
-                {{ selectedCombinedJobIds.length > 0 ? (selectedCombinedJobIds.length === (jobDefinitions.length +
-                coderTrainings.length) ? ('ws-admin.export-options.all-selected' | translate) :
-                selectedCombinedJobIds.length + ' ' + ('ws-admin.export-options.select-all' | translate)) : '' }}
-              </mat-select-trigger>
-              <mat-optgroup [label]="'ws-admin.export-options.job-definitions' | translate">
-                <mat-option *ngFor="let def of jobDefinitions" [value]="'job_' + def.id">
-                  {{ getJobDefinitionLabel(def) }}
-                </mat-option>
-              </mat-optgroup>
-              <mat-optgroup [label]="'ws-admin.export-options.coder-trainings' | translate">
-                <mat-option *ngFor="let training of coderTrainings" [value]="'training_' + training.id">
-                  {{ training.label || ('Training ' + training.id) }}
-                </mat-option>
-              </mat-optgroup>
-            </mat-select>
-          </mat-form-field>
+          <div class="selection-trigger">
+            <div class="selection-trigger-header">
+              <div class="selection-trigger-title">
+                {{ 'ws-admin.export-options.job-definitions' | translate }} & {{
+                  'ws-admin.export-options.coder-trainings' | translate }}
+              </div>
+              <div class="selection-trigger-summary">{{ getSelectionSummary() }}</div>
+            </div>
+            <button mat-stroked-button color="primary" type="button" (click)="openSelectionDialog()">
+              Auswahl ändern
+            </button>
+          </div>
 
           <mat-form-field appearance="outline">
             <mat-label>{{ 'ws-admin.export-options.coders' | translate }}</mat-label>

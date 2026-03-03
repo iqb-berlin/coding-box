@@ -10,6 +10,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
@@ -21,6 +22,10 @@ import { CoderService } from '../../../coding/services/coder.service';
 import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
 import { CoderTraining } from '../../../coding/models/coder-training.model';
 import { Coder } from '../../../coding/models/coder.model';
+import {
+  ExportSelectionDialogComponent,
+  ExportSelectionDialogResult
+} from './export-selection-dialog.component';
 
 export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
 
@@ -41,6 +46,7 @@ export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed
     MatTooltipModule,
     MatSelectModule,
     MatFormFieldModule,
+    MatDialogModule,
     FormsModule,
     CommonModule
   ]
@@ -52,6 +58,7 @@ export class ExportComponent {
   private snackBar = inject(MatSnackBar);
   private codingFacadeService = inject(CodingFacadeService);
   private coderService = inject(CoderService);
+  private dialog = inject(MatDialog);
 
   selectedFormat: ExportFormat = 'aggregated';
   isStartingExport = false;
@@ -104,6 +111,36 @@ export class ExportComponent {
 
   constructor() {
     this.loadOptions();
+  }
+
+  openSelectionDialog(): void {
+    const dialogRef = this.dialog.open(ExportSelectionDialogComponent, {
+      width: '1100px',
+      maxWidth: '92vw',
+      data: {
+        jobDefinitions: this.jobDefinitions,
+        coderTrainings: this.coderTrainings,
+        coders: this.coders,
+        selectedCombinedJobIds: this.selectedCombinedJobIds
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((result: ExportSelectionDialogResult | undefined) => {
+      if (!result) return;
+      this.selectedCombinedJobIds = result.selectedCombinedJobIds;
+    });
+  }
+
+  getSelectionSummary(): string {
+    const jobCount = this.finalJobDefinitionIds.length;
+    const trainingCount = this.finalCoderTrainingIds.length;
+
+    if (jobCount === 0 && trainingCount === 0) return 'Keine Filter gesetzt';
+
+    const parts: string[] = [];
+    if (jobCount > 0) parts.push(`${jobCount} Definition${jobCount === 1 ? '' : 'en'}`);
+    if (trainingCount > 0) parts.push(`${trainingCount} Training${trainingCount === 1 ? '' : 's'}`);
+    return parts.join(', ');
   }
 
   getJobDefinitionLabel(def: JobDefinition): string {
