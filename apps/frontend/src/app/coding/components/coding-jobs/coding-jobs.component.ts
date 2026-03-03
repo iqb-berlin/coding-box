@@ -183,8 +183,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               processedData.forEach(job => {
                 const progressResult = bulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
-                  ((typeof progress.id === 'number' && progress.id < 0 && progress.id !== -1) ||
-                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                  ((typeof progress.id === 'number' && (progress.id === -1 || progress.id === -2)) ||
+                    progress.codingIssueOption === -1 ||
+                    progress.codingIssueOption === -2)
                 ) : false;
               });
             } catch (error) {
@@ -229,8 +230,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
               processedData.forEach(job => {
                 const progressResult = fallbackBulkProgressResult?.[job.id];
                 job.hasIssues = progressResult ? Object.values(progressResult as Record<string, SavedCode>).some(progress => progress && typeof progress === 'object' && 'id' in progress &&
-                  ((typeof progress.id === 'number' && progress.id < 0) ||
-                    (progress.codingIssueOption !== null && progress.codingIssueOption !== undefined))
+                  ((typeof progress.id === 'number' && (progress.id === -1 || progress.id === -2)) ||
+                    progress.codingIssueOption === -1 ||
+                    progress.codingIssueOption === -2)
                 ) : false;
               });
             } catch (fallbackError) {

@@ -53,8 +53,16 @@ export class CodingResultsService {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
 
-      const uncertainIssues = Object.values(codingProgress).filter(p => typeof p.id === 'number' && (p.id === -1 || p.id === -2)
-      );
+      const uncertainIssues = Object.values(codingProgress).filter(p => {
+        if (!p || typeof p !== 'object') {
+          return false;
+        }
+
+        const codeId = typeof p.id === 'number' ? p.id : null;
+        const codingIssueOption = typeof p.codingIssueOption === 'number' ? p.codingIssueOption : null;
+
+        return codeId === -1 || codeId === -2 || codingIssueOption === -1 || codingIssueOption === -2;
+      });
 
       if (uncertainIssues.length > 0) {
         return {
@@ -83,16 +91,23 @@ export class CodingResultsService {
         } else if (typeof progress.id === 'number') {
           let status = statusStringToNumber('CODING_COMPLETE');
           let code = null;
-          const score = progress.score !== undefined ? progress.score : null;
+          let score = progress.score !== undefined ? progress.score : null;
+
+          if (progress.codingIssueOption === -1 || progress.codingIssueOption === -2) {
+            skippedReviewCount += 1;
+            continue;
+          }
 
           // Handle uncertain options (negative IDs)
           if (progress.id === -1) {
             status = statusStringToNumber('CODING_INCOMPLETE');
           } else if (progress.id === -3) {
-            status = statusStringToNumber('INVALID');
+            code = -98;
+            score = 0;
           } else if (progress.id === -4) {
-            status = statusStringToNumber('CODING_ERROR');
-          } else if (progress.id === -2 || progress.id === -1) {
+            code = -97;
+            score = 0;
+          } else if (progress.id === -2) {
             skippedReviewCount += 1;
             continue;
           } else if (progress.id > 0) {
@@ -133,9 +148,6 @@ export class CodingResultsService {
         const completedUpdates = responsesToUpdate.filter(
           r => r.status_v2 === statusStringToNumber('CODING_COMPLETE') && r.code_v2 !== null
         );
-
-        // Fetch the original response values for the units we just coded
-        // (we need value + unit info to find siblings)
         const codedResponseIds = completedUpdates.map(r => r.responseId);
         if (codedResponseIds.length > 0) {
           const codedResponses = await this.responseRepository
@@ -242,7 +254,6 @@ export class CodingResultsService {
 
         await queryRunner.commitTransaction();
 
-        // Update coding job status to 'results_applied' after successful application
         await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
@@ -319,8 +330,6 @@ export class CodingResultsService {
       }
 
       this.logger.log(`Found ${emptyResponses.length} empty responses to code`);
-
-      // Start transaction to ensure data integrity
       const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction('READ COMMITTED');
@@ -329,7 +338,6 @@ export class CodingResultsService {
         const batchSize = 500;
         let totalUpdated = 0;
 
-        // Update in batches for better performance
         for (let i = 0; i < emptyResponses.length; i += batchSize) {
           const batch = emptyResponses.slice(i, i + batchSize);
 
@@ -354,7 +362,6 @@ export class CodingResultsService {
 
         await queryRunner.commitTransaction();
 
-        // Invalidate caches and refresh statistics
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
         await this.codingAnalysisService.invalidateCache(workspaceId);
