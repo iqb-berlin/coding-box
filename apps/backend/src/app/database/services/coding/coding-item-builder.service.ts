@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
+import { mapCodeForExport } from '../../../utils/coding-utils';
 import { CodingFileCacheService } from './coding-file-cache.service';
 
 export interface CodingItem {
@@ -149,20 +150,20 @@ export class CodingItemBuilderService {
           response.status_v1 != null ?
             statusNumberToString(response.status_v1) || '' :
             '';
-        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 || '';
       } else if (targetVersion === 'v2') {
         baseItem.status_v1 =
           response.status_v1 != null ?
             statusNumberToString(response.status_v1) || '' :
             '';
-        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 || '';
         baseItem.status_v2 =
           response.status_v2 != null ?
             statusNumberToString(response.status_v2) || '' :
             '';
-        baseItem.code_v2 = response.code_v2 || '';
+        baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
         baseItem.score_v2 = response.score_v2 || '';
       } else {
         // v3
@@ -170,19 +171,19 @@ export class CodingItemBuilderService {
           response.status_v1 != null ?
             statusNumberToString(response.status_v1) || '' :
             '';
-        baseItem.code_v1 = response.code_v1 || '';
+        baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 || '';
         baseItem.status_v2 =
           response.status_v2 != null ?
             statusNumberToString(response.status_v2) || '' :
             '';
-        baseItem.code_v2 = response.code_v2 || '';
+        baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
         baseItem.score_v2 = response.score_v2 || '';
         baseItem.status_v3 =
           response.status_v3 != null ?
             statusNumberToString(response.status_v3) || '' :
             '';
-        baseItem.code_v3 = response.code_v3 || '';
+        baseItem.code_v3 = mapCodeForExport(response.code_v3) ?? '';
         baseItem.score_v3 = response.score_v3 || '';
       }
 
