@@ -10,6 +10,7 @@ import { CoderTrainingVariable } from '../../entities/coder-training-variable.en
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
+import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import User from '../../entities/user.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
@@ -80,6 +81,8 @@ export class CoderTrainingService {
     private coderTrainingCoderRepository: Repository<CoderTrainingCoder>,
     @InjectRepository(CoderTrainingDiscussionResult)
     private coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>,
+    @InjectRepository(CodingJobVariableBundle)
+    private codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
     @InjectRepository(User)
     private userRepository: Repository<User>,
     @InjectRepository(ResponseEntity)
@@ -243,6 +246,34 @@ export class CoderTrainingService {
     return sorted.slice(0, sampleCount);
   }
 
+  private sortTrainingResponses(
+    responses: CoderTrainingResponse[],
+    caseOrderingMode: 'continuous' | 'alternating' = 'continuous'
+  ): CoderTrainingResponse[] {
+    const cmp = (v1: string, v2: string) => v1.localeCompare(v2);
+
+    return [...responses].sort((a, b) => {
+      if (caseOrderingMode === 'alternating') {
+        // Alternating: person first, then booklet, then unit, then variable
+        if (a.personLogin !== b.personLogin) return cmp(a.personLogin, b.personLogin);
+        if (a.personCode !== b.personCode) return cmp(a.personCode, b.personCode);
+        if (a.personGroup !== b.personGroup) return cmp(a.personGroup, b.personGroup);
+        if (a.bookletName !== b.bookletName) return cmp(a.bookletName, b.bookletName);
+        if (a.unitName !== b.unitName) return cmp(a.unitName, b.unitName);
+        if (a.variableId !== b.variableId) return cmp(a.variableId, b.variableId);
+        return a.responseId - b.responseId;
+      }
+      // Continuous: variable first, then unit, then person
+      if (a.variableId !== b.variableId) return cmp(a.variableId, b.variableId);
+      if (a.unitName !== b.unitName) return cmp(a.unitName, b.unitName);
+      if (a.personLogin !== b.personLogin) return cmp(a.personLogin, b.personLogin);
+      if (a.personCode !== b.personCode) return cmp(a.personCode, b.personCode);
+      if (a.personGroup !== b.personGroup) return cmp(a.personGroup, b.personGroup);
+      if (a.bookletName !== b.bookletName) return cmp(a.bookletName, b.bookletName);
+      return a.responseId - b.responseId;
+    });
+  }
+
   async generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
@@ -400,7 +431,6 @@ export class CoderTrainingService {
       coderTraining.workspace_id = workspaceId;
       coderTraining.label = trainingLabel;
       coderTraining.case_ordering_mode = caseOrderingMode || 'continuous';
-      // assigned_variables etc. are now relations and not set directly here
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
 
@@ -443,8 +473,10 @@ export class CoderTrainingService {
 
       const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
 
-      // Build mapping from variable to bundle id
+      // Build mapping from variable to bundle id and bundle sorting mode
       const variableToBundleMap = new Map<string, number>();
+      const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
+      this.logger.log(`Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
       if (assignedVariableBundles && assignedVariableBundles.length > 0) {
         const bundleIds = assignedVariableBundles.map(b => b.id);
         if (bundleIds.length > 0) {
@@ -452,9 +484,16 @@ export class CoderTrainingService {
             where: { id: In(bundleIds) }
           });
           for (const bundle of fetchedBundles) {
+            // Store the bundle's sorting mode (if set, otherwise null)
+            const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
+            const mode = bundleConfig?.caseOrderingMode || null;
+            bundleSortingModeMap.set(bundle.id, mode);
+            this.logger.log(`Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
             if (bundle.variables) {
               for (const v of bundle.variables) {
-                variableToBundleMap.set(`${v.unitName}::${v.variableId}`, bundle.id);
+                const key = `${v.unitName}::${v.variableId}`;
+                variableToBundleMap.set(key, bundle.id);
+                this.logger.debug(`  Variable mapping: ${key} -> bundle ${bundle.id}`);
               }
             }
           }
@@ -496,6 +535,22 @@ export class CoderTrainingService {
         codingJobCoder.user_id = coderId;
         await this.codingJobCoderRepository.save(codingJobCoder);
 
+        // Save bundle configurations to CodingJobVariableBundle for display sorting
+        const seenBundleIdsForJob = new Set<number>();
+        for (const response of trainingPackage.responses) {
+          const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+          if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
+            seenBundleIdsForJob.add(bundleId);
+            const bundleMode = bundleSortingModeMap.get(bundleId);
+            const jobVariableBundle = new CodingJobVariableBundle();
+            jobVariableBundle.coding_job_id = jobId;
+            jobVariableBundle.variable_bundle_id = bundleId;
+            jobVariableBundle.case_ordering_mode = bundleMode || null;
+            await this.codingJobVariableBundleRepository.save(jobVariableBundle);
+            this.logger.log(`Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
+          }
+        }
+
         const processedVariables = new Set<string>();
         for (const response of trainingPackage.responses) {
           const variableKey = `${response.variableId}:${response.unitName}`;
@@ -510,7 +565,36 @@ export class CoderTrainingService {
           }
         }
 
-        const codingJobUnits: CodingJobUnit[] = trainingPackage.responses.map(response => {
+        // Sort responses with bundle-specific sorting modes
+        // Group responses by their effective sorting mode
+        const defaultMode = caseOrderingMode || 'continuous';
+        const alternatingResponses: CoderTrainingResponse[] = [];
+        const continuousResponses: CoderTrainingResponse[] = [];
+
+        for (const response of trainingPackage.responses) {
+          const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+          const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
+          const effectiveMode = bundleMode || defaultMode;
+
+          this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
+
+          if (effectiveMode === 'alternating') {
+            alternatingResponses.push(response);
+          } else {
+            continuousResponses.push(response);
+          }
+        }
+
+        this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
+
+        // Sort each group with its respective mode
+        const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
+        const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
+
+        // Combine: alternating first, then continuous
+        const sortedResponses = [...sortedAlternating, ...sortedContinuous];
+
+        const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
           const codingJobUnit = new CodingJobUnit();
           codingJobUnit.coding_job_id = jobId;
           codingJobUnit.response_id = response.responseId;
@@ -577,7 +661,8 @@ export class CoderTrainingService {
       assigned_variable_bundles: training.bundles?.map(b => ({
         id: b.variable_bundle_id,
         name: b.bundle?.name || 'Unknown Bundle',
-        sampleCount: b.sample_count
+        sampleCount: b.sample_count,
+        caseOrderingMode: b.case_ordering_mode
       })),
       assigned_coders: training.coders?.map(c => c.user_id)
     }));
@@ -1046,8 +1131,10 @@ export class CoderTrainingService {
         // Generate and create new jobs
         const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
 
-        // Build mapping from variable to bundle id
+        // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();
+        const bundleSortingModeMap = new Map<number, 'continuous' | 'alternating'>();
+        this.logger.log(`[Update] Building bundle maps for ${assignedVariableBundles?.length || 0} bundles`);
         if (assignedVariableBundles && assignedVariableBundles.length > 0) {
           const bundleIds = assignedVariableBundles.map(b => b.id);
           if (bundleIds.length > 0) {
@@ -1055,9 +1142,16 @@ export class CoderTrainingService {
               where: { id: In(bundleIds) }
             });
             for (const bundle of fetchedBundles) {
+              // Store the bundle's sorting mode (if set, otherwise null)
+              const bundleConfig = assignedVariableBundles.find(b => b.id === bundle.id);
+              const mode = bundleConfig?.caseOrderingMode || null;
+              bundleSortingModeMap.set(bundle.id, mode);
+              this.logger.log(`[Update] Bundle ${bundle.id} (${bundle.name}): mode=${mode}`);
               if (bundle.variables) {
                 for (const v of bundle.variables) {
-                  variableToBundleMap.set(`${v.unitName}::${v.variableId}`, bundle.id);
+                  const key = `${v.unitName}::${v.variableId}`;
+                  variableToBundleMap.set(key, bundle.id);
+                  this.logger.debug(`[Update]   Variable mapping: ${key} -> bundle ${bundle.id}`);
                 }
               }
             }
@@ -1096,6 +1190,22 @@ export class CoderTrainingService {
           codingJobCoder.user_id = coderId;
           await this.codingJobCoderRepository.save(codingJobCoder);
 
+          // Save bundle configurations to CodingJobVariableBundle for display sorting
+          const seenBundleIdsForJob = new Set<number>();
+          for (const response of trainingPackage.responses) {
+            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+            if (bundleId && !seenBundleIdsForJob.has(bundleId)) {
+              seenBundleIdsForJob.add(bundleId);
+              const bundleMode = bundleSortingModeMap.get(bundleId);
+              const jobVariableBundle = new CodingJobVariableBundle();
+              jobVariableBundle.coding_job_id = jobId;
+              jobVariableBundle.variable_bundle_id = bundleId;
+              jobVariableBundle.case_ordering_mode = bundleMode || null;
+              await this.codingJobVariableBundleRepository.save(jobVariableBundle);
+              this.logger.log(`[Update] Saved CodingJobVariableBundle: job=${jobId}, bundle=${bundleId}, mode=${bundleMode || 'null'}`);
+            }
+          }
+
           const processedVariables = new Set<string>();
           for (const response of trainingPackage.responses) {
             const variableKey = `${response.variableId}:${response.unitName}`;
@@ -1109,7 +1219,36 @@ export class CoderTrainingService {
             }
           }
 
-          const codingJobUnits: CodingJobUnit[] = trainingPackage.responses.map(response => {
+          // Sort responses with bundle-specific sorting modes
+          // Group responses by their effective sorting mode
+          const defaultMode = caseOrderingMode || 'continuous';
+          const alternatingResponses: CoderTrainingResponse[] = [];
+          const continuousResponses: CoderTrainingResponse[] = [];
+
+          for (const response of trainingPackage.responses) {
+            const bundleId = variableToBundleMap.get(`${response.unitName}::${response.variableId}`);
+            const bundleMode = bundleId !== undefined ? bundleSortingModeMap.get(bundleId) : undefined;
+            const effectiveMode = bundleMode || defaultMode;
+
+            this.logger.debug(`Response ${response.responseId} (${response.unitName}::${response.variableId}): bundleId=${bundleId}, bundleMode=${bundleMode}, effectiveMode=${effectiveMode}`);
+
+            if (effectiveMode === 'alternating') {
+              alternatingResponses.push(response);
+            } else {
+              continuousResponses.push(response);
+            }
+          }
+
+          this.logger.log(`Sorting: ${alternatingResponses.length} alternating, ${continuousResponses.length} continuous (default: ${defaultMode})`);
+
+          // Sort each group with its respective mode
+          const sortedAlternating = this.sortTrainingResponses(alternatingResponses, 'alternating');
+          const sortedContinuous = this.sortTrainingResponses(continuousResponses, 'continuous');
+
+          // Combine: alternating first, then continuous
+          const sortedResponses = [...sortedAlternating, ...sortedContinuous];
+
+          const codingJobUnits: CodingJobUnit[] = sortedResponses.map(response => {
             const codingJobUnit = new CodingJobUnit();
             codingJobUnit.coding_job_id = jobId;
             codingJobUnit.response_id = response.responseId;
