@@ -8,12 +8,19 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatSelectModule } from '@angular/material/select';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { AppService } from '../../../core/services/app.service';
 import { ExportJobService } from '../../../shared/services/file/export-job.service';
+import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
+import { CoderService } from '../../../coding/services/coder.service';
+import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
+import { CoderTraining } from '../../../coding/models/coder-training.model';
+import { Coder } from '../../../coding/models/coder.model';
 
 export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
 
@@ -32,6 +39,8 @@ export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed
     MatSnackBarModule,
     MatCheckboxModule,
     MatTooltipModule,
+    MatSelectModule,
+    MatFormFieldModule,
     FormsModule,
     CommonModule
   ]
@@ -41,6 +50,8 @@ export class ExportComponent {
   private exportJobService = inject(ExportJobService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
+  private codingFacadeService = inject(CodingFacadeService);
+  private coderService = inject(CoderService);
 
   selectedFormat: ExportFormat = 'aggregated';
   isStartingExport = false;
@@ -53,6 +64,15 @@ export class ExportComponent {
   usePseudoCoders = false;
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
   excludeAutoCoded = true;
+
+  jobDefinitions: JobDefinition[] = [];
+  coderTrainings: CoderTraining[] = [];
+  coders: Coder[] = [];
+
+  selectedJobDefinitionIds: number[] = [];
+  selectedCoderTrainingIds: number[] = [];
+  selectedCoderIds: number[] = [];
+  selectedCombinedJobIds: string[] = [];
 
   exportFormats = [
     {
@@ -82,6 +102,36 @@ export class ExportComponent {
     }
   ];
 
+  constructor() {
+    this.loadOptions();
+  }
+
+  getJobDefinitionLabel(def: JobDefinition): string {
+    const idPart = def.id != null ? `Definition #${def.id}` : 'Definition';
+    const statusPart = def.status ? `(${def.status})` : '';
+    const varsCount = def.assignedVariables?.length ?? 0;
+    const bundlesCount = def.assignedVariableBundles?.length ?? 0;
+    const codersCount = def.assignedCoders?.length ?? 0;
+    return `${idPart} ${statusPart} – ${varsCount} Variablen, ${bundlesCount} Bündel, ${codersCount} Kodierer`;
+  }
+
+  private loadOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.codingFacadeService.getJobDefinitions(workspaceId).subscribe(defs => {
+      this.jobDefinitions = defs;
+    });
+
+    this.codingFacadeService.getCoderTrainings(workspaceId).subscribe(trainings => {
+      this.coderTrainings = trainings;
+    });
+
+    this.coderService.getCoders().subscribe(coders => {
+      this.coders = coders;
+    });
+  }
+
   onFormatChange(): void {
     this.clearReplayUrlIfNeeded();
   }
@@ -92,9 +142,21 @@ export class ExportComponent {
 
   private clearReplayUrlIfNeeded(): void {
     if (this.selectedFormat === 'coding-times' ||
-        (this.selectedFormat === 'aggregated' && this.doubleCodingMethod === 'new-column-per-coder')) {
+      (this.selectedFormat === 'aggregated' && this.doubleCodingMethod === 'new-column-per-coder')) {
       this.includeReplayUrl = false;
     }
+  }
+
+  get finalJobDefinitionIds(): number[] {
+    return this.selectedCombinedJobIds
+      .filter(id => id.startsWith('job_'))
+      .map(id => parseInt(id.replace('job_', ''), 10));
+  }
+
+  get finalCoderTrainingIds(): number[] {
+    return this.selectedCombinedJobIds
+      .filter(id => id.startsWith('training_'))
+      .map(id => parseInt(id.replace('training_', ''), 10));
   }
 
   onExport(): void {
@@ -140,6 +202,9 @@ export class ExportComponent {
         includeModalValue: this.includeModalValue,
         includeDoubleCoded: this.includeDoubleCoded,
         excludeAutoCoded: this.excludeAutoCoded,
+        jobDefinitionIds: this.finalJobDefinitionIds,
+        coderTrainingIds: this.finalCoderTrainingIds,
+        coderIds: this.selectedCoderIds,
         authToken
       };
 
