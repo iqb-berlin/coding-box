@@ -144,7 +144,7 @@
                   <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate }}</mat-label>
                   <mat-select
                     [value]="bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value"
-                    (selectionChange)="bundleGroup.bundle.caseOrderingMode = $event.value">
+                    (selectionChange)="updateBundleCaseOrderingMode(bundleGroup.bundle.id, $event.value)">
                     <mat-option value="continuous">{{ 'coding-job-definition-dialog.case-ordering-mode.continuous' |
                       translate }}</mat-option>
                     <mat-option value="alternating">{{ 'coding-job-definition-dialog.case-ordering-mode.alternating' |

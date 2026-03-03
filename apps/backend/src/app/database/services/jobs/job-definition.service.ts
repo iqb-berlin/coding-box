@@ -3,7 +3,9 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { JobDefinition, JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
+import {
+  JobDefinition, JobDefinitionVariable, JobDefinitionVariableBundle, CaseOrderingMode
+} from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
@@ -91,7 +93,8 @@ export class JobDefinitionService {
       assigned_variables: createDto.assignedVariables,
       assigned_variable_bundles: createDto.assignedVariableBundles?.map(bundle => ({
         id: bundle.id,
-        name: bundle.name
+        name: bundle.name,
+        caseOrderingMode: bundle.caseOrderingMode as CaseOrderingMode
       })),
       assigned_coders: createDto.assignedCoders,
       duration_seconds: createDto.durationSeconds,
@@ -115,6 +118,9 @@ export class JobDefinitionService {
 
     if (jobDefinition.assigned_variable_bundles && jobDefinition.assigned_variable_bundles.length > 0) {
       const bundleIds = jobDefinition.assigned_variable_bundles.map(b => b.id);
+      const savedBundleModes = new Map(
+        jobDefinition.assigned_variable_bundles.map(b => [b.id, b.caseOrderingMode])
+      );
       const fullBundles = await this.variableBundleRepository.find({
         where: { id: In(bundleIds) }
       });
@@ -124,7 +130,8 @@ export class JobDefinitionService {
         description: bundle.description,
         createdAt: bundle.created_at,
         updatedAt: bundle.updated_at,
-        variables: bundle.variables
+        variables: bundle.variables,
+        caseOrderingMode: savedBundleModes.get(bundle.id)
       }));
       if (fullBundles.length < bundleIds.length) {
         await this.jobDefinitionRepository.save(jobDefinition);
@@ -147,6 +154,9 @@ export class JobDefinitionService {
     for (const definition of definitions) {
       if (definition.assigned_variable_bundles && definition.assigned_variable_bundles.length > 0) {
         const bundleIds = definition.assigned_variable_bundles.map(b => b.id);
+        const savedBundleModes = new Map(
+          definition.assigned_variable_bundles.map(b => [b.id, b.caseOrderingMode])
+        );
         const fullBundles = await this.variableBundleRepository.find({
           where: { id: In(bundleIds) }
         });
@@ -156,7 +166,8 @@ export class JobDefinitionService {
           description: bundle.description,
           createdAt: bundle.created_at,
           updatedAt: bundle.updated_at,
-          variables: bundle.variables
+          variables: bundle.variables,
+          caseOrderingMode: savedBundleModes.get(bundle.id)
         }));
       }
     }
@@ -197,7 +208,8 @@ export class JobDefinitionService {
     if (updateDto.assignedVariableBundles !== undefined) {
       jobDefinition.assigned_variable_bundles = updateDto.assignedVariableBundles?.map(bundle => ({
         id: bundle.id,
-        name: bundle.name
+        name: bundle.name,
+        caseOrderingMode: bundle.caseOrderingMode as CaseOrderingMode
       }));
     }
     if (updateDto.assignedCoders !== undefined) {

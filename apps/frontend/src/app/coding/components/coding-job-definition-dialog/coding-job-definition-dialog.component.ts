@@ -400,8 +400,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           if (this.data.isEdit && this.data.codingJob) {
             const assignedBundles = this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles;
             if (assignedBundles && assignedBundles.length > 0) {
-              const ids = assignedBundles.map(b => b.name);
-              const preSelected = this.variableBundles.filter(b => ids.includes(b.name));
+              const ids = assignedBundles.map(b => b.id);
+              const preSelected = this.variableBundles.filter(b => ids.includes(b.id));
+              preSelected.forEach(bundle => {
+                const savedBundle = assignedBundles.find(ab => ab.id === bundle.id);
+                if (savedBundle?.caseOrderingMode) {
+                  bundle.caseOrderingMode = savedBundle.caseOrderingMode;
+                }
+              });
               this.selectedVariableBundles.select(...preSelected);
             }
           }
@@ -508,16 +514,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   applyAvailabilityFilter(): void {
-    // Debug logging to verify filter behavior
-    // eslint-disable-next-line no-console
-    console.log('[JobDefinitionDialog] applyAvailabilityFilter start', {
-      availabilityFilter: this.availabilityFilter,
-      totalVariables: this.variables.length
-    });
-
     let filteredData = this.variables;
-
-    // Apply text filters
     if (this.unitNameFilter || this.variableIdFilter) {
       filteredData = filteredData.filter(v => {
         const matchesUnit = !this.unitNameFilter ||
@@ -528,7 +525,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Apply availability filter
     if (this.availabilityFilter !== 'all') {
       filteredData = filteredData.filter(v => {
         const effectiveTotal = v.uniqueCasesAfterAggregation ?? v.responseCount;
@@ -619,7 +615,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getVariableDisabledReason(variable: Variable): string {
-    // Check if no cases are available
     if (variable.availableCases !== undefined && variable.availableCases === 0) {
       const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? 0;
       return `Alle ${effectiveTotal} Fälle bereits verteilt`;
@@ -653,11 +648,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       v.availableCases ?? v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0
     );
 
-    // Sum all selected variables
     let total = this.selectedVariables.selected
       .reduce((sum, v) => sum + getAvailableCases(v), 0);
 
-    // Include variables from selected bundles
     this.selectedVariableBundles.selected.forEach(bundle => {
       bundle.variables.forEach(v => {
         total += getAvailableCases(v as unknown as Variable);
@@ -988,7 +981,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     try {
-      // Use the new distributed job creation endpoint
       const mappedCoders = data.selectedCoders.map(coder => ({
         id: coder.id,
         name: coder.name,
@@ -1041,6 +1033,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   setBundleOrderingMode(bundle: VariableBundle, mode: 'continuous' | 'alternating'): void {
     bundle.caseOrderingMode = mode;
+    const selectedBundle = this.selectedVariableBundles.selected.find(b => b.id === bundle.id);
+    if (selectedBundle && selectedBundle !== bundle) {
+      selectedBundle.caseOrderingMode = mode;
+    }
   }
 
   private removeConflictingIndividualSelections(bundle: VariableBundle): void {
@@ -1097,7 +1093,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const jobDefinition: JobDefinition = {
       status: 'draft',
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
@@ -1134,7 +1130,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: Partial<JobDefinition> = {
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
@@ -1200,7 +1196,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),

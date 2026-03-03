@@ -279,7 +279,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           );
           const sampleCountByKey = firstVarInBundle?.sampleCount;
           const sampleCount = b.sampleCount || sampleCountByKey || 10;
-          this.addBundleVariables(b.id, sampleCount);
+          const caseOrderingMode = b.caseOrderingMode || this.editTraining?.case_ordering_mode || 'continuous';
+          this.addBundleVariables(b.id, sampleCount, caseOrderingMode);
         }
       });
     }
@@ -324,7 +325,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false): void {
+  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
     const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
     const maxAvailable = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
@@ -335,7 +336,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       sampleCount: [defaultSampleCount, [Validators.required, Validators.min(1), Validators.max(maxAvailable)]],
       bundleId: [bundleId],
       bundleName: [bundleName],
-      overlapWarning: [false]
+      overlapWarning: [false],
+      bundleCaseOrderingMode: [bundleCaseOrderingMode || null]
     });
 
     this.variablesFormArray.push(variableGroup);
@@ -376,7 +378,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addBundleVariables(bundleId: number, sampleCount?: number | string): void {
+  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating'): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variable-Bundle nicht gefunden');
@@ -401,7 +403,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       if (this.isVariableAlreadyAdded(variable)) {
         duplicateVariables.push(`${variable.unitName} - ${variable.variableId}`);
       } else {
-        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name);
+        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name, false, caseOrderingMode);
         addedCount += 1;
       }
     });
@@ -412,6 +414,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (duplicateVariables.length > 0) {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
+    }
+
+    if (caseOrderingMode) {
+      bundle.caseOrderingMode = caseOrderingMode;
     }
 
     this.checkForOverlaps();
@@ -432,7 +438,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
-        this.addBundleVariables(bundleId);
+        const defaultMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+        this.addBundleVariables(bundleId, undefined, defaultMode);
         this.selectedBundleIds.add(bundleId);
       });
 
@@ -634,7 +641,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
               createdAt: bundle?.createdAt || new Date(),
               updatedAt: bundle?.updatedAt || new Date(),
               description: bundle?.description,
-              variables: bundle?.variables || []
+              variables: bundle?.variables || [],
+              caseOrderingMode: bundle?.caseOrderingMode
             },
             variables: []
           };
@@ -674,6 +682,19 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   getBundleSampleCount(bundleId: number): number {
     const firstVariable = this.variablesFormArray.controls.find(control => control.get('bundleId')?.value === bundleId);
     return firstVariable?.get('sampleCount')?.value || 10;
+  }
+
+  updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
+    const bundle = this.availableBundles.find(b => b.id === bundleId);
+    if (bundle) {
+      bundle.caseOrderingMode = mode;
+    }
+    this.variablesFormArray.controls.forEach(control => {
+      if (control.get('bundleId')?.value === bundleId) {
+        control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
+      }
+    });
+    this.changeDetectorRef.markForCheck();
   }
 
   hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {
@@ -751,11 +772,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const bundleId = c.get('bundleId')?.value;
       if (bundleId && !seenBundleIds.has(bundleId)) {
         seenBundleIds.add(bundleId);
+        const bundle = this.availableBundles.find(b => b.id === bundleId);
+        const bundleCaseOrderingMode = bundle?.caseOrderingMode || c.get('bundleCaseOrderingMode')?.value;
         assignedVariableBundles.push({
           id: bundleId,
           name: c.get('bundleName')?.value,
           sampleCount: c.get('sampleCount')?.value || 10,
-          caseOrderingMode: this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
+          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
         });
       }
     });

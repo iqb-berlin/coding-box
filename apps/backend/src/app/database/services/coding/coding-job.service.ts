@@ -58,7 +58,7 @@ interface JobCreationWarning {
 }
 
 type VariableReference = { unitName: string; variableId: string };
-type BundleItem = { id: number; name: string; variables: VariableReference[] };
+type BundleItem = { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: VariableReference[] };
 type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
 
 interface SlimResponse {
@@ -1443,7 +1443,7 @@ export class CodingJobService {
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
@@ -1519,15 +1519,19 @@ export class CodingJobService {
     for (const itemObj of items) {
       let itemVariables: { unitName: string; variableId: string }[];
       let itemKey = '';
+      let itemCaseOrderingMode: 'continuous' | 'alternating';
 
       if (itemObj.type === 'bundle') {
         const bundleItem = itemObj.item as BundleItem;
         itemVariables = bundleItem.variables;
         itemKey = bundleItem.name;
+        // Use bundle-specific caseOrderingMode if available, otherwise use global
+        itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
       } else {
         const variableItem = itemObj.item as VariableReference;
         itemVariables = [variableItem];
         itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+        itemCaseOrderingMode = caseOrderingMode;
       }
 
       const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
@@ -1614,12 +1618,12 @@ export class CodingJobService {
       }
 
       const sortedResponses = [...filteredResponses].sort((a, b) => {
-        if (caseOrderingMode === 'alternating') {
-          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+        if (itemCaseOrderingMode === 'alternating') {
           if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
           if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
           if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
           if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
           if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
           return a.id - b.id;
         }
@@ -1701,7 +1705,7 @@ export class CodingJobService {
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
@@ -1789,15 +1793,19 @@ export class CodingJobService {
       for (const itemObj of items) {
         let itemVariables: { unitName: string; variableId: string }[];
         let itemKey = '';
+        let itemCaseOrderingMode: 'continuous' | 'alternating';
 
         if (itemObj.type === 'bundle') {
           const bundleItem = itemObj.item as BundleItem;
           itemVariables = bundleItem.variables;
           itemKey = bundleItem.name;
+          // Use bundle-specific caseOrderingMode if available, otherwise use global
+          itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
         } else {
           const variableItem = itemObj.item as VariableReference;
           itemVariables = [variableItem];
           itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+          itemCaseOrderingMode = caseOrderingMode;
         }
 
         // Fetch responses only for this item to limit peak memory usage
@@ -1903,12 +1911,12 @@ export class CodingJobService {
         }
 
         const sortedResponses = [...filteredResponses].sort((a, b) => {
-          if (caseOrderingMode === 'alternating') {
-            if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+          if (itemCaseOrderingMode === 'alternating') {
             if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
             if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
             if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
             if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+            if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
             if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
             return a.id - b.id;
           }
@@ -1989,7 +1997,7 @@ export class CodingJobService {
               {
                 name: jobName,
                 assignedCoders: [coder.id],
-                caseOrderingMode,
+                caseOrderingMode: itemCaseOrderingMode,
                 ...(itemObj.type === 'bundle' ?
                   { variableBundleIds: [(itemObj.item as { id: number }).id] } :
                   { variables: itemVariables }
