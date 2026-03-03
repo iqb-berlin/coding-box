@@ -1681,7 +1681,6 @@ export class CodingJobService {
         sortedCoders
       );
 
-      // Now simply count what was distributed
       for (let i = 0; i < sortedCoders.length; i++) {
         const coder = sortedCoders[i];
         const coderCases = caseDistribution[i];
@@ -2055,8 +2054,10 @@ export class CodingJobService {
       select: ['code', 'coding_issue_option']
     });
 
-    return codingJobUnits.some(unit => unit.coding_issue_option !== null ||
-      (unit.code !== null && unit.code < 0)
+    return codingJobUnits.some(unit => unit.coding_issue_option === -1 ||
+      unit.coding_issue_option === -2 ||
+      unit.code === -1 ||
+      unit.code === -2
     );
   }
 
