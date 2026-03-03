@@ -22,10 +22,21 @@ import { CommonModule } from '@angular/common';
 import { SelectionModel } from '@angular/cdk/collections';
 
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { Subject, takeUntil } from 'rxjs';
+import { normalizeTestperson } from '../../../replay/utils/token-utils';
+import { PostMessage, PostMessageService } from '../../../core/services/post-message.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
+
+interface ReplayCodeSelectedMessage extends PostMessage {
+  testPerson: string;
+  unitId: string;
+  variableId: string;
+  code: string;
+  responseId?: number;
+}
 
 interface TrainingComparison {
   responseId: number;
@@ -161,6 +172,8 @@ export class CodingResultsComparisonComponent implements OnInit {
   private snackBar = inject(MatSnackBar);
   private codingStatisticsService = inject(CodingStatisticsService);
   private appService = inject(AppService);
+  private postMessageService = inject(PostMessageService);
+  private ngUnsubscribe = new Subject<void>();
 
   isLoading = false;
   isLoadingKappa = false;
@@ -251,6 +264,17 @@ export class CodingResultsComparisonComponent implements OnInit {
         this.loadComparison();
       }
     });
+
+    this.postMessageService.getMessages<ReplayCodeSelectedMessage>('replayCodeSelected')
+      .pipe(takeUntil(this.ngUnsubscribe))
+      .subscribe(msg => {
+        this.handleReplayCodeSelected(msg.message);
+      });
+  }
+
+  ngOnDestroy(): void {
+    this.ngUnsubscribe.next();
+    this.ngUnsubscribe.complete();
   }
 
   ngAfterViewInit(): void {
@@ -294,12 +318,8 @@ export class CodingResultsComparisonComponent implements OnInit {
       }
 
       const hasNotes = this.rowHasNotes(row);
-      if (filters.notesMode === 'none' && hasNotes) {
-        return false;
-      }
-      if (filters.notesMode === 'with-notes' && !hasNotes) {
-        return false;
-      }
+      if (filters.notesMode === 'none') return !hasNotes;
+      if (filters.notesMode === 'with-notes') return hasNotes;
 
       return true;
     };
@@ -481,7 +501,7 @@ export class CodingResultsComparisonComponent implements OnInit {
           next: result => {
             if (result.replayUrl) {
               const separator = result.replayUrl.includes('?') ? '&' : '?';
-              window.open(`${result.replayUrl}${separator}mode=coding`, '_blank');
+              window.open(`${result.replayUrl}${separator}mode=coding&originResponseId=${responseId}`, '_blank');
             }
           }
         });
@@ -1083,5 +1103,40 @@ export class CodingResultsComparisonComponent implements OnInit {
 
   toggleCalculationLevel(): void {
     this.loadKappaStatistics();
+  }
+
+  private handleReplayCodeSelected(data: { testPerson: string; unitId: string; variableId: string; code: string, responseId?: number }): void {
+    if (this.comparisonMode !== 'within-training') return;
+
+    const targetVarId = (data.variableId || '').toLowerCase();
+    const targetUnitId = (data.unitId || '').toLowerCase();
+    const normalizedMsgTP = normalizeTestperson(data.testPerson || '').toLowerCase();
+
+    // 1. Primary match: responseId (most reliable)
+    let row = data.responseId ? this.withinTrainingData.find(d => d.responseId === data.responseId &&
+      (d.variableId || '').toLowerCase() === targetVarId
+    ) : null;
+
+    // 2. Fallback match: unitName + variableId + testperson
+    if (!row) {
+      row = this.withinTrainingData.find(d => {
+        const rowUnitId = (d.unitName || '').toLowerCase();
+        const rowVarId = (d.variableId || '').toLowerCase();
+        const rowTP = normalizeTestperson(d.testperson || '').toLowerCase();
+        return rowUnitId === targetUnitId && rowVarId === targetVarId && rowTP === normalizedMsgTP;
+      });
+    }
+
+    if (row) {
+      this.discussionCodeByResponseId[row.responseId] = data.code;
+      // Trigger the existing save logic as if the user blurs the input
+      this.onDiscussionCodeBlur(row);
+
+      this.snackBar.open(
+        `Codierung für ${data.variableId} aus Replay übernommen: ${data.code}`,
+        this.translate.instant('common.close'),
+        { duration: 3000 }
+      );
+    }
   }
 }
