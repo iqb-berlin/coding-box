@@ -38,6 +38,7 @@ import { CoderTraining } from './entities/coder-training.entity';
 import { CoderTrainingVariable } from './entities/coder-training-variable.entity';
 import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
+import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
 
 @Module({
   imports: [
@@ -87,6 +88,7 @@ import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
           CoderTrainingVariable,
           CoderTrainingBundle,
           CoderTrainingCoder,
+          CoderTrainingDiscussionResult,
           MissingsProfile
         ],
         synchronize: false

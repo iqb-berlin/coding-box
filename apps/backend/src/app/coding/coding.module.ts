@@ -10,11 +10,13 @@ import { CoderTraining } from '../database/entities/coder-training.entity';
 import { CoderTrainingVariable } from '../database/entities/coder-training-variable.entity';
 import { CoderTrainingBundle } from '../database/entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../database/entities/coder-training-coder.entity';
+import { CoderTrainingDiscussionResult } from '../database/entities/coder-training-discussion-result.entity';
 import { MissingsProfile } from '../database/entities/missings-profile.entity';
 import { VariableBundle } from '../database/entities/variable-bundle.entity';
 import { ResponseEntity } from '../database/entities/response.entity';
 import FileUpload from '../database/entities/file_upload.entity';
 import { Setting } from '../database/entities/setting.entity';
+import User from '../database/entities/user.entity';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
@@ -58,9 +60,11 @@ import { WorkspaceModule } from '../workspace/workspace.module';
       CoderTrainingVariable,
       CoderTrainingBundle,
       CoderTrainingCoder,
+      CoderTrainingDiscussionResult,
       MissingsProfile,
       VariableBundle,
       ResponseEntity,
+      User,
       FileUpload,
       Setting,
       Persons,
