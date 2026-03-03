@@ -7,7 +7,7 @@ import { Request } from 'express';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
-  calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping
+  calculateModalValue, getLatestCode, buildCoderMapping, buildCoderNameMapping, mapCodeForExport
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService } from './coding-list.service';
@@ -217,7 +217,8 @@ export class CodingResultsExportService {
 
         const compositeVariableKey = `${unitName}_${variableId}`;
 
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const code = mapCodeForExport(rawCode);
         const comment = unit.notes || null;
 
         if (!testPersonVariableCodes.has(testPersonKey)) {
@@ -290,8 +291,9 @@ export class CodingResultsExportService {
             testPersonVariableComments.get(testPersonKey)!.set(compositeVariableKey, []);
           }
 
-          if (resp.code_v1 !== null) {
-            testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(resp.code_v1);
+          const code = mapCodeForExport(resp.code_v1);
+          if (code !== null) {
+            testPersonVariableCodes.get(testPersonKey)!.get(compositeVariableKey)!.push(code);
           }
 
           variableSet.add(compositeVariableKey);
@@ -530,7 +532,8 @@ export class CodingResultsExportService {
           dataMap.set(rowKey, new Map());
         }
 
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const code = mapCodeForExport(rawCode);
         const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
         const comment = unit.notes || null;
 
@@ -585,7 +588,7 @@ export class CodingResultsExportService {
           }
 
           dataMap.get(rowKey)!.set(autoCoderName, {
-            code: resp.code_v1,
+            code: mapCodeForExport(resp.code_v1),
             score: resp.score_v1,
             comment: null
           });
@@ -653,7 +656,7 @@ export class CodingResultsExportService {
             if (outputCommentsInsteadOfCodes) {
               row[coderName] = coding?.comment || '';
             } else {
-              row[coderName] = coding?.code ?? '';
+              row[coderName] = mapCodeForExport(coding?.code ?? null) ?? '';
             }
 
             if (coding?.code !== null && coding?.code !== undefined) {
@@ -667,7 +670,7 @@ export class CodingResultsExportService {
           // Add modal value
           if (includeModalValue && codes.length > 0) {
             const modalResult = calculateModalValue(codes);
-            row[MODAL_VALUE_HEADER] = modalResult.modalValue;
+            row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
           } else if (includeModalValue) {
             row[MODAL_VALUE_HEADER] = '';
@@ -834,7 +837,8 @@ export class CodingResultsExportService {
           dataMap.set(testPersonKey, new Map());
         }
 
-        const code = unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const rawCode = unit.code ?? unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null;
+        const code = mapCodeForExport(rawCode);
         const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
         const comment = unit.notes || null;
 
@@ -891,7 +895,7 @@ export class CodingResultsExportService {
           }
 
           dataMap.get(testPersonKey)!.set(columnKey, {
-            code: resp.code_v1,
+            code: mapCodeForExport(resp.code_v1),
             score: resp.score_v1,
             comment: null
           });
@@ -950,7 +954,7 @@ export class CodingResultsExportService {
           if (outputCommentsInsteadOfCodes) {
             row[columnLabel] = coding?.comment || '';
           } else {
-            row[columnLabel] = coding?.code ?? '';
+            row[columnLabel] = mapCodeForExport(coding?.code ?? null) ?? '';
           }
 
           if (coding?.code !== null && coding?.code !== undefined) {
@@ -965,7 +969,7 @@ export class CodingResultsExportService {
         // Add modal value
         if (includeModalValue && allCodes.length > 0) {
           const modalResult = calculateModalValue(allCodes);
-          row[MODAL_VALUE_HEADER] = modalResult.modalValue;
+          row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
         } else if (includeModalValue) {
           row[MODAL_VALUE_HEADER] = '';
@@ -1483,8 +1487,7 @@ export class CodingResultsExportService {
                   const comment = comments?.get(coder);
                   row[displayCoder] = comment || '';
                 } else {
-                  // Display empty cell for negative codes (coding issues)
-                  row[displayCoder] = (code !== null && code >= 0) ? code : '';
+                  row[displayCoder] = mapCodeForExport(code) ?? '';
                 }
 
                 // Only include non-negative codes in modal value calculation
@@ -1744,7 +1747,8 @@ export class CodingResultsExportService {
           commentValue = unit.notes || '';
         }
 
-        const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
+        const mappedCode = mapCodeForExport(unit.code);
+        const codeValue = mappedCode === null ? '' : mappedCode.toString();
 
         const rowFields = [
           escapeCsvField(personId),

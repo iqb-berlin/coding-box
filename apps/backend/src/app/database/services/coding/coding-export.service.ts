@@ -9,7 +9,7 @@ import { Request, Response } from 'express';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
-  calculateModalValue, getLatestCode, buildCoderNameMapping
+  calculateModalValue, getLatestCode, buildCoderNameMapping, mapCodeForExport
 } from '../../../utils/coding-utils';
 import { generateUniqueWorksheetName } from '../../../utils/excel-utils';
 import { CodingListService, CodingItem } from './coding-list.service';
@@ -509,8 +509,9 @@ export class CodingExportService {
         const varData = personData.get(pid)!;
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
         const d = varData.get(compositeKey)!;
-        const code = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
-        if (code !== null && code !== undefined) d.codes.push(parseInt(code, 10));
+        const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+        if (code !== null) d.codes.push(code);
         if (row.notes) {
           const coderName = row.username || `Job ${row.jobId}`;
           d.comments.push(`${coderName}: ${row.notes}`);
@@ -524,7 +525,8 @@ export class CodingExportService {
         const varData = personData.get(pid)!;
         if (!varData.has(compositeKey)) varData.set(compositeKey, { codes: [], comments: [] });
         const d = varData.get(compositeKey)!;
-        if (row.code_v1 !== null && row.code_v1 !== undefined) d.codes.push(parseInt(row.code_v1, 10));
+        const code = mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null);
+        if (code !== null) d.codes.push(code);
       });
 
       // Write rows
@@ -544,7 +546,7 @@ export class CodingExportService {
           if (data && data.codes.length > 0) {
             const modalResult = calculateModalValue(data.codes);
             modalValues.set(vKey, modalResult.modalValue);
-            row[vKey] = outputCommentsInsteadOfCodes ? data.comments.join(' | ') : (modalResult.modalValue ?? '');
+            row[vKey] = outputCommentsInsteadOfCodes ? data.comments.join(' | ') : (mapCodeForExport(modalResult.modalValue) ?? '');
           } else {
             row[vKey] = '';
           }
@@ -797,10 +799,11 @@ export class CodingExportService {
         if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
         const coderMap = varMap.get(compositeKey)!;
 
-        const code = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const rawCode = row.cju_code ?? row.code_v3 ?? row.code_v2 ?? row.code_v1;
+        const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
         const score = row.cju_score ?? row.score_v3 ?? row.score_v2 ?? row.score_v1;
         coderMap.set(coderName, {
-          code: code !== null && code !== undefined ? parseInt(code, 10) : null,
+          code,
           score: score !== null && score !== undefined ? parseInt(score, 10) : null,
           comment: row.notes
         });
@@ -815,7 +818,7 @@ export class CodingExportService {
         if (!varMap.has(compositeKey)) varMap.set(compositeKey, new Map());
         const coderMap = varMap.get(compositeKey)!;
         coderMap.set(coderName, {
-          code: row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null,
+          code: mapCodeForExport(row.code_v1 !== null && row.code_v1 !== undefined ? parseInt(row.code_v1, 10) : null),
           score: row.score_v1 !== null && row.score_v1 !== undefined ? parseInt(row.score_v1, 10) : null,
           comment: null
         });
@@ -858,7 +861,7 @@ export class CodingExportService {
 
           if (includeModalValue) {
             const modalResult = calculateModalValue(codes);
-            row[MODAL_VALUE_HEADER] = modalResult.modalValue ?? '';
+            row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
             row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
           }
 
@@ -1124,7 +1127,7 @@ export class CodingExportService {
 
         if (includeModalValue) {
           const modalResult = calculateModalValue(codes);
-          row[MODAL_VALUE_HEADER] = modalResult.modalValue ?? '';
+          row[MODAL_VALUE_HEADER] = mapCodeForExport(modalResult.modalValue) ?? '';
           row[DEVIATION_COUNT_HEADER] = modalResult.deviationCount;
         }
 
@@ -1270,7 +1273,8 @@ export class CodingExportService {
           }
           const pData = personDataMap.get(pid)!;
           const latest = getLatestCode(resp);
-          const code = resp.cju_code ?? latest.code;
+          const rawCode = resp.cju_code ?? latest.code;
+          const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
           pData[resp.variableId] = outputCommentsInsteadOfCodes ? resp.notes || '' : code ?? '';
           pData[`_metadata_${resp.variableId}`] = { unitName: resp.unitName, bookletName: resp.bookletName };
         }
@@ -1479,7 +1483,9 @@ export class CodingExportService {
           const p = personGroup.get(pid)!;
           if (d.username) {
             const latest = getLatestCode(d);
-            p.codings[d.username] = { code: d.cju_code ?? latest.code, notes: d.notes, status: d.status_v1 };
+            const rawCode = d.cju_code ?? latest.code;
+            const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
+            p.codings[d.username] = { code, notes: d.notes, status: d.status_v1 };
           }
         }
 
@@ -1749,7 +1755,8 @@ export class CodingExportService {
           }
 
           const timestamp = unit.updated_at ? new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
-          const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
+          const mappedCode = mapCodeForExport(unit.code);
+          const codeValue = mappedCode === null ? '' : mappedCode.toString();
           const scoreValue = unit.score !== null && unit.score !== undefined ? unit.score.toString() : '';
 
           let commentValue = unit.notes || '';

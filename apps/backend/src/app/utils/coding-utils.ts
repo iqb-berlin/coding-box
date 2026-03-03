@@ -89,6 +89,22 @@ export function getLatestCode(response: ResponseEntity): { code: number | null; 
 }
 
 /**
+ * Maps internal code values to export representation.
+ *
+ * Rules:
+ * -3 -> -98
+ * -4 -> -97
+ * -1/-2 -> empty (null)
+ */
+export function mapCodeForExport(code: number | null | undefined): number | null {
+  if (code === null || code === undefined) return null;
+  if (code === -3) return -98;
+  if (code === -4) return -97;
+  if (code === -1 || code === -2) return null;
+  return code;
+}
+
+/**
  * Builds a mapping of coder names to anonymous identifiers (K1, K2, etc.).
  *
  * @param coders - Array of real coder names
