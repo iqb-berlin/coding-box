@@ -9,12 +9,15 @@ import { CoderTraining } from '../../entities/coder-training.entity';
 import { CoderTrainingVariable } from '../../entities/coder-training-variable.entity';
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import User from '../../entities/user.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { MissingsProfilesService } from './missings-profiles.service';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -75,13 +78,157 @@ export class CoderTrainingService {
     private coderTrainingBundleRepository: Repository<CoderTrainingBundle>,
     @InjectRepository(CoderTrainingCoder)
     private coderTrainingCoderRepository: Repository<CoderTrainingCoder>,
+    @InjectRepository(CoderTrainingDiscussionResult)
+    private coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>,
+    @InjectRepository(User)
+    private userRepository: Repository<User>,
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
     private codingJobService: CodingJobService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private missingsProfilesService: MissingsProfilesService
   ) { }
+
+  private async buildMissingCodesByJobId(
+    workspaceId: number,
+    jobs: Array<Pick<CodingJob, 'id' | 'missings_profile_id'>>
+  ): Promise<Map<number, { mirCode: number; mciCode: number }>> {
+    const profileIds = [...new Set(jobs
+      .map(job => job.missings_profile_id)
+      .filter((id): id is number => id !== null && id !== undefined))];
+
+    const missingCodesByProfileId = new Map<number, { mirCode: number; mciCode: number }>();
+
+    for (const profileId of profileIds) {
+      const profile = await this.missingsProfilesService.getMissingsProfileDetails(workspaceId, profileId);
+      const missings = profile?.parseMissings() || [];
+
+      const mirMissing = missings.find(m => m.id === 'mir' ||
+        m.label?.toLowerCase().includes('invalid') ||
+        m.label?.toLowerCase().includes('spa')
+      );
+
+      const mciMissing = missings.find(m => m.id === 'mci' ||
+        m.label?.toLowerCase().includes('coding impossible') ||
+        m.label?.toLowerCase().includes('techn')
+      );
+
+      missingCodesByProfileId.set(profileId, {
+        mirCode: mirMissing?.code ?? -98,
+        mciCode: mciMissing?.code ?? -97
+      });
+    }
+
+    const missingCodesByJobId = new Map<number, { mirCode: number; mciCode: number }>();
+    jobs.forEach(job => {
+      const profileCodes = job.missings_profile_id ? missingCodesByProfileId.get(job.missings_profile_id) : undefined;
+      missingCodesByJobId.set(job.id, profileCodes ?? { mirCode: -98, mciCode: -97 });
+    });
+
+    return missingCodesByJobId;
+  }
+
+  private mapDisplayCodeAndScore(
+    code: number | null,
+    score: number | null,
+    codingIssueOption: number | null,
+    missingCodes: { mirCode: number; mciCode: number }
+  ): { code: string | null; score: number | null } {
+    if (code === null && codingIssueOption === null) {
+      return { code: null, score };
+    }
+
+    if (code === -3 || codingIssueOption === -3) {
+      return {
+        code: missingCodes.mirCode.toString(),
+        score: score ?? 0
+      };
+    }
+
+    if (code === -4 || codingIssueOption === -4) {
+      return {
+        code: missingCodes.mciCode.toString(),
+        score
+      };
+    }
+
+    return {
+      code: code !== null ? code.toString() : null,
+      score
+    };
+  }
+
+  async saveDiscussionResult(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    managerUserId: number | null,
+    managerName: string | null,
+    code: number | null,
+    score: number | null
+  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+    const training = await this.coderTrainingRepository.findOne({
+      where: {
+        id: trainingId,
+        workspace_id: workspaceId
+      },
+      relations: ['codingJobs', 'codingJobs.codingJobUnits']
+    });
+
+    if (!training) {
+      throw new Error(`Training ${trainingId} not found in workspace ${workspaceId}`);
+    }
+
+    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => unit.response_id === responseId)
+    );
+
+    if (!hasResponseInTraining) {
+      throw new Error(`Response ${responseId} is not part of training ${trainingId}`);
+    }
+
+    const existing = await this.coderTrainingDiscussionResultRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId,
+        response_id: responseId
+      }
+    });
+
+    if (code === null) {
+      if (existing) {
+        await this.coderTrainingDiscussionResultRepository.delete(existing.id);
+      }
+      return {
+        success: true,
+        code: null,
+        score: null,
+        managerUserId: null,
+        managerName: null
+      };
+    }
+
+    const discussionResult = existing || this.coderTrainingDiscussionResultRepository.create({
+      workspace_id: workspaceId,
+      training_id: trainingId,
+      response_id: responseId
+    });
+
+    discussionResult.code = code;
+    discussionResult.score = score;
+    discussionResult.manager_user_id = managerUserId;
+    discussionResult.manager_name = managerName;
+
+    const saved = await this.coderTrainingDiscussionResultRepository.save(discussionResult);
+    return {
+      success: true,
+      code: saved.code,
+      score: saved.score,
+      managerUserId: saved.manager_user_id,
+      managerName: saved.manager_name
+    };
+  }
 
   private sampleResponses(
     responses: CoderTrainingResponse[],
@@ -440,6 +587,7 @@ export class CoderTrainingService {
     workspaceId: number,
     trainingIds: number[]
   ): Promise<Array<{
+      responseId: number;
       unitName: string;
       variableId: string;
       personCode: string;
@@ -453,6 +601,8 @@ export class CoderTrainingService {
         coderName: string;
         code: string | null;
         score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
       }>;
     }>> {
     this.logger.log(`Getting coding comparison for trainings ${trainingIds.join(', ')} in workspace ${workspaceId}`);
@@ -474,6 +624,9 @@ export class CoderTrainingService {
     if (trainings.length === 0) {
       return [];
     }
+
+    const allTrainingJobs = trainings.flatMap(training => training.codingJobs || []);
+    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, allTrainingJobs);
 
     const responseMap = new Map<number, {
       unitName: string;
@@ -506,6 +659,7 @@ export class CoderTrainingService {
     });
 
     const comparisonData: Array<{
+      responseId: number;
       unitName: string;
       variableId: string;
       personCode: string;
@@ -519,6 +673,8 @@ export class CoderTrainingService {
         coderName: string;
         code: string | null;
         score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
       }>;
     }> = [];
 
@@ -531,6 +687,8 @@ export class CoderTrainingService {
         coderName: string;
         code: string | null;
         score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
       }> = [];
 
       for (const training of trainings) {
@@ -549,23 +707,22 @@ export class CoderTrainingService {
 
             if (unit) {
               // This coder HAS this response assigned
-              let code: string | null = null;
-              let score: number | null = null;
-
-              if (unit.code !== null) {
-                code = unit.code.toString();
-              }
-              if (unit.score !== null) {
-                score = unit.score;
-              }
+              const mappedDisplay = this.mapDisplayCodeAndScore(
+                unit.code,
+                unit.score,
+                unit.coding_issue_option,
+                missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+              );
 
               codersData.push({
                 trainingId: training.id,
                 trainingLabel: training.label,
                 coderId: job.id,
                 coderName: coderName,
-                code,
-                score
+                code: mappedDisplay.code,
+                score: mappedDisplay.score,
+                notes: unit.notes,
+                codingIssueOption: unit.coding_issue_option
               });
             }
           }
@@ -573,6 +730,7 @@ export class CoderTrainingService {
       }
 
       comparisonData.push({
+        responseId,
         unitName: info.unitName,
         variableId: info.variableId,
         personCode: info.personCode,
@@ -600,6 +758,8 @@ export class CoderTrainingService {
     trainingId: number
   ): Promise<Array<{
 
+      responseId: number;
+
       unitName: string;
       variableId: string;
       personCode: string;
@@ -607,11 +767,19 @@ export class CoderTrainingService {
       personGroup: string;
       testPerson: string;
       givenAnswer: string;
+      replayCode: number | null;
+      replayScore: number | null;
+      discussionCode: number | null;
+      discussionScore: number | null;
+      discussionManagerUserId: number | null;
+      discussionManagerName: string | null;
       coders: Array<{
         jobId: number;
         coderName: string;
         code: string | null;
         score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
       }>;
     }>> {
     this.logger.log(`Getting within-training coding comparison for training ${trainingId} in workspace ${workspaceId}`);
@@ -628,6 +796,8 @@ export class CoderTrainingService {
       return [];
     }
 
+    const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
+
     const unitVariableMap = new Map<string, {
       responseId: number;
       unitName: string;
@@ -636,7 +806,9 @@ export class CoderTrainingService {
       personLogin: string;
       personGroup: string;
       testPerson: string;
-      givenAnswer: string
+      givenAnswer: string;
+      replayCode: number | null;
+      replayScore: number | null;
     }>();
 
     training.codingJobs.forEach(job => {
@@ -655,13 +827,42 @@ export class CoderTrainingService {
             personLogin: unit.person_login,
             personGroup: personGroup,
             testPerson,
-            givenAnswer
+            givenAnswer,
+            replayCode: unit.response?.code_v3 ?? unit.response?.code_v2 ?? unit.response?.code_v1 ?? null,
+            replayScore: unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null
           });
         }
       });
     });
 
     const comparisonData = [];
+    const responseIds = Array.from(unitVariableMap.values()).map(item => item.responseId);
+    const persistedDiscussionResults = responseIds.length > 0 ?
+      await this.coderTrainingDiscussionResultRepository.find({
+        where: {
+          workspace_id: workspaceId,
+          training_id: trainingId,
+          response_id: In(responseIds)
+        }
+      }) :
+      [];
+    const discussionByResponseId = new Map<number, CoderTrainingDiscussionResult>();
+    persistedDiscussionResults.forEach(result => {
+      discussionByResponseId.set(result.response_id, result);
+    });
+
+    const managerUserIds = [...new Set(persistedDiscussionResults
+      .map(result => result.manager_user_id)
+      .filter((id): id is number => id !== null && id !== undefined))];
+    const managerNameById = new Map<number, string>();
+    if (managerUserIds.length > 0) {
+      const users = await this.userRepository.find({
+        where: { id: In(managerUserIds) }
+      });
+      users.forEach(user => {
+        managerNameById.set(user.id, user.username);
+      });
+    }
 
     for (const [, unitVar] of unitVariableMap.entries()) {
       const codersData: Array<{
@@ -669,11 +870,15 @@ export class CoderTrainingService {
         coderName: string;
         code: string | null;
         score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
       }> = [];
 
       for (const job of training.codingJobs) {
-        let code: string | null = null;
+        let code: number | null = null;
         let score: number | null = null;
+        let notes: string | null = null;
+        let codingIssueOption: number | null = null;
 
         const coderName = job.codingJobCoders && job.codingJobCoders.length > 0 && job.codingJobCoders[0].user ?
           `${job.codingJobCoders[0].user.username || 'Unknown'}` :
@@ -681,24 +886,36 @@ export class CoderTrainingService {
 
         job.codingJobUnits?.forEach(unit => {
           if (unit.response_id === unitVar.responseId) {
-            if (unit.code !== null) {
-              code = unit.code.toString();
-            }
+            code = unit.code;
             if (unit.score !== null) {
               score = unit.score;
             }
+            notes = unit.notes;
+            codingIssueOption = unit.coding_issue_option;
           }
         });
+
+        const mappedDisplay = this.mapDisplayCodeAndScore(
+          code,
+          score,
+          codingIssueOption,
+          missingCodesByJobId.get(job.id) ?? { mirCode: -98, mciCode: -97 }
+        );
 
         codersData.push({
           jobId: job.id,
           coderName,
-          code,
-          score
+          code: mappedDisplay.code,
+          score: mappedDisplay.score,
+          notes,
+          codingIssueOption
         });
       }
 
+      const discussionResult = discussionByResponseId.get(unitVar.responseId);
+
       comparisonData.push({
+        responseId: unitVar.responseId,
         unitName: unitVar.unitName,
         variableId: unitVar.variableId,
         personCode: unitVar.personCode,
@@ -706,6 +923,12 @@ export class CoderTrainingService {
         personGroup: unitVar.personGroup,
         testPerson: unitVar.testPerson,
         givenAnswer: unitVar.givenAnswer,
+        replayCode: unitVar.replayCode,
+        replayScore: unitVar.replayScore,
+        discussionCode: discussionResult?.code ?? null,
+        discussionScore: discussionResult?.score ?? null,
+        discussionManagerUserId: discussionResult?.manager_user_id ?? null,
+        discussionManagerName: discussionResult?.manager_user_id ? (managerNameById.get(discussionResult.manager_user_id) ?? discussionResult.manager_name ?? null) : (discussionResult?.manager_name ?? null),
         coders: codersData
       });
     }

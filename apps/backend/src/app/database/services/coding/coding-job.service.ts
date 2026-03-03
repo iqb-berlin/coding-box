@@ -13,6 +13,7 @@ import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { CreateCodingJobDto } from '../../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
@@ -96,6 +97,8 @@ export class CodingJobService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
+    @InjectRepository(CoderTrainingDiscussionResult)
+    private discussionResultRepository: Repository<CoderTrainingDiscussionResult>,
     private connection: Connection,
     private cacheService: CacheService,
     private workspaceFilesService: WorkspaceFilesService
@@ -681,9 +684,52 @@ export class CodingJobService {
 
     await this.codingJobUnitRepository.save(codingJobUnit);
 
+    // If this coding job belongs to a training, also save as discussion result
+    if (codingJob.training_id && codingJobUnit.response_id && progress.selectedCode) {
+      try {
+        await this.saveDiscussionResultForTraining(
+          codingJob.workspace_id,
+          codingJob.training_id,
+          codingJobUnit.response_id,
+          progress.selectedCode.id,
+          progress.selectedCode.score ?? null
+        );
+      } catch (error) {
+        // Log but don't fail the coding progress save
+        this.logger.warn(`Failed to save discussion result for training ${codingJob.training_id}, response ${codingJobUnit.response_id}: ${error.message}`);
+      }
+    }
+
     await this.checkAndUpdateCodingJobCompletion(codingJobId);
 
     return codingJob;
+  }
+
+  private async saveDiscussionResultForTraining(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    code: number,
+    score: number | null
+  ): Promise<void> {
+    const existing = await this.discussionResultRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId,
+        response_id: responseId
+      }
+    });
+
+    const discussionResult = existing || this.discussionResultRepository.create({
+      workspace_id: workspaceId,
+      training_id: trainingId,
+      response_id: responseId
+    });
+
+    discussionResult.code = code;
+    discussionResult.score = score;
+
+    await this.discussionResultRepository.save(discussionResult);
   }
 
   async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {

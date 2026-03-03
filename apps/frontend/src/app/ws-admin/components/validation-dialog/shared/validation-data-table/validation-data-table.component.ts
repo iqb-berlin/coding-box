@@ -42,7 +42,7 @@ export interface ValidationTableColumn {
                        (change)="toggleSelection(element)"
                        [disabled]="!canSelect(element)">
               } @else if (column.type === 'link') {
-                <a href="javascript:void(0)" (click)="onLinkClick(element, column.key)">
+                <a class="table-link" (click)="$event.preventDefault(); onLinkClick(element, column.key)">
                   {{ getValue(element, column.key) }}
                 </a>
               } @else {
@@ -78,6 +78,12 @@ export interface ValidationTableColumn {
 
     mat-paginator {
       margin-top: 16px;
+    }
+
+    .table-link {
+      cursor: pointer;
+      color: #2196F3;
+      text-decoration: underline;
     }
   `]
 })

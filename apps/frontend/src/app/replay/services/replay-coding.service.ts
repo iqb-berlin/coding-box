@@ -7,6 +7,7 @@ import {
   Code, VariableCoding, CodingScheme, CodeSelectedEvent
 } from '../../models/coding-interfaces';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
+import { normalizeTestperson } from '../utils/token-utils';
 
 interface SavedCode {
   id: number;
@@ -199,18 +200,20 @@ export class ReplayCodingService {
     unitId: string,
     workspaceId: number,
     unitsData: UnitsReplay | null
-  ): Promise<void> {
+  ): Promise<SavedCode | null> {
     const compositeKey = this.generateCompositeKey(testPerson, unitId, event.variableId);
 
     if (event.code === null && event.codingIssueOption === null) {
       this.selectedCodes.delete(compositeKey);
-      return;
+      return null;
     }
+
+    let normalizedCode: SavedCode | null = null;
 
     // Handle regular code
     if (event.code) {
       const code = event.code as { id: number; label: string; score?: number };
-      const normalizedCode: SavedCode = {
+      normalizedCode = {
         id: code.id,
         code: String(code.id),
         label: code.label,
@@ -230,7 +233,7 @@ export class ReplayCodingService {
     } else if (event.codingIssueOption) {
       // Handle coding issue option-only case (legacy support)
       const codingIssueOption = event.codingIssueOption;
-      const normalizedCode: SavedCode = {
+      normalizedCode = {
         id: codingIssueOption.code,
         code: String(codingIssueOption.code),
         label: codingIssueOption.label,
@@ -246,18 +249,11 @@ export class ReplayCodingService {
     }
 
     this.checkCodingJobCompletion(unitsData);
-  }
-
-  private normalizeTestPerson(testPerson: string): string {
-    const parts = testPerson.split('@');
-    if (parts.length === 4) {
-      return `${parts[0]}@${parts[1]}@${parts[3]}`; // login@code@booklet
-    }
-    return testPerson; // assume 3 parts is already normalized
+    return normalizedCode;
   }
 
   generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
-    const normalizedTestPerson = this.normalizeTestPerson(testPerson);
+    const normalizedTestPerson = normalizeTestperson(testPerson);
     let bookletId = 'default';
     if (normalizedTestPerson) {
       const parts = normalizedTestPerson.split('@');

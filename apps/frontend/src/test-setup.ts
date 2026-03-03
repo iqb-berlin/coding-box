@@ -54,7 +54,13 @@ const originalError = console.error;
 beforeAll(() => {
   // eslint-disable-next-line no-console
   console.error = jest.fn((...args) => {
-    if (args[0]?.message?.includes('Could not parse CSS stylesheet')) {
+    if (args[0]?.message?.includes('Could not parse CSS stylesheet') ||
+        args[0]?.message?.includes('Not implemented: navigation')) {
+      return;
+    }
+    // Handle the case where the error is just a string or has a different structure
+    const errorMessage = typeof args[0] === 'string' ? args[0] : (args[0]?.message || '');
+    if (errorMessage.includes('Not implemented: navigation')) {
       return;
     }
     originalError.call(console, ...args);

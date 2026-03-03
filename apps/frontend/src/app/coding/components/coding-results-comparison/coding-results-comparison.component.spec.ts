@@ -10,6 +10,8 @@ import { TranslateModule } from '@ngx-translate/core';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
+import { CodingStatisticsService } from '../../services/coding-statistics.service';
+import { AppService } from '../../../core/services/app.service';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -46,7 +48,22 @@ describe('CodingResultsComparisonComponent', () => {
             getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
             compareTrainingCodingResults: jest.fn(),
             compareWithinTrainingCodingResults: jest.fn(),
+            saveDiscussionResult: jest.fn(),
             getTrainingCohensKappa: jest.fn()
+          }
+        },
+        {
+          provide: CodingStatisticsService,
+          useValue: {
+            getReplayUrl: jest.fn()
+          }
+        },
+        {
+          provide: AppService,
+          useValue: {
+            authData: { userName: 'Test User' },
+            loggedUser: undefined,
+            createToken: jest.fn()
           }
         }
       ]
@@ -66,6 +83,7 @@ describe('CodingResultsComparisonComponent', () => {
       component.comparisonMode = 'between-trainings';
       component.comparisonData = [
         {
+          responseId: 1,
           unitName: 'Unit1',
           variableId: 'Var1',
           testPerson: 'Test1',
@@ -92,6 +110,7 @@ describe('CodingResultsComparisonComponent', () => {
           ]
         },
         {
+          responseId: 2,
           unitName: 'Unit2',
           variableId: 'Var2',
           testPerson: 'Test2',
@@ -118,6 +137,7 @@ describe('CodingResultsComparisonComponent', () => {
           ]
         },
         {
+          responseId: 3,
           unitName: 'Unit3',
           variableId: 'Var3',
           testPerson: 'Test3',
@@ -158,6 +178,7 @@ describe('CodingResultsComparisonComponent', () => {
       component.comparisonMode = 'within-training';
       component.withinTrainingData = [
         {
+          responseId: 1,
           unitName: 'Unit1',
           variableId: 'Var1',
           testperson: 'Test1',
@@ -177,6 +198,7 @@ describe('CodingResultsComparisonComponent', () => {
           ]
         },
         {
+          responseId: 2,
           unitName: 'Unit2',
           variableId: 'Var2',
           testperson: 'Test2',

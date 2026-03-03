@@ -104,6 +104,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayStartTime: number = 0; // Track when replay viewing starts
   protected reloadKey: number = 0;
   workspaceId: number = 0;
+  originResponseId: number | null = null;
 
   // Resize handle state
   codePanelWidth: number = 350;
@@ -172,6 +173,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isCodingMode = queryParams.mode === 'coding';
         this.isBookletReplayMode = queryParams.mode === 'booklet-view';
+        this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
         if (this.isCodingMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
@@ -315,6 +317,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } = params;
     this.page = page;
     this.anchor = anchor;
+    if (this.isCodingMode && anchor) {
+      this.codingService.currentVariableId = anchor;
+    }
     this.unitId = unitId;
     this.setTestPerson(testPerson);
   }
@@ -754,7 +759,24 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
-    await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+    const savedCode = await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+
+    if (savedCode && window.opener && this.originResponseId) {
+      window.opener.postMessage({
+        type: 'replayCodeSelected',
+        testPerson: this.testPerson,
+        unitId: this.unitId,
+        variableId: event.variableId,
+        code: savedCode.code,
+        responseId: this.originResponseId
+      }, '*');
+
+      this.errorSnackBar.open(
+        `Code ${savedCode.code} an Vergleichsliste gesendet`,
+        'Ok',
+        { duration: 2000 }
+      );
+    }
   }
 
   getCoderNotes(): string {
