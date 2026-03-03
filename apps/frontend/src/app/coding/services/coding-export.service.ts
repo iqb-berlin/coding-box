@@ -189,16 +189,24 @@ export class CodingExportService {
     format?: 'csv' | 'json' | 'excel',
     includeReplayUrls: boolean = false
   ): Observable<{ jobId: string; message: string }> {
-    const payload = {
-      exportType,
-      version,
-      format,
-      includeReplayUrl: includeReplayUrls
-    };
+    const identity = this.appService.loggedUser?.sub || '';
+    return this.appService.createToken(workspaceId, identity, 60).pipe(
+      catchError(() => of('')),
+      switchMap(token => {
+        const payload = {
+          exportType,
+          version,
+          format,
+          includeReplayUrl: includeReplayUrls,
+          authToken: token,
+          serverUrl: window.location.origin
+        };
 
-    return this.http.post<{ jobId: string; message: string }>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`,
-      payload
+        return this.http.post<{ jobId: string; message: string }>(
+          `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`,
+          payload
+        );
+      })
     );
   }
 

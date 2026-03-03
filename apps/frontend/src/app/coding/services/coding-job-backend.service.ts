@@ -33,6 +33,7 @@ export interface CodingExportConfig {
   coderTrainingIds?: number[];
   coderIds?: number[];
   authToken?: string;
+  serverUrl?: string;
 }
 
 interface JobDefinitionApiResponse {
@@ -470,9 +471,14 @@ export class CodingJobBackendService {
     exportConfig: CodingExportConfig
   ): Observable<{ jobId: string; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/start`;
+    // Ensure serverUrl is set if not provided
+    const configWithServerUrl = {
+      ...exportConfig,
+      serverUrl: exportConfig.serverUrl || window.location.origin
+    };
     return this.http.post<{ jobId: string; message: string }>(
       url,
-      exportConfig,
+      configWithServerUrl,
       {
         headers: this.authHeader
       }
