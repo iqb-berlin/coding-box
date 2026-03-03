@@ -246,7 +246,15 @@
       "new-column-per-coder": "pro Kodierer neue Spalte",
       "new-column-per-coder-tooltip": "Spalte bilden die Variablen, als Zeilen sind die Personen genutzt und pro Kodierer hat die Variable eine weitere Spalte. Beispiel für Spaltenbeschriftung: Variablenname_Kodierer",
       "most-frequent-random": "Kodierer: häufigster/Zufall",
-      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt."
+      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt.",
+      "filter-jobs-trainings": "Enthaltene Job-Definitionen und Schulungen",
+      "filter-coders": "Enthaltene Kodierer",
+      "job-definitions": "Job-Definitionen",
+      "coder-trainings": "Schulungen",
+      "coders": "Kodierer",
+      "all-selected": "Alle ausgewählt",
+      "select-all": "Alle auswählen",
+      "deselect-all": "Auswahl aufheben"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
