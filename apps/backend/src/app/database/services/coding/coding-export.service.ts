@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Readable, PassThrough } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  In, IsNull, Not, Repository
+  In, Repository, SelectQueryBuilder, Brackets
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
@@ -17,6 +17,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
@@ -32,6 +33,8 @@ export class CodingExportService {
     private codingJobVariableRepository: Repository<CodingJobVariable>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
+    @InjectRepository(CoderTrainingDiscussionResult)
+    private coderTrainingDiscussionResultRepository: Repository<CoderTrainingDiscussionResult>,
     private codingListService: CodingListService,
     private workspaceCoreService: WorkspaceCoreService
   ) { }
@@ -299,16 +302,19 @@ export class CodingExportService {
     authToken = '',
     req?: Request,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated coding results for workspace ${workspaceId} with method: ${doubleCodingMethod}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ' (including auto-coded)'}`);
 
     this.clearPageMapsCache();
 
     if (doubleCodingMethod === 'new-row-per-variable') {
-      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation);
+      return this.exportAggregatedNewRowPerVariable(workspaceId, outputCommentsInsteadOfCodes, includeReplayUrl, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, authToken, req, excludeAutoCoded, checkCancellation, jobDefinitionIds, coderTrainingIds, coderIds);
     } if (doubleCodingMethod === 'new-column-per-coder') {
-      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded, checkCancellation);
+      return this.exportAggregatedNewColumnPerCoder(workspaceId, outputCommentsInsteadOfCodes, anonymizeCoders, usePseudoCoders, includeComments, includeModalValue, excludeAutoCoded, checkCancellation, jobDefinitionIds, coderTrainingIds, coderIds);
     }
 
     this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
@@ -327,11 +333,15 @@ export class CodingExportService {
     }
 
     // 1. Get all variables to define columns
-    const variableRecords = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const variableRecordsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const variableRecords = await variableRecordsQuery
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id')
       .getRawMany();
@@ -373,7 +383,7 @@ export class CodingExportService {
     const variables = Array.from(variableSet).sort();
 
     // 2. Get all distinct test persons metadata
-    const personResults = await this.responseRepository.createQueryBuilder('resp')
+    const personResultsQuery = this.responseRepository.createQueryBuilder('resp')
       .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
@@ -383,7 +393,15 @@ export class CodingExportService {
       .addSelect('MAX(person.code)', 'code')
       .addSelect('MAX(person.group)', 'group')
       .addSelect('MAX(bookletinfo.name)', 'bookletName')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId });
+
+    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+      personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .innerJoin('cju.coding_job', 'cj');
+      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    }
+
+    const personResults = await personResultsQuery
       .groupBy('person.id')
       .orderBy('MAX(person.login)', 'ASC')
       .addOrderBy('MAX(person.code)', 'ASC')
@@ -422,7 +440,7 @@ export class CodingExportService {
       const batchPersonIds = batch.map(p => p.id);
 
       // Fetch coding results for this batch
-      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      const manualCodingQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
         .innerJoin('cju.coding_job', 'cj')
         .innerJoin('cju.response', 'resp')
         .innerJoin('resp.unit', 'unit')
@@ -439,8 +457,11 @@ export class CodingExportService {
         .addSelect('cju.notes', 'notes')
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
-        .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .getRawMany();
+        .where('person.id IN (:...ids)', { ids: batchPersonIds });
+
+      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+      const manualCoding = await manualCodingQuery.getRawMany();
 
       const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
@@ -544,7 +565,10 @@ export class CodingExportService {
     authToken: string,
     req?: Request,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-row-per-variable method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
@@ -562,12 +586,15 @@ export class CodingExportService {
       manualCodingVariableSet = new Set<string>(codingListVariables.map(item => `${item.unitName}|${item.variableId}`));
     }
 
-    // 1. Get all variables
-    const variableRecords = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const variableRecordsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const variableRecords = await variableRecordsQuery
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id')
       .getRawMany();
@@ -608,12 +635,15 @@ export class CodingExportService {
 
     const sortedVariables = Array.from(variableSet).sort();
 
-    // 2. Get all coders
-    const coderRecords = await this.codingJobRepository.createQueryBuilder('cj')
+    const coderRecordsQuery = this.codingJobRepository.createQueryBuilder('cj')
       .innerJoin('cj.codingJobCoders', 'cjc')
       .innerJoin('cjc.user', 'user')
       .select('user.username', 'userName')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const coderRecords = await coderRecordsQuery
       .groupBy('user.username')
       .getRawMany();
 
@@ -626,7 +656,7 @@ export class CodingExportService {
     }
 
     // 3. Get all persons
-    const personResults = await this.responseRepository.createQueryBuilder('resp')
+    const personResultsQuery = this.responseRepository.createQueryBuilder('resp')
       .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
@@ -636,7 +666,15 @@ export class CodingExportService {
       .addSelect('MAX(person.code)', 'code')
       .addSelect('MAX(person.group)', 'group')
       .addSelect('MAX(bookletinfo.name)', 'bookletName')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId });
+
+    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+      personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .innerJoin('cju.coding_job', 'cj');
+      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    }
+
+    const personResults = await personResultsQuery
       .groupBy('person.id')
       .orderBy('MAX(person.login)', 'ASC')
       .addOrderBy('MAX(person.code)', 'ASC')
@@ -680,7 +718,7 @@ export class CodingExportService {
       const batch = personResults.slice(i, i + batchSize);
       const batchPersonIds = batch.map(p => p.id);
 
-      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      const manualCodingQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
         .innerJoin('cju.coding_job', 'cj')
         .innerJoin('cju.response', 'resp')
         .innerJoin('resp.unit', 'unit')
@@ -700,8 +738,11 @@ export class CodingExportService {
         .addSelect('cju.notes', 'notes')
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
-        .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .getRawMany();
+        .where('person.id IN (:...ids)', { ids: batchPersonIds });
+
+      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+      const manualCoding = await manualCodingQuery.getRawMany();
 
       const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
@@ -776,8 +817,8 @@ export class CodingExportService {
           allCoderNames.forEach(coderName => {
             const data = coderDataMap?.get(coderName);
             const displayName = anonymizeCoders ? coderMapping.get(coderName)! : coderName;
-            row[`${displayName} Code`] = data?.code ?? '';
-            row[`${displayName} Score`] = data?.score ?? '';
+            row[`${displayName} Code`] = outputCommentsInsteadOfCodes ? (data?.comment ?? '') : (data?.code ?? '');
+            row[`${displayName} Score`] = outputCommentsInsteadOfCodes ? '' : (data?.score ?? '');
             if (includeComments) row[`${displayName} Note`] = data?.comment ?? '';
             if (data?.code !== null && data?.code !== undefined) codes.push(data.code);
             if (data?.comment) comments.push(`${displayName}: ${data.comment}`);
@@ -823,7 +864,10 @@ export class CodingExportService {
     includeComments: boolean,
     includeModalValue: boolean,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting aggregated results with new-column-per-coder method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
@@ -842,11 +886,15 @@ export class CodingExportService {
     }
 
     // 1. Get all coders to build mapping
-    const coderRecords = await this.codingJobRepository.createQueryBuilder('cj')
+    const coderRecordsQuery = this.codingJobRepository.createQueryBuilder('cj')
       .innerJoin('cj.codingJobCoders', 'cjc')
       .innerJoin('cjc.user', 'user')
       .select('user.username', 'userName')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const coderRecords = await coderRecordsQuery
       .groupBy('user.username')
       .getRawMany();
     const allCoderNamesList = coderRecords.map(c => c.userName).sort();
@@ -858,14 +906,18 @@ export class CodingExportService {
     }
 
     // 2. Get all variable-coder pairs for columns
-    const variableCoderPairs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const variableCoderPairsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .innerJoin('cj.codingJobCoders', 'cjc')
       .innerJoin('cjc.user', 'user')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('user.username', 'userName')
-      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(variableCoderPairsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const variableCoderPairs = await variableCoderPairsQuery
       .groupBy('cju.unit_name')
       .addGroupBy('cju.variable_id')
       .addGroupBy('user.username')
@@ -904,7 +956,7 @@ export class CodingExportService {
     const sortedColumns = Array.from(colSet).sort();
 
     // 3. Get all persons
-    const personResults = await this.responseRepository.createQueryBuilder('resp')
+    const personResultsQuery = this.responseRepository.createQueryBuilder('resp')
       .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
@@ -912,7 +964,15 @@ export class CodingExportService {
       .addSelect('MAX(person.login)', 'login')
       .addSelect('MAX(person.code)', 'code')
       .addSelect('MAX(person.group)', 'group')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .where('person.workspace_id = :workspaceId', { workspaceId });
+
+    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+      personResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .innerJoin('cju.coding_job', 'cj');
+      this.applyJobFilters(personResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    }
+
+    const personResults = await personResultsQuery
       .groupBy('person.id')
       .orderBy('MAX(person.login)', 'ASC')
       .addOrderBy('MAX(person.code)', 'ASC')
@@ -946,7 +1006,7 @@ export class CodingExportService {
       const batch = personResults.slice(i, i + batchSize);
       const batchPersonIds = batch.map(p => p.id);
 
-      const manualCoding = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      const manualCodingQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
         .innerJoin('cju.coding_job', 'cj')
         .innerJoin('cju.response', 'resp')
         .innerJoin('resp.unit', 'unit')
@@ -963,8 +1023,11 @@ export class CodingExportService {
         .addSelect('cju.notes', 'notes')
         .addSelect('user.username', 'username')
         .addSelect('cj.id', 'jobId')
-        .where('person.id IN (:...ids)', { ids: batchPersonIds })
-        .getRawMany();
+        .where('person.id IN (:...ids)', { ids: batchPersonIds });
+
+      this.applyJobFilters(manualCodingQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+      const manualCoding = await manualCodingQuery.getRawMany();
 
       const autoCoding = excludeAutoCoded ? [] : await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
@@ -1061,17 +1124,24 @@ export class CodingExportService {
     authToken = '',
     req?: Request,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by coder for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
     this.clearPageMapsCache();
     if (checkCancellation) await checkCancellation();
 
-    const codingJobs = await this.codingJobRepository.find({
-      where: { workspace_id: workspaceId },
-      relations: ['codingJobCoders', 'codingJobCoders.user']
-    });
+    const codingJobsQuery = this.codingJobRepository.createQueryBuilder('cj')
+      .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
+      .leftJoinAndSelect('cjc.user', 'user')
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(codingJobsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+    const codingJobs = await codingJobsQuery.getMany();
 
     if (codingJobs.length === 0) {
       throw new Error('No coding jobs found for this workspace');
@@ -1082,6 +1152,9 @@ export class CodingExportService {
 
     for (const job of codingJobs) {
       for (const jc of job.codingJobCoders) {
+        if (coderIds && coderIds.length > 0 && !coderIds.includes(jc.user.id)) {
+          continue;
+        }
         allCoderNames.add(jc.user.username);
         const coderKey = `${jc.user.username}_${jc.user.id}`;
         if (!coderJobsMap.has(coderKey)) {
@@ -1212,7 +1285,10 @@ export class CodingExportService {
     authToken = '',
     req?: Request,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
 
@@ -1228,23 +1304,29 @@ export class CodingExportService {
 
     if (checkCancellation) await checkCancellation();
 
-    const unitVariableResults = await this.responseRepository.createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
+    const unitVariableResultsQuery = this.responseRepository.createQueryBuilder('resp')
+      .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
+      .addSelect('resp.variableid', 'variableId')
       .where('person.workspace_id = :workspaceId', { workspaceId });
 
     if (excludeAutoCoded) {
-      unitVariableResults.andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+      unitVariableResultsQuery.andWhere('resp.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
     }
 
-    const combinations = await unitVariableResults
+    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+      unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .innerJoin('cju.coding_job', 'cj');
+      this.applyJobFilters(unitVariableResultsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    }
+
+    const combinations = await unitVariableResultsQuery
       .groupBy('unit.name')
-      .addGroupBy('response.variableid')
+      .addGroupBy('resp.variableid')
       .orderBy('unit.name', 'ASC')
-      .addOrderBy('response.variableid', 'ASC')
+      .addOrderBy('resp.variableid', 'ASC')
       .getRawMany();
 
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
@@ -1284,14 +1366,18 @@ export class CodingExportService {
       }
 
       // Find coders involved
-      const coderQuery = await this.codingJobUnitRepository.createQueryBuilder('cju')
-        .innerJoin('cju.coding_job', 'job')
-        .innerJoin('job.codingJobCoders', 'jc')
-        .innerJoin('jc.user', 'user')
+      const coderQueryBuilder = this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .innerJoin('cj.codingJobCoders', 'cjc')
+        .innerJoin('cjc.user', 'user')
         .select('user.username', 'username')
         .where('cju.unit_name = :unitName', { unitName })
         .andWhere('cju.variable_id = :variableId', { variableId })
-        .andWhere('job.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('cj.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyJobFilters(coderQueryBuilder, jobDefinitionIds, coderTrainingIds, coderIds);
+
+      const coderQuery = await coderQueryBuilder
         .groupBy('user.username')
         .getRawMany();
 
@@ -1312,15 +1398,15 @@ export class CodingExportService {
 
       for (let i = 0; i < pIds.length; i += BATCH_SIZE) {
         const batchIds = pIds.slice(i, i + BATCH_SIZE);
-        const dataQuery = await this.responseRepository.createQueryBuilder('resp')
+        const dataQueryBuilder = this.responseRepository.createQueryBuilder('resp')
           .innerJoin('resp.unit', 'unit')
           .innerJoin('unit.booklet', 'booklet')
           .innerJoin('booklet.person', 'person')
           .leftJoin('booklet.bookletinfo', 'bookletinfo')
-          .leftJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
-          .leftJoin('cju.coding_job', 'job')
-          .leftJoin('job.codingJobCoders', 'jc')
-          .leftJoin('jc.user', 'user')
+          .innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+          .innerJoin('cju.coding_job', 'cj')
+          .leftJoin('cj.codingJobCoders', 'cjc')
+          .leftJoin('cjc.user', 'user')
           .select('person.login', 'login')
           .addSelect('person.code', 'code')
           .addSelect('person.group', 'group')
@@ -1334,8 +1420,11 @@ export class CodingExportService {
           .addSelect('person.id', 'pId')
           .where('person.id IN (:...batchIds)', { batchIds })
           .andWhere('unit.name = :unitName', { unitName })
-          .andWhere('resp.variableid = :variableId', { variableId })
-          .getRawMany();
+          .andWhere('resp.variableid = :variableId', { variableId });
+
+        this.applyJobFilters(dataQueryBuilder, jobDefinitionIds, coderTrainingIds, coderIds);
+
+        const dataQuery = await dataQueryBuilder.getRawMany();
 
         const personGroup = new Map<number, {
           login: string,
@@ -1415,7 +1504,10 @@ export class CodingExportService {
     authToken = '',
     req?: Request,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting detailed coding results for workspace ${workspaceId}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -1436,22 +1528,32 @@ export class CodingExportService {
 
       let coderNameMapping: Map<string, string> | null = null;
       if (anonymizeCoders && !usePseudoCoders) {
-        const coders = await this.codingJobRepository.createQueryBuilder('job')
-          .innerJoin('job.codingJobCoders', 'jc')
-          .innerJoin('jc.user', 'user')
+        const codersQuery = this.codingJobRepository.createQueryBuilder('cj')
+          .innerJoin('cj.codingJobCoders', 'cjc')
+          .innerJoin('cjc.user', 'user')
           .select('user.username', 'username')
-          .where('job.workspace_id = :workspaceId', { workspaceId })
+          .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+        this.applyJobFilters(codersQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+
+        const coders = await codersQuery
           .groupBy('user.username')
           .getRawMany();
         coderNameMapping = buildCoderNameMapping(coders.map(c => c.username), false);
       }
 
-      const totalCount = await this.codingJobUnitRepository.count({
-        where: { coding_job: { workspace_id: workspaceId } }
-      });
+      const totalCountQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+      this.applyJobFilters(totalCountQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+      const totalCount = await totalCountQuery.getCount();
 
       const chunks: Buffer[] = [];
+      const includeDiscussionResult = (coderTrainingIds?.length || 0) > 0;
+
       const headerColumns = ['"Person"', '"Kodierer"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"'];
+      if (includeDiscussionResult) headerColumns.push('"Score"');
       if (includeReplayUrl) headerColumns.push('"Replay URL"');
       chunks.push(Buffer.from(`${headerColumns.join(';')}\n`, 'utf-8'));
 
@@ -1461,27 +1563,134 @@ export class CodingExportService {
 
       for (let i = 0; i < totalCount; i += batchSize) {
         if (checkCancellation) await checkCancellation();
-        const unitsBatch = await this.codingJobUnitRepository.find({
-          where: { coding_job: { workspace_id: workspaceId } },
-          relations: [
-            'coding_job',
-            'coding_job.codingJobCoders',
-            'coding_job.codingJobCoders.user',
-            'response',
-            'response.unit',
-            'response.unit.booklet',
-            'response.unit.booklet.person'
-          ],
-          order: { created_at: 'ASC' },
-          skip: i,
-          take: batchSize
-        });
+        const unitsBatchQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
+          .innerJoinAndSelect('cju.coding_job', 'cj')
+          .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
+          .leftJoinAndSelect('cjc.user', 'user')
+          .leftJoinAndSelect('cju.response', 'resp')
+          .leftJoinAndSelect('resp.unit', 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo') // bookletinfo is used for replay URL
+          .where('cj.workspace_id = :workspaceId', { workspaceId })
+          .orderBy('cju.created_at', 'ASC')
+          .skip(i)
+          .take(batchSize);
+
+        this.applyJobFilters(unitsBatchQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+        const unitsBatch = await unitsBatchQuery.getMany();
+
+        let discussionResultMap: Map<string, {
+          code: number | null;
+          score: number | null;
+          managerName: string | null;
+          updatedAt: Date | null;
+        }> | null = null;
+        if (includeDiscussionResult && unitsBatch.length > 0) {
+          const trainingIdSet = new Set<number>();
+          const responseIdSet = new Set<number>();
+          for (const unit of unitsBatch) {
+            const tId = unit.coding_job?.training_id;
+            if (tId) trainingIdSet.add(tId);
+            if (unit.response_id) responseIdSet.add(unit.response_id);
+          }
+
+          if (trainingIdSet.size > 0 && responseIdSet.size > 0) {
+            const discussionResults = await this.coderTrainingDiscussionResultRepository.find({
+              where: {
+                workspace_id: workspaceId,
+                training_id: In(Array.from(trainingIdSet)),
+                response_id: In(Array.from(responseIdSet))
+              }
+            });
+            discussionResultMap = new Map(
+              discussionResults.map(r => [`${r.training_id}|${r.response_id}`,
+                {
+                  code: r.code,
+                  score: r.score,
+                  managerName: r.manager_name,
+                  updatedAt: r.updated_at
+                }])
+            );
+          }
+        }
 
         let batchCsv = '';
-        for (const unit of unitsBatch) {
+
+        // Ensure that all coder rows for the same case (training_id + response_id) are emitted first,
+        // then a single coding manager row at the end of that case.
+        const sortedUnitsBatch = [...unitsBatch].sort((a, b) => {
+          const aTrainingId = a.coding_job?.training_id ?? 0;
+          const bTrainingId = b.coding_job?.training_id ?? 0;
+          if (aTrainingId !== bTrainingId) return aTrainingId - bTrainingId;
+          if (a.response_id !== b.response_id) return a.response_id - b.response_id;
+          if (a.variable_id !== b.variable_id) return a.variable_id.localeCompare(b.variable_id);
+          const aUpdated = a.updated_at ? new Date(a.updated_at).getTime() : 0;
+          const bUpdated = b.updated_at ? new Date(b.updated_at).getTime() : 0;
+          return aUpdated - bUpdated;
+        });
+
+        let currentCaseKey: string | null = null;
+        let currentCaseRepresentative: CodingJobUnit | null = null;
+        let emittedManagerForCurrentCase = false;
+
+        const flushManagerRowIfNeeded = async (): Promise<void> => {
+          if (!includeDiscussionResult) return;
+          if (!currentCaseRepresentative) return;
+          if (emittedManagerForCurrentCase) return;
+
+          const trainingId = currentCaseRepresentative.coding_job?.training_id;
+          const responseId = currentCaseRepresentative.response_id;
+          if (!trainingId || !responseId) return;
+
+          const discussion = discussionResultMap ? discussionResultMap.get(`${trainingId}|${responseId}`) : undefined;
+          if (!discussion) return;
+
+          const person = currentCaseRepresentative.response?.unit?.booklet?.person;
+          const personId = person?.code || person?.login || '';
+          const managerDisplayName = discussion.managerName || (discussion.managerName === '' ? '' : null) || 'Coding Manager';
+          const discussionTimestamp = discussion.updatedAt ? new Date(discussion.updatedAt).toLocaleString('de-DE').replace(',', '') : '';
+          const discussionCodeValue = (discussion.code !== null && discussion.code !== undefined) ? discussion.code.toString() : '';
+          const discussionScoreValue = (discussion.score !== null && discussion.score !== undefined) ? discussion.score.toString() : '';
+
+          const discussionRowFields = [
+            escapeCsvField(personId),
+            escapeCsvField(managerDisplayName),
+            escapeCsvField(currentCaseRepresentative.variable_id),
+            escapeCsvField(''),
+            escapeCsvField(discussionTimestamp),
+            escapeCsvField(discussionCodeValue),
+            escapeCsvField(discussionScoreValue)
+          ];
+
+          if (includeReplayUrl && req) {
+            const bookletName = currentCaseRepresentative.response?.unit?.booklet?.bookletinfo?.name || '';
+            const unitName = currentCaseRepresentative.response?.unit?.name || '';
+            const group = person?.group || '';
+            const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, currentCaseRepresentative.variable_id, workspaceId, authToken);
+            discussionRowFields.push(escapeCsvField(replayUrl));
+          }
+
+          batchCsv += `${discussionRowFields.join(';')}\n`;
+          emittedManagerForCurrentCase = true;
+        };
+
+        for (const unit of sortedUnitsBatch) {
           if (unit.code === null || unit.code === undefined) continue;
           if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
           if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
+
+          const trainingId = unit.coding_job?.training_id ?? 0;
+          const caseKey = `${trainingId}|${unit.response_id}`;
+
+          if (currentCaseKey !== null && caseKey !== currentCaseKey) {
+            await flushManagerRowIfNeeded();
+            currentCaseRepresentative = null;
+            emittedManagerForCurrentCase = false;
+          }
+
+          currentCaseKey = caseKey;
+          if (!currentCaseRepresentative) currentCaseRepresentative = unit;
 
           const person = unit.response?.unit?.booklet?.person;
           const personId = person?.code || person?.login || '';
@@ -1505,6 +1714,7 @@ export class CodingExportService {
 
           const timestamp = unit.updated_at ? new Date(unit.updated_at).toLocaleString('de-DE').replace(',', '') : '';
           const codeValue = (unit.code >= -4 && unit.code <= -1) ? '' : unit.code.toString();
+          const scoreValue = unit.score !== null && unit.score !== undefined ? unit.score.toString() : '';
 
           let commentValue = unit.notes || '';
           if (!outputCommentsInsteadOfCodes && unit.coding_issue_option) {
@@ -1523,6 +1733,10 @@ export class CodingExportService {
             escapeCsvField(codeValue)
           ];
 
+          if (includeDiscussionResult) {
+            rowFields.push(escapeCsvField(scoreValue));
+          }
+
           if (includeReplayUrl && req) {
             const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
             const unitName = unit.response?.unit?.name || '';
@@ -1530,8 +1744,12 @@ export class CodingExportService {
             const replayUrl = await this.generateReplayUrlWithPageLookup(req, person?.login || '', person?.code || '', group, bookletName, unitName, unit.variable_id, workspaceId, authToken);
             rowFields.push(escapeCsvField(replayUrl));
           }
+
           batchCsv += `${rowFields.join(';')}\n`;
         }
+
+        // Flush last case in this batch
+        await flushManagerRowIfNeeded();
         chunks.push(Buffer.from(batchCsv, 'utf-8'));
       }
 
@@ -1548,7 +1766,10 @@ export class CodingExportService {
     anonymizeCoders = false,
     usePseudoCoders = false,
     excludeAutoCoded = false,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
   ): Promise<Buffer> {
     this.logger.log(`Exporting coding times report for workspace ${workspaceId}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}${excludeAutoCoded ? ' (manual coding only)' : ''}`);
 
@@ -1567,47 +1788,18 @@ export class CodingExportService {
       });
     }
 
-    const codingJobUnitsRaw = await this.codingJobUnitRepository.find({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId
-        },
-        code: Not(IsNull()) // Only include units that have been coded
-      },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit'
-      ],
-      select: {
-        id: true,
-        variable_id: true,
-        updated_at: true,
-        code: true,
-        coding_job: {
-          id: true,
-          codingJobCoders: {
-            id: true,
-            user: {
-              id: true,
-              username: true
-            }
-          }
-        },
-        response: {
-          id: true,
-          unit: {
-            id: true,
-            name: true
-          }
-        }
-      },
-      order: {
-        updated_at: 'ASC'
-      }
-    });
+    const codingJobUnitsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
+      .innerJoinAndSelect('cju.coding_job', 'cj')
+      .leftJoinAndSelect('cj.codingJobCoders', 'cjc')
+      .leftJoinAndSelect('cjc.user', 'user')
+      .leftJoinAndSelect('cju.response', 'resp')
+      .leftJoinAndSelect('resp.unit', 'unit')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cju.code IS NOT NULL')
+      .orderBy('cju.updated_at', 'ASC');
+
+    this.applyJobFilters(codingJobUnitsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    const codingJobUnitsRaw = await codingJobUnitsQuery.getMany();
 
     const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
     const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
@@ -1819,5 +2011,36 @@ export class CodingExportService {
     const averageTimeMs = totalTimeMs / timeSpans.length;
 
     return averageTimeMs / 1000; // Convert to seconds
+  }
+
+  private applyJobFilters(
+    query: SelectQueryBuilder<unknown>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): void {
+    const hasJd = jobDefinitionIds && jobDefinitionIds.length > 0;
+    const hasTraining = coderTrainingIds && coderTrainingIds.length > 0;
+    const hasCoders = coderIds && coderIds.length > 0;
+
+    if (hasJd || hasTraining) {
+      query.andWhere(new Brackets(qb => {
+        if (hasJd) {
+          qb.orWhere('cj.job_definition_id IN (:...jobDefinitionIds)', { jobDefinitionIds });
+        }
+        if (hasTraining) {
+          qb.orWhere('cj.training_id IN (:...coderTrainingIds)', { coderTrainingIds });
+        }
+      }));
+    }
+
+    if (hasCoders) {
+      // Use EXISTS subquery to filter by coder IDs in coding_job_coder table
+      query.andWhere(`EXISTS (
+        SELECT 1 FROM coding_job_coder filter_cjc
+        WHERE filter_cjc.coding_job_id = cj.id
+        AND filter_cjc.user_id IN (:...coderIds)
+      )`, { coderIds });
+    }
   }
 }

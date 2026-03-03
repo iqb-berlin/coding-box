@@ -4,17 +4,22 @@ import {
   CodingJob,
   VariableBundle
 } from '../../coding/models/coding-job.model';
-import { CodingService } from '../coding.service';
-import { CodingJobBackendService, CodingExportConfig, JobDefinition } from '../coding-job-backend.service';
-import { ReplayBackendService, ReplayStatisticsResponse } from '../replay-backend.service';
+import { CodingJobBackendService, CodingExportConfig, JobDefinition } from '../../coding/services/coding-job-backend.service';
+import { ReplayBackendService, ReplayStatisticsResponse } from '../../replay/services/replay-backend.service';
 import {
   CodingTrainingBackendService,
   CreateCoderTrainingJobsResponse,
   TrainingCodingResult,
   WithinTrainingCodingResult,
   CodingJobForTraining
-} from '../coding-training-backend.service';
-import { VariableAnalysisService, VariableAnalysisResultDto, JobCancelResult } from '../variable-analysis.service';
+} from '../../coding/services/coding-training-backend.service';
+import { CodingExecutionService } from '../../coding/services/coding-execution.service';
+import { CodingExportService } from '../../coding/services/coding-export.service';
+import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
+import { CodingVersionService } from '../../coding/services/coding-version.service';
+import { DistributedCodingService } from '../../coding/services/distributed-coding.service';
+import { MissingsProfileService } from '../../coding/services/missings-profile.service';
+import { VariableAnalysisService, VariableAnalysisResultDto, JobCancelResult } from '../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { VariableAnalysisJobDto } from '../../models/variable-analysis-job.dto';
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
@@ -95,46 +100,51 @@ export interface ExportJobStatus {
   providedIn: 'root'
 })
 export class CodingFacadeService {
-  private codingService = inject(CodingService);
+  private codingExecutionService = inject(CodingExecutionService);
+  private codingExportService = inject(CodingExportService);
+  private codingStatisticsService = inject(CodingStatisticsService);
+  private codingVersionService = inject(CodingVersionService);
+  private distributedCodingService = inject(DistributedCodingService);
+  private missingsProfileService = inject(MissingsProfileService);
   private codingJobBackendService = inject(CodingJobBackendService);
   private replayBackendService = inject(ReplayBackendService);
   private codingTrainingBackendService = inject(CodingTrainingBackendService);
   private variableAnalysisService = inject(VariableAnalysisService);
 
   getCodingJobStatus(workspaceId: number, jobId: string): Observable<CodingJobStatus> {
-    return this.codingService.getCodingJobStatus(workspaceId, jobId);
+    return this.codingExecutionService.getCodingJobStatus(workspaceId, jobId);
   }
 
   getCodingListAsCsv(workspaceId: number): Observable<Blob> {
-    return this.codingService.getCodingListAsCsv(workspaceId);
+    return this.codingExportService.getCodingListAsCsv(workspaceId);
   }
 
   getCodingListAsExcel(workspaceId: number): Observable<Blob> {
-    return this.codingService.getCodingListAsExcel(workspaceId);
+    return this.codingExportService.getCodingListAsExcel(workspaceId);
   }
 
   getCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
-    return this.codingService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls);
+    return this.codingExportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls);
   }
 
   getCodingResultsByVersionAsExcel(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
-    return this.codingService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls);
+    return this.codingExportService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls);
   }
 
   getCodingStatistics(workspaceId: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
-    return this.codingService.getCodingStatistics(workspaceId, version);
+    return this.codingStatisticsService.getCodingStatistics(workspaceId, version);
   }
 
   createCodingStatisticsJob(workspaceId: number): Observable<{ jobId: string; message: string }> {
-    return this.codingService.createCodingStatisticsJob(workspaceId);
+    return this.codingExecutionService.createCodingStatisticsJob(workspaceId);
   }
 
   getResponsesByStatus(workspaceId: number, status: string, version: 'v1' | 'v2' | 'v3' = 'v1', page: number = 1, limit: number = 100): Observable<PaginatedResponse<ResponseEntity>> {
-    return this.codingService.getResponsesByStatus(workspaceId, status, version, page, limit);
+    return this.codingStatisticsService.getResponsesByStatus(workspaceId, status, version, page, limit);
   }
 
   getReplayUrl(workspaceId: number, responseId: number, authToken: string): Observable<{ replayUrl: string }> {
-    return this.codingService.getReplayUrl(workspaceId, responseId, authToken);
+    return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, authToken);
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
@@ -161,7 +171,7 @@ export class CodingFacadeService {
     return this.codingJobBackendService.deleteCodingJob(workspaceId, codingJobId);
   }
 
-  startCodingJob(workspaceId: number, codingJobId: number): Observable<{ total: number; items: CodingJobItem[] }> {
+  startCodingJob(workspaceId: number, codingJobId: number): Observable<{ total: number; firstReplayUrl: string }> {
     return this.codingJobBackendService.startCodingJob(workspaceId, codingJobId);
   }
 
@@ -201,7 +211,7 @@ export class CodingFacadeService {
     return this.codingTrainingBackendService.getCodingJobsForTraining(workspaceId, trainingId);
   }
 
-  saveCodingProgress(workspaceId: number, codingJobId: number, progressData: { testPerson: string; unitId: string; variableId: string; selectedCode: { id: number; code: string; label: string; [key: string]: unknown }; isOpen?: boolean; notes?: string }): Observable<CodingJob> {
+  saveCodingProgress(workspaceId: number, codingJobId: number, progressData: { testPerson: string; unitId: string; variableId: string; selectedCode: { id: number; code: string; label: string;[key: string]: unknown }; isOpen?: boolean; notes?: string }): Observable<CodingJob> {
     return this.codingJobBackendService.saveCodingProgress(workspaceId, codingJobId, progressData);
   }
 
@@ -270,27 +280,27 @@ export class CodingFacadeService {
   }
 
   getMissingsProfiles(workspaceId: number): Observable<{ label: string; id: number }[]> {
-    return this.codingService.getMissingsProfiles(workspaceId);
+    return this.missingsProfileService.getMissingsProfiles(workspaceId);
   }
 
   getMissingsProfileDetails(workspaceId: number, id: string | number): Observable<MissingsProfilesDto | null> {
-    return this.codingService.getMissingsProfileDetails(workspaceId, id);
+    return this.missingsProfileService.getMissingsProfileDetails(workspaceId, id);
   }
 
   createMissingsProfile(workspaceId: number, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
-    return this.codingService.createMissingsProfile(workspaceId, profile);
+    return this.missingsProfileService.createMissingsProfile(workspaceId, profile);
   }
 
   updateMissingsProfile(workspaceId: number, label: string, profile: MissingsProfilesDto): Observable<MissingsProfilesDto | null> {
-    return this.codingService.updateMissingsProfile(workspaceId, label, profile);
+    return this.missingsProfileService.updateMissingsProfile(workspaceId, label, profile);
   }
 
   deleteMissingsProfile(workspaceId: number, label: string): Observable<boolean> {
-    return this.codingService.deleteMissingsProfile(workspaceId, label);
+    return this.missingsProfileService.deleteMissingsProfile(workspaceId, label);
   }
 
   getCodingBook(workspaceId: number, missingsProfile: string, contentOptions: CodeBookContentSetting, unitList: number[]): Observable<Blob | null> {
-    return this.codingService.getCodingBook(workspaceId, missingsProfile, contentOptions, unitList);
+    return this.codingExportService.getCodingBook(workspaceId, missingsProfile, contentOptions, unitList);
   }
 
   storeReplayStatistics(workspaceId: number, data: { unitId: string; bookletId?: string; testPersonLogin?: string; testPersonCode?: string; durationMilliseconds: number; replayUrl?: string; success?: boolean; errorMessage?: string }): Observable<ReplayStatisticsResponse> {
@@ -330,11 +340,11 @@ export class CodingFacadeService {
   }
 
   getVariableAnalysis(workspaceId: number, page: number = 1, limit: number = 100, unitId?: string, variableId?: string, derivation?: string): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
-    return this.codingService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation);
+    return this.codingStatisticsService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation);
   }
 
   createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number): Observable<{ success: boolean; jobsCreated: number; message: string; distribution: Record<string, Record<string, number>>; doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>; aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>; matchingFlags: string[]; jobs: { coderId: number; coderName: string; variable: { unitName: string; variableId: string }; jobId: number; jobName: string; caseCount: number; }[]; }> {
-    return this.codingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases);
+    return this.distributedCodingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases);
   }
 
   calculateDistribution(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], maxCodingCases?: number): Observable<{
@@ -344,11 +354,11 @@ export class CodingFacadeService {
     matchingFlags: string[];
     warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
   }> {
-    return this.codingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, maxCodingCases);
+    return this.distributedCodingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, maxCodingCases);
   }
 
   resetCodingVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', unitFilters?: string[], variableFilters?: string[]): Observable<{ jobId: string; message: string }> {
-    return this.codingService.resetCodingVersion(workspaceId, version, unitFilters, variableFilters);
+    return this.codingVersionService.resetCodingVersion(workspaceId, version, unitFilters, variableFilters);
   }
 
   deleteVariableAnalysisJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {

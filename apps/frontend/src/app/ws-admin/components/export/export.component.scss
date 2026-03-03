@@ -76,4 +76,60 @@
       margin-top: 8px;
     }
   }
+
+  .filter-section {
+    margin: 24px 0;
+    padding: 16px;
+    background-color: #f0f4f8;
+    border-radius: 4px;
+    border-left: 4px solid #2196f3;
+
+    h3 {
+      margin: 0 0 16px 0;
+      font-size: 1.1em;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .filter-fields-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+
+      .selection-trigger {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px;
+        border-radius: 4px;
+        background: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(0, 0, 0, 0.08);
+
+        .selection-trigger-header {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          min-width: 0;
+        }
+
+        .selection-trigger-title {
+          font-weight: 500;
+          color: #333;
+        }
+
+        .selection-trigger-summary {
+          font-size: 0.875em;
+          color: #666;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+      }
+
+      mat-form-field {
+        width: 100%;
+      }
+    }
+  }
 }
