@@ -212,7 +212,10 @@ export class ExportJobProcessor {
             job.data.authToken || '',
             undefined, // req is not available in background job
             job.data.excludeAutoCoded || false,
-            checkCancellation
+            checkCancellation,
+            job.data.jobDefinitionIds,
+            job.data.coderTrainingIds,
+            job.data.coderIds
           );
           break;
 
@@ -226,7 +229,10 @@ export class ExportJobProcessor {
             job.data.authToken || '',
             undefined, // req is not available in background job
             job.data.excludeAutoCoded || false,
-            checkCancellation
+            checkCancellation,
+            job.data.jobDefinitionIds,
+            job.data.coderTrainingIds,
+            job.data.coderIds
           );
           break;
 
@@ -243,7 +249,10 @@ export class ExportJobProcessor {
             job.data.authToken || '',
             undefined, // req is not available in background job
             job.data.excludeAutoCoded || false,
-            checkCancellation
+            checkCancellation,
+            job.data.jobDefinitionIds,
+            job.data.coderTrainingIds,
+            job.data.coderIds
           );
           break;
 
@@ -257,7 +266,10 @@ export class ExportJobProcessor {
             job.data.authToken || '',
             undefined, // req is not available in background job
             job.data.excludeAutoCoded || false,
-            checkCancellation
+            checkCancellation,
+            job.data.jobDefinitionIds,
+            job.data.coderTrainingIds,
+            job.data.coderIds
           );
           break;
 
@@ -267,7 +279,10 @@ export class ExportJobProcessor {
             job.data.anonymizeCoders || false,
             job.data.usePseudoCoders || false,
             job.data.excludeAutoCoded || false,
-            checkCancellation
+            checkCancellation,
+            job.data.jobDefinitionIds,
+            job.data.coderTrainingIds,
+            job.data.coderIds
           );
           break;
 

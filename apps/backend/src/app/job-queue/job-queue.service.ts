@@ -115,6 +115,9 @@ export interface ExportJobData {
     unitNames?: string[];
     personIds?: number[];
   };
+  jobDefinitionIds?: number[];
+  coderTrainingIds?: number[];
+  coderIds?: number[];
 }
 
 export interface ExportJobResult {

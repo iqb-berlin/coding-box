@@ -29,6 +29,9 @@ export interface CodingExportConfig {
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
   excludeAutoCoded?: boolean;
+  jobDefinitionIds?: number[];
+  coderTrainingIds?: number[];
+  coderIds?: number[];
   authToken?: string;
 }
 
