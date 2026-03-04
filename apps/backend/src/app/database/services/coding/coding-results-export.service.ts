@@ -1082,7 +1082,7 @@ export class CodingResultsExportService {
         const testPersonList: string[] = [];
         const personGroups = new Map<string, string>();
         const personBooklets = new Map<string, string>();
-        const variableUnitNames = new Map<string, string>();
+        const variableMetadata = new Map<string, { unitName: string; variableId: string; displayHeader: string }>();
 
         for (const job of jobs) {
           // Get responses for this job's variables and units
@@ -1132,7 +1132,12 @@ export class CodingResultsExportService {
             const testPersonKey = `${person?.login}_${person?.code}`;
             const variableId = response.variableid;
             const unitName = response.unit?.name;
-            const compositeKey = unitName ? `${unitName}_${variableId}` : variableId;
+
+            if (!unitName || !variableId) {
+              continue;
+            }
+
+            const compositeKey = JSON.stringify([unitName, variableId]);
             const latestCoding = getLatestCode(response);
 
             // Store person group and booklet
@@ -1143,9 +1148,13 @@ export class CodingResultsExportService {
               personBooklets.set(testPersonKey, response.unit?.booklet?.bookletinfo?.name || '');
             }
 
-            // Store unit name for this variable
-            if (!variableUnitNames.has(compositeKey)) {
-              variableUnitNames.set(compositeKey, unitName || '');
+            // Store metadata for this variable key
+            if (!variableMetadata.has(compositeKey)) {
+              variableMetadata.set(compositeKey, {
+                unitName,
+                variableId,
+                displayHeader: `${unitName} | ${variableId}`
+              });
             }
 
             if (!testPersonMap.has(testPersonKey)) {
@@ -1176,7 +1185,8 @@ export class CodingResultsExportService {
               const person = unit.response?.unit?.booklet?.person;
               const testPersonKey = `${person?.login}_${person?.code}`;
               const unitName = unit.response?.unit?.name;
-              const compositeKey = unitName ? `${unitName}_${unit.variable_id}` : unit.variable_id;
+              if (!unitName || !unit.variable_id) continue;
+              const compositeKey = JSON.stringify([unitName, unit.variable_id]);
 
               if (!testPersonComments.has(testPersonKey)) {
                 testPersonComments.set(testPersonKey, new Map());
@@ -1186,7 +1196,17 @@ export class CodingResultsExportService {
           }
         }
 
-        const variables = Array.from(variableSet).sort();
+        const variables = Array.from(variableSet).sort((a, b) => {
+          const metaA = variableMetadata.get(a);
+          const metaB = variableMetadata.get(b);
+          if (!metaA || !metaB) return a.localeCompare(b);
+          const unitComparison = metaA.unitName.localeCompare(metaB.unitName);
+          if (unitComparison !== 0) return unitComparison;
+          return metaA.variableId.localeCompare(metaB.variableId);
+        });
+
+        const variableHeaders = variables.map(variableKey => variableMetadata.get(variableKey)?.displayHeader || variableKey
+        );
 
         if (variables.length === 0) continue;
 
@@ -1194,7 +1214,7 @@ export class CodingResultsExportService {
         if (includeReplayUrl) {
           baseHeaders.push('Replay URL');
         }
-        const headers = [...baseHeaders, ...variables];
+        const headers = [...baseHeaders, ...variableHeaders];
         worksheet.columns = headers.map(header => ({ header, key: header, width: header === 'Replay URL' ? 60 : 15 }));
 
         for (const testPersonKey of testPersonList) {
@@ -1212,26 +1232,37 @@ export class CodingResultsExportService {
           // Add replay URL if requested - use first variable with data
           if (includeReplayUrl && req) {
             let replayUrl = '';
-            for (const variable of variables) {
-              if (personData.has(variable)) {
-                const parts = variable.split('_');
-                const varId = parts[parts.length - 1];
-                const unitName = variableUnitNames.get(variable) || '';
-                replayUrl = await this.generateReplayUrlWithPageLookup(req, login, code, group, bookletName, unitName, varId, workspaceId, authToken);
+            for (const variableKey of variables) {
+              if (personData.has(variableKey)) {
+                const metadata = variableMetadata.get(variableKey);
+                if (!metadata) continue;
+                replayUrl = await this.generateReplayUrlWithPageLookup(
+                  req,
+                  login,
+                  code,
+                  group,
+                  bookletName,
+                  metadata.unitName,
+                  metadata.variableId,
+                  workspaceId,
+                  authToken
+                );
                 break;
               }
             }
             row['Replay URL'] = replayUrl;
           }
 
-          for (const variable of variables) {
-            const coding = personData.get(variable);
+          for (let index = 0; index < variables.length; index++) {
+            const variableKey = variables[index];
+            const variableHeader = variableHeaders[index];
+            const coding = personData.get(variableKey);
             if (outputCommentsInsteadOfCodes) {
               const comments = testPersonComments.get(testPersonKey);
-              const comment = comments?.get(variable);
-              row[variable] = comment || '';
+              const comment = comments?.get(variableKey);
+              row[variableHeader] = comment || '';
             } else {
-              row[variable] = coding?.code ?? '';
+              row[variableHeader] = coding?.code ?? '';
             }
           }
 
@@ -1666,7 +1697,7 @@ export class CodingResultsExportService {
 
       const pseudoCoderMappings = new Map<string, Map<string, string>>();
       const csvRows: string[] = [];
-      const headerColumns = ['"Person"', '"Kodierer"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"'];
+      const headerColumns = ['"Person Login"', '"Person Code"', '"Person Group"', '"Kodierer"', '"Unit"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"'];
       if (includeReplayUrl) {
         headerColumns.push('"Replay URL"');
       }
@@ -1688,13 +1719,16 @@ export class CodingResultsExportService {
         }
 
         const person = unit.response?.unit?.booklet?.person;
-        const personId = person?.code || person?.login || '';
+        const personLogin = person?.login || '';
+        const personCode = person?.code || '';
+        const personGroup = person?.group || '';
+        const unitName = unit.unit_name || unit.response?.unit?.name || '';
 
         let coder = unit.coding_job?.codingJobCoders?.[0]?.user?.username || '';
 
         if (anonymizeCoders && coder) {
           if (usePseudoCoders) {
-            const varPersonKey = `${unit.variable_id}_${personId}`;
+            const varPersonKey = `${unit.variable_id}_${personLogin}_${personCode}`;
             if (!pseudoCoderMappings.has(varPersonKey)) {
               pseudoCoderMappings.set(varPersonKey, new Map<string, string>());
             }
@@ -1751,8 +1785,11 @@ export class CodingResultsExportService {
         const codeValue = mappedCode === null ? '' : mappedCode.toString();
 
         const rowFields = [
-          escapeCsvField(personId),
+          escapeCsvField(personLogin),
+          escapeCsvField(personCode),
+          escapeCsvField(personGroup),
           escapeCsvField(coder),
+          escapeCsvField(unitName),
           escapeCsvField(unit.variable_id),
           escapeCsvField(commentValue),
           escapeCsvField(timestamp),
@@ -1761,15 +1798,15 @@ export class CodingResultsExportService {
 
         if (includeReplayUrl && req) {
           const bookletName = unit.response?.unit?.booklet?.bookletinfo?.name || '';
-          const unitName = unit.response?.unit?.name || '';
-          const group = person?.group || '';
+          const replayUnitName = unit.response?.unit?.name || unitName;
+          const group = personGroup;
           const replayUrl = await this.generateReplayUrlWithPageLookup(
             req,
-            person?.login || '',
-            person?.code || '',
+            personLogin,
+            personCode,
             group,
             bookletName,
-            unitName,
+            replayUnitName,
             unit.variable_id,
             workspaceId,
             authToken
