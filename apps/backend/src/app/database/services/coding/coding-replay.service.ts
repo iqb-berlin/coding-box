@@ -37,7 +37,7 @@ export class CodingReplayService {
       }
 
       const person = response.unit?.booklet?.person;
-      if (!person || person.workspace_id !== workspaceId) {
+      if (!person || Number(person.workspace_id) !== Number(workspaceId)) {
         throw new Error(
           `Response ${responseId} does not belong to workspace ${workspaceId}`
         );
