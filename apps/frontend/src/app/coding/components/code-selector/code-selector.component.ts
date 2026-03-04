@@ -275,31 +275,9 @@ export class CodeSelectorComponent implements OnChanges {
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
     const currentIndex = data.currentUnitIndex;
-    const currentKey = this.activeVariableKey;
-
-    if (currentKey && this.availableVariables.length > 1) {
-      // Stay within the same unit+variable
-      const [unitName, variableId] = currentKey.split('::');
-      for (let i = currentIndex + 1; i < data.units.length; i++) {
-        const u = data.units[i];
-        if ((u.alias || u.name) === unitName && u.variableId === variableId) {
-          this.unitChanged.emit(u);
-          return;
-        }
-      }
-
-      // If we didn't return, we reached the end of the current variable.
-      // Jump to the next variable
-      const currentVarIndex = this.availableVariables.findIndex(v => v.key === currentKey);
-      if (currentVarIndex >= 0 && currentVarIndex < this.availableVariables.length - 1) {
-        const nextVar = this.availableVariables[currentVarIndex + 1];
-        this.jumpToVariable(nextVar.key);
-      }
-    } else {
-      const nextIndex = currentIndex + 1;
-      if (nextIndex < data.units.length) {
-        this.unitChanged.emit(data.units[nextIndex]);
-      }
+    const nextIndex = currentIndex + 1;
+    if (nextIndex < data.units.length) {
+      this.unitChanged.emit(data.units[nextIndex]);
     }
   }
 
@@ -308,23 +286,9 @@ export class CodeSelectorComponent implements OnChanges {
     if (!data || !this.hasPreviousUnit()) return;
 
     const currentIndex = data.currentUnitIndex;
-    const currentKey = this.activeVariableKey;
-
-    if (currentKey && this.availableVariables.length > 1) {
-      // Stay within the same unit+variable
-      const [unitName, variableId] = currentKey.split('::');
-      for (let i = currentIndex - 1; i >= 0; i--) {
-        const u = data.units[i];
-        if ((u.alias || u.name) === unitName && u.variableId === variableId) {
-          this.unitChanged.emit(u);
-          return;
-        }
-      }
-    } else {
-      const prevIndex = currentIndex - 1;
-      if (prevIndex >= 0) {
-        this.unitChanged.emit(data.units[prevIndex]);
-      }
+    const prevIndex = currentIndex - 1;
+    if (prevIndex >= 0) {
+      this.unitChanged.emit(data.units[prevIndex]);
     }
   }
 
@@ -333,23 +297,6 @@ export class CodeSelectorComponent implements OnChanges {
     if (!data || !data.units.length) return false;
 
     const currentIndex = data.currentUnitIndex;
-    const currentKey = this.activeVariableKey;
-
-    if (currentKey && this.availableVariables.length > 1) {
-      const [unitName, variableId] = currentKey.split('::');
-      let hasNext = data.units.slice(currentIndex + 1).some(
-        u => (u.alias || u.name) === unitName && u.variableId === variableId
-      );
-
-      if (!hasNext) {
-        const currentVarIndex = this.availableVariables.findIndex(v => v.key === currentKey);
-        hasNext = currentVarIndex >= 0 && currentVarIndex < this.availableVariables.length - 1;
-      }
-
-      if (this.isReadOnly) return hasNext;
-      return hasNext && this.hasCurrentSelection();
-    }
-
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
     if (this.isReadOnly) return hasNext;
@@ -360,17 +307,7 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return false;
 
-    const currentIndex = data.currentUnitIndex;
-    const currentKey = this.activeVariableKey;
-
-    if (currentKey && this.availableVariables.length > 1) {
-      const [unitName, variableId] = currentKey.split('::');
-      return data.units.slice(0, currentIndex).some(
-        u => (u.alias || u.name) === unitName && u.variableId === variableId
-      );
-    }
-
-    return currentIndex > 0;
+    return data.currentUnitIndex > 0;
   }
 
   @HostListener('window:keydown', ['$event'])
