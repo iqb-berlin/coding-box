@@ -888,115 +888,35 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.isCodingMode && this.unitsData) {
       const currentIndex = this.unitsData.currentUnitIndex;
       const currentUnit = this.unitsData.units[currentIndex];
-
-      // Determine if we are in multi-variable mode and should restrict navigation
-      // to the current unit+variable combination.
-      const isMultiVariable = this.unitsData.units.some(
-        u => u.variableId !== currentUnit?.variableId
-      );
-      const currentUnitName = currentUnit ? (currentUnit.alias || currentUnit.name) : '';
-      const currentVarId = currentUnit?.variableId || '';
-
-      const findNextInVariable = (fromIdx: number): number => {
-        for (let i = fromIdx + 1; i < this.unitsData!.units.length; i++) {
-          const u = this.unitsData!.units[i];
-          if ((u.alias || u.name) === currentUnitName && u.variableId === currentVarId) {
-            return i;
-          }
-        }
-        return -1;
-      };
-
-      const findPrevInVariable = (fromIdx: number): number => {
-        for (let i = fromIdx - 1; i >= 0; i--) {
-          const u = this.unitsData!.units[i];
-          if ((u.alias || u.name) === currentUnitName && u.variableId === currentVarId) {
-            return i;
-          }
-        }
-        return -1;
-      };
-
-      const jumpToNextVariable = (): number => {
-        const seen = new Set<string>();
-        const availableVars: { key: string; variableId: string; unitName: string }[] = [];
-        for (const unit of this.unitsData!.units) {
-          if (unit.variableId) {
-            const key = `${unit.alias || unit.name}::${unit.variableId}`;
-            if (!seen.has(key)) {
-              seen.add(key);
-              availableVars.push({ key, variableId: unit.variableId, unitName: unit.alias || unit.name });
-            }
-          }
-        }
-
-        const currentKey = `${currentUnitName}::${currentVarId}`;
-        const currentVarIndex = availableVars.findIndex(v => v.key === currentKey);
-        if (currentVarIndex >= 0 && currentVarIndex < availableVars.length - 1) {
-          const nextVarKey = availableVars[currentVarIndex + 1].key;
-          const [nextUnitName, nextVarId] = nextVarKey.split('::');
-
-          const variableUnits = this.unitsData!.units
-            .map((unit, index) => ({ unit, index }))
-            .filter(({ unit }) => (unit.alias || unit.name) === nextUnitName && unit.variableId === nextVarId);
-
-          if (variableUnits.length > 0) {
-            const firstUncoded = variableUnits.find(
-              ({ unit }) => !this.codingService.isUnitCoded(unit)
-            );
-            return firstUncoded ? firstUncoded.index : variableUnits[0].index;
-          }
-        }
-        return -1;
-      };
+      const currentUnitName = currentUnit?.name || this.unitId;
+      const currentVariableId = currentUnit?.variableId || this.codingService.currentVariableId;
 
       // Check for Enter key - navigate to next unit (existing functionality)
-      if (keyboardEvent.key === 'Enter' && this.codingService.currentVariableId) {
-        const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
+      if (keyboardEvent.key === 'Enter' && currentVariableId) {
+        const compositeKey = this.codingService.generateCompositeKey(this.testPerson, currentUnitName, currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
         if (hasSelection) {
           keyboardEvent.preventDefault();
-          let nextIndex: number;
-          if (isMultiVariable) {
-            nextIndex = findNextInVariable(currentIndex);
-            if (nextIndex === -1) {
-              nextIndex = jumpToNextVariable();
-            }
-          } else {
-            nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
-          }
+          const nextIndex = currentIndex + 1;
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
           }
         }
       } else if (keyboardEvent.key === 'ArrowRight') {
         keyboardEvent.preventDefault();
-        const compositeKey = this.codingService.generateCompositeKey(this.testPerson, this.unitId, this.codingService.currentVariableId);
+        const compositeKey = this.codingService.generateCompositeKey(this.testPerson, currentUnitName, currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
         if (hasSelection || this.codingService.isCodingJobFinalized) {
-          let nextIndex: number;
-          if (isMultiVariable) {
-            nextIndex = findNextInVariable(currentIndex);
-            if (nextIndex === -1) {
-              nextIndex = jumpToNextVariable();
-            }
-          } else {
-            nextIndex = this.codingService.getNextJumpableUnitIndex(this.unitsData, currentIndex);
-          }
+          const nextIndex = currentIndex + 1;
           if (nextIndex >= 0 && nextIndex < this.unitsData.units.length) {
             this.handleUnitChanged(this.unitsData.units[nextIndex]);
           }
         }
       } else if (keyboardEvent.key === 'ArrowLeft' && currentIndex > 0) {
         keyboardEvent.preventDefault();
-        let prevIndex: number;
-        if (isMultiVariable) {
-          prevIndex = findPrevInVariable(currentIndex);
-        } else {
-          prevIndex = currentIndex - 1;
-        }
+        const prevIndex = currentIndex - 1;
         if (prevIndex >= 0) {
           this.handleUnitChanged(this.unitsData.units[prevIndex]);
         }

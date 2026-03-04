@@ -256,6 +256,53 @@ describe('ReplayComponent', () => {
 
       document.body.removeChild(textarea);
     });
+
+    it('should navigate to immediate next unit on ArrowRight for interleaved variables', () => {
+      component.isCodingMode = true;
+      const unitsData = {
+        id: 123,
+        name: 'job',
+        currentUnitIndex: 0,
+        units: [
+          {
+            id: 1,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V1',
+            variableAnchor: 'V1'
+          },
+          {
+            id: 2,
+            name: 'UNIT1',
+            alias: 'UNIT1',
+            bookletId: 0,
+            testPerson: 'tp1@code1@grp@booklet',
+            variableId: 'V2',
+            variableAnchor: 'V2'
+          }
+        ]
+      };
+      const replayComponent = component as ReplayComponent & { unitsData: typeof unitsData };
+      replayComponent.unitsData = unitsData;
+      component.testPerson = 'tp1@code1@grp@booklet';
+      component.unitId = 'UNIT1';
+      component.codingService.currentVariableId = 'V1';
+
+      const compositeKey = component.codingService.generateCompositeKey(component.testPerson, 'UNIT1', 'V1');
+      component.codingService.selectedCodes.set(compositeKey, {
+        id: 1,
+        label: 'coded'
+      });
+
+      const handleUnitChangedSpy = jest.spyOn(component, 'handleUnitChanged').mockResolvedValue();
+      const event = new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight' });
+
+      component.onKeyDown(event);
+
+      expect(handleUnitChangedSpy).toHaveBeenCalledWith(unitsData.units[1]);
+    });
   });
 
   describe('Coding Job Status', () => {
