@@ -772,7 +772,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       }, '*');
 
       this.errorSnackBar.open(
-        `Code ${savedCode.code} an Vergleichsliste gesendet`,
+        'Code an Vergleichsliste gesendet',
         'Ok',
         { duration: 2000 }
       );

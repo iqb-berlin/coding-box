@@ -366,10 +366,44 @@ export class CodingResultsComparisonComponent implements OnInit {
       return '-';
     }
     const issue = this.getCodingIssueLabel(issueOption);
+    if (code === '-1' || code === '-2') {
+      return issue || code;
+    }
     return issue ? `${code} (${issue})` : code;
   }
 
+  /**
+   * Maps auto-coder codes for display in the coding manager UI.
+   * - Code -4 (technical problems) → -97
+   * - Code -3 (invalid/fun response) → -98
+   * - Codes -1 and -2 → null (empty)
+   */
+  mapCodeForDisplay(code: string | number | null | undefined): string {
+    if (code === null || code === undefined || code === '') {
+      return '';
+    }
+    const codeNum = typeof code === 'string' ? parseInt(code, 10) : code;
+    if (Number.isNaN(codeNum)) {
+      return String(code);
+    }
+    if (codeNum === -4) {
+      return '-97';
+    }
+    if (codeNum === -3) {
+      return '-98';
+    }
+    if (codeNum === -1 || codeNum === -2) {
+      return '';
+    }
+    return String(codeNum);
+  }
+
   private getDiscussionScoreFromKnownCodes(comparison: WithinTrainingComparison, codeAsNumber: number): number | null {
+    // Handle mapped codes: -97 (from -4) and -98 (from -3) should have score 0
+    if (codeAsNumber === -97 || codeAsNumber === -98) {
+      return 0;
+    }
+
     const matchedCoder = comparison.coders.find(c => c.code !== null && parseInt(c.code, 10) === codeAsNumber && c.score !== null);
     if (matchedCoder) {
       return matchedCoder.score;
@@ -474,10 +508,10 @@ export class CodingResultsComparisonComponent implements OnInit {
 
     data.forEach(item => {
       if (item.discussionCode !== null && item.discussionCode !== undefined) {
-        this.discussionCodeByResponseId[item.responseId] = item.discussionCode.toString();
+        this.discussionCodeByResponseId[item.responseId] = this.mapCodeForDisplay(item.discussionCode.toString());
         this.discussionScoreByResponseId[item.responseId] = item.discussionScore ?? this.getDiscussionScoreFromKnownCodes(item, item.discussionCode);
       } else if (item.replayCode !== null && item.replayCode !== undefined) {
-        this.discussionCodeByResponseId[item.responseId] = item.replayCode.toString();
+        this.discussionCodeByResponseId[item.responseId] = this.mapCodeForDisplay(item.replayCode.toString());
         this.discussionScoreByResponseId[item.responseId] = item.replayScore ?? this.getDiscussionScoreFromKnownCodes(item, item.replayCode);
       } else {
         this.discussionCodeByResponseId[item.responseId] = '';
@@ -1128,12 +1162,12 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     if (row) {
-      this.discussionCodeByResponseId[row.responseId] = data.code;
+      this.discussionCodeByResponseId[row.responseId] = this.mapCodeForDisplay(data.code);
       // Trigger the existing save logic as if the user blurs the input
       this.onDiscussionCodeBlur(row);
 
       this.snackBar.open(
-        `Codierung für ${data.variableId} aus Replay übernommen: ${data.code}`,
+        `Kodierung für ${data.variableId} aus Replay übernommen`,
         this.translate.instant('common.close'),
         { duration: 3000 }
       );
