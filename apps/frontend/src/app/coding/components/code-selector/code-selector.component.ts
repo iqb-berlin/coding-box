@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -59,6 +59,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
+  @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
@@ -375,6 +376,9 @@ export class CodeSelectorComponent implements OnChanges {
 
   toggleVariablePanel(): void {
     this.isVariablePanelOpen = !this.isVariablePanelOpen;
+    if (this.isVariablePanelOpen) {
+      setTimeout(() => this.focusCurrentVariableInPanel(), 0);
+    }
   }
 
   closeVariablePanel(): void {
@@ -384,6 +388,18 @@ export class CodeSelectorComponent implements OnChanges {
   selectVariable(key: string): void {
     this.isVariablePanelOpen = false;
     this.jumpToVariable(key);
+  }
+
+  private focusCurrentVariableInPanel(): void {
+    const panel = this.variablePanel?.nativeElement;
+    if (!panel) return;
+
+    const activeItem = panel.querySelector<HTMLElement>('.variable-panel-item.active');
+    const targetItem = activeItem || panel.querySelector<HTMLElement>('.variable-panel-item');
+    if (!targetItem) return;
+
+    targetItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    targetItem.focus({ preventScroll: true });
   }
 
   /** Returns coded/total/percentage for any unit+variable key. */
