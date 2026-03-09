@@ -69,4 +69,71 @@ describe('PersonService', () => {
       expect(parse('')).toBeNull();
     });
   });
+
+  describe('chunk parsing', () => {
+    it('should use chunk.id as subform fallback when subForm is missing', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const extractSubforms = (service as any).extractSubforms.bind(service);
+      const parsed = extractSubforms([
+        {
+          id: 'elementCodes',
+          subForm: '',
+          content: '[{"id":"text_1","status":"DISPLAYED","value":[]}]',
+          ts: 1,
+          responseType: 'iqb-standard@1.0'
+        }
+      ]);
+
+      expect(parsed).toEqual([
+        {
+          id: 'elementCodes',
+          responses: [{ id: 'text_1', status: 'DISPLAYED', value: [] }]
+        }
+      ]);
+    });
+
+    it('should create one chunk entry per parsed response chunk', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const createUnit = (service as any).createUnit.bind(service);
+      const unit = createUnit(
+        {
+          unitname: 'UNIT_1'
+        },
+        [],
+        [],
+        new Set<string>(),
+        [
+          {
+            id: 'elementCodes',
+            subForm: '',
+            content: '[{"id":"text_1","status":"DISPLAYED","value":[]}]',
+            ts: 100,
+            responseType: 'iqb-standard@1.0'
+          },
+          {
+            id: 'stateVariableCodes',
+            subForm: '',
+            content: '[{"id":"state_1","status":"VALUE_CHANGED","value":"1"}]',
+            ts: 200,
+            responseType: 'iqb-standard@1.0'
+          }
+        ]
+      );
+
+      expect(unit.chunks).toEqual([
+        {
+          id: 'elementCodes',
+          type: 'iqb-standard@1.0',
+          ts: 100,
+          variables: ['text_1']
+        },
+        {
+          id: 'stateVariableCodes',
+          type: 'iqb-standard@1.0',
+          ts: 200,
+          variables: ['state_1']
+        }
+      ]);
+    });
+  });
 });

@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as fs from 'fs';
+import * as path from 'path';
 import { AppModule } from './app/app.module';
 
 async function bootstrap() {
@@ -13,6 +15,36 @@ async function bootstrap() {
   const port = 3333;
   const globalPrefix = 'api';
 
+  app.use((req, _res, next) => {
+    const [pathname, query = ''] = req.url.split('?', 2);
+    const normalizedPathname = pathname.replace(/\/{2,}/g, '/');
+    req.url = query ? `${normalizedPathname}?${query}` : normalizedPathname;
+    next();
+  });
+
+  const packagesRoot = path.resolve('./packages');
+  const packageDirectoryMap = new Map<string, string>();
+  if (fs.existsSync(packagesRoot)) {
+    fs.readdirSync(packagesRoot, { withFileTypes: true })
+      .filter(entry => entry.isDirectory())
+      .forEach(entry => packageDirectoryMap.set(entry.name.toLowerCase(), entry.name));
+  }
+
+  app.use('/api/packages', (req, _res, next) => {
+    // Resolve top-level package directory case-insensitively.
+    const match = req.url.match(/^\/([^/]+)(\/.*)?$/);
+    if (match) {
+      const requestedTopLevel = match[1];
+      const normalizedTopLevel = packageDirectoryMap.get(requestedTopLevel.toLowerCase());
+      if (normalizedTopLevel && normalizedTopLevel !== requestedTopLevel) {
+        req.url = `/${normalizedTopLevel}${match[2] || ''}`;
+      }
+    }
+    next();
+  });
+
+  // Explicit compatibility alias for historical GeoGebra package paths.
+  app.useStaticAssets('./packages/Geogebra', { prefix: '/api/packages/GeoGebra' });
   app.useStaticAssets('./packages', { prefix: '/api/packages' });
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);

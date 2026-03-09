@@ -42,6 +42,67 @@ interface PersonWhere {
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
 
+  private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
+    const normalizedVariableId = String(variableId || '').trim();
+    const isMarkingPanel = normalizedVariableId.startsWith('marking-panel_');
+    if (value === null || value === undefined) {
+      if (isMarkingPanel) {
+        return [];
+      }
+      return null;
+    }
+
+    const raw = String(value);
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      return isMarkingPanel ? [] : '';
+    }
+
+    if (!isMarkingPanel) {
+      // Most interactive controls persist values as JSON arrays.
+      // Deserialize array payloads so replay players receive list-like values.
+      if (!trimmed.startsWith('[')) {
+        // Keep object/primitive payloads as stored text for non-marking variables.
+        // Some players expect strings and perform their own parsing.
+        return raw;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (!Array.isArray(parsed)) {
+          return raw;
+        }
+
+        const isPrimitiveArray = parsed.every(item => item === null ||
+          ['string', 'number', 'boolean'].includes(typeof item)
+        );
+
+        return isPrimitiveArray ? parsed : raw;
+      } catch {
+        return raw;
+      }
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        if (
+          parsed.length > 0 &&
+          parsed.every(token => typeof token === 'string' && /^\d+-\d+-#[0-9a-fA-F]{3,8}$/.test(token))
+        ) {
+          return [parsed];
+        }
+        return parsed;
+      }
+      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { marks?: unknown[] }).marks)) {
+        return (parsed as { marks: unknown[] }).marks;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
+
   constructor(
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
@@ -2170,11 +2231,11 @@ export class WorkspaceTestResultsService {
         content: string;
       }[];
     }> {
-    const cacheKey = this.cacheService.generateUnitResponseCacheKey(
+    const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
-    );
+    )}:v4`;
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;
@@ -2282,45 +2343,55 @@ export class WorkspaceTestResultsService {
       this.logger.log(`No chunks found for unit ${unit.id}`);
     }
 
-    const chunkKeyMap = new Map<string, string>();
+    const chunkKeyMap = new Map<string, { key: string; ts: number }>();
     chunks.forEach(chunk => {
       if (chunk.variables) {
+        const chunkTs = Number(chunk.ts) || 0;
         const variables = chunk.variables.split(',').map(v => v.trim());
         variables.forEach(variable => {
-          chunkKeyMap.set(variable, chunk.key);
+          const current = chunkKeyMap.get(variable);
+          if (!current || chunkTs >= current.ts) {
+            chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
+          }
         });
       }
     });
 
-    const responsesByChunk = {};
+    const responsesByChunk = new Map<string, Map<string, {
+      id: string;
+      value: unknown;
+      status: number;
+      chunkTs: number;
+    }>>();
 
     unit.responses.forEach(response => {
+      const mappedChunk = chunkKeyMap.get(response.variableid);
+      const chunkKey = mappedChunk?.key || response.subform || '';
+      const chunkTs = mappedChunk?.ts || 0;
       const mappedResponse = {
         id: response.variableid,
-        value: response.value,
-        status: response.status
+        value: WorkspaceTestResultsService.parseStoredResponseValue(response.value, response.variableid),
+        status: response.status,
+        chunkTs
       };
 
-      const chunkKey =
-        chunkKeyMap.get(response.variableid) || response.subform || '';
-
-      if (!responsesByChunk[chunkKey]) {
-        responsesByChunk[chunkKey] = [];
+      if (!responsesByChunk.has(chunkKey)) {
+        responsesByChunk.set(chunkKey, new Map());
       }
-
-      responsesByChunk[chunkKey].push(mappedResponse);
+      const chunkResponses = responsesByChunk.get(chunkKey)!;
+      const existing = chunkResponses.get(mappedResponse.id);
+      if (!existing || mappedResponse.chunkTs >= existing.chunkTs) {
+        chunkResponses.set(mappedResponse.id, mappedResponse);
+      }
     });
 
-    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
-      const uniqueResponses = responsesByChunk[chunkKey].filter(
-        (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
-      );
-
-      return {
-        id: chunkKey,
-        content: JSON.stringify(uniqueResponses)
-      };
-    });
+    const responsesArray = Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
+      id: chunkKey,
+      content: JSON.stringify(Array.from(responseMap.values()).map(({
+        chunkTs: _chunkTs,
+        ...response
+      }) => response))
+    }));
 
     const result = {
       responses: responsesArray
@@ -3314,14 +3385,10 @@ export class WorkspaceTestResultsService {
             responsesByChunkKey.set(chunkKey, []);
           }
 
-          let value: ResponseValueType = r.value;
-          try {
-            if (typeof r.value === 'string' && r.value.length > 0) {
-              value = JSON.parse(r.value);
-            }
-          } catch (e) {
-            // keep as string
-          }
+          const value = WorkspaceTestResultsService.parseStoredResponseValue(
+            r.value,
+            r.variableid
+          ) as ResponseValueType;
 
           responsesByChunkKey.get(chunkKey)!.push({
             id: r.variableid,

@@ -350,10 +350,10 @@ export class PersonService {
       .map(chunk => {
         try {
           const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm, responses: chunkContent };
+          return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
         } catch (error) {
           this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${error.message}`);
-          return { id: chunk.subForm, responses: [] };
+          return { id: chunk.subForm || chunk.id || '', responses: [] };
         }
       });
   }
@@ -418,19 +418,51 @@ export class PersonService {
     variables: Set<string>,
     parsedResponses: Chunk[]
   ): TcMergeUnit {
+    const chunks = parsedResponses
+      .map(chunk => {
+        const chunkId = String(chunk.id || chunk.subForm || '').trim();
+        const chunkType = String(chunk.responseType || '').trim();
+        const chunkTs = Number(chunk.ts) || 0;
+        let chunkVariables: string[] = [];
+
+        try {
+          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
+          if (Array.isArray(chunkContent)) {
+            chunkVariables = Array.from(new Set(
+              chunkContent
+                .map(response => String(response?.id || '').trim())
+                .filter(Boolean)
+            ));
+          }
+        } catch (error) {
+          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${error.message}`);
+        }
+
+        // Keep backward compatibility: if there is only one chunk, keep the old
+        // variable-source behavior to avoid writing empty chunk variables.
+        if (chunkVariables.length === 0 && parsedResponses.length === 1 && variables.size > 0) {
+          chunkVariables = Array.from(new Set(
+            Array.from(variables)
+              .map(variable => String(variable || '').trim())
+              .filter(Boolean)
+          ));
+        }
+
+        return {
+          id: chunkId,
+          type: chunkType,
+          ts: chunkTs,
+          variables: chunkVariables
+        };
+      })
+      .filter(chunk => chunk.id || chunk.type || chunk.ts || chunk.variables.length > 0);
+
     return {
       id: row.unitname,
       alias: row.unitname,
       laststate,
       subforms,
-      chunks: [
-        {
-          id: parsedResponses[0]?.id || '',
-          type: parsedResponses[0]?.responseType || '',
-          ts: parsedResponses[0]?.ts || 0,
-          variables: Array.from(variables)
-        }
-      ],
+      chunks,
       logs: []
     };
   }

@@ -446,4 +446,39 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
     });
   });
+
+  describe('parseStoredResponseValue', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parse = (value: string | null, variableId?: string) => (WorkspaceTestResultsService as any).parseStoredResponseValue(value, variableId);
+
+    it('should normalize flat marking tokens to nested arrays', () => {
+      const parsed = parse('["2-2-#f9f871","4-4-#f9f871"]', 'marking-panel_1');
+      expect(parsed).toEqual([['2-2-#f9f871', '4-4-#f9f871']]);
+    });
+
+    it('should return empty array for non-array marking-panel payloads', () => {
+      const parsed = parse('{"unexpected":true}', 'marking-panel_1');
+      expect(parsed).toEqual([]);
+    });
+
+    it('should keep non-json primitive strings for non-marking variables', () => {
+      const parsed = parse('false', 'image_1');
+      expect(parsed).toBe('false');
+    });
+
+    it('should parse JSON arrays for non-marking variables', () => {
+      const parsed = parse('[true,false,true]', 'hotspot-image_1');
+      expect(parsed).toEqual([true, false, true]);
+    });
+
+    it('should keep JSON objects as strings for non-marking variables', () => {
+      const parsed = parse('{"k":"v"}', 'text_1');
+      expect(parsed).toBe('{"k":"v"}');
+    });
+
+    it('should keep arrays of objects as strings for non-marking variables', () => {
+      const parsed = parse('[{"k":"v"}]', 'text_1');
+      expect(parsed).toBe('[{"k":"v"}]');
+    });
+  });
 });
