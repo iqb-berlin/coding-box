@@ -27,10 +27,11 @@
       </button>
 
       @if (isVariablePanelOpen) {
-      <div class="variable-panel">
+      <div class="variable-panel" #variablePanel>
         @for (v of availableVariables; track v.key) {
         @let prog = getProgressForKey(v.key);
-        <div class="variable-panel-item" [class.active]="v.key === activeVariableKey" (click)="selectVariable(v.key)">
+        <div class="variable-panel-item" [class.active]="v.key === activeVariableKey" (click)="selectVariable(v.key)"
+          tabindex="-1">
           <div class="variable-panel-header">
             <span class="variable-panel-name">{{ v.unitName }} / {{ v.variableId }}</span>
             <span class="variable-panel-count">{{ prog.coded }}/{{ prog.total }}</span>

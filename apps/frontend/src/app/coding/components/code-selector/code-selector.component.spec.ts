@@ -81,4 +81,28 @@ describe('CodeSelectorComponent', () => {
 
     expect(emitSpy).toHaveBeenCalledWith(component.unitsData.units[1]);
   });
+
+  it('toggleVariablePanel should focus active variable item when opened', () => {
+    jest.useFakeTimers();
+    const panel = document.createElement('div');
+    panel.className = 'variable-panel';
+    const activeItem = document.createElement('div');
+    activeItem.className = 'variable-panel-item active';
+    activeItem.setAttribute('tabindex', '-1');
+    panel.appendChild(activeItem);
+
+    const scrollSpy = jest.fn();
+    // jsdom does not implement scrollIntoView in all environments.
+    (activeItem as unknown as { scrollIntoView: () => void }).scrollIntoView = scrollSpy;
+    const focusSpy = jest.spyOn(activeItem, 'focus').mockImplementation(() => { });
+    (component as unknown as { variablePanel: { nativeElement: HTMLElement } }).variablePanel = { nativeElement: panel };
+
+    component.toggleVariablePanel();
+    jest.runAllTimers();
+
+    expect(component.isVariablePanelOpen).toBe(true);
+    expect(scrollSpy).toHaveBeenCalled();
+    expect(focusSpy).toHaveBeenCalled();
+    jest.useRealTimers();
+  });
 });
