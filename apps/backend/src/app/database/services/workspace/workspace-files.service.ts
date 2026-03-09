@@ -4,6 +4,7 @@ import {
   FindOperator, In, Like, Repository
 } from 'typeorm';
 import * as cheerio from 'cheerio';
+import AdmZip = require('adm-zip');
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
@@ -472,26 +473,6 @@ ${bookletRefs}
       overwriteExistingParam: boolean,
       overwriteAllowListParam?: Set<string>
     ): Promise<TestFilesUploadResultDto> => {
-      const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
-
-      for (let i = 0; i < files.length; i += batchSize) {
-        const batch = files.slice(i, i + batchSize);
-        batch.forEach(file => {
-          const promises = this.handleFile(
-            workspace_id,
-            file,
-            overwriteExistingParam,
-            overwriteAllowListParam
-          );
-          promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
-          );
-        });
-        await Promise.allSettled(
-          tasks.slice(i, i + batchSize).map(t => t.promise)
-        );
-      }
-
-      const settled = await Promise.allSettled(tasks.map(t => t.promise));
       const conflicts: TestFilesUploadConflictDto[] = [];
       const failedFiles: TestFilesUploadFailedDto[] = [];
       const uploadedFiles: TestFilesUploadUploadedDto[] = [];
@@ -503,18 +484,28 @@ ${bookletRefs}
       typeof value === 'object' &&
         (value as { conflict?: unknown }).conflict === true;
 
-      settled.forEach((result, idx) => {
-        const task = tasks[idx];
-        if (result.status === 'rejected') {
-          const reason = (result as PromiseRejectedResult).reason;
+      const isFailedResult = (
+        value: unknown
+      ): value is { failed: true; filename: string; reason: string } => !!value &&
+      typeof value === 'object' &&
+        (value as { failed?: unknown }).failed === true &&
+        typeof (value as { filename?: unknown }).filename === 'string' &&
+        typeof (value as { reason?: unknown }).reason === 'string';
+
+      const collectResultValue = (value: unknown): void => {
+        if (Array.isArray(value)) {
+          value.forEach(collectResultValue);
+          return;
+        }
+
+        if (isFailedResult(value)) {
           failedFiles.push({
-            filename: task?.filename || 'unknown',
-            reason: reason instanceof Error ? reason.message : String(reason)
+            filename: value.filename,
+            reason: value.reason
           });
           return;
         }
 
-        const value = result.value;
         if (isConflict(value)) {
           conflicts.push({
             fileId: value.fileId,
@@ -533,7 +524,38 @@ ${bookletRefs}
         if (typeof value !== 'undefined') {
           uploaded += 1;
         }
-      });
+      };
+
+      for (let i = 0; i < files.length; i += batchSize) {
+        const batch = files.slice(i, i + batchSize);
+        const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
+
+        batch.forEach(file => {
+          const promises = this.handleFile(
+            workspace_id,
+            file,
+            overwriteExistingParam,
+            overwriteAllowListParam
+          );
+          promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
+          );
+        });
+
+        const settled = await Promise.allSettled(tasks.map(t => t.promise));
+        settled.forEach((result, idx) => {
+          const task = tasks[idx];
+          if (result.status === 'rejected') {
+            const reason = (result as PromiseRejectedResult).reason;
+            failedFiles.push({
+              filename: task?.filename || 'unknown',
+              reason: reason instanceof Error ? reason.message : String(reason)
+            });
+            return;
+          }
+
+          collectResultValue(result.value);
+        });
+      }
 
       return {
         total: Array.isArray(originalFiles) ? originalFiles.length : 0,
@@ -655,7 +677,7 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          )
+          ).catch(error => this.toFailedUploadResult(file.originalname, error))
         );
         break;
       case 'text/html':
@@ -665,7 +687,7 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          )
+          ).catch(error => this.toFailedUploadResult(file.originalname, error))
         );
         break;
       case 'application/octet-stream':
@@ -675,14 +697,14 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          )
+          ).catch(error => this.toFailedUploadResult(file.originalname, error))
         );
         break;
       case 'application/zip':
       case 'application/x-zip-compressed':
       case 'application/x-zip':
         filePromises.push(
-          ...this.handleZipFile(
+          this.handleZipFile(
             workspaceId,
             file,
             overwriteExisting,
@@ -693,8 +715,11 @@ ${bookletRefs}
       default:
         this.logger.warn(`Unsupported file type: ${file.mimetype}`);
         filePromises.push(
-          Promise.reject(
-            this.unsupportedFile(`Unsupported file type: ${file.mimetype}`)
+          Promise.resolve(
+            this.toFailedUploadResult(
+              file.originalname,
+              `Unsupported file type: ${file.mimetype}`
+            )
           )
         );
     }
@@ -704,6 +729,17 @@ ${bookletRefs}
 
   private unsupportedFile(message: string): Error {
     return new Error(message);
+  }
+
+  private toFailedUploadResult(
+    filename: string,
+    reason: unknown
+  ): { failed: true; filename: string; reason: string } {
+    return {
+      failed: true,
+      filename,
+      reason: reason instanceof Error ? reason.message : String(reason)
+    };
   }
 
   private async handleXmlFile(
@@ -758,13 +794,12 @@ ${bookletRefs}
       if (!xmlValidation.schemaValid) {
         const maxErrors = 10;
         const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
+        const failureMessage = `XSD validation failed: ${file.originalname}`;
         this.logger.warn(
           `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length
           }) ${JSON.stringify(errorsPreview)}`
         );
-        throw this.unsupportedFile(
-          `XSD validation failed: ${file.originalname}`
-        );
+        return this.toFailedUploadResult(file.originalname, failureMessage);
       }
 
       const metadata = xmlDocument('Metadata');
@@ -1138,41 +1173,58 @@ ${bookletRefs}
     );
   }
 
-  private handleZipFile(
+  private async handleZipFile(
     workspaceId: number,
     file: FileIo,
     overwriteExisting: boolean,
     overwriteAllowList?: Set<string>
-  ): Array<Promise<unknown>> {
+  ): Promise<unknown[]> {
     this.logger.log(
       `Processing ZIP file: ${file.originalname} for workspace ${workspaceId}`
     );
-    const promises: Array<Promise<unknown>> = [];
-
+    const results: unknown[] = [];
     try {
-      const fileIos = this.workspaceFileStorageService.unzipToFileIos(
-        file.buffer
-      );
+      const zip = new AdmZip(file.buffer);
+      const zipEntries = zip.getEntries().filter(entry => !entry.isDirectory);
       this.logger.log(
-        `Found ${fileIos.length} entries in ZIP file ${file.originalname}`
+        `Found ${zipEntries.length} entries in ZIP file ${file.originalname}`
       );
 
-      fileIos.forEach(fileIo => promises.push(
-        ...this.handleFile(
-          workspaceId,
-          fileIo,
-          overwriteExisting,
-          overwriteAllowList
-        )
-      )
-      );
-      return promises;
+      const ENTRY_BATCH_SIZE = 25;
+      for (let i = 0; i < zipEntries.length; i += ENTRY_BATCH_SIZE) {
+        const batch = zipEntries.slice(i, i + ENTRY_BATCH_SIZE);
+        const batchResults = await Promise.all(batch.map(async entry => {
+          const sanitizedEntryName =
+            this.workspaceFileStorageService.sanitizePath(entry.entryName);
+          const entryData = entry.getData();
+          const nestedFile = <FileIo>{
+            originalname: path.basename(sanitizedEntryName),
+            buffer: entryData,
+            mimetype: this.workspaceFileStorageService.getMimeType(
+              sanitizedEntryName
+            ),
+            size: entryData.length,
+            fieldname: '',
+            encoding: ''
+          };
+
+          const nestedPromises = this.handleFile(
+            workspaceId,
+            nestedFile,
+            overwriteExisting,
+            overwriteAllowList
+          );
+          return Promise.all(nestedPromises);
+        }));
+        batchResults.forEach(res => results.push(...res));
+      }
+      return results;
     } catch (error) {
       this.logger.error(
         `Error processing ZIP file ${file.originalname}: ${error.message}`,
         error.stack
       );
-      return [Promise.reject(error)];
+      return [this.toFailedUploadResult(file.originalname, error)];
     }
   }
 
