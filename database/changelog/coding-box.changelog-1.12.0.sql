@@ -55,3 +55,17 @@ CREATE INDEX "idx_coder_training_discussion_result_manager_user"
   ON "public"."coder_training_discussion_result" ("manager_user_id");
 
 -- rollback DROP TABLE "public"."coder_training_discussion_result";
+
+-- changeset jurei733:3
+-- comment: Add performance indexes for replay statistics aggregations
+
+CREATE INDEX IF NOT EXISTS replay_statistics_workspace_timestamp_idx
+  ON replay_statistics (workspace_id, timestamp);
+CREATE INDEX IF NOT EXISTS replay_statistics_workspace_success_timestamp_idx
+  ON replay_statistics (workspace_id, success, timestamp);
+CREATE INDEX IF NOT EXISTS replay_statistics_workspace_unit_idx
+  ON replay_statistics (workspace_id, unit_id);
+
+-- rollback DROP INDEX IF EXISTS replay_statistics_workspace_timestamp_idx;
+-- rollback DROP INDEX IF EXISTS replay_statistics_workspace_success_timestamp_idx;
+-- rollback DROP INDEX IF EXISTS replay_statistics_workspace_unit_idx;
