@@ -2261,10 +2261,10 @@ export class WorkspaceTestResultsService {
     const bookletId = parts[parts.length - 1];
     const queryBuilder = this.unitRepository
       .createQueryBuilder('unit')
-      .innerJoinAndSelect('unit.responses', 'response')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('unit.id', 'unitId')
       .where('person.login = :login', { login })
       .andWhere('person.code = :code', { code });
 
@@ -2278,9 +2278,10 @@ export class WorkspaceTestResultsService {
       .andWhere('bookletinfo.name = :bookletId', { bookletId })
       .andWhere('unit.alias = :unitId', { unitId });
 
-    const unit = await queryBuilder.getOne();
+    const unitRow = await queryBuilder.getRawOne<{ unitId: number }>();
+    const unitDbId = unitRow?.unitId;
 
-    if (!unit) {
+    if (!unitDbId) {
       const personWhere: PersonWhere = {
         code,
         login,
@@ -2329,19 +2330,35 @@ export class WorkspaceTestResultsService {
     }
 
     const chunks = await this.chunkRepository.find({
-      where: { unitid: unit.id }
+      where: { unitid: unitDbId }
     });
 
     if (chunks.length > 0) {
-      this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
+      this.logger.log(`Found ${chunks.length} chunks for unit ${unitDbId}`);
       chunks.forEach(chunk => {
         this.logger.log(
           `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
         );
       });
     } else {
-      this.logger.log(`No chunks found for unit ${unit.id}`);
+      this.logger.log(`No chunks found for unit ${unitDbId}`);
     }
+
+    const responseRows = await this.responseRepository
+      .createQueryBuilder('response')
+      .select([
+        'response.variableid AS variableid',
+        'response.value AS value',
+        'response.status AS status',
+        'response.subform AS subform'
+      ])
+      .where('response.unitid = :unitDbId', { unitDbId })
+      .getRawMany<{
+      variableid: string;
+      value: string | null;
+      status: number;
+      subform: string | null;
+    }>();
 
     const chunkKeyMap = new Map<string, { key: string; ts: number }>();
     chunks.forEach(chunk => {
@@ -2364,7 +2381,7 @@ export class WorkspaceTestResultsService {
       chunkTs: number;
     }>>();
 
-    unit.responses.forEach(response => {
+    responseRows.forEach(response => {
       const mappedChunk = chunkKeyMap.get(response.variableid);
       const chunkKey = mappedChunk?.key || response.subform || '';
       const chunkTs = mappedChunk?.ts || 0;

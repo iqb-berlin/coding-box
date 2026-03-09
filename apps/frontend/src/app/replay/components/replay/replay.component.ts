@@ -12,20 +12,16 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import { ActivatedRoute, Params } from '@angular/router';
 import {
-  combineLatest, firstValueFrom, Observable, of, Subject, Subscription, switchMap, catchError
+  firstValueFrom, of, Subject, Subscription, catchError
 } from 'rxjs';
-import * as xml2js from 'xml2js';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
 import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { ResponseService } from '../../../shared/services/response/response.service';
-import { FileBackendService } from '../../../shared/services/file/file-backend.service';
 import { ReplayBackendService } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
-import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { ErrorMessages } from '../../models/error-messages.model';
@@ -63,8 +59,6 @@ import { CodingJobBackendService } from '../../../coding/services/coding-job-bac
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private fileService = inject(FileService);
-  private responseService = inject(ResponseService);
-  private fileBackendService = inject(FileBackendService);
   private replayBackendService = inject(ReplayBackendService);
   private appService = inject(AppService);
   private route = inject(ActivatedRoute);
@@ -92,16 +86,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
-  private lastPlayer: { id: string, data: string } = { id: '', data: '' };
-  private lastUnitDef: { id: string, data: string } = { id: '', data: '' };
-  private lastUnit: { id: string, data: string } = { id: '', data: '' };
-  private lastVocs: { id: string, data: string } = { id: '', data: '' };
   private routerSubscription: Subscription | null = null;
   readonly testPersonInput = input<string>();
   readonly unitIdInput = input<string>();
   protected unitsData: UnitsReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
+  private routeStartTime: number = 0;
+  private payloadRequestStartTime: number = 0;
+  private payloadResponseTime: number = 0;
   private successStoredForCurrentReplay: boolean = false;
   protected reloadKey: number = 0;
   workspaceId: number = 0;
@@ -159,6 +152,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   subscribeRouter(): void {
     this.routerSubscription = this.route.params
       ?.subscribe(async params => {
+        this.routeStartTime = performance.now();
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
@@ -334,15 +328,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private checkUnitId(unitFile: FilesDto[]): void {
-    if (!unitFile || !unitFile[0]) {
-      this.storeErrorInStatistics('UnitIdError');
-      ReplayComponent.throwError('UnitIdError');
-    } else {
-      this.cacheUnitData(unitFile[0]);
-    }
-  }
-
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
     // eslint-disable-next-line @typescript-eslint/dot-notation
     if (typeof changes['unitIdInput']?.currentValue === 'undefined') {
@@ -390,16 +375,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private setUnitProperties(
     unitData: {
       unitDef: FilesDto[],
-      response: ResponseDto[],
+      response: {
+        responses: {
+          id: string;
+          content: string;
+        }[];
+      },
       player: FilesDto[],
       vocs: FilesDto[]
     }
   ) {
-    this.cachePlayerData(unitData.player[0]);
-    this.cacheUnitDefData(unitData.unitDef[0]);
-    if (unitData.vocs && unitData.vocs[0]) {
-      this.cacheVocsData(unitData.vocs[0]);
-    }
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
@@ -412,43 +397,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
   }
 
-  private cacheUnitData(unit: FilesDto) {
-    this.lastUnit.data = unit.data;
-    this.lastUnit.id = unit.file_id;
-  }
-
-  private cacheUnitDefData(unitDef: FilesDto) {
-    this.lastUnitDef.data = unitDef.data;
-    const extensionIndex = unitDef.file_id.toUpperCase().lastIndexOf('.VOUD');
-    this.lastUnitDef.id = extensionIndex > -1 ?
-      unitDef.file_id.substring(0, extensionIndex) :
-      unitDef.file_id;
-  }
-
-  private cachePlayerData(playerData: FilesDto) {
-    this.lastPlayer.data = playerData.data;
-    this.lastPlayer.id = playerData.file_id;
-  }
-
-  private cacheVocsData(vocsData: FilesDto) {
-    this.lastVocs.data = vocsData.data;
-    const extensionIndex = vocsData.file_id.toLowerCase().lastIndexOf('.vocs');
-    this.lastVocs.id = extensionIndex > -1 ?
-      vocsData.file_id.substring(0, extensionIndex) :
-      vocsData.file_id;
-  }
-
   static getNormalizedPlayerId(name: string): string {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
     const matches = name.match(reg);
     if (matches) {
       const rawIdParts = {
         module: matches[1] || '',
-        full: matches[2] || '',
         major: parseInt(matches[3], 10) || 0,
         minor: (typeof matches[4] === 'string') ? parseInt(matches[4].substring(1), 10) : 0,
-        patch: (typeof matches[5] === 'string') ? parseInt(matches[5].substring(1), 10) : 0,
-        label: (typeof matches[6] === 'string') ? matches[6].substring(1) : ''
+        patch: (typeof matches[5] === 'string') ? parseInt(matches[5].substring(1), 10) : 0
       };
       return `${rawIdParts.module}-${rawIdParts.major}.${rawIdParts.minor}.${rawIdParts.patch}`.toUpperCase();
     }
@@ -456,97 +413,41 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return '';
   }
 
-  private getUnitDef(workspace: number, authToken?: string): Observable<FilesDto[]> {
-    if (this.lastUnitDef.id && this.lastUnitDef.data && this.lastUnitDef.id === this.unitId.toUpperCase()) {
-      return of([{
-        data: this.lastUnitDef.data,
-        file_id: `${this.lastUnitDef.id}.VOUD`
-      }]);
-    }
-    return this.fileService.getUnitDef(workspace, this.unitId, authToken);
-  }
-
-  private getResponses(workspace: number, authToken?: string): Observable<ResponseDto[]> {
-    if (this.isPrintMode) {
-      return of([]);
-    }
-    return this.responseService
-      .getResponses(workspace, this.testPerson, this.unitId, authToken);
-  }
-
-  private getUnit(workspace: number, authToken?: string): Observable<FilesDto[]> {
-    if (this.lastUnit.id && this.lastUnit.data && this.lastUnit.id === this.unitId.toUpperCase()) {
-      return of([{
-        data: this.lastUnit.data,
-        file_id: this.lastUnit.id
-      }]);
-    }
-    return this.fileService.getUnit(workspace, this.unitId, authToken);
-  }
-
-  private getVocs(workspace: number): Observable<FilesDto[]> {
-    if (this.lastVocs.id && this.lastVocs.data && this.lastVocs.id === this.unitId.toUpperCase()) {
-      return of([{
-        data: this.lastVocs.data,
-        file_id: `${this.lastVocs.id}.vocs`
-      }]);
-    }
-    return this.fileBackendService.getVocs(workspace, this.unitId);
-  }
-
-  private getPlayer(
-    workspace: number, player: string, authToken?: string
-  ): Observable<FilesDto[]> {
-    if (this.lastPlayer.id && this.lastPlayer.data && this.lastPlayer.id === player) {
-      return of([{ data: this.lastPlayer.data, file_id: this.lastPlayer.id }]);
-    }
-    return this.fileService.getPlayer(
-      workspace,
-      player,
-      authToken);
-  }
-
   private async getUnitData(
     workspace: number,
     authToken?: string
   ): Promise<{
       unitDef: FilesDto[],
-      response: ResponseDto[],
+      response: {
+        responses: {
+          id: string;
+          content: string;
+        }[];
+      },
       player: FilesDto[],
       vocs: FilesDto[]
     }> {
     this.replayStartTime = performance.now();
+    this.payloadRequestStartTime = performance.now();
     this.successStoredForCurrentReplay = false;
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
-      combineLatest([
-        this.getUnitDef(workspace, authToken),
-        this.getResponses(workspace, authToken).pipe(catchError(error => {
-          const errorMessage = this.extractReplayErrorMessage(error, this.getErrorMessages().ResponsesError);
-          this.storeErrorInStatistics(errorMessage);
-          return of([]);
-        })),
-        this.getVocs(workspace).pipe(catchError(error => {
-          const errorMessage = this.extractReplayErrorMessage(error, 'Fehler beim Laden des Coding Schemas');
-          this.storeErrorInStatistics(errorMessage);
-          return of([]);
-        })),
-        this.getUnit(workspace, authToken)
-          .pipe(switchMap(unitFile => {
-            this.checkUnitId(unitFile);
-            let player = '';
-            xml2js.parseString(unitFile[0].data, (err: any, result: any) => {
-              player = result?.Unit.DefinitionRef[0].$.player;
-            });
-            return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
-          }))
-      ]));
+      this.replayBackendService.getReplayPayload(
+        workspace,
+        this.testPerson,
+        this.unitId,
+        authToken
+      )
+    );
+    this.payloadResponseTime = performance.now();
+    const payloadDuration = Math.round(this.payloadResponseTime - this.payloadRequestStartTime);
+    logger.log(`Replay payload loaded in ${payloadDuration}ms for unit ${this.unitId}`);
     this.setIsLoaded();
     return {
-      unitDef: unitData[0],
-      response: unitData[1],
-      vocs: unitData[2],
-      player: unitData[3]
+      unitDef: unitData.unitDef,
+      response: unitData.response,
+      vocs: unitData.vocs,
+      player: unitData.player
     };
   }
 
@@ -593,6 +494,16 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.successStoredForCurrentReplay) {
       return;
     }
+    const now = performance.now();
+    const routeToVisible = this.routeStartTime ? Math.round(now - this.routeStartTime) : 0;
+    const payloadDuration = (this.payloadRequestStartTime && this.payloadResponseTime) ?
+      Math.round(this.payloadResponseTime - this.payloadRequestStartTime) :
+      0;
+    const payloadToVisible = this.payloadResponseTime ? Math.round(now - this.payloadResponseTime) : 0;
+    logger.log(
+      `Replay timings unit=${this.unitId} routeToVisible=${routeToVisible}ms ` +
+      `payload=${payloadDuration}ms payloadToVisible=${payloadToVisible}ms`
+    );
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
     this.storeReplayStatistics(true, duration);
     this.successStoredForCurrentReplay = true;
@@ -664,21 +575,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     return { testPersonLogin, testPersonCode, bookletId };
-  }
-
-  private extractReplayErrorMessage(error: unknown, fallback: string): string {
-    if (error instanceof HttpErrorResponse) {
-      if (typeof error.error === 'string' && error.error.trim()) {
-        return error.error;
-      }
-      if (error.message) {
-        return error.message;
-      }
-    }
-    if (error instanceof Error && error.message) {
-      return error.message;
-    }
-    return fallback;
   }
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
