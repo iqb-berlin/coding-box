@@ -14,7 +14,7 @@
       @if (!!player && unitDef) {
       @for (key of [reloadKey]; track $index) {
       <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
+        [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (responseVisible)="onResponseVisible()">
       </coding-box-unit-player>
       }
       }
@@ -48,7 +48,7 @@
   @if (!!player && unitDef) {
   @for (key of [reloadKey]; track $index) {
   <coding-box-unit-player [unitDef]="unitDef" [unitPlayer]="player" [unitResponses]="responses" [pageId]="page"
-    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)">
+    [printMode]="isPrintMode" (invalidPage)="checkPageError($event)" (responseVisible)="onResponseVisible()">
   </coding-box-unit-player>
   }
   }

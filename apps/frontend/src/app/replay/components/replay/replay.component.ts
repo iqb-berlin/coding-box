@@ -102,6 +102,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected unitsData: UnitsReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
   private replayStartTime: number = 0; // Track when replay viewing starts
+  private successStoredForCurrentReplay: boolean = false;
   protected reloadKey: number = 0;
   workspaceId: number = 0;
   originResponseId: number | null = null;
@@ -514,13 +515,22 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       player: FilesDto[],
       vocs: FilesDto[]
     }> {
-    const startTime = performance.now();
+    this.replayStartTime = performance.now();
+    this.successStoredForCurrentReplay = false;
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
       combineLatest([
         this.getUnitDef(workspace, authToken),
-        this.getResponses(workspace, authToken).pipe(catchError(() => of([]))),
-        this.getVocs(workspace).pipe(catchError(() => of([]))),
+        this.getResponses(workspace, authToken).pipe(catchError(error => {
+          const errorMessage = this.extractReplayErrorMessage(error, this.getErrorMessages().ResponsesError);
+          this.storeErrorInStatistics(errorMessage);
+          return of([]);
+        })),
+        this.getVocs(workspace).pipe(catchError(error => {
+          const errorMessage = this.extractReplayErrorMessage(error, 'Fehler beim Laden des Coding Schemas');
+          this.storeErrorInStatistics(errorMessage);
+          return of([]);
+        })),
         this.getUnit(workspace, authToken)
           .pipe(switchMap(unitFile => {
             this.checkUnitId(unitFile);
@@ -531,60 +541,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             return this.getPlayer(workspace, ReplayComponent.getNormalizedPlayerId(player), authToken);
           }))
       ]));
-    const endTime = performance.now();
-    const duration = Math.floor(endTime - startTime);
-    if (duration) {
-      if (duration >= 1) {
-        try {
-          let testPersonLogin: string | undefined;
-          let testPersonCode: string | undefined;
-          let bookletId: string | undefined;
-
-          if (this.testPerson) {
-            const parts = this.testPerson.split('@');
-            if (parts.length >= 3) {
-              testPersonLogin = parts[0];
-              testPersonCode = parts[1];
-              // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
-              bookletId = parts.length === 4 ? parts[3] : parts[2];
-            }
-          }
-          if (authToken) {
-            try {
-              const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
-              const workspaceId = Number(decoded?.workspace);
-              if (workspaceId) {
-                const replayUrl = window.location.href;
-
-                this.replayBackendService.storeReplayStatistics(workspaceId, {
-                  unitId: this.unitId,
-                  bookletId,
-                  testPersonLogin,
-                  testPersonCode,
-                  durationMilliseconds: duration,
-                  replayUrl,
-                  success: true
-                }).subscribe({
-                  next: () => {
-                    logger.log(`Replay statistics stored successfully. Duration: ${duration}ms`);
-                  },
-                  error: error => {
-                    logger.error(`Error storing replay statistics: ${error}`);
-                  }
-                });
-              }
-            } catch (error) {
-              logger.error(`Error decoding auth token: ${error}`);
-            }
-          }
-        } catch (error) {
-          logger.error(`Error storing replay statistics: ${error}`);
-        }
-      }
-
-      this.replayStartTime = performance.now();
-    }
-
     this.setIsLoaded();
     return {
       unitDef: unitData[0],
@@ -630,49 +586,99 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private storeErrorInStatistics(errorMessage: string): void {
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) return;
+    this.storeReplayStatistics(false, duration, errorMessage);
+  }
 
-    try {
-      const decoded: JwtPayload & { workspace: string } = jwtDecode(authToken);
-      const workspaceId = Number(decoded?.workspace);
-      if (!workspaceId) return;
-
-      let testPersonLogin = '';
-      let testPersonCode = '';
-      let bookletId = '';
-
-      if (this.testPerson) {
-        const parts = this.testPerson.split('@');
-        if (parts.length >= 3) {
-          testPersonLogin = parts[0];
-          testPersonCode = parts[1];
-          // Support both old format (3 parts: login@code@booklet) and new format (4 parts: login@code@group@booklet)
-          bookletId = parts.length === 4 ? parts[3] : parts[2];
-        }
-      }
-      const replayUrl = window.location.href;
-
-      this.replayBackendService.storeReplayStatistics(workspaceId, {
-        unitId: this.unitId || 'unknown',
-        bookletId,
-        testPersonLogin,
-        testPersonCode,
-        durationMilliseconds: duration,
-        replayUrl,
-        success: false,
-        errorMessage: errorMessage
-      }).subscribe({
-        next: () => {
-          logger.log('Error replay statistics stored successfully.');
-        },
-        error: error => {
-          logger.error(`Error storing replay error statistics: ${error}`);
-        }
-      });
-    } catch (error) {
-      logger.error(`Error storing replay error statistics: ${error}`);
+  onResponseVisible(): void {
+    if (this.successStoredForCurrentReplay) {
+      return;
     }
+    const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
+    this.storeReplayStatistics(true, duration);
+    this.successStoredForCurrentReplay = true;
+  }
+
+  private storeReplayStatistics(success: boolean, duration: number, errorMessage?: string): void {
+    const workspaceId = this.getWorkspaceIdFromToken();
+    if (!workspaceId) return;
+
+    const {
+      testPersonLogin,
+      testPersonCode,
+      bookletId
+    } = this.parseTestPersonData();
+    const replayUrl = window.location.href;
+
+    this.replayBackendService.storeReplayStatistics(workspaceId, {
+      unitId: this.unitId || 'unknown',
+      bookletId,
+      testPersonLogin,
+      testPersonCode,
+      durationMilliseconds: Math.max(0, duration),
+      replayUrl,
+      success,
+      errorMessage
+    }).subscribe({
+      next: () => {
+        logger.log(
+          `${success ? 'Replay' : 'Replay error'} statistics stored successfully. Duration: ${Math.max(0, duration)}ms`
+        );
+      },
+      error: error => {
+        logger.error(`Error storing replay statistics: ${error}`);
+      }
+    });
+  }
+
+  private getWorkspaceIdFromToken(): number | null {
+    const candidateTokens = [this.authToken, localStorage.getItem('id_token')]
+      .filter((token): token is string => !!token);
+
+    for (const token of candidateTokens) {
+      try {
+        const decoded: JwtPayload & { workspace: string } = jwtDecode(token);
+        const workspaceId = Number(decoded?.workspace);
+        if (workspaceId) {
+          return workspaceId;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    return this.workspaceId || null;
+  }
+
+  private parseTestPersonData(): { testPersonLogin: string; testPersonCode: string; bookletId: string } {
+    let testPersonLogin = '';
+    let testPersonCode = '';
+    let bookletId = '';
+
+    if (this.testPerson) {
+      const parts = this.testPerson.split('@');
+      if (parts.length >= 3) {
+        testPersonLogin = parts[0];
+        testPersonCode = parts[1];
+        bookletId = parts.length === 4 ? parts[3] : parts[2];
+      }
+    }
+
+    return { testPersonLogin, testPersonCode, bookletId };
+  }
+
+  private extractReplayErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof HttpErrorResponse) {
+      if (typeof error.error === 'string' && error.error.trim()) {
+        return error.error;
+      }
+      if (error.message) {
+        return error.message;
+      }
+    }
+    if (error instanceof Error && error.message) {
+      return error.message;
+    }
+    return fallback;
   }
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {

@@ -40,8 +40,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly printMode = input<boolean>(false);
   iFrameHeight = input<number>();
   readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
+  readonly responseVisible = output<void>();
   // Track the last emitted page error to prevent flickering
   private lastPageError: 'notInList' | 'notCurrent' | null = null;
+  private hasEmittedResponseVisible = false;
   @ViewChild('hostingIframe') hostingIframe!: ElementRef;
   private validPages: Subject<{ pages: string[], current: string }> = new Subject();
   private iFrameElement: HTMLIFrameElement | undefined;
@@ -73,6 +75,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     }
 
     if (unitDefChange?.currentValue && unitDefChange.previousValue !== unitDefChange.currentValue) {
+      this.hasEmittedResponseVisible = false;
       this.handleUnitDefChange(unitDefChange.currentValue, unitPlayerChange, unitResponsesChange);
     } else if (unitResponsesChange?.currentValue &&
       unitResponsesChange.previousValue !== unitResponsesChange.currentValue) {
@@ -283,6 +286,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               this.setPageList(msgData.validPages, msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
+              this.notifyResponseVisible();
               break;
 
             case 'vopStateChangedNotification':
@@ -298,12 +302,14 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
                 this.setPresentationStatus(msgData.unitState.presentationProgress);
                 this.setResponsesStatus(msgData.unitState.responseProgress);
               }
+              this.notifyResponseVisible();
               break;
 
             case 'vo.FromPlayer.ChangedDataTransfer':
               this.setPageList(msgData.validPages, msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
+              this.notifyResponseVisible();
               break;
 
             case 'vo.FromPlayer.PageNavigationRequest':
@@ -355,6 +361,14 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   async sendUnitData() {
     this.postUnitDef();
+  }
+
+  private notifyResponseVisible(): void {
+    if (this.hasEmittedResponseVisible) {
+      return;
+    }
+    this.hasEmittedResponseVisible = true;
+    this.responseVisible.emit();
   }
 
   private postUnitDef(): void {
