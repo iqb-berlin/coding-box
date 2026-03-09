@@ -44,12 +44,17 @@ interface ReplayFrequencyData {
       </div>
 
       <div *ngIf="!loading" class="dialog-body">
-        <mat-tab-group class="tabs" dynamicHeight="false">
+        <mat-tab-group
+          class="tabs"
+          dynamicHeight="false"
+          (selectedIndexChange)="selectedTabIndex = $event"
+        >
           <!-- Frequency Tab -->
           <mat-tab label="{{ 'workspace.replay-frequency' | translate }}">
             <div class="chart-container">
               <h3>{{ 'workspace.replay-frequency-by-unit' | translate }}</h3>
               <ngx-charts-bar-vertical
+                *ngIf="selectedTabIndex === 0"
                 [results]="frequencyData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -58,9 +63,9 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.unit' | translate"
                 [yAxisLabel]="'workspace.replay-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [rotateXAxisTicks]="true"
-                [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
+                [xAxisTickFormatting]="formatXAxisTick"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -106,6 +111,7 @@ interface ReplayFrequencyData {
                     {{ 'workspace.replay-duration-distribution' | translate }}
                   </h3>
                   <ngx-charts-bar-vertical
+                    *ngIf="selectedTabIndex === 1"
                     [results]="durationDistributionData"
                     [xAxis]="true"
                     [yAxis]="true"
@@ -114,7 +120,7 @@ interface ReplayFrequencyData {
                     [xAxisLabel]="'workspace.duration-milliseconds' | translate"
                     [yAxisLabel]="'workspace.replay-count' | translate"
                     [scheme]="colorScheme"
-                    [showDataLabel]="true"
+                    [showDataLabel]="false"
                     [view]="halfView"
                   ></ngx-charts-bar-vertical>
                 </div>
@@ -122,6 +128,7 @@ interface ReplayFrequencyData {
                 <div class="chart-column">
                   <h3>{{ 'workspace.avg-duration-by-unit' | translate }}</h3>
                   <ngx-charts-bar-vertical
+                    *ngIf="selectedTabIndex === 1"
                     [results]="unitDurationData"
                     [xAxis]="true"
                     [yAxis]="true"
@@ -132,9 +139,9 @@ interface ReplayFrequencyData {
                       'workspace.avg-duration-milliseconds' | translate
                     "
                     [scheme]="colorScheme"
-                    [showDataLabel]="true"
+                    [showDataLabel]="false"
                     [rotateXAxisTicks]="true"
-                    [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
+                    [xAxisTickFormatting]="formatXAxisTick"
                     [view]="halfView"
                   ></ngx-charts-bar-vertical>
                 </div>
@@ -149,6 +156,7 @@ interface ReplayFrequencyData {
             <div class="chart-container">
               <h3>{{ 'workspace.replay-distribution-by-day' | translate }}</h3>
               <ngx-charts-bar-vertical
+                *ngIf="selectedTabIndex === 2"
                 [results]="dayDistributionData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -157,7 +165,7 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.date' | translate"
                 [yAxisLabel]="'workspace.replay-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -170,6 +178,7 @@ interface ReplayFrequencyData {
             <div class="chart-container">
               <h3>{{ 'workspace.replay-distribution-by-hour' | translate }}</h3>
               <ngx-charts-bar-vertical
+                *ngIf="selectedTabIndex === 3"
                 [results]="hourDistributionData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -178,7 +187,7 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.hour' | translate"
                 [yAxisLabel]="'workspace.replay-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -264,7 +273,7 @@ interface ReplayFrequencyData {
                 <p>{{ 'workspace.no-failures' | translate }}</p>
               </div>
               <ngx-charts-bar-vertical
-                *ngIf="failureByUnitData.length > 0"
+                *ngIf="failureByUnitData.length > 0 && selectedTabIndex === 5"
                 [results]="failureByUnitData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -273,9 +282,9 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.unit' | translate"
                 [yAxisLabel]="'workspace.failure-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [rotateXAxisTicks]="true"
-                [xAxisTickFormatting]="formatXAxisLabel.bind(this)"
+                [xAxisTickFormatting]="formatXAxisTick"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -291,7 +300,7 @@ interface ReplayFrequencyData {
                 <p>{{ 'workspace.no-failures' | translate }}</p>
               </div>
               <ngx-charts-bar-vertical
-                *ngIf="failureByDayData.length > 0"
+                *ngIf="failureByDayData.length > 0 && selectedTabIndex === 6"
                 [results]="failureByDayData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -300,7 +309,7 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.date' | translate"
                 [yAxisLabel]="'workspace.failure-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -318,7 +327,7 @@ interface ReplayFrequencyData {
                 <p>{{ 'workspace.no-failures' | translate }}</p>
               </div>
               <ngx-charts-bar-vertical
-                *ngIf="failureByHourData.length > 0"
+                *ngIf="failureByHourData.length > 0 && selectedTabIndex === 7"
                 [results]="failureByHourData"
                 [xAxis]="true"
                 [yAxis]="true"
@@ -327,7 +336,7 @@ interface ReplayFrequencyData {
                 [xAxisLabel]="'workspace.hour' | translate"
                 [yAxisLabel]="'workspace.failure-count' | translate"
                 [scheme]="colorScheme"
-                [showDataLabel]="true"
+                [showDataLabel]="false"
                 [view]="wideView"
               ></ngx-charts-bar-vertical>
             </div>
@@ -457,6 +466,7 @@ implements OnInit, AfterViewInit, OnDestroy {
 
   workspaceId: number;
   loading = true;
+  selectedTabIndex = 0;
 
   wideView: [number, number] = [900, 520];
   halfView: [number, number] = [440, 380];
@@ -509,6 +519,8 @@ implements OnInit, AfterViewInit, OnDestroy {
     }
     return value;
   }
+
+  readonly formatXAxisTick = (value: string): string => this.formatXAxisLabel(value);
 
   constructor() {
     this.workspaceId = this.data.workspaceId;
@@ -582,10 +594,20 @@ implements OnInit, AfterViewInit, OnDestroy {
     return top;
   }
 
+  private toTopN(data: Record<string, number>, topN: number): ReplayFrequencyData[] {
+    return Object.entries(data)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, topN);
+  }
+
   private loadReplayStatistics(): void {
     this.loading = true;
 
-    const options = { lastDays: this.defaultLastDays };
+    const options = {
+      lastDays: this.defaultLastDays,
+      limit: this.topUnitsCount
+    };
 
     // Load replay frequency data
     this.replayBackendService
@@ -696,15 +718,10 @@ implements OnInit, AfterViewInit, OnDestroy {
 
           // Set unit duration data
           if (data.unitAverages) {
-            this.unitDurationData = Object.entries(data.unitAverages).map(
-              ([unitId, avgDuration]) => ({
-                name: unitId,
-                value: avgDuration as number
-              })
+            this.unitDurationData = this.toTopN(
+              data.unitAverages as Record<string, number>,
+              this.topUnitsCount
             );
-
-            // Sort by unit ID
-            this.unitDurationData.sort((a, b) => a.name.localeCompare(b.name));
           }
 
           // Load error statistics
