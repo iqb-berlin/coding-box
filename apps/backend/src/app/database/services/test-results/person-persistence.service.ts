@@ -398,20 +398,54 @@ export class PersonPersistenceService {
    */
   async processChunks(unit: TcMergeUnit, savedUnit: Unit, booklet: TcMergeBooklet): Promise<void> {
     try {
-      if (unit.chunks && unit.chunks.length > 0) {
-        const chunkEntries = unit.chunks.map(chunk => ({
-          unitid: savedUnit.id,
-          key: chunk.id,
-          type: chunk.type,
-          ts: chunk.ts,
-          variables: Array.isArray(chunk.variables) ? chunk.variables.join(',') : ''
-        }));
+      // Always rewrite chunk rows for a unit to keep uploads idempotent
+      // and avoid stale/duplicate chunk mappings in replay.
+      await this.chunkRepository.delete({ unitid: savedUnit.id });
 
-        if (chunkEntries.length > 0) {
-          await this.chunkRepository.insert(chunkEntries);
-          if (chunkEntries.length > 5) {
-            this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id}`);
-          }
+      if (!Array.isArray(unit.chunks) || unit.chunks.length === 0) {
+        return;
+      }
+
+      const dedupeMap = new Map<string, {
+        unitid: number;
+        key: string;
+        type: string;
+        ts: number;
+        variables: string;
+      }>();
+
+      unit.chunks.forEach(chunk => {
+        const key = String(chunk.id || '').trim();
+        if (!key) {
+          return;
+        }
+        const type = String(chunk.type || '').trim();
+        const ts = Number(chunk.ts) || 0;
+        const variables = Array.isArray(chunk.variables) ?
+          Array.from(new Set(
+            chunk.variables
+              .map(variable => String(variable || '').trim())
+              .filter(Boolean)
+          )).join(',') :
+          '';
+
+        const dedupeKey = `${key}@@${type}@@${ts}@@${variables}`;
+        if (!dedupeMap.has(dedupeKey)) {
+          dedupeMap.set(dedupeKey, {
+            unitid: savedUnit.id,
+            key,
+            type,
+            ts,
+            variables
+          });
+        }
+      });
+
+      const chunkEntries = Array.from(dedupeMap.values());
+      if (chunkEntries.length > 0) {
+        await this.chunkRepository.insert(chunkEntries);
+        if (chunkEntries.length > 5) {
+          this.logger.log(`Saved ${chunkEntries.length} chunks for unit ${unit.id}`);
         }
       }
     } catch (error) {
