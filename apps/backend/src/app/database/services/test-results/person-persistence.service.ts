@@ -146,7 +146,11 @@ export class PersonPersistenceService {
 
       this.logger.log(`Starting to process ${personList.length} persons for workspace ${workspace_id}`);
 
-      await this.personsRepository.upsert(personList, ['group', 'code', 'login', 'workspace_id']);
+      const UPSERT_BATCH_SIZE = 25;
+      for (let i = 0; i < personList.length; i += UPSERT_BATCH_SIZE) {
+        const batch = personList.slice(i, i + UPSERT_BATCH_SIZE);
+        await this.personsRepository.upsert(batch, ['group', 'code', 'login', 'workspace_id']);
+      }
 
       let persons: Persons[] = [];
       if (scope === 'workspace') {

@@ -151,67 +151,96 @@ export class TestcenterService {
   ): Promise<Promise<{ issues: TestResultsUploadIssueDto[] }>[]> {
     logger.log('Import response data from TC');
     const headersRequest = this.createHeaders(authToken);
-    const chunks = this.createChunks(testGroups.split(','), 2);
-    const allRawResponses: Response[] = [];
-
-    for (const chunk of chunks) {
-      const endpoint = url ?
-        `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
-          ','
-        )}` :
-        `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
-          ','
-        )}`;
-
-      try {
-        const { data: rawResponses } = await this.httpService.axiosRef.get<
-        Response[]
-        >(endpoint, {
-          httpsAgent: agent,
-          headers: headersRequest
-        });
-        allRawResponses.push(...rawResponses);
-      } catch (error) {
-        logger.error(
-          `Error fetching response chunk from "${endpoint}": ${
-            error?.message || error
-          }`
-        );
-        throw error;
-      }
-    }
+    const chunks = this.createChunks(testGroups.split(','), 1);
 
     return [
       Promise.resolve().then(async () => {
         const issues: TestResultsUploadIssueDto[] = [];
         try {
-          this.persons = await this.personService.createPersonList(
-            allRawResponses,
-            Number(workspace_id)
-          );
+          const PERSON_BATCH_SIZE = 50;
 
-          const personList = await Promise.all(
-            this.persons.map(async person => {
+          for (const chunk of chunks) {
+            const endpoint = url ?
+              `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
+                ','
+              )}` :
+              `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
+                ','
+              )}`;
+
+            let rawResponses: Response[] = [];
+            try {
+              const response = await this.httpService.axiosRef.get<Response[]>(endpoint, {
+                httpsAgent: agent,
+                headers: headersRequest
+              });
+              rawResponses = response.data || [];
+            } catch (error) {
+              logger.error(
+                `Error fetching response chunk from "${endpoint}": ${
+                  error?.message || error
+                }`
+              );
+              throw error;
+            }
+
+            if (!rawResponses.length) continue;
+
+            this.persons = await this.personService.createPersonList(
+              rawResponses,
+              Number(workspace_id)
+            );
+
+            const responsesByPerson = new Map<string, Response[]>();
+            rawResponses.forEach(row => {
+              const key = `${row.groupname || ''}@@${row.loginname || ''}@@${row.code || ''}`;
+              const rows = responsesByPerson.get(key) || [];
+              rows.push(row);
+              responsesByPerson.set(key, rows);
+            });
+
+            let personList: Person[] = [];
+            for (const person of this.persons) {
+              const personKey = `${person.group || ''}@@${person.login || ''}@@${person.code || ''}`;
+              const personRows = responsesByPerson.get(personKey) || [];
+              if (!personRows.length) continue;
+
               const personWithBooklets =
                 await this.personService.assignBookletsToPerson(
                   person,
-                  allRawResponses,
+                  personRows,
                   issues
                 );
-              return this.personService.assignUnitsToBookletAndPerson(
+              const personWithUnits = await this.personService.assignUnitsToBookletAndPerson(
                 personWithBooklets,
-                allRawResponses,
+                personRows,
                 issues
               );
-            })
-          );
-          await this.personService.processPersonBooklets(
-            personList,
-            Number(workspace_id),
-            'skip',
-            'person',
-            issues
-          );
+              personList.push(personWithUnits);
+
+              if (personList.length >= PERSON_BATCH_SIZE) {
+                await this.personService.processPersonBooklets(
+                  personList,
+                  Number(workspace_id),
+                  'skip',
+                  'person',
+                  issues
+                );
+                personList = [];
+              }
+            }
+
+            if (personList.length > 0) {
+              await this.personService.processPersonBooklets(
+                personList,
+                Number(workspace_id),
+                'skip',
+                'person',
+                issues
+              );
+            }
+          }
+
           return { issues };
         } catch (error) {
           logger.error('Error processing consolidated response data:');
@@ -232,7 +261,7 @@ export class TestcenterService {
   ): Promise<{ issues: TestResultsUploadIssueDto[] }> {
     logger.log('Import logs data from TC');
     const headersRequest = this.createHeaders(authToken);
-    const logsChunks = this.createChunks(testGroups.split(','), 2);
+    const logsChunks = this.createChunks(testGroups.split(','), 1);
     const allLogData: Log[] = [];
     const importIssues: TestResultsUploadIssueDto[] = [];
 
