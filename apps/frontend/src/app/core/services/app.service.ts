@@ -5,13 +5,13 @@ import {
   Observable,
   Subject
 } from 'rxjs';
-import { DecodedToken } from '../core/services/auth.service';
-import { AppLogoDto } from '../../../../../api-dto/app-logo-dto';
-import { AuthDataDto } from '../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../core/interceptors/app-http-error.class';
-import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
+import { DecodedToken } from './auth.service';
+import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
+import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
+import { AppHttpError } from '../interceptors/app-http-error.class';
+import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
-import { SERVER_URL } from '../injection-tokens';
+import { SERVER_URL } from '../../injection-tokens';
 
 export interface AuthIdentity {
   identity: string;
@@ -34,7 +34,7 @@ export class AppService {
     workspaces: []
   };
 
-  user !:CreateUserDto;
+  user!: CreateUserDto;
   isLoggedIn = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
@@ -44,26 +44,21 @@ export class AppService {
   loggedUser: DecodedToken | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('auth_token')}` };
   backendUnavailable = false;
   needsReAuthentication = false;
-
-  authHeader = { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   constructor() {
     this.loadLogoSettings();
   }
 
   createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`,
-      { headers: this.authHeader }
+      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`
     );
   }
 
   getAuthData(authObj: AuthIdentity): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      `${this.serverUrl}auth-data?identity=${authObj.identity}`,
-      { headers: this.authHeader }
+      `${this.serverUrl}auth-data?identity=${authObj.identity}`
     );
   }
 
