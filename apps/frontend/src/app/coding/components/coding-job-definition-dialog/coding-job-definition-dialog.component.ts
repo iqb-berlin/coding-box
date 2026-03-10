@@ -400,8 +400,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           if (this.data.isEdit && this.data.codingJob) {
             const assignedBundles = this.data.codingJob.variableBundles || this.data.codingJob.assignedVariableBundles;
             if (assignedBundles && assignedBundles.length > 0) {
-              const ids = assignedBundles.map(b => b.name);
-              const preSelected = this.variableBundles.filter(b => ids.includes(b.name));
+              const ids = assignedBundles.map(b => b.id);
+              const preSelected = this.variableBundles.filter(b => ids.includes(b.id));
+              preSelected.forEach(bundle => {
+                const savedBundle = assignedBundles.find(ab => ab.id === bundle.id);
+                if (savedBundle?.caseOrderingMode) {
+                  bundle.caseOrderingMode = savedBundle.caseOrderingMode;
+                }
+              });
               this.selectedVariableBundles.select(...preSelected);
             }
           }
@@ -424,7 +430,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const getTotalCases = (unitName?: string, variableId?: string) => {
       const key = makeKey(unitName, variableId);
       const loadedVar = this.variables.find(v => makeKey(v.unitName, v.variableId) === key);
-      return loadedVar?.responseCount || 0;
+      return loadedVar?.uniqueCasesAfterAggregation ?? loadedVar?.responseCount ?? 0;
     };
 
     // Count cases used in each job definition (excluding the current one being edited)
@@ -482,10 +488,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     // Adjust available cases based on cases used in definitions
+    // Use uniqueCasesAfterAggregation as the effective total (respects aggregation grouping)
     this.variables.forEach(v => {
       const key = makeKey(v.unitName, v.variableId);
       const casesUsed = casesUsedInDefinitions.get(key) || 0;
-      const originalAvailable = v.responseCount || 0;
+      const originalAvailable = v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0;
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 
@@ -507,16 +514,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   applyAvailabilityFilter(): void {
-    // Debug logging to verify filter behavior
-    // eslint-disable-next-line no-console
-    console.log('[JobDefinitionDialog] applyAvailabilityFilter start', {
-      availabilityFilter: this.availabilityFilter,
-      totalVariables: this.variables.length
-    });
-
     let filteredData = this.variables;
-
-    // Apply text filters
     if (this.unitNameFilter || this.variableIdFilter) {
       filteredData = filteredData.filter(v => {
         const matchesUnit = !this.unitNameFilter ||
@@ -527,14 +525,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Apply availability filter
     if (this.availabilityFilter !== 'all') {
       filteredData = filteredData.filter(v => {
+        const effectiveTotal = v.uniqueCasesAfterAggregation ?? v.responseCount;
         const availableRaw = v.availableCases !== undefined ?
           v.availableCases :
-          v.responseCount ?? 0;
-        const totalRaw = v.responseCount !== undefined ?
-          v.responseCount :
+          effectiveTotal ?? 0;
+        const totalRaw = effectiveTotal !== undefined ?
+          effectiveTotal :
           v.availableCases ?? 0;
 
         const available = Number(availableRaw ?? 0);
@@ -617,9 +615,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getVariableDisabledReason(variable: Variable): string {
-    // Check if no cases are available
     if (variable.availableCases !== undefined && variable.availableCases === 0) {
-      return `Alle ${variable.responseCount || 0} Fälle bereits verteilt`;
+      const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? 0;
+      return `Alle ${effectiveTotal} Fälle bereits verteilt`;
     }
 
     // Check if variable is included in currently selected variable bundle
@@ -647,14 +645,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const isDefinitionMode = this.data.mode === 'definition';
 
     const getAvailableCases = (v: Variable): number => (
-      v.availableCases ?? v.responseCount ?? 0
+      v.availableCases ?? v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0
     );
 
-    // Sum all selected variables
     let total = this.selectedVariables.selected
       .reduce((sum, v) => sum + getAvailableCases(v), 0);
 
-    // Include variables from selected bundles
     this.selectedVariableBundles.selected.forEach(bundle => {
       bundle.variables.forEach(v => {
         total += getAvailableCases(v as unknown as Variable);
@@ -673,13 +669,44 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return total;
   }
 
+  getTotalDoubleCodedCases(): number {
+    const totalCases = this.getTotalCodingCases();
+    if (totalCases === 0) return 0;
+
+    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.value;
+
+    if (this.doubleCodingMode === 'absolute') {
+      return Math.min(doubleCodingAbsolute || 0, totalCases);
+    }
+
+    return Math.floor(((doubleCodingPercentage || 0) / 100) * totalCases);
+  }
+
+  getTotalCodingTasks(): number {
+    return this.getTotalCodingCases() + this.getTotalDoubleCodedCases();
+  }
+
   getTotalTimeInSeconds(): number {
     const durationPerCase = this.codingJobForm.value.durationSeconds || 1;
-    return this.getTotalCodingCases() * durationPerCase;
+    return this.getTotalCodingTasks() * durationPerCase;
+  }
+
+  getTimePerCoderInSeconds(): number {
+    const totalTime = this.getTotalTimeInSeconds();
+    const numCoders = this.selectedCoders.selected.length;
+    if (numCoders === 0) return totalTime;
+    return Math.ceil(totalTime / numCoders);
   }
 
   getFormattedTotalTime(): string {
-    const seconds = this.getTotalTimeInSeconds();
+    return this.formatTime(this.getTotalTimeInSeconds());
+  }
+
+  getFormattedTimePerCoder(): string {
+    return this.formatTime(this.getTimePerCoderInSeconds());
+  }
+
+  private formatTime(seconds: number): string {
     const min = Math.floor(seconds / 60);
     const sec = seconds % 60;
     return `${min}:${sec.toString().padStart(2, '0')}`;
@@ -691,11 +718,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getAvailabilityClass(variable: Variable): string {
-    if (variable.availableCases === undefined || variable.responseCount === undefined) {
+    const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount;
+    if (variable.availableCases === undefined || effectiveTotal === undefined) {
       return '';
     }
 
-    const availabilityPercentage = (variable.availableCases / variable.responseCount) * 100;
+    const availabilityPercentage = (variable.availableCases / effectiveTotal) * 100;
 
     if (availabilityPercentage === 100) {
       return 'availability-full';
@@ -706,11 +734,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getAvailabilityText(variable: Variable): string {
-    if (variable.availableCases === undefined || variable.responseCount === undefined) {
-      return `${variable.responseCount || 0}`;
+    const effectiveTotal = variable.uniqueCasesAfterAggregation ?? variable.responseCount;
+    if (variable.availableCases === undefined || effectiveTotal === undefined) {
+      return `${effectiveTotal || 0}`;
     }
 
-    return `${variable.availableCases}/${variable.responseCount}`;
+    return `${variable.availableCases}/${effectiveTotal}`;
   }
 
   isAllSelected(): boolean {
@@ -952,7 +981,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     try {
-      // Use the new distributed job creation endpoint
       const mappedCoders = data.selectedCoders.map(coder => ({
         id: coder.id,
         name: coder.name,
@@ -996,7 +1024,18 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const isNowSelected = this.selectedVariableBundles.isSelected(bundle);
 
     if (!wasSelected && isNowSelected) {
+      if (!bundle.caseOrderingMode) {
+        bundle.caseOrderingMode = this.codingJobForm.value.caseOrderingMode || 'continuous';
+      }
       this.removeConflictingIndividualSelections(bundle);
+    }
+  }
+
+  setBundleOrderingMode(bundle: VariableBundle, mode: 'continuous' | 'alternating'): void {
+    bundle.caseOrderingMode = mode;
+    const selectedBundle = this.selectedVariableBundles.selected.find(b => b.id === bundle.id);
+    if (selectedBundle && selectedBundle !== bundle) {
+      selectedBundle.caseOrderingMode = mode;
     }
   }
 
@@ -1054,7 +1093,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const jobDefinition: JobDefinition = {
       status: 'draft',
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
@@ -1091,7 +1130,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const jobDefinition: Partial<JobDefinition> = {
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
@@ -1157,7 +1196,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
-      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name })) as unknown as VariableBundle[],
+      assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),

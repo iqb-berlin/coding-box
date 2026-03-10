@@ -22,6 +22,8 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatTooltip } from '@angular/material/tooltip';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatRadioModule } from '@angular/material/radio';
 import {
   FormBuilder,
   FormGroup,
@@ -33,11 +35,12 @@ import {
 import {
   Subject, takeUntil, map, startWith, Observable, combineLatest, BehaviorSubject
 } from 'rxjs';
+import { JobDefinitionSelectionDialogComponent } from './job-definition-selection-dialog.component';
 import { CoderService } from '../../services/coder.service';
 import { VariableBundleService } from '../../services/variable-bundle.service';
 import { Coder } from '../../models/coder.model';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { CodingJobBackendService, JobDefinition } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
@@ -75,7 +78,9 @@ export interface VariableGrouping {
     ReactiveFormsModule,
     MatIconButton,
     MatTooltip,
-    MatHint
+    MatHint,
+    MatDialogModule,
+    MatRadioModule
   ],
   templateUrl: './coder-training.component.html',
   styleUrls: ['./coder-training.component.scss']
@@ -88,6 +93,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
   private changeDetectorRef = inject(ChangeDetectorRef);
   private snackBar = inject(MatSnackBar);
+  private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
   private variableBundleService = inject(VariableBundleService);
   private codingJobBackendService = inject(CodingJobBackendService);
@@ -132,6 +138,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   constructor() {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
+      caseOrderingMode: ['continuous'],
       variables: this.fb.array([])
     });
 
@@ -250,6 +257,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!this.editTraining) return;
 
     this.trainingForm.get('trainingLabel')?.setValue(this.editTraining.label);
+    if (this.editTraining.case_ordering_mode) {
+      this.trainingForm.get('caseOrderingMode')?.setValue(this.editTraining.case_ordering_mode);
+    }
 
     if (this.editTraining.assigned_coders) {
       this.selectedCoders = new Set(this.editTraining.assigned_coders);
@@ -269,7 +279,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           );
           const sampleCountByKey = firstVarInBundle?.sampleCount;
           const sampleCount = b.sampleCount || sampleCountByKey || 10;
-          this.addBundleVariables(b.id, sampleCount);
+          const caseOrderingMode =
+            b.caseOrderingMode ||
+            (b as { case_ordering_mode?: 'continuous' | 'alternating' }).case_ordering_mode ||
+            this.editTraining?.case_ordering_mode ||
+            'continuous';
+          this.addBundleVariables(b.id, sampleCount, caseOrderingMode);
         }
       });
     }
@@ -314,9 +329,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false): void {
+  addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
     const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
-    const maxAvailable = variableData?.responseCount || 1000;
+    const maxAvailable = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
 
     const variableGroup = this.fb.group({
@@ -325,7 +340,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       sampleCount: [defaultSampleCount, [Validators.required, Validators.min(1), Validators.max(maxAvailable)]],
       bundleId: [bundleId],
       bundleName: [bundleName],
-      overlapWarning: [false]
+      overlapWarning: [false],
+      bundleCaseOrderingMode: [bundleCaseOrderingMode || null]
     });
 
     this.variablesFormArray.push(variableGroup);
@@ -366,7 +382,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addBundleVariables(bundleId: number, sampleCount?: number | string): void {
+  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating'): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variable-Bundle nicht gefunden');
@@ -386,12 +402,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     let addedCount = 0;
     const duplicateVariables: string[] = [];
+    const effectiveCaseOrderingMode = caseOrderingMode || bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
 
     bundle.variables.forEach(variable => {
       if (this.isVariableAlreadyAdded(variable)) {
         duplicateVariables.push(`${variable.unitName} - ${variable.variableId}`);
       } else {
-        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name);
+        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name, false, effectiveCaseOrderingMode);
         addedCount += 1;
       }
     });
@@ -403,6 +420,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (duplicateVariables.length > 0) {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
+
+    bundle.caseOrderingMode = effectiveCaseOrderingMode;
 
     this.checkForOverlaps();
   }
@@ -422,7 +441,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const removedBundleIds = currentSelectedIds.filter(id => !selectedBundleIds.includes(id));
 
       newBundleIds.forEach(bundleId => {
-        this.addBundleVariables(bundleId);
+        const defaultMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+        this.addBundleVariables(bundleId, undefined, defaultMode);
         this.selectedBundleIds.add(bundleId);
       });
 
@@ -615,6 +635,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const bundleName = control.get('bundleName')?.value;
 
       if (bundleId && bundleName) {
+        const bundleModeFromControl = control.get('bundleCaseOrderingMode')?.value as 'continuous' | 'alternating' | null;
         if (!bundleGroups[bundleId]) {
           const bundle = this.availableBundles.find(b => b.id === bundleId);
           bundleGroups[bundleId] = {
@@ -624,10 +645,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
               createdAt: bundle?.createdAt || new Date(),
               updatedAt: bundle?.updatedAt || new Date(),
               description: bundle?.description,
-              variables: bundle?.variables || []
+              variables: bundle?.variables || [],
+              caseOrderingMode: bundleModeFromControl || bundle?.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
             },
             variables: []
           };
+        }
+        if (!bundleGroups[bundleId].bundle.caseOrderingMode && bundleModeFromControl) {
+          bundleGroups[bundleId].bundle.caseOrderingMode = bundleModeFromControl;
         }
         bundleGroups[bundleId].variables.push({ control: control as FormGroup, index });
       } else {
@@ -666,6 +691,19 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return firstVariable?.get('sampleCount')?.value || 10;
   }
 
+  updateBundleCaseOrderingMode(bundleId: number, mode: 'continuous' | 'alternating'): void {
+    const bundle = this.availableBundles.find(b => b.id === bundleId);
+    if (bundle) {
+      bundle.caseOrderingMode = mode;
+    }
+    this.variablesFormArray.controls.forEach(control => {
+      if (control.get('bundleId')?.value === bundleId) {
+        control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
+      }
+    });
+    this.changeDetectorRef.markForCheck();
+  }
+
   hasInsufficientCases(bundleGroup: { variables: { control: FormGroup }[] }): boolean {
     if (bundleGroup.variables.length === 0) return false;
     const requestedCount = bundleGroup.variables[0].control.get('sampleCount')?.value || 0;
@@ -674,7 +712,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const unitId = v.control.get('unitId')?.value;
       const variableId = v.control.get('variableId')?.value;
       const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-      return variableData && (variableData.responseCount || 0) < requestedCount;
+      const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+      return variableData && effectiveCount < requestedCount;
     });
   }
 
@@ -683,14 +722,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const variableId = item.control.get('variableId')?.value;
     const requestedCount = item.control.get('sampleCount')?.value || 0;
     const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-    return !!variableData && (variableData.responseCount || 0) < requestedCount;
+    const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+    return !!variableData && effectiveCount < requestedCount;
   }
 
   getAvailableCount(item: { control: FormGroup }): number {
     const unitId = item.control.get('unitId')?.value;
     const variableId = item.control.get('variableId')?.value;
     const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-    return variableData?.responseCount || 0;
+    return variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
   }
 
   trackByCoderId(index: number, coder: Coder): number {
@@ -733,19 +773,24 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           sampleCount: c.get('sampleCount')?.value
         }));
 
-    const assignedVariableBundles: { id: number; name: string; sampleCount: number }[] = [];
+    const assignedVariableBundles: { id: number; name: string; sampleCount: number; caseOrderingMode?: 'continuous' | 'alternating' }[] = [];
     const seenBundleIds = new Set<number>();
     this.variablesFormArray.controls.forEach(c => {
       const bundleId = c.get('bundleId')?.value;
       if (bundleId && !seenBundleIds.has(bundleId)) {
         seenBundleIds.add(bundleId);
+        const bundle = this.availableBundles.find(b => b.id === bundleId);
+        const bundleCaseOrderingMode = c.get('bundleCaseOrderingMode')?.value || bundle?.caseOrderingMode;
         assignedVariableBundles.push({
           id: bundleId,
           name: c.get('bundleName')?.value,
-          sampleCount: c.get('sampleCount')?.value || 10
+          sampleCount: c.get('sampleCount')?.value || 10,
+          caseOrderingMode: bundleCaseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
         });
       }
     });
+
+    const caseOrderingMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
 
     const request$ = this.isEditMode ?
       this.codingTrainingBackendService.updateCoderTraining(
@@ -756,7 +801,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         variableConfigs,
         undefined,
         assignedVariables,
-        assignedVariableBundles
+        assignedVariableBundles,
+        caseOrderingMode
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
         workspaceId,
@@ -765,7 +811,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         trainingLabel,
         undefined,
         assignedVariables,
-        assignedVariableBundles
+        assignedVariableBundles,
+        caseOrderingMode
       );
 
     request$.subscribe({
@@ -802,6 +849,60 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onClose(): void {
     this.close.emit();
+  }
+
+  openImportDialog(): void {
+    const dialogRef = this.dialog.open(JobDefinitionSelectionDialogComponent, {
+      width: '1200px',
+      height: '80vh',
+      disableClose: false
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result && result.jobDefinition) {
+        this.importJobDefinitionSelections(result.jobDefinition, result.defaultSampleCount);
+      }
+    });
+  }
+
+  private importJobDefinitionSelections(jobDef: JobDefinition, defaultSampleCount: number): void {
+    let varsAdded = 0;
+    let bundlesAdded = 0;
+
+    if (jobDef.assignedVariables && jobDef.assignedVariables.length > 0) {
+      jobDef.assignedVariables.forEach((v: Variable) => {
+        const isAlreadyAdded = this.variablesFormArray.controls.some(c => !c.get('bundleId')?.value &&
+          c.get('variableId')?.value === v.variableId &&
+          c.get('unitId')?.value === v.unitName
+        );
+        if (!isAlreadyAdded) {
+          const sampleCount = v.casesInJobs ?? defaultSampleCount;
+          this.addVariable(v.variableId, v.unitName, sampleCount, undefined, undefined, true);
+          varsAdded += 1;
+        }
+      });
+    }
+
+    if (jobDef.assignedVariableBundles && jobDef.assignedVariableBundles.length > 0) {
+      const currentSelectedIds = Array.from(this.selectedBundleIds);
+      jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
+        if (!currentSelectedIds.includes(b.id)) {
+          this.selectedBundleIds.add(b.id);
+          this.addBundleVariables(b.id, defaultSampleCount);
+          bundlesAdded += 1;
+        }
+      });
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
+    }
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+
+    if (varsAdded > 0 || bundlesAdded > 0) {
+      this.showSuccess(`${varsAdded} Variable(n) und ${bundlesAdded} Bündel hinzugefügt.`);
+    } else {
+      this.showSuccess('Alle Variablen und Bündel waren bereits vorhanden.');
+    }
   }
 
   private showError(message: string): void {

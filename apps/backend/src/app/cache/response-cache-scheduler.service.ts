@@ -10,6 +10,7 @@ import { WorkspaceTestResultsService } from '../database/services/test-results';
 @Injectable()
 export class ResponseCacheSchedulerService {
   private readonly logger = new Logger(ResponseCacheSchedulerService.name);
+  private readonly responseCacheVersionSuffix = ':v4';
 
   constructor(
     private readonly cacheService: CacheService,
@@ -65,7 +66,7 @@ export class ResponseCacheSchedulerService {
       for (const person of personsWithUnits) {
         for (const unit of person.units) {
           const connector = this.createConnector(person, unit.booklet.bookletinfo.name);
-          const cacheKey = this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unit.alias);
+          const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unit.alias)}${this.responseCacheVersionSuffix}`;
 
           cacheCheckItems.push({
             workspaceId,
@@ -139,7 +140,11 @@ export class ResponseCacheSchedulerService {
    * Cache a response for a specific workspace, test person, and unit
    */
   private async cacheResponse(workspaceId: number, connector: string, unitId: string): Promise<void> {
-    const cacheKey = this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId);
+    const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
+      workspaceId,
+      connector,
+      unitId
+    )}${this.responseCacheVersionSuffix}`;
 
     // Check if already in cache
     const exists = await this.cacheService.exists(cacheKey);

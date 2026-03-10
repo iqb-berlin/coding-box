@@ -42,12 +42,20 @@ interface CodingResult {
   personCode: string;
   personGroup: string;
   testPerson: string;
-  code?: string | number;
+  code?: string | number | null;
   codeLabel?: string;
   score?: number;
   codingIssueOptionLabel?: string;
   givenCode?: string | number;
   givenScore?: number;
+  notes?: string;
+}
+
+interface CodingProgressEntry {
+  id?: string | number;
+  label?: string;
+  score?: number;
+  codingIssueOption?: number;
 }
 
 @Component({
@@ -91,6 +99,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     'code',
     'score',
     'codingIssueOption',
+    'notes',
     'actions'
   ];
 
@@ -149,30 +158,43 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
         this.codingJobBackendService.getCodingProgress(this.data.workspaceId, this.data.codingJob.id).subscribe({
           next: progressResult => {
-            this.dataSource.data = unitsResult.map(unit => {
-              const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
-              const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
-              const progress = progressResult[progressKey] as { id?: string; label?: string; score?: number; codingIssueOption?: number } | undefined;
+            this.codingJobBackendService.getCodingNotes(this.data.workspaceId, this.data.codingJob.id).subscribe({
+              next: notesResult => {
+                this.dataSource.data = unitsResult.map(unit => {
+                  const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
+                  const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+                  const progress = progressResult[progressKey] as CodingProgressEntry | undefined;
+                  const notes = notesResult ? notesResult[progressKey] : undefined;
+                  const mappedCode = this.getMappedResultCode(progress);
+                  const mappedScore = this.getMappedResultScore(progress);
+                  const reviewIssueOption = this.getReviewIssueOption(progress);
 
-              return {
-                unitName: unit.unitName,
-                unitAlias: unit.unitAlias,
-                variableId: unit.variableId,
-                variableAnchor: unit.variableAnchor,
-                bookletName: unit.bookletName,
-                personLogin: unit.personLogin,
-                personCode: unit.personCode,
-                personGroup: unit.personGroup,
-                testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
-                code: progress?.id,
-                codeLabel: progress?.label,
-                score: progress?.score,
-                codingIssueOptionLabel: progress?.codingIssueOption ? this.getCodingIssueOption(progress.codingIssueOption) : undefined,
-                givenCode: progress?.codingIssueOption && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
-                givenScore: progress?.codingIssueOption && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined
-              };
+                  return {
+                    unitName: unit.unitName,
+                    unitAlias: unit.unitAlias,
+                    variableId: unit.variableId,
+                    variableAnchor: unit.variableAnchor,
+                    bookletName: unit.bookletName,
+                    personLogin: unit.personLogin,
+                    personCode: unit.personCode,
+                    personGroup: unit.personGroup,
+                    testPerson: `${unit.personLogin}@${unit.personCode}@${unit.personGroup}`,
+                    code: mappedCode,
+                    codeLabel: progress?.label,
+                    score: mappedScore,
+                    codingIssueOptionLabel: reviewIssueOption !== null ? this.getCodingIssueOption(reviewIssueOption) : undefined,
+                    givenCode: reviewIssueOption !== null && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
+                    givenScore: reviewIssueOption !== null && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
+                    notes: notes
+                  };
+                });
+                this.isLoading = false;
+              },
+              error: () => {
+                this.snackBar.open('Fehler beim Laden der Notizen', 'Schließen', { duration: 3000 });
+                this.isLoading = false;
+              }
             });
-            this.isLoading = false;
           },
           error: () => {
             this.snackBar.open('Fehler beim Laden der Kodierergebnisse', 'Schließen', { duration: 3000 });
@@ -315,11 +337,51 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     return !Number.isNaN(numCode) && numCode > 0;
   }
 
-  isCodingIssueOption(result: CodingResult): boolean {
-    if (result.code !== undefined && result.code !== null) {
-      const codeNum = typeof result.code === 'number' ? result.code : parseInt(result.code.toString(), 10);
-      if (codeNum < 0) return true;
+  private toNumericCode(code: string | number | undefined): number | null {
+    if (code === undefined || code === null) {
+      return null;
     }
+    if (typeof code === 'number') {
+      return code;
+    }
+    const parsed = parseInt(code, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  private getMappedResultCode(progress?: CodingProgressEntry): number | null {
+    const code = this.toNumericCode(progress?.id);
+    if (code === -3) {
+      return -98;
+    }
+    if (code === -4) {
+      return -97;
+    }
+    return code;
+  }
+
+  private getMappedResultScore(progress?: CodingProgressEntry): number | undefined {
+    const code = this.toNumericCode(progress?.id);
+    if (code === -3 || code === -4) {
+      return 0;
+    }
+    return progress?.score;
+  }
+
+  private getReviewIssueOption(progress?: CodingProgressEntry): number | null {
+    const code = this.toNumericCode(progress?.id);
+    if (code === -1 || code === -2) {
+      return code;
+    }
+
+    const issueOption = progress?.codingIssueOption;
+    if (issueOption === -1 || issueOption === -2) {
+      return issueOption;
+    }
+
+    return null;
+  }
+
+  isCodingIssueOption(result: CodingResult): boolean {
     return result.codingIssueOptionLabel !== null && result.codingIssueOptionLabel !== undefined;
   }
 
@@ -407,7 +469,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
         const url = this.router
           .serializeUrl(
             this.router.createUrlTree(
-              [`replay/${testPerson}@${result.bookletName}/${unitName}/0/${result.variableId}`],
+              [`replay/${testPerson}/${unitName}/0/${result.variableId}`],
               { queryParams: queryParams })
           );
 

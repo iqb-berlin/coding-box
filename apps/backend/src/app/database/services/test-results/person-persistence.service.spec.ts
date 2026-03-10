@@ -21,6 +21,7 @@ describe('PersonPersistenceService', () => {
   let bookletRepository: Repository<Booklet>;
   let bookletInfoRepository: Repository<BookletInfo>;
   let bookletLogRepository: Repository<BookletLog>;
+  let chunkRepository: Repository<ChunkEntity>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -44,6 +45,7 @@ describe('PersonPersistenceService', () => {
     bookletRepository = module.get(getRepositoryToken(Booklet));
     bookletInfoRepository = module.get(getRepositoryToken(BookletInfo));
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
+    chunkRepository = module.get(getRepositoryToken(ChunkEntity));
   });
 
   it('should process logs from input persons even if they are not in DB booklets array', async () => {
@@ -135,5 +137,57 @@ describe('PersonPersistenceService', () => {
     expect(result.success).toBe(true);
     expect(result.totalLogsSaved).toBe(2);
     expect(bookletLogRepository.save).toHaveBeenCalled();
+  });
+
+  it('should replace chunk rows per unit and deduplicate chunk entries', async () => {
+    jest.spyOn(chunkRepository, 'delete').mockResolvedValue({} as never);
+    const insertSpy = jest.spyOn(chunkRepository, 'insert').mockResolvedValue({} as never);
+
+    await service.processChunks(
+      {
+        id: 'UNIT_1',
+        chunks: [
+          {
+            id: 'elementCodes',
+            type: 'iqb-standard@1.0',
+            ts: 1,
+            variables: ['a', 'a', 'b']
+          },
+          {
+            id: 'elementCodes',
+            type: 'iqb-standard@1.0',
+            ts: 1,
+            variables: ['a', 'b']
+          },
+          {
+            id: 'stateVariableCodes',
+            type: 'iqb-standard@1.0',
+            ts: 2,
+            variables: ['s1']
+          }
+        ]
+      } as never,
+      { id: 123 } as Unit,
+      { id: 'BOOKLET_1' } as never
+    );
+
+    expect(chunkRepository.delete).toHaveBeenCalledWith({ unitid: 123 });
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+    expect(insertSpy).toHaveBeenCalledWith([
+      {
+        unitid: 123,
+        key: 'elementCodes',
+        type: 'iqb-standard@1.0',
+        ts: 1,
+        variables: 'a,b'
+      },
+      {
+        unitid: 123,
+        key: 'stateVariableCodes',
+        type: 'iqb-standard@1.0',
+        ts: 2,
+        variables: 's1'
+      }
+    ]);
   });
 });

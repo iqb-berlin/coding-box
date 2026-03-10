@@ -48,7 +48,10 @@ describe('ExportCodingBookComponent', () => {
 
   beforeEach(async () => {
     const exportServiceMock = {
-      getCodingBook: jest.fn()
+      getCodingBook: jest.fn(),
+      startCodebookJob: jest.fn(),
+      getCodebookJobStatus: jest.fn(),
+      downloadCodebookFile: jest.fn()
     };
 
     const missingsProfileServiceMock = {
@@ -399,32 +402,20 @@ describe('ExportCodingBookComponent', () => {
       component.selectedMissingsProfile = 1;
     });
 
-    const setupDownloadMocks = () => {
-      jest.spyOn(document, 'createElement');
-      const createObjectURLSpy = jest.spyOn(window.URL, 'createObjectURL').mockReturnValue('blob:test');
-      const revokeObjectURLSpy = jest.spyOn(window.URL, 'revokeObjectURL').mockImplementation(() => { });
-      jest.spyOn(document.body, 'appendChild').mockImplementation(() => null as unknown as Node);
-      jest.spyOn(document.body, 'removeChild').mockImplementation(() => null as unknown as Node);
-      return { createObjectURLSpy, revokeObjectURLSpy };
-    };
-
-    it('should export coding book with correct parameters', () => {
-      const mockBlob = new Blob(['test'], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      exportService.getCodingBook.mockReturnValue(of(mockBlob));
-
-      const { createObjectURLSpy, revokeObjectURLSpy } = setupDownloadMocks();
+    it('should start a codebook job with correct parameters', () => {
+      exportService.startCodebookJob.mockReturnValue(of({ jobId: '123', message: 'ok' }));
+      exportService.getCodebookJobStatus.mockReturnValue(of({ status: 'pending', progress: 0 }));
 
       component.exportCodingBook();
 
-      expect(exportService.getCodingBook).toHaveBeenCalledWith(
+      expect(exportService.startCodebookJob).toHaveBeenCalledWith(
         1,
         '1',
         component.contentOptions,
         [1, 2]
       );
-      expect(appService.dataLoading).toBe(false);
-      expect(createObjectURLSpy).toHaveBeenCalledWith(mockBlob);
-      expect(revokeObjectURLSpy).toHaveBeenCalled();
+      expect(component.codebookJobId).toBe('123');
+      expect(component.codebookJobStatus).toBe('pending');
     });
 
     it('should not export if no workspace selected', () => {
@@ -432,7 +423,7 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(exportService.getCodingBook).not.toHaveBeenCalled();
+      expect(exportService.startCodebookJob).not.toHaveBeenCalled();
     });
 
     it('should not export if no units selected', () => {
@@ -440,43 +431,41 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(exportService.getCodingBook).not.toHaveBeenCalled();
+      expect(exportService.startCodebookJob).not.toHaveBeenCalled();
     });
 
-    it('should handle export error', () => {
-      exportService.getCodingBook.mockReturnValue(throwError(() => new Error('Export error')));
+    it('should handle job start error', () => {
+      exportService.startCodebookJob.mockReturnValue(throwError(() => new Error('Start error')));
 
       component.exportCodingBook();
 
-      expect(appService.dataLoading).toBe(false);
+      expect(component.codebookJobStatus).toBe('failed');
+      expect(component.codebookJobError).toBe('Failed to start codebook generation job');
     });
 
-    it('should set dataLoading to true during export', () => {
-      const mockBlob = new Blob(['test']);
-      exportService.getCodingBook.mockReturnValue(of(mockBlob));
-
-      setupDownloadMocks();
+    it('should set status to pending when starting', () => {
+      exportService.startCodebookJob.mockReturnValue(of({ jobId: '456', message: 'ok' }));
+      exportService.getCodebookJobStatus.mockReturnValue(of({ status: 'pending', progress: 0 }));
 
       component.exportCodingBook();
 
-      // dataLoading should be set to false after completion
-      expect(appService.dataLoading).toBe(false);
+      expect(component.codebookJobProgress).toBe(0);
     });
+  });
 
-    it('should create download link with correct filename format', () => {
-      const mockBlob = new Blob(['test']);
-      exportService.getCodingBook.mockReturnValue(of(mockBlob));
+  describe('resetCodebookJob', () => {
+    it('should reset all codebook job state', () => {
+      component.codebookJobId = '123';
+      component.codebookJobStatus = 'failed';
+      component.codebookJobProgress = 50;
+      component.codebookJobError = 'some error';
 
-      const mockAnchor = document.createElement('a');
-      jest.spyOn(document, 'createElement').mockReturnValue(mockAnchor);
-      const clickSpy = jest.spyOn(mockAnchor, 'click').mockImplementation(() => { });
-      setupDownloadMocks();
+      component.resetCodebookJob();
 
-      component.contentOptions.exportFormat = 'docx';
-      component.exportCodingBook();
-
-      expect(mockAnchor.download).toMatch(/^codebook_\d{8}_\d{6}\.docx$/);
-      expect(clickSpy).toHaveBeenCalled();
+      expect(component.codebookJobId).toBeNull();
+      expect(component.codebookJobStatus).toBe('idle');
+      expect(component.codebookJobProgress).toBe(0);
+      expect(component.codebookJobError).toBeNull();
     });
   });
 

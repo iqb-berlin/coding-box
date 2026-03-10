@@ -5,6 +5,7 @@ import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { TranslateService } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import {
@@ -38,6 +39,7 @@ describe('SchemeEditorDialogComponent', () => {
   let mockDialogRef: Partial<MatDialogRef<SchemeEditorDialogComponent>>;
   let mockSnackBar: Partial<MatSnackBar>;
   let mockDialog: Partial<MatDialog>;
+  let mockTranslateService: Partial<TranslateService>;
 
   const mockData: SchemeEditorDialogData = {
     workspaceId: 1,
@@ -66,6 +68,14 @@ describe('SchemeEditorDialogComponent', () => {
     mockDialog = {
       open: jest.fn()
     };
+    mockTranslateService = {
+      instant: jest.fn().mockImplementation((key: string) => key),
+      stream: jest.fn().mockReturnValue(of('')),
+      get: jest.fn().mockImplementation((key: string) => of(key)),
+      onLangChange: new EventEmitter(),
+      onTranslationChange: new EventEmitter(),
+      onDefaultLangChange: new EventEmitter()
+    };
 
     await TestBed.configureTestingModule({
       imports: [
@@ -78,6 +88,7 @@ describe('SchemeEditorDialogComponent', () => {
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
+        { provide: TranslateService, useValue: mockTranslateService },
         { provide: MatDialog, useValue: mockDialog }
       ]
     })
@@ -140,7 +151,7 @@ describe('SchemeEditorDialogComponent', () => {
 
     expect(mockFileService.deleteFiles).toHaveBeenCalledWith(1, ['r1']);
     expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Scheme saved successfully', 'Success', expect.any(Object));
+    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));
 
@@ -154,7 +165,7 @@ describe('SchemeEditorDialogComponent', () => {
     component.save();
     tick();
 
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Failed to save scheme', 'Error', expect.any(Object));
+    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-error', 'Error', expect.any(Object));
   }));
 
   it('should handle save when file does not exist initially', fakeAsync(() => {
@@ -169,14 +180,14 @@ describe('SchemeEditorDialogComponent', () => {
 
     expect(mockFileService.deleteFiles).not.toHaveBeenCalled();
     expect(mockFileService.uploadTestFiles).toHaveBeenCalled();
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Scheme saved successfully', 'Success', expect.any(Object));
+    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.save-success', 'Success', expect.any(Object));
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
   }));
 
   it('should show error via snackbar on schemer error', () => {
     const errorMsg = 'Something went wrong';
     component.onError(errorMsg);
-    expect(mockSnackBar.open).toHaveBeenCalledWith(`Schemer error: ${errorMsg}`, 'Error', { duration: 3000 });
+    expect(mockSnackBar.open).toHaveBeenCalledWith('coding.schemer.schemer-error', 'Error', expect.any(Object));
   });
 
   it('should pretty print JSON scheme', () => {

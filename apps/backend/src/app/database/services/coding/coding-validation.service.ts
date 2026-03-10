@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable, Logger, forwardRef, Inject
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -10,6 +12,7 @@ import { ValidationResultDto } from '../../../../../../../api-dto/coding/validat
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { CodingJobService } from './coding-job.service';
 
 @Injectable()
 export class CodingValidationService {
@@ -21,7 +24,9 @@ export class CodingValidationService {
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    @Inject(forwardRef(() => CodingJobService))
+    private codingJobService: CodingJobService
   ) { }
 
   async validateCodingCompleteness(
@@ -202,6 +207,8 @@ export class CodingValidationService {
       responseCount: number;
       casesInJobs: number;
       availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      isDerived: boolean;
     }[]
     > {
     try {
@@ -223,6 +230,8 @@ export class CodingValidationService {
         responseCount: number;
         casesInJobs: number;
         availableCases: number;
+        uniqueCasesAfterAggregation: number;
+        isDerived: boolean;
       }[]
       >(cacheKey);
       if (cachedResult) {
@@ -265,11 +274,11 @@ export class CodingValidationService {
   }
 
   /**
-     * Enrich variables with case information (cases in jobs and available cases)
+     * Enrich variables with case information (cases in jobs, available cases, and unique cases after aggregation)
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: { unitName: string; variableId: string; responseCount: number }[]
+    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
   ): Promise<
     {
       unitName: string;
@@ -277,85 +286,242 @@ export class CodingValidationService {
       responseCount: number;
       casesInJobs: number;
       availableCases: number;
+      uniqueCasesAfterAggregation: number;
+      isDerived: boolean;
     }[]
     > {
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
+
+    // Compute aggregation-reduced counts for all variables at once
+    const aggregationMap = await this.computeUniqueCasesAfterAggregation(workspaceId, variables);
 
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
       const casesInJobs = casesInJobsMap.get(key) || 0;
       const availableCases = Math.max(0, variable.responseCount - casesInJobs);
+      const uniqueCasesAfterAggregation = aggregationMap.get(key) ?? variable.responseCount;
 
       return {
         ...variable,
         casesInJobs,
-        availableCases
+        availableCases,
+        uniqueCasesAfterAggregation
       };
     });
+  }
+
+  /**
+   * Compute the number of unique coding cases per variable after applying aggregation grouping.
+   * When aggregation is disabled (threshold = null), returns responseCount for each variable.
+   * Derived variables are never aggregated because they share empty/null underlying string values.
+   */
+  private async computeUniqueCasesAfterAggregation(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string; responseCount: number; isDerived?: boolean }[]
+  ): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+
+    if (variables.length === 0) {
+      return result;
+    }
+
+    const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
+
+    if (aggregationThreshold === null) {
+      // Aggregation disabled — unique cases = raw response count
+      variables.forEach(v => {
+        result.set(`${v.unitName}::${v.variableId}`, v.responseCount);
+      });
+      return result;
+    }
+
+    const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+
+    // Fetch slim responses for all base variables in one call (skip derived vars)
+    const baseVariables = variables.filter(v => !v.isDerived);
+    const slimResponses = await this.codingJobService.getSlimResponsesForVariables(
+      workspaceId,
+      baseVariables.map(v => ({ unitName: v.unitName, variableId: v.variableId }))
+    );
+
+    // Group by variable key and apply aggregation
+    for (const variable of variables) {
+      const key = `${variable.unitName}::${variable.variableId}`;
+
+      // Derived variables don't have user string responses, so aggregation would falsely
+      // group all of their empty/null values into 1 case. We always use raw responseCount.
+      if (variable.isDerived) {
+        result.set(key, variable.responseCount);
+        continue;
+      }
+
+      const varResponses = slimResponses.filter(
+        r => r.unitName === variable.unitName && r.variableid === variable.variableId
+      );
+
+      const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(varResponses, matchingFlags);
+
+      let uniqueCases = 0;
+      for (const group of aggregatedGroups) {
+        if (group.responses.length >= aggregationThreshold) {
+          uniqueCases += 1;
+        } else {
+          uniqueCases += group.responses.length;
+        }
+      }
+
+      result.set(key, uniqueCases);
+    }
+
+    this.logger.log(
+      `Computed unique cases after aggregation for ${variables.length} variables in workspace ${workspaceId}`
+    );
+
+    return result;
   }
 
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
     unitName?: string
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number }[]
+    { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
     > {
-    const queryBuilder = this.responseRepository
-      .createQueryBuilder('response')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('COUNT(response.id)', 'responseCount')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .where('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .andWhere('person.workspace_id = :workspace_id', {
-        workspace_id: workspaceId
-      })
-      .andWhere('person.consider = :consider', { consider: true });
+    // Helper to build the base query for a given status
+    const buildQuery = (status: number) => {
+      const qb = this.responseRepository
+        .createQueryBuilder('response')
+        .select('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect('COUNT(response.id)', 'responseCount')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
+        .where('response.status_v1 = :status', { status })
+        .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
+        .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
+        .groupBy('unit.name')
+        .addGroupBy('response.variableid');
 
-    if (unitName) {
-      queryBuilder.andWhere('unit.name = :unitName', { unitName });
-    }
+      if (unitName) {
+        qb.andWhere('unit.name = :unitName', { unitName });
+      }
+      return qb;
+    };
 
-    // Exclude special/auto codes (any negative code_v2, e.g. -111 for duplicates, -98 for empty)
-    queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)');
+    // Run both queries in parallel
+    const [codingIncompleteRaw, intendedIncompleteRaw] = await Promise.all([
+      buildQuery(statusStringToNumber('CODING_INCOMPLETE')).getRawMany(),
+      buildQuery(statusStringToNumber('INTENDED_INCOMPLETE')).getRawMany()
+    ]);
 
-    queryBuilder.groupBy('unit.name').addGroupBy('response.variableid');
-
-    const rawResults = await queryBuilder.getRawMany();
-
-    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(
-      workspaceId
+    this.logger.debug(
+      `[DEBUG] CODING_INCOMPLETE raw results (${codingIncompleteRaw.length}): ${
+        codingIncompleteRaw.map((r: { unitName: string; variableId: string; responseCount: string }) => `${r.unitName}::${r.variableId}(${r.responseCount})`).join(', ')}`
+    );
+    this.logger.debug(
+      `[DEBUG] INTENDED_INCOMPLETE raw results (${intendedIncompleteRaw.length}): ${
+        intendedIncompleteRaw.map((r: { unitName: string; variableId: string; responseCount: string }) => `${r.unitName}::${r.variableId}(${r.responseCount})`).join(', ')}`
     );
 
+    // Load both lookup maps from the file service
+    const [unitVariableMap, intendedIncompleteSchemeMap, derivedVariableMap] = await Promise.all([
+      this.workspaceFilesService.getUnitVariableMap(workspaceId),
+      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId),
+      this.workspaceFilesService.getDerivedVariableMap(workspaceId)
+    ]);
+
+    // Build case-insensitive lookup structures
     const validVariableSets = new Map<string, Set<string>>();
     unitVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
       validVariableSets.set(unitNameKey.toUpperCase(), variables);
     });
 
-    const filteredResult = rawResults.filter(row => {
-      const unitNamesValidVars = validVariableSets.get(
-        row.unitName?.toUpperCase()
-      );
-      return unitNamesValidVars?.has(row.variableId);
+    const derivedVariableSets = new Map<string, Set<string>>();
+    derivedVariableMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      derivedVariableSets.set(unitNameKey.toUpperCase(), variables);
     });
 
-    const result = filteredResult.map(row => ({
-      unitName: row.unitName,
-      variableId: row.variableId,
-      responseCount: parseInt(row.responseCount, 10)
-    }));
+    const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
+    intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
+    });
+
+    this.logger.debug(
+      `[DEBUG] unitVariableMap units: [${Array.from(validVariableSets.keys()).join(', ')}]`
+    );
+    this.logger.debug(
+      `[DEBUG] intendedIncompleteSchemeMap units: [${Array.from(intendedIncompleteSchemeVars.keys()).join(', ')}]`
+    );
+    for (const [unit, vars] of intendedIncompleteSchemeVars.entries()) {
+      this.logger.debug(
+        `[DEBUG] INTENDED_INCOMPLETE scheme vars for unit "${unit}": [${Array.from(vars).join(', ')}]`
+      );
+    }
+
+    // CODING_INCOMPLETE: include all variables that are in the unit variable map
+    const filteredCodingIncomplete = codingIncompleteRaw.filter(row => {
+      const validVars = validVariableSets.get(row.unitName?.toUpperCase());
+      const pass = validVars?.has(row.variableId) ?? false;
+      if (!pass) {
+        this.logger.debug(
+          `[DEBUG] CODING_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — not in unitVariableMap`
+        );
+      }
+      return pass;
+    });
+
+    // INTENDED_INCOMPLETE: include only variables where the coding scheme does NOT
+    // have an INTENDED_INCOMPLETE code type (those with it are correctly auto-coded
+    // and should not appear in manual coding).
+    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(row => {
+      const validVars = validVariableSets.get(row.unitName?.toUpperCase());
+      if (!validVars?.has(row.variableId)) {
+        this.logger.debug(
+          `[DEBUG] INTENDED_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — not in unitVariableMap`
+        );
+        return false;
+      }
+      const schemeVars = intendedIncompleteSchemeVars.get(row.unitName?.toUpperCase());
+      const hasIntendedIncompleteInScheme = schemeVars?.has(row.variableId) ?? false;
+      if (hasIntendedIncompleteInScheme) {
+        this.logger.debug(
+          `[DEBUG] INTENDED_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — has INTENDED_INCOMPLETE code in scheme`
+        );
+      } else {
+        this.logger.debug(
+          `[DEBUG] INTENDED_INCOMPLETE INCLUDED ${row.unitName}::${row.variableId} — no INTENDED_INCOMPLETE code in scheme`
+        );
+      }
+      return !hasIntendedIncompleteInScheme;
+    });
+
+    // Merge results, summing response counts for variables that appear in both
+    const mergedMap = new Map<string, { unitName: string; variableId: string; responseCount: number; isDerived: boolean }>();
+
+    for (const row of [...filteredCodingIncomplete, ...filteredIntendedIncomplete]) {
+      const key = `${row.unitName}::${row.variableId}`;
+      const existing = mergedMap.get(key);
+      const count = parseInt(row.responseCount, 10);
+      const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+      if (existing) {
+        existing.responseCount += count;
+      } else {
+        mergedMap.set(key, {
+          unitName: row.unitName,
+          variableId: row.variableId,
+          responseCount: count,
+          isDerived
+        });
+      }
+    }
+
+    const result = Array.from(mergedMap.values());
 
     this.logger.log(
-      `Found ${rawResults.length
-      } CODING_INCOMPLETE variable groups, filtered to ${filteredResult.length
-      } valid variables${unitName ? ` for unit ${unitName}` : ''}`
+      `Found ${codingIncompleteRaw.length} CODING_INCOMPLETE + ${intendedIncompleteRaw.length} INTENDED_INCOMPLETE variable groups, ` +
+      `filtered to ${result.length} valid variables${unitName ? ` for unit ${unitName}` : ''}`
     );
 
     return result;

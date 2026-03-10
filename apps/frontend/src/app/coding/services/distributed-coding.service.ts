@@ -16,7 +16,7 @@ export class DistributedCodingService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number
   ): Observable<{
@@ -97,7 +97,7 @@ export class DistributedCodingService {
     }> {
     const body: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;

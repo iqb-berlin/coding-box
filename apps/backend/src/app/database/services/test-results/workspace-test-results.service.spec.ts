@@ -1,4 +1,5 @@
 import { Repository, DataSource } from 'typeorm';
+import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { ResponseManagementService } from './response-management.service';
@@ -15,6 +16,7 @@ import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 const mockQueryBuilder = () => ({
@@ -50,6 +52,7 @@ describe('WorkspaceTestResultsService', () => {
   let responseManagementService: ResponseManagementService;
   let workspaceCoreService: WorkspaceCoreService;
   let unitTagService: UnitTagService;
+  let journalService: JournalService;
   let personsRepository: Repository<Persons>;
   let unitRepository: Repository<Unit>;
   let bookletRepository: Repository<Booklet>;
@@ -57,7 +60,18 @@ describe('WorkspaceTestResultsService', () => {
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
+  let codingValidationService: CodingValidationService;
   let dataSource: DataSource;
+
+  beforeAll(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
     responseManagementService = {
@@ -73,6 +87,14 @@ describe('WorkspaceTestResultsService', () => {
     unitTagService = {
       findAllByUnitIds: jest.fn().mockResolvedValue([])
     } as unknown as UnitTagService;
+
+    codingValidationService = {
+      invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    } as unknown as CodingValidationService;
+
+    journalService = {
+      createEntry: jest.fn().mockResolvedValue(undefined)
+    } as unknown as JournalService;
 
     personsRepository = {
       count: jest.fn(),
@@ -107,7 +129,8 @@ describe('WorkspaceTestResultsService', () => {
     dataSource = {
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
-      })
+      }),
+      transaction: jest.fn()
     } as unknown as DataSource;
 
     service = new WorkspaceTestResultsService(
@@ -122,9 +145,10 @@ describe('WorkspaceTestResultsService', () => {
       chunkRepository,
       dataSource,
       unitTagService,
-      {} as unknown as JournalService,
+      journalService,
       {} as unknown as CacheService,
       {} as unknown as CodingListService,
+      codingValidationService,
       responseManagementService,
       workspaceCoreService
     );
@@ -353,6 +377,124 @@ describe('WorkspaceTestResultsService', () => {
       await service.exportTestResultsToStream(workspaceId, resStream, {});
 
       expect(qb.getMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('deletion methods', () => {
+    it('deleteTestPersons should invalidate cache', async () => {
+      const workspaceId = 1;
+      const testPersonIds = '1,2';
+      const userId = 'user1';
+
+      const personQb = mockQueryBuilder();
+      personQb.getMany.mockResolvedValue([{ id: 1, login: 'l1' }, { id: 2, login: 'l2' }]);
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(personQb);
+      // Mock transaction
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          select: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 1, login: 'l1' }, { id: 2, login: 'l2' }]),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteTestPersons(workspaceId, testPersonIds, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteUnit should invalidate cache', async () => {
+      const workspaceId = 1;
+      const unitId = 101;
+      const userId = 'user1';
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue({ id: 101, name: 'U1' }),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteUnit(workspaceId, unitId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteResponse should invalidate cache', async () => {
+      const workspaceId = 1;
+      const responseId = 500;
+      const userId = 'user1';
+
+      (responseManagementService.deleteResponse as jest.Mock).mockResolvedValue({ success: true });
+
+      await service.deleteResponse(workspaceId, responseId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+
+    it('deleteBooklet should invalidate cache', async () => {
+      const workspaceId = 1;
+      const bookletId = 202;
+      const userId = 'user1';
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb({
+        createQueryBuilder: jest.fn(() => ({
+          leftJoinAndSelect: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockReturnThis(),
+          getOne: jest.fn().mockResolvedValue({ id: 202, bookletinfo: { name: 'B1' } }),
+          delete: jest.fn().mockReturnThis(),
+          from: jest.fn().mockReturnThis(),
+          execute: jest.fn().mockResolvedValue({})
+        }))
+      }));
+
+      await service.deleteBooklet(workspaceId, bookletId, userId);
+
+      expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+    });
+  });
+
+  describe('parseStoredResponseValue', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parse = (value: string | null, variableId?: string) => (WorkspaceTestResultsService as any).parseStoredResponseValue(value, variableId);
+
+    it('should normalize flat marking tokens to nested arrays', () => {
+      const parsed = parse('["2-2-#f9f871","4-4-#f9f871"]', 'marking-panel_1');
+      expect(parsed).toEqual([['2-2-#f9f871', '4-4-#f9f871']]);
+    });
+
+    it('should return empty array for non-array marking-panel payloads', () => {
+      const parsed = parse('{"unexpected":true}', 'marking-panel_1');
+      expect(parsed).toEqual([]);
+    });
+
+    it('should keep non-json primitive strings for non-marking variables', () => {
+      const parsed = parse('false', 'image_1');
+      expect(parsed).toBe('false');
+    });
+
+    it('should parse JSON arrays for non-marking variables', () => {
+      const parsed = parse('[true,false,true]', 'hotspot-image_1');
+      expect(parsed).toEqual([true, false, true]);
+    });
+
+    it('should keep JSON objects as strings for non-marking variables', () => {
+      const parsed = parse('{"k":"v"}', 'text_1');
+      expect(parsed).toBe('{"k":"v"}');
+    });
+
+    it('should keep arrays of objects as strings for non-marking variables', () => {
+      const parsed = parse('[{"k":"v"}]', 'text_1');
+      expect(parsed).toBe('[{"k":"v"}]');
     });
   });
 });

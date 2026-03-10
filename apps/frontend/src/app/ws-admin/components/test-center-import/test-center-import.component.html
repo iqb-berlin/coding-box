@@ -299,6 +299,9 @@
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
       <p class="loading-text">{{ loadingMessage }}</p>
+      @if (importProgressPercent > 0) {
+      <p class="loading-text">Fortschritt: {{ importProgressPercent }}%</p>
+      }
     </div>
     } @if (!isUploadingTestResults) {
     <div class="table-container">

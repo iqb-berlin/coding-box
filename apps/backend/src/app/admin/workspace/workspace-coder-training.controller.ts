@@ -7,7 +7,8 @@ import {
   Query,
   UseGuards,
   Body,
-  Delete
+  Delete,
+  Req
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -16,6 +17,7 @@ import {
   ApiTags,
   ApiBody
 } from '@nestjs/swagger';
+import { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
@@ -158,6 +160,11 @@ export class WorkspaceCoderTrainingController {
           jobsCount: {
             type: 'number',
             description: 'Number of coding jobs in this training'
+          },
+          case_ordering_mode: {
+            type: 'string',
+            enum: ['continuous', 'alternating'],
+            description: 'Global case ordering mode for this training'
           }
         }
       }
@@ -171,6 +178,7 @@ export class WorkspaceCoderTrainingController {
     created_at: Date;
     updated_at: Date;
     jobsCount: number;
+    case_ordering_mode?: 'continuous' | 'alternating';
   }[]
   > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
@@ -281,6 +289,7 @@ export class WorkspaceCoderTrainingController {
                      }[];
                      assignedVariables?: JobDefinitionVariable[];
                      assignedVariableBundles?: JobDefinitionVariableBundle[];
+                     caseOrderingMode?: 'continuous' | 'alternating';
                    }
   ): Promise<{
         success: boolean;
@@ -301,7 +310,8 @@ export class WorkspaceCoderTrainingController {
       body.trainingLabel,
       body.missingsProfileId,
       body.assignedVariables,
-      body.assignedVariableBundles
+      body.assignedVariableBundles,
+      body.caseOrderingMode
     );
   }
 
@@ -360,6 +370,7 @@ export class WorkspaceCoderTrainingController {
       @Query('trainingIds') trainingIdsQuery: string
   ): Promise<
       Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personCode: string;
@@ -373,6 +384,8 @@ export class WorkspaceCoderTrainingController {
           coderName: string;
           code: string | null;
           score: number | null;
+          notes: string | null;
+          codingIssueOption: number | null;
         }>;
       }>
       > {
@@ -441,16 +454,27 @@ export class WorkspaceCoderTrainingController {
       @Query('trainingId') trainingId: number
   ): Promise<
       Array<{
+        responseId: number;
         unitName: string;
         variableId: string;
         personCode: string;
+        personLogin: string;
+        personGroup: string;
         testPerson: string;
         givenAnswer: string;
+        replayCode: number | null;
+        replayScore: number | null;
+        discussionCode: number | null;
+        discussionScore: number | null;
+        discussionManagerUserId: number | null;
+        discussionManagerName: string | null;
         coders: Array<{
           jobId: number;
           coderName: string;
           code: string | null;
           score: number | null;
+          notes: string | null;
+          codingIssueOption: number | null;
         }>;
       }>
       > {
@@ -462,6 +486,50 @@ export class WorkspaceCoderTrainingController {
     return this.coderTrainingService.getWithinTrainingCodingComparison(
       workspace_id,
       trainingId
+    );
+  }
+
+  @Post(':workspace_id/coding/coder-trainings/:trainingId/discussion-result')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'trainingId',
+    type: Number,
+    description: 'ID of the coder training'
+  })
+  @ApiBody({
+    description: 'Persist or clear discussion result for a response in coder training comparison',
+    schema: {
+      type: 'object',
+      properties: {
+        responseId: { type: 'number' },
+        code: { type: 'number', nullable: true },
+        score: { type: 'number', nullable: true }
+      },
+      required: ['responseId']
+    }
+  })
+  async saveDiscussionResult(
+    @WorkspaceId() workspace_id: number,
+      @Param('trainingId') trainingId: number,
+      @Body() body: { responseId: number; code: number | null; score: number | null },
+      @Req() req: Request
+  ): Promise<{ success: boolean; code: number | null; score: number | null; managerUserId: number | null; managerName: string | null }> {
+    const reqUser = (req as Request & {
+      user?: { id?: string | number; username?: string; preferred_username?: string; name?: string };
+    }).user;
+    const managerUserId = reqUser?.id !== undefined && reqUser?.id !== null ? Number(reqUser.id) : null;
+    const managerName = reqUser?.preferred_username || reqUser?.username || reqUser?.name || null;
+
+    return this.coderTrainingService.saveDiscussionResult(
+      workspace_id,
+      Number(trainingId),
+      Number(body.responseId),
+      Number.isNaN(managerUserId) ? null : managerUserId,
+      managerName,
+      body.code,
+      body.score
     );
   }
 
@@ -552,6 +620,7 @@ export class WorkspaceCoderTrainingController {
         }[];
         assignedVariables?: JobDefinitionVariable[];
         assignedVariableBundles?: JobDefinitionVariableBundle[];
+        caseOrderingMode?: 'continuous' | 'alternating';
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
@@ -566,7 +635,8 @@ export class WorkspaceCoderTrainingController {
       body.variableConfigs,
       body.missingsProfileId,
       body.assignedVariables,
-      body.assignedVariableBundles
+      body.assignedVariableBundles,
+      body.caseOrderingMode
     );
   }
 

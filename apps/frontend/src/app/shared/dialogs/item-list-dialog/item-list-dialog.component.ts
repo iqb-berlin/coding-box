@@ -62,11 +62,6 @@ export class ItemListDialogComponent implements OnInit {
       next: groups => {
         this.itemGroups = groups;
         this.isLoading = false;
-      },
-      error: err => {
-        console.error('Failed to load item IDs', err);
-        this.error = 'Fehler beim Laden der Item-IDs.';
-        this.isLoading = false;
       }
     });
   }
@@ -123,8 +118,6 @@ export class ItemListDialogComponent implements OnInit {
         const foundItem = vomdData.items?.find((i: { id: string; uuid?: string }) => i.id === itemId);
         if (foundItem && foundItem.uuid) {
           selectedView = foundItem.uuid;
-        } else {
-          console.warn(`Could not find UUID for item ID ${itemId}`);
         }
       }
 
@@ -144,7 +137,6 @@ export class ItemListDialogComponent implements OnInit {
         } as unknown as MetadataDialogData
       });
     } catch (error) {
-      console.error('Error opening metadata file:', error);
       loadingSnackBar.dismiss();
       this.snackBar.open('Fehler beim Öffnen der Metadaten-Datei.', 'Fehler', { duration: 3000 });
     }

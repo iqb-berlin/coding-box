@@ -176,7 +176,7 @@ export class WorkspaceTestResultsResponseController {
   ): Promise<{
         responses: {
           id: string;
-          content: { id: string; value: string; status: string }[];
+          content: string;
         }[];
       }> {
     return this.workspaceTestResultsService.findUnitResponse(

@@ -217,14 +217,16 @@ export class UsersService {
   }
 
   async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
-    const { username, identity, issuer } = keycloakUser;
+    const {
+      username, identity, issuer, isAdmin
+    } = keycloakUser;
     const existingUser = await this.usersRepository.findOne({
       where: [
         { username },
         { identity, issuer }
       ],
       select: {
-        id: true, username: true, identity: true, issuer: true
+        id: true, username: true, identity: true, issuer: true, isAdmin: true
       }
     });
 
@@ -232,6 +234,7 @@ export class UsersService {
       const updatedFields: Partial<User> = {};
       if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
       if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
+      if (existingUser.isAdmin !== isAdmin) updatedFields.isAdmin = isAdmin;
 
       if (Object.keys(updatedFields).length > 0) {
         await this.usersRepository.update({ id: existingUser.id }, updatedFields);

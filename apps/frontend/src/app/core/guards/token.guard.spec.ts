@@ -9,8 +9,10 @@ describe('Token Guard', () => {
   let mockRouter: jest.Mocked<Router>;
   let mockRoute: ActivatedRouteSnapshot;
   let mockState: RouterStateSnapshot;
+  const MOCK_NOW = 1700000000000; // Fixed timestamp
 
   beforeEach(() => {
+    jest.spyOn(Date, 'now').mockReturnValue(MOCK_NOW);
     mockRouter = {
       createUrlTree: jest.fn()
     } as unknown as jest.Mocked<Router>;
@@ -28,6 +30,10 @@ describe('Token Guard', () => {
     } as unknown as ActivatedRouteSnapshot;
 
     mockState = { url: '/replay' } as RouterStateSnapshot;
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   describe('Security Validation - Token Presence', () => {

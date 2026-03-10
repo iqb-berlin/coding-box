@@ -1,4 +1,10 @@
-import { Component, inject, OnInit } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  ChangeDetectorRef,
+  Component,
+  inject,
+  OnInit
+} from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
@@ -17,7 +23,7 @@ import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -25,7 +31,11 @@ import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-
 import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-dialog/unit-definition-player-dialog.component';
-import { DuplicateTestTaker, UnusedTestFile } from '../../../../../../../api-dto/files/file-validation-result.dto';
+import {
+  DuplicateTestTaker,
+  FileValidationResultDto,
+  UnusedTestFile
+} from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import {
   AffectedUnitsDialogComponent,
@@ -100,6 +110,26 @@ interface ValidationSummary {
   metadata: SectionSummary;
 }
 
+type ValidationSectionKey = keyof ExpandedFilesLists;
+
+interface MissingRelationInfo {
+  all: string[];
+  preview: string[];
+  remaining: number;
+}
+
+interface DerivedDataValidation extends DataValidation {
+  existingCount: number;
+  missingCount: number;
+  filteredMissingCount: number;
+  isCompleteForView: boolean;
+  relatedEntitiesByMissingFile: Record<string, MissingRelationInfo>;
+}
+
+type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
+  [K in ValidationSectionKey]: DerivedDataValidation;
+};
+
 @Component({
   selector: 'files-validation-dialog',
   templateUrl: './files-validation.component.html',
@@ -115,11 +145,13 @@ interface ValidationSummary {
     ScrollingModule,
     MatExpansionModule
   ],
-  styleUrls: ['./files-validation.component.scss']
+  styleUrls: ['./files-validation.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush
 })
 export class FilesValidationDialogComponent implements OnInit {
   dialogRef = inject<MatDialogRef<FilesValidationDialogComponent>>(MatDialogRef);
   private dialog = inject(MatDialog);
+  private cdr = inject(ChangeDetectorRef);
 
   data = inject<{
     validationResults: FilesValidation[];
@@ -134,6 +166,7 @@ export class FilesValidationDialogComponent implements OnInit {
   filteredTestTakers: FilteredTestTaker[] = [];
   duplicateTestTakers: DuplicateTestTaker[] = [];
   unusedTestFiles: UnusedTestFile[] = [];
+  validationResults: FilesValidationView[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
   duplicateSelection = new Map<string, string>(); // Maps login to selected testTaker file
@@ -188,6 +221,7 @@ export class FilesValidationDialogComponent implements OnInit {
   };
 
   expandedSummaryLists: Set<string> = new Set();
+  private readonly relationPreviewLimit = 3;
 
   toggleSummaryList(section: string): void {
     if (this.expandedSummaryLists.has(section)) {
@@ -202,10 +236,38 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private calculateSummary(): void {
-    if (!this.data.validationResults) return;
+    if (!this.validationResults.length) {
+      this.summary = {
+        totalTestTakers: 0,
+        validTestTakerXmls: 0,
+        invalidTestTakerXmls: 0,
+        booklets: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        units: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        schemes: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        schemer: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        definitions: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        player: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        },
+        metadata: {
+          complete: 0, incomplete: 0, missingFiles: 0, missingFileNames: []
+        }
+      };
+      return;
+    }
 
     const summaryData: ValidationSummary = {
-      totalTestTakers: this.data.validationResults.length,
+      totalTestTakers: this.validationResults.length,
       validTestTakerXmls: 0,
       invalidTestTakerXmls: 0,
       booklets: {
@@ -241,25 +303,23 @@ export class FilesValidationDialogComponent implements OnInit {
       metadata: new Set<string>()
     };
 
-    this.data.validationResults.forEach(val => {
+    this.validationResults.forEach(val => {
       if (val.testTakerSchemaValid === false) {
         summaryData.invalidTestTakerXmls += 1;
       } else {
         summaryData.validTestTakerXmls += 1;
       }
 
-      const updateSectionStats = (section: keyof typeof missingFilesSets, data: DataValidation) => {
-        if (this.isSectionComplete(data, section)) {
+      const updateSectionStats = (section: keyof typeof missingFilesSets, data: DerivedDataValidation) => {
+        if (data.isCompleteForView) {
           summaryData[section].complete += 1;
         } else {
           summaryData[section].incomplete += 1;
         }
 
-        // Collect missing files
         if (data.files) {
           data.files.forEach(f => {
             if (!f.exists) {
-              // For units, check if ignored
               if (section === 'units' && this.isUnitIgnored(f.filename)) {
                 return;
               }
@@ -287,21 +347,172 @@ export class FilesValidationDialogComponent implements OnInit {
     this.summary = summaryData;
   }
 
+  private rebuildValidationResults(): void {
+    const rawResults = this.data.validationResults || [];
+    this.validationResults = rawResults.map(result => this.createValidationView(result));
+    this.calculateSummary();
+    this.cdr.markForCheck();
+  }
+
+  private resetExpandedFilesLists(results: FilesValidation[]): void {
+    this.expandedFilesLists.clear();
+    results.forEach(val => {
+      this.expandedFilesLists.set(val.testTaker, {
+        booklets: false,
+        units: false,
+        schemes: false,
+        schemer: false,
+        definitions: false,
+        player: false,
+        metadata: false
+      });
+    });
+  }
+
+  private updateModeGroups(): void {
+    const modeMap = new Map<string, number>();
+    this.filteredTestTakers
+      .filter(item => this.isKnownTestTaker(item))
+      .forEach(item => {
+        const count = modeMap.get(item.mode) || 0;
+        modeMap.set(item.mode, count + 1);
+      });
+    this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
+  }
+
+  private applyValidationResultData(resultDto: FileValidationResultDto): void {
+    const filteredResults = (resultDto.validationResults || []).filter(v => !!v?.testTaker) as FilesValidation[];
+    this.data.validationResults = filteredResults;
+    this.filteredTestTakers = resultDto.filteredTestTakers || [];
+    this.duplicateTestTakers = resultDto.duplicateTestTakers || [];
+    this.unusedTestFiles = resultDto.unusedTestFiles || [];
+
+    this.selection.clear();
+    this.allSelected = false;
+    this.unusedFilesSelection.clear();
+    this.allUnusedFilesSelected = false;
+    this.duplicateSelection.clear();
+
+    this.duplicateTestTakers.forEach(duplicate => {
+      if (duplicate.occurrences.length > 0) {
+        this.duplicateSelection.set(duplicate.login, duplicate.occurrences[0].testTaker);
+      }
+    });
+
+    this.resetExpandedFilesLists(filteredResults);
+    this.updateModeGroups();
+    this.rebuildValidationResults();
+  }
+
+  private refreshValidationData(successMessage?: string): void {
+    if (!this.data.workspaceId) {
+      return;
+    }
+
+    const refreshInProgressRef: MatSnackBarRef<TextOnlySnackBar> = this.snackBar.open(
+      'Validierungsergebnisse werden aktualisiert...'
+    );
+
+    this.fileService.validateFiles(this.data.workspaceId).subscribe({
+      next: response => {
+        refreshInProgressRef.dismiss();
+        if (typeof response === 'boolean') {
+          this.snackBar.open('Validierungsergebnisse konnten nicht aktualisiert werden', 'OK', { duration: 3000 });
+          return;
+        }
+        this.applyValidationResultData(response);
+        if (successMessage) {
+          this.snackBar.open(successMessage, 'OK', { duration: 2500 });
+        }
+      },
+      error: () => {
+        refreshInProgressRef.dismiss();
+        this.snackBar.open('Fehler beim Aktualisieren der Validierungsergebnisse', 'OK', { duration: 3000 });
+      }
+    });
+  }
+
+  private createValidationView(result: FilesValidation): FilesValidationView {
+    return {
+      ...result,
+      booklets: this.createDerivedValidation(result.booklets, 'booklets'),
+      units: this.createDerivedValidation(result.units, 'units'),
+      schemes: this.createDerivedValidation(result.schemes, 'schemes'),
+      schemer: this.createDerivedValidation(result.schemer, 'schemer'),
+      definitions: this.createDerivedValidation(result.definitions, 'definitions'),
+      player: this.createDerivedValidation(result.player, 'player'),
+      metadata: this.createDerivedValidation(result.metadata, 'metadata')
+    };
+  }
+
+  private createDerivedValidation(
+    data: DataValidation,
+    sectionType: ValidationSectionKey
+  ): DerivedDataValidation {
+    const existingCount = data.files.filter(file => file.exists).length;
+    const missingFiles = data.files.filter(file => !file.exists);
+    const missingCount = missingFiles.length;
+    const filteredMissingCount = sectionType === 'units' ?
+      missingFiles.filter(file => !this.isUnitIgnored(file.filename)).length :
+      missingCount;
+
+    return {
+      ...data,
+      existingCount,
+      missingCount,
+      filteredMissingCount,
+      isCompleteForView: this.computeSectionComplete(data, sectionType),
+      relatedEntitiesByMissingFile: this.createRelatedEntitiesByMissingFile(data, sectionType, missingFiles)
+    };
+  }
+
+  private createRelatedEntitiesByMissingFile(
+    data: DataValidation,
+    sectionType: ValidationSectionKey,
+    missingFiles: FileStatus[]
+  ): Record<string, MissingRelationInfo> {
+    if (sectionType === 'booklets') {
+      return {};
+    }
+
+    const relations: Record<string, MissingRelationInfo> = {};
+
+    missingFiles.forEach(file => {
+      const relatedEntities = sectionType === 'units' ?
+        this.findBookletsForMissingUnit(data, file.filename) :
+        this.findUnitsForMissingRef(data, file.filename);
+
+      if (relatedEntities.length > 0) {
+        relations[file.filename] = this.createMissingRelationInfo(relatedEntities);
+      }
+    });
+
+    return relations;
+  }
+
+  private createMissingRelationInfo(values: string[]): MissingRelationInfo {
+    const uniqueValues = Array.from(new Set(values));
+    return {
+      all: uniqueValues,
+      preview: uniqueValues.slice(0, this.relationPreviewLimit),
+      remaining: Math.max(0, uniqueValues.length - this.relationPreviewLimit)
+    };
+  }
+
+  private computeSectionComplete(data: DataValidation, sectionType: ValidationSectionKey): boolean {
+    if (data.complete || !data.missing || data.missing.length === 0) {
+      return true;
+    }
+
+    if (sectionType === 'units') {
+      return data.missing.every(unit => this.isUnitIgnored(unit));
+    }
+
+    return false;
+  }
+
   private isKnownTestTaker(item: FilteredTestTaker): boolean {
     return item.consider === true || item.consider === false;
-  }
-
-  getUnitsForMissingRefLimited(data: DataValidation, ref: string, limit: number): string[] {
-    const units = this.getUnitsForMissingRef(data, ref);
-    if (limit <= 0) {
-      return [];
-    }
-    return units.slice(0, limit);
-  }
-
-  getUnitsForMissingRefRemainingCount(data: DataValidation, ref: string, limit: number): number {
-    const units = this.getUnitsForMissingRef(data, ref);
-    return Math.max(0, units.length - Math.max(0, limit));
   }
 
   openAffectedUnitsDialog(title: string, units: string[], onSelect: (unitId: string) => void): void {
@@ -359,19 +570,12 @@ export class FilesValidationDialogComponent implements OnInit {
             metadata: false
           });
         });
-        this.calculateSummary();
+        this.rebuildValidationResults();
       }
 
       if (this.data.filteredTestTakers) {
         this.filteredTestTakers = this.data.filteredTestTakers;
-
-        const modeMap = new Map<string, number>();
-        this.filteredTestTakers.filter(item => this.isKnownTestTaker(item)).forEach(item => {
-          const count = modeMap.get(item.mode) || 0;
-          modeMap.set(item.mode, count + 1);
-        });
-
-        this.modeGroups = Array.from(modeMap.entries()).map(([mode, count]) => ({ mode, count }));
+        this.updateModeGroups();
       }
 
       if (this.data.duplicateTestTakers) {
@@ -401,6 +605,7 @@ export class FilesValidationDialogComponent implements OnInit {
     if (!this.data.workspaceId) return;
     this.workspaceService.getIgnoredUnits(this.data.workspaceId).subscribe(units => {
       this.ignoredUnits = new Set(units.map(u => u.toUpperCase()));
+      this.rebuildValidationResults();
     });
   }
 
@@ -428,6 +633,7 @@ export class FilesValidationDialogComponent implements OnInit {
           if (this.data.workspaceId) {
             this.testResultService.invalidateCache(this.data.workspaceId);
           }
+          this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
         } else {
           // Revert change on failure
           if (this.ignoredUnits.has(normalized)) {
@@ -436,6 +642,7 @@ export class FilesValidationDialogComponent implements OnInit {
             this.ignoredUnits.add(normalized);
           }
           this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+          this.cdr.markForCheck();
         }
       },
       error: () => {
@@ -446,32 +653,9 @@ export class FilesValidationDialogComponent implements OnInit {
           this.ignoredUnits.add(normalized);
         }
         this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
+        this.cdr.markForCheck();
       }
     });
-  }
-
-  isSectionComplete(data: DataValidation, sectionType: string): boolean {
-    if (data.complete) return true;
-    if (!data.missing || data.missing.length === 0) return true;
-    if (sectionType === 'units') {
-      const visibleMissing = data.missing.filter(u => !this.isUnitIgnored(u));
-      return visibleMissing.length === 0;
-    }
-    // Check if missing items depends on ignored units (e.g. Schemes for ignored units?)
-    // For simplicity, we only filter "missing units" in the Units section for now.
-    // Ideally, if a unit is ignored, its missing resources should probably also be ignored?
-    // But currently we only implement ignoring UNITS.
-    return false;
-  }
-
-  getFilteredMissingCount(data: DataValidation, sectionType: string): number {
-    const missingCount = this.getMissingCount(data);
-    if (sectionType === 'units') {
-      const missingFiles = data.files.filter(f => !f.exists);
-      const ignoredMissing = missingFiles.filter(f => this.isUnitIgnored(f.filename));
-      return Math.max(0, missingCount - ignoredMissing.length);
-    }
-    return missingCount;
   }
 
   filesDeleted = false;
@@ -513,6 +697,7 @@ export class FilesValidationDialogComponent implements OnInit {
             this.unusedTestFiles = this.unusedTestFiles.filter(f => !idsToDelete.includes(f.id));
             this.unusedFilesSelection.clear();
             this.checkIfAllUnusedFilesSelected();
+            this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
             this.snackBar.open('Dateien erfolgreich gelöscht', 'OK', { duration: 3000 });
           } else {
             this.snackBar.open('Fehler beim Löschen der Dateien', 'Fehler', { duration: 3000 });
@@ -529,15 +714,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.dialogRef.close(this.filesDeleted);
   }
 
-  getExistingCount(data: DataValidation): number {
-    return data.files.filter(file => file.exists).length;
-  }
-
-  getMissingCount(data: DataValidation): number {
-    return data.files.filter(file => !file.exists).length;
-  }
-
-  getBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
+  private findBookletsForMissingUnit(data: DataValidation, unit: string): string[] {
     if (!data.missingUnitsPerBooklet || data.missingUnitsPerBooklet.length === 0 || !unit) {
       return [];
     }
@@ -547,18 +724,7 @@ export class FilesValidationDialogComponent implements OnInit {
       .map(entry => entry.booklet);
   }
 
-  getBookletsForMissingUnitLimited(data: DataValidation, unit: string, limit: number): string[] {
-    const booklets = this.getBookletsForMissingUnit(data, unit);
-    if (limit <= 0) return [];
-    return booklets.slice(0, limit);
-  }
-
-  getBookletsForMissingUnitRemainingCount(data: DataValidation, unit: string, limit: number): number {
-    const booklets = this.getBookletsForMissingUnit(data, unit);
-    return Math.max(0, booklets.length - Math.max(0, limit));
-  }
-
-  getUnitsForMissingRef(data: DataValidation, ref: string): string[] {
+  private findUnitsForMissingRef(data: DataValidation, ref: string): string[] {
     if (!data.missingRefsPerUnit || data.missingRefsPerUnit.length === 0 || !ref) {
       return [];
     }

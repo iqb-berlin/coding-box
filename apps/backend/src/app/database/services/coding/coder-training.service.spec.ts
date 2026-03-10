@@ -6,11 +6,18 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CoderTraining } from '../../entities/coder-training.entity';
 import { CoderTrainingVariable } from '../../entities/coder-training-variable.entity';
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
+import User from '../../entities/user.entity';
+import { MissingsProfilesService } from './missings-profiles.service';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -27,6 +34,17 @@ describe('CoderTrainingService', () => {
     create: jest.fn()
   };
 
+  const mockCodingJobService = {
+    getAggregationThreshold: jest.fn().mockResolvedValue(null),
+    getResponseMatchingMode: jest.fn().mockResolvedValue([ResponseMatchingFlag.IGNORE_WHITESPACE]),
+    aggregateResponsesByValue: jest.fn().mockReturnValue([]),
+    normalizeValue: jest.fn().mockReturnValue('normalized')
+  };
+
+  const mockWorkspaceFilesService = {
+    getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -39,7 +57,14 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingVariable), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingBundle), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
-        { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository }
+        { provide: getRepositoryToken(CoderTrainingDiscussionResult), useValue: mockRepository },
+        { provide: getRepositoryToken(CodingJobVariableBundle), useValue: mockRepository },
+        { provide: getRepositoryToken(User), useValue: mockRepository },
+        { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
+        { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
+        { provide: CodingJobService, useValue: mockCodingJobService },
+        { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } }
       ]
     }).compile();
 

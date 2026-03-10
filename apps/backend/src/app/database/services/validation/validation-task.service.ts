@@ -1,8 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ValidationTask } from '../../entities/validation-task.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import {
+  JobQueueService
+} from '../../../job-queue/job-queue.service';
 
 @Injectable()
 export class ValidationTaskService {
@@ -11,8 +19,10 @@ export class ValidationTaskService {
   constructor(
     @InjectRepository(ValidationTask)
     private taskRepository: Repository<ValidationTask>,
-    private validationService: WorkspaceFilesService
-  ) {}
+    private validationService: WorkspaceFilesService,
+    @Inject(forwardRef(() => JobQueueService))
+    private readonly jobQueueService: JobQueueService
+  ) { }
 
   async createValidationTask(
     workspaceId: number,
@@ -27,15 +37,21 @@ export class ValidationTaskService {
       page: page,
       limit: limit,
       status: 'pending',
+      progress: 0,
       result: additionalData ? JSON.stringify(additionalData) : undefined
     });
 
     const savedTask = await this.taskRepository.save(task);
     this.logger.log(`Created validation task with ID ${savedTask.id}`);
 
-    this.processValidationTask(savedTask.id).catch(error => {
-      this.logger.error(`Error processing task ${savedTask.id}: ${error.message}`, error.stack);
-    });
+    try {
+      await this.jobQueueService.addValidationTaskJob({ taskId: savedTask.id });
+    } catch (error) {
+      savedTask.status = 'failed';
+      savedTask.error = `Failed to queue validation task: ${error.message}`;
+      await this.taskRepository.save(savedTask);
+      throw error;
+    }
 
     return savedTask;
   }
@@ -84,11 +100,12 @@ export class ValidationTaskService {
     }
   }
 
-  private async processValidationTask(taskId: number): Promise<void> {
+  async processValidationTask(taskId: number): Promise<void> {
     try {
       const task = await this.getValidationTask(taskId);
 
       task.status = 'processing';
+      task.progress = 10;
       await this.taskRepository.save(task);
 
       let result: unknown;
@@ -171,6 +188,7 @@ export class ValidationTaskService {
 
       task.result = JSON.stringify(result);
       task.status = 'completed';
+      task.progress = 100;
       await this.taskRepository.save(task);
 
       this.logger.log(`Completed validation task with ID ${taskId}`);
@@ -179,6 +197,7 @@ export class ValidationTaskService {
         const task = await this.getValidationTask(taskId);
         task.error = error.message;
         task.status = 'failed';
+        task.progress = 100;
         await this.taskRepository.save(task);
       } catch (innerError) {
         this.logger.error(`Failed to update task ${taskId} with error: ${innerError.message}`, innerError.stack);

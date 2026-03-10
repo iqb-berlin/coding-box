@@ -3,13 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
 } from 'typeorm';
-import {
-  VariableCodingData,
-  CodingScheme
-} from '@iqbspecs/coding-scheme';
+import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
 import * as cheerio from 'cheerio';
-import { ResponseValueType } from '@iqbspecs/response/response.interface';
+
 import {
   statusNumberToString,
   statusStringToNumber
@@ -27,6 +24,7 @@ import {
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
 @Injectable()
 export class CodingProcessService {
@@ -45,7 +43,8 @@ export class CodingProcessService {
     private responseRepository: Repository<ResponseEntity>,
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private workspaceCoreService: WorkspaceCoreService
   ) { }
 
   private codingSchemeCache: Map<
@@ -251,7 +250,7 @@ export class CodingProcessService {
 
       // Step 3: Get units - 30% progress
       const unitQueryStart = Date.now();
-      const units = await this.fetchUnits(bookletIds);
+      const units = await this.fetchUnits(workspace_id, bookletIds);
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
@@ -538,11 +537,17 @@ export class CodingProcessService {
     });
   }
 
-  private async fetchUnits(bookletIds: number[]): Promise<Unit[]> {
-    return this.unitRepository.find({
-      where: { bookletid: In(bookletIds) },
-      select: ['id', 'bookletid', 'name', 'alias']
-    });
+  private async fetchUnits(workspace_id: number, bookletIds: number[]): Promise<Unit[]> {
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
+    const query = this.unitRepository.createQueryBuilder('unit')
+      .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
+      .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
+
+    if (ignoredUnits.length > 0) {
+      query.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
+
+    return query.getMany();
   }
 
   private async fetchResponses(
@@ -781,24 +786,13 @@ export class CodingProcessService {
           });
         }
 
-        for (const response of responses) {
+        const inputResponses = responses.map(response => {
           let inputStatus = response.status;
           if (autoCoderRun === 2) {
             inputStatus =
               response.status_v2 || response.status_v1 || response.status;
           }
-
-          const variableAlias = String(response.variableid);
-          const resolvedVariableId =
-            variableAliasToIdMap.get(variableAlias) ?? variableAlias;
-
-          const variableCoding = Array.isArray(scheme.variableCodings) ?
-            scheme.variableCodings.find((vc: VariableCodingData) => {
-              const key = (vc.alias ?? vc.id) as string | undefined;
-              return key === variableAlias || key === resolvedVariableId;
-            }) :
-            undefined;
-          let responseValue: ResponseValueType = response.value;
+          let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
           if (isArrayString) {
             try {
@@ -807,32 +801,59 @@ export class CodingProcessService {
               // ignore
             }
           }
-          const codedResult = Autocoder.CodingFactory.code(
-            {
-              id: response.variableid,
-              value: responseValue,
-              status: statusNumberToString(inputStatus)
-            },
-            variableCoding
-          );
-          const codedStatus = codedResult?.status;
+          return {
+            id: String(response.variableid),
+            value: responseValue,
+            status: statusNumberToString(inputStatus) as import('@iqbspecs/response/response.interface').ResponseStatusType,
+            subform: response.subform
+          };
+        });
+
+        const codedResults = Autocoder.CodingSchemeFactory.code(
+          inputResponses,
+          scheme.variableCodings || []
+        );
+
+        for (const codedResult of codedResults) {
+          const codedStatus = this.normalizeAutocoderStatus(codedResult.status);
           if (!statistics.statusCounts[codedStatus]) {
             statistics.statusCounts[codedStatus] = 0;
           }
           statistics.statusCounts[codedStatus] += 1;
 
+          const existingResponse = responses.find(r => String(r.variableid) === codedResult.id);
+
           const codedResponse: CodedResponse = {
-            id: response.id
+            id: existingResponse ? existingResponse.id : -1
           };
 
+          if (!existingResponse) {
+            codedResponse.isNew = true;
+            codedResponse.unitid = unit.id;
+            codedResponse.variableid = codedResult.id;
+            codedResponse.value = typeof codedResult.value === 'object' && codedResult.value !== null ?
+              JSON.stringify(codedResult.value) :
+              String(codedResult.value ?? '');
+            codedResponse.status = statusStringToNumber('VALUE_CHANGED');
+            codedResponse.subform = codedResult.subform;
+          }
+
           if (autoCoderRun === 1) {
-            codedResponse.code_v1 = codedResult?.code;
+            codedResponse.code_v1 = codedResult.code ?? null;
             codedResponse.status_v1 = codedStatus;
-            codedResponse.score_v1 = codedResult?.score;
+            codedResponse.score_v1 = codedResult.score ?? null;
+            if (!codedResponse.isNew) {
+              codedResponse.code_v2 = null;
+              codedResponse.status_v2 = null;
+              codedResponse.score_v2 = null;
+              codedResponse.code_v3 = null;
+              codedResponse.status_v3 = null;
+              codedResponse.score_v3 = null;
+            }
           } else if (autoCoderRun === 2) {
-            codedResponse.code_v3 = codedResult?.code;
+            codedResponse.code_v3 = codedResult.code ?? null;
             codedResponse.status_v3 = codedStatus;
-            codedResponse.score_v3 = codedResult?.score;
+            codedResponse.score_v3 = codedResult.score ?? null;
           }
 
           allCodedResponses[responseIndex] = codedResponse;
@@ -931,5 +952,13 @@ export class CodingProcessService {
     }
 
     return { codingSchemeRefs, unitToCodingSchemeRefMap };
+  }
+
+  private normalizeAutocoderStatus(status: string): string {
+    const nonCodingStatuses = [];
+    if (nonCodingStatuses.includes(status)) {
+      return 'NO_CODING';
+    }
+    return status;
   }
 }

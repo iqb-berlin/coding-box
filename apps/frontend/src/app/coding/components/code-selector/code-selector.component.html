@@ -1,17 +1,58 @@
 <div class="selector-content">
-@if (showProgress) {
+  @if (showProgress) {
   <div class="progress-info">
     <span class="progress-text">{{ 'replay.coding-progress' | translate }}</span>
     <span class="progress-numbers">{{ completedCount }}/{{ totalUnits }}</span>
     <span class="progress-percentage">({{ progressPercentage }}%)</span>
     @if (openCount > 0) {
-      <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ openCount }}</span>
+    <span class="progress-open">{{ 'replay.open-count' | translate }}: {{ openCount }}</span>
     }
   </div>
   <mat-progress-bar mode="determinate" [value]="progressPercentage" class="custom-progress-bar"></mat-progress-bar>
+  @if (availableVariables.length > 1) {
+  <div class="variable-selector-section">
+    <div class="variable-dropdown-wrapper">
+      <button class="variable-trigger-btn" (click)="toggleVariablePanel()" type="button">
+        <span class="variable-trigger-label">
+          @if (activeVariableKey) {
+          @let prog = getProgressForKey(activeVariableKey);
+          <span class="variable-trigger-name">{{ activeVariableKey.split('::')[0] }} / {{
+            activeVariableKey.split('::')[1] }}</span>
+          <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
+          } @else {
+          Variable wählen
+          }
+        </span>
+        <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen ? 'expand_less' : 'expand_more' }}</mat-icon>
+      </button>
+
+      @if (isVariablePanelOpen) {
+      <div class="variable-panel" #variablePanel>
+        @for (v of availableVariables; track v.key) {
+        @let prog = getProgressForKey(v.key);
+        <div class="variable-panel-item" [class.active]="v.key === activeVariableKey" (click)="selectVariable(v.key)"
+          tabindex="-1">
+          <div class="variable-panel-header">
+            <span class="variable-panel-name">{{ v.unitName }} / {{ v.variableId }}</span>
+            <span class="variable-panel-count">{{ prog.coded }}/{{ prog.total }}</span>
+          </div>
+          <div class="variable-panel-bar-track">
+            <div class="variable-panel-bar-fill" [style.width.%]="prog.percentage"
+              [class.complete]="prog.percentage === 100"></div>
+          </div>
+        </div>
+        }
+      </div>
+      }
+    </div>
+  </div>
+  }
+
   <div class="progress-actions">
     @if (unitsData) {
-      <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe" class="nav-button prev-button">
+    <div class="nav-controls">
+      <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
+        class="nav-button prev-button">
         <mat-icon>chevron_left</mat-icon>
       </button>
 
@@ -21,37 +62,31 @@
         <span class="total-units">{{ totalNavigationUnits }}</span>
       </div>
 
-      <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe" class="nav-button next-button">
+      <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe"
+        class="nav-button next-button">
         <mat-icon>chevron_right</mat-icon>
       </button>
+    </div>
     }
 
-    <button
-      mat-icon-button
-      (click)="onNavigateClick()"
-      class="navigate-button"
-      matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
-      <mat-icon>directions</mat-icon>
-    </button>
-    <button
-      mat-icon-button
-      (click)="onCommentClick()"
-      class="comment-button"
-      matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
-      <mat-icon>comment</mat-icon>
-    </button>
-    @if (hasCodingJob && !isCodingJobCompleted) {
-      <button
-        mat-icon-button
-        (click)="onPauseClick()"
-        [disabled]="isPausingJob"
-        class="pause-button"
+    <div class="action-controls">
+      <button mat-icon-button (click)="onNavigateClick()" class="navigate-button"
+        matTooltip="{{ 'replay.navigate-dialog.title' | translate }}">
+        <mat-icon>directions</mat-icon>
+      </button>
+      <button mat-icon-button (click)="onCommentClick()" class="comment-button"
+        matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
+        <mat-icon>comment</mat-icon>
+      </button>
+      @if (hasCodingJob && !isCodingJobCompleted) {
+      <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob" class="pause-button"
         matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
         <mat-icon>pause</mat-icon>
       </button>
-    }
+      }
+    </div>
   </div>
-}
+  }
 
   <div class="codes-section">
     <div *ngIf="regularCodes.length; else noCodes">
@@ -59,33 +94,20 @@
         <div class="code-row general-instruction-row" *ngIf="!suppressGeneralInstructions && variableManualInstruction">
           <div class="code-instruction" [innerHTML]="getSafeHtml(variableManualInstruction)"></div>
         </div>
-        <div class="code-row"
-             [class.selected]="item.id === selectedCode"
-             [class.read-only]="isReadOnly || isRegularSelectionDisabled"
-             *ngFor="let item of regularCodes;"
-             [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
-             (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
+        <div class="code-row" [class.selected]="item.id === selectedCode"
+          [class.read-only]="isReadOnly || isRegularSelectionDisabled" *ngFor="let item of regularCodes;"
+          [style.cursor]="(isReadOnly || isRegularSelectionDisabled) ? 'not-allowed' : 'pointer'"
+          (click)="(isReadOnly || isRegularSelectionDisabled) ? null : onSelect(item.id)">
 
           <div class="code-content">
             <span class="code-info">
               <span class="code-id">{{ item.id }}</span>
-              <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' | translate }} {{ item.score }}</span>
+              <span class="code-score" *ngIf="showScore && item.score !== undefined">{{ 'code-selector.score-label' |
+                translate }} {{ item.score }}</span>
             </span>
           </div>
-          <div class="code-instruction" *ngIf="!suppressGeneralInstructions && item.manualInstruction" [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
-        </div>
-      </div>
-
-      <div class="uncertain-codes-section">
-        <div class="code-row"
-             [class.selected]="item.id === selectedCodingIssueOption"
-             [class.read-only]="isReadOnly"
-             *ngFor="let item of codingIssueOptionCodes;"
-             [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
-             (click)="isReadOnly ? null : onSelect(item.id)">
-          <div class="code-content">
-            <span class="uncertain-text">{{ item.label }}</span>
-          </div>
+          <div class="code-instruction" *ngIf="!suppressGeneralInstructions && item.manualInstruction"
+            [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
         </div>
       </div>
     </div>
@@ -95,17 +117,25 @@
     </ng-template>
   </div>
 
+  <div class="uncertain-codes-section fixed-section">
+    <div class="code-row" [class.selected]="item.id === selectedCodingIssueOption" [class.read-only]="isReadOnly"
+      *ngFor="let item of codingIssueOptionCodes;" [style.cursor]="isReadOnly ? 'not-allowed' : 'pointer'"
+      (click)="isReadOnly ? null : onSelect(item.id)">
+      <div class="code-content">
+        <span class="shortcut-icon" *ngIf="getShortcutLabel(item.id)">{{ getShortcutLabel(item.id) }}</span>
+        <span class="uncertain-text">{{ item.label }}</span>
+      </div>
+    </div>
+  </div>
+
   <div class="deselect-container fixed-section">
     <button mat-button class="deselect-button" (click)="deselectAll()">Auswahl entfernen</button>
   </div>
 
   @if (allowComments) {
-    <mat-form-field appearance="outline" class="notes-field fixed-section">
-      <textarea matInput
-        [(ngModel)]="coderNotes"
-        (input)="onNotesChanged()"
-        placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}"
-        rows="3"></textarea>
-    </mat-form-field>
+  <mat-form-field appearance="outline" class="notes-field fixed-section">
+    <textarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
+      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
+  </mat-form-field>
   }
 </div>

@@ -1,7 +1,25 @@
-import { VariableAnalysisJob } from '../../../database/entities/variable-analysis-job.entity';
+export interface VariableAnalysisJobInput {
+  id: string | number;
+  workspaceId?: number;
+  unitId?: number;
+  variableId?: string;
+  data?: {
+    workspaceId?: number;
+    unitId?: number;
+    variableId?: string;
+  };
+  status: string;
+  progress?: number;
+  error?: string;
+  timestamp?: number;
+  created_at?: number | Date;
+  finishedOn?: number;
+}
+
+// import { VariableAnalysisJob } from '../../../database/entities/variable-analysis-job.entity';
 
 export class VariableAnalysisJobDto {
-  id: number;
+  id: string; // Changed from number to string to support Bull IDs
   workspace_id: number;
 
   /**
@@ -18,6 +36,7 @@ export class VariableAnalysisJobDto {
    * Status of the job: 'pending', 'processing', 'completed', 'failed'
    */
   status: string;
+  progress?: number;
   error?: string;
   created_at: Date;
   updated_at: Date;
@@ -28,19 +47,20 @@ export class VariableAnalysisJobDto {
   type?: string;
 
   /**
-   * Static method to create a DTO from an entity
+   * Static method to create a DTO from a plain object (e.g. from Bull job)
    */
-  static fromEntity(entity: VariableAnalysisJob): VariableAnalysisJobDto {
+  static fromJob(job: VariableAnalysisJobInput): VariableAnalysisJobDto {
     const dto = new VariableAnalysisJobDto();
-    dto.id = entity.id;
-    dto.workspace_id = entity.workspace_id;
-    dto.unit_id = entity.unit_id;
-    dto.variable_id = entity.variable_id;
-    dto.status = entity.status;
-    dto.error = entity.error;
-    dto.created_at = entity.created_at;
-    dto.updated_at = entity.updated_at;
-    dto.type = entity.type;
+    dto.id = job.id.toString();
+    dto.workspace_id = job.workspaceId || (job.data && job.data.workspaceId);
+    dto.unit_id = job.unitId || (job.data && job.data.unitId);
+    dto.variable_id = job.variableId || (job.data && job.data.variableId);
+    dto.status = job.status;
+    dto.progress = job.progress;
+    dto.error = job.error; // Bull job failedReason or similar
+    dto.created_at = new Date(job.timestamp || job.created_at);
+    dto.updated_at = new Date(job.finishedOn || Date.now());
+    dto.type = 'variable-analysis';
     return dto;
   }
 }

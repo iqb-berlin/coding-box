@@ -26,6 +26,7 @@ export interface JobDefinitionVariableBundle {
   id: number;
   name: string;
   sampleCount?: number;
+  caseOrderingMode?: CaseOrderingMode;
 }
 
 @Entity({ name: 'job_definitions' })

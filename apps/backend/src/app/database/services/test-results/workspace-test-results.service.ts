@@ -26,6 +26,7 @@ import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { ResponseManagementService } from './response-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
@@ -40,6 +41,67 @@ interface PersonWhere {
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+
+  private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
+    const normalizedVariableId = String(variableId || '').trim();
+    const isMarkingPanel = normalizedVariableId.startsWith('marking-panel_');
+    if (value === null || value === undefined) {
+      if (isMarkingPanel) {
+        return [];
+      }
+      return null;
+    }
+
+    const raw = String(value);
+    const trimmed = raw.trim();
+    if (trimmed === '') {
+      return isMarkingPanel ? [] : '';
+    }
+
+    if (!isMarkingPanel) {
+      // Most interactive controls persist values as JSON arrays.
+      // Deserialize array payloads so replay players receive list-like values.
+      if (!trimmed.startsWith('[')) {
+        // Keep object/primitive payloads as stored text for non-marking variables.
+        // Some players expect strings and perform their own parsing.
+        return raw;
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (!Array.isArray(parsed)) {
+          return raw;
+        }
+
+        const isPrimitiveArray = parsed.every(item => item === null ||
+          ['string', 'number', 'boolean'].includes(typeof item)
+        );
+
+        return isPrimitiveArray ? parsed : raw;
+      } catch {
+        return raw;
+      }
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        if (
+          parsed.length > 0 &&
+          parsed.every(token => typeof token === 'string' && /^\d+-\d+-#[0-9a-fA-F]{3,8}$/.test(token))
+        ) {
+          return [parsed];
+        }
+        return parsed;
+      }
+      if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { marks?: unknown[] }).marks)) {
+        return (parsed as { marks: unknown[] }).marks;
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  }
 
   constructor(
     @InjectRepository(Persons)
@@ -66,6 +128,8 @@ export class WorkspaceTestResultsService {
     private readonly cacheService: CacheService,
     @Inject(forwardRef(() => CodingListService))
     private readonly codingListService: CodingListService,
+    @Inject(forwardRef(() => CodingValidationService))
+    private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
     private readonly workspaceCoreService: WorkspaceCoreService
   ) { }
@@ -2164,18 +2228,18 @@ export class WorkspaceTestResultsService {
   ): Promise<{
       responses: {
         id: string;
-        content: { id: string; value: string; status: string }[];
+        content: string;
       }[];
     }> {
-    const cacheKey = this.cacheService.generateUnitResponseCacheKey(
+    const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
-    );
+    )}:v4`;
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;
-        content: { id: string; value: string; status: string }[];
+        content: string;
       }[];
     }>(cacheKey);
 
@@ -2197,10 +2261,10 @@ export class WorkspaceTestResultsService {
     const bookletId = parts[parts.length - 1];
     const queryBuilder = this.unitRepository
       .createQueryBuilder('unit')
-      .innerJoinAndSelect('unit.responses', 'response')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('unit.id', 'unitId')
       .where('person.login = :login', { login })
       .andWhere('person.code = :code', { code });
 
@@ -2214,9 +2278,10 @@ export class WorkspaceTestResultsService {
       .andWhere('bookletinfo.name = :bookletId', { bookletId })
       .andWhere('unit.alias = :unitId', { unitId });
 
-    const unit = await queryBuilder.getOne();
+    const unitRow = await queryBuilder.getRawOne<{ unitId: number }>();
+    const unitDbId = unitRow?.unitId;
 
-    if (!unit) {
+    if (!unitDbId) {
       const personWhere: PersonWhere = {
         code,
         login,
@@ -2265,79 +2330,85 @@ export class WorkspaceTestResultsService {
     }
 
     const chunks = await this.chunkRepository.find({
-      where: { unitid: unit.id }
+      where: { unitid: unitDbId }
     });
 
     if (chunks.length > 0) {
-      this.logger.log(`Found ${chunks.length} chunks for unit ${unit.id}`);
+      this.logger.log(`Found ${chunks.length} chunks for unit ${unitDbId}`);
       chunks.forEach(chunk => {
         this.logger.log(
           `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
         );
       });
     } else {
-      this.logger.log(`No chunks found for unit ${unit.id}`);
+      this.logger.log(`No chunks found for unit ${unitDbId}`);
     }
 
-    const chunkKeyMap = new Map<string, string>();
+    const responseRows = await this.responseRepository
+      .createQueryBuilder('response')
+      .select([
+        'response.variableid AS variableid',
+        'response.value AS value',
+        'response.status AS status',
+        'response.subform AS subform'
+      ])
+      .where('response.unitid = :unitDbId', { unitDbId })
+      .getRawMany<{
+      variableid: string;
+      value: string | null;
+      status: number;
+      subform: string | null;
+    }>();
+
+    const chunkKeyMap = new Map<string, { key: string; ts: number }>();
     chunks.forEach(chunk => {
       if (chunk.variables) {
+        const chunkTs = Number(chunk.ts) || 0;
         const variables = chunk.variables.split(',').map(v => v.trim());
         variables.forEach(variable => {
-          chunkKeyMap.set(variable, chunk.key);
+          const current = chunkKeyMap.get(variable);
+          if (!current || chunkTs >= current.ts) {
+            chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
+          }
         });
       }
     });
 
-    const responsesByChunk = {};
+    const responsesByChunk = new Map<string, Map<string, {
+      id: string;
+      value: unknown;
+      status: number;
+      chunkTs: number;
+    }>>();
 
-    unit.responses.forEach(response => {
-      let value = response.value;
-      if (typeof value === 'string') {
-        if (value.startsWith('[') && value.endsWith(']')) {
-          try {
-            value = JSON.parse(value);
-          } catch (e) {
-            this.logger.warn(`Failed to parse JSON array: ${value}`);
-          }
-        } else if (value.startsWith('{') && value.endsWith('}')) {
-          try {
-            const jsonArrayString = value
-              .replace(/^\{/, '[')
-              .replace(/}$/, ']');
-            value = JSON.parse(jsonArrayString);
-          } catch (e) {
-            this.logger.warn(`Failed to parse curly brace array: ${value}`);
-          }
-        }
-      }
-
+    responseRows.forEach(response => {
+      const mappedChunk = chunkKeyMap.get(response.variableid);
+      const chunkKey = mappedChunk?.key || response.subform || '';
+      const chunkTs = mappedChunk?.ts || 0;
       const mappedResponse = {
         id: response.variableid,
-        value: value,
-        status: response.status
+        value: WorkspaceTestResultsService.parseStoredResponseValue(response.value, response.variableid),
+        status: response.status,
+        chunkTs
       };
 
-      const chunkKey =
-        chunkKeyMap.get(response.variableid) || response.subform || '';
-
-      if (!responsesByChunk[chunkKey]) {
-        responsesByChunk[chunkKey] = [];
+      if (!responsesByChunk.has(chunkKey)) {
+        responsesByChunk.set(chunkKey, new Map());
       }
-
-      responsesByChunk[chunkKey].push(mappedResponse);
+      const chunkResponses = responsesByChunk.get(chunkKey)!;
+      const existing = chunkResponses.get(mappedResponse.id);
+      if (!existing || mappedResponse.chunkTs >= existing.chunkTs) {
+        chunkResponses.set(mappedResponse.id, mappedResponse);
+      }
     });
 
-    const responsesArray = Object.keys(responsesByChunk).map(chunkKey => {
-      const uniqueResponses = responsesByChunk[chunkKey].filter(
-        (response: { id: string }, index: number, self: { id: string }[]) => index === self.findIndex((r: { id: string }) => r.id === response.id)
-      );
-
-      return {
-        id: chunkKey,
-        content: uniqueResponses
-      };
-    });
+    const responsesArray = Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
+      id: chunkKey,
+      content: JSON.stringify(Array.from(responseMap.values()).map(({
+        chunkTs: _chunkTs,
+        ...response
+      }) => response))
+    }));
 
     const result = {
       responses: responsesArray
@@ -2486,6 +2557,7 @@ export class WorkspaceTestResultsService {
         }
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
@@ -2558,6 +2630,7 @@ export class WorkspaceTestResultsService {
         );
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
@@ -2573,11 +2646,17 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.responseManagementService.deleteResponse(
+    const result = await this.responseManagementService.deleteResponse(
       workspaceId,
       responseId,
       userId
     );
+    if (result?.success) {
+      await this.codingValidationService.invalidateIncompleteVariablesCache(
+        workspaceId
+      );
+    }
+    return result;
   }
 
   async deleteBooklet(
@@ -2646,6 +2725,7 @@ export class WorkspaceTestResultsService {
         );
       }
 
+      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     });
   }
@@ -3322,14 +3402,10 @@ export class WorkspaceTestResultsService {
             responsesByChunkKey.set(chunkKey, []);
           }
 
-          let value: ResponseValueType = r.value;
-          try {
-            if (typeof r.value === 'string' && r.value.length > 0) {
-              value = JSON.parse(r.value);
-            }
-          } catch (e) {
-            // keep as string
-          }
+          const value = WorkspaceTestResultsService.parseStoredResponseValue(
+            r.value,
+            r.variableid
+          ) as ResponseValueType;
 
           responsesByChunkKey.get(chunkKey)!.push({
             id: r.variableid,

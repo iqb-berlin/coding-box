@@ -7,11 +7,13 @@ import {
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
+import { sortUnitsContinuous, sortUnitsAlternating } from '../../../utils/coding-utils';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { CreateCodingJobDto } from '../../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
@@ -19,6 +21,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -55,8 +58,21 @@ interface JobCreationWarning {
 }
 
 type VariableReference = { unitName: string; variableId: string };
-type BundleItem = { id: number; name: string; variables: VariableReference[] };
+type BundleItem = { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: VariableReference[] };
 type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
+
+interface SlimResponse {
+  id: number;
+  variableid: string;
+  value: string | null;
+  unitName: string;
+  unitAlias: string | null;
+  bookletName: string;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  variableBundleId?: number;
+}
 
 @Injectable()
 export class CodingJobService {
@@ -81,8 +97,11 @@ export class CodingJobService {
     private fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Setting)
     private settingRepository: Repository<Setting>,
+    @InjectRepository(CoderTrainingDiscussionResult)
+    private discussionResultRepository: Repository<CoderTrainingDiscussionResult>,
     private connection: Connection,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
@@ -665,9 +684,52 @@ export class CodingJobService {
 
     await this.codingJobUnitRepository.save(codingJobUnit);
 
+    // If this coding job belongs to a training, also save as discussion result
+    if (codingJob.training_id && codingJobUnit.response_id && progress.selectedCode) {
+      try {
+        await this.saveDiscussionResultForTraining(
+          codingJob.workspace_id,
+          codingJob.training_id,
+          codingJobUnit.response_id,
+          progress.selectedCode.id,
+          progress.selectedCode.score ?? null
+        );
+      } catch (error) {
+        // Log but don't fail the coding progress save
+        this.logger.warn(`Failed to save discussion result for training ${codingJob.training_id}, response ${codingJobUnit.response_id}: ${error.message}`);
+      }
+    }
+
     await this.checkAndUpdateCodingJobCompletion(codingJobId);
 
     return codingJob;
+  }
+
+  private async saveDiscussionResultForTraining(
+    workspaceId: number,
+    trainingId: number,
+    responseId: number,
+    code: number,
+    score: number | null
+  ): Promise<void> {
+    const existing = await this.discussionResultRepository.findOne({
+      where: {
+        workspace_id: workspaceId,
+        training_id: trainingId,
+        response_id: responseId
+      }
+    });
+
+    const discussionResult = existing || this.discussionResultRepository.create({
+      workspace_id: workspaceId,
+      training_id: trainingId,
+      response_id: responseId
+    });
+
+    discussionResult.code = code;
+    discussionResult.score = score;
+
+    await this.discussionResultRepository.save(discussionResult);
   }
 
   async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
@@ -786,7 +848,7 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null; variableBundleId: number | null }[]> {
     const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
 
     if (onlyOpen) {
@@ -797,23 +859,17 @@ export class CodingJobService {
       where: { id: codingJobId }
     });
 
-    const caseOrderingMode = codingJob?.case_ordering_mode || 'continuous';
-    const order = caseOrderingMode === 'alternating' ?
-      {
-        person_login: 'ASC' as const,
-        person_code: 'ASC' as const,
-        person_group: 'ASC' as const,
-        booklet_name: 'ASC' as const,
-        unit_name: 'ASC' as const,
-        variable_id: 'ASC' as const
-      } :
-      {
-        variable_id: 'ASC' as const,
-        unit_name: 'ASC' as const,
-        booklet_name: 'ASC' as const,
-        person_login: 'ASC' as const,
-        person_code: 'ASC' as const
-      };
+    const globalMode = codingJob?.case_ordering_mode || 'continuous';
+
+    const bundles = await this.codingJobVariableBundleRepository.find({
+      where: { coding_job_id: codingJobId },
+      order: { id: 'ASC' }
+    });
+
+    const bundleModes = new Map<number, string>();
+    for (const b of bundles) {
+      bundleModes.set(b.variable_bundle_id, b.case_ordering_mode || globalMode);
+    }
 
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: whereClause,
@@ -827,12 +883,33 @@ export class CodingJobService {
         'person_login',
         'person_code',
         'person_group',
-        'notes'
-      ],
-      order
+        'notes',
+        'variable_bundle_id'
+      ]
     });
 
-    return codingJobUnits.map(unit => ({
+    const buckets = new Map<number | 'unbundled', CodingJobUnit[]>();
+    for (const b of bundles) {
+      buckets.set(b.variable_bundle_id, []);
+    }
+    buckets.set('unbundled', []);
+
+    for (const unit of codingJobUnits) {
+      const key = unit.variable_bundle_id || 'unbundled';
+      if (!buckets.has(key)) {
+        buckets.set(key, []);
+      }
+      buckets.get(key)!.push(unit);
+    }
+
+    let sortedUnits: CodingJobUnit[] = [];
+    for (const [key, units] of buckets.entries()) {
+      const mode = key === 'unbundled' ? globalMode : (bundleModes.get(key as number) || globalMode);
+      units.sort(mode === 'alternating' ? sortUnitsAlternating : sortUnitsContinuous);
+      sortedUnits = sortedUnits.concat(units);
+    }
+
+    return sortedUnits.map(unit => ({
       responseId: unit.response_id,
       unitName: unit.unit_name,
       unitAlias: unit.unit_alias,
@@ -842,12 +919,97 @@ export class CodingJobService {
       personLogin: unit.person_login,
       personCode: unit.person_code,
       personGroup: unit.person_group,
-      notes: unit.notes
+      notes: unit.notes,
+      variableBundleId: unit.variable_bundle_id
     }));
   }
 
+  private async getSlimResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<SlimResponse[]> {
+    const variableRepo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
+    const bundleRepo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
+
+    const codingJobVariables = await variableRepo.find({
+      where: { coding_job_id: codingJobId }
+    });
+
+    const codingJobVariableBundles = await bundleRepo.find({
+      where: { coding_job_id: codingJobId },
+      relations: ['variable_bundle']
+    });
+
+    const variableBundleMap = new Map<string, number>();
+    const allVariables: { unit_name: string; variable_id: string }[] = codingJobVariables.map(v => ({
+      unit_name: v.unit_name,
+      variable_id: v.variable_id
+    }));
+    codingJobVariableBundles.forEach(bundle => {
+      if (bundle.variable_bundle?.variables) {
+        bundle.variable_bundle.variables.forEach(variable => {
+          allVariables.push({
+            unit_name: variable.unitName,
+            variable_id: variable.variableId
+          });
+          variableBundleMap.set(`${variable.unitName}::${variable.variableId}`, bundle.variable_bundle_id);
+        });
+      }
+    });
+
+    if (allVariables.length === 0) {
+      return [];
+    }
+
+    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+    const queryBuilder = responseRepo.createQueryBuilder('response')
+      .select('response.id', 'id')
+      .addSelect('response.variableid', 'variableid')
+      .addSelect('response.value', 'value')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
+      .addSelect('COALESCE(bookletinfo.name, \'\')', 'bookletName')
+      .addSelect('COALESCE(person.login, \'\')', 'personLogin')
+      .addSelect('COALESCE(person.code, \'\')', 'personCode')
+      .addSelect('COALESCE(person.group, \'\')', 'personGroup')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person');
+
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    allVariables.forEach((variable, index) => {
+      const unitParam = `cjUnitName${index}`;
+      const variableParam = `cjVariableId${index}`;
+      conditions.push(`(unit.name = :${unitParam} AND response.variableid = :${variableParam})`);
+      parameters[unitParam] = variable.unit_name;
+      parameters[variableParam] = variable.variable_id;
+    });
+
+    queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
+    queryBuilder.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+
+    const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
+
+    return raw.map(r => {
+      const unitName = r.unitName ?? '';
+      const variableid = r.variableid;
+      return {
+        id: Number(r.id),
+        variableid: variableid,
+        value: r.value ?? null,
+        unitName: unitName,
+        unitAlias: r.unitAlias ?? null,
+        bookletName: r.bookletName ?? '',
+        personLogin: r.personLogin ?? '',
+        personCode: r.personCode ?? '',
+        personGroup: r.personGroup ?? '',
+        variableBundleId: variableBundleMap.get(`${unitName}::${variableid}`)
+      };
+    });
+  }
+
   private async saveCodingJobUnits(codingJobId: number, maxCodingCases?: number, manager?: EntityManager): Promise<void> {
-    let responses = await this.getResponsesForCodingJob(codingJobId, manager);
+    let responses = await this.getSlimResponsesForCodingJob(codingJobId, manager);
 
     if (responses.length === 0) {
       return;
@@ -860,18 +1022,24 @@ export class CodingJobService {
     }
     const workspaceId = codingJob.workspace_id;
 
-    // Get aggregation threshold
+    // Get aggregation threshold and matching flags
     const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
 
-    // If aggregation is enabled, filter to unique cases only
+    // If aggregation is enabled, filter to unique cases using slim-compatible logic
     if (aggregationThreshold !== null && aggregationThreshold >= 2) {
       const originalCount = responses.length;
-      responses = await this.filterResponsesForAggregation(
-        responses,
-        aggregationThreshold,
-        workspaceId
-      );
-
+      const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+      const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
+      const filteredResponses: SlimResponse[] = [];
+      aggregatedGroups.forEach(group => {
+        if (group.responses.length >= aggregationThreshold) {
+          group.responses.sort((a, b) => a.id - b.id);
+          filteredResponses.push(group.responses[0]);
+        } else {
+          filteredResponses.push(...group.responses);
+        }
+      });
+      responses = filteredResponses;
       this.logger.log(
         `Aggregation enabled (threshold: ${aggregationThreshold}). ` +
         `Reduced from ${originalCount} to ${responses.length} cases`
@@ -889,20 +1057,24 @@ export class CodingJobService {
     }
 
     const repo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
-    const codingJobUnits = responses.map(response => repo.create({
-      coding_job_id: codingJobId,
-      response_id: response.id,
-      unit_name: response.unit?.name || '',
-      unit_alias: response.unit?.alias || null,
-      variable_id: response.variableid,
-      variable_anchor: response.variableid,
-      booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
-      person_login: response.unit?.booklet?.person?.login || '',
-      person_code: response.unit?.booklet?.person?.code || '',
-      person_group: response.unit?.booklet?.person?.group || ''
-    }));
-
-    await repo.save(codingJobUnits);
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < responses.length; i += BATCH_SIZE) {
+      const chunk = responses.slice(i, i + BATCH_SIZE);
+      const units = chunk.map(r => repo.create({
+        coding_job_id: codingJobId,
+        response_id: r.id,
+        unit_name: r.unitName,
+        unit_alias: r.unitAlias,
+        variable_id: r.variableid,
+        variable_anchor: r.variableid,
+        booklet_name: r.bookletName,
+        person_login: r.personLogin,
+        person_code: r.personCode,
+        person_group: r.personGroup,
+        variable_bundle_id: r.variableBundleId || null
+      }));
+      await repo.save(units);
+    }
   }
 
   private async getCodingSchemes(unitAliases: string[], workspaceId: number): Promise<Map<string, CodingScheme>> {
@@ -953,7 +1125,7 @@ export class CodingJobService {
   async createCodingJobWithUnitSubset(
     workspaceId: number,
     createCodingJobDto: CreateCodingJobDto,
-    unitSubset: number[]
+    unitSubset: SlimResponse[]
   ): Promise<CodingJob> {
     return this.connection.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
@@ -1002,46 +1174,43 @@ export class CodingJobService {
     });
   }
 
-  private async saveCodingJobUnitsSubset(codingJobId: number, responseIds: number[], manager?: EntityManager): Promise<void> {
-    const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
-    const responses = await responseRepo.find({
-      where: { id: In(responseIds) },
-      relations: ['unit', 'unit.booklet', 'unit.booklet.bookletinfo', 'unit.booklet.person']
-    });
-
+  private async saveCodingJobUnitsSubset(codingJobId: number, responses: SlimResponse[], manager?: EntityManager): Promise<void> {
     if (responses.length === 0) {
       return;
     }
 
     const unitRepo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
-    const codingJobUnits = responses.map(response => unitRepo.create({
-      coding_job_id: codingJobId,
-      response_id: response.id,
-      unit_name: response.unit?.name || '',
-      unit_alias: response.unit?.alias || null,
-      variable_id: response.variableid,
-      variable_anchor: response.variableid,
-      booklet_name: response.unit?.booklet?.bookletinfo?.name || '',
-      person_login: response.unit?.booklet?.person?.login || '',
-      person_code: response.unit?.booklet?.person?.code || '',
-      person_group: response.unit?.booklet?.person?.group || ''
-    }));
-
-    await unitRepo.save(codingJobUnits);
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < responses.length; i += BATCH_SIZE) {
+      const chunk = responses.slice(i, i + BATCH_SIZE);
+      const units = chunk.map(r => unitRepo.create({
+        coding_job_id: codingJobId,
+        response_id: r.id,
+        unit_name: r.unitName,
+        unit_alias: r.unitAlias,
+        variable_id: r.variableid,
+        variable_anchor: r.variableid,
+        booklet_name: r.bookletName,
+        person_login: r.personLogin,
+        person_code: r.personCode,
+        person_group: r.personGroup,
+        variable_bundle_id: r.variableBundleId || null
+      }));
+      await unitRepo.save(units);
+    }
   }
 
   private distributeDoubleCodingEvenly(
-    doubleCodingResponses: ResponseEntity[],
+    doubleCodingResponses: SlimResponse[],
     sortedCoders: { id: number; name: string; username: string }[]
-  ): { response: ResponseEntity; coders: { id: number; name: string }[] }[] {
-    const assignments: { response: ResponseEntity; coders: { id: number; name: string }[] }[] = [];
+  ): { response: SlimResponse; coders: { id: number; name: string }[] }[] {
+    const assignments: { response: SlimResponse; coders: { id: number; name: string }[] }[] = [];
     const numCoders = sortedCoders.length;
 
     // Track how many double-coding assignments each coder has received
     const doubleCodingCounts = new Map(sortedCoders.map(c => [c.id, 0]));
 
     for (const response of doubleCodingResponses) {
-      // Find the two coders with the least double-coding assignments
       const coderCounts = sortedCoders.map(coder => ({
         id: coder.id,
         name: coder.name,
@@ -1050,7 +1219,6 @@ export class CodingJobService {
 
       coderCounts.sort((a, b) => a.count - b.count);
 
-      // Pick the two coders with lowest counts (break ties by name for consistency)
       const selectedCoders = coderCounts
         .slice(0, Math.min(2, numCoders))
         .sort((a, b) => a.name.localeCompare(b.name));
@@ -1070,16 +1238,15 @@ export class CodingJobService {
   }
 
   private distributeCasesForVariable(
-    responses: ResponseEntity[],
-    doubleCodingResponses: ResponseEntity[],
+    responses: SlimResponse[],
+    doubleCodingResponses: SlimResponse[],
     sortedCoders: { id: number; name: string; username: string }[]
-  ): ResponseEntity[][] {
+  ): SlimResponse[][] {
     const numCoders = sortedCoders.length;
-    const coderCases: ResponseEntity[][] = sortedCoders.map(() => []);
+    const coderCases: SlimResponse[][] = sortedCoders.map(() => []);
 
     const singleCodingResponses = responses.filter(r => !doubleCodingResponses.some(dc => dc.id === r.id));
 
-    // First, assign all double-coded cases to all coders (since double-coding means all coders get the same cases)
     sortedCoders.forEach((coder, coderIndex) => {
       doubleCodingResponses.forEach(doubleCodingResponse => {
         coderCases[coderIndex].push(doubleCodingResponse);
@@ -1144,9 +1311,9 @@ export class CodingJobService {
   }
 
   aggregateResponsesByValue(
-    responses: ResponseEntity[],
+    responses: SlimResponse[],
     flags: ResponseMatchingFlag[]
-  ): { normalizedValue: string; responses: ResponseEntity[]; totalResponses: number }[] {
+  ): { normalizedValue: string; responses: SlimResponse[]; totalResponses: number }[] {
     if (flags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
       return responses.map(r => ({
         normalizedValue: r.value || '',
@@ -1155,7 +1322,7 @@ export class CodingJobService {
       }));
     }
 
-    const groups = new Map<string, ResponseEntity[]>();
+    const groups = new Map<string, SlimResponse[]>();
 
     for (const response of responses) {
       const normalizedValue = this.normalizeValue(response.value, flags);
@@ -1211,11 +1378,72 @@ export class CodingJobService {
       .getMany();
   }
 
+  async getSlimResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<SlimResponse[]> {
+    if (variables.length === 0) {
+      return [];
+    }
+
+    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+      .select('response.id', 'id')
+      .addSelect('response.variableid', 'variableid')
+      .addSelect('response.value', 'value')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
+      .addSelect('COALESCE(bookletinfo.name, \'\')', 'bookletName')
+      .addSelect('COALESCE(person.login, \'\')', 'personLogin')
+      .addSelect('COALESCE(person.code, \'\')', 'personCode')
+      .addSelect('COALESCE(person.group, \'\')', 'personGroup')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    variables.forEach((variable, index) => {
+      const unitParam = `slimUnitName${index}`;
+      const variableParam = `slimVariableId${index}`;
+      conditions.push(`(unit.name = :${unitParam} AND response.variableid = :${variableParam})`);
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+    });
+
+    if (conditions.length > 0) {
+      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    }
+
+    const raw = await queryBuilder
+      .orderBy('response.id', 'ASC')
+      .getRawMany();
+
+    return raw.map(r => ({
+      id: Number(r.id),
+      variableid: r.variableid,
+      value: r.value ?? null,
+      unitName: r.unitName ?? '',
+      unitAlias: r.unitAlias ?? null,
+      bookletName: r.bookletName ?? '',
+      personLogin: r.personLogin ?? '',
+      personCode: r.personCode ?? '',
+      personGroup: r.personGroup ?? ''
+    }));
+  }
+
   async calculateDistribution(
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
@@ -1237,12 +1465,10 @@ export class CodingJobService {
     const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
     const warnings: JobCreationWarning[] = [];
 
-    // Get response matching mode for this workspace
+    // Get response matching mode and aggregation threshold for this workspace
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
-
-    // Initialize remaining cases for global cap
-    // let remainingCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ? maxCodingCases : undefined;
-    // We now use per-item quota instead of global decrementing cap
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
 
     const items: DistributionItem[] = [];
     const allVariables: VariableReference[] = [];
@@ -1259,14 +1485,22 @@ export class CodingJobService {
       allVariables.push(variable);
     }
 
-    const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
+    const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
+
+    // Build derived variable lookup for this workspace to skip aggregation for derived vars
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    const derivedVariableSets = new Map<string, Set<string>>();
+    derivedVariableMap.forEach((vars, unitNameKey) => {
+      derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+    });
+    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
     // Generate warnings for variables that have reduced available cases
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     for (const variable of allVariables) {
       const key = `${variable.unitName}::${variable.variableId}`;
       const casesInJobs = casesInJobsMap.get(key) || 0;
-      const totalAvailable = allResponses.filter(r => r.unit?.name === variable.unitName && r.variableid === variable.variableId).length;
+      const totalAvailable = allResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId).length;
       const availableCases = totalAvailable - casesInJobs;
 
       if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
@@ -1285,24 +1519,53 @@ export class CodingJobService {
     for (const itemObj of items) {
       let itemVariables: { unitName: string; variableId: string }[];
       let itemKey = '';
+      let itemCaseOrderingMode: 'continuous' | 'alternating';
 
       if (itemObj.type === 'bundle') {
         const bundleItem = itemObj.item as BundleItem;
         itemVariables = bundleItem.variables;
         itemKey = bundleItem.name;
+        // Use bundle-specific caseOrderingMode if available, otherwise use global
+        itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
       } else {
         const variableItem = itemObj.item as VariableReference;
         itemVariables = [variableItem];
         itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+        itemCaseOrderingMode = caseOrderingMode;
       }
 
-      const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
+      const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
       );
       const totalResponses = responses.length;
 
-      // Calculate aggregation info based on matching mode
+      // Derived variables have null/empty string values and must not be aggregated —
+      // aggregation would collapse all their responses into 1 group.
+      // A bundle item is treated as derived only if ALL its variables are derived.
+      const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
+
+      // Calculate aggregation info based on matching mode, applying threshold exactly as in createDistributedCodingJobs
       const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-      const uniqueCases = aggregatedGroups.length;
+
+      const filteredResponses: SlimResponse[] = [];
+      let uniqueCases = 0;
+
+      if (!allItemVarsDerived && aggregationThreshold !== null) {
+        // Apply filtering logic: if group size >= threshold, keep 1 representative. Else keep all.
+        aggregatedGroups.forEach(group => {
+          if (group.responses.length >= threshold) {
+            group.responses.sort((a, b) => a.id - b.id);
+            filteredResponses.push(group.responses[0]);
+            uniqueCases += 1;
+          } else {
+            filteredResponses.push(...group.responses);
+            uniqueCases += group.responses.length;
+          }
+        });
+      } else {
+        // Aggregation disabled or derived variable — use all responses as-is
+        filteredResponses.push(...responses);
+        uniqueCases = responses.length;
+      }
 
       aggregationInfo[itemKey] = {
         uniqueCases,
@@ -1354,61 +1617,22 @@ export class CodingJobService {
         doubleCodingCount = Math.min(doubleCodingCount, itemQuota);
       }
 
-      const sortedResponses = [...responses].sort((a, b) => {
-        if (caseOrderingMode === 'alternating') {
-          // Alternating mode: sort by case (unit/booklet/person), then by variable
-          // First by unit name
-          const aUnitName = a.unit?.name || '';
-          const bUnitName = b.unit?.name || '';
-          if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
-
-          // Then by testperson: login, code, group, booklet.name
-          const aLogin = a.unit?.booklet?.person?.login || '';
-          const bLogin = b.unit?.booklet?.person?.login || '';
-          if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
-
-          const aCode = a.unit?.booklet?.person?.code || '';
-          const bCode = b.unit?.booklet?.person?.code || '';
-          if (aCode !== bCode) return aCode.localeCompare(bCode);
-
-          const aGroup = a.unit?.booklet?.person?.group || '';
-          const bGroup = b.unit?.booklet?.person?.group || '';
-          if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
-
-          const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
-          const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
-          if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
-
-          // Finally by variable
+      const sortedResponses = [...filteredResponses].sort((a, b) => {
+        if (itemCaseOrderingMode === 'alternating') {
+          if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+          if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+          if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+          if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
           if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-
           return a.id - b.id;
         }
-        // Continuous mode (default): sort by variable first, then by case
         if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-
-        // Then by unit name
-        const aUnitName = a.unit?.name || '';
-        const bUnitName = b.unit?.name || '';
-        if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
-
-        // Then by testperson: login, code, group, booklet.name
-        const aLogin = a.unit?.booklet?.person?.login || '';
-        const bLogin = b.unit?.booklet?.person?.login || '';
-        if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
-
-        const aCode = a.unit?.booklet?.person?.code || '';
-        const bCode = b.unit?.booklet?.person?.code || '';
-        if (aCode !== bCode) return aCode.localeCompare(bCode);
-
-        const aGroup = a.unit?.booklet?.person?.group || '';
-        const bGroup = b.unit?.booklet?.person?.group || '';
-        if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
-
-        const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
-        const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
-        if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
-
+        if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+        if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+        if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+        if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+        if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
         return a.id - b.id;
       });
       const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
@@ -1457,7 +1681,6 @@ export class CodingJobService {
         sortedCoders
       );
 
-      // Now simply count what was distributed
       for (let i = 0; i < sortedCoders.length; i++) {
         const coder = sortedCoders[i];
         const coderCases = caseDistribution[i];
@@ -1481,7 +1704,7 @@ export class CodingJobService {
     workspaceId: number,
     request: {
       selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[];
+      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
@@ -1545,26 +1768,22 @@ export class CodingJobService {
       for (const variable of selectedVariables) {
         items.push({ type: 'variable', item: variable });
         allVariables.push(variable);
-      } const allResponses = await this.getResponsesForVariables(workspaceId, allVariables);
+      }
 
       // Generate warnings for variables that have reduced available cases
       const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
-      for (const variable of allVariables) {
-        const key = `${variable.unitName}::${variable.variableId}`;
-        const casesInJobs = casesInJobsMap.get(key) || 0;
-        const totalAvailable = allResponses.filter(r => r.unit?.name === variable.unitName && r.variableid === variable.variableId).length;
-        const availableCases = totalAvailable - casesInJobs;
 
-        if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
-          warnings.push({
-            unitName: variable.unitName,
-            variableId: variable.variableId,
-            message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
-            casesInJobs,
-            availableCases
-          });
-        }
-      }
+      // Hoist aggregation threshold — same for all items in this workspace
+      const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+      const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
+
+      // Build derived variable lookup to skip aggregation for derived vars
+      const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+      const derivedVariableSets = new Map<string, Set<string>>();
+      derivedVariableMap.forEach((vars, unitNameKey) => {
+        derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+      });
+      const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
       // Sort coders alphabetically for deterministic distribution
       const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
@@ -1573,32 +1792,55 @@ export class CodingJobService {
       for (const itemObj of items) {
         let itemVariables: { unitName: string; variableId: string }[];
         let itemKey = '';
+        let itemCaseOrderingMode: 'continuous' | 'alternating';
 
         if (itemObj.type === 'bundle') {
           const bundleItem = itemObj.item as BundleItem;
           itemVariables = bundleItem.variables;
           itemKey = bundleItem.name;
+          // Use bundle-specific caseOrderingMode if available, otherwise use global
+          itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
         } else {
           const variableItem = itemObj.item as VariableReference;
           itemVariables = [variableItem];
           itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
+          itemCaseOrderingMode = caseOrderingMode;
         }
 
-        const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unit?.name && v.variableId === response.variableid)
-        );
+        // Fetch responses only for this item to limit peak memory usage
+        const responses = await this.getSlimResponsesForVariables(workspaceId, itemVariables);
         const totalResponses = responses.length;
+
+        // Generate warnings for variables in this item
+        for (const variable of itemVariables) {
+          const key = `${variable.unitName}::${variable.variableId}`;
+          const casesInJobs = casesInJobsMap.get(key) || 0;
+          const totalAvailable = responses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId).length;
+          const availableCases = totalAvailable - casesInJobs;
+
+          if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
+            warnings.push({
+              unitName: variable.unitName,
+              variableId: variable.variableId,
+              message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
+              casesInJobs,
+              availableCases
+            });
+          }
+        }
+
+        // Derived variables have null/empty string values and must not be aggregated —
+        // aggregation would collapse all their responses into 1 group.
+        // A bundle item is treated as derived only if ALL its variables are derived.
+        const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
 
         // Calculate aggregation info based on matching mode
         const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
 
-        // Get aggregation threshold
-        const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
-        const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
-
-        const filteredResponses: ResponseEntity[] = [];
+        const filteredResponses: SlimResponse[] = [];
         let uniqueCases = 0;
 
-        if (aggregationThreshold !== null) {
+        if (!allItemVarsDerived && aggregationThreshold !== null) {
           // Apply filtering logic: if group size >= threshold, keep 1. Else keep all.
           aggregatedGroups.forEach(group => {
             if (group.responses.length >= threshold) {
@@ -1611,7 +1853,7 @@ export class CodingJobService {
             }
           });
         } else {
-          // Aggregation disabled
+          // Aggregation disabled or derived variable — use all responses as-is
           filteredResponses.push(...responses);
           uniqueCases = responses.length;
         }
@@ -1668,47 +1910,21 @@ export class CodingJobService {
         }
 
         const sortedResponses = [...filteredResponses].sort((a, b) => {
-          // Sorting logic duplicated from calculateDistribution, or we can assume it's fine
-          // Since createDistributedCodingJobs repeats logic, we must repeat it here.
-          // Note for refactoring: this sorting logic is IDENTICAL to calculateDistribution.
-          // Due to tool limitations I'll just use simple variableId sorting if caseOrderingMode is continuous.
-          // But to be safe let's copy the full sorts.
-
-          if (caseOrderingMode === 'alternating') {
-            const aUnitName = a.unit?.name || '';
-            const bUnitName = b.unit?.name || '';
-            if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
-            const aLogin = a.unit?.booklet?.person?.login || '';
-            const bLogin = b.unit?.booklet?.person?.login || '';
-            if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
-            const aCode = a.unit?.booklet?.person?.code || '';
-            const bCode = b.unit?.booklet?.person?.code || '';
-            if (aCode !== bCode) return aCode.localeCompare(bCode);
-            const aGroup = a.unit?.booklet?.person?.group || '';
-            const bGroup = b.unit?.booklet?.person?.group || '';
-            if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
-            const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
-            const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
-            if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+          if (itemCaseOrderingMode === 'alternating') {
+            if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+            if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+            if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+            if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+            if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
             if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
             return a.id - b.id;
           }
           if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-          const aUnitName = a.unit?.name || '';
-          const bUnitName = b.unit?.name || '';
-          if (aUnitName !== bUnitName) return aUnitName.localeCompare(bUnitName);
-          const aLogin = a.unit?.booklet?.person?.login || '';
-          const bLogin = b.unit?.booklet?.person?.login || '';
-          if (aLogin !== bLogin) return aLogin.localeCompare(bLogin);
-          const aCode = a.unit?.booklet?.person?.code || '';
-          const bCode = b.unit?.booklet?.person?.code || '';
-          if (aCode !== bCode) return aCode.localeCompare(bCode);
-          const aGroup = a.unit?.booklet?.person?.group || '';
-          const bGroup = b.unit?.booklet?.person?.group || '';
-          if (aGroup !== bGroup) return aGroup.localeCompare(bGroup);
-          const aBooklet = a.unit?.booklet?.bookletinfo?.name || '';
-          const bBooklet = b.unit?.booklet?.bookletinfo?.name || '';
-          if (aBooklet !== bBooklet) return aBooklet.localeCompare(bBooklet);
+          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+          if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+          if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+          if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+          if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
           return a.id - b.id;
         });
 
@@ -1780,13 +1996,13 @@ export class CodingJobService {
               {
                 name: jobName,
                 assignedCoders: [coder.id],
-                caseOrderingMode,
+                caseOrderingMode: itemCaseOrderingMode,
                 ...(itemObj.type === 'bundle' ?
                   { variableBundleIds: [(itemObj.item as { id: number }).id] } :
                   { variables: itemVariables }
                 )
               },
-              coderCases.map(r => r.id)
+              coderCases
             );
 
             createdJobs.push({
@@ -1838,8 +2054,10 @@ export class CodingJobService {
       select: ['code', 'coding_issue_option']
     });
 
-    return codingJobUnits.some(unit => unit.coding_issue_option !== null ||
-      (unit.code !== null && unit.code < 0)
+    return codingJobUnits.some(unit => unit.coding_issue_option === -1 ||
+      unit.coding_issue_option === -2 ||
+      unit.code === -1 ||
+      unit.code === -2
     );
   }
 

@@ -193,17 +193,25 @@ describe('WsSettingsComponent', () => {
     });
 
     it('should toggle isExporting and call fetch', async () => {
-      jest.spyOn(document, 'createElement');
-      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(() => document.createElement('div'));
-      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(() => document.createElement('div'));
+      const anchor = document.createElement('a');
+      const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
+      const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor as HTMLAnchorElement);
 
-      await component.exportWorkspaceDatabase();
+      const appendChildSpy = jest.spyOn(document.body, 'appendChild').mockImplementation(node => node);
+      const removeChildSpy = jest.spyOn(document.body, 'removeChild').mockImplementation(node => node);
+
+      component.exportWorkspaceDatabase();
+
+      // Wait for fetch and promise chain to finish
+      await new Promise(resolve => { setTimeout(resolve, 0); });
 
       expect(global.fetch).toHaveBeenCalled();
+      expect(clickSpy).toHaveBeenCalled();
       expect(component.isExporting).toBe(false);
 
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
+      createElementSpy.mockRestore();
     });
 
     it('should show error if no token found', async () => {

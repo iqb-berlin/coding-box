@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 
 export type ReplayStatisticsResponse = {
   id: number;
@@ -43,6 +44,39 @@ export class ReplayBackendService {
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
     return this.http.post<ReplayStatisticsResponse>(url, data, { headers: this.authHeader });
+  }
+
+  getReplayPayload(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string,
+    authToken?: string
+  ): Observable<{
+      unitDef: FilesDto[];
+      response: {
+        responses: {
+          id: string;
+          content: string;
+        }[];
+      };
+      player: FilesDto[];
+      vocs: FilesDto[];
+    }> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-payload/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    return this.http.get<{
+      unitDef: FilesDto[];
+      response: {
+        responses: {
+          id: string;
+          content: string;
+        }[];
+      };
+      player: FilesDto[];
+      vocs: FilesDto[];
+    }>(url, { headers });
   }
 
   getReplayFrequencyByUnit(

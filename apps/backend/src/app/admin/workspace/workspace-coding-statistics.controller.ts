@@ -939,6 +939,7 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
+              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
               variables: {
                 type: 'array',
                 items: {
@@ -970,7 +971,7 @@ export class WorkspaceCodingStatisticsController {
     }
   })
   @ApiOkResponse({
-    description: 'Distributed coding jobs created successfully.',
+    description: 'Distributed coding jobs created successfully',
     schema: {
       type: 'object',
       properties: {
@@ -1032,6 +1033,7 @@ export class WorkspaceCodingStatisticsController {
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
+                       caseOrderingMode?: 'continuous' | 'alternating';
                        variables: { unitName: string; variableId: string }[];
                      }[];
                      selectedCoders: { id: number; name: string; username: string }[];

@@ -294,14 +294,16 @@ export class CodingVariablesDialogComponent implements OnInit {
         const schemeContent = base64ToUtf8(schemeFile.base64Data);
 
         this.dialog.open(SchemeEditorDialogComponent, {
-          width: '100vw',
-          height: '90vh',
+          width: '95vw',
+          height: '95vh',
+          maxWidth: '1400px',
           data: {
             workspaceId: this.data.workspaceId,
             fileId: codingSchemeRef,
             fileName: schemeFile.filename,
             content: schemeContent
-          }
+          },
+          panelClass: 'scheme-editor-dialog-container'
         });
       },
       error: () => {

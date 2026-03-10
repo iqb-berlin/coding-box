@@ -146,7 +146,8 @@ export class CohensKappaStatisticsComponent implements OnInit {
     if (kappa < 0.2) return 'kappa-poor';
     if (kappa < 0.4) return 'kappa-fair';
     if (kappa < 0.6) return 'kappa-moderate';
-    if (kappa < 0.8) return 'kappa-substantial';
+    if (kappa < 0.81) return 'kappa-substantial';
+    if (kappa <= 0.95) return 'kappa-good';
     return 'kappa-perfect';
   }
 
@@ -166,10 +167,13 @@ export class CohensKappaStatisticsComponent implements OnInit {
     if (kappa < 0.6) {
       return 'Akzeptable Übereinstimmung';
     }
-    if (kappa < 0.8) {
+    if (kappa < 0.81) {
       return 'Gute Übereinstimmung';
     }
-    return 'Ausgezeichnete Übereinstimmung';
+    if (kappa <= 0.95) {
+      return 'Gute Übereinstimmung';
+    }
+    return 'Nahezu perfekte Übereinstimmung';
   }
 
   getKappaInterpretationClass(kappa: number | null): string {
@@ -188,7 +192,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
     if (kappa < 0.6) {
       return 'kappa-moderate';
     }
-    if (kappa < 0.8) {
+    if (kappa <= 0.95) {
       return 'kappa-good';
     }
     return 'kappa-excellent';

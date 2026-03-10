@@ -7,6 +7,7 @@ import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingStatisticsService } from '../../../services/coding-statistics.service';
 import { Success } from '../../../models/success.model';
+import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 
 describe('CodingManagementUiService', () => {
   let service: CodingManagementUiService;
@@ -83,6 +84,28 @@ describe('CodingManagementUiService', () => {
       expect(url).toBe('');
       expect(mockSnackBar.open).toHaveBeenCalled();
       done();
+    });
+  });
+
+  it('should open SchemeEditorDialogComponent when showing coding scheme', () => {
+    const codingSchemeRef = 'test-scheme';
+    const mockFileData = { base64Data: 'eyJoZWxsbyI6IndvcmxkIn0=', filename: 'test-scheme.json', mimeType: 'application/json' };
+    (mockFileService.getCodingSchemeFile as jest.Mock).mockReturnValue(of(mockFileData));
+
+    service.showCodingSchemeDialog(codingSchemeRef);
+
+    expect(mockFileService.getCodingSchemeFile).toHaveBeenCalledWith(1, codingSchemeRef);
+    expect(mockDialog.open).toHaveBeenCalledWith(SchemeEditorDialogComponent, {
+      width: '80%',
+      height: '80%',
+      data: {
+        workspaceId: 1,
+        fileId: codingSchemeRef,
+        fileName: codingSchemeRef,
+        content: 'eyJoZWxsbyI6IndvcmxkIn0=',
+        readOnly: true
+      },
+      panelClass: 'scheme-editor-dialog-container'
     });
   });
 });

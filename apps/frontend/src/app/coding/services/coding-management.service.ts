@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import {
-  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction
+  BehaviorSubject, Observable, of, forkJoin, timer, OperatorFunction, Subscription
 } from 'rxjs';
 import {
   catchError, map, switchMap, takeWhile, finalize
@@ -9,7 +9,7 @@ import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
-import { CodingVersionService } from './coding-version.service';
+import { CodingVersionService, ResetVersionJobStatus } from './coding-version.service';
 import { CodingExportService } from './coding-export.service';
 import { ResponseService } from '../../shared/services/response/response.service';
 import {
@@ -64,6 +64,14 @@ export class CodingManagementService {
 
   private _isLoadingStatistics = new BehaviorSubject<boolean>(false);
   isLoadingStatistics$ = this._isLoadingStatistics.asObservable();
+
+  private _resetProgress = new BehaviorSubject<number | null>(null);
+  resetProgress$ = this._resetProgress.asObservable();
+
+  private _resetJobId = new BehaviorSubject<string | null>(null);
+  resetJobId$ = this._resetJobId.asObservable();
+
+  private resetPollingSubscription: Subscription | null = null;
 
   fetchCodingStatistics(version: StatisticsVersion): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -251,10 +259,79 @@ export class CodingManagementService {
     return this.responseService.hasGeogebraResponses(workspaceId);
   }
 
-  resetCodingVersion(version: StatisticsVersion): Observable<{ affectedResponseCount: number; cascadeResetVersions: ('v2' | 'v3')[]; message: string } | null> {
+  checkActiveResetJob(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) return of(null);
-    return this.versionService.resetCodingVersion(workspaceId, version);
+    if (!workspaceId) return;
+
+    this.versionService.getActiveResetVersionJob(workspaceId).subscribe(activeJob => {
+      if (activeJob.hasActiveJob && activeJob.jobId) {
+        this._resetJobId.next(activeJob.jobId);
+        this._resetProgress.next(activeJob.progress ?? 0);
+        this.startResetPolling(workspaceId, activeJob.jobId);
+      }
+    });
+  }
+
+  resetCodingVersion(version: StatisticsVersion): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.versionService.resetCodingVersion(workspaceId, version).subscribe({
+      next: ({ jobId }) => {
+        this._resetJobId.next(jobId);
+        this._resetProgress.next(0);
+        this.startResetPolling(workspaceId, jobId);
+      },
+      error: err => {
+        if (err.status === 409) {
+          this.showErrorSnackbar(err.error?.message || 'coding-management.descriptions.error-reset-conflict', false);
+        } else {
+          this.showErrorSnackbar('coding-management.descriptions.error-reset');
+        }
+      }
+    });
+  }
+
+  private startResetPolling(workspaceId: number, jobId: string): void {
+    this.stopResetPolling();
+
+    this.resetPollingSubscription = timer(0, 2000).pipe(
+      switchMap(() => this.versionService.getResetVersionJobStatus(workspaceId, jobId)),
+      takeWhile(
+        (status: ResetVersionJobStatus) => ['pending', 'processing'].includes(status.status),
+        true
+      )
+    ).subscribe((status: ResetVersionJobStatus) => {
+      this._resetProgress.next(status.progress);
+
+      if (status.status === 'completed') {
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
+
+        if (status.result) {
+          let cascadeText = '';
+          if (status.result.cascadeResetVersions?.length > 0) {
+            cascadeText = ` (+ ${status.result.cascadeResetVersions.join(', ')})`;
+          }
+          this.snackBar.open(
+            `${status.result.affectedResponseCount} Antworten zurückgesetzt${cascadeText}`,
+            'Schließen',
+            { duration: 5000, panelClass: ['success-snackbar'] }
+          );
+        }
+      } else if (status.status === 'failed') {
+        this._resetProgress.next(null);
+        this._resetJobId.next(null);
+        this.showErrorSnackbar('coding-management.descriptions.error-reset');
+      }
+    });
+  }
+
+  private stopResetPolling(): void {
+    if (this.resetPollingSubscription) {
+      this.resetPollingSubscription.unsubscribe();
+      this.resetPollingSubscription = null;
+    }
   }
 
   // --- Download Helpers ---
@@ -263,49 +340,7 @@ export class CodingManagementService {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    switch (format) {
-      case 'csv':
-        this.downloadCodingListAsCsvBackground(workspaceId);
-        break;
-      case 'excel':
-        this.downloadCodingListAsExcelBackground(workspaceId);
-        break;
-      case 'json':
-        this.downloadCodingListAsJsonBackground(workspaceId);
-        break;
-      default:
-      // No default action needed
-    }
-  }
-
-  private downloadCodingListAsCsvBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsCsv(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als CSV'))
-      .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.csv`, 'Kodierliste wurde als CSV nicht erfolgreich heruntergeladen.'));
-  }
-
-  private downloadCodingListAsExcelBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsExcel(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Herunterladen der Kodierliste als Excel'))
-      .subscribe((blob: Blob | null) => this.saveBlob(blob, `coding-list-${this.getDateString()}.xlsx`, 'Kodierliste wurde als Excel nicht erfolgreich heruntergeladen.'));
-  }
-
-  private downloadCodingListAsJsonBackground(workspaceId: number): void {
-    this.showInfoSnackbar('Kodierliste wird im Hintergrund erstellt...');
-    this.exportService.getCodingListAsCsv(workspaceId)
-      .pipe(this.handleDownloadError('Fehler beim Abrufen der Kodierliste (JSON)'))
-      .subscribe(async (blob: Blob | null) => {
-        if (!blob) return;
-        try {
-          const jsonBlob = await this.convertCsvBlobToJsonBlob(blob as Blob);
-          this.saveBlob(jsonBlob, `coding-list-${this.getDateString()}.json`);
-          this.showSuccessSnackbar('Kodierliste wurde als JSON erfolgreich heruntergeladen.');
-        } catch (e) {
-          this.showErrorSnackbar('Fehler beim Umwandeln der CSV-Daten in JSON', false);
-        }
-      });
+    this.performBackgroundCodingListDownload(workspaceId, format);
   }
 
   downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
@@ -315,61 +350,128 @@ export class CodingManagementService {
     return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
   }
 
+  downloadProgress$ = new BehaviorSubject<number | null>(null);
+
   private async performBackgroundDownload(
     workspaceId: number,
     version: StatisticsVersion,
     format: ExportFormat,
     includeReplayUrls: boolean
   ): Promise<void> {
-    const snackBarRef = this.snackBar.open(
-      this.translateService.instant('coding-management.download-dialog.download-started', { version, format }),
-      this.translateService.instant('close'),
-      { duration: 0, panelClass: ['info-snackbar'] }
-    );
+    this.downloadProgress$.next(0);
 
     try {
-      if (format === 'json') {
-        await this.downloadResultsAsJson(workspaceId, version, includeReplayUrls);
-      } else if (format === 'csv') {
-        await this.downloadResultsGeneric(workspaceId, version, format, includeReplayUrls);
-      } else if (format === 'excel') {
-        await this.downloadResultsGeneric(workspaceId, version, format, includeReplayUrls);
-      }
+      // Start the job
+      const jobStartResult = await this.exportService.startExportJob(
+        workspaceId,
+        'results-by-version',
+        version,
+        format,
+        includeReplayUrls
+      ).toPromise();
 
-      snackBarRef.dismiss();
-      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete', { version, format }));
+      if (!jobStartResult) {
+        this.showErrorSnackbar('Failed to start export job', false);
+        this.downloadProgress$.next(null);
+        return;
+      }
+      const { jobId } = jobStartResult;
+
+      // Poll for status
+      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
+
+      // Handle file download
+      if (format === 'json') {
+        const jsonBlob = await this.convertCsvBlobToJsonBlob(blob);
+        this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
+      } else {
+        const ext = format === 'csv' ? 'csv' : 'xlsx';
+        this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
+      }
+      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
-      snackBarRef.dismiss();
-      this.showErrorSnackbar('coding-management.download-dialog.download-failed');
+      this.showErrorSnackbar(
+        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
+        false
+      );
+    } finally {
+      this.downloadProgress$.next(null);
     }
   }
 
-  private downloadResultsGeneric(workspaceId: number, version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
-    return new Promise((resolve, reject) => {
-      if (format === 'csv') {
-        this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-          .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.csv`); resolve(); }, error: reject });
-      } else if (format === 'excel') {
-        this.exportService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls)
-          .subscribe({ next: blob => { this.saveBlob(blob as Blob, `coding-results-${version}-${this.getDateString()}.xlsx`); resolve(); }, error: reject });
+  codingListDownloadProgress$ = new BehaviorSubject<number | null>(null);
+
+  private async performBackgroundCodingListDownload(
+    workspaceId: number,
+    format: ExportFormat
+  ): Promise<void> {
+    this.codingListDownloadProgress$.next(0);
+
+    try {
+      this.showInfoSnackbar(this.translateService.instant('coding-management.descriptions.job-started', { defaultValue: 'Export-Job gestartet...' }));
+
+      const jobStartResult = await this.exportService.startExportJob(
+        workspaceId,
+        'coding-list',
+        undefined,
+        format
+      ).toPromise();
+
+      if (!jobStartResult) {
+        this.showErrorSnackbar('Failed to start export job', false);
+        this.codingListDownloadProgress$.next(null);
+        return;
       }
-    });
+      const { jobId } = jobStartResult;
+
+      const blob = await this.pollJobAndProgress(workspaceId, jobId, this.codingListDownloadProgress$);
+
+      const ext = format === 'excel' ? 'xlsx' : format;
+      this.saveBlob(blob, `coding-list-${this.getDateString()}.${ext}`);
+
+      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
+    } catch (error) {
+      this.showErrorSnackbar(
+        this.translateService.instant('coding-management.download-dialog.download-failed', { error: (error as Error).message || error }),
+        false
+      );
+    } finally {
+      this.codingListDownloadProgress$.next(null);
+    }
   }
 
-  private downloadResultsAsJson(workspaceId: number, version: StatisticsVersion, includeReplayUrls: boolean): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.exportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls)
-        .pipe(catchError(() => { reject(new Error('Failed')); return of(null); }))
-        .subscribe(async blob => {
-          if (!blob) { reject(new Error('No data')); return; }
-          try {
-            const jsonBlob = await this.convertCsvBlobToJsonBlob(blob as Blob);
-            this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
-            resolve();
-          } catch (e) {
-            reject(e);
+  private pollJobAndProgress(
+    workspaceId: number,
+    jobId: string,
+    progressSubject: BehaviorSubject<number | null>
+  ): Promise<Blob> {
+    return new Promise<Blob>((resolve, reject) => {
+      const subscription = timer(0, 2000).pipe(
+        switchMap(() => this.exportService.getExportJobStatus(workspaceId, jobId)),
+        takeWhile(status => ['pending', 'processing'].includes(status.status), true)
+      ).subscribe({
+        next: status => {
+          if (status.status === 'completed') {
+            subscription.unsubscribe();
+            progressSubject.next(100);
+            this.exportService.downloadExportFile(workspaceId, jobId).subscribe({
+              next: fileBlob => resolve(fileBlob),
+              error: reject
+            });
+          } else if (status.status === 'failed' || status.status === 'cancelled') {
+            subscription.unsubscribe();
+            const errorMsg = status.error || 'Job failed';
+            reject(new Error(errorMsg));
+          } else {
+            const progress = Math.round(status.progress || 0);
+            progressSubject.next(progress);
           }
-        });
+        },
+        error: err => {
+          subscription.unsubscribe();
+          reject(err);
+        }
+      });
     });
   }
 
@@ -388,13 +490,6 @@ export class CodingManagementService {
     return catchError(() => {
       this.showErrorSnackbar('coding-management.descriptions.error-statistics');
       return of(fallback);
-    });
-  }
-
-  private handleDownloadError<T>(msg: string): OperatorFunction<T, T | null> {
-    return catchError(() => {
-      this.showErrorSnackbar(msg, false);
-      return of(null);
     });
   }
 
