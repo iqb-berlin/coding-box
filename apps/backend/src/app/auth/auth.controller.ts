@@ -215,8 +215,16 @@ export class AuthController {
     const state = redirectUri ? `${baseState}:${encodeURIComponent(redirectUri)}` : baseState;
     const oAuth2Endpoint = this.getOAuth2Endpoint();
 
+    const { codeVerifier, codeChallenge } = this.oidcAuthService.generatePkcePair();
+    const stored = await this.oidcAuthService.storePkceVerifier(state, codeVerifier);
+    if (!stored) {
+      this.logger.error('Failed to store PKCE verifier');
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: 'Failed to initiate login' });
+      return;
+    }
+
     // Get authorization URL with proper OAuth redirect_uri (callback)
-    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, oAuth2Endpoint);
+    const authUrl = this.oidcAuthService.getAuthorizationUrl(state, oAuth2Endpoint, codeChallenge);
     res.redirect(authUrl);
   }
 
@@ -270,8 +278,27 @@ export class AuthController {
         }
       }
 
+      if (!state) {
+        this.logger.error('State parameter is required for PKCE flow');
+        const errorUrl = (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) ?
+          `${finalRedirectUri}?error=authentication_failed` :
+          '/login?error=authentication_failed';
+        res.redirect(errorUrl);
+        return;
+      }
+
       const oAuth2Endpoint = this.getOAuth2Endpoint();
-      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, oAuth2Endpoint);
+      const codeVerifier = await this.oidcAuthService.consumePkceVerifier(state);
+      if (!codeVerifier) {
+        this.logger.error('PKCE verifier missing or expired');
+        const errorUrl = (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) ?
+          `${finalRedirectUri}?error=authentication_failed` :
+          '/login?error=authentication_failed';
+        res.redirect(errorUrl);
+        return;
+      }
+
+      const tokenResponse = await this.oidcAuthService.exchangeCodeForToken(code, oAuth2Endpoint, codeVerifier);
 
       const userInfo = await this.oidcAuthService.getUserInfo(tokenResponse.access_token);
 
