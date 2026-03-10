@@ -35,6 +35,13 @@ class FileBackendServiceMock {
 }
 
 class ReplayBackendServiceMock {
+  getReplayPayload = jest.fn().mockReturnValue(of({
+    unitDef: [{ data: 'unitDef data', file_id: 'UNIT-123.VOUD' }],
+    response: { responses: [{ id: '1', content: 'response data' }] },
+    vocs: [],
+    player: [{ data: 'player data', file_id: 'PLAYER-1.0' }]
+  }));
+
   storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
 }
 
@@ -91,6 +98,7 @@ describe('ReplayComponent', () => {
     component = fixture.componentInstance;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
     fixture.detectChanges();
+    await fixture.whenStable();
   });
 
   afterEach(() => {
@@ -120,6 +128,7 @@ describe('ReplayComponent', () => {
 
   it('should handle page errors correctly', () => {
     snackBar.open.mockClear();
+    component.page = 'page-1';
     component.checkPageError('notInList');
     expect(snackBar.open).toHaveBeenCalledWith(
       'Keine valide Seite mit der ID "page-1" gefunden',
