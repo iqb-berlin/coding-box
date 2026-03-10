@@ -2,6 +2,7 @@ import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
+import { createHash, randomBytes } from 'crypto';
 
 export interface OidcConfiguration {
   issuer: string;
@@ -38,18 +39,23 @@ export class OidcAuthService {
   private readonly logger = new Logger(OidcAuthService.name);
   private readonly oidcConfiguration: OidcConfiguration;
   private readonly oAuth2ClientId: string;
-  private readonly oAuth2ClientSecret: string;
+  private readonly oAuth2ClientSecret?: string;
+  private readonly pkceTtlMs = 5 * 60 * 1000;
+  private readonly pkceStore = new Map<string, { codeVerifier: string; expiresAt: number }>();
 
   constructor(
     private readonly httpService: HttpService,
     private readonly configService: ConfigService
   ) {
-    this.oidcConfiguration.issuer = this.configService.get<string>('OIDC_ISSUER');
-    this.oidcConfiguration.authorization_endpoint = this.configService.get<string>('OIDC_AUTHORIZATION_ENDPOINT');
-    this.oidcConfiguration.token_endpoint = this.configService.get<string>('OIDC_TOKEN_ENDPOINT');
-    this.oidcConfiguration.userinfo_endpoint = this.configService.get<string>('OIDC_USERINFO_ENDPOINT');
-    this.oidcConfiguration.jwks_uri = this.configService.get<string>('OIDC_JWKS_URI');
-    this.oidcConfiguration.end_session_endpoint = this.configService.get<string>('OIDC_END_SESSION_ENDPOINT');
+    this.oidcConfiguration = {
+      issuer: this.configService.get<string>('OIDC_ISSUER') ?? '',
+      account_endpoint: this.configService.get<string>('OIDC_ACCOUNT_ENDPOINT') ?? '',
+      authorization_endpoint: this.configService.get<string>('OIDC_AUTHORIZATION_ENDPOINT') ?? '',
+      token_endpoint: this.configService.get<string>('OIDC_TOKEN_ENDPOINT') ?? '',
+      userinfo_endpoint: this.configService.get<string>('OIDC_USERINFO_ENDPOINT') ?? '',
+      end_session_endpoint: this.configService.get<string>('OIDC_END_SESSION_ENDPOINT') ?? '',
+      jwks_uri: this.configService.get<string>('OIDC_JWKS_URI') ?? ''
+    };
     this.oAuth2ClientId = this.configService.get<string>('OAUTH2_CLIENT_ID');
     this.oAuth2ClientSecret = this.configService.get<string>('OAUTH2_CLIENT_SECRET');
   }
@@ -60,7 +66,7 @@ export class OidcAuthService {
    * @param redirectUri - Callback URL after authentication
    * @returns Authorization URL
    */
-  getAuthorizationUrl(state: string, redirectUri: string): string {
+  getAuthorizationUrl(state: string, redirectUri: string, codeChallenge?: string): string {
     if (!this.oidcConfiguration.authorization_endpoint || !this.oAuth2ClientId) {
       throw new UnauthorizedException('OpenID Connect configuration is missing');
     }
@@ -73,6 +79,11 @@ export class OidcAuthService {
       scope: 'openid profile email'
     });
 
+    if (codeChallenge) {
+      params.set('code_challenge', codeChallenge);
+      params.set('code_challenge_method', 'S256');
+    }
+
     return `${this.oidcConfiguration.authorization_endpoint}?${params.toString()}`;
   }
 
@@ -82,18 +93,26 @@ export class OidcAuthService {
    * @param redirectUri - The same redirect URI used in authorization request
    * @returns Token response from OpenID Connect Provider
    */
-  async exchangeCodeForToken(code: string, redirectUri: string): Promise<OidcTokenResponse> {
-    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId || !this.oAuth2ClientSecret) {
+  async exchangeCodeForToken(code: string, redirectUri: string, codeVerifier?: string): Promise<OidcTokenResponse> {
+    if (!this.oidcConfiguration.token_endpoint || !this.oAuth2ClientId) {
       throw new UnauthorizedException('OpenID Connect token endpoint configuration is missing');
+    }
+
+    if (!codeVerifier) {
+      throw new UnauthorizedException('PKCE code verifier is missing');
     }
 
     const params = new URLSearchParams({
       grant_type: 'authorization_code',
       client_id: this.oAuth2ClientId,
-      client_secret: this.oAuth2ClientSecret,
       code: code,
-      redirect_uri: redirectUri
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier
     });
+
+    if (this.oAuth2ClientSecret) {
+      params.append('client_secret', this.oAuth2ClientSecret);
+    }
 
     try {
       this.logger.log('Exchanging authorization code for access token');
@@ -216,5 +235,33 @@ export class OidcAuthService {
     }
 
     return this.oidcConfiguration.account_endpoint;
+  }
+
+  generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
+    const codeVerifier = randomBytes(32).toString('base64url');
+    const codeChallenge = createHash('sha256').update(codeVerifier).digest('base64url');
+    return { codeVerifier, codeChallenge };
+  }
+
+  async storePkceVerifier(state: string, codeVerifier: string): Promise<boolean> {
+    const cacheKey = this.pkceCacheKey(state);
+    const expiresAt = Date.now() + this.pkceTtlMs;
+    this.pkceStore.set(cacheKey, { codeVerifier, expiresAt });
+    return true;
+  }
+
+  async consumePkceVerifier(state: string): Promise<string | null> {
+    const cacheKey = this.pkceCacheKey(state);
+    const cached = this.pkceStore.get(cacheKey);
+    this.pkceStore.delete(cacheKey);
+    if (!cached || cached.expiresAt < Date.now()) {
+      return null;
+    }
+    return cached.codeVerifier;
+  }
+
+  private pkceCacheKey(state: string): string {
+    const digest = createHash('sha256').update(state).digest('hex');
+    return `oidc:pkce:${digest}`;
   }
 }
