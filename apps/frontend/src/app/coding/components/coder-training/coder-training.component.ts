@@ -279,7 +279,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           );
           const sampleCountByKey = firstVarInBundle?.sampleCount;
           const sampleCount = b.sampleCount || sampleCountByKey || 10;
-          const caseOrderingMode = b.caseOrderingMode || this.editTraining?.case_ordering_mode || 'continuous';
+          const caseOrderingMode =
+            b.caseOrderingMode ||
+            (b as { case_ordering_mode?: 'continuous' | 'alternating' }).case_ordering_mode ||
+            this.editTraining?.case_ordering_mode ||
+            'continuous';
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode);
         }
       });
@@ -398,12 +402,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     let addedCount = 0;
     const duplicateVariables: string[] = [];
+    const effectiveCaseOrderingMode = caseOrderingMode || bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
 
     bundle.variables.forEach(variable => {
       if (this.isVariableAlreadyAdded(variable)) {
         duplicateVariables.push(`${variable.unitName} - ${variable.variableId}`);
       } else {
-        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name, false, caseOrderingMode);
+        this.addVariable(variable.variableId, variable.unitName, sampleCountNum, bundle.id, bundle.name, false, effectiveCaseOrderingMode);
         addedCount += 1;
       }
     });
@@ -416,9 +421,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
 
-    if (caseOrderingMode) {
-      bundle.caseOrderingMode = caseOrderingMode;
-    }
+    bundle.caseOrderingMode = effectiveCaseOrderingMode;
 
     this.checkForOverlaps();
   }
@@ -632,6 +635,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const bundleName = control.get('bundleName')?.value;
 
       if (bundleId && bundleName) {
+        const bundleModeFromControl = control.get('bundleCaseOrderingMode')?.value as 'continuous' | 'alternating' | null;
         if (!bundleGroups[bundleId]) {
           const bundle = this.availableBundles.find(b => b.id === bundleId);
           bundleGroups[bundleId] = {
@@ -642,10 +646,13 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
               updatedAt: bundle?.updatedAt || new Date(),
               description: bundle?.description,
               variables: bundle?.variables || [],
-              caseOrderingMode: bundle?.caseOrderingMode
+              caseOrderingMode: bundleModeFromControl || bundle?.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous'
             },
             variables: []
           };
+        }
+        if (!bundleGroups[bundleId].bundle.caseOrderingMode && bundleModeFromControl) {
+          bundleGroups[bundleId].bundle.caseOrderingMode = bundleModeFromControl;
         }
         bundleGroups[bundleId].variables.push({ control: control as FormGroup, index });
       } else {
@@ -773,7 +780,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       if (bundleId && !seenBundleIds.has(bundleId)) {
         seenBundleIds.add(bundleId);
         const bundle = this.availableBundles.find(b => b.id === bundleId);
-        const bundleCaseOrderingMode = bundle?.caseOrderingMode || c.get('bundleCaseOrderingMode')?.value;
+        const bundleCaseOrderingMode = c.get('bundleCaseOrderingMode')?.value || bundle?.caseOrderingMode;
         assignedVariableBundles.push({
           id: bundleId,
           name: c.get('bundleName')?.value,

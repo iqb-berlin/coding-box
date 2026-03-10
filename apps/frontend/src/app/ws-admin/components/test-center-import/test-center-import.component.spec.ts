@@ -168,6 +168,7 @@ describe('TestCenterImportComponent', () => {
     importService.importWorkspaceFiles.mockReturnValue(of(mockImportResult));
 
     component.getTestData();
+    await fixture.whenStable();
     fixture.detectChanges();
 
     expect(importService.importWorkspaceFiles).toHaveBeenCalledWith(
@@ -178,8 +179,7 @@ describe('TestCenterImportComponent', () => {
       'fake-token',
       expect.objectContaining({ responses: true }),
       ['group1'],
-      true,
-      undefined
+      true
     );
 
     expect(mockDialogRef.close).toHaveBeenCalledWith({

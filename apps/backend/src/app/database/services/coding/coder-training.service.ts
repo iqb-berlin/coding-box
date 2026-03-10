@@ -56,6 +56,7 @@ interface CoderTrainingWithJobs {
   assigned_variables?: JobDefinitionVariable[];
   assigned_variable_bundles?: JobDefinitionVariableBundle[];
   assigned_coders?: number[];
+  case_ordering_mode?: 'continuous' | 'alternating';
 }
 
 @Injectable()
@@ -653,6 +654,7 @@ export class CoderTrainingService {
       created_at: training.created_at,
       updated_at: training.updated_at,
       jobsCount: training.codingJobs?.length || 0,
+      case_ordering_mode: training.case_ordering_mode,
       assigned_variables: training.variables?.map(v => ({
         variableId: v.variable_id,
         unitName: v.unit_name,

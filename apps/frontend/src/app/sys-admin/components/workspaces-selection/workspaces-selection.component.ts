@@ -13,9 +13,10 @@ import {
 } from '@angular/material/table';
 import {
   Component, OnInit, SimpleChanges, ViewChild, inject,
-  input,
+  DestroyRef, input,
   output
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -38,6 +39,7 @@ import { WorkspaceBackendService } from '../../../workspace/services/workspace-b
 })
 export class WorkspacesSelectionComponent implements OnInit {
   private workspaceBackendService = inject(WorkspaceBackendService);
+  private destroyRef = inject(DestroyRef);
 
   objectsDatasource = new MatTableDataSource<WorkspaceInListDto>();
   displayedColumns = ['selectCheckbox', 'name'];
@@ -64,17 +66,19 @@ export class WorkspacesSelectionComponent implements OnInit {
 
   private updateWorkspaceList(): void {
     this.selectedWorkspaceId = 0;
-    this.workspaceBackendService.getAllWorkspacesList().subscribe(workspaces => {
-      this.workspacesUpdated.emit(this.workspacesChanged());
-      this.setObjectsDatasource(workspaces.data);
-      this.tableSelectionCheckboxes.clear();
-      this.tableSelectionRow.clear();
-      if (this.selectedWorkspacesIds()?.length > 0) {
-        this.tableSelectionCheckboxes.select(...workspaces.data
-          .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
-        this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
-      }
-    });
+    this.workspaceBackendService.getAllWorkspacesList()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(workspaces => {
+        this.workspacesUpdated.emit(this.workspacesChanged());
+        this.setObjectsDatasource(workspaces.data);
+        this.tableSelectionCheckboxes.clear();
+        this.tableSelectionRow.clear();
+        if (this.selectedWorkspacesIds()?.length > 0) {
+          this.tableSelectionCheckboxes.select(...workspaces.data
+            .filter(workspace => this.selectedWorkspacesIds().includes(workspace.id)));
+          this.workspaceSelectionChanged.emit(this.tableSelectionCheckboxes.selected);
+        }
+      });
   }
 
   private setObjectsDatasource(groups: WorkspaceInListDto[]): void {
