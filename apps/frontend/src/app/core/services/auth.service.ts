@@ -82,7 +82,7 @@ export class AuthService {
 
   login(): void {
     const redirectUri = encodeURIComponent(window.location.origin);
-    window.location.href = `${environment.backendUrl}auth/login?redirect_uri=${redirectUri}`;
+    window.location.href = `${environment.backendUrl}/auth/login?redirect_uri=${redirectUri}`;
   }
 
   logout(): void {
