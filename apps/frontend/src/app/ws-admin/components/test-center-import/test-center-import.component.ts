@@ -172,6 +172,7 @@ export class TestCenterImportComponent {
   testCenterInstance: Testcenter[] = [];
   showTestGroups: boolean = false;
   importingTestGroups: string[] = [];
+  importProgressPercent: number = 0;
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -360,6 +361,7 @@ export class TestCenterImportComponent {
       formValues.testCenterIndividual;
 
     this.isUploadingTestResults = true;
+    this.importProgressPercent = 0;
     this.importService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
@@ -432,6 +434,7 @@ export class TestCenterImportComponent {
     this.firstTestFilesImportData = null;
     this.isUploadingTestFiles = true;
     this.isUploadingTestResults = this.data.importType === 'testResults';
+    this.importProgressPercent = 0;
     const selectedGroupNames = this.selectedRows.map(
       group => group.groupName
     );
@@ -481,6 +484,15 @@ export class TestCenterImportComponent {
       this.loadingMessage = `Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
     } else {
       this.loadingMessage = `Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`;
+    }
+
+    if (this.data.importType === 'testResults') {
+      this.performTestResultsImportWithProgress(
+        formValues,
+        selectedGroupNames,
+        overwriteExistingLogs
+      );
+      return;
     }
 
     this.importService
@@ -640,5 +652,74 @@ export class TestCenterImportComponent {
           this.isUploadingTestResults = false;
         }
       });
+  }
+
+  private mergeImportResults(base: Result | null, current: Result): Result {
+    if (!base) return { ...current };
+    return {
+      ...current,
+      success: (base.success ?? false) && (current.success ?? false),
+      testFiles: (base.testFiles || 0) + (current.testFiles || 0),
+      responses: (base.responses || 0) + (current.responses || 0),
+      logs: (base.logs || 0) + (current.logs || 0),
+      booklets: (base.booklets || 0) + (current.booklets || 0),
+      units: (base.units || 0) + (current.units || 0),
+      persons: (base.persons || 0) + (current.persons || 0),
+      importedGroups: [...new Set([...(base.importedGroups || []), ...(current.importedGroups || [])])],
+      issues: [...(base.issues || []), ...(current.issues || [])]
+    };
+  }
+
+  private async performTestResultsImportWithProgress(
+    formValues: ImportFormValues,
+    selectedGroupNames: string[],
+    overwriteExistingLogs: boolean
+  ): Promise<void> {
+    try {
+      let mergedResult: Result | null = null;
+      const total = selectedGroupNames.length;
+      for (let i = 0; i < total; i++) {
+        const groupName = selectedGroupNames[i];
+        this.importProgressPercent = Math.round((i / total) * 100);
+        this.loadingMessage = `Importiere Testgruppe ${i + 1}/${total}: ${groupName} (${this.importProgressPercent}%)...`;
+
+        const currentResult = await firstValueFrom(
+          this.importService.importWorkspaceFiles(
+            this.appService.selectedWorkspaceId,
+            formValues.workspace,
+            formValues.testCenter.toString(),
+            formValues.testCenterIndividual,
+            this.authToken,
+            formValues.importOptions,
+            [groupName],
+            overwriteExistingLogs
+          )
+        );
+
+        mergedResult = this.mergeImportResults(mergedResult, currentResult);
+      }
+
+      this.importProgressPercent = 100;
+      this.loadingMessage = 'Import abgeschlossen (100%)';
+      this.uploadData = mergedResult;
+      this.isUploadingTestFiles = false;
+      this.isUploadingTestResults = false;
+
+      const importedResponses = !!formValues.importOptions.responses;
+      const importedLogs = !!formValues.importOptions.logs;
+      const resultType: 'logs' | 'responses' = importedResponses ? 'responses' : 'logs';
+
+      this.dialogRef.close({
+        didImport: true,
+        resultType,
+        importedResponses,
+        importedLogs,
+        uploadResult: mergedResult
+      });
+    } catch (error) {
+      this.isUploadingTestFiles = false;
+      this.isUploadingTestResults = false;
+      this.importProgressPercent = 0;
+    }
   }
 }

@@ -84,11 +84,8 @@ describe('FilesValidationComponent', () => {
       ]
     };
 
-    // Trigger calculation (usually done in constructor which we can't easily re-run, so we call private method via any or rely on init if we moved it)
-    // Since we called calculateSummary in the constructor, we need to manually call it or re-create component with data.
-    // However, for this test, we can just call it if we cast to any or if we made it public (it's private).
-    // Let's use brackets to access private method for testing.
-    (component as unknown as { calculateSummary: () => void }).calculateSummary();
+    // Rebuild derived view data and summary after replacing injected data in test.
+    (component as unknown as { rebuildValidationResults: () => void }).rebuildValidationResults();
 
     expect(component.summary.totalTestTakers).toBe(3);
     expect(component.summary.validTestTakerXmls).toBe(2);

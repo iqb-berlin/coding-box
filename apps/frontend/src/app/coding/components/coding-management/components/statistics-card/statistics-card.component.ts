@@ -47,6 +47,10 @@ export class StatisticsCardComponent {
   @Input() isLoading = false;
   @Input() isDownloadInProgress = false;
   @Input() statisticsLoaded = false;
+  @Input() resetProgress: number | null = null;
+  @Input() downloadProgress: number | null = null;
+  @Input() hideActionButtons = false;
+  @Input() hideResetButton = false;
 
   @Output() versionChange = new EventEmitter<'v1' | 'v2' | 'v3'>();
   @Output() loadStatistics = new EventEmitter<void>();
@@ -68,10 +72,44 @@ export class StatisticsCardComponent {
     return this.responseStatusMap.get(status) || 'UNKNOWN';
   }
 
+  get effectiveTotalResponses(): number {
+    if (!this.codingStatistics) return 0;
+    const ignoredStatuses = [
+      '0', '1', '2', '3', '10',
+      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+    ];
+    let total = this.codingStatistics.totalResponses;
+    for (const status of ignoredStatuses) {
+      if (this.codingStatistics.statusCounts && this.codingStatistics.statusCounts[status]) {
+        total -= this.codingStatistics.statusCounts[status];
+      }
+    }
+    return total;
+  }
+
+  get effectiveReferenceTotalResponses(): number {
+    if (!this.referenceStatistics) return 0;
+    const ignoredStatuses = [
+      '0', '1', '2', '3', '10',
+      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+    ];
+    let total = this.referenceStatistics.totalResponses;
+    for (const status of ignoredStatuses) {
+      if (this.referenceStatistics.statusCounts && this.referenceStatistics.statusCounts[status]) {
+        total -= this.referenceStatistics.statusCounts[status];
+      }
+    }
+    return total;
+  }
+
   getStatuses(): string[] {
-    const currentStatuses = Object.keys(this.codingStatistics.statusCounts);
+    const ignoredStatuses = [
+      '0', '1', '2', '3', '10',
+      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+    ];
+    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
     if (this.referenceStatistics) {
-      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts);
+      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
       const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
       return Array.from(allStatuses);
     }
@@ -81,12 +119,12 @@ export class StatisticsCardComponent {
   getStatusDifference(status: string): number | null {
     if (
       !this.referenceStatistics ||
-            (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
     ) {
       return null;
     }
     // Don't show differences if current version has no data yet
-    if (this.codingStatistics.totalResponses === 0) {
+    if (this.effectiveTotalResponses === 0) {
       return null;
     }
     const currentCount = this.codingStatistics.statusCounts[status] || 0;
@@ -97,15 +135,15 @@ export class StatisticsCardComponent {
   getTotalResponsesDifference(): number | null {
     if (
       !this.referenceStatistics ||
-            (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
+      (this.selectedVersion !== 'v2' && this.selectedVersion !== 'v3')
     ) {
       return null;
     }
     // Don't show differences if current version has no data yet
-    if (this.codingStatistics.totalResponses === 0) {
+    if (this.effectiveTotalResponses === 0) {
       return null;
     }
-    return this.codingStatistics.totalResponses - this.referenceStatistics.totalResponses;
+    return this.effectiveTotalResponses - this.effectiveReferenceTotalResponses;
   }
 
   getDifferenceTooltip(): string {
@@ -126,11 +164,12 @@ export class StatisticsCardComponent {
   }
 
   getStatusPercentage(status: string): number {
-    if (!this.codingStatistics.totalResponses || !this.codingStatistics.statusCounts[status]) {
+    const total = this.effectiveTotalResponses;
+    if (!total || !this.codingStatistics.statusCounts[status]) {
       return 0;
     }
     return Math.round(
-      (this.codingStatistics.statusCounts[status] / this.codingStatistics.totalResponses) * 100
+      (this.codingStatistics.statusCounts[status] / total) * 100
     );
   }
 

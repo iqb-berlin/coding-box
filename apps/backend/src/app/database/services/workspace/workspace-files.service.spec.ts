@@ -1,7 +1,27 @@
+import { ConsoleLogger, Logger } from '@nestjs/common';
 import { WorkspaceFilesService } from './workspace-files.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 
 describe('WorkspaceFilesService.handleFile', () => {
+  beforeAll(() => {
+    Logger.overrideLogger(false);
+    jest.spyOn(console, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(ConsoleLogger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(ConsoleLogger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(ConsoleLogger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterAll(() => {
+    Logger.overrideLogger(['log', 'error', 'warn', 'debug', 'verbose']);
+    jest.restoreAllMocks();
+  });
+
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
   function makeService(): WorkspaceFilesService {

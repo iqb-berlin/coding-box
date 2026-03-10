@@ -9,8 +9,10 @@ export interface EmptyResponseDto {
   variableId: string;
   personLogin: string;
   personCode: string;
+  personGroup: string;
   bookletName: string;
   responseId: number;
+  value: string | null;
 }
 
 export interface DuplicateValueGroupDto {
@@ -49,4 +51,6 @@ export interface ResponseAnalysisDto {
   duplicateValues: DuplicateValueAnalysisDto;
   matchingFlags: string[];
   analysisTimestamp: string;
+  isCalculating?: boolean;
+  progress?: number;
 }

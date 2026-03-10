@@ -89,6 +89,22 @@ export function getLatestCode(response: ResponseEntity): { code: number | null; 
 }
 
 /**
+ * Maps internal code values to export representation.
+ *
+ * Rules:
+ * -3 -> -98
+ * -4 -> -97
+ * -1/-2 -> empty (null)
+ */
+export function mapCodeForExport(code: number | null | undefined): number | null {
+  if (code === null || code === undefined) return null;
+  if (code === -3) return -98;
+  if (code === -4) return -97;
+  if (code === -1 || code === -2) return null;
+  return code;
+}
+
+/**
  * Builds a mapping of coder names to anonymous identifiers (K1, K2, etc.).
  *
  * @param coders - Array of real coder names
@@ -134,4 +150,48 @@ export function buildCoderMapping(codingJobUnits: CodingJobUnit[], usePseudo = f
   }
 
   return buildCoderNameMapping(Array.from(allCoders), usePseudo);
+}
+
+export interface SortableCodingUnit {
+  variable_id: string;
+  unit_name: string;
+  unit_alias?: string | null;
+  booklet_name: string;
+  person_login: string;
+  person_code: string;
+  person_group: string;
+}
+
+const cmp = (v1: string | null, v2: string | null) => (v1 || '').localeCompare(v2 || '');
+
+/**
+ * Sorts units continuously: grouped by variable, then tasks, then persons.
+ */
+export function sortUnitsContinuous(a: SortableCodingUnit, b: SortableCodingUnit): number {
+  const c1 = cmp(a.variable_id, b.variable_id);
+  if (c1 !== 0) return c1;
+  const c2 = cmp(a.unit_name, b.unit_name);
+  if (c2 !== 0) return c2;
+  const c3 = cmp(a.booklet_name, b.booklet_name);
+  if (c3 !== 0) return c3;
+  const c4 = cmp(a.person_login, b.person_login);
+  if (c4 !== 0) return c4;
+  return cmp(a.person_code, b.person_code);
+}
+
+/**
+ * Sorts units alternatingly: grouped by person, then booklets, then units, then variables.
+ */
+export function sortUnitsAlternating(a: SortableCodingUnit, b: SortableCodingUnit): number {
+  const c1 = cmp(a.person_login, b.person_login);
+  if (c1 !== 0) return c1;
+  const c2 = cmp(a.person_code, b.person_code);
+  if (c2 !== 0) return c2;
+  const c3 = cmp(a.person_group, b.person_group);
+  if (c3 !== 0) return c3;
+  const c4 = cmp(a.booklet_name, b.booklet_name);
+  if (c4 !== 0) return c4;
+  const c5 = cmp(a.unit_name, b.unit_name);
+  if (c5 !== 0) return c5;
+  return cmp(a.variable_id, b.variable_id);
 }

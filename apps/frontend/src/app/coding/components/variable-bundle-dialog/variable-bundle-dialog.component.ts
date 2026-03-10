@@ -262,6 +262,16 @@ export class VariableBundleDialogComponent implements OnInit, OnDestroy {
     });
   }
 
+  selectAll(): void {
+    this.dataSource.filteredData.forEach(variable => {
+      this.selectedVariables.select(variable);
+    });
+  }
+
+  deselectAll(): void {
+    this.selectedVariables.clear();
+  }
+
   clearFilters(): void {
     this.unitNameFilter = '';
     this.variableIdFilter = '';

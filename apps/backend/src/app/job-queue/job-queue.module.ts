@@ -1,20 +1,28 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { JobQueueService } from './job-queue.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
 import { ExportJobProcessor } from './processors/export-job.processor';
 import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-filter-options.processor';
 import { UploadResultsProcessor } from './processors/upload-results.processor';
+import { CodebookGenerationProcessor } from './processors/codebook-generation.processor';
+import { ResetCodingVersionProcessor } from './processors/reset-coding-version.processor';
+import { ValidationTaskProcessor } from './processors/validation-task.processor';
+import { CodingAnalysisProcessor } from './processors/coding-analysis.processor';
+import { VariableAnalysisProcessor } from './processors/variable-analysis.processor';
 // eslint-disable-next-line import/no-cycle
 import { CodingModule } from '../coding/coding.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CacheModule } from '../cache/cache.module';
+import { ResponseEntity } from '../database/entities/response.entity';
 
 @Module({
   imports: [
+    TypeOrmModule.forFeature([ResponseEntity]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -41,6 +49,21 @@ import { CacheModule } from '../cache/cache.module';
     BullModule.registerQueue({
       name: 'test-results-upload'
     }),
+    BullModule.registerQueue({
+      name: 'codebook-generation'
+    }),
+    BullModule.registerQueue({
+      name: 'reset-coding-version'
+    }),
+    BullModule.registerQueue({
+      name: 'validation-task'
+    }),
+    BullModule.registerQueue({
+      name: 'response-analysis'
+    }),
+    BullModule.registerQueue({
+      name: 'variable-analysis'
+    }),
     forwardRef(() => CodingModule),
     forwardRef(() => WorkspaceModule),
     CacheModule
@@ -51,7 +74,14 @@ import { CacheModule } from '../cache/cache.module';
     CodingStatisticsProcessor,
     ExportJobProcessor,
     FlatResponseFilterOptionsProcessor,
-    UploadResultsProcessor
+    UploadResultsProcessor,
+    CodebookGenerationProcessor,
+    ResetCodingVersionProcessor,
+    CodebookGenerationProcessor,
+    ResetCodingVersionProcessor,
+    ValidationTaskProcessor,
+    CodingAnalysisProcessor,
+    VariableAnalysisProcessor
   ],
   exports: [JobQueueService]
 })

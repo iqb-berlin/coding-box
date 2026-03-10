@@ -194,6 +194,8 @@
     "my-coding-jobs": "Meine Kodierjobs",
     "coding-management": "Kodierung-Management",
     "job-definitions": "Job-Definitionen",
+    "coding-statistics": "Kodierstatistiken",
+    "manual-coding": "Manuelle Kodierung",
     "export-subtitle": "Export der Daten nach Kodierung und Bereinigung",
     "export-description": "Diese Komponente wird für den Export der Daten nach Kodierung und Bereinigung verwendet.",
     "export-placeholder": "Die Funktionalität zum Datenexport wird in einer zukünftigen Version implementiert.",
@@ -244,7 +246,15 @@
       "new-column-per-coder": "pro Kodierer neue Spalte",
       "new-column-per-coder-tooltip": "Spalte bilden die Variablen, als Zeilen sind die Personen genutzt und pro Kodierer hat die Variable eine weitere Spalte. Beispiel für Spaltenbeschriftung: Variablenname_Kodierer",
       "most-frequent-random": "Kodierer: häufigster/Zufall",
-      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt."
+      "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt.",
+      "filter-jobs-trainings": "Enthaltene Job-Definitionen und Schulungen",
+      "filter-coders": "Enthaltene Kodierer",
+      "job-definitions": "Job-Definitionen",
+      "coder-trainings": "Schulungen",
+      "coders": "Kodierer",
+      "all-selected": "Alle ausgewählt",
+      "select-all": "Alle auswählen",
+      "deselect-all": "Auswahl aufheben"
     },
     "export-exporting": "Export läuft...",
     "export-success": "Export erfolgreich abgeschlossen",
@@ -364,6 +374,17 @@
     "error_title": "Fehler"
   },
   "coding": {
+    "schemer": {
+      "save-success": "Antwortschema erfolgreich gespeichert",
+      "save-error": "Fehler beim Speichern des Antwortschemas",
+      "load-error": "Fehler beim Laden der Antwortschema-Informationen. Der Editor arbeitet ohne Variablen-Validierung.",
+      "decode-error": "Fehler beim Dekodieren der Schemer-HTML",
+      "download-error": "Fehler beim Herunterladen der Schemer-HTML",
+      "fetch-error": "Fehler beim Abrufen der Schemer-Dateien",
+      "schemer-error": "Schemer-Fehler: {{error}}",
+      "unsaved-changes-title": "Ungespeicherte Änderungen",
+      "unsaved-changes-content": "Sie haben ungespeicherte Änderungen. Möchten Sie wirklich schließen?"
+    },
     "comment-dialog": {
       "title": "Kommentar zum Kodierjob",
       "label": "Kommentar",
@@ -500,6 +521,8 @@
     "has-closed-vars": "Geschlossen kodierte Variablen",
     "show-score": "Bewertung anzeigen",
     "codebook-content": "Codebook Inhalte",
+    "codebook-generating": "Codebook wird generiert...",
+    "codebook-completed": "Codebook erfolgreich generiert",
     "export-format": "Exportformat",
     "code-label-to-upper": "Code-Label in Großbuchstaben",
     "hide-item-var-relation": "Item-Variable-Relation ausblenden",
@@ -735,7 +758,18 @@
   },
   "variable-analysis": {
     "analysis-results": "Analyse Ergebnisse",
+    "analysis-running": "Analyse läuft...",
     "analyzing-variables": "Analysiere Variablen...",
+    "info-title": "Was ist die Item/Variablenanalyse?",
+    "info-description": "Dieses Tool bietet einen statistischen Überblick über die im Arbeitsbereich gesammelten Antwortdaten. Es hilft dabei, die Qualität der Daten zu prüfen und Antwortmuster zu erkennen, bevor die finalen Exporte durchgeführt werden.",
+    "info-feature-frequencies-title": "Antwort-Häufigkeiten",
+    "info-feature-frequencies-desc": "Aggregiert alle Teilnehmerantworten und berechnet die Verteilung für jede Variable.",
+    "info-feature-validation-title": "Datenvalidierung",
+    "info-feature-validation-desc": "Hilft bei der Identifizierung von unerwarteten Mustern oder ungültigen Einträgen.",
+    "info-feature-background-title": "Hintergrundverarbeitung",
+    "info-feature-background-desc": "Da Analysen rechenintensiv sein können, werden sie in Hintergrund-Jobs ausgeführt.",
+    "show-info": "Erklärung anzeigen",
+    "hide-info": "Erklärung ausblenden",
     "search-variables": "Variablen suchen",
     "search-placeholder": "Variablenname eingeben...",
     "no-variables-found": "Keine Variablen gefunden.",
@@ -756,6 +790,7 @@
     "created-at-column": "Erstellt am",
     "actions-column": "Aktionen",
     "all": "Alle",
+    "started-at": "Gestartet am",
     "view-results": "Ergebnisse anzeigen",
     "cancel-job": "Auftrag abbrechen",
     "close": "Schließen",
@@ -769,7 +804,12 @@
     "error-deleting-job": "Fehler beim Löschen des Analyse-Auftrags",
     "confirm-delete-job": "Sind Sie sicher, dass Sie diesen Analyse-Auftrag löschen wollen?",
     "delete-job": "Auftrag löschen",
+    "delete-all-jobs": "Alle löschen",
+    "confirm-delete-all-jobs": "Sind Sie sicher, dass Sie ALLE Analyse-Aufträge für diesen Arbeitsbereich löschen wollen?",
+    "all-jobs-deleted": "Alle Analyse-Aufträge erfolgreich gelöscht",
+    "error-deleting-all-jobs": "Fehler beim Löschen aller Analyse-Aufträge",
     "status-pending": "Ausstehend",
+    "status-waiting": "Wartend",
     "status-processing": "Wird bearbeitet",
     "status-completed": "Abgeschlossen",
     "status-failed": "Fehlgeschlagen",
@@ -828,7 +868,9 @@
       "coding-variables-title": "Kodiervariablen",
       "error-unit-xml-processing": "Fehler beim Verarbeiten der Unit-XML-Daten",
       "error-reset": "Fehler beim Zurücksetzen der Kodierversion",
-      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt"
+      "error-workspace": "Fehler: Kein Arbeitsbereich ausgewählt",
+      "job-started": "Export-Job gestartet...",
+      "coding-list-progress": "Kodierliste wird erstellt... {{progress}}%"
     },
     "actions": {
       "review-session": "Review",
@@ -907,7 +949,8 @@
       "irreversible-warning": "Diese Aktion kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass Sie ein Backup der Daten haben.",
       "cancel-button": "Abbrechen",
       "confirm-button": "Ja, zurücksetzen",
-      "reset-tooltip": "Kodierversion zurücksetzen"
+      "reset-tooltip": "Kodierversion zurücksetzen",
+      "resetting": "Zurücksetzen..."
     },
     "download-dialog": {
       "title": "Kodierergebnisse herunterladen",
@@ -923,7 +966,6 @@
       "notice-title": "Hinweis",
       "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
       "download-button": "Herunterladen",
-      "download-tooltip": "Kodierergebnisse herunterladen",
       "creating-file": "Datei wird erstellt...",
       "unknown-format": "Unbekanntes Format",
       "error-json": "Fehler beim Abrufen der Kodierergebnisse (JSON)",
@@ -934,9 +976,10 @@
       "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
       "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
       "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
-      "download-started": "Download für {{version}} als {{format}} gestartet...",
-      "download-complete": "Download für {{version}} als {{format}} abgeschlossen",
-      "download-failed": "Download fehlgeschlagen"
+      "download-started": "Download gestartet...",
+      "download-failed": "Download fehlgeschlagen",
+      "download-complete": "Download abgeschlossen",
+      "download-tooltip": "Ergebnisse herunterladen"
     },
     "aria": {
       "select-page": "Seiten auswählen"
@@ -1288,7 +1331,9 @@
         "unit": "Aufgabe",
         "variable": "Variable",
         "person": "Person",
-        "booklet": "Booklet"
+        "group": "Gruppe",
+        "booklet": "Booklet",
+        "value": "Wert"
       },
       "apply-empty-coding-button": "Kodierung automatisch anwenden",
       "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
@@ -1442,14 +1487,8 @@
       "coders": "Kodierer:",
       "total-cases": "Gesamt Kodierfälle:",
       "estimated-time": "Geschätzte Zeit:",
-      "details": "Auswahldetails anzeigen",
-      "selected-variables": "Ausgewählte Variablen",
-      "selected-variable-bundles": "Ausgewählte Variablenbündel"
-    },
-    "tabs": {
-      "coders": "Kodierer",
-      "individual-variables": "Einzelne Variablen",
-      "variable-bundles": "Variablenbündel"
+      "time-per-coder": "Zeit pro Kodierer:",
+      "details": "Auswahldetails anzeigen"
     },
     "filters": {
       "unit-name": "Aufgaben-ID Filter",
@@ -1633,6 +1672,7 @@
     "fair": "Mäßige Übereinstimmung",
     "moderate": "Akzeptable Übereinstimmung",
     "substantial": "Substantielle Übereinstimmung",
+    "good": "Gute Übereinstimmung",
     "almost_perfect": "Nahezu perfekte Übereinstimmung"
   },
   "double-coded-review": {
@@ -1698,6 +1738,7 @@
     "variables-with-incomplete-status": "Variablen mit CODING_INCOMPLETE Status",
     "response-status-summary": "Zusammenfassung des Antwortstatus",
     "coding-incomplete": "Gesamt zu kodierende Fälle:",
+    "aggregation-savings": "Einsparung durch Aggregation:",
     "applied-results": "Angewendete Ergebnisse:",
     "remaining": "Verbleibend:",
     "completion-progress": "Fertigstellungsfortschritt",

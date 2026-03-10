@@ -4,7 +4,8 @@ import {
   OnInit,
   inject,
   Output,
-  EventEmitter
+  EventEmitter,
+  Input
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -103,6 +104,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   @Output() bulkCreationCompleted = new EventEmitter<void>();
   @Output() jobDefinitionChanged = new EventEmitter<void>();
+  @Input() selectionMode = false;
+  @Output() definitionSelected = new EventEmitter<JobDefinition>();
 
   ngOnInit(): void {
     this.loadCoders();
@@ -232,6 +235,12 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         this.jobDefinitionChanged.emit();
       }
     });
+  }
+
+  selectDefinition(definition: JobDefinition): void {
+    if (this.selectionMode) {
+      this.definitionSelected.emit(definition);
+    }
   }
 
   editDefinition(definition: JobDefinition): void {

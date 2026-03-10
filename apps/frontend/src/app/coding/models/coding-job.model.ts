@@ -42,6 +42,8 @@ export interface Variable {
   responseCount?: number;
   casesInJobs?: number;
   availableCases?: number;
+  uniqueCasesAfterAggregation?: number;
+  isDerived?: boolean;
 }
 
 export interface VariableBundle {
@@ -51,4 +53,5 @@ export interface VariableBundle {
   createdAt: Date;
   updatedAt: Date;
   variables: Variable[];
+  caseOrderingMode?: 'continuous' | 'alternating';
 }

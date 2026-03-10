@@ -47,7 +47,7 @@ services:
     image: ${REGISTRY_PATH}iqbberlin/coding-box-frontend:${TAG}
     environment:
       - KEYCLOAK_URL=${KEYCLOAK_URL:-https://keycloak.kodierbox.iqb.hu-berlin.de/}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-iqb}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM:-coding-box}
       - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-coding-box}
       - BACKEND_URL=${BACKEND_URL:-api/}
     volumes:

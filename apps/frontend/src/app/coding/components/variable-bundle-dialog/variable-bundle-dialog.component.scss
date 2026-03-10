@@ -162,6 +162,12 @@
     gap: 8px;
   }
 
+  .selection-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
   .selection-count {
     font-weight: 500;
     color: #1976d2;

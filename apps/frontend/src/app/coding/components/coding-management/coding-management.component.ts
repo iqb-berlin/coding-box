@@ -2,6 +2,7 @@ import {
   Component,
   OnInit,
   OnDestroy,
+  Input,
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -15,6 +16,7 @@ import {
 } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { AppService } from '../../../core/services/app.service';
@@ -56,11 +58,14 @@ import { ReviewListDialogComponent } from './components/review-list-dialog/revie
     TranslateModule,
     StatisticsCardComponent,
     ResponseFiltersComponent,
-    ResponseTableComponent
+    ResponseTableComponent,
+    MatProgressSpinnerModule
   ],
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  @Input() hideActionButtons = false;
+
   private appService = inject(AppService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private snackBar = inject(MatSnackBar);
@@ -89,6 +94,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   isLoadingStatistics = false;
   isDownloadInProgress = false;
   showManualCoding = false;
+  resetProgress: number | null = null;
+  downloadProgress: number | null = null;
+  codingListDownloadProgress: number | null = null;
 
   // Statistics state
   codingStatistics: CodingStatistics = { totalResponses: 0, statusCounts: {} };
@@ -162,6 +170,32 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(isLoading => {
         this.isLoadingStatistics = isLoading;
       });
+
+    this.codingManagementService.resetProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.resetProgress = progress;
+        if (progress === null && this.statisticsLoaded) {
+          this.fetchCodingStatistics();
+          this.refreshTableData();
+        }
+      });
+
+    this.codingManagementService.downloadProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.downloadProgress = progress;
+        this.isDownloadInProgress = progress !== null;
+      });
+
+    this.codingManagementService.codingListDownloadProgress$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(progress => {
+        this.codingListDownloadProgress = progress;
+      });
+
+    // Check for active reset job (persists across navigation)
+    this.codingManagementService.checkActiveResetJob();
   }
 
   ngOnDestroy(): void {
@@ -469,10 +503,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.dialog.open(CodingVariablesDialogComponent, {
-      width: '90%',
+      width: '95vw',
       maxWidth: '1400px',
-      height: '90vh',
-      data: { workspaceId }
+      height: '95vh',
+      data: { workspaceId },
+      panelClass: 'coding-variables-dialog-container'
     });
   }
 
@@ -516,51 +551,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
-    this.isLoading = true;
-    this.codingManagementService.resetCodingVersion(version).subscribe({
-      next: result => {
-        this.isLoading = false;
-        if (result) {
-          let cascadeText = '';
-          if (result.cascadeResetVersions && result.cascadeResetVersions.length > 0) {
-            cascadeText = this.translateService.instant(
-              'coding-management.statistics.reset-cascade-suffix',
-              { versions: result.cascadeResetVersions.join(', ') }
-            );
-          }
-          const message = this.translateService.instant(
-            'coding-management.statistics.reset-success',
-            {
-              count: result.affectedResponseCount,
-              version: version,
-              cascade: cascadeText
-            }
-          );
-
-          this.snackBar.open(
-            message,
-            'Schließen',
-            {
-              duration: 5000,
-              panelClass: ['success-snackbar']
-            }
-          );
-        }
-        this.fetchCodingStatistics();
-        this.refreshTableData();
-      },
-      error: () => {
-        this.isLoading = false;
-        this.snackBar.open(
-          this.translateService.instant('coding-management.descriptions.error-reset'),
-          'Schließen',
-          {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          }
-        );
-      }
-    });
+    this.codingManagementService.resetCodingVersion(version);
   }
 
   private openDownloadCodingResultsDialog(): void {
@@ -596,7 +587,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   getAvailableStatuses(): string[] {
-    return Object.keys(this.codingStatistics.statusCounts);
+    const ignoredStatuses = [
+      '0', '1', '2', '3', '10',
+      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+    ];
+    return Object.keys(this.codingStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
   }
 
   private refreshTableData(): void {

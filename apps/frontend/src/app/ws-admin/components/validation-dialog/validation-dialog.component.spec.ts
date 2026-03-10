@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
-  MatDialog, MatDialogRef, MAT_DIALOG_DATA, MatDialogModule
+  MatDialog, MatDialogRef, MAT_DIALOG_DATA
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
@@ -97,7 +97,6 @@ describe('ValidationDialogComponent', () => {
         provideHttpClientTesting(),
         { provide: MAT_DIALOG_DATA, useValue: {} },
         { provide: MatDialogRef, useValue: dialogRefMock },
-        { provide: MatDialog, useValue: dialogMock },
         { provide: MatSnackBar, useValue: { open: jest.fn() } },
         { provide: AppService, useValue: appServiceMock },
         { provide: ValidationTaskStateService, useValue: stateServiceMock },
@@ -116,6 +115,9 @@ describe('ValidationDialogComponent', () => {
             MockResponseStatusPanel,
             MockGroupResponsesPanel,
             MockDuplicateResponsesPanel
+          ],
+          providers: [
+            { provide: MatDialog, useValue: dialogMock }
           ]
         },
         remove: {
@@ -126,8 +128,7 @@ describe('ValidationDialogComponent', () => {
             VariableTypesValidationPanelComponent,
             ResponseStatusValidationPanelComponent,
             GroupResponsesValidationPanelComponent,
-            DuplicateResponsesValidationPanelComponent,
-            MatDialogModule
+            DuplicateResponsesValidationPanelComponent
           ]
         }
       })

@@ -5,7 +5,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, Subject } from 'rxjs';
+import { of, Subject, BehaviorSubject } from 'rxjs';
 import { PageEvent } from '@angular/material/paginator';
 import { CodingManagementComponent } from './coding-management.component';
 import { CodingManagementService } from '../../services/coding-management.service';
@@ -39,13 +39,17 @@ describe('CodingManagementComponent', () => {
       referenceStatistics$: of(null),
       referenceVersion$: of(null),
       isLoadingStatistics$: of(false),
+      resetProgress$: of(null) as never,
+      downloadProgress$: new BehaviorSubject<number | null>(null),
+      codingListDownloadProgress$: new BehaviorSubject<number | null>(null),
       fetchCodingStatistics: jest.fn(),
       fetchResponsesByStatus: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
       searchResponses: jest.fn().mockReturnValue(of({ data: [], total: 0 })),
       resetCodingVersion: jest.fn().mockReturnValue(of({ message: 'Success' })),
       downloadCodingResults: jest.fn().mockReturnValue(Promise.resolve()),
       hasGeogebraResponses: jest.fn().mockReturnValue(of(false)),
-      downloadCodingList: jest.fn()
+      downloadCodingList: jest.fn(),
+      checkActiveResetJob: jest.fn()
     };
 
     mockUiService = {

@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import FileUpload from '../../entities/file_upload.entity';
@@ -13,8 +14,8 @@ import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 
 jest.mock('@iqb/responses', () => ({
-  CodingFactory: {
-    code: jest.fn()
+  CodingSchemeFactory: {
+    code: jest.fn().mockReturnValue([])
   }
 }));
 
@@ -31,6 +32,8 @@ describe('CodingProcessService', () => {
   let unitRepository: Repository<Unit>;
   let responseRepository: Repository<ResponseEntity>;
   let fileUploadRepository: Repository<FileUpload>;
+  let mockUnits: Unit[];
+  let mockResponses: ResponseEntity[];
 
   const mockJobQueueService = {
     getTestPersonCodingJob: jest.fn()
@@ -42,6 +45,10 @@ describe('CodingProcessService', () => {
 
   const mockWorkspaceFilesService = {
     getUnitVariableMap: jest.fn()
+  };
+
+  const mockWorkspaceCoreService = {
+    getIgnoredUnits: jest.fn().mockResolvedValue([])
   };
 
   const mockCodingStatisticsService = {
@@ -64,12 +71,12 @@ describe('CodingProcessService', () => {
     personid: personId
   });
 
-  const createMockUnit = (id: number, bookletId: number, name: string = `unit_${id}`, alias: string = `alias_${id}`) => ({
+  const createMockUnit = (id: number, bookletId: number, name: string = `unit_${id}`, alias: string = `alias_${id}`): Unit => ({
     id,
     bookletid: bookletId,
     name,
     alias
-  });
+  } as Unit);
 
   const createMockResponse = (
     id: number,
@@ -123,6 +130,7 @@ describe('CodingProcessService', () => {
   }
 
   let mockQueryBuilder: MockQueryBuilder;
+  let mockUnitQueryBuilder: Partial<MockQueryBuilder>;
 
   beforeEach(async () => {
     mockQueryBuilder = {
@@ -145,6 +153,13 @@ describe('CodingProcessService', () => {
       getRawOne: jest.fn()
     };
 
+    mockUnitQueryBuilder = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+
     const mockQueryRunner = {
       connect: jest.fn(),
       startTransaction: jest.fn(),
@@ -164,7 +179,7 @@ describe('CodingProcessService', () => {
         CodingProcessService,
         { provide: getRepositoryToken(FileUpload), useValue: { find: jest.fn(), findBy: jest.fn(), findOne: jest.fn() } },
         { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
-        { provide: getRepositoryToken(Unit), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Unit), useValue: { createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder) } },
         { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn() } },
         {
           provide: getRepositoryToken(ResponseEntity),
@@ -180,7 +195,8 @@ describe('CodingProcessService', () => {
         { provide: JobQueueService, useValue: mockJobQueueService },
         { provide: ResponseManagementService, useValue: mockResponseManagementService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
-        { provide: CodingStatisticsService, useValue: mockCodingStatisticsService }
+        { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
+        { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService }
       ]
     }).compile();
 
@@ -213,18 +229,18 @@ describe('CodingProcessService', () => {
         createMockBooklet(2, '2')
       ]);
 
-      unitRepository.find = jest.fn().mockResolvedValue([
+      mockUnits = [
         createMockUnit(1, 1, 'TEST_UNIT_1', 'ALIAS_1'),
         createMockUnit(2, 2, 'TEST_UNIT_2', 'ALIAS_2')
-      ]);
+      ];
 
-      const mockResponses = [
+      mockResponses = [
         createMockResponse(1, 1, 'var1'),
         createMockResponse(2, 2, 'var2')
       ];
 
-      // Configure the query builder to return responses
-      mockQueryBuilder.getMany.mockResolvedValue(mockResponses);
+      // Default query builder behavior
+      mockQueryBuilder.getMany.mockResolvedValue([]);
 
       // The service converts unit names to uppercase when building the validVariableSets map
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
@@ -260,7 +276,8 @@ describe('CodingProcessService', () => {
       // Override mocks to ensure no data is returned for empty array
       personsRepository.find = jest.fn().mockResolvedValue([]);
       bookletRepository.find = jest.fn().mockResolvedValue([]);
-      unitRepository.find = jest.fn().mockResolvedValue([]);
+      mockUnitQueryBuilder = unitRepository.createQueryBuilder('unit') as unknown as MockQueryBuilder;
+      (mockUnitQueryBuilder.getMany as jest.Mock).mockResolvedValue([]);
       responseRepository.find = jest.fn().mockResolvedValue([]);
 
       const result = await service.processTestPersonsBatch(workspaceId, [], autoCoderRun);
@@ -279,6 +296,7 @@ describe('CodingProcessService', () => {
     });
 
     it('should handle no booklets found', async () => {
+      mockQueryBuilder.getMany.mockResolvedValueOnce(mockUnits); // Units found initially
       bookletRepository.find = jest.fn().mockResolvedValue([]);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
@@ -288,7 +306,7 @@ describe('CodingProcessService', () => {
     });
 
     it('should handle no units found', async () => {
-      unitRepository.find = jest.fn().mockResolvedValue([]);
+      mockQueryBuilder.getMany.mockResolvedValueOnce([]); // No units found
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 
@@ -297,7 +315,9 @@ describe('CodingProcessService', () => {
     });
 
     it('should handle no responses found', async () => {
-      mockQueryBuilder.getMany.mockResolvedValue([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce([]); // No responses found
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 
@@ -306,12 +326,14 @@ describe('CodingProcessService', () => {
     });
 
     it('should filter out invalid variables not defined in unit schema', async () => {
-      mockQueryBuilder.getMany.mockResolvedValue([
-        createMockResponse(1, 1, 'var1'), // valid
-        createMockResponse(2, 1, 'invalid_var'), // invalid
-        createMockResponse(3, 2, 'var2'), // valid
-        createMockResponse(4, 2, 'another_invalid') // invalid
-      ]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce([
+          createMockResponse(1, 1, 'var1'), // valid
+          createMockResponse(2, 1, 'invalid_var'), // invalid
+          createMockResponse(3, 2, 'var2'), // valid
+          createMockResponse(4, 2, 'another_invalid') // invalid
+        ]);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 
@@ -319,6 +341,10 @@ describe('CodingProcessService', () => {
     });
 
     it('should handle job cancellation during processing', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
       mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
         getState: jest.fn().mockResolvedValue('paused'),
         data: { isPaused: true }
@@ -337,7 +363,9 @@ describe('CodingProcessService', () => {
       responsesWithV2[0].status_v2 = 2;
       responsesWithV2[1].status_v2 = 1;
 
-      mockQueryBuilder.getMany.mockResolvedValue(responsesWithV2);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(responsesWithV2);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
 
@@ -345,6 +373,10 @@ describe('CodingProcessService', () => {
     });
 
     it('should call progress callback at appropriate intervals', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
       mockJobQueueService.getTestPersonCodingJob = jest.fn().mockResolvedValue({
         getState: jest.fn().mockResolvedValue('active'),
         data: { isPaused: false }

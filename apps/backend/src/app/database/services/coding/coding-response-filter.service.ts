@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 
@@ -77,6 +77,57 @@ export class CodingResponseFilterService {
   }
 
   /**
+   * Count total responses matching filter for progress calculation.
+   */
+  async countResponses(
+    workspaceId: number,
+    options: ResponseFilterOptions = {}
+  ): Promise<number> {
+    const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
+    return queryBuilder.getCount();
+  }
+
+  private async createBatchQueryBuilder(
+    workspaceId: number,
+    options: ResponseFilterOptions
+  ) {
+    const status = options.status || 'CODING_INCOMPLETE';
+    const considerOnly = options.considerOnly !== false;
+    const version = options.version;
+
+    const queryBuilder = this.responseRepository
+      .createQueryBuilder('response')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person');
+
+    // Establish base conditions
+    if (version) {
+      queryBuilder.where(`response.status_${version} IS NOT NULL`)
+        .andWhere(`response.status_${version} NOT IN (:...excludedStatuses)`, { excludedStatuses: EXCLUDED_STATUSES });
+    } else {
+      queryBuilder.where('response.status_v1 = :status', {
+        status: statusStringToNumber(status)
+      });
+    }
+
+    // Add filters
+    queryBuilder
+      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId });
+
+    if (considerOnly) {
+      queryBuilder.andWhere('person.consider = :consider', { consider: true });
+    }
+
+    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
+    if (ignoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    }
+
+    return queryBuilder;
+  }
+
+  /**
    * Get responses in batches for streaming operations.
    * Uses cursor-based pagination for memory efficiency.
    */
@@ -86,43 +137,23 @@ export class CodingResponseFilterService {
     batchSize: number,
     options: ResponseFilterOptions = {}
   ): Promise<ResponseEntity[]> {
-    const status = options.status || 'CODING_INCOMPLETE';
-    const considerOnly = options.considerOnly !== false;
-    const version = options.version;
+    const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
 
-    const queryBuilder = this.responseRepository
-      .createQueryBuilder('response')
-      .leftJoinAndSelect('response.unit', 'unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.person', 'person')
+    // Add selections for relations needed in result
+    // Note: relations joined in createBatchQueryBuilder need to be selected if we want them.
+    // createBatchQueryBuilder uses leftJoin.
+    // getMany needs selections.
+
+    // Re-apply joins with selection? Or just addSelect?
+    // addSelect needs alias.
+    queryBuilder
+      .addSelect(['unit', 'booklet', 'person'])
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
 
-    // Establish base conditions
-    if (version) {
-      queryBuilder.where(`response.status_${version} IS NOT NULL`);
-    } else {
-      queryBuilder.where('response.status_v1 = :status', {
-        status: statusStringToNumber(status)
-      });
-    }
-
-    // Add filters
     queryBuilder
-      .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
-      .andWhere('response.id > :lastId', { lastId });
-
-    if (considerOnly) {
-      queryBuilder.andWhere('person.consider = :consider', { consider: true });
-    }
-
-    queryBuilder
+      .andWhere('response.id > :lastId', { lastId })
       .orderBy('response.id', 'ASC')
       .take(batchSize);
-
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    if (ignoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
-    }
 
     return queryBuilder.getMany();
   }
@@ -148,6 +179,7 @@ export class CodingResponseFilterService {
     }
 
     // Check for excluded variable patterns
+    // eslint-disable-next-line
     if (/image|text|audio|frame|video|_0/i.test(variableId)) {
       return false;
     }
@@ -172,6 +204,7 @@ export class CodingResponseFilterService {
     }
 
     // Check for excluded variable patterns
+    // eslint-disable-next-line
     return !/image|text|audio|frame|video|_0/i.test(variableId);
   }
 }

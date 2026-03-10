@@ -40,3 +40,16 @@ export function isTestperson(testperson: string): boolean {
   const nonEmptyParts = parts.filter(part => part.trim() !== '');
   return nonEmptyParts.length >= 2;
 }
+/**
+ * Normalizes a test person identifier to the standard 3-part format (login@code@booklet).
+ * If a 4-part identifier (login@code@group@booklet) is provided, the group portion is removed.
+ * @param testperson The test person identifier to normalize
+ * @returns The normalized test person identifier
+ */
+export function normalizeTestperson(testperson: string): string {
+  const parts = testperson.split('@');
+  if (parts.length === 4) {
+    return `${parts[0]}@${parts[1]}@${parts[3]}`; // login@code@booklet
+  }
+  return testperson; // assume 3 parts is already normalized
+}

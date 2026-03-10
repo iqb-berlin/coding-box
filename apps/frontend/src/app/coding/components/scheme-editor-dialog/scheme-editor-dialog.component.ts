@@ -1,4 +1,5 @@
 import { Component, Inject, OnInit } from '@angular/core';
+import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { CommonModule } from '@angular/common';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions
@@ -18,6 +19,7 @@ export interface SchemeEditorDialogData {
   fileId: string;
   fileName: string;
   content: string;
+  readOnly?: boolean;
 }
 
 @Component({
@@ -30,29 +32,50 @@ export interface SchemeEditorDialogData {
     MatDialogActions,
     MatButton,
     MatDivider,
+    TranslateModule,
     StandaloneUnitSchemerComponent
   ],
   template: `
     <h2 mat-dialog-title>{{ data.fileName }}</h2>
     <mat-dialog-content>
-        @if (schemerHtml && !isLoading) {
-          <unit-schemer-standalone
-            [schemerHtml]="schemerHtml"
-            [unitScheme]="unitScheme"
-            (schemeChanged)="onSchemeChanged($event)"
-            (error)="onError($event)">
-          </unit-schemer-standalone>
-        } @else {
-          <pre class="raw-json">{{ prettyScheme }}</pre>
-        }
+      @if (schemerHtml && !isLoading) {
+        <unit-schemer-standalone
+          [schemerHtml]="schemerHtml"
+          [unitScheme]="unitScheme"
+          (schemeChanged)="onSchemeChanged($event)"
+          (error)="onError($event)">
+        </unit-schemer-standalone>
+      } @else {
+        <pre class="raw-json">{{ prettyScheme }}</pre>
+      }
     </mat-dialog-content>
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="close()">Abbrechen</button>
-      <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">Speichern</button>
+      <button mat-button (click)="close()">{{ 'close' | translate }}</button>
+      @if (!data.readOnly) {
+        <button mat-button color="primary" [disabled]="!hasChanges" (click)="save()">{{ 'save' | translate }}</button>
+      }
     </mat-dialog-actions>
   `,
   styles: [`
+    :host {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    mat-dialog-content {
+      flex: 1;
+      padding: 0 !important;
+      margin: 0 !important;
+      overflow: hidden !important;
+    }
+
+    unit-schemer-standalone {
+      display: block;
+      height: 100%;
+      width: 100%;
+    }
 
     .raw-json {
       height: 100%;
@@ -60,7 +83,6 @@ export interface SchemeEditorDialogData {
       box-sizing: border-box;
       margin: 0;
       padding: 12px;
-      border-radius: 4px;
       overflow: auto;
       white-space: pre-wrap;
       word-break: break-word;
@@ -69,10 +91,9 @@ export interface SchemeEditorDialogData {
       line-height: 1.5;
     }
 
-    unit-schemer-standalone {
-      display: block;
-      height: 100%;
-      width: 100%;
+    mat-dialog-actions {
+      margin: 0 !important;
+      padding: 0 !important;
     }
   `]
 })
@@ -102,7 +123,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: SchemeEditorDialogData,
     private snackBar: MatSnackBar,
     private fileService: FileService,
-
+    private translate: TranslateService,
     private dialog: MatDialog
   ) { }
 
@@ -125,7 +146,7 @@ export class SchemeEditorDialogComponent implements OnInit {
         },
         error: () => {
           this.snackBar.open(
-            'Failed to load variable information for the scheme. The schemer will work without variable validation.',
+            this.translate.instant('coding.schemer.load-error'),
             'OK',
             { duration: 5000 }
           );
@@ -154,17 +175,29 @@ export class SchemeEditorDialogComponent implements OnInit {
                     this.schemerHtml = base64ToUtf8(fileDownload.base64Data);
                     this.isLoading = false;
                   } catch (error) {
-                    this.snackBar.open('Failed to decode schemer HTML', 'Error', { duration: 3000 });
+                    this.snackBar.open(
+                      this.translate.instant('coding.schemer.decode-error'),
+                      'Error',
+                      { duration: 3000 }
+                    );
                   }
                 },
                 error: () => {
-                  this.snackBar.open('Failed to download schemer HTML', 'Error', { duration: 3000 });
+                  this.snackBar.open(
+                    this.translate.instant('coding.schemer.download-error'),
+                    'Error',
+                    { duration: 3000 }
+                  );
                 }
               });
           }
         },
         error: () => {
-          this.snackBar.open('Failed to fetch schemer files', 'Error', { duration: 3000 });
+          this.snackBar.open(
+            this.translate.instant('coding.schemer.fetch-error'),
+            'Error',
+            { duration: 3000 }
+          );
         }
       });
   }
@@ -178,7 +211,11 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   onError(error: string): void {
-    this.snackBar.open(`Schemer error: ${error}`, 'Error', { duration: 3000 });
+    this.snackBar.open(
+      this.translate.instant('coding.schemer.schemer-error', { error }),
+      'Error',
+      { duration: 3000 }
+    );
   }
 
   close(): void {
@@ -186,8 +223,8 @@ export class SchemeEditorDialogComponent implements OnInit {
       const confirmRef = this.dialog.open(ConfirmDialogComponent, {
         width: '400px',
         data: {
-          title: 'Ungespeicherte Änderungen',
-          content: 'Sie haben ungespeicherte Änderungen. Möchten Sie wirklich schließen?',
+          title: this.translate.instant('coding.schemer.unsaved-changes-title'),
+          content: this.translate.instant('coding.schemer.unsaved-changes-content'),
           confirmButtonLabel: 'Ja',
           showCancel: true
         }
@@ -245,10 +282,18 @@ export class SchemeEditorDialogComponent implements OnInit {
         const conflicts = result.conflicts || [];
         const ok = result.failed === 0 && conflicts.length === 0;
         if (ok) {
-          this.snackBar.open('Scheme saved successfully', 'Success', { duration: 3000 });
+          this.snackBar.open(
+            this.translate.instant('coding.schemer.save-success'),
+            'Success',
+            { duration: 3000 }
+          );
           this.dialogRef.close(true);
         } else {
-          this.snackBar.open('Failed to save scheme', 'Error', { duration: 3000 });
+          this.snackBar.open(
+            this.translate.instant('coding.schemer.save-error'),
+            'Error',
+            { duration: 3000 }
+          );
         }
       });
   }

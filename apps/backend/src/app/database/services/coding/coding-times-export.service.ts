@@ -130,40 +130,16 @@ export class CodingTimesExportService {
         return Buffer.from(buffer);
       }
 
-      const coderTimestamps = new Map<string, Date[]>();
-
-      for (const unit of codingJobUnits) {
-        if (!unit.updated_at || !unit.coding_job?.codingJobCoders?.length) {
-          continue;
-        }
-
-        const timestamp = new Date(unit.updated_at);
-
-        for (const jobCoder of unit.coding_job.codingJobCoders) {
-          const coderName = jobCoder.user?.username || 'Unknown';
-
-          if (!coderTimestamps.has(coderName)) {
-            coderTimestamps.set(coderName, []);
-          }
-
-          coderTimestamps.get(coderName)!.push(timestamp);
-        }
-      }
-
-      const coderAverages = new Map<string, number | null>();
-      for (const [coderName, timestamps] of coderTimestamps) {
-        const avgTime = this.calculateAverageCodingTime(timestamps);
-        coderAverages.set(coderName, avgTime);
-      }
-
       const variableUnitCoders = new Map<string, Set<string>>();
+      const variableUnitCoderTimestamps = new Map<string, Map<string, Date[]>>();
 
       for (const unit of codingJobUnits) {
-        if (!unit.response?.unit?.name) continue;
+        if (!unit.response?.unit?.name || !unit.updated_at) continue;
 
         const variableId = unit.variable_id;
         const unitName = unit.response.unit.name;
         const variableUnitKey = `${unitName}|${variableId}`;
+        const timestamp = new Date(unit.updated_at);
 
         if (manualCodingVariableSet) {
           if (!manualCodingVariableSet.has(variableUnitKey)) {
@@ -175,13 +151,25 @@ export class CodingTimesExportService {
           variableUnitCoders.set(variableUnitKey, new Set());
         }
 
+        if (!variableUnitCoderTimestamps.has(variableUnitKey)) {
+          variableUnitCoderTimestamps.set(variableUnitKey, new Map<string, Date[]>());
+        }
+
         for (const jobCoder of unit.coding_job?.codingJobCoders || []) {
           const coderName = jobCoder.user?.username || 'Unknown';
           variableUnitCoders.get(variableUnitKey)!.add(coderName);
+
+          const coderTimestampsByVariableUnit = variableUnitCoderTimestamps.get(variableUnitKey)!;
+          if (!coderTimestampsByVariableUnit.has(coderName)) {
+            coderTimestampsByVariableUnit.set(coderName, []);
+          }
+          coderTimestampsByVariableUnit.get(coderName)!.push(timestamp);
         }
       }
 
-      const coderList = Array.from(coderTimestamps.keys()).sort();
+      const coderList = Array.from(new Set(
+        Array.from(variableUnitCoders.values()).flatMap(coders => Array.from(coders.values()))
+      )).sort();
 
       const displayCoderList = coderNameMapping ?
         coderList.map(coder => coderNameMapping.get(coder) || coder) :
@@ -217,7 +205,10 @@ export class CodingTimesExportService {
           const columnKey = `coder_${i}`;
 
           if (assignedCoders.has(coderName)) {
-            const avgTime = coderAverages.get(coderName);
+            const coderTimestamps = variableUnitCoderTimestamps
+              .get(variableUnitKey)
+              ?.get(coderName) || [];
+            const avgTime = this.calculateAverageCodingTime(coderTimestamps);
             rowData[columnKey] = avgTime !== null ? Math.round(avgTime! * 100) / 100 : null;
             if (avgTime !== null) {
               totalTimeSum += avgTime;

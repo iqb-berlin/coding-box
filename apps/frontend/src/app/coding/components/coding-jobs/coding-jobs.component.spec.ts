@@ -309,6 +309,7 @@ describe('CodingJobsComponent', () => {
     const job = mockCodingJobs[0] as CodingJob;
     (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
       total: 1,
+      firstReplayUrl: 'http://replay.url',
       items: [{
         unitName: 'Unit 1',
         variableId: 'Var 1',
@@ -318,19 +319,13 @@ describe('CodingJobsComponent', () => {
         replayUrl: 'http://replay.url'
       }]
     }));
-    window.open = jest.fn();
-    const localStorageSpy = jest.spyOn(Storage.prototype, 'setItem');
+    jest.spyOn(window, 'open').mockImplementation(() => null);
 
     component.startCodingJob(job);
 
     expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
     expect(appServiceMock.createToken).toHaveBeenCalled();
-    expect(localStorageSpy).toHaveBeenCalledWith(
-      `replay_booklet_${job.id}`,
-      expect.stringContaining('Coding-Job: Job 1')
-    );
     expect(window.open).toHaveBeenCalled();
-    localStorageSpy.mockRestore();
   });
 
   it('should handle restart coding job', fakeAsync(() => {
@@ -341,6 +336,7 @@ describe('CodingJobsComponent', () => {
     (codingJobBackendServiceMock.restartCodingJobWithOpenUnits as jest.Mock).mockReturnValue(of(job));
     (codingJobBackendServiceMock.startCodingJob as jest.Mock).mockReturnValue(of({
       total: 1,
+      firstReplayUrl: 'http://replay.url',
       items: [{
         unitName: 'Unit 1',
         variableId: 'Var 1',

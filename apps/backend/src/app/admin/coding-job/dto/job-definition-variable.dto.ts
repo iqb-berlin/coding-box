@@ -32,4 +32,13 @@ export class JobDefinitionVariableBundleDto {
   })
   @IsString()
     name: string;
+
+  @ApiProperty({
+    description: 'Bundle-specific case ordering mode (overrides global mode)',
+    example: 'alternating',
+    required: false,
+    enum: ['continuous', 'alternating']
+  })
+  @IsString()
+    caseOrderingMode?: 'continuous' | 'alternating';
 }

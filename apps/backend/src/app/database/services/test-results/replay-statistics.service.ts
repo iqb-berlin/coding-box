@@ -230,6 +230,8 @@ export class ReplayStatisticsService {
           .where('stats.workspace_id = :workspaceId', { workspaceId })
           .groupBy('stats.unit_id');
 
+        this.applyTimeFilters(unitAveragesQuery, options);
+
         const unitAveragesResult = await unitAveragesQuery.getRawMany();
 
         unitAverages = {};

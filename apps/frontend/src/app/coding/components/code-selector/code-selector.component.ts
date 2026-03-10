@@ -1,5 +1,5 @@
 import {
-  Component, EventEmitter, Input, OnChanges, Output, SimpleChanges
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -59,12 +59,20 @@ export class CodeSelectorComponent implements OnChanges {
   @Output() openCommentDialog = new EventEmitter<void>();
   @Output() pauseCodingJob = new EventEmitter<void>();
   @Output() unitChanged = new EventEmitter<UnitsReplayUnit>();
+  @ViewChild('variablePanel') variablePanel?: ElementRef<HTMLElement>;
 
   selectableItems: SelectableItem[] = [];
   selectedCode: number | null = null;
   selectedCodingIssueOption: number | null = null;
   variableManualInstruction: string | null = null;
-  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService) { }
+  constructor(private sanitizer: DomSanitizer, private translateService: TranslateService, private elementRef: ElementRef) { }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.isVariablePanelOpen && !this.elementRef.nativeElement.contains(event.target)) {
+      this.isVariablePanelOpen = false;
+    }
+  }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes.codingScheme || changes.variableId || changes.missings) {
@@ -115,18 +123,18 @@ export class CodeSelectorComponent implements OnChanges {
           type: 'codingIssueOption'
         },
         {
-          id: -2,
-          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
-          type: 'codingIssueOption'
-        },
-        {
           id: -3,
-          label: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer'),
+          label: `(mir) ${this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer')}`,
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: this.translateService.instant('code-selector.coding-issue-options.technical-problems'),
+          label: `(mci) ${this.translateService.instant('code-selector.coding-issue-options.technical-problems')} `,
+          type: 'codingIssueOption'
+        },
+        {
+          id: -2,
+          label: this.translateService.instant('code-selector.coding-issue-options.new-code-needed'),
           type: 'codingIssueOption'
         }
       ];
@@ -167,22 +175,6 @@ export class CodeSelectorComponent implements OnChanges {
           this.selectedCode = null;
         }
       }
-    }
-
-    const codeDto = this.selectedCode !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCode)!
-    ) : null;
-
-    const codingIssueOption = this.selectedCodingIssueOption !== null ? this.createCodeOrCodingIssueOption(
-      this.selectableItems.find(item => item.id === this.selectedCodingIssueOption)!
-    ) as CodingIssueDto : null;
-
-    if (codeDto || codingIssueOption) {
-      this.codeSelected.emit({
-        variableId: this.variableId,
-        code: codeDto,
-        codingIssueOption: codingIssueOption
-      });
     }
   }
 
@@ -279,31 +271,25 @@ export class CodeSelectorComponent implements OnChanges {
 
   nextUnit(): void {
     const data = this.unitsData;
-    if (!data) {
-      return;
-    }
+    if (!data) return;
 
-    if (!this.isReadOnly && !this.hasCurrentSelection()) {
-      return;
-    }
+    if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
     const currentIndex = data.currentUnitIndex;
     const nextIndex = currentIndex + 1;
-    if (nextIndex >= 0 && nextIndex < data.units.length) {
+    if (nextIndex < data.units.length) {
       this.unitChanged.emit(data.units[nextIndex]);
     }
   }
 
   previousUnit(): void {
     const data = this.unitsData;
-    if (!data || !this.hasPreviousUnit()) {
-      return;
-    }
+    if (!data || !this.hasPreviousUnit()) return;
 
-    const prevIndex = data.currentUnitIndex - 1;
+    const currentIndex = data.currentUnitIndex;
+    const prevIndex = currentIndex - 1;
     if (prevIndex >= 0) {
-      const prevUnit = data.units[prevIndex];
-      this.unitChanged.emit(prevUnit);
+      this.unitChanged.emit(data.units[prevIndex]);
     }
   }
 
@@ -311,13 +297,10 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data || !data.units.length) return false;
 
-    const nextIndex = data.currentUnitIndex + 1;
+    const currentIndex = data.currentUnitIndex;
+    const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
-
-    if (this.isReadOnly) {
-      return hasNext;
-    }
-
+    if (this.isReadOnly) return hasNext;
     return hasNext && this.hasCurrentSelection();
   }
 
@@ -328,11 +311,169 @@ export class CodeSelectorComponent implements OnChanges {
     return data.currentUnitIndex > 0;
   }
 
+  @HostListener('window:keydown', ['$event'])
+  handleKeyboardEvent(event: KeyboardEvent): void {
+    if (this.isReadOnly || this.selectableItems.length === 0) {
+      return;
+    }
+
+    // Ignore if user is typing in an input/textarea
+    // We check specifically for the tag name to avoid blocking shortcuts when focus is just on the body or a div
+    const activeElement = document.activeElement as HTMLElement;
+    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+      return;
+    }
+
+    let targetId: number | null = null;
+
+    switch (event.code) {
+      case 'NumpadDivide':
+      case 'Slash': // Standard key fallback if desired, though user emphasized Numpad
+        targetId = -1; // Code-Vergabe unsicher
+        break;
+      case 'NumpadMultiply':
+        targetId = -3; // Ungültig (Spaßantwort)
+        break;
+      case 'NumpadSubtract':
+      case 'Minus': // Standard key fallback
+        targetId = -4; // Technische Probleme
+        break;
+      case 'NumpadAdd':
+        targetId = -2; // Neuer Code nötig
+        break;
+      default:
+        break;
+    }
+
+    if (targetId !== null) {
+      const optionExists = this.selectableItems.some(item => item.id === targetId);
+      if (optionExists) {
+        event.preventDefault(); // Prevent default browser action (e.g. quick find with '/')
+        this.onSelect(targetId);
+      }
+    }
+  }
+
+  getShortcutLabel(id: number): string {
+    switch (id) {
+      case -1: return '÷'; // Display for Divide
+      case -3: return '×'; // Display for Multiply
+      case -4: return '-';
+      case -2: return '+';
+      default: return '';
+    }
+  }
+
   get totalNavigationUnits(): number {
     return this.unitsData?.units.length || 0;
   }
 
   get currentNavigationIndex(): number {
     return (this.unitsData?.currentUnitIndex || 0) + 1;
+  }
+
+  isVariablePanelOpen = false;
+
+  toggleVariablePanel(): void {
+    this.isVariablePanelOpen = !this.isVariablePanelOpen;
+    if (this.isVariablePanelOpen) {
+      setTimeout(() => this.focusCurrentVariableInPanel(), 0);
+    }
+  }
+
+  closeVariablePanel(): void {
+    this.isVariablePanelOpen = false;
+  }
+
+  selectVariable(key: string): void {
+    this.isVariablePanelOpen = false;
+    this.jumpToVariable(key);
+  }
+
+  private focusCurrentVariableInPanel(): void {
+    const panel = this.variablePanel?.nativeElement;
+    if (!panel) return;
+
+    const activeItem = panel.querySelector<HTMLElement>('.variable-panel-item.active');
+    const targetItem = activeItem || panel.querySelector<HTMLElement>('.variable-panel-item');
+    if (!targetItem) return;
+
+    targetItem.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    targetItem.focus({ preventScroll: true });
+  }
+
+  /** Returns coded/total/percentage for any unit+variable key. */
+  getProgressForKey(key: string): { coded: number; total: number; percentage: number } {
+    if (!this.unitsData?.units || !this.codingService) return { coded: 0, total: 0, percentage: 0 };
+    const [unitName, variableId] = key.split('::');
+    const units = this.unitsData.units.filter(
+      u => (u.alias || u.name) === unitName && u.variableId === variableId
+    );
+    const total = units.length;
+    const coded = units.filter(u => this.codingService.isUnitCoded(u)).length;
+    const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
+    return { coded, total, percentage };
+  }
+
+  /** Unique unit+variable combinations available in the current coding job, preserving order of first appearance. */
+  get availableVariables(): { key: string; variableId: string; unitName: string }[] {
+    if (!this.unitsData?.units) return [];
+    const seen = new Set<string>();
+    const result: { key: string; variableId: string; unitName: string }[] = [];
+    for (const unit of this.unitsData.units) {
+      if (unit.variableId) {
+        const key = `${unit.alias || unit.name}::${unit.variableId}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          result.push({ key, variableId: unit.variableId, unitName: unit.alias || unit.name });
+        }
+      }
+    }
+    return result;
+  }
+
+  /** Composite key (unitName::variableId) for the unit currently being displayed. */
+  get activeVariableKey(): string {
+    if (!this.unitsData?.units) return '';
+    const unit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!unit?.variableId) return '';
+    return `${unit.alias || unit.name}::${unit.variableId}`;
+  }
+
+  /** Progress (coded / total) for the unit+variable of the current unit. */
+  get currentVariableProgress(): { coded: number; total: number; percentage: number } | null {
+    if (!this.unitsData?.units || !this.codingService) return null;
+    const currentUnit = this.unitsData.units[this.unitsData.currentUnitIndex];
+    if (!currentUnit?.variableId) return null;
+    const unitName = currentUnit.alias || currentUnit.name;
+    const varId = currentUnit.variableId;
+    // Count all units with the same unitName+variableId combo
+    const variableUnits = this.unitsData.units.filter(
+      u => (u.alias || u.name) === unitName && u.variableId === varId
+    );
+    const total = variableUnits.length;
+    const coded = variableUnits.filter(u => this.codingService.isUnitCoded(u)).length;
+    const percentage = total > 0 ? Math.round((coded / total) * 100) : 0;
+    return { coded, total, percentage };
+  }
+
+  /**
+   * Jump to the first uncoded unit for the given unit+variable key ("unitName::variableId").
+   * Falls back to the first matching unit if all are coded.
+   */
+  jumpToVariable(key: string): void {
+    if (!this.unitsData?.units) return;
+    const [unitName, variableId] = key.split('::');
+    const variableUnits = this.unitsData.units
+      .map((unit, index) => ({ unit, index }))
+      .filter(({ unit }) => (unit.alias || unit.name) === unitName && unit.variableId === variableId);
+    if (variableUnits.length === 0) return;
+
+    // Prefer first uncoded unit
+    const firstUncoded = variableUnits.find(
+      ({ unit }) => !this.codingService.isUnitCoded(unit)
+    );
+    const target = firstUncoded ?? variableUnits[0];
+    this.unitChanged.emit(target.unit);
   }
 }
