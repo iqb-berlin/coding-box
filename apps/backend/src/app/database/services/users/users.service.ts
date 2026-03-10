@@ -216,7 +216,9 @@ export class UsersService {
   }
 
   async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
-    const { username, identity, issuer } = oidcPdUser;
+    const {
+      username, identity, issuer, isAdmin
+    } = oidcPdUser;
     const existingUser = await this.usersRepository.findOne({
       where: [
         { username },

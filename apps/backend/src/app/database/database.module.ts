@@ -20,12 +20,6 @@ import { ResponseEntity } from './entities/response.entity';
 import { Session } from './entities/session.entity';
 import { UnitTag } from './entities/unitTag.entity';
 import { UnitNote } from './entities/unitNote.entity';
-import { PersonService } from './services/person.service';
-import { AuthService } from '../auth/service/auth.service';
-import { OAuth2ClientCredentialsService } from '../auth/service/oauth2-client-credentials.service';
-import { UnitTagService } from './services/unit-tag.service';
-import { UnitNoteService } from './services/unit-note.service';
-import { ResourcePackageService } from './services/resource-package.service';
 import { JournalEntry } from './entities/journal-entry.entity';
 import { Job } from './entities/job.entity';
 import { VariableAnalysisJob } from './entities/variable-analysis-job.entity';
@@ -45,6 +39,7 @@ import { CoderTrainingVariable } from './entities/coder-training-variable.entity
 import { CoderTrainingBundle } from './entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from './entities/coder-training-coder.entity';
 import { CoderTrainingDiscussionResult } from './entities/coder-training-discussion-result.entity';
+import { TestPersonCodingJob } from './entities/test-person-coding-job.entity';
 
 @Module({
   imports: [
@@ -57,126 +52,6 @@ import { CoderTrainingDiscussionResult } from './entities/coder-training-discuss
         username: configService.get('POSTGRES_USER'),
         password: configService.get('POSTGRES_PASSWORD'),
         database: configService.get('POSTGRES_DB'),
-        entities: [BookletInfo, Booklet, Session, BookletLog, Unit, UnitLog, UnitLastState, ResponseEntity,
-          User, Workspace, WorkspaceAdmin, FileUpload, WorkspaceUser, ResourcePackage, Logs, Persons, ChunkEntity, BookletLog, Session, UnitLog, UnitTag, UnitNote, JournalEntry, Job, VariableAnalysisJob, ValidationTask, Setting, ReplayStatistics, VariableBundle,
-          CodingJob, CodingJobCoder, CodingJobVariable, CodingJobVariableBundle, CodingJobUnit, JobDefinition, CoderTraining, MissingsProfile
-        ],
-        synchronize: false
-      }),
-      inject: [ConfigService]
-    }),
-    TypeOrmModule.forFeature([
-      User,
-      Workspace,
-      WorkspaceAdmin,
-      FileUpload,
-      Logs,
-      ResponseEntity,
-      WorkspaceUser,
-      ResourcePackage,
-      Persons,
-      Booklet,
-      BookletInfo,
-      Unit,
-      ChunkEntity,
-      BookletLog,
-      UnitLog,
-      UnitLastState,
-      Session,
-      UnitTag,
-      UnitNote,
-      JournalEntry,
-      Job,
-      VariableAnalysisJob,
-      ValidationTask,
-      Setting,
-      ReplayStatistics,
-      VariableBundle,
-      CodingJob,
-      CodingJobCoder,
-      CodingJobVariable,
-      CodingJobVariableBundle,
-      CodingJobUnit,
-      JobDefinition,
-      CoderTraining,
-      MissingsProfile
-    ]),
-    CacheModule
-  ],
-  providers: [
-    UsersService,
-    WorkspaceCoreService,
-    WorkspaceFilesService,
-    WorkspaceTestResultsService,
-    WorkspaceUsersService,
-    WorkspaceCodingService,
-    WorkspacePlayerService,
-    TestcenterService,
-    UploadResultsService,
-    PersonService,
-    AuthService,
-    OAuth2ClientCredentialsService,
-    JwtService,
-    UnitTagService,
-    UnitNoteService,
-    ResourcePackageService,
-    JournalService,
-    VariableAnalysisService,
-    JobService,
-    ValidationTaskService,
-    ReplayStatisticsService,
-    CodingJobService,
-    JobDefinitionService,
-    CodingStatisticsService,
-    MissingsProfilesService,
-    CodingListService,
-    CoderTrainingService,
-    VariableAnalysisReplayService,
-    ExportValidationResultsService,
-    ExternalCodingImportService,
-    BullJobManagementService,
-    CodingResultsService,
-    CodingExportService
-  ],
-  exports: [
-    User,
-    FileUpload,
-    Logs,
-    Persons,
-    Workspace,
-    WorkspaceAdmin,
-    WorkspaceCoreService,
-    WorkspaceFilesService,
-    WorkspaceTestResultsService,
-    WorkspaceUsersService,
-    WorkspaceCodingService,
-    WorkspacePlayerService,
-    UsersService,
-    WorkspaceUser,
-    TestcenterService,
-    UploadResultsService,
-    ResourcePackageService,
-    ResourcePackage,
-    PersonService,
-    UnitTagService,
-    UnitNoteService,
-    JournalService,
-    VariableAnalysisService,
-    JobService,
-    ValidationTaskService,
-    ReplayStatisticsService,
-    CodingJobService,
-    JobDefinitionService,
-    CodingStatisticsService,
-    MissingsProfilesService,
-    CodingListService,
-    CoderTrainingService,
-    VariableAnalysisReplayService,
-    ExportValidationResultsService,
-    ExternalCodingImportService,
-    BullJobManagementService,
-    CodingResultsService,
-    CodingExportService
         entities: [
           BookletInfo,
           Booklet,
@@ -215,7 +90,8 @@ import { CoderTrainingDiscussionResult } from './entities/coder-training-discuss
           CoderTrainingBundle,
           CoderTrainingCoder,
           CoderTrainingDiscussionResult,
-          MissingsProfile
+          MissingsProfile,
+          TestPersonCodingJob
         ],
         synchronize: false
       }),

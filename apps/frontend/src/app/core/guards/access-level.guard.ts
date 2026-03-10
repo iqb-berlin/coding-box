@@ -13,7 +13,6 @@ import {
   filter,
   timeout
 } from 'rxjs';
-import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import { AppService } from '../services/app.service';
@@ -24,20 +23,19 @@ import { AppService } from '../services/app.service';
  * @returns CanActivateFn that checks if user has sufficient access level
  */
 export function canActivateAccessLevel(minLevel: number): CanActivateFn {
-  const isAccessAllowed = async (
+  return async (
     route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot,
-    authData: AuthGuardData
+    state: RouterStateSnapshot
   ): Promise<boolean | UrlTree> => {
-    const { authenticated } = authData;
-    if (!authenticated) {
-      return false;
-    }
-
     const authService = inject(AuthService);
     const userService = inject(UserService);
     const appService = inject(AppService);
     const router = inject(Router);
+
+    if (!authService.isLoggedIn()) {
+      authService.login();
+      return false;
+    }
 
     // Check if user is system admin (bypass access level check)
     const userRoles = authService.getRoles();
@@ -101,6 +99,4 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
       return false;
     }
   };
-
-  return createAuthGuard<CanActivateFn>(isAccessAllowed);
 }
