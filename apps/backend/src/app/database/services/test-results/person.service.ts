@@ -143,7 +143,7 @@ export class PersonService {
       }
     }
     person.booklets = booklets;
-    logger.log(`Successfully assigned ${booklets.length} booklets to person ${person.login}.`);
+    logger.debug(`Assigned ${booklets.length} booklets to person ${person.login}.`);
     return person;
   }
 

@@ -6,6 +6,7 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CoderTraining } from '../../entities/coder-training.entity';
 import { CoderTrainingVariable } from '../../entities/coder-training-variable.entity';
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
@@ -57,6 +58,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(CoderTrainingBundle), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingCoder), useValue: mockRepository },
         { provide: getRepositoryToken(CoderTrainingDiscussionResult), useValue: mockRepository },
+        { provide: getRepositoryToken(CodingJobVariableBundle), useValue: mockRepository },
         { provide: getRepositoryToken(User), useValue: mockRepository },
         { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },

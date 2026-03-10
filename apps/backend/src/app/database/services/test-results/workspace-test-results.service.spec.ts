@@ -1,4 +1,5 @@
 import { Repository, DataSource } from 'typeorm';
+import { Logger } from '@nestjs/common';
 import { PassThrough } from 'stream';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { ResponseManagementService } from './response-management.service';
@@ -51,6 +52,7 @@ describe('WorkspaceTestResultsService', () => {
   let responseManagementService: ResponseManagementService;
   let workspaceCoreService: WorkspaceCoreService;
   let unitTagService: UnitTagService;
+  let journalService: JournalService;
   let personsRepository: Repository<Persons>;
   let unitRepository: Repository<Unit>;
   let bookletRepository: Repository<Booklet>;
@@ -60,6 +62,16 @@ describe('WorkspaceTestResultsService', () => {
   let chunkRepository: Repository<ChunkEntity>;
   let codingValidationService: CodingValidationService;
   let dataSource: DataSource;
+
+  beforeAll(() => {
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterAll(() => {
+    jest.restoreAllMocks();
+  });
 
   beforeEach(() => {
     responseManagementService = {
@@ -79,6 +91,10 @@ describe('WorkspaceTestResultsService', () => {
     codingValidationService = {
       invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
     } as unknown as CodingValidationService;
+
+    journalService = {
+      createEntry: jest.fn().mockResolvedValue(undefined)
+    } as unknown as JournalService;
 
     personsRepository = {
       count: jest.fn(),
@@ -129,7 +145,7 @@ describe('WorkspaceTestResultsService', () => {
       chunkRepository,
       dataSource,
       unitTagService,
-      {} as unknown as JournalService,
+      journalService,
       {} as unknown as CacheService,
       {} as unknown as CodingListService,
       codingValidationService,

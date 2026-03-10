@@ -160,6 +160,11 @@ export class WorkspaceCoderTrainingController {
           jobsCount: {
             type: 'number',
             description: 'Number of coding jobs in this training'
+          },
+          case_ordering_mode: {
+            type: 'string',
+            enum: ['continuous', 'alternating'],
+            description: 'Global case ordering mode for this training'
           }
         }
       }
@@ -173,6 +178,7 @@ export class WorkspaceCoderTrainingController {
     created_at: Date;
     updated_at: Date;
     jobsCount: number;
+    case_ordering_mode?: 'continuous' | 'alternating';
   }[]
   > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
