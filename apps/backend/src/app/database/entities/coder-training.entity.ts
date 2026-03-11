@@ -16,6 +16,15 @@ import { CoderTrainingVariable } from './coder-training-variable.entity';
 import { CoderTrainingBundle } from './coder-training-bundle.entity';
 import { CaseOrderingMode } from './job-definition.entity';
 
+export type CaseSelectionMode =
+  | 'oldest_first'
+  | 'newest_first'
+  | 'random'
+  | 'random_per_testgroup'
+  | 'random_testgroups';
+
+export type ReferenceMode = 'same' | 'different';
+
 /**
  * Entity for coder training sessions
  * A coder training contains multiple coding jobs for different coders
@@ -37,6 +46,19 @@ export class CoderTraining {
     default: 'continuous'
   })
     case_ordering_mode: CaseOrderingMode;
+
+  @Column({
+    type: 'varchar',
+    length: 30,
+    default: 'oldest_first'
+  })
+    case_selection_mode: CaseSelectionMode;
+
+  @Column({ type: 'jsonb', nullable: true })
+    reference_training_ids: number[] | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+    reference_mode: ReferenceMode | null;
 
   @OneToMany(() => CodingJob, codingJob => codingJob.training, { cascade: true })
     codingJobs: CodingJob[];

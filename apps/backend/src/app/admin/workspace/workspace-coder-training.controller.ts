@@ -179,9 +179,43 @@ export class WorkspaceCoderTrainingController {
     updated_at: Date;
     jobsCount: number;
     case_ordering_mode?: 'continuous' | 'alternating';
+    case_selection_mode?: string;
+    reference_training_ids?: number[];
+    reference_mode?: string | null;
   }[]
   > {
     return this.coderTrainingService.getCoderTrainings(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/training-response-ids')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'trainingIds',
+    description: 'Comma-separated training IDs',
+    required: true,
+    example: '1,2,3'
+  })
+  @ApiOkResponse({
+    description: 'Response IDs grouped by variable (unitAlias:variableId)',
+    schema: {
+      type: 'object',
+      additionalProperties: {
+        type: 'array',
+        items: { type: 'number' }
+      },
+      example: { 'unit1:var1': [1, 2, 3], 'unit1:var2': [4, 5, 6] }
+    }
+  })
+  async getTrainingResponseIds(
+    @WorkspaceId() workspace_id: number,
+      @Query('trainingIds') trainingIdsParam: string
+  ): Promise<Record<string, number[]>> {
+    const trainingIds = trainingIdsParam ?
+      trainingIdsParam.split(',').map(id => parseInt(id.trim(), 10)).filter(n => !Number.isNaN(n)) :
+      [];
+    return this.coderTrainingService.getTrainingResponseIds(workspace_id, trainingIds);
   }
 
   @Post(':workspace_id/coding/coder-training-jobs')
@@ -290,6 +324,9 @@ export class WorkspaceCoderTrainingController {
                      assignedVariables?: JobDefinitionVariable[];
                      assignedVariableBundles?: JobDefinitionVariableBundle[];
                      caseOrderingMode?: 'continuous' | 'alternating';
+                     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
+                     referenceTrainingIds?: number[];
+                     referenceMode?: 'same' | 'different';
                    }
   ): Promise<{
         success: boolean;
@@ -311,7 +348,10 @@ export class WorkspaceCoderTrainingController {
       body.missingsProfileId,
       body.assignedVariables,
       body.assignedVariableBundles,
-      body.caseOrderingMode
+      body.caseOrderingMode,
+      body.caseSelectionMode,
+      body.referenceTrainingIds,
+      body.referenceMode
     );
   }
 
@@ -590,7 +630,11 @@ export class WorkspaceCoderTrainingController {
               name: { type: 'string' }
             }
           }
-        }
+        },
+        caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
+        caseSelectionMode: { type: 'string', enum: ['oldest_first', 'newest_first', 'random', 'random_per_testgroup', 'random_testgroups'] },
+        referenceTrainingIds: { type: 'array', items: { type: 'number' } },
+        referenceMode: { type: 'string', enum: ['same', 'different'] }
       },
       required: ['label', 'selectedCoders', 'variableConfigs']
     }
@@ -621,6 +665,9 @@ export class WorkspaceCoderTrainingController {
         assignedVariables?: JobDefinitionVariable[];
         assignedVariableBundles?: JobDefinitionVariableBundle[];
         caseOrderingMode?: 'continuous' | 'alternating';
+        caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups';
+        referenceTrainingIds?: number[];
+        referenceMode?: 'same' | 'different';
       }
   ): Promise<{ success: boolean; message: string; jobsCreated?: number }> {
     if (!trainingId || trainingId <= 0) {
@@ -636,7 +683,10 @@ export class WorkspaceCoderTrainingController {
       body.missingsProfileId,
       body.assignedVariables,
       body.assignedVariableBundles,
-      body.caseOrderingMode
+      body.caseOrderingMode,
+      body.caseSelectionMode,
+      body.referenceTrainingIds,
+      body.referenceMode
     );
   }
 
