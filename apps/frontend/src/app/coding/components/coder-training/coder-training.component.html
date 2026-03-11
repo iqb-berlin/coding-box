@@ -40,6 +40,44 @@
 
     <mat-divider class="section-divider"></mat-divider>
 
+    <!-- Case Selection Mode Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.case-selection-mode.title' | translate }}</h3>
+      </div>
+      <p class="section-description">{{ 'coding-job-definition-dialog.case-selection-mode.description' | translate }}</p>
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'coding-job-definition-dialog.case-selection-mode.title' | translate }}</mat-label>
+        <mat-select formControlName="caseSelectionMode">
+          <mat-option value="oldest_first">{{ 'coding-job-definition-dialog.case-selection-mode.oldest_first' | translate }}</mat-option>
+          <mat-option value="newest_first">{{ 'coding-job-definition-dialog.case-selection-mode.newest_first' | translate }}</mat-option>
+          <mat-option value="random">{{ 'coding-job-definition-dialog.case-selection-mode.random' | translate }}</mat-option>
+          <mat-option value="random_per_testgroup">{{ 'coding-job-definition-dialog.case-selection-mode.random_per_testgroup' | translate }}</mat-option>
+          <mat-option value="random_testgroups">{{ 'coding-job-definition-dialog.case-selection-mode.random_testgroups' | translate }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <!-- Reference Trainings Section -->
+    <div class="section" *ngIf="availableTrainings.length > 0">
+      <div class="section-header">
+        <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.reference-trainings.title' | translate }}</h3>
+      </div>
+      <p class="section-description">{{ 'coding-job-definition-dialog.reference-trainings.description' | translate }}</p>
+      <mat-form-field appearance="outline" class="full-width">
+        <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
+        <mat-select formControlName="referenceTrainingIds" multiple>
+          <mat-option *ngFor="let t of availableTrainings" [value]="t.id">{{ t.label }} ({{ t.jobsCount }} Jobs)</mat-option>
+        </mat-select>
+      </mat-form-field>
+      <mat-radio-group formControlName="referenceMode" class="reference-mode-controls" *ngIf="(trainingForm.get('referenceTrainingIds')?.value?.length || 0) > 0">
+        <mat-radio-button value="same">{{ 'coding-job-definition-dialog.reference-trainings.same' | translate }}</mat-radio-button>
+        <mat-radio-button value="different">{{ 'coding-job-definition-dialog.reference-trainings.different' | translate }}</mat-radio-button>
+      </mat-radio-group>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
     <!-- Coder Selection Section -->
     <div class="section">
       <div class="section-header">
