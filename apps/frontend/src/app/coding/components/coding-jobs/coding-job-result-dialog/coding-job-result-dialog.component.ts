@@ -113,7 +113,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     public dialogRef: MatDialogRef<CodingJobResultDialogComponent>,
-    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number }
+    @Inject(MAT_DIALOG_DATA) public data: { codingJob: CodingJob; workspaceId: number; canApplyResults?: boolean }
   ) { }
 
   ngOnInit(): void {

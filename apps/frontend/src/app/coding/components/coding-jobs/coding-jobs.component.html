@@ -52,10 +52,12 @@
     </div>
 
     <div class="fx-row-center-center fx-gap-16">
+      @if (canApplyResults) {
       <button mat-button (click)="bulkApplyCodingResults()" class="bulk-apply-button">
         <mat-icon>rule</mat-icon>
         Alle Ergebnisse anwenden
       </button>
+      }
       <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()"
         [disabled]="selection.selected.length === 0" class="bulk-delete-button">
         <mat-icon>delete_sweep</mat-icon>
@@ -111,11 +113,13 @@
           <mat-icon>restart_alt</mat-icon>
         </button>
         }
+        @if (canApplyResults) {
         <button mat-icon-button (click)="applyCodingResults(element)" matTooltip="Ergebnisse anwenden"
           aria-label="Ergebnisse anwenden"
           [disabled]="element.status !== 'completed' || !!element.training?.id || !!element.training_id">
           <mat-icon>check_circle</mat-icon>
         </button>
+        }
       </mat-cell>
     </ng-container>
 
