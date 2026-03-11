@@ -14,6 +14,7 @@ import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJob } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 
 describe('CodingJobsComponent', () => {
   let component: CodingJobsComponent;
@@ -24,6 +25,7 @@ describe('CodingJobsComponent', () => {
   let coderServiceMock: Partial<CoderService>;
   let matSnackBarMock: Partial<MatSnackBar>;
   let matDialogMock: Partial<MatDialog>;
+  let userBackendServiceMock: Partial<UserBackendService>;
 
   const mockCodingJobs: Partial<CodingJob>[] = [
     {
@@ -77,8 +79,15 @@ describe('CodingJobsComponent', () => {
 
     appServiceMock = {
       selectedWorkspaceId: 1,
+      authData: {
+        userId: 1, isAdmin: false, userName: '', email: '', firstName: '', lastName: '', workspaces: []
+      },
       loggedUser: { sub: 'user-1' },
       createToken: jest.fn().mockReturnValue(of('token'))
+    };
+
+    userBackendServiceMock = {
+      getUsers: jest.fn().mockReturnValue(of([{ id: 1, accessLevel: 3 }]))
     };
 
     coderServiceMock = {
@@ -103,6 +112,7 @@ describe('CodingJobsComponent', () => {
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
         { provide: AppService, useValue: appServiceMock },
+        { provide: UserBackendService, useValue: userBackendServiceMock },
         { provide: CoderService, useValue: coderServiceMock },
         { provide: MatSnackBar, useValue: matSnackBarMock },
         { provide: MatDialog, useValue: matDialogMock },
@@ -117,6 +127,7 @@ describe('CodingJobsComponent', () => {
           { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
           { provide: CodingTrainingBackendService, useValue: codingTrainingBackendServiceMock },
           { provide: AppService, useValue: appServiceMock },
+          { provide: UserBackendService, useValue: userBackendServiceMock },
           { provide: CoderService, useValue: coderServiceMock },
           { provide: MatSnackBar, useValue: matSnackBarMock },
           { provide: MatDialog, useValue: matDialogMock }

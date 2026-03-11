@@ -27,6 +27,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AppService } from '../../../core/services/app.service';
+import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 
@@ -101,10 +102,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
   codingTrainingBackendService = inject(CodingTrainingBackendService);
+  private userBackendService = inject(UserBackendService);
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private coderService = inject(CoderService);
+
+  canApplyResults = false;
 
   private coderNamesByJobId = new Map<number, string>();
   allCoders: Coder[] = [];
@@ -139,9 +143,23 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       this.updateCoderNamesMap(this.dataSource.data);
     });
 
+    this.updateCanApplyResults();
     this.loadCoderTrainings();
     this.loadCodingJobs();
     window.addEventListener('focus', this.handleWindowFocus);
+  }
+
+  private updateCanApplyResults(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const userId = this.appService.authData.userId;
+    if (this.appService.authData.isAdmin || !workspaceId || userId <= 0) {
+      this.canApplyResults = this.appService.authData.isAdmin;
+      return;
+    }
+    this.userBackendService.getUsers(workspaceId).subscribe(users => {
+      const currentUser = users.find(u => u.id === userId);
+      this.canApplyResults = (currentUser?.accessLevel ?? 0) >= 3;
+    });
   }
 
   ngAfterViewInit(): void {
@@ -151,6 +169,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   loadCodingJobs(): void {
     this.isLoading = true;
+    this.updateCanApplyResults();
     this.loadCoderTrainings();
 
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -746,7 +765,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       height: '80vh',
       data: {
         codingJob: job,
-        workspaceId: workspaceId
+        workspaceId: workspaceId,
+        canApplyResults: this.canApplyResults
       }
     });
 

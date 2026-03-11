@@ -23,7 +23,8 @@ export class WorkspaceCodingResultsController {
   ) { }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({
