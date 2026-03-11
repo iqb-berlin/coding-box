@@ -46,6 +46,7 @@ export class WorkspaceFilesService implements OnModuleInit {
   private intendedIncompleteSchemeCache: Map<number, Map<string, Set<string>>> = new Map();
   // Maps workspaceId → unitName → Set of variable aliases that are derived variables
   private derivedVariableCache: Map<number, Map<string, Set<string>>> = new Map();
+  private readonly resourceTypeLabel = 'Resource';
 
   constructor(
     @InjectRepository(FileUpload)
@@ -64,6 +65,11 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
   ) { }
 
+  private getResourceSubtypeExtension(fileType: string): string | null {
+    const match = fileType.match(/^Resource\s*\((\.[^)]+)\)$/i);
+    return match ? match[1].toLowerCase() : null;
+  }
+
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
     this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
 
@@ -75,7 +81,28 @@ export class WorkspaceFilesService implements OnModuleInit {
         .andWhere('file.file_type IS NOT NULL')
         .getRawMany();
 
-      return result.map(item => item.file_type).sort();
+      const fileTypes = result.map(item => item.file_type);
+      const resourceExtensions = new Set(['.vocs', '.voud', '.vomd', '.html']);
+      if (fileTypes.includes(this.resourceTypeLabel)) {
+        const resourceFiles = await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .select('file.filename', 'filename')
+          .where('file.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
+          .getRawMany();
+
+        const resourceSubTypes = new Set<string>();
+        resourceFiles.forEach(({ filename }) => {
+          const extension = path.extname(String(filename)).toLowerCase();
+          if (resourceExtensions.has(extension)) {
+            resourceSubTypes.add(`${this.resourceTypeLabel} (${extension})`);
+          }
+        });
+
+        resourceSubTypes.forEach(t => fileTypes.push(t));
+      }
+
+      return Array.from(new Set(fileTypes)).sort();
     } catch (error) {
       this.logger.error(
         `Error fetching file types for workspace ${workspaceId}: ${error.message}`,
@@ -112,7 +139,14 @@ export class WorkspaceFilesService implements OnModuleInit {
       .where('file.workspace_id = :workspaceId', { workspaceId });
 
     if (fileType) {
-      qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      const resourceExtension = this.getResourceSubtypeExtension(fileType);
+      if (resourceExtension) {
+        qb = qb
+          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
+          .andWhere('LOWER(file.filename) LIKE :extension', { extension: `%${resourceExtension}` });
+      } else {
+        qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      }
     }
 
     if (fileSize) {
@@ -1554,21 +1588,52 @@ ${bookletRefs}
     try {
       this.logger.log(`Creating ZIP file for workspace ${workspaceId}`);
 
+      const normalizedFileTypes = (fileTypes || []).map(t => t.trim()).filter(Boolean);
+      const resourceExtensions = new Set<string>();
+      let resourceAllSelected = false;
+      const baseTypes = new Set<string>();
+
+      normalizedFileTypes.forEach(type => {
+        if (type === this.resourceTypeLabel) {
+          resourceAllSelected = true;
+          baseTypes.add(this.resourceTypeLabel);
+          resourceExtensions.clear();
+          return;
+        }
+        const extension = this.getResourceSubtypeExtension(type);
+        if (extension) {
+          if (!resourceAllSelected) {
+            resourceExtensions.add(extension);
+          }
+          baseTypes.add(this.resourceTypeLabel);
+          return;
+        }
+        baseTypes.add(type);
+      });
+
       let where: { workspace_id: number; file_type?: FindOperator<string> } = {
         workspace_id: workspaceId
       };
-      if (fileTypes && fileTypes.length > 0) {
+      if (baseTypes.size > 0) {
         where = {
           workspace_id: workspaceId,
-          file_type: In(fileTypes)
+          file_type: In(Array.from(baseTypes))
         };
       }
 
-      const files = await this.fileUploadRepository.find({
+      let files = await this.fileUploadRepository.find({
         where,
         order: { file_type: 'ASC', filename: 'ASC' },
         take: 3000
       });
+
+      if (!resourceAllSelected && resourceExtensions.size > 0) {
+        files = files.filter(file => {
+          if (file.file_type !== this.resourceTypeLabel) return true;
+          const extension = path.extname(file.filename).toLowerCase();
+          return resourceExtensions.has(extension);
+        });
+      }
 
       if (!files || files.length === 0) {
         this.logger.error(`No files found in workspace ${workspaceId}`);

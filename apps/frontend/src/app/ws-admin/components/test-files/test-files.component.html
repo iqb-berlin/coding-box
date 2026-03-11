@@ -57,7 +57,7 @@
               <mat-option value="">Alle Dateitypen</mat-option>
               @for (type of fileTypes; track type) {
               <mat-option [value]="type">
-                {{ type }}
+                {{ getFileTypeLabel(type) }}
               </mat-option>
               }
             </mat-select>
@@ -144,7 +144,7 @@
             'file-upload.file_type' | translate
             }}</mat-header-cell>
           <mat-cell *matCellDef="let element">
-            <span class="file-type-badge">{{ element.file_type }}</span>
+            <span class="file-type-badge">{{ getFileTypeLabel(element.file_type) }}</span>
           </mat-cell>
         </ng-container>
 
