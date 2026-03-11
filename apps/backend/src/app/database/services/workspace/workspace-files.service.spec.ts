@@ -208,3 +208,180 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
     expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
   });
 });
+
+describe('WorkspaceFilesService.findAllFileTypes', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const baseQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn()
+  };
+
+  const resourceQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn()
+  };
+
+  const mockFileUploadRepository = {
+    createQueryBuilder: jest.fn()
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileUploadRepository.createQueryBuilder
+      .mockReturnValueOnce(baseQueryBuilder)
+      .mockReturnValueOnce(resourceQueryBuilder);
+  });
+
+  it('should return resource subtypes for known extensions', async () => {
+    baseQueryBuilder.getRawMany.mockResolvedValue([
+      { file_type: 'Resource' },
+      { file_type: 'Unit' }
+    ]);
+    resourceQueryBuilder.getRawMany.mockResolvedValue([
+      { filename: 'test1.vocs' },
+      { filename: 'test2.voud' },
+      { filename: 'test3.vomd' },
+      { filename: 'test4.html' },
+      { filename: 'test5.txt' }
+    ]);
+
+    const service = makeService();
+    const result = await service.findAllFileTypes(1);
+
+    expect(result).toEqual(expect.arrayContaining([
+      'Resource',
+      'Unit',
+      'Resource (.vocs)',
+      'Resource (.voud)',
+      'Resource (.vomd)',
+      'Resource (.html)'
+    ]));
+  });
+});
+
+describe('WorkspaceFilesService.findFiles', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn().mockReturnThis(),
+    take: jest.fn().mockReturnThis(),
+    getManyAndCount: jest.fn().mockResolvedValue([[], 0])
+  };
+
+  const mockFileTypesQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue([])
+  };
+
+  const mockFileUploadRepository = {
+    createQueryBuilder: jest.fn()
+  };
+
+  const mockService = () => new WorkspaceFilesService(
+    mockFileUploadRepository as unknown as CtorParams[0],
+    {} as unknown as CtorParams[1],
+    {} as unknown as CtorParams[2],
+    {} as unknown as CtorParams[3],
+    {} as unknown as CtorParams[4],
+    {} as unknown as CtorParams[5],
+    {} as unknown as CtorParams[6],
+    {} as unknown as CtorParams[7],
+    {} as unknown as CtorParams[8],
+    {} as unknown as CtorParams[9]
+  );
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileUploadRepository.createQueryBuilder
+      .mockReturnValueOnce(mockQueryBuilder)
+      .mockReturnValueOnce(mockFileTypesQueryBuilder);
+  });
+
+  it('should filter resource subtypes by file extension', async () => {
+    const service = mockService();
+    await service.findFiles(1, { page: 1, limit: 20, fileType: 'Resource (.vocs)' });
+
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'file.file_type = :fileType',
+      { fileType: 'Resource' }
+    );
+    expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'LOWER(file.filename) LIKE :extension',
+      { extension: '%.vocs' }
+    );
+  });
+});
+
+describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockFileUploadRepository = {
+    find: jest.fn()
+  };
+  const mockWorkspaceFileStorageService = {
+    createZipBufferFromFiles: jest.fn().mockReturnValue(Buffer.from('zip'))
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      mockWorkspaceFileStorageService as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should filter resource files by selected subtype for zip export', async () => {
+    mockFileUploadRepository.find.mockResolvedValue([
+      { file_type: 'Resource', filename: 'a.vocs' },
+      { file_type: 'Resource', filename: 'b.voud' },
+      { file_type: 'Unit', filename: 'unit.xml' }
+    ]);
+
+    const service = makeService();
+    await service.downloadWorkspaceFilesAsZip(1, ['Resource (.vocs)']);
+
+    expect(mockWorkspaceFileStorageService.createZipBufferFromFiles).toHaveBeenCalled();
+    const [filesPassed] = mockWorkspaceFileStorageService.createZipBufferFromFiles.mock.calls[0];
+    expect(filesPassed).toEqual([
+      { file_type: 'Resource', filename: 'a.vocs' },
+      { file_type: 'Unit', filename: 'unit.xml' }
+    ]);
+  });
+});
