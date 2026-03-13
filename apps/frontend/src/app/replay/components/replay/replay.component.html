@@ -19,7 +19,15 @@
       }
       }
       @if (testPerson && unitId) {
-      <div class="watermark">{{ testPerson }} - {{ unitId }}</div>
+      <div
+        #watermark
+        class="watermark"
+        [class.truncated]="isWatermarkTruncated"
+        [matTooltip]="watermarkText"
+        [matTooltipDisabled]="!isWatermarkTruncated"
+        matTooltipPosition="above">
+        {{ watermarkText }}
+      </div>
       }
     </div>
 
