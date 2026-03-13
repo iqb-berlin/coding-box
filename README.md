@@ -214,6 +214,30 @@ und geben Sie danach folgenden Befehl zum Hochfahren der Webanwendung ein:
 make coding-box-up
 ```
 
+## Authentication
+
+### Keycloak Auth Flow (OIDC + PKCE)
+
+Die Anwendung nutzt **Keycloak** als Identity Provider mit dem **OAuth2 Authorization Code Flow** und **PKCE**:
+
+1. **Login starten** (`GET /api/auth/login`): Backend erzeugt `state` und PKCE (`code_verifier`, `code_challenge`) und leitet zum Keycloak‑Login weiter.
+2. **Benutzer‑Login**: Nutzer meldet sich bei Keycloak an (Passwort, SSO, etc.).
+3. **Callback** (`GET /api/auth/callback`): Keycloak liefert `code` und `state` zurück.
+4. **Token‑Exchange**: Backend tauscht `code` gegen Tokens am Keycloak‑Token‑Endpoint, mit PKCE `code_verifier` (ohne Client‑Secret).
+5. **Userinfo**: Backend ruft User‑Profil via `userinfo`‑Endpoint ab.
+6. **User‑Persistenz**: Nutzer wird in der lokalen DB gespeichert (Identität über `sub`).
+7. **Token‑Weitergabe**: Backend leitet den Nutzer zur Frontend‑URL zurück und hängt `token`, `id_token`, `refresh_token` als Query‑Params an.
+8. **Frontend‑Session**: Frontend speichert Tokens in `localStorage` und lädt `auth-data` (Arbeitsbereiche).
+
+Details:
+- `state` enthält optional die Ziel‑URL (`redirect_uri`) und wird serverseitig geprüft.
+- PKCE‑Verifier wird serverseitig kurzzeitig gespeichert (TTL 5 Minuten).
+- API‑Requests senden den Access‑Token als `Authorization: Bearer <token>`.
+- Logout nutzt `POST /api/auth/logout` und invalidiert die SSO‑Session bei Keycloak.
+
+---
+
+## Additional Information
 Nachdem die Prozesse dieser Befehle beendet sind, ist der Edge-Router und das Monitoring aktiv, die Kodierbox
 Datenbank eingerichtet, die Kodierbox API und Web-Site ansprechbar.
 Ein Zugriff auf den Server über einen Browser sollte dann sofort möglich sein.

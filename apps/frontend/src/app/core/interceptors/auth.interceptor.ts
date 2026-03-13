@@ -4,12 +4,15 @@ import {
   HttpHandlerFn,
   HttpHeaders,
   HttpInterceptorFn,
-  HttpRequest
+  HttpRequest,
+  HttpErrorResponse
 } from '@angular/common/http';
 import {
-  finalize,
   Observable,
-  tap
+  catchError,
+  finalize,
+  tap,
+  throwError
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
@@ -23,25 +26,47 @@ export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
   next: HttpHandlerFn
 ): Observable<HttpEvent<unknown>> => {
-  const appService: AppService = inject(AppService);
-  const snackBar = inject(MatSnackBar);
+  const appService = inject(AppService);
   const authService = inject(AuthService);
+  const snackBar = inject(MatSnackBar);
   let httpErrorInfo: AppHttpError | null = null;
 
   let modifiedReq = req;
 
+  // Add auth token to request if available and not already present
   if (!req.headers.has('Authorization')) {
-    const idToken = localStorage.getItem('id_token');
-    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
-    modifiedReq = req.clone({ headers });
+    const token = authService.getToken();
+    if (token) {
+      const headers = new HttpHeaders({ Authorization: `Bearer ${token}` });
+      modifiedReq = req.clone({ headers });
+    }
   }
 
   return next(modifiedReq)
     .pipe(
+      catchError((error: HttpErrorResponse) => {
+        // Handle 401 Unauthorized responses by redirecting to login
+        if (error.status === 401) {
+          authService.login();
+        }
+
+        httpErrorInfo = new AppHttpError(error);
+        return throwError(() => error);
+      }),
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
-          if (error.status === 401 || error.status === 403) {
+          if (error.status === 500 || error.status === 999) {
+            appService.setBackendUnavailable(true);
+            snackBar.open(
+              'Backend ist nicht verfügbar. Bitte versuchen Sie es später erneut.',
+              'Schließen',
+              {
+                duration: 0,
+                panelClass: ['error-snackbar']
+              }
+            );
+          } else if (error.status === 401 || error.status === 403) {
             const errorMessage = error.error?.message || error.message || '';
 
             if (errorMessage.includes('Access level')) {
@@ -75,6 +100,9 @@ export const authInterceptor: HttpInterceptorFn = (
                 }
               );
             }
+          }
+          if (!httpErrorInfo) {
+            httpErrorInfo = new AppHttpError(error);
           }
         }
       }),
