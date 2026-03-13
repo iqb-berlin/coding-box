@@ -13,11 +13,13 @@ import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { MissingsProfilesService } from './missings-profiles.service';
+import type { CaseSelectionMode } from '../../entities/coder-training.entity';
 
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
@@ -62,6 +64,7 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(User), useValue: mockRepository },
         { provide: getRepositoryToken(ResponseEntity), useValue: mockRepository },
         { provide: getRepositoryToken(VariableBundle), useValue: mockRepository },
+        { provide: getRepositoryToken(ChunkEntity), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
         { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } }
@@ -209,6 +212,119 @@ describe('CoderTrainingService', () => {
         sampleCount: 25
       });
       expect(result[0].assigned_coders).toEqual([10]);
+    });
+  });
+
+  describe('sampleResponses', () => {
+    type SampleResponse = {
+      responseId: number;
+      unitAlias: string;
+      variableId: string;
+      unitName: string;
+      value: string;
+      personLogin: string;
+      personCode: string;
+      personGroup: string;
+      bookletName: string;
+      variable: string;
+      chunkTs?: number;
+    };
+
+    type SampleResponsesFn = (
+      responses: SampleResponse[],
+      sampleCount: number,
+      caseSelectionMode?: CaseSelectionMode
+    ) => SampleResponse[];
+
+    const getSampleResponses = (svc: CoderTrainingService): SampleResponsesFn =>
+      (svc as unknown as { sampleResponses: SampleResponsesFn }).sampleResponses.bind(svc);
+
+    const makeResponse = (responseId: number, chunkTs?: number, personGroup = '') => ({
+      responseId,
+      unitAlias: 'unit',
+      variableId: 'var',
+      unitName: 'unit',
+      value: 'value',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup,
+      bookletName: 'booklet',
+      variable: 'var',
+      chunkTs
+    });
+
+    it('should select oldest responses by chunk timestamp for oldest_first', () => {
+      const responses = [
+        makeResponse(4, 90),
+        makeResponse(2, 90),
+        makeResponse(3, 100)
+      ];
+
+      const result = getSampleResponses(service)(responses, 2, 'oldest_first');
+
+      expect(result.map((r: { responseId: number }) => r.responseId)).toEqual([2, 4]);
+    });
+
+    it('should select newest responses by chunk timestamp for newest_first', () => {
+      const responses = [
+        makeResponse(4, 90),
+        makeResponse(2, 90),
+        makeResponse(3, 100)
+      ];
+
+      const result = getSampleResponses(service)(responses, 2, 'newest_first');
+
+      expect(result.map((r: { responseId: number }) => r.responseId)).toEqual([3, 4]);
+    });
+
+    it('should sample one response per group for random_per_testgroup when sampleCount matches groups', () => {
+      const responses = [
+        makeResponse(1, 10, 'A'),
+        makeResponse(2, 20, 'A'),
+        makeResponse(3, 10, 'B'),
+        makeResponse(4, 20, 'B')
+      ];
+
+      const result = getSampleResponses(service)(responses, 2, 'random_per_testgroup');
+
+      expect(result).toHaveLength(2);
+      const groups = Array.from(new Set(result.map((r: { personGroup: string }) => r.personGroup))).sort();
+      expect(groups).toEqual(['A', 'B']);
+    });
+  });
+
+  describe('getTrainingResponseIds', () => {
+    it('should return empty map when no training IDs are provided', async () => {
+      const result = await service.getTrainingResponseIds(1, []);
+
+      expect(result).toEqual({});
+    });
+
+    it('should group response IDs by unit and variable and remove duplicates', async () => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([
+          { unitKey: 'unitA', variableId: 'v1', responseId: 5 },
+          { unitKey: 'unitA', variableId: 'v1', responseId: 5 },
+          { unitKey: 'unitA', variableId: 'v1', responseId: 7 },
+          { unitKey: 'unitB', variableId: 'v2', responseId: 3 }
+        ])
+      };
+
+      (mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await service.getTrainingResponseIds(1, [10, 20]);
+
+      expect((mockRepository as { createQueryBuilder?: jest.Mock }).createQueryBuilder).toHaveBeenCalledWith('cju');
+      expect(result).toEqual({
+        'unitA:v1': [5, 7],
+        'unitB:v2': [3]
+      });
     });
   });
 });
