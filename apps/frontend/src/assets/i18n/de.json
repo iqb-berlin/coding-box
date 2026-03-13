@@ -1480,6 +1480,22 @@
       "continuous": "Kontinuierlich - Alle Fälle einer Variable zusammen",
       "alternating": "Abwechselnd - Alle Variablen eines Falls, dann nächster Fall"
     },
+    "case-selection-mode": {
+      "title": "Fallauswahl-Strategie",
+      "description": "Wählen Sie, welche Fälle für die Schulung ausgewählt werden.",
+      "oldest_first": "Älteste zuerst (erste n Fälle nach Zeitstempel)",
+      "newest_first": "Neueste zuerst (letzte n Fälle nach Zeitstempel)",
+      "random": "Komplett zufällig",
+      "random_per_testgroup": "Zufällig aus allen Testgruppen (gleich viele pro Gruppe)",
+      "random_testgroups": "Zufällige Testgruppen (eine Gruppe nach der anderen)"
+    },
+    "reference-trainings": {
+      "title": "Referenz-Schulung(en)",
+      "description": "Optional: Beschränken Sie die Fallauswahl auf Fälle aus anderen Schulungen.",
+      "select-placeholder": "Schulungen auswählen",
+      "same": "Nur gleiche Fälle wie in der/den gewählten Schulung(en)",
+      "different": "Nur andere Fälle als in der/den gewählten Schulung(en)"
+    },
     "selection-summary": {
       "title": "Ausgewählte Elemente",
       "variables": "Variablen:",
