@@ -1,5 +1,5 @@
 import {
-  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
+  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, ViewChild, HostListener, inject,
   input
 } from '@angular/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -83,6 +83,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   isReviewMode: boolean = false;
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
+  isWatermarkTruncated: boolean = false;
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -91,6 +92,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly unitIdInput = input<string>();
   protected unitsData: UnitsReplay | null = null;
   @ViewChild(UnitPlayerComponent) unitPlayerComponent: UnitPlayerComponent | undefined;
+  @ViewChild('watermark')
+  set watermarkRef(ref: ElementRef<HTMLElement> | undefined) {
+    this.watermarkElement = ref ?? null;
+    this.setupWatermarkObserver();
+  }
+
   private replayStartTime: number = 0; // Track when replay viewing starts
   private routeStartTime: number = 0;
   private payloadRequestStartTime: number = 0;
@@ -99,6 +106,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   protected reloadKey: number = 0;
   workspaceId: number = 0;
   originResponseId: number | null = null;
+  private watermarkElement: ElementRef<HTMLElement> | null = null;
+  private watermarkObserver: ResizeObserver | null = null;
+  private watermarkCheckPending: boolean = false;
 
   // Resize handle state
   codePanelWidth: number = 350;
@@ -326,6 +336,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } else {
       this.testPerson = testPerson;
     }
+  }
+
+  get watermarkText(): string {
+    if (!this.testPerson || !this.unitId) {
+      return '';
+    }
+    return `${this.testPerson} - ${this.unitId}`;
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
@@ -658,6 +675,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
     this.resetSnackBars();
+    this.watermarkObserver?.disconnect();
+    this.watermarkObserver = null;
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
@@ -862,11 +881,67 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const dx = this.resizeStartX - event.clientX; // dragging left = wider panel
     const maxWidth = window.innerWidth * this.MAX_PANEL_WIDTH_RATIO;
     this.codePanelWidth = Math.min(maxWidth, Math.max(this.MIN_PANEL_WIDTH, this.resizeStartWidth + dx));
+    this.scheduleWatermarkCheck();
   }
 
   @HostListener('document:mouseup')
   onResizeEnd(): void {
     this.isResizing = false;
+  }
+
+  @HostListener('window:resize')
+  onWindowResize(): void {
+    this.scheduleWatermarkCheck();
+  }
+
+  private setupWatermarkObserver(): void {
+    this.watermarkObserver?.disconnect();
+    this.watermarkObserver = null;
+
+    const element = this.watermarkElement?.nativeElement;
+    if (!element) {
+      this.isWatermarkTruncated = false;
+      return;
+    }
+
+    this.scheduleWatermarkCheck();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    this.watermarkObserver = new ResizeObserver(() => {
+      this.scheduleWatermarkCheck();
+    });
+    this.watermarkObserver.observe(element);
+  }
+
+  private scheduleWatermarkCheck(): void {
+    if (this.watermarkCheckPending) return;
+    this.watermarkCheckPending = true;
+    const runCheck = () => {
+      this.watermarkCheckPending = false;
+      this.updateWatermarkTruncation();
+    };
+
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(runCheck);
+    } else {
+      setTimeout(runCheck, 0);
+    }
+  }
+
+  private updateWatermarkTruncation(): void {
+    const element = this.watermarkElement?.nativeElement;
+    if (!element) {
+      this.isWatermarkTruncated = false;
+      return;
+    }
+
+    const isTruncated = element.scrollWidth > element.clientWidth + 1;
+    if (this.isWatermarkTruncated !== isTruncated) {
+      this.isWatermarkTruncated = isTruncated;
+    }
   }
 
   private loadCodingSchemeForCodingJob(): void {
