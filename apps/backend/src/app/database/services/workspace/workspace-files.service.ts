@@ -44,6 +44,8 @@ export class WorkspaceFilesService implements OnModuleInit {
   private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
   // Maps workspaceId → unitName → Set of variable IDs that have INTENDED_INCOMPLETE code in their coding scheme
   private intendedIncompleteSchemeCache: Map<number, Map<string, Set<string>>> = new Map();
+  // Maps workspaceId → unitName → Set of variable IDs that have CODER_TRAINING_REQUIRED processing property
+  private coderTrainingRequiredCache: Map<number, Map<string, Set<string>>> = new Map();
   // Maps workspaceId → unitName → Set of variable aliases that are derived variables
   private derivedVariableCache: Map<number, Map<string, Set<string>>> = new Map();
   private readonly resourceTypeLabel = 'Resource';
@@ -2143,6 +2145,7 @@ ${bookletRefs}
       // Maps unitId → Map<schemeId, alias> for translating scheme IDs to response variableids
       const schemeIdToAliasMap = new Map<string, Map<string, string>>();
       const intendedIncompleteByUnit = new Map<string, Set<string>>();
+      const trainingRequiredByUnit = new Map<string, Set<string>>();
       for (const scheme of codingSchemes) {
         try {
           const unitId = scheme.file_id.replace('.VOCS', '');
@@ -2151,6 +2154,7 @@ ${bookletRefs}
               id: string;
               alias?: string;
               sourceType?: string;
+              processing?: string[];
               codes?: Array<{ type?: string }>;
             }[];
           };
@@ -2163,6 +2167,8 @@ ${bookletRefs}
             // Collect scheme variable IDs (not aliases!) that have INTENDED_INCOMPLETE code type.
             // These will be translated to aliases during unit XML parsing below.
             const intendedIncompleteSchemeIds = new Set<string>();
+            // Collect scheme variable IDs that have CODER_TRAINING_REQUIRED processing property.
+            const trainingRequiredSchemeIds = new Set<string>();
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
@@ -2180,6 +2186,12 @@ ${bookletRefs}
                   intendedIncompleteSchemeIds.add(vc.id);
                 }
               }
+              // Track variables with CODER_TRAINING_REQUIRED
+              if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
+                  trainingRequiredSchemeIds.add(vc.id);
+                }
+              }
             }
             codingSchemeMap.set(unitId, variableSourceTypes);
             schemeIdToAliasMap.set(unitId, idToAlias);
@@ -2189,10 +2201,12 @@ ${bookletRefs}
               );
               // Store by unitId so we can resolve to aliases during XML parsing
               intendedIncompleteByUnit.set(unitId, intendedIncompleteSchemeIds);
-            } else {
+            }
+            if (trainingRequiredSchemeIds.size > 0) {
               this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has NO INTENDED_INCOMPLETE code types`
+                `[DEBUG] Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
               );
+              trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
           }
         } catch (error) {
@@ -2209,6 +2223,8 @@ ${bookletRefs}
       const intendedIncompleteAliasByUnit = new Map<string, Set<string>>();
       // Tracks derived variable aliases per unit for derivedVariableCache
       const derivedVariablesByUnit = new Map<string, Set<string>>();
+      // Maps unitId → alias-keyed set of variables with CODER_TRAINING_REQUIRED
+      const trainingRequiredAliasByUnit = new Map<string, Set<string>>();
 
       for (const unitFile of unitFiles) {
         try {
@@ -2226,8 +2242,12 @@ ${bookletRefs}
             const variables = new Set<string>();
             // Scheme IDs that have INTENDED_INCOMPLETE code type (from the .VOCS file)
             const schemeIdsWithIntendedIncomplete = intendedIncompleteByUnit.get(unitName);
+            // Scheme IDs that have CODER_TRAINING_REQUIRED processing property
+            const schemeIdsWithTrainingRequired = trainingRequiredByUnit.get(unitName);
             // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
             const aliasesWithIntendedIncomplete = new Set<string>();
+            // Aliases that map to scheme IDs with CODER_TRAINING_REQUIRED
+            const aliasesWithTrainingRequired = new Set<string>();
             // Derived variable aliases for this unit
             const derivedAliases = new Set<string>();
 
@@ -2256,6 +2276,10 @@ ${bookletRefs}
                     this.logger.debug(
                       `[DEBUG] Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
+                  }
+                  // Check CODER_TRAINING_REQUIRED
+                  if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
+                    aliasesWithTrainingRequired.add(variable.$.alias);
                   }
                 }
               }
@@ -2313,6 +2337,10 @@ ${bookletRefs}
                     `[DEBUG] Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                   );
                 }
+                // Check CODER_TRAINING_REQUIRED
+                if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
+                  aliasesWithTrainingRequired.add(alias);
+                }
               }
             } else {
               this.logger.debug(
@@ -2348,12 +2376,19 @@ ${bookletRefs}
                       `[DEBUG] Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
+                  // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
+                  if (schemeIdsWithTrainingRequired?.has(schemeId)) {
+                    aliasesWithTrainingRequired.add(resolvedAlias);
+                  }
                 }
               }
             }
 
             if (aliasesWithIntendedIncomplete.size > 0) {
               intendedIncompleteAliasByUnit.set(unitName, aliasesWithIntendedIncomplete);
+            }
+            if (aliasesWithTrainingRequired.size > 0) {
+              trainingRequiredAliasByUnit.set(unitName, aliasesWithTrainingRequired);
             }
             if (derivedAliases.size > 0) {
               derivedVariablesByUnit.set(unitName, derivedAliases);
@@ -2370,6 +2405,7 @@ ${bookletRefs}
       this.unitVariableCache.set(workspaceId, unitVariables);
       // Store alias-based map (not the scheme-ID-based intendedIncompleteByUnit)
       this.intendedIncompleteSchemeCache.set(workspaceId, intendedIncompleteAliasByUnit);
+      this.coderTrainingRequiredCache.set(workspaceId, trainingRequiredAliasByUnit);
       this.derivedVariableCache.set(workspaceId, derivedVariablesByUnit);
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`
@@ -2425,6 +2461,19 @@ ${bookletRefs}
     return this.derivedVariableCache.get(workspaceId) || new Map();
   }
 
+  /**
+   * Returns a map of unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED
+   * processing property in their coding scheme.
+   */
+  async getCoderTrainingRequiredVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    if (!this.coderTrainingRequiredCache.has(workspaceId)) {
+      await this.refreshUnitVariableCache(workspaceId);
+    }
+    return this.coderTrainingRequiredCache.get(workspaceId) || new Map();
+  }
+
   async getUnitVariableDetails(
     workspaceId: number
   ): Promise<UnitVariableDetailsDto[]> {
@@ -2462,6 +2511,10 @@ ${bookletRefs}
       string,
       Map<string, boolean>
       >();
+      const codingSchemeTrainingRequiredMap = new Map<
+      string,
+      Map<string, boolean>
+      >();
 
       for (const scheme of codingSchemes) {
         try {
@@ -2472,6 +2525,7 @@ ${bookletRefs}
             variableCodings?: {
               id: string;
               sourceType?: string;
+              processing?: string[];
               codes?: Array<{
                 id: number | string;
                 label?: string;
@@ -2492,11 +2546,18 @@ ${bookletRefs}
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
+            const variableTrainingRequired = new Map<string, boolean>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
               }
+              if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
+                  variableTrainingRequired.set(vc.id, true);
+                }
+              }
+
               if (vc.id && vc.codes && Array.isArray(vc.codes)) {
                 const codes = vc.codes
                   .filter(code => code.id !== undefined)
@@ -2535,6 +2596,10 @@ ${bookletRefs}
               variableManualInstructions
             );
             codingSchemeClosedCodingMap.set(unitId, variableClosedCoding);
+            codingSchemeTrainingRequiredMap.set(
+              unitId,
+              variableTrainingRequired
+            );
           }
         } catch (error) {
           this.logger.error(
@@ -2580,6 +2645,7 @@ ${bookletRefs}
               isDerived?: boolean;
               hasManualInstruction?: boolean;
               hasClosedCoding?: boolean;
+              coderTrainingRequired?: boolean;
             }> = [];
 
             // Process BaseVariables
@@ -2617,6 +2683,10 @@ ${bookletRefs}
                     codingSchemeClosedCodingMap.get(unitName);
                   const hasClosedCoding =
                     unitClosedCoding?.get(variableId) || false;
+                  const unitTrainingRequired =
+                    codingSchemeTrainingRequiredMap.get(unitName);
+                  const coderTrainingRequired =
+                    unitTrainingRequired?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -2636,7 +2706,8 @@ ${bookletRefs}
                     codes: variableCodes,
                     isDerived: false,
                     hasManualInstruction,
-                    hasClosedCoding
+                    hasClosedCoding,
+                    coderTrainingRequired
                   });
                 }
               }
@@ -2677,6 +2748,10 @@ ${bookletRefs}
                     codingSchemeClosedCodingMap.get(unitName);
                   const hasClosedCoding =
                     unitClosedCoding?.get(variableId) || false;
+                  const unitTrainingRequired =
+                    codingSchemeTrainingRequiredMap.get(unitName);
+                  const coderTrainingRequired =
+                    unitTrainingRequired?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -2696,7 +2771,8 @@ ${bookletRefs}
                     codes: variableCodes,
                     isDerived: true,
                     hasManualInstruction,
-                    hasClosedCoding
+                    hasClosedCoding,
+                    coderTrainingRequired
                   });
                 }
               }

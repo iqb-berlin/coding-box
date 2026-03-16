@@ -29,6 +29,7 @@ export interface CodingExportConfig {
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
   excludeAutoCoded?: boolean;
+  trainingRequired?: boolean;
   jobDefinitionIds?: number[];
   coderTrainingIds?: number[];
   coderIds?: number[];
@@ -211,7 +212,8 @@ export class CodingJobBackendService {
 
   getCodingIncompleteVariables(
     workspaceId: number,
-    unitName?: string
+    unitName?: string,
+    trainingRequired?: boolean
   ): Observable<
     {
       unitName: string;
@@ -221,12 +223,16 @@ export class CodingJobBackendService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired?: boolean;
     }[]
     > {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/incomplete-variables`;
     let params = new HttpParams();
     if (unitName) {
       params = params.set('unitName', unitName);
+    }
+    if (trainingRequired !== undefined) {
+      params = params.set('trainingRequired', trainingRequired.toString());
     }
     params = params.set('_t', Date.now().toString());
     return this.http.get<
@@ -238,6 +244,7 @@ export class CodingJobBackendService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired?: boolean;
     }[]
     >(url, { params, headers: this.authHeader });
   }

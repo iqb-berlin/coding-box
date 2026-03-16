@@ -47,6 +47,12 @@ export class WorkspaceCodingExportController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding list exported as CSV',
     content: {
@@ -62,13 +68,21 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('trainingRequired') trainingRequired: string,
       @Res() res: Response
   ): Promise<void> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
     return this.codingListExportService.exportCodingListAsCsv(
       workspace_id,
       authToken,
       serverUrl,
-      res
+      res,
+      trainingRequiredParam
     );
   }
 
@@ -88,6 +102,12 @@ export class WorkspaceCodingExportController {
     description: 'Server URL to use for generating links',
     type: String
   })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding list exported as Excel',
     content: {
@@ -103,13 +123,21 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('trainingRequired') trainingRequired: string,
       @Res() res: Response
   ): Promise<void> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
     return this.codingListExportService.exportCodingListAsExcel(
       workspace_id,
       authToken,
       serverUrl,
-      res
+      res,
+      trainingRequiredParam
     );
   }
 
@@ -128,6 +156,12 @@ export class WorkspaceCodingExportController {
     required: false,
     description: 'Server URL to use for generating links',
     type: String
+  })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
   })
   @ApiOkResponse({
     description: 'Coding list exported as JSON',
@@ -158,13 +192,21 @@ export class WorkspaceCodingExportController {
     @WorkspaceId() workspace_id: number,
       @Query('authToken') authToken: string,
       @Query('serverUrl') serverUrl: string,
+      @Query('trainingRequired') trainingRequired: string,
       @Res() res: Response
   ): Promise<void> {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
     return this.codingListExportService.exportCodingListAsJson(
       workspace_id,
       authToken,
       serverUrl,
-      res
+      res,
+      trainingRequiredParam
     );
   }
 
@@ -863,6 +905,7 @@ export class WorkspaceCodingExportController {
         includeModalValue: { type: 'boolean' },
         includeDoubleCoded: { type: 'boolean' },
         excludeAutoCoded: { type: 'boolean' },
+        trainingRequired: { type: 'boolean' },
         authToken: { type: 'string' }
       }
     }

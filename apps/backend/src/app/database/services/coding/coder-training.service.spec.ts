@@ -236,8 +236,7 @@ describe('CoderTrainingService', () => {
       caseSelectionMode?: CaseSelectionMode
     ) => SampleResponse[];
 
-    const getSampleResponses = (svc: CoderTrainingService): SampleResponsesFn =>
-      (svc as unknown as { sampleResponses: SampleResponsesFn }).sampleResponses.bind(svc);
+    const getSampleResponses = (svc: CoderTrainingService): SampleResponsesFn => (svc as unknown as { sampleResponses: SampleResponsesFn }).sampleResponses.bind(svc);
 
     const makeResponse = (responseId: number, chunkTs?: number, personGroup = '') => ({
       responseId,

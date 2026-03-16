@@ -336,11 +336,11 @@ export class CodingManagementService {
 
   // --- Download Helpers ---
 
-  downloadCodingList(format: ExportFormat): void {
+  downloadCodingList(format: ExportFormat, trainingRequired?: boolean): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    this.performBackgroundCodingListDownload(workspaceId, format);
+    this.performBackgroundCodingListDownload(workspaceId, format, trainingRequired);
   }
 
   downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
@@ -401,9 +401,10 @@ export class CodingManagementService {
 
   codingListDownloadProgress$ = new BehaviorSubject<number | null>(null);
 
-  private async performBackgroundCodingListDownload(
+  async performBackgroundCodingListDownload(
     workspaceId: number,
-    format: ExportFormat
+    format: ExportFormat,
+    trainingRequired?: boolean
   ): Promise<void> {
     this.codingListDownloadProgress$.next(0);
 
@@ -414,7 +415,9 @@ export class CodingManagementService {
         workspaceId,
         'coding-list',
         undefined,
-        format
+        format,
+        false,
+        trainingRequired
       ).toPromise();
 
       if (!jobStartResult) {
