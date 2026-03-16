@@ -12,11 +12,16 @@ import {
   WidthType,
   PageNumber,
   ITableCellBorders,
-  Header, FileChild
+  Header,
+  FileChild,
+  ParagraphChild,
+  ImportedXmlComponent
 } from 'docx';
 import * as cheerio from 'cheerio';
 // Using type-only import to avoid dependency warning
 import type { AnyNode, Element } from 'domhandler';
+import * as katex from 'katex';
+import { mml2omml } from 'mathml2omml';
 import {
   BookVariable, CodeBookContentSetting, CodebookUnitDto, ItemMetadata
 } from './codebook.interfaces';
@@ -25,6 +30,39 @@ import {
  * Class for generating DOCX files for codebooks
  */
 export class CodebookDocxGenerator {
+  private static decodeLatex(latex: string): string {
+    if (!latex) return '';
+    try {
+      return decodeURIComponent(latex);
+    } catch {
+      return latex;
+    }
+  }
+
+  private static latexToOmml(latex: string): ImportedXmlComponent | null {
+    const trimmed = latex.trim();
+    if (!trimmed) return null;
+    try {
+      const mathml = katex.renderToString(trimmed, {
+        output: 'mathml',
+        throwOnError: false,
+        strict: 'ignore'
+      });
+      const omml = mml2omml(mathml);
+      return ImportedXmlComponent.fromXmlString(omml);
+    } catch {
+      return null;
+    }
+  }
+
+  private static normalizeMathTokens(html: string): string {
+    return html.replace(/\[\[iqb-math:([\s\S]*?)]]/g, (_, encodedFormula: string) => {
+      const latex = this.decodeLatex(encodedFormula);
+      const escapedLatex = latex.replace(/"/g, '&quot;');
+      return `<span class="iqb-math-formula" data-latex="${escapedLatex}"></span>`;
+    });
+  }
+
   /**
    * Generate a DOCX file for a codebook
    * @param codingBookUnits List of codebook units
@@ -531,7 +569,8 @@ export class CodebookDocxGenerator {
     if (!html) return paragraphs;
 
     try {
-      const $ = cheerio.load(`<div>${html}</div>`);
+      const normalizedHtml = this.normalizeMathTokens(html);
+      const $ = cheerio.load(`<div>${normalizedHtml}</div>`);
       const rootElement = $('div')[0];
 
       if (rootElement && rootElement.children) {
@@ -560,10 +599,10 @@ export class CodebookDocxGenerator {
         const tagName = element.name.toLowerCase();
 
         if (tagName === 'p') {
-          const textRuns: TextRun[] = [];
-          this.processInlineElements(element.children, textRuns);
-          if (textRuns.length > 0) {
-            paragraphs.push(new Paragraph({ children: textRuns }));
+          const children: ParagraphChild[] = [];
+          this.processInlineElements(element.children, children);
+          if (children.length > 0) {
+            paragraphs.push(new Paragraph({ children }));
           }
         } else if (tagName === 'ul' || tagName === 'ol') {
           this.processListElements(element.children, paragraphs, tagName === 'ol');
@@ -577,23 +616,37 @@ export class CodebookDocxGenerator {
   /**
    * Process inline elements
    * @param nodes List of nodes
-   * @param textRuns List of text runs
+   * @param children List of paragraph children
    */
-  private static processInlineElements(nodes: AnyNode[], textRuns: TextRun[]): void {
+  private static processInlineElements(nodes: AnyNode[], children: ParagraphChild[]): void {
     for (const node of nodes) {
       if (node.type === 'text') {
         if ('data' in node && node.data && node.data.trim()) {
-          textRuns.push(new TextRun({ text: node.data.trim() }));
+          children.push(new TextRun({ text: node.data.trim() }));
         }
       } else if (node.type === 'tag') {
         const element = node as Element;
         const tagName = element.name.toLowerCase();
 
+        if (tagName === 'span' && element.attribs?.class?.includes('iqb-math-formula')) {
+          const rawLatex = element.attribs?.['data-latex'] || '';
+          const latex = this.decodeLatex(rawLatex).trim();
+          if (latex) {
+            const ommlComponent = this.latexToOmml(latex);
+            if (ommlComponent) {
+              children.push(ommlComponent);
+            } else {
+              children.push(new TextRun({ text: latex }));
+            }
+          }
+          continue;
+        }
+
         if (tagName === 'strong' || tagName === 'b') {
           if (element.children) {
             for (const child of element.children) {
               if (child.type === 'text' && child.data) {
-                textRuns.push(new TextRun({ text: child.data.trim(), bold: true }));
+                children.push(new TextRun({ text: child.data.trim(), bold: true }));
               }
             }
           }
@@ -601,12 +654,12 @@ export class CodebookDocxGenerator {
           if (element.children) {
             for (const child of element.children) {
               if (child.type === 'text' && child.data) {
-                textRuns.push(new TextRun({ text: child.data.trim(), italics: true }));
+                children.push(new TextRun({ text: child.data.trim(), italics: true }));
               }
             }
           }
         } else if (element.children && element.children.length > 0) {
-          this.processInlineElements(element.children, textRuns);
+          this.processInlineElements(element.children, children);
         }
       }
     }
@@ -624,11 +677,11 @@ export class CodebookDocxGenerator {
       if (node.type === 'tag') {
         const element = node as Element;
         if (element.name.toLowerCase() === 'li') {
-          const textRuns: TextRun[] = [];
-          this.processInlineElements(element.children, textRuns);
-          if (textRuns.length > 0) {
+          const children: ParagraphChild[] = [];
+          this.processInlineElements(element.children, children);
+          if (children.length > 0) {
             paragraphs.push(new Paragraph({
-              children: textRuns,
+              children,
               bullet: {
                 level: 0
               },
