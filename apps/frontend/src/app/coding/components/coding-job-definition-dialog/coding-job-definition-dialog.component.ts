@@ -157,6 +157,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   variableIdFilter = '';
   bundleNameFilter = '';
   availabilityFilter: 'all' | 'full' | 'partial' | 'none' = 'all';
+  trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
   private disabledVariableKeys = new Set<string>();
   existingJobDefinitions: JobDefinition[] = [];
@@ -316,7 +317,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   loadCodingIncompleteVariables(unitNameFilter?: string): void {
     this.isLoadingVariableAnalysis = true;
-    if (this.data.preloadedVariables && !unitNameFilter) {
+    const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
+
+    if (this.data.preloadedVariables && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
       this.applyJobDefinitionUsage();
       this.dataSource.data = this.variables;
@@ -332,7 +335,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, unitNameFilter || undefined).subscribe({
+    this.codingJobBackendService.getCodingIncompleteVariables(
+      workspaceId,
+      unitNameFilter || undefined,
+      trainingRequired
+    ).subscribe({
       next: variables => {
         this.variables = variables;
         this.applyJobDefinitionUsage();
@@ -575,7 +582,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.unitNameFilter = '';
     this.variableIdFilter = '';
     this.availabilityFilter = 'all';
-    this.dataSource.data = this.variables;
+    this.trainingRequiredFilter = 'all';
+    this.loadCodingIncompleteVariables();
   }
 
   clearBundleFilter(): void {

@@ -16,4 +16,5 @@ export interface UnitVariableDto {
   valuesComplete?: boolean;
   valuePositionLabels?: string[];
   isDerived?: boolean;
+  coderTrainingRequired?: boolean;
 }

@@ -13,6 +13,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
 import { AppService } from '../../../core/services/app.service';
@@ -38,7 +39,9 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
     MatIconModule,
     MatDividerModule,
     CommonModule,
-    TranslateModule
+    TranslateModule,
+    MatButtonToggleGroup,
+    MatButtonToggle
   ],
   providers: [
     DatePipe
@@ -54,6 +57,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   selectedFormat: ExportFormat = 'json';
+  trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
   validationResults: ValidateCodingCompletenessResponseDto | null = null;
   validationProgress: ValidationProgress | null = null;
@@ -101,7 +105,11 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   }
 
   onExport(): void {
-    this.dialogRef.close(this.selectedFormat);
+    const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
+    this.dialogRef.close({
+      format: this.selectedFormat,
+      trainingRequired
+    });
   }
 
   // Validation methods

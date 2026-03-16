@@ -93,7 +93,8 @@
                 "IGNORE_DISPENSABLE_SPACES",
                 "SORT_ARRAY",
                 "REPLAY_REQUIRED",
-                "ATTACHMENT"
+                "ATTACHMENT",
+                "CODER_TRAINING_REQUIRED"
               ]
             }
           },

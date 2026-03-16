@@ -21,6 +21,20 @@
 
     <mat-divider></mat-divider>
 
+    <div class="filter-section">
+      <h3>{{ 'export-dialog.filter.section-title' | translate }}</h3>
+      <div class="filter-option">
+        <label class="filter-label">Schulungsaufwand:</label>
+        <mat-button-toggle-group [(ngModel)]="trainingRequiredFilter" name="trainingRequiredFilter">
+          <mat-button-toggle value="all">Alle</mat-button-toggle>
+          <mat-button-toggle value="true">Erhöht</mat-button-toggle>
+          <mat-button-toggle value="false">Normal</mat-button-toggle>
+        </mat-button-toggle-group>
+      </div>
+    </div>
+
+    <mat-divider></mat-divider>
+
     <!-- New section: Validierung externer Kodierliste für Replay-Funktionalität -->
     <div class="validation-section">
       <h3>{{ 'export-dialog.validation.section-title' | translate }}</h3>
