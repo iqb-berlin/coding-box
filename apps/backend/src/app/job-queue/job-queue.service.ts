@@ -106,6 +106,7 @@ export interface ExportJobData {
   includeModalValue?: boolean;
   includeDoubleCoded?: boolean;
   excludeAutoCoded?: boolean;
+  trainingRequired?: boolean;
   authToken?: string;
   serverUrl?: string;
   isCancelled?: boolean;
