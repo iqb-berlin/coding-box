@@ -231,6 +231,9 @@ export class WorkspaceFilesService implements OnModuleInit {
       .andWhere('id IN (:...ids)', { ids: numericIds })
       .execute();
 
+    // Invalidate memory caches inside this service
+    this.invalidateWorkspaceFileCaches(workspace_id);
+
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);
 
@@ -610,6 +613,9 @@ ${bookletRefs}
         overwriteExisting,
         overwriteAllowList
       );
+      // Invalidate memory caches inside this service
+      this.invalidateWorkspaceFileCaches(workspace_id);
+
       await this.codingStatisticsService.invalidateCache(workspace_id);
       await this.codingStatisticsService.invalidateIncompleteVariablesCache(
         workspace_id
@@ -2806,5 +2812,18 @@ ${bookletRefs}
       );
       return [];
     }
+  }
+
+  /**
+   * Invalidates memory map caches for a given workspace. This is called when
+   * files are uploaded or deleted to ensure that updated coding schemes, etc.
+   * are correctly parsed on the next request.
+   */
+  invalidateWorkspaceFileCaches(workspaceId: number): void {
+    this.unitVariableCache.delete(workspaceId);
+    this.intendedIncompleteSchemeCache.delete(workspaceId);
+    this.coderTrainingRequiredCache.delete(workspaceId);
+    this.derivedVariableCache.delete(workspaceId);
+    this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId}`);
   }
 }
