@@ -333,16 +333,57 @@ export class CodingReviewService {
         `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}${excludeTrainings ? ' (excluding trainings)' : ''}`
       );
 
-      const doubleCodedData = await this.getDoubleCodedVariablesForReview(
-        workspaceId,
-        1,
-        10000,
-        false, // onlyConflicts = false (needed for correct Kappa calculation)
-        excludeTrainings, // use passed parameter
-        true // includeRelations = true (needed for correct unique variable counting)
-      ); // Get all data
+      const allDoubleCodedItems: Array<{
+        responseId: number;
+        unitName: string;
+        variableId: string;
+        personLogin: string;
+        personCode: string;
+        bookletName: string;
+        givenAnswer: string;
+        coderResults: Array<{
+          coderId: number;
+          coderName: string;
+          jobId: number;
+          jobName: string;
+          code: number | null;
+          score: number | null;
+          notes: string | null;
+          codedAt: Date;
+        }>;
+      }> = [];
 
-      if (doubleCodedData.total === 0) {
+      let totalDoubleCodedResponses = 0;
+      let currentPage = 1;
+      const batchSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const doubleCodedData = await this.getDoubleCodedVariablesForReview(
+          workspaceId,
+          currentPage,
+          batchSize,
+          false, // onlyConflicts = false (needed for correct Kappa calculation)
+          excludeTrainings, // use passed parameter
+          true // includeRelations = true (needed for correct unique variable counting)
+        );
+
+        if (currentPage === 1) {
+          totalDoubleCodedResponses = doubleCodedData.total;
+        }
+
+        if (doubleCodedData.data.length > 0) {
+          allDoubleCodedItems.push(...doubleCodedData.data);
+        }
+
+        if (allDoubleCodedItems.length >= totalDoubleCodedResponses || doubleCodedData.data.length === 0) {
+          hasMore = false;
+        } else {
+          currentPage += 1;
+        }
+      }
+
+      if (totalDoubleCodedResponses === 0) {
         return {
           coderPairs: [],
           workspaceSummary: {
@@ -370,7 +411,7 @@ export class CodingReviewService {
       const uniqueVariables = new Set<string>();
       const uniqueCoders = new Set<number>();
 
-      for (const item of doubleCodedData.data) {
+      for (const item of allDoubleCodedItems) {
         uniqueVariables.add(`${item.unitName}:${item.variableId}`);
 
         const coders = item.coderResults;
@@ -477,7 +518,7 @@ export class CodingReviewService {
       }
 
       const workspaceSummary = {
-        totalDoubleCodedResponses: doubleCodedData.total,
+        totalDoubleCodedResponses,
         totalCoderPairs: coderPairs.length,
         averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
         variablesIncluded: uniqueVariables.size,
