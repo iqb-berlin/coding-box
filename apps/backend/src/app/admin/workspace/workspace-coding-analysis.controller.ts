@@ -192,6 +192,12 @@ export class WorkspaceCodingAnalysisController {
     description: 'Filter by unit name',
     type: String
   })
+  @ApiQuery({
+    name: 'trainingRequired',
+    required: false,
+    description: 'Filter variables by coder training requirement',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'CODING_INCOMPLETE variables retrieved successfully.',
     schema: {
@@ -228,7 +234,8 @@ export class WorkspaceCodingAnalysisController {
   })
   async getCodingIncompleteVariables(
     @WorkspaceId() workspace_id: number,
-      @Query('unitName') unitName?: string
+      @Query('unitName') unitName?: string,
+      @Query('trainingRequired') trainingRequired?: string
   ): Promise<
       {
         unitName: string;
@@ -240,9 +247,16 @@ export class WorkspaceCodingAnalysisController {
         isDerived: boolean;
       }[]
       > {
+    let trainingRequiredParam: boolean | undefined;
+    if (trainingRequired === 'true') {
+      trainingRequiredParam = true;
+    } else if (trainingRequired === 'false') {
+      trainingRequiredParam = false;
+    }
     return this.codingValidationService.getCodingIncompleteVariables(
       workspace_id,
-      unitName
+      unitName,
+      trainingRequiredParam
     );
   }
 

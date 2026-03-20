@@ -59,12 +59,13 @@ export class CodingListService {
   async getCodingList(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    trainingRequired?: boolean
   ): Promise<{
       items: CodingItem[];
       total: number;
     }> {
-    return this.queryService.getCodingList(workspace_id, authToken, serverUrl);
+    return this.queryService.getCodingList(workspace_id, authToken, serverUrl, trainingRequired);
   }
 
   /**
@@ -75,13 +76,15 @@ export class CodingListService {
     workspace_id: number,
     authToken: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ) {
     return this.streamService.getCodingListCsvStream(
       workspace_id,
       authToken,
       serverUrl,
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
   }
 
@@ -93,13 +96,15 @@ export class CodingListService {
     workspace_id: number,
     authToken?: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): Promise<Buffer> {
     return this.streamService.getCodingListAsExcel(
       workspace_id,
       authToken,
       serverUrl,
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
   }
 
@@ -111,13 +116,15 @@ export class CodingListService {
     workspace_id: number,
     authToken: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): JsonStream {
     return this.streamService.getCodingListJsonStream(
       workspace_id,
       authToken,
       serverUrl,
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
   }
 
@@ -126,9 +133,10 @@ export class CodingListService {
    * Delegates to CodingListQueryService.
    */
   async getCodingListVariables(
-    workspaceId: number
+    workspaceId: number,
+    trainingRequired?: boolean
   ): Promise<Array<{ unitName: string; variableId: string }>> {
-    return this.queryService.getCodingListVariables(workspaceId);
+    return this.queryService.getCodingListVariables(workspaceId, trainingRequired);
   }
 
   /**

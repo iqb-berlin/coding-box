@@ -162,14 +162,16 @@ export class ExportJobProcessor {
               job.data.workspaceId,
               job.data.authToken || '',
               job.data.serverUrl || '',
-              onProgress
+              onProgress,
+              job.data.trainingRequired
             );
           } else if (job.data.format === 'json') {
             const stream = await this.codingExportService.exportCodingListForJobAsJson(
               job.data.workspaceId,
               job.data.authToken || '',
               job.data.serverUrl || '',
-              onProgress
+              onProgress,
+              job.data.trainingRequired
             );
 
             const writeStream = fs.createWriteStream(filePath);
@@ -185,7 +187,8 @@ export class ExportJobProcessor {
               job.data.workspaceId,
               job.data.authToken || '',
               job.data.serverUrl || '',
-              onProgress
+              onProgress,
+              job.data.trainingRequired
             );
 
             const writeStream = fs.createWriteStream(filePath);
