@@ -1,5 +1,5 @@
 import {
-  Component, OnInit, Inject, Optional, inject
+  Component, OnInit, OnDestroy, Inject, Optional, inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
@@ -13,15 +13,23 @@ import { MatRadioModule } from '@angular/material/radio';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { MatSelectModule } from '@angular/material/select';
+import {
+  MatDialog, MatDialogModule, MatDialogRef, MAT_DIALOG_DATA
+} from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, FormControl
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import {
+  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge
+} from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 
 interface CoderResult {
   coderId: number;
@@ -31,6 +39,7 @@ interface CoderResult {
   code: number | null;
   score: number | null;
   notes: string | null;
+  supervisorComment: string | null;
   codedAt: string;
 }
 
@@ -66,18 +75,21 @@ interface DoubleCodedItem {
     MatSnackBarModule,
     MatDialogModule,
     MatTooltipModule,
+    MatSelectModule,
     FormsModule,
     ReactiveFormsModule,
     TranslateModule
   ],
   providers: [{ provide: MatPaginatorIntl, useClass: GermanPaginatorIntl }]
 })
-export class DoubleCodedReviewComponent implements OnInit {
+export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private fb = inject(FormBuilder);
   private translateService = inject(TranslateService);
+  private dialog = inject(MatDialog);
+  private workspaceService = inject(WorkspaceBackendService);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
@@ -99,12 +111,53 @@ export class DoubleCodedReviewComponent implements OnInit {
   pageSize = 50;
   isLoading = false;
   showOnlyConflicts = true;
+  searchControl = new FormControl('');
+  coderControl = new FormControl<number | null>(null);
+  statusControl = new FormControl<string>('all');
+  availableCoders: { id: number; name: string }[] = [];
+  private destroy$ = new Subject<void>();
 
   selectionForm!: FormGroup;
+  selectedItem: DoubleCodedItem | null = null;
 
   ngOnInit(): void {
     this.initializeForm();
+    this.setupFilters();
+    this.loadCoders();
     this.loadData();
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private setupFilters(): void {
+    const search$ = this.searchControl.valueChanges.pipe(debounceTime(500), distinctUntilChanged());
+    const coder$ = this.coderControl.valueChanges.pipe(distinctUntilChanged());
+    const status$ = this.statusControl.valueChanges.pipe(distinctUntilChanged());
+
+    merge(search$, coder$, status$)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.onFilterChange();
+      });
+  }
+
+  private loadCoders(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.workspaceService.getWorkspaceCoders(workspaceId)
+      .pipe(
+        map(response => response.data.map((user: { userId: number; username: string }) => ({
+          id: user.userId,
+          name: user.username || `User ${user.userId}`
+        })))
+      )
+      .subscribe(coders => {
+        this.availableCoders = coders;
+      });
   }
 
   private initializeForm(): void {
@@ -129,31 +182,49 @@ export class DoubleCodedReviewComponent implements OnInit {
       this.selectionForm.removeControl(key);
     });
 
-    // Determine the current set of rows to base the form on
     const currentItems = this.dataSource.data;
 
-    // Add form controls for each visible item
     currentItems.forEach(item => {
       const controlName = this.getItemControlName(item);
-      const defaultValue = item.coderResults.length > 0 ? item.coderResults[0].coderId.toString() : '';
+
+      // Look for an existing resolution (a coder result that has a supervisor comment)
+      const resolvedResult = item.coderResults.find(cr => !!cr.supervisorComment);
+
+      let defaultValue = '';
+      if (resolvedResult) {
+        defaultValue = resolvedResult.coderId.toString();
+      } else if (item.coderResults.length > 0) {
+        defaultValue = item.coderResults[0].coderId.toString();
+      }
+
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
 
-      // Add comment control for conflicting items or always if we want to allow comments
-      // Logic: If we are in conflict view, all items are conflicts.
-      // If we are in all view, we check hasConflict.
-      if (this.hasConflict(item)) {
-        const commentControlName = this.getCommentControlName(item);
-        this.selectionForm.addControl(commentControlName, new FormControl(''));
+      const commentControlName = this.getCommentControlName(item);
+      if (this.hasConflict(item) || (resolvedResult && resolvedResult.supervisorComment)) {
+        const defaultComment = resolvedResult ? (resolvedResult.supervisorComment || '') : '';
+        this.selectionForm.addControl(commentControlName, new FormControl(defaultComment));
       }
     });
   }
 
   hasConflict(item: DoubleCodedItem): boolean {
-    if (item.coderResults.length < 2) {
+    const validResults = item.coderResults.filter(cr => cr.code !== null);
+    if (validResults.length < 2) {
+      // If none or only one coded, we can't have a conflict per se yet,
+      // but it's "incomplete" if more are expected.
       return false;
     }
-    const firstCode = item.coderResults[0].code;
-    return item.coderResults.some(result => result.code !== firstCode);
+    const firstCode = validResults[0].code;
+    return validResults.some(result => result.code !== firstCode);
+  }
+
+  isAllCodersDone(item: DoubleCodedItem): boolean {
+    return item.coderResults.every(cr => cr.code !== null);
+  }
+
+  getCodedCount(item: DoubleCodedItem): string {
+    const codedCount = item.coderResults.filter(cr => cr.code !== null).length;
+    return `${codedCount}/${item.coderResults.length}`;
   }
 
   onFilterChange(): void {
@@ -171,15 +242,6 @@ export class DoubleCodedReviewComponent implements OnInit {
       const value = this.selectionForm.get(controlName)?.value;
       return value && value !== '';
     });
-  }
-
-  // NOTE: This now returns total count based on current filter (e.g. total conflicts if filtered)
-  getTotalCount(): number {
-    return this.totalItems;
-  }
-
-  getVisibleConflictCount(): number {
-    return this.dataSource.data.filter(item => this.hasConflict(item)).length;
   }
 
   getUnresolvedCount(): number {
@@ -208,8 +270,11 @@ export class DoubleCodedReviewComponent implements OnInit {
       workspaceId,
       this.currentPage,
       this.pageSize,
-      this.showOnlyConflicts, // Pass filter to service
-      true // Exclude trainings
+      this.showOnlyConflicts,
+      false, // excludeTrainings handled by backend
+      this.searchControl.value || undefined,
+      this.coderControl.value || undefined,
+      this.statusControl.value || undefined
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
@@ -244,21 +309,6 @@ export class DoubleCodedReviewComponent implements OnInit {
     }
   }
 
-  getSelectedCoderResult(item: DoubleCodedItem): CoderResult | undefined {
-    return item.selectedCoderResult || item.coderResults[0];
-  }
-
-  getSelectedCoderResultFromForm(index: number): CoderResult | undefined {
-    const currentItems = this.getCurrentItems();
-    const item = currentItems[index];
-    if (!item) {
-      return undefined;
-    }
-    const controlName = this.getItemControlName(item);
-    const selectedCoderId = this.selectionForm.get(controlName)?.value;
-    return item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
-  }
-
   applyReviewDecisions(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -270,13 +320,16 @@ export class DoubleCodedReviewComponent implements OnInit {
 
     // Collect decisions from current (visible) items on the page
     const decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> = [];
-
     const currentItems = this.getCurrentItems();
+    let hasIncomplete = false;
 
     currentItems.forEach(item => {
       const decision = this.getDecisionForItem(item);
       if (decision) {
         decisions.push(decision);
+        if (!this.isAllCodersDone(item)) {
+          hasIncomplete = true;
+        }
       }
     });
 
@@ -287,7 +340,11 @@ export class DoubleCodedReviewComponent implements OnInit {
       return;
     }
 
-    this.sendDecisions(workspaceId, decisions);
+    if (hasIncomplete) {
+      this.confirmIncompleteResolution(workspaceId, decisions);
+    } else {
+      this.sendDecisions(workspaceId, decisions);
+    }
   }
 
   applySingleDecision(item: DoubleCodedItem): void {
@@ -308,7 +365,28 @@ export class DoubleCodedReviewComponent implements OnInit {
       return;
     }
 
-    this.sendDecisions(workspaceId, [decision]);
+    if (!this.isAllCodersDone(item)) {
+      this.confirmIncompleteResolution(workspaceId, [decision]);
+    } else {
+      this.sendDecisions(workspaceId, [decision]);
+    }
+  }
+
+  private confirmIncompleteResolution(workspaceId: number, decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }>): void {
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      data: {
+        title: this.translateService.instant('double-coded-review.warnings.incomplete-title'),
+        message: this.translateService.instant('double-coded-review.warnings.incomplete-message'),
+        confirmButtonText: this.translateService.instant('confirm'),
+        cancelButtonText: this.translateService.instant('cancel')
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.sendDecisions(workspaceId, decisions);
+      }
+    });
   }
 
   private getDecisionForItem(item: DoubleCodedItem): { responseId: number; selectedJobId: number; resolutionComment?: string } | null {
@@ -349,11 +427,6 @@ export class DoubleCodedReviewComponent implements OnInit {
         }).subscribe(message => {
           this.showSuccess(message);
         });
-
-        // Reset to page 1 and reload data
-        // For single item apply, we might want to stay on page, but reloading is safer for consistency
-        // If applying single item, maybe define if we stay?
-        // Let's stick to reload for now.
         this.loadData();
       },
       error: () => {
@@ -383,12 +456,40 @@ export class DoubleCodedReviewComponent implements OnInit {
     });
   }
 
-  getCoderResultsDisplay(coderResults: DoubleCodedItem['coderResults']): string {
-    return coderResults.map(cr => `${cr.coderName}: ${cr.code || 'N/A'}`).join(', ');
+  getCodeDisplay(code: number | null): string {
+    if (code === null || code === undefined) {
+      return 'N/A';
+    }
+
+    switch (code) {
+      case -1:
+      case -2:
+        return '';
+      case -3:
+        return '-98';
+      case -4:
+        return '-97';
+      default:
+        return code.toString();
+    }
   }
 
-  getSelectedValue(item: DoubleCodedItem): string {
-    const selected = this.getSelectedCoderResult(item);
-    return selected ? selected.coderId.toString() : '';
+  getCodeLabel(code: number | null): string {
+    if (code === null || code === undefined) {
+      return '';
+    }
+
+    switch (code) {
+      case -1:
+        return this.translateService.instant('code-selector.coding-issue-options.code-assignment-uncertain');
+      case -2:
+        return this.translateService.instant('code-selector.coding-issue-options.new-code-needed');
+      case -3:
+        return this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer');
+      case -4:
+        return this.translateService.instant('code-selector.coding-issue-options.technical-problems');
+      default:
+        return '';
+    }
   }
 }

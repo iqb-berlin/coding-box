@@ -298,19 +298,55 @@
         padding: 16px 24px;
         border-bottom: 1px solid #e0e0e0;
         margin-bottom: 16px;
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 24px;
 
         mat-checkbox {
-          margin-bottom: 12px;
+          margin-bottom: 0;
+        }
+
+        .search-field {
+          flex: 2;
+          min-width: 200px;
+          max-width: 400px;
+
+          ::ng-deep .mat-mdc-form-field-wrapper {
+            padding-bottom: 0;
+          }
+
+          ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+            display: none;
+          }
+        }
+
+        .filter-dropdown {
+          flex: 1;
+          min-width: 150px;
+          max-width: 250px;
+
+          &.small {
+            max-width: 180px;
+          }
+
+          ::ng-deep .mat-mdc-form-field-wrapper {
+            padding-bottom: 0;
+          }
+
+          ::ng-deep .mat-mdc-form-field-subscript-wrapper {
+            display: none;
+          }
         }
 
         .statistics {
           display: flex;
           gap: 16px;
           align-items: center;
-          margin-top: 8px;
           padding: 8px 12px;
           background-color: #e3f2fd;
           border-radius: 4px;
+          margin-left: auto;
 
           .stat-text {
             font-size: 14px;
@@ -379,7 +415,10 @@
           padding: 8px 12px;
           border-radius: 4px;
           max-width: 200px;
+          max-height: 150px;
+          overflow-y: auto;
           word-break: break-word;
+          white-space: pre-wrap;
         }
 
         .coder-results-cell {
@@ -594,4 +633,59 @@ mat-dialog-actions {
       }
     }
   }
+}
+
+.coding-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background-color: #f5f5f5;
+  color: #666;
+  width: fit-content;
+  margin-top: 4px;
+  cursor: help;
+
+  &.incomplete {
+    background-color: #fff3e0;
+    color: #ef6c00;
+  }
+
+  &.complete {
+    background-color: #e8f5e9;
+    color: #2e7d32;
+  }
+
+  .progress-dots {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      box-sizing: border-box;
+
+      &.filled {
+        background-color: #2e7d32;
+      }
+
+      &.empty {
+        background-color: #e0e0e0;
+        border: 1px solid #bdbdbd;
+      }
+    }
+  }
+}
+
+.incomplete-row {
+  opacity: 0.7;
+}
+
+.pending-coder {
+  font-style: italic;
+  color: #999;
 }

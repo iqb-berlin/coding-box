@@ -668,7 +668,10 @@ export class TestPersonCodingService {
     page: number = 1,
     limit: number = 50,
     onlyConflicts: boolean = false,
-    excludeTrainings: boolean = false
+    excludeTrainings: boolean = false,
+    search?: string,
+    coderId?: number,
+    statusFilter?: string
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -686,6 +689,7 @@ export class TestPersonCodingService {
           code: number | null;
           score: number | null;
           notes: string | null;
+          supervisorComment: string | null;
           codedAt: string;
         }>;
       }>;
@@ -693,11 +697,23 @@ export class TestPersonCodingService {
       page: number;
       limit: number;
     }> {
-    const params = new HttpParams()
+    let params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString())
       .set('onlyConflicts', onlyConflicts.toString())
       .set('excludeTrainings', excludeTrainings.toString());
+
+    if (search && search.trim() !== '') {
+      params = params.set('search', search.trim());
+    }
+
+    if (coderId) {
+      params = params.set('coderId', coderId.toString());
+    }
+
+    if (statusFilter && statusFilter !== 'all') {
+      params = params.set('statusFilter', statusFilter);
+    }
 
     return this.http
       .get<{
@@ -717,6 +733,7 @@ export class TestPersonCodingService {
           code: number | null;
           score: number | null;
           notes: string | null;
+          supervisorComment: string | null;
           codedAt: string;
         }>;
       }>;
