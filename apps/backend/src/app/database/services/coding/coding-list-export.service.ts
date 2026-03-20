@@ -14,12 +14,15 @@ export class CodingListExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    res: Response
+    res: Response,
+    trainingRequired?: boolean
   ): Promise<void> {
     const csvStream = await this.codingListService.getCodingListCsvStream(
       workspaceId,
       authToken || '',
-      serverUrl || ''
+      serverUrl || '',
+      undefined,
+      trainingRequired
     );
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -39,12 +42,15 @@ export class CodingListExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    res: Response
+    res: Response,
+    trainingRequired?: boolean
   ): Promise<void> {
     const excelData = await this.codingListService.getCodingListAsExcel(
       workspaceId,
       authToken || '',
-      serverUrl || ''
+      serverUrl || '',
+      undefined,
+      trainingRequired
     );
 
     res.setHeader(
@@ -65,7 +71,8 @@ export class CodingListExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    res: Response
+    res: Response,
+    trainingRequired?: boolean
   ): Promise<void> {
     res.setHeader('Content-Type', 'application/json');
     res.setHeader(
@@ -81,7 +88,9 @@ export class CodingListExportService {
     const stream = await this.codingListService.getCodingListJsonStream(
       workspaceId,
       authToken || '',
-      serverUrl || ''
+      serverUrl || '',
+      undefined,
+      trainingRequired
     );
 
     let first = true;

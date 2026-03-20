@@ -44,6 +44,7 @@ export interface Variable {
   availableCases?: number;
   uniqueCasesAfterAggregation?: number;
   isDerived?: boolean;
+  coderTrainingRequired?: boolean;
 }
 
 export interface VariableBundle {
