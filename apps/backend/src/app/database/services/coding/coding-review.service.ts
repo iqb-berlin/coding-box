@@ -24,6 +24,9 @@ export class CodingReviewService {
     limit: number = 50,
     onlyConflicts: boolean = false,
     excludeTrainings: boolean = false,
+    search?: string,
+    coderId?: number,
+    statusFilter?: string,
     includeRelations: boolean = true
   ): Promise<{
       data: Array<{
@@ -42,6 +45,7 @@ export class CodingReviewService {
           code: number | null;
           score: number | null;
           notes: string | null;
+          supervisorComment: string | null;
           codedAt: Date;
         }>;
       }>;
@@ -55,14 +59,16 @@ export class CodingReviewService {
       );
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
+        .leftJoin('cju.coding_job', 'cj')
+        .leftJoin('cju.response', 'resp')
+        .leftJoin('resp.unit', 'u')
+        .leftJoin('u.booklet', 'b')
+        .leftJoin('b.person', 'p')
         .select('cju.response_id', 'responseId')
         .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
-        .leftJoin('cju.coding_job', 'cj')
-        .leftJoin('cj.codingJobCoders', 'cjc')
-        .where('cj.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('cju.code IS NOT NULL') // Only include coded responses
+        .where('cju.workspace_id = :workspaceId', { workspaceId })
         .groupBy('cju.response_id')
-        .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs coded this response
+        .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
 
       if (onlyConflicts) {
         // A conflict exists if there are different codes for the same response.
@@ -70,17 +76,62 @@ export class CodingReviewService {
         // If all codes are the same, COUNT(DISTINCT ...) will be 1.
         // If there are differences, it will be > 1.
         query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+
+        // Also permanently hide items from the conflict list if a supervisor already resolved them
+        query.andWhere('resp.status_v2 != :completeStatus', {
+          completeStatus: statusStringToNumber('CODING_COMPLETE')
+        });
       }
 
       if (excludeTrainings) {
         query.andWhere('cj.training_id IS NULL');
       }
 
-      const doubleCodedResponseIds = await query.getRawMany();
+      if (search && search.trim() !== '') {
+        const searchPattern = `%${search.trim().toLowerCase()}%`;
+        query.andWhere(
+          '(LOWER(u.name) LIKE :searchPattern OR LOWER(resp.variableid) LIKE :searchPattern OR LOWER(p.login) LIKE :searchPattern OR LOWER(p.code) LIKE :searchPattern OR LOWER(p.group) LIKE :searchPattern)',
+          { searchPattern }
+        );
+      }
 
-      const responseIds = doubleCodedResponseIds.map(row => row.responseId);
+      if (coderId) {
+        // Filter by responses where the specific coder is involved
+        // We use a subquery to find all response IDs that have a job for this coder
+        query.andWhere(subQuery => {
+          const sub = subQuery
+            .subQuery()
+            .select('cju2.response_id')
+            .from('coding_job_unit', 'cju2')
+            .leftJoin('cju2.coding_job', 'cj2')
+            .where('cj2.coder_id = :coderId', { coderId })
+            .getQuery();
+          return `cju.response_id IN ${sub}`;
+        });
+      }
 
-      if (responseIds.length === 0) {
+      if (statusFilter === 'done') {
+        // At least one result must exist and COUNT(code) must match COUNT(total jobs)
+        query.andHaving('COUNT(cju.code) = COUNT(cju.coding_job_id)');
+      } else if (statusFilter === 'pending') {
+        // At least one coder hasn't submitted a code
+        query.andHaving('COUNT(cju.code) < COUNT(cju.coding_job_id)');
+      }
+
+      // Get the total count efficiently using a subquery to avoid loading all IDs into memory
+      // This is necessary because of the GROUP BY and HAVING clauses.
+      // We use raw query execution here because `query.getQuery()` returns compiled SQL
+      // with positional parameters ($1, $2) which cannot be passed cleanly back into another
+      // QueryBuilder using `setParameters()` out-of-the-box.
+      const [sql, params] = query.getQueryAndParameters();
+      const countResult = await this.codingJobUnitRepository.query(
+        `SELECT COUNT(*) as "total" FROM (${sql}) "subquery"`,
+        params
+      );
+
+      const total = parseInt(countResult[0]?.total || '0', 10);
+
+      if (total === 0) {
         return {
           data: [],
           total: 0,
@@ -88,10 +139,12 @@ export class CodingReviewService {
           limit
         };
       }
-      const total = responseIds.length;
-      const startIndex = (page - 1) * limit;
-      const endIndex = Math.min(startIndex + limit, responseIds.length);
-      const paginatedResponseIds = responseIds.slice(startIndex, endIndex);
+
+      // Apply ordering and pagination at the database level to ensure stable sorts
+      query.orderBy('cju.response_id', 'ASC');
+      query.offset((page - 1) * limit).limit(limit);
+      const paginatedRawResults = await query.getRawMany();
+      const paginatedResponseIds = paginatedRawResults.map(row => row.responseId);
 
       const relations = includeRelations ? [
         'coding_job',
@@ -112,6 +165,12 @@ export class CodingReviewService {
         relations
       });
 
+      // After fetching relations, explicitly remove any individual items that belong to trainings
+      // Since `where: { response_id: In() }` indiscriminately loaded all records for these responses.
+      const finalCodingJobUnits = excludeTrainings ?
+        codingJobUnits.filter(unit => !unit.coding_job?.training_id) :
+        codingJobUnits;
+
       const responseGroups = new Map<
       number,
       {
@@ -130,12 +189,13 @@ export class CodingReviewService {
           code: number | null;
           score: number | null;
           notes: string | null;
+          supervisorComment: string | null;
           codedAt: Date;
         }>;
       }
       >();
 
-      for (const unit of codingJobUnits) {
+      for (const unit of finalCodingJobUnits) {
         const responseId = unit.response_id;
 
         if (!responseGroups.has(responseId)) {
@@ -163,6 +223,7 @@ export class CodingReviewService {
             code: unit.code,
             score: unit.score,
             notes: unit.notes,
+            supervisorComment: unit.supervisor_comment || null,
             codedAt: unit.created_at
           });
         }
@@ -214,72 +275,89 @@ export class CodingReviewService {
       let failedCount = 0;
       let skippedCount = 0;
 
-      for (const decision of decisions) {
-        try {
-          // Get the selected coder's coding_job_unit entry
-          const selectedCodingJobUnit =
-            await this.codingJobUnitRepository.findOne({
-              where: {
-                response_id: decision.responseId,
-                coding_job_id: decision.selectedJobId
-              },
-              relations: ['response', 'coding_job']
-            });
+      await this.responseRepository.manager.transaction(async transactionalEntityManager => {
+        for (const decision of decisions) {
+          try {
+            // Get the selected coder's coding_job_unit entry
+            const selectedCodingJobUnit =
+              await transactionalEntityManager.findOne(CodingJobUnit, {
+                where: {
+                  response_id: decision.responseId,
+                  coding_job_id: decision.selectedJobId
+                },
+                relations: ['response', 'coding_job']
+              });
 
-          if (!selectedCodingJobUnit) {
-            this.logger.warn(
-              `Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`
+            if (!selectedCodingJobUnit) {
+              this.logger.warn(
+                `Could not find coding_job_unit for responseId ${decision.responseId} and jobId ${decision.selectedJobId}`
+              );
+              skippedCount += 1;
+              continue;
+            }
+
+            if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
+              this.logger.warn(
+                `Workspace mismatch for responseId ${decision.responseId}`
+              );
+              skippedCount += 1;
+              continue;
+            }
+
+            const response = selectedCodingJobUnit.response;
+            if (!response) {
+              this.logger.warn(
+                `Could not find response for responseId ${decision.responseId}`
+              );
+              skippedCount += 1;
+              continue;
+            }
+
+            let updatedValue = response.value || '';
+            const boundary = '\n\n--- ORIGINAL RESPONSE ---\n';
+
+            // Clean up any historical ghost-append headers that were manually injected previously
+            // This restores the student's submission text exactly to full pristine form.
+            if (updatedValue.includes(boundary)) {
+              const parts = updatedValue.split(boundary);
+              updatedValue = parts[parts.length - 1];
+            }
+
+            // Purge any stale supervisor comments from ALL coder rows on this specific response
+            // This mathematically prevents the "Changed Mind" problem inherently: if a supervisor switches
+            // the winning coder tomorrow, the old winning coder automatically loses their legacy comment.
+            await transactionalEntityManager.update(
+              CodingJobUnit,
+              { response_id: decision.responseId },
+              { supervisor_comment: null }
             );
-            skippedCount += 1;
-            continue;
-          }
 
-          if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
-            this.logger.warn(
-              `Workspace mismatch for responseId ${decision.responseId}`
+            // Reassign the fresh, correct supervisor comment strictly to the winner
+            if (decision.resolutionComment && decision.resolutionComment.trim()) {
+              selectedCodingJobUnit.supervisor_comment = decision.resolutionComment.trim();
+              await transactionalEntityManager.save(CodingJobUnit, selectedCodingJobUnit);
+            }
+
+            response.status_v2 = statusStringToNumber('CODING_COMPLETE');
+            response.code_v2 = selectedCodingJobUnit.code;
+            response.score_v2 = selectedCodingJobUnit.score;
+            response.value = updatedValue;
+
+            await transactionalEntityManager.save(ResponseEntity, response);
+            appliedCount += 1;
+
+            this.logger.debug(
+              `Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`
             );
-            skippedCount += 1;
-            continue;
-          }
-
-          const response = selectedCodingJobUnit.response;
-          if (!response) {
-            this.logger.warn(
-              `Could not find response for responseId ${decision.responseId}`
+          } catch (error) {
+            this.logger.error(
+              `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
+              error.stack
             );
-            skippedCount += 1;
-            continue;
+            failedCount += 1;
           }
-
-          let updatedValue = response.value || '';
-          if (decision.resolutionComment && decision.resolutionComment.trim()) {
-            const timestamp = new Date()
-              .toISOString()
-              .replace('T', ' ')
-              .substring(0, 16);
-            const resolutionNote = `[RESOLUTION - ${timestamp}]: ${decision.resolutionComment.trim()}\n`;
-            updatedValue = resolutionNote + updatedValue;
-          }
-
-          response.status_v2 = statusStringToNumber('CODING_COMPLETE');
-          response.code_v2 = selectedCodingJobUnit.code;
-          response.score_v2 = selectedCodingJobUnit.score;
-          response.value = updatedValue;
-
-          await this.responseRepository.save(response);
-          appliedCount += 1;
-
-          this.logger.debug(
-            `Applied resolution for responseId ${decision.responseId}: code=${selectedCodingJobUnit.code}, score=${selectedCodingJobUnit.score}`
-          );
-        } catch (error) {
-          this.logger.error(
-            `Error applying resolution for responseId ${decision.responseId}: ${error.message}`,
-            error.stack
-          );
-          failedCount += 1;
         }
-      }
+      });
 
       const message = `Applied ${appliedCount} resolutions successfully. ${failedCount > 0 ? `${failedCount} failed.` : ''
       } ${skippedCount > 0 ? `${skippedCount} skipped.` : ''}`;
@@ -333,69 +411,10 @@ export class CodingReviewService {
         `Calculating workspace-wide Cohen's Kappa for double-coded incomplete variables in workspace ${workspaceId}${excludeTrainings ? ' (excluding trainings)' : ''}`
       );
 
-      const allDoubleCodedItems: Array<{
-        responseId: number;
-        unitName: string;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        bookletName: string;
-        givenAnswer: string;
-        coderResults: Array<{
-          coderId: number;
-          coderName: string;
-          jobId: number;
-          jobName: string;
-          code: number | null;
-          score: number | null;
-          notes: string | null;
-          codedAt: Date;
-        }>;
-      }> = [];
-
       let totalDoubleCodedResponses = 0;
       let currentPage = 1;
       const batchSize = 1000;
       let hasMore = true;
-
-      while (hasMore) {
-        const doubleCodedData = await this.getDoubleCodedVariablesForReview(
-          workspaceId,
-          currentPage,
-          batchSize,
-          false, // onlyConflicts = false (needed for correct Kappa calculation)
-          excludeTrainings, // use passed parameter
-          true // includeRelations = true (needed for correct unique variable counting)
-        );
-
-        if (currentPage === 1) {
-          totalDoubleCodedResponses = doubleCodedData.total;
-        }
-
-        if (doubleCodedData.data.length > 0) {
-          allDoubleCodedItems.push(...doubleCodedData.data);
-        }
-
-        if (allDoubleCodedItems.length >= totalDoubleCodedResponses || doubleCodedData.data.length === 0) {
-          hasMore = false;
-        } else {
-          currentPage += 1;
-        }
-      }
-
-      if (totalDoubleCodedResponses === 0) {
-        return {
-          coderPairs: [],
-          workspaceSummary: {
-            totalDoubleCodedResponses: 0,
-            totalCoderPairs: 0,
-            averageKappa: null,
-            variablesIncluded: 0,
-            codersIncluded: 0,
-            weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
-          }
-        };
-      }
 
       const coderPairData = new Map<
       string,
@@ -411,58 +430,82 @@ export class CodingReviewService {
       const uniqueVariables = new Set<string>();
       const uniqueCoders = new Set<number>();
 
-      for (const item of allDoubleCodedItems) {
-        uniqueVariables.add(`${item.unitName}:${item.variableId}`);
+      while (hasMore) {
+        const doubleCodedData = await this.getDoubleCodedVariablesForReview(
+          workspaceId,
+          currentPage,
+          batchSize,
+          false, // onlyConflicts = false (needed for correct Kappa calculation)
+          excludeTrainings, // use passed parameter
+          undefined, // no search for kappa calc
+          undefined, // no coderId for kappa calc
+          undefined, // no statusFilter for kappa calc
+          false // includeRelations = false
+        );
 
-        const coders = item.coderResults;
-        for (let i = 0; i < coders.length; i++) {
-          for (let j = i + 1; j < coders.length; j++) {
-            const coder1 = coders[i];
-            const coder2 = coders[j];
+        if (currentPage === 1) {
+          totalDoubleCodedResponses = doubleCodedData.total;
+        }
 
-            uniqueCoders.add(coder1.coderId);
-            uniqueCoders.add(coder2.coderId);
+        for (const item of doubleCodedData.data) {
+          uniqueVariables.add(`${item.unitName}:${item.variableId}`);
 
-            const pairKey =
-              coder1.coderId < coder2.coderId ?
-                `${coder1.coderId}-${coder2.coderId}` :
-                `${coder2.coderId}-${coder1.coderId}`;
+          const coders = item.coderResults;
+          for (let i = 0; i < coders.length; i++) {
+            for (let j = i + 1; j < coders.length; j++) {
+              const coder1 = coders[i];
+              const coder2 = coders[j];
 
-            if (!coderPairData.has(pairKey)) {
-              coderPairData.set(pairKey, {
-                coder1Id:
-                  coder1.coderId < coder2.coderId ?
-                    coder1.coderId :
-                    coder2.coderId,
-                coder1Name:
-                  coder1.coderId < coder2.coderId ?
-                    coder1.coderName :
-                    coder2.coderName,
-                coder2Id:
-                  coder1.coderId < coder2.coderId ?
-                    coder2.coderId :
-                    coder1.coderId,
-                coder2Name:
-                  coder1.coderId < coder2.coderId ?
-                    coder2.coderName :
-                    coder1.coderName,
-                codes: []
-              });
-            }
+              uniqueCoders.add(coder1.coderId);
+              uniqueCoders.add(coder2.coderId);
 
-            const pair = coderPairData.get(pairKey)!;
-            if (coder1.coderId < coder2.coderId) {
-              pair.codes.push({
-                code1: coder1.code,
-                code2: coder2.code
-              });
-            } else {
-              pair.codes.push({
-                code1: coder2.code,
-                code2: coder1.code
-              });
+              const pairKey =
+                coder1.coderId < coder2.coderId ?
+                  `${coder1.coderId}-${coder2.coderId}` :
+                  `${coder2.coderId}-${coder1.coderId}`;
+
+              if (!coderPairData.has(pairKey)) {
+                coderPairData.set(pairKey, {
+                  coder1Id:
+                    coder1.coderId < coder2.coderId ?
+                      coder1.coderId :
+                      coder2.coderId,
+                  coder1Name:
+                    coder1.coderId < coder2.coderId ?
+                      coder1.coderName :
+                      coder2.coderName,
+                  coder2Id:
+                    coder1.coderId < coder2.coderId ?
+                      coder2.coderId :
+                      coder1.coderId,
+                  coder2Name:
+                    coder1.coderId < coder2.coderId ?
+                      coder2.coderName :
+                      coder1.coderName,
+                  codes: []
+                });
+              }
+
+              const pair = coderPairData.get(pairKey)!;
+              if (coder1.coderId < coder2.coderId) {
+                pair.codes.push({
+                  code1: coder1.code,
+                  code2: coder2.code
+                });
+              } else {
+                pair.codes.push({
+                  code1: coder2.code,
+                  code2: coder1.code
+                });
+              }
             }
           }
+        }
+
+        if ((currentPage * batchSize) >= totalDoubleCodedResponses || doubleCodedData.data.length === 0) {
+          hasMore = false;
+        } else {
+          currentPage += 1;
         }
       }
 
@@ -520,7 +563,7 @@ export class CodingReviewService {
       const workspaceSummary = {
         totalDoubleCodedResponses,
         totalCoderPairs: coderPairs.length,
-        averageKappa: Math.round((averageKappa || 0) * 1000) / 1000,
+        averageKappa: averageKappa !== null ? Math.round(averageKappa * 1000) / 1000 : null,
         variablesIncluded: uniqueVariables.size,
         codersIncluded: uniqueCoders.size,
         weightingMethod: (weightedMean ? 'weighted' : 'unweighted') as 'weighted' | 'unweighted'
