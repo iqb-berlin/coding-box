@@ -12,5 +12,6 @@ export default {
     ]
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
+  transformIgnorePatterns: ['node_modules/(?!mathml2omml)'],
   coverageDirectory: '../../coverage/apps/backend'
 };
