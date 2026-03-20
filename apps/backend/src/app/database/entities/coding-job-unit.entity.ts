@@ -17,12 +17,18 @@ import { ResponseEntity } from './response.entity';
  * Entity for coding job units (responses that need to be coded for a job)
  */
 @Entity({ name: 'coding_job_unit' })
+@Index(['workspace_id', 'response_id'])
+@Index(['response_id', 'code'])
 export class CodingJobUnit {
   @PrimaryGeneratedColumn()
     id: number;
 
   @Column()
     coding_job_id: number;
+
+  @Index()
+  @Column({ nullable: true })
+    workspace_id: number | null;
 
   @Index()
   @Column()
@@ -66,6 +72,9 @@ export class CodingJobUnit {
 
   @Column({ nullable: true, type: 'text' })
     notes: string | null;
+
+  @Column({ nullable: true, type: 'text' })
+    supervisor_comment: string | null;
 
   @Column({ nullable: true })
     coding_issue_option: number | null;

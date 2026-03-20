@@ -172,7 +172,7 @@ describe('CodingManagementService', () => {
       service.downloadCodingList('csv');
       await new Promise(r => { setTimeout(r, 50); });
 
-      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'csv');
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'csv', false, undefined);
       expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'job-1');
       expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });
@@ -189,7 +189,7 @@ describe('CodingManagementService', () => {
       service.downloadCodingList('excel');
       await new Promise(r => { setTimeout(r, 50); });
 
-      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'excel');
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(1, 'coding-list', undefined, 'excel', false, undefined);
       expect(exportServiceMock.getExportJobStatus).toHaveBeenCalledWith(1, 'job-1');
       expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });

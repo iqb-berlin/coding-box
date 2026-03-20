@@ -1717,12 +1717,30 @@
     "apply-decisions": "Entscheidungen anwenden",
     "apply-help-tooltip": "Behebt Konflikte für die ausgewählten Items. Die Kodierung wird auf 'CODING_COMPLETE' gesetzt und der Code des gewählten Kodierers wird als endgültiger Wert übernommen. Die ursprünglichen Kodierwerte werden in den Verlauf (v1, v2, v3) verschoben.",
     "apply-single-tooltip": "Diese Entscheidung anwenden",
+    "apply-disabled-tooltip": "Alle Kodierer müssen ihre Arbeit beenden, bevor der Konflikt gelöst werden kann.",
+    "coders-done": "Kodierer fertig",
+    "pending": "Ausstehend",
     "filter": {
-      "show-only-conflicts": "Nur Konflikte anzeigen"
+      "show-only-conflicts": "Nur Konflikte anzeigen",
+      "search-label": "Suchen",
+      "search-placeholder": "Einheit, Variable, Login, Code oder Gruppe...",
+      "coder-label": "Kodierer",
+      "all-coders": "Alle Kodierer",
+      "status-label": "Status",
+      "status-all": "Alle Status",
+      "status-done": "Alle fertig",
+      "status-pending": "Warten auf Kodierer"
+    },
+    "details": {
+      "given-answer": "Vollständige Antwort",
+      "coder-notes": "Anmerkungen der Kodierer",
+      "no-notes": "Keine Anmerkungen vorhanden.",
+      "person-context": "Personen-Kontext"
     },
     "statistics": {
       "showing-conflicts": "Zeige {{visible}} von {{total}} Konflikten",
-      "unresolved": "{{count}} ungelöst"
+      "unresolved": "{{count}} ungelöst",
+      "unresolved-on-page": "{{count}} ungelöst auf dieser Seite"
     },
     "conflict-indicator": "Konflikt: Kodierer haben unterschiedliche Codes vergeben",
     "comment-label": "Kommentar zur Auflösung (optional)",
@@ -1737,11 +1755,16 @@
       "substantial": "Substantiell",
       "almost-perfect": "Fast perfekt"
     },
+    "warnings": {
+      "incomplete-title": "Achtung: Kodierung unvollständig",
+      "incomplete-message": "Für diese Variable(n) haben noch nicht alle zugewiesenen Kodierer ein Ergebnis geliefert. Möchten Sie den Konflikt trotzdem jetzt schon mit dem gewählten Ergebnis auflösen? Dies kann nicht rückgängig gemacht werden."
+    },
     "errors": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
-      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt"
+      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
+      "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt"
     },
     "success": {
       "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"
