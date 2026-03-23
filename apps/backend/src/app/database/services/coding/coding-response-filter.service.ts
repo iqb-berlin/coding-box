@@ -112,10 +112,10 @@ export class CodingResponseFilterService {
 
     const queryBuilder = this.responseRepository
       .createQueryBuilder('response')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.person', 'person')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo');
+      .leftJoinAndSelect('response.unit', 'unit')
+      .leftJoinAndSelect('unit.booklet', 'booklet')
+      .leftJoinAndSelect('booklet.person', 'person')
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
 
     // Establish base conditions
     if (version) {
@@ -166,17 +166,6 @@ export class CodingResponseFilterService {
     options: ResponseFilterOptions = {}
   ): Promise<ResponseEntity[]> {
     const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
-
-    // Add selections for relations needed in result
-    // Note: relations joined in createBatchQueryBuilder need to be selected if we want them.
-    // createBatchQueryBuilder uses leftJoin.
-    // getMany needs selections.
-
-    // Re-apply joins with selection? Or just addSelect?
-    // addSelect needs alias.
-    queryBuilder
-      .addSelect(['unit', 'booklet', 'person'])
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo');
 
     queryBuilder
       .andWhere('response.id > :lastId', { lastId })
