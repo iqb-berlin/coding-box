@@ -145,17 +145,23 @@
           <div *ngIf="responseAnalysis" class="analysis-summary">
             <!-- Empty Responses Summary -->
             <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
-              [class.has-issues]="responseAnalysis.emptyResponses.total > 0">
+              [class.has-issues]="hasUncodedEmptyResponses()">
               <div class="analysis-header" (click)="toggleEmptyResponsesDetails()">
                 <div class="analysis-icon-title">
-                  <mat-icon [class.warning-icon]="responseAnalysis.emptyResponses.total > 0">
-                    {{ responseAnalysis.emptyResponses.total > 0 ? 'warning' : 'check_circle' }}
+                  <mat-icon [class.warning-icon]="hasUncodedEmptyResponses()" 
+                           [class.success-icon]="!hasUncodedEmptyResponses() && responseAnalysis.emptyResponses.total > 0">
+                    {{ hasUncodedEmptyResponses() ? 'warning' : 'check_circle' }}
                   </mat-icon>
                   <div class="analysis-title-content">
                     <span class="analysis-title">{{ 'coding-management-manual.response-analysis.empty-responses' |
                       translate }}</span>
-                    <span class="analysis-count" [class.warning-count]="responseAnalysis.emptyResponses.total > 0">
+                    <span class="analysis-count" 
+                          [class.warning-count]="hasUncodedEmptyResponses()"
+                          [class.success-count]="!hasUncodedEmptyResponses() && responseAnalysis.emptyResponses.total > 0">
                       {{ responseAnalysis.emptyResponses.total }}
+                      <span *ngIf="responseAnalysis.emptyResponses.total > 0" class="count-detail">
+                        ({{ getUncodedCount() }} {{ 'coding-management-manual.response-analysis.open' | translate }})
+                      </span>
                     </span>
                   </div>
                 </div>

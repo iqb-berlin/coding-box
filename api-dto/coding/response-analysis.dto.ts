@@ -34,6 +34,7 @@ export interface DuplicateValueGroupDto {
 
 export interface EmptyResponseAnalysisDto {
   total: number;
+  totalUncoded: number;
   items: EmptyResponseDto[];
   page?: number;
   pageSize?: number;

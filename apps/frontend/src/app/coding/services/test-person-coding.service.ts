@@ -595,7 +595,7 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of({
-          emptyResponses: { total: 0, items: [] },
+          emptyResponses: { total: 0, totalUncoded: 0, items: [] },
           duplicateValues: {
             total: 0, totalResponses: 0, groups: [], isAggregationApplied: false
           },

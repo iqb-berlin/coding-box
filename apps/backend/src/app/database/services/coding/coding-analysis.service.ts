@@ -470,6 +470,7 @@ export class CodingAnalysisService {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
         total: 0,
+        totalUncoded: 0,
         items: []
       },
       duplicateValues: {
