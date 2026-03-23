@@ -1319,6 +1319,7 @@
       "description": "Übersicht über leere Antworten und doppelte Werte basierend auf den Matching-Einstellungen.",
       "refresh": "Analyse aktualisieren",
       "empty-responses": "Leere Antworten",
+      "open": "offen",
       "duplicate-values": "Doppelte Werte",
       "groups": "Gruppen",
       "responses": "Antworten",

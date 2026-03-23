@@ -1399,6 +1399,10 @@
           &.warning-icon {
             color: #ff9800;
           }
+
+          &.success-icon {
+            color: #4caf50;
+          }
         }
 
         .analysis-title-content {
@@ -1445,6 +1449,19 @@
             &.warning-count {
               color: #e65100;
               font-weight: 600;
+            }
+
+            &.success-count {
+              color: #2e7d32;
+              font-weight: 600;
+            }
+
+            .count-detail {
+              font-size: 12px;
+              color: #666;
+              font-weight: 400;
+              margin-left: 4px;
+              opacity: 0.8;
             }
           }
         }

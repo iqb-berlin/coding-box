@@ -178,6 +178,7 @@ export class CodingAnalysisProcessor {
     return {
       emptyResponses: {
         total: emptyResponses.length,
+        totalUncoded: emptyResponses.filter(r => !r.isCoded).length,
         items: emptyResponses
       },
       duplicateValues: {
@@ -275,6 +276,7 @@ export class CodingAnalysisProcessor {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
         total: 0,
+        totalUncoded: 0,
         items: []
       },
       duplicateValues: {

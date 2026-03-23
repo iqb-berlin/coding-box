@@ -1402,9 +1402,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   hasUncodedEmptyResponses(): boolean {
-    if (!this.responseAnalysis?.emptyResponses?.items) {
-      return false;
-    }
-    return this.responseAnalysis.emptyResponses.items.some(item => !item.isCoded);
+    return (this.responseAnalysis?.emptyResponses?.totalUncoded || 0) > 0;
+  }
+
+  getUncodedCount(): number {
+    return this.responseAnalysis?.emptyResponses?.totalUncoded || 0;
   }
 }
