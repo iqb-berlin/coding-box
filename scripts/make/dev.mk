@@ -32,6 +32,7 @@ dev-up:
 	@if ! test $(shell docker network ls -q --filter name=app-net);\
 		then docker network create app-net;\
 	fi
+	docker pull quay.io/keycloak/keycloak:22.0
 	docker compose --env-file $(CODING_BOX_BASE_DIR)/.env.dev up --no-build --pull never -d
 
 ## Stop and remove all docker containers, preserve data volumes
