@@ -37,18 +37,29 @@ import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
+import { CacheService } from '../../../cache/cache.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
-  private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
-  // Maps workspaceId → unitName → Set of variable IDs that have INTENDED_INCOMPLETE code in their coding scheme
-  private intendedIncompleteSchemeCache: Map<number, Map<string, Set<string>>> = new Map();
-  // Maps workspaceId → unitName → Set of variable IDs that have CODER_TRAINING_REQUIRED processing property
-  private coderTrainingRequiredCache: Map<number, Map<string, Set<string>>> = new Map();
-  // Maps workspaceId → unitName → Set of variable aliases that are derived variables
-  private derivedVariableCache: Map<number, Map<string, Set<string>>> = new Map();
   private readonly resourceTypeLabel = 'Resource';
+
+  private getCacheKey(workspaceId: number, type: string): string {
+    return `workspace_files:${type}:${workspaceId}`;
+  }
+
+  private toRedisMap(map: Map<string, Set<string>>): Record<string, string[]> {
+    return Object.fromEntries(
+      Array.from(map.entries()).map(([k, v]) => [k, Array.from(v)])
+    );
+  }
+
+  private fromRedisMap(data: Record<string, string[]> | null): Map<string, Set<string>> {
+    if (!data) return new Map();
+    return new Map(
+      Object.entries(data).map(([k, v]) => [k, new Set(v)])
+    );
+  }
 
   constructor(
     @InjectRepository(FileUpload)
@@ -64,7 +75,8 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileStorageService: WorkspaceFileStorageService,
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
-    private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
+    private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
+    private cacheService: CacheService
   ) { }
 
   private getResourceSubtypeExtension(fileType: string): string | null {
@@ -232,7 +244,7 @@ export class WorkspaceFilesService implements OnModuleInit {
       .execute();
 
     // Invalidate memory caches inside this service
-    this.invalidateWorkspaceFileCaches(workspace_id);
+    await this.invalidateWorkspaceFileCaches(workspace_id);
 
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);
@@ -614,7 +626,7 @@ ${bookletRefs}
         overwriteAllowList
       );
       // Invalidate memory caches inside this service
-      this.invalidateWorkspaceFileCaches(workspace_id);
+      await this.invalidateWorkspaceFileCaches(workspace_id);
 
       await this.codingStatisticsService.invalidateCache(workspace_id);
       await this.codingStatisticsService.invalidateIncompleteVariablesCache(
@@ -2408,13 +2420,13 @@ ${bookletRefs}
         }
       }
 
-      this.unitVariableCache.set(workspaceId, unitVariables);
-      // Store alias-based map (not the scheme-ID-based intendedIncompleteByUnit)
-      this.intendedIncompleteSchemeCache.set(workspaceId, intendedIncompleteAliasByUnit);
-      this.coderTrainingRequiredCache.set(workspaceId, trainingRequiredAliasByUnit);
-      this.derivedVariableCache.set(workspaceId, derivedVariablesByUnit);
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'unit_variables'), this.toRedisMap(unitVariables));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'intended_incomplete'), this.toRedisMap(intendedIncompleteAliasByUnit));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'training_required'), this.toRedisMap(trainingRequiredAliasByUnit));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'derived_variables'), this.toRedisMap(derivedVariablesByUnit));
+
       this.logger.log(
-        `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`
+        `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
       );
       this.logger.debug(
         `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
@@ -2433,10 +2445,13 @@ ${bookletRefs}
   async getUnitVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.unitVariableCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.unitVariableCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   /**
@@ -2448,10 +2463,13 @@ ${bookletRefs}
   async getIntendedIncompleteSchemeVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.intendedIncompleteSchemeCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'intended_incomplete');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.intendedIncompleteSchemeCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   /**
@@ -2461,10 +2479,13 @@ ${bookletRefs}
   async getDerivedVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.derivedVariableCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.derivedVariableCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   /**
@@ -2474,10 +2495,13 @@ ${bookletRefs}
   async getCoderTrainingRequiredVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.coderTrainingRequiredCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'training_required');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.coderTrainingRequiredCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   async getUnitVariableDetails(
@@ -2819,11 +2843,13 @@ ${bookletRefs}
    * files are uploaded or deleted to ensure that updated coding schemes, etc.
    * are correctly parsed on the next request.
    */
-  invalidateWorkspaceFileCaches(workspaceId: number): void {
-    this.unitVariableCache.delete(workspaceId);
-    this.intendedIncompleteSchemeCache.delete(workspaceId);
-    this.coderTrainingRequiredCache.delete(workspaceId);
-    this.derivedVariableCache.delete(workspaceId);
-    this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId}`);
+  async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'unit_variables')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'intended_incomplete')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'training_required')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'derived_variables'))
+    ]);
+    this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId} in Redis`);
   }
 }

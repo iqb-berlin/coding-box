@@ -210,6 +210,7 @@ export class CodingValidationService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired: boolean;
     }[]
     > {
     try {
@@ -234,6 +235,7 @@ export class CodingValidationService {
         availableCases: number;
         uniqueCasesAfterAggregation: number;
         isDerived: boolean;
+        coderTrainingRequired: boolean;
       }[]
       >(cacheKey);
       if (cachedResult) {
@@ -280,7 +282,7 @@ export class CodingValidationService {
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
+    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
   ): Promise<
     {
       unitName: string;
@@ -290,6 +292,7 @@ export class CodingValidationService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired: boolean;
     }[]
     > {
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
@@ -387,7 +390,7 @@ export class CodingValidationService {
     unitName?: string,
     trainingRequired?: boolean
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
+    { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
@@ -479,9 +482,11 @@ export class CodingValidationService {
       if (!validVars?.has(variableId)) return false;
 
       // Filter by trainingRequired
+      const isRequired = trainingRequiredSets.get(unitKey)?.has(variableId) || false;
       if (trainingRequired !== undefined) {
-        const isRequired = trainingRequiredSets.get(unitKey)?.has(variableId) || false;
-        if (isRequired !== trainingRequired) return false;
+        if (isRequired !== trainingRequired) {
+          return false;
+        }
       }
       return true;
     };
@@ -503,13 +508,21 @@ export class CodingValidationService {
     });
 
     // Merge results, summing response counts for variables that appear in both
-    const mergedMap = new Map<string, { unitName: string; variableId: string; responseCount: number; isDerived: boolean }>();
+    const mergedMap = new Map<string, {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      isDerived: boolean;
+      coderTrainingRequired: boolean;
+    }>();
 
     for (const row of [...filteredCodingIncomplete, ...filteredIntendedIncomplete]) {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
       const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+      const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+
       if (existing) {
         existing.responseCount += count;
       } else {
@@ -517,7 +530,8 @@ export class CodingValidationService {
           unitName: row.unitName,
           variableId: row.variableId,
           responseCount: count,
-          isDerived
+          isDerived,
+          coderTrainingRequired
         });
       }
     }
