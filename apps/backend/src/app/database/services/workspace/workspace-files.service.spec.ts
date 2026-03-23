@@ -35,7 +35,8 @@ describe('WorkspaceFilesService.handleFile', () => {
       {} as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
-      {} as unknown as CtorParams[9]
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10]
     );
   }
 
@@ -156,7 +157,8 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       {} as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
-      {} as unknown as CtorParams[9]
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10]
     );
   }
 
@@ -241,7 +243,8 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
       {} as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
-      {} as unknown as CtorParams[9]
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10]
     );
   }
 
@@ -313,7 +316,8 @@ describe('WorkspaceFilesService.findFiles', () => {
     {} as unknown as CtorParams[6],
     {} as unknown as CtorParams[7],
     {} as unknown as CtorParams[8],
-    {} as unknown as CtorParams[9]
+    {} as unknown as CtorParams[9],
+    { delete: jest.fn() } as unknown as CtorParams[10]
   );
 
   beforeEach(() => {
@@ -359,7 +363,8 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
       mockWorkspaceFileStorageService as unknown as CtorParams[6],
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
-      {} as unknown as CtorParams[9]
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10]
     );
   }
 
