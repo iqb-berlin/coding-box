@@ -6,6 +6,13 @@ type FileStatus = {
   schemaValid?: boolean;
   schemaErrors?: string[];
   ignored?: boolean;
+  parents?: string[];
+};
+
+type TestletDto = {
+  id: string;
+  label?: string;
+  ignored?: boolean;
 };
 
 type DataValidation = {
@@ -15,6 +22,7 @@ type DataValidation = {
   unitsWithoutPlayer?: string[];
   missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
+  testlets?: TestletDto[];
 };
 
 export type FilteredTestTaker = {

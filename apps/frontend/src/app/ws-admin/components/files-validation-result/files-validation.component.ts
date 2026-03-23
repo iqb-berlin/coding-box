@@ -24,6 +24,7 @@ import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -43,12 +44,23 @@ import {
 } from './affected-units-dialog.component';
 import { MetadataDialogComponent } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
+import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
+import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/booklet-testlet.dto';
+import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
 
 type FileStatus = {
   filename: string;
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  ignored?: boolean;
+  parents?: string[];
+};
+
+type TestletDto = {
+  id: string;
+  label?: string;
+  ignored?: boolean;
 };
 
 type DataValidation = {
@@ -58,6 +70,7 @@ type DataValidation = {
   unitsWithoutPlayer?: string[];
   missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
+  testlets?: TestletDto[];
 };
 
 type FilteredTestTaker = {
@@ -143,7 +156,8 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
     MatCheckbox,
     FormsModule,
     ScrollingModule,
-    MatExpansionModule
+    MatExpansionModule,
+    MatProgressSpinnerModule
   ],
   styleUrls: ['./files-validation.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -181,6 +195,13 @@ export class FilesValidationDialogComponent implements OnInit {
   isResolvingDuplicates = false;
 
   ignoredUnits = new Set<string>();
+  ignoredBooklets = new Set<string>();
+  ignoredTestlets: { bookletId: string; testletId: string }[] = [];
+
+  bookletData: Map<string, BookletInfoDto> = new Map();
+  expandedBooklets: Set<string> = new Set();
+  loadingBooklets: Set<string> = new Set();
+  selectedTabIndex = 0;
 
   private workspaceService = inject(WorkspaceService);
   private fileService = inject(FileService);
@@ -355,16 +376,18 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private resetExpandedFilesLists(results: FilesValidation[]): void {
+    const previous = new Map(this.expandedFilesLists);
     this.expandedFilesLists.clear();
     results.forEach(val => {
+      const prev = previous.get(val.testTaker);
       this.expandedFilesLists.set(val.testTaker, {
-        booklets: false,
-        units: false,
-        schemes: false,
-        schemer: false,
-        definitions: false,
-        player: false,
-        metadata: false
+        booklets: prev?.booklets || false,
+        units: prev?.units || false,
+        schemes: prev?.schemes || false,
+        schemer: prev?.schemer || false,
+        definitions: prev?.definitions || false,
+        player: prev?.player || false,
+        metadata: prev?.metadata || false
       });
     });
   }
@@ -597,65 +620,168 @@ export class FilesValidationDialogComponent implements OnInit {
 
   ngOnInit(): void {
     if (this.data.workspaceId) {
-      this.loadIgnoredUnits();
+      this.loadWorkspaceSettings();
     }
   }
 
-  loadIgnoredUnits(): void {
+  loadWorkspaceSettings(): void {
     if (!this.data.workspaceId) return;
-    this.workspaceService.getIgnoredUnits(this.data.workspaceId).subscribe(units => {
-      this.ignoredUnits = new Set(units.map(u => u.toUpperCase()));
+    this.workspaceService.getWorkspaceSettings(this.data.workspaceId).subscribe(settings => {
+      this.ignoredUnits = new Set((settings.ignoredUnits || []).map(u => u.toUpperCase()));
+      this.ignoredBooklets = new Set((settings.ignoredBooklets || []).map(b => b.toUpperCase()));
+      this.ignoredTestlets = (settings.ignoredTestlets || []).map(t => ({ bookletId: t.bookletId.toUpperCase(), testletId: t.testletId.toUpperCase() }));
       this.rebuildValidationResults();
     });
   }
 
-  isUnitIgnored(unit: string): boolean {
-    return !!unit && this.ignoredUnits.has(unit.toUpperCase());
-  }
+  isUnitIgnored(unit: string, parents?: string[]): boolean {
+    if (!unit) return false;
+    const normalizedUnit = unit.toUpperCase();
 
-  toggleUnitIgnore(unit: string): void {
-    if (!unit || !this.data.workspaceId) return;
-    const normalized = unit.toUpperCase();
-    let message = '';
+    // Direct unit ignore
+    if (this.ignoredUnits.has(normalizedUnit)) return true;
 
-    if (this.ignoredUnits.has(normalized)) {
-      this.ignoredUnits.delete(normalized);
-      message = 'Aufgabe wiederhergestellt';
-    } else {
-      this.ignoredUnits.add(normalized);
-      message = 'Aufgabe ignoriert';
+    // Check parent exclusions if parents are provided
+    if (parents && parents.length > 0) {
+      return parents.some(bookletId => {
+        const normalizedBooklet = bookletId.toUpperCase();
+        if (this.ignoredBooklets.has(normalizedBooklet)) return true;
+
+        // Check testlets if we have booklet data loaded
+        const info = this.bookletData.get(normalizedBooklet);
+        if (info && info.testlets) {
+          return info.testlets.some((testlet: BookletTestletDto) => this.isTestletIgnored(normalizedBooklet, testlet.id) &&
+            (testlet.units || []).some((u: BookletUnitDto) => u.id.toUpperCase() === normalizedUnit));
+        }
+        return false;
+      });
     }
 
-    this.workspaceService.saveIgnoredUnits(this.data.workspaceId, Array.from(this.ignoredUnits)).subscribe({
+    return false;
+  }
+
+  isBookletIgnored(booklet: string): boolean {
+    return !!booklet && this.ignoredBooklets.has(booklet.toUpperCase());
+  }
+
+  isTestletIgnored(bookletId: string, testletId: string): boolean {
+    if (!bookletId || !testletId) return false;
+    const normBooklet = bookletId.toUpperCase();
+    const normTestlet = testletId.toUpperCase();
+    return this.ignoredTestlets.some(t => t.bookletId === normBooklet && t.testletId === normTestlet);
+  }
+
+  hasIgnoredTestlets(bookletId: string): boolean {
+    if (!bookletId) return false;
+    const normBooklet = bookletId.toUpperCase();
+    return this.ignoredTestlets.some(t => t.bookletId === normBooklet);
+  }
+
+  toggleBookletExpand(bookletId: string): void {
+    if (!bookletId) return;
+    const normalized = bookletId.toUpperCase();
+
+    if (this.expandedBooklets.has(normalized)) {
+      this.expandedBooklets.delete(normalized);
+    } else {
+      this.expandedBooklets.add(normalized);
+      if (!this.bookletData.has(normalized) && !this.loadingBooklets.has(normalized)) {
+        this.loadBookletData(normalized);
+      }
+    }
+  }
+
+  private loadBookletData(bookletId: string): void {
+    if (!this.data.workspaceId || !bookletId) return;
+    this.loadingBooklets.add(bookletId);
+    this.fileService.getBookletInfo(this.data.workspaceId, bookletId).subscribe({
+      next: info => {
+        this.bookletData.set(bookletId, info);
+        this.loadingBooklets.delete(bookletId);
+        this.cdr.markForCheck();
+      },
+      error: () => {
+        this.loadingBooklets.delete(bookletId);
+        this.cdr.markForCheck();
+      }
+    });
+  }
+
+  private saveCurrentWorkspaceSettings(onSuccess: (message: string) => void, onRevert: () => void): void {
+    if (!this.data.workspaceId) return;
+    const settings = {
+      ignoredUnits: Array.from(this.ignoredUnits),
+      ignoredBooklets: Array.from(this.ignoredBooklets),
+      ignoredTestlets: this.ignoredTestlets
+    };
+    this.workspaceService.saveWorkspaceSettings(this.data.workspaceId, settings).subscribe({
       next: success => {
         if (success) {
-          this.snackBar.open(message, 'OK', { duration: 3000 });
           if (this.data.workspaceId) {
             this.testResultService.invalidateCache(this.data.workspaceId);
           }
+          onSuccess('Einstellungen gespeichert');
           this.refreshValidationData('Validierungsergebnisse wurden aktualisiert');
         } else {
-          // Revert change on failure
-          if (this.ignoredUnits.has(normalized)) {
-            this.ignoredUnits.delete(normalized);
-          } else {
-            this.ignoredUnits.add(normalized);
-          }
+          onRevert();
           this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
           this.cdr.markForCheck();
         }
       },
       error: () => {
-        // Revert change on error
-        if (this.ignoredUnits.has(normalized)) {
-          this.ignoredUnits.delete(normalized);
-        } else {
-          this.ignoredUnits.add(normalized);
-        }
+        onRevert();
         this.snackBar.open('Fehler beim Speichern', 'OK', { duration: 3000 });
         this.cdr.markForCheck();
       }
     });
+  }
+
+  toggleUnitIgnore(unit: string): void {
+    if (!unit || !this.data.workspaceId) return;
+    const normalized = unit.toUpperCase();
+
+    if (this.ignoredUnits.has(normalized)) {
+      this.ignoredUnits.delete(normalized);
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredUnits.add(normalized));
+    } else {
+      this.ignoredUnits.add(normalized);
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Aufgabe ignoriert', 'OK', { duration: 3000 }), () => this.ignoredUnits.delete(normalized));
+    }
+  }
+
+  toggleBookletIgnore(booklet: string): void {
+    if (!booklet || !this.data.workspaceId) return;
+    const normalized = booklet.toUpperCase();
+
+    if (this.ignoredBooklets.has(normalized)) {
+      this.ignoredBooklets.delete(normalized);
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft wiederhergestellt', 'OK', { duration: 3000 }), () => this.ignoredBooklets.add(normalized));
+    } else {
+      this.ignoredBooklets.add(normalized);
+      this.saveCurrentWorkspaceSettings(() => this.snackBar.open('Testheft ignoriert', 'OK', { duration: 3000 }), () => this.ignoredBooklets.delete(normalized));
+    }
+  }
+
+  toggleTestletIgnore(bookletId: string, testletId: string): void {
+    if (!bookletId || !testletId || !this.data.workspaceId) return;
+    const normBooklet = bookletId.toUpperCase();
+    const normTestlet = testletId.toUpperCase();
+
+    const index = this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet);
+
+    if (index >= 0) {
+      this.ignoredTestlets.splice(index, 1);
+      this.saveCurrentWorkspaceSettings(
+        () => this.snackBar.open('Testlet wiederhergestellt', 'OK', { duration: 3000 }),
+        () => this.ignoredTestlets.push({ bookletId: normBooklet, testletId: normTestlet })
+      );
+    } else {
+      this.ignoredTestlets.push({ bookletId: normBooklet, testletId: normTestlet });
+      this.saveCurrentWorkspaceSettings(
+        () => this.snackBar.open('Testlet ignoriert', 'OK', { duration: 3000 }),
+        () => this.ignoredTestlets.splice(this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1)
+      );
+    }
   }
 
   filesDeleted = false;
@@ -1109,7 +1235,9 @@ export class FilesValidationDialogComponent implements OnInit {
           height: '80vh',
           data: {
             bookletInfo,
-            bookletId: normalizedBookletId
+            bookletId: normalizedBookletId,
+            isTestletIgnored: (testletId: string) => this.isTestletIgnored(normalizedBookletId, testletId),
+            toggleTestletIgnore: (testletId: string) => this.toggleTestletIgnore(normalizedBookletId, testletId)
           }
         });
       },

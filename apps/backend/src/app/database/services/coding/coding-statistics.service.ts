@@ -9,6 +9,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
@@ -22,7 +23,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     private cacheService: CacheService,
     private jobQueueService: JobQueueService,
     private bullJobManagementService: BullJobManagementService,
-    private workspaceCoreService: WorkspaceCoreService
+    private workspaceCoreService: WorkspaceCoreService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async onApplicationBootstrap(): Promise<void> {
@@ -77,9 +79,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
     try {
       const unitVariables = await this.getUnitVariables(workspace_id);
-      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
-      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
-      const unitsWithVariables = Object.keys(unitVariables).filter(u => !ignoredSet.has(u.toUpperCase()));
+
+      const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      const globalIgnoredSet = new Set(globalIgnoredUnits);
+
+      const unitsWithVariables = Object.keys(unitVariables).filter(u => !globalIgnoredSet.has(u.toUpperCase()));
 
       if (unitsWithVariables.length === 0) {
         this.logger.log(`No units with variables found for workspace ${workspace_id}`);
@@ -102,6 +106,25 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL AND (response.code_v2 IS NULL OR response.code_v2 != -111)';
       }
 
+      let paramIndex = 5;
+      const queryParams: (number | string | number[] | string[] | boolean)[] = [codedStatuses, workspace_id, true, unitsWithVariables];
+
+      if (ignoredBooklets.length > 0) {
+        whereCondition += ` AND bookletinfo.name != ALL($${paramIndex})`;
+        queryParams.push(ignoredBooklets);
+        paramIndex += 1;
+      }
+
+      if (testletIgnoredUnits.length > 0) {
+        const conditions = testletIgnoredUnits.map(t => {
+          const condition = `NOT (bookletinfo.name = $${paramIndex} AND unit.name = $${paramIndex + 1})`;
+          queryParams.push(t.bookletId, t.unitId);
+          paramIndex += 2;
+          return condition;
+        }).join(' AND ');
+        whereCondition += ` AND (${conditions})`;
+      }
+
       const statusCountResults = await this.responseRepository.query(`
         SELECT
           ${statusColumn} as "statusValue",
@@ -109,6 +132,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         FROM response
         INNER JOIN unit ON response.unitid = unit.id
         INNER JOIN booklet ON unit.bookletid = booklet.id
+        INNER JOIN bookletinfo ON booklet.infoid = bookletinfo.id
         INNER JOIN persons person ON booklet.personid = person.id
         WHERE response.status = ANY($1)
           AND ${whereCondition}
@@ -116,7 +140,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           AND person.consider = $3
           AND unit.name = ANY($4)
         GROUP BY ${statusColumn}
-      `, [codedStatuses, workspace_id, true, unitsWithVariables]);
+      `, queryParams);
 
       let totalResponses = 0;
       statusCountResults.forEach(result => {

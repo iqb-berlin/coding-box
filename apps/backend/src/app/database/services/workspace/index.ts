@@ -11,3 +11,4 @@ export { UnitInfoService } from './unit-info.service';
 export { UnitTagService } from './unit-tag.service';
 export { UnitNoteService } from './unit-note.service';
 export { BookletInfoService } from './booklet-info.service';
+export { WorkspaceExclusionService } from './workspace-exclusion.service';

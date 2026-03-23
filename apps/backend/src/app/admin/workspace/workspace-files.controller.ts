@@ -34,6 +34,7 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { WorkspaceFilesService, WorkspaceCoreService } from '../../database/services/workspace';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
+import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatisticsService, CodingValidationService } from '../../database/services/coding';
 
@@ -430,56 +431,28 @@ export class WorkspaceFilesController {
       }
     }
 
+    let zipBuffer: Buffer;
     try {
       logger.log(
         `Starting ZIP download for workspace ${workspaceIdNum} with ${requestedTypes.length} file types`
       );
 
-      const zipBuffer =
+      zipBuffer =
         await this.workspaceFilesService.downloadWorkspaceFilesAsZip(
           workspaceIdNum,
           requestedTypes.length > 0 ? requestedTypes : undefined
         );
-
-      // Validate ZIP buffer
-      if (!zipBuffer || zipBuffer.length === 0) {
-        logger.error(
-          `Empty ZIP buffer generated for workspace ${workspaceIdNum}`
-        );
-        throw new InternalServerErrorException(
-          'No files available to download.'
-        );
-      }
-
-      if (zipBuffer.length > MAX_ZIP_SIZE) {
-        logger.error(
-          `ZIP file exceeds maximum size for workspace ${workspaceIdNum}: ${zipBuffer.length} bytes`
-        );
-        throw new InternalServerErrorException(
-          'ZIP file is too large. Please select fewer file types.'
-        );
-      }
-
-      const duration = Date.now() - startTime;
-      logger.log(
-        `ZIP download completed for workspace ${workspaceIdNum} in ${duration} ms(${zipBuffer.length} bytes)`
-      );
-
-      return new StreamableFile(zipBuffer, {
-        type: 'application/zip',
-        disposition: `attachment; filename = "workspace-${workspaceIdNum}-files.zip"`
-      });
     } catch (error) {
       const duration = Date.now() - startTime;
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       logger.error(
-        `Error creating ZIP file for workspace ${workspaceIdNum} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
+        ` Error creating ZIP file for workspace ${workspaceIdNum} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
         } `
       );
 
-      // Re-throw known exceptions
+      // Re-throw generic exceptions if needed, though they aren't caught locally anymore.
       if (
         error instanceof BadRequestException ||
         error instanceof InternalServerErrorException
@@ -510,6 +483,35 @@ export class WorkspaceFilesController {
         'Unable to create ZIP file. Please try again later.'
       );
     }
+
+    // Validate ZIP buffer outside try/catch
+    if (!zipBuffer || zipBuffer.length === 0) {
+      logger.error(
+        `Empty ZIP buffer generated for workspace ${workspaceIdNum}`
+      );
+      throw new InternalServerErrorException(
+        'No files available to download.'
+      );
+    }
+
+    if (zipBuffer.length > MAX_ZIP_SIZE) {
+      logger.error(
+        `ZIP file exceeds maximum size for workspace ${workspaceIdNum}: ${zipBuffer.length} bytes`
+      );
+      throw new InternalServerErrorException(
+        'ZIP file is too large. Please select fewer file types.'
+      );
+    }
+
+    const duration = Date.now() - startTime;
+    logger.log(
+      `ZIP download completed for workspace ${workspaceIdNum} in ${duration} ms(${zipBuffer.length} bytes)`
+    );
+
+    return new StreamableFile(zipBuffer, {
+      type: 'application/zip',
+      disposition: `attachment; filename = "workspace-${workspaceIdNum}-files.zip"`
+    });
   }
 
   @Get(':workspace_id/files/ignored-units')
@@ -534,5 +536,29 @@ export class WorkspaceFilesController {
       throw new BadRequestException('ignoredUnits must be an array of strings');
     }
     return this.workspaceCoreService.setIgnoredUnits(workspaceId, body.ignoredUnits);
+  }
+
+  @Get(':workspace_id/settings')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOkResponse({ description: 'Workspace Settings returned' })
+  async getWorkspaceSettings(@Param('workspace_id') workspaceId: number) {
+    return this.workspaceCoreService.getWorkspaceSettings(workspaceId);
+  }
+
+  @Put(':workspace_id/settings')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOkResponse({ description: 'Workspace Settings updated' })
+  async updateWorkspaceSettings(
+    @Param('workspace_id') workspaceId: number,
+      @Body() body: WorkspaceSettingsDto
+  ): Promise<void> {
+    if (!body) {
+      throw new BadRequestException('Request body is required');
+    }
+    return this.workspaceCoreService.setWorkspaceSettings(workspaceId, body);
   }
 }
