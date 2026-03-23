@@ -13,6 +13,8 @@ export interface EmptyResponseDto {
   bookletName: string;
   responseId: number;
   value: string | null;
+  isCoded?: boolean;
+  assignedCode?: number;
 }
 
 export interface DuplicateValueGroupDto {
