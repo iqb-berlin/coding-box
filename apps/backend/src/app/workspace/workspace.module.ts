@@ -45,7 +45,8 @@ import {
   UnitInfoService,
   UnitTagService,
   UnitNoteService,
-  BookletInfoService
+  BookletInfoService,
+  WorkspaceExclusionService
 } from '../database/services/workspace';
 import {
   WorkspaceTestResultsService,
@@ -177,7 +178,8 @@ import { CodingModule } from '../coding/coding.module';
     CodebookGenerationService,
     CodingResponseQueryService,
     UnitInfoService,
-    BookletInfoService
+    BookletInfoService,
+    WorkspaceExclusionService
   ],
   exports: [
     WorkspaceCoreService,
@@ -218,7 +220,8 @@ import { CodingModule } from '../coding/coding.module';
     CodebookGenerationService,
     CodingResponseQueryService,
     UnitInfoService,
-    BookletInfoService
+    BookletInfoService,
+    WorkspaceExclusionService
   ]
 })
 export class WorkspaceModule { }

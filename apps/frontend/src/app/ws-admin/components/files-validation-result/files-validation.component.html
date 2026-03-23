@@ -220,7 +220,7 @@
     }
 
     @if (validationResults.length > 0) {
-    <mat-tab-group>
+    <mat-tab-group [(selectedIndex)]="selectedTabIndex">
       @if (validationResults.length > 1) {
       <mat-tab label="Übersicht">
         <div class="summary-container">
@@ -554,19 +554,64 @@
               <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'booklets')">
                 <ul>
                   @for (file of val.booklets.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if (file.exists) {
-                    <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
-                      matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
-                      <mat-icon>info</mat-icon>
-                    </button>
+                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists"
+                    [class.ignored-unit]="isBookletIgnored(file.filename)"
+                    [class.has-ignored-testlets]="hasIgnoredTestlets(file.filename)">
+                    <div class="file-item-header">
+                      @if (file.exists) {
+                      <button mat-icon-button class="expansion-toggle" (click)="toggleBookletExpand(file.filename); $event.stopPropagation()">
+                          <mat-icon>{{ expandedBooklets.has(file.filename.toUpperCase()) ? 'expand_less' : 'expand_more' }}</mat-icon>
+                      </button>
+                      }
+                      <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                      <span class="file-name">
+                        {{ file.filename }}
+                        @if (hasIgnoredTestlets(file.filename)) {
+                        <mat-icon class="testlet-warning-icon" matTooltip="Einige Testlets in diesem Testheft sind deaktiviert">layers_clear</mat-icon>
+                        }
+                      </span>
+                      @if (file.schemaValid === false) {
+                      <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                        report_problem
+                      </mat-icon>
+                      }
+                      @if (file.exists) {
+                      <button mat-icon-button class="file-action-button" (click)="openBookletInfo(file.filename)"
+                        matTooltip="Testheft anzeigen" [attr.aria-label]="'Testheft anzeigen'">
+                        <mat-icon>info</mat-icon>
+                      </button>
+                      }
+                      <button mat-icon-button class="file-action-button"
+                        (click)="toggleBookletIgnore(file.filename); $event.stopPropagation()"
+                        matTooltip="{{ isBookletIgnored(file.filename) ? 'Testheft wiederherstellen' : 'Testheft ignorieren' }}">
+                        <mat-icon>{{ isBookletIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
+                      </button>
+                    </div>
+                    
+                    <!-- Nested Testlets Section -->
+                    @if (expandedBooklets.has(file.filename.toUpperCase())) {
+                      <div class="nested-testlets">
+                        @if (loadingBooklets.has(file.filename.toUpperCase())) {
+                        <mat-spinner diameter="20"></mat-spinner>
+                        } @else if (bookletData.get(file.filename.toUpperCase())) {
+                        <ul class="testlet-nested-list">
+                          @for (testlet of bookletData.get(file.filename.toUpperCase())?.testlets; track testlet.id) {
+                          <li class="testlet-nested-item" [class.ignored-testlet]="isTestletIgnored(file.filename, testlet.id)">
+                            <mat-icon class="testlet-icon">layers</mat-icon>
+                            <span class="testlet-label">{{ testlet.label || testlet.id }}</span>
+                            <button mat-icon-button class="testlet-action-button"
+                                    (click)="toggleTestletIgnore(file.filename, testlet.id); $event.stopPropagation()"
+                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Testlet wiederherstellen' : 'Testlet ignorieren' }}">
+                              <mat-icon>{{ isTestletIgnored(file.filename, testlet.id) ? 'visibility_off' : 'visibility' }}</mat-icon>
+                            </button>
+                          </li>
+                          }
+                          @if (!(bookletData.get(file.filename.toUpperCase())?.testlets?.length)) {
+                            <li class="no-testlets">Keine Testlets gefunden</li>
+                          }
+                        </ul>
+                        }
+                      </div>
                     }
                   </li>
                   }
@@ -617,45 +662,47 @@
                 <ul>
                   @for (file of val.units.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists"
-                    [class.ignored-unit]="isUnitIgnored(file.filename)">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (!file.exists && val.units.relatedEntitiesByMissingFile[file.filename]; as relatedBooklets) {
-                    <span class="file-name">
-                      (
-                      @for (b of relatedBooklets.preview; track b) {
-                      <button mat-button type="button" (click)="openBookletInfo(b)">
-                        {{ b }}
+                    [class.ignored-unit]="isUnitIgnored(file.filename, file.parents)">
+                    <div class="file-item-header">
+                      <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                      <span class="file-name">{{ file.filename }}</span>
+                      @if (!file.exists && val.units.relatedEntitiesByMissingFile[file.filename]; as relatedBooklets) {
+                      <span class="file-name">
+                        (
+                        @for (b of relatedBooklets.preview; track b) {
+                        <button mat-button type="button" (click)="openBookletInfo(b)">
+                          {{ b }}
+                        </button>
+                        }
+                        @if (relatedBooklets.remaining > 0) {
+                        <button mat-button type="button" (click)="openAffectedUnitsDialog(
+                                        'Betroffene Testhefte',
+                                        relatedBooklets.all,
+                                        openBookletInfo.bind(this)
+                                      )">
+                          +{{ relatedBooklets.remaining }} mehr
+                        </button>
+                        }
+                        )
+                      </span>
+                      }
+                      @if (file.schemaValid === false) {
+                      <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                        report_problem
+                      </mat-icon>
+                      }
+                      @if (file.exists) {
+                      <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
+                        matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
+                        <mat-icon>info</mat-icon>
                       </button>
                       }
-                      @if (relatedBooklets.remaining > 0) {
-                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
-                                      'Betroffene Testhefte',
-                                      relatedBooklets.all,
-                                      openBookletInfo.bind(this)
-                                    )">
-                        +{{ relatedBooklets.remaining }} mehr
+                      <button mat-icon-button class="file-action-button"
+                        (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
+                        matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}">
+                        <mat-icon>{{ isUnitIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
                       </button>
-                      }
-                      )
-                    </span>
-                    }
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if (file.exists) {
-                    <button mat-icon-button class="file-action-button" (click)="openUnitInfo(file.filename)"
-                      matTooltip="Aufgabe anzeigen" [attr.aria-label]="'Aufgabe anzeigen'">
-                      <mat-icon>info</mat-icon>
-                    </button>
-                    }
-                    <button mat-icon-button class="file-action-button"
-                      (click)="toggleUnitIgnore(file.filename); $event.stopPropagation()"
-                      matTooltip="{{ isUnitIgnored(file.filename) ? 'Aufgabe wiederherstellen' : 'Aufgabe ignorieren' }}">
-                      <mat-icon>{{ isUnitIgnored(file.filename) ? 'visibility_off' : 'visibility' }}</mat-icon>
-                    </button>
+                    </div>
                   </li>
                   }
                 </ul>
@@ -706,6 +753,7 @@
                 <ul>
                   @for (file of val.schemes.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <div class="file-item-header">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && val.schemes.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
@@ -739,6 +787,7 @@
                       <mat-icon>schema</mat-icon>
                     </button>
                     }
+                    </div>
                   </li>
                   }
                 </ul>
@@ -789,6 +838,7 @@
                 <ul>
                   @for (file of val.schemer.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <div class="file-item-header">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && val.schemer.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
@@ -816,6 +866,7 @@
                       report_problem
                     </mat-icon>
                     }
+                    </div>
                   </li>
                   }
                 </ul>
@@ -866,6 +917,7 @@
                 <ul>
                   @for (file of val.definitions.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <div class="file-item-header">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && val.definitions.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
@@ -899,6 +951,7 @@
                       <mat-icon>description</mat-icon>
                     </button>
                     }
+                    </div>
                   </li>
                   }
                 </ul>
@@ -949,6 +1002,7 @@
                 <ul>
                   @for (file of val.player.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <div class="file-item-header">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && val.player.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
@@ -976,6 +1030,7 @@
                       report_problem
                     </mat-icon>
                     }
+                    </div>
                   </li>
                   }
                 </ul>
@@ -1026,6 +1081,7 @@
                 <ul>
                   @for (file of val.metadata.files; track file) {
                   <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                    <div class="file-item-header">
                     <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
                     <span class="file-name">{{ file.filename }}</span>
                     @if (!file.exists && val.metadata.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
@@ -1059,6 +1115,7 @@
                       <mat-icon>description</mat-icon>
                     </button>
                     }
+                    </div>
                   </li>
                   }
                 </ul>

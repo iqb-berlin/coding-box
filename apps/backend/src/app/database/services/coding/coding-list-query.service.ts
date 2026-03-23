@@ -7,6 +7,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingItem } from './coding-item-builder.service';
 
 /**
@@ -27,7 +28,8 @@ export class CodingListQueryService {
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly workspaceCoreService: WorkspaceCoreService
+    private readonly workspaceCoreService: WorkspaceCoreService,
+    private readonly workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   /**
@@ -99,9 +101,21 @@ export class CodingListQueryService {
         .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
 
-      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
-      if (ignoredUnits.length > 0) {
-        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+      const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      if (globalIgnoredUnits.length > 0) {
+        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+      }
+      if (ignoredBooklets.length > 0) {
+        queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
+      }
+      if (testletIgnoredUnits.length > 0) {
+        const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
+        const params: Record<string, string> = {};
+        testletIgnoredUnits.forEach((t, i) => {
+          params[`bId${i}`] = t.bookletId;
+          params[`uId${i}`] = t.unitId;
+        });
+        queryBuilder.andWhere(`NOT (${condition})`, params);
       }
 
       const [responses, total] = await queryBuilder.getManyAndCount();
@@ -232,6 +246,7 @@ export class CodingListQueryService {
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.status_v1', 'statusV1')
@@ -255,9 +270,21 @@ export class CodingListQueryService {
        AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
     );
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    if (ignoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    if (globalIgnoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+    }
+    if (ignoredBooklets.length > 0) {
+      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
+    }
+    if (testletIgnoredUnits.length > 0) {
+      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
+      const params: Record<string, string> = {};
+      testletIgnoredUnits.forEach((t, i) => {
+        params[`bId${i}`] = t.bookletId;
+        params[`uId${i}`] = t.unitId;
+      });
+      queryBuilder.andWhere(`NOT (${condition})`, params);
     }
 
     const rawResults = await queryBuilder.getRawMany();

@@ -11,6 +11,8 @@ import Persons from '../../entities/persons.entity';
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
 
 type FileStatus = {
@@ -18,6 +20,13 @@ type FileStatus = {
   exists: boolean;
   schemaValid?: boolean;
   schemaErrors?: string[];
+  ignored?: boolean;
+  parents?: string[];
+};
+
+type TestletDto = {
+  id: string;
+  label?: string;
   ignored?: boolean;
 };
 
@@ -28,6 +37,7 @@ type DataValidation = {
   unitsWithoutPlayer?: string[];
   missingRefsPerUnit?: { unit: string; missingRefs: string[] }[];
   files: FileStatus[];
+  testlets?: TestletDto[];
 };
 
 type UnitRefs = {
@@ -63,23 +73,23 @@ export class WorkspaceTestFilesValidationService {
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
     private workspaceXmlSchemaValidationService: WorkspaceXmlSchemaValidationService,
-    private workspaceCoreService: WorkspaceCoreService
+    private workspaceCoreService: WorkspaceCoreService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async validateTestFiles(workspaceId: number): Promise<FileValidationResultDto> {
     try {
       this.logger.log(`Starting batched test file validation for workspace ${workspaceId}`);
 
-      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults, ignoredUnits] = await Promise.all([
-        this.preloadBookletToUnits(workspaceId),
+      const exclusions = await this.workspaceExclusionService.getExclusions(workspaceId);
+
+      const [bookletMap, unitMap, resourceIds, xmlSchemaResults, codingSchemeResults] = await Promise.all([
+        this.preloadBookletToUnits(workspaceId, exclusions),
         this.preloadUnitRefs(workspaceId),
         this.getAllResourceIds(workspaceId),
         this.workspaceXmlSchemaValidationService.validateAllXmlSchemas(workspaceId),
-        this.validateAllCodingSchemes(workspaceId),
-        this.workspaceCoreService.getIgnoredUnits(workspaceId)
+        this.validateAllCodingSchemes(workspaceId)
       ]);
-
-      const ignoredUnitsSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
 
       const summarizeSchemaResults = (label: string, results: Map<string, { schemaValid: boolean; errors: string[] }>): void => {
         const entries = Array.from(results.entries());
@@ -169,7 +179,7 @@ export class WorkspaceTestFilesValidationService {
             resourceIdsArray,
             xmlSchemaResults,
             codingSchemeResults,
-            ignoredUnitsSet
+            exclusions
           );
           if (validationResult) {
             validationResults.push(validationResult);
@@ -399,8 +409,8 @@ export class WorkspaceTestFilesValidationService {
     return considerByLogin;
   }
 
-  private async preloadBookletToUnits(workspaceId: number): Promise<Map<string, string[]>> {
-    const bookletMap = new Map<string, string[]>();
+  private async preloadBookletToUnits(workspaceId: number, exclusions: WorkspaceSettingsDto): Promise<Map<string, { unitIds: string[]; testlets: TestletDto[] }>> {
+    const bookletMap = new Map<string, { unitIds: string[]; testlets: TestletDto[] }>();
     const BATCH_SIZE = 100;
     let offset = 0;
 
@@ -415,12 +425,46 @@ export class WorkspaceTestFilesValidationService {
       for (const booklet of booklets) {
         try {
           const $ = cheerio.load(booklet.data, { xmlMode: true });
+          const bookletId = booklet.file_id.toUpperCase();
+
+          if (this.workspaceExclusionService.isExcluded({ bookletId }, exclusions)) {
+            bookletMap.set(bookletId, { unitIds: [], testlets: [] });
+            continue;
+          }
+
+          const testlets: TestletDto[] = [];
+          $('testlet').each((_, element) => {
+            const id = $(element).attr('id');
+            const label = $(element).attr('label');
+            if (id) {
+              testlets.push({
+                id,
+                label,
+                ignored: this.workspaceExclusionService.isExcluded({ bookletId, testletId: id }, exclusions)
+              });
+            }
+          });
+
           const unitIds: string[] = [];
           $('Unit').each((_, element) => {
             const unitId = $(element).attr('id');
-            if (unitId) unitIds.push(unitId.toUpperCase());
+            if (unitId) {
+              let ignoredByTestlet = false;
+              let current = $(element).parent();
+              while (current.length && current[0].tagName === 'testlet') {
+                const testletId = current.attr('id');
+                if (testletId && this.workspaceExclusionService.isExcluded({ bookletId, testletId }, exclusions)) {
+                  ignoredByTestlet = true;
+                  break;
+                }
+                current = current.parent();
+              }
+              if (!ignoredByTestlet) {
+                unitIds.push(unitId.toUpperCase());
+              }
+            }
           });
-          bookletMap.set(booklet.file_id.toUpperCase(), unitIds);
+          bookletMap.set(bookletId, { unitIds, testlets });
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
           this.logger.warn(`Failed to parse booklet ${booklet.file_id}: ${message}`);
@@ -618,13 +662,13 @@ export class WorkspaceTestFilesValidationService {
 
   private processTestTakerWithCache(
     testTaker: FileUpload,
-    bookletMap: Map<string, string[]>,
+    bookletMap: Map<string, { unitIds: string[]; testlets: TestletDto[] }>,
     unitMap: Map<string, UnitRefs>,
     resourceIds: Set<string>,
     resourceIdsArray: string[],
     xmlSchemaResults: Map<string, { schemaValid: boolean; errors: string[] }>,
     codingSchemeResults: Map<string, { schemaValid: boolean; errors: string[] }>,
-    ignoredUnits: Set<string>
+    exclusions: WorkspaceSettingsDto
   ): ValidationData | null {
     const xmlDocument = cheerio.load(testTaker.data, { xml: true });
     const bookletTags = xmlDocument('Booklet');
@@ -639,14 +683,19 @@ export class WorkspaceTestFilesValidationService {
 
     const missingBooklets: string[] = [];
     const bookletFiles: FileStatus[] = [];
-    const uniqueUnits = new Set<string>();
+    const allTestlets: TestletDto[] = [];
+    const unitToBookletsMap = new Map<string, Set<string>>();
     const missingUnitsPerBooklet: { booklet: string; missingUnits: string[] }[] = [];
 
     for (const bookletId of uniqueBooklets) {
       const exists = bookletMap.has(bookletId);
+      const isBookletIgnored = this.workspaceExclusionService.isExcluded({ bookletId }, exclusions);
       const schemaKey = `Booklet:${bookletId}`;
       const schemaInfo = xmlSchemaResults.get(schemaKey);
       const bookletStatus: FileStatus = { filename: bookletId, exists };
+      if (isBookletIgnored) {
+        bookletStatus.ignored = true;
+      }
       if (schemaInfo) {
         bookletStatus.schemaValid = schemaInfo.schemaValid;
         if (!schemaInfo.schemaValid) {
@@ -654,11 +703,25 @@ export class WorkspaceTestFilesValidationService {
         }
       }
       bookletFiles.push(bookletStatus);
+      if (isBookletIgnored) {
+        continue;
+      }
       if (!exists) {
         missingBooklets.push(bookletId);
       } else {
-        const units = bookletMap.get(bookletId) || [];
-        units.forEach(u => uniqueUnits.add(u));
+        const data = bookletMap.get(bookletId);
+        const units = data?.unitIds || [];
+        (data?.testlets || []).forEach(t => {
+          if (!allTestlets.some(existing => existing.id === t.id)) {
+            allTestlets.push(t);
+          }
+        });
+
+        units.forEach(u => {
+          const booklets = unitToBookletsMap.get(u) || new Set<string>();
+          booklets.add(bookletId);
+          unitToBookletsMap.set(u, booklets);
+        });
 
         const missingUnitsInBooklet = units.filter(u => !unitMap.has(u));
         if (missingUnitsInBooklet.length > 0) {
@@ -670,6 +733,7 @@ export class WorkspaceTestFilesValidationService {
       }
     }
 
+    const uniqueUnits = Array.from(unitToBookletsMap.keys());
     const missingUnits: string[] = [];
     const unitFiles: FileStatus[] = [];
     const unitsWithoutPlayer: string[] = [];
@@ -688,10 +752,15 @@ export class WorkspaceTestFilesValidationService {
 
     for (const unitId of uniqueUnits) {
       const exists = unitMap.has(unitId);
-      const isIgnored = ignoredUnits.has(unitId);
+      const isIgnored = this.workspaceExclusionService.isExcluded({ unitId }, exclusions);
       const schemaKey = `Unit:${unitId}`;
       const schemaInfo = xmlSchemaResults.get(schemaKey);
-      const status: FileStatus = { filename: unitId, exists, ignored: isIgnored };
+      const status: FileStatus = {
+        filename: unitId,
+        exists,
+        ignored: isIgnored,
+        parents: Array.from(unitToBookletsMap.get(unitId) || [])
+      };
       if (schemaInfo) {
         status.schemaValid = schemaInfo.schemaValid;
         if (!schemaInfo.schemaValid) {
@@ -819,7 +888,8 @@ export class WorkspaceTestFilesValidationService {
       booklets: {
         complete: missingBooklets.length === 0,
         missing: missingBooklets,
-        files: bookletFiles
+        files: bookletFiles,
+        testlets: allTestlets
       },
       units: {
         complete: unitComplete ? missingUnits.length === 0 : false,

@@ -14,6 +14,7 @@ import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/pag
 import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { SERVER_URL } from '../../injection-tokens';
 import { AccessRightsMatrixDto } from '../../../../../../api-dto/workspaces/access-rights-matrix-dto';
+import { WorkspaceSettingsDto } from '../../../../../../api-dto/workspaces/workspace-settings-dto';
 
 @Injectable({
   providedIn: 'root'
@@ -174,6 +175,16 @@ export class WorkspaceService {
 
   saveIgnoredUnits(workspaceId: number, ignoredUnits: string[]): Observable<boolean> {
     return this.http.put<boolean>(`${this.serverUrl}admin/workspace/${workspaceId}/files/ignored-units`, { ignoredUnits }, { headers: this.authHeader })
+      .pipe(map(() => true), catchError(() => of(false)));
+  }
+
+  getWorkspaceSettings(workspaceId: number): Observable<WorkspaceSettingsDto> {
+    return this.http.get<WorkspaceSettingsDto>(`${this.serverUrl}admin/workspace/${workspaceId}/settings`, { headers: this.authHeader })
+      .pipe(catchError(() => of({ ignoredUnits: [], ignoredBooklets: [], ignoredTestlets: [] } as WorkspaceSettingsDto)));
+  }
+
+  saveWorkspaceSettings(workspaceId: number, settings: WorkspaceSettingsDto): Observable<boolean> {
+    return this.http.put<boolean>(`${this.serverUrl}admin/workspace/${workspaceId}/settings`, settings, { headers: this.authHeader })
       .pipe(map(() => true), catchError(() => of(false)));
   }
 }
