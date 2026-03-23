@@ -173,16 +173,22 @@
                         <th>{{ 'coding-management-manual.response-analysis.table.group' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.booklet' | translate }}</th>
                         <th>{{ 'coding-management-manual.response-analysis.table.value' | translate }}</th>
+                        <th>{{ 'coding-management-manual.response-analysis.table.status' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
-                      <tr *ngFor="let item of responseAnalysis.emptyResponses.items">
+                      <tr *ngFor="let item of responseAnalysis.emptyResponses.items" [class.coded-row]="item.isCoded">
                         <td>{{ item.unitAlias || item.unitName }}</td>
                         <td>{{ item.variableId }}</td>
                         <td>{{ item.personLogin }}{{ item.personCode ? ' (' + item.personCode + ')' : '' }}</td>
                         <td>{{ item.personGroup }}</td>
                         <td>{{ item.bookletName }}</td>
                         <td class="value-cell">{{ item.value || '(leer)' }}</td>
+                        <td class="status-cell">
+                          <span *ngIf="item.isCoded" class="coded-badge">
+                            Kodiert (Code: {{ item.assignedCode }})
+                          </span>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -194,7 +200,7 @@
                 </mat-paginator>
                 <div class="analysis-actions">
                   <button mat-stroked-button color="primary" (click)="onApplyEmptyResponseCoding()"
-                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating"
+                    [disabled]="isApplyingEmptyCoding || responseAnalysis.isCalculating || !hasUncodedEmptyResponses()"
                     [matTooltip]="'coding-management-manual.response-analysis.apply-empty-coding-tooltip' | translate">
                     <mat-icon *ngIf="!isApplyingEmptyCoding">flash_on</mat-icon>
                     <mat-spinner *ngIf="isApplyingEmptyCoding" diameter="20"></mat-spinner>

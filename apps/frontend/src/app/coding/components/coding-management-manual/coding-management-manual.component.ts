@@ -119,45 +119,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   ResponseMatchingFlag = ResponseMatchingFlag; // Expose enum to template
 
   // Response analysis data
-  responseAnalysis: {
-    emptyResponses: {
-      total: number;
-      items: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        personLogin: string;
-        personCode: string;
-        personGroup: string;
-        bookletName: string;
-        responseId: number;
-        value: string | null;
-      }[];
-    };
-    duplicateValues: {
-      total: number;
-      totalResponses: number;
-      groups: {
-        unitName: string;
-        unitAlias: string | null;
-        variableId: string;
-        normalizedValue: string;
-        originalValue: string;
-        occurrences: {
-          personLogin: string;
-          personCode: string;
-          bookletName: string;
-          responseId: number;
-          value: string;
-        }[];
-      }[];
-      isAggregationApplied: boolean;
-    };
-    matchingFlags: string[];
-    analysisTimestamp: string;
-    isCalculating?: boolean;
-    progress?: number;
-  } | null = null;
+  responseAnalysis: ResponseAnalysisDto | null = null;
 
   isLoadingResponseAnalysis = false;
   showEmptyResponsesDetails = false;
@@ -170,7 +132,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private analysisPollingTimer?: ReturnType<typeof setTimeout>;
 
   emptyPageIndex = 0;
-  emptyPageSize = 50;
+  emptyPageSize = 5;
   duplicatePageIndex = 0;
   duplicatePageSize = 50;
 
@@ -1207,12 +1169,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const totalResponses = this.responseAnalysis.emptyResponses.total;
+    const uncodedCount = this.responseAnalysis.emptyResponses.items.filter(item => !item.isCoded).length;
+    if (uncodedCount === 0) {
+      return;
+    }
 
     // Show Material Dialog confirmation
     const dialogRef = this.dialog.open(ApplyEmptyCodingDialogComponent, {
       width: '550px',
-      data: { count: totalResponses }
+      data: { count: uncodedCount }
     });
 
     dialogRef.afterClosed().pipe(takeUntil(this.destroy$)).subscribe((confirmed: unknown) => {
@@ -1434,5 +1399,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.duplicatePageIndex = event.pageIndex;
     this.duplicatePageSize = event.pageSize;
     this.loadResponseAnalysis();
+  }
+
+  hasUncodedEmptyResponses(): boolean {
+    if (!this.responseAnalysis?.emptyResponses?.items) {
+      return false;
+    }
+    return this.responseAnalysis.emptyResponses.items.some(item => !item.isCoded);
   }
 }
