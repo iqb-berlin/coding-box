@@ -2,7 +2,7 @@ import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { Response } from 'express';
 import * as csv from 'fast-csv';
 import * as fs from 'fs';
@@ -29,6 +29,7 @@ import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { ResponseManagementService } from './response-management.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 interface PersonWhere {
   code: string;
@@ -131,8 +132,30 @@ export class WorkspaceTestResultsService {
     @Inject(forwardRef(() => CodingValidationService))
     private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
-    private readonly workspaceCoreService: WorkspaceCoreService
+    private readonly workspaceCoreService: WorkspaceCoreService,
+    private readonly workspaceExclusionService: WorkspaceExclusionService
   ) { }
+
+  private applyExclusionsToQuery(qb: SelectQueryBuilder<unknown>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
+    const u = options.unitAlias || 'unit';
+    const b = options.bookletInfoAlias || 'bookletinfo';
+    if (exclusions.globalIgnoredUnits.length > 0) {
+      const normalizedIgnoredUnits = exclusions.globalIgnoredUnits.map(gu => gu.toUpperCase().replace(/\.XML$/i, ''));
+      qb.andWhere(`UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) NOT IN (:...ignoredUnits)`, { ignoredUnits: normalizedIgnoredUnits });
+    }
+    if (exclusions.ignoredBooklets.length > 0) {
+      qb.andWhere(`UPPER(${b}.name) NOT IN (:...ignoredBooklets)`, { ignoredBooklets: exclusions.ignoredBooklets });
+    }
+    if (exclusions.testletIgnoredUnits.length > 0) {
+      const condition = exclusions.testletIgnoredUnits.map((_, i: number) => `(UPPER(${b}.name) = :bId${i} AND UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) = :uId${i})`).join(' OR ');
+      const params: Record<string, string> = {};
+      exclusions.testletIgnoredUnits.forEach((t, i: number) => {
+        params[`bId${i}`] = t.bookletId.toUpperCase();
+        params[`uId${i}`] = t.unitId.toUpperCase().replace(/\.XML$/i, '');
+      });
+      qb.andWhere(`NOT (${condition})`, params);
+    }
+  }
 
   async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
     testPersons: number;
@@ -153,11 +176,7 @@ export class WorkspaceTestResultsService {
       where: { workspace_id: workspaceId, consider: true }
     });
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    let normalizedIgnoredUnits: string[] = [];
-    if (ignoredUnits.length > 0) {
-      normalizedIgnoredUnits = ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, ''));
-    }
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     const groupRows = await this.personsRepository
       .createQueryBuilder('person')
@@ -180,14 +199,13 @@ export class WorkspaceTestResultsService {
     const unitKeyQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .select('DISTINCT COALESCE(unit.alias, unit.name)', 'unitKey')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
-    if (normalizedIgnoredUnits.length > 0) {
-      unitKeyQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
-    }
+    this.applyExclusionsToQuery(unitKeyQuery, exclusions);
     const unitRows = await unitKeyQuery.getRawMany();
     const uniqueUnits = unitRows.length;
 
@@ -195,19 +213,19 @@ export class WorkspaceTestResultsService {
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
-    if (normalizedIgnoredUnits.length > 0) {
-      uniqueResponsesQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
-    }
+    this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
     const uniqueResponses = await uniqueResponsesQuery.getCount();
 
     const statusRowsQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
@@ -215,9 +233,7 @@ export class WorkspaceTestResultsService {
       .addSelect('COUNT(response.id)', 'count')
       .groupBy('response.status');
 
-    if (normalizedIgnoredUnits.length > 0) {
-      statusRowsQuery.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
-    }
+    this.applyExclusionsToQuery(statusRowsQuery, exclusions);
     const statusRows = await statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
 
     const responseStatusCounts: Record<string, number> = {};
@@ -340,8 +356,9 @@ export class WorkspaceTestResultsService {
         `Fetching booklets, bookletInfo data, units, and test results for personId: ${personId} and workspaceId: ${workspaceId}`
       );
 
-      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, '')));
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits.map(u => u.toUpperCase().replace(/\.XML$/i, '')));
+      const ignoredBookletsSet = new Set(exclusions.ignoredBooklets.map(b => b.toUpperCase()));
 
       const booklets = await this.bookletRepository
         .createQueryBuilder('booklet')
@@ -485,7 +502,14 @@ export class WorkspaceTestResultsService {
         name: booklet.bookletinfo.name,
         logs: bookletLogsMap.get(booklet.id) || [],
         units: (unitsMap.get(booklet.id) || [])
-          .filter(unit => !ignoredSet.has(unit.name.toUpperCase()))
+          .filter(unit => {
+            const uName = unit.name.toUpperCase().replace(/\.XML$/i, '');
+            const bName = booklet.bookletinfo.name.toUpperCase();
+            if (globalIgnoredSet.has(uName)) return false;
+            if (ignoredBookletsSet.has(bName)) return false;
+            return !exclusions.testletIgnoredUnits.some(t => t.bookletId.toUpperCase() === bName && t.unitId.toUpperCase()
+              .replace(/\.XML$/i, '') === uName);
+          })
           .map(unit => ({
             id: unit.id,
             name: unit.name,
@@ -824,12 +848,8 @@ export class WorkspaceTestResultsService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    if (ignoredUnits.length > 0) {
-      // Strip .xml extension from ignored units to match unit names
-      const normalizedIgnoredUnits = ignoredUnits.map(u => u.toUpperCase().replace(/\.XML$/, ''));
-      qb.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: normalizedIgnoredUnits });
-    }
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    this.applyExclusionsToQuery(qb, exclusions);
 
     if (code) {
       qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });

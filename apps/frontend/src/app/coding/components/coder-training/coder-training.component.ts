@@ -298,9 +298,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             (b as { case_ordering_mode?: 'continuous' | 'alternating' }).case_ordering_mode ||
             this.editTraining?.case_ordering_mode ||
             'continuous';
-          this.addBundleVariables(b.id, sampleCount, caseOrderingMode);
+          this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
+          this.selectedBundleIds.add(b.id);
         }
       });
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
     }
 
     this.updateGroupedVariables();
@@ -414,7 +416,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating'): void {
+  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variable-Bundle nicht gefunden');
@@ -445,11 +447,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       }
     });
 
-    if (addedCount > 0) {
+    if (addedCount > 0 && !silent) {
       this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt`);
     }
 
-    if (duplicateVariables.length > 0) {
+    if (duplicateVariables.length > 0 && !silent) {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
 

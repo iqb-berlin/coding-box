@@ -25,6 +25,7 @@ import { ResponseManagementService } from '../test-results/response-management.s
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingProcessService {
@@ -44,7 +45,8 @@ export class CodingProcessService {
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
     private workspaceFilesService: WorkspaceFilesService,
-    private workspaceCoreService: WorkspaceCoreService
+    private workspaceCoreService: WorkspaceCoreService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   private codingSchemeCache: Map<
@@ -538,13 +540,29 @@ export class CodingProcessService {
   }
 
   private async fetchUnits(workspace_id: number, bookletIds: number[]): Promise<Unit[]> {
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
+    const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
     const query = this.unitRepository.createQueryBuilder('unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
       .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
 
-    if (ignoredUnits.length > 0) {
-      query.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    if (globalIgnoredUnits.length > 0) {
+      query.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+    }
+
+    if (ignoredBooklets.length > 0) {
+      query.andWhere('UPPER(bookletinfo.name) NOT IN (:...ignoredBooklets)', { ignoredBooklets });
+    }
+
+    if (testletIgnoredUnits.length > 0) {
+      const condition = testletIgnoredUnits.map((_, i) => `(UPPER(bookletinfo.name) = :bId${i} AND UPPER(unit.name) = :uId${i})`).join(' OR ');
+      const params: Record<string, string> = {};
+      testletIgnoredUnits.forEach((t, i) => {
+        params[`bId${i}`] = t.bookletId.toUpperCase();
+        params[`uId${i}`] = t.unitId.toUpperCase();
+      });
+      query.andWhere(`NOT (${condition})`, params);
     }
 
     return query.getMany();

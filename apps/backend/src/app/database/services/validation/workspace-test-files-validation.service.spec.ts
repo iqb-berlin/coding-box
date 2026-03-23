@@ -6,6 +6,7 @@ import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 describe('WorkspaceTestFilesValidationService', () => {
   let service: WorkspaceTestFilesValidationService;
@@ -47,6 +48,14 @@ describe('WorkspaceTestFilesValidationService', () => {
           provide: WorkspaceCoreService,
           useValue: {
             getIgnoredUnits: jest.fn().mockResolvedValue([])
+          }
+        },
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }),
+            getExclusions: jest.fn().mockResolvedValue({ ignoredUnits: [], ignoredBooklets: [], ignoredTestlets: [] }),
+            isExcluded: jest.fn().mockReturnValue(false)
           }
         }
       ]
