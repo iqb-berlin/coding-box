@@ -533,10 +533,10 @@ export class CodingProcessService {
   }
 
   private async fetchBooklets(personIds: number[]): Promise<Booklet[]> {
-    return this.bookletRepository.find({
-      where: { personid: In(personIds) },
-      select: ['id', 'personid']
-    });
+    return this.bookletRepository.createQueryBuilder('booklet')
+      .where('booklet.personid IN (:...personIds)', { personIds })
+      .select(['booklet.id', 'booklet.personid'])
+      .getMany();
   }
 
   private async fetchUnits(workspace_id: number, bookletIds: number[]): Promise<Unit[]> {
