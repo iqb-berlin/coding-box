@@ -5,6 +5,7 @@ import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import FileUpload from '../../entities/file_upload.entity';
@@ -177,6 +178,12 @@ describe('CodingProcessService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingProcessService,
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+          }
+        },
         { provide: getRepositoryToken(FileUpload), useValue: { find: jest.fn(), findBy: jest.fn(), findOne: jest.fn() } },
         { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Unit), useValue: { createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder) } },

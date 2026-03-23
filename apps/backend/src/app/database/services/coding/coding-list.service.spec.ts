@@ -5,6 +5,7 @@ import { WorkspaceFilesService, WorkspaceCoreService } from '../workspace';
 import { CodingListService } from './coding-list.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingListQueryService } from './coding-list-query.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingItemBuilderService } from './coding-item-builder.service';
 
@@ -27,7 +28,10 @@ describe('CodingListService', () => {
       fileUploadRepository,
       responseRepository,
       workspaceFilesService,
-      {} as unknown as WorkspaceCoreService
+      {} as unknown as WorkspaceCoreService,
+      {
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+      } as unknown as WorkspaceExclusionService
     );
     const streamService = {} as unknown as CodingListStreamService;
 
