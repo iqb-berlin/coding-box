@@ -51,6 +51,24 @@ export class WorkspaceCodingReviewController {
     description: 'Exclude coder trainings from the review list (default: false)',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: 'Search string to filter by unit name, variable id, person login or person code',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderId',
+    required: false,
+    description: 'Filter by specific coder ID',
+    type: Number
+  })
+  @ApiQuery({
+    name: 'statusFilter',
+    required: false,
+    description: 'Filter by coding status (all, done, pending)',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Double-coded variables retrieved for review',
     schema: {
@@ -121,7 +139,10 @@ export class WorkspaceCodingReviewController {
                    @Query('page') page: number = 1,
                    @Query('limit') limit: number = 50,
                    @Query('onlyConflicts') onlyConflicts?: string,
-                   @Query('excludeTrainings') excludeTrainings?: string
+                   @Query('excludeTrainings') excludeTrainings?: string,
+                   @Query('search') search?: string,
+                   @Query('coderId') coderId?: number,
+                   @Query('statusFilter') statusFilter?: string
   ): Promise<DoubleCodedReviewResponse> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
@@ -133,7 +154,10 @@ export class WorkspaceCodingReviewController {
       validPage,
       validLimit,
       isOnlyConflicts,
-      isExcludeTrainings
+      isExcludeTrainings,
+      search,
+      coderId,
+      statusFilter
     );
   }
 

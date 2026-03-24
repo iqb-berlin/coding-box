@@ -18,6 +18,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
@@ -51,6 +52,7 @@ describe('WorkspaceTestResultsService', () => {
   let service: WorkspaceTestResultsService;
   let responseManagementService: ResponseManagementService;
   let workspaceCoreService: WorkspaceCoreService;
+  let workspaceExclusionService: WorkspaceExclusionService;
   let unitTagService: UnitTagService;
   let journalService: JournalService;
   let personsRepository: Repository<Persons>;
@@ -83,6 +85,10 @@ describe('WorkspaceTestResultsService', () => {
     workspaceCoreService = {
       getIgnoredUnits: jest.fn().mockResolvedValue([])
     } as unknown as WorkspaceCoreService;
+
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+    } as unknown as WorkspaceExclusionService;
 
     unitTagService = {
       findAllByUnitIds: jest.fn().mockResolvedValue([])
@@ -150,7 +156,8 @@ describe('WorkspaceTestResultsService', () => {
       {} as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
-      workspaceCoreService
+      workspaceCoreService,
+      workspaceExclusionService
     );
   });
 
@@ -222,7 +229,11 @@ describe('WorkspaceTestResultsService', () => {
     it('should handle ignored units correctly', async () => {
       const workspaceId = 1;
 
-      (workspaceCoreService.getIgnoredUnits as jest.Mock).mockResolvedValue(['unit1.xml']);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['unit1.xml'],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      });
       (personsRepository.count as jest.Mock).mockResolvedValue(5);
 
       // default mocks for the rest to avoid errors
@@ -248,7 +259,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.getWorkspaceTestResultsOverview(workspaceId);
 
       expect(unitQb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('UPPER(unit.name) NOT IN'),
+        expect.stringContaining("UPPER(REPLACE(UPPER(unit.name), '.XML', '')) NOT IN"),
         expect.objectContaining({ ignoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
       );
     });

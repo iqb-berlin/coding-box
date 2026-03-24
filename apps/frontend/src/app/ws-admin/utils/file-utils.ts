@@ -37,3 +37,26 @@ export function extractUnitName(fileName: string): string {
   const match = fileName.match(/^Unit\s+(.+)$/);
   return match ? match[1] : fileName;
 }
+
+/**
+ * Returns a localized (German) label for a file type.
+ * @param fileType The file type to localize
+ * @returns German label if known, otherwise the original value
+ */
+export function getFileTypeLabel(fileType: string): string {
+  const normalized = (fileType || '').trim();
+  const resourceSubtypeMatch = normalized.match(/^Resource\s*\(\s*(\.[^)]+?)\s*\)$/i);
+  if (resourceSubtypeMatch) {
+    return `Ressource (${resourceSubtypeMatch[1].trim().toLowerCase()})`;
+  }
+  const mapping: Record<string, string> = {
+    Resource: 'Ressource',
+    Unit: 'Aufgaben',
+    Booklet: 'Testhefte',
+    TestTakers: 'Testteilnehmer',
+    Testtakers: 'Testteilnehmer',
+    Schemer: 'Schemer',
+    SysCheck: 'Systemcheck'
+  };
+  return mapping[normalized] ?? normalized;
+}

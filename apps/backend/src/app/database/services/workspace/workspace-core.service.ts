@@ -5,6 +5,7 @@ import Workspace from '../../entities/workspace.entity';
 import { WorkspaceInListDto } from '../../../../../../../api-dto/workspaces/workspace-in-list-dto';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { CreateWorkspaceDto } from '../../../../../../../api-dto/workspaces/create-workspace-dto';
+import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
@@ -142,6 +143,19 @@ export class WorkspaceCoreService {
     settings.ignoredUnits = ignoredUnits;
     workspace.settings = settings;
 
+    await this.workspaceRepository.save(workspace);
+  }
+
+  async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsDto> {
+    const workspace = await this.findOne(workspaceId);
+    return workspace.settings || {};
+  }
+
+  async setWorkspaceSettings(workspaceId: number, newSettings: Partial<WorkspaceSettingsDto>): Promise<void> {
+    const workspace = await this.workspaceRepository.findOne({ where: { id: workspaceId } });
+    if (!workspace) throw new AdminWorkspaceNotFoundException(workspaceId, 'PATCH');
+
+    workspace.settings = { ...(workspace.settings || {}), ...newSettings };
     await this.workspaceRepository.save(workspace);
   }
 }

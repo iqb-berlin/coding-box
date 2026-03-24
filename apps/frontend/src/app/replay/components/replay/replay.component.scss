@@ -173,12 +173,17 @@
   user-select: none;
   white-space: nowrap;
   text-overflow: ellipsis;
-  max-width: 300px;
+  max-width: calc(100% - 20px);
   overflow: hidden;
   font-weight: 500;
   background-color: rgba(255, 255, 255, 0.7);
   padding: 2px 8px;
   border-radius: 4px;
+}
+
+.watermark.truncated {
+  pointer-events: auto;
+  cursor: help;
 }
 
 .coding-progress {

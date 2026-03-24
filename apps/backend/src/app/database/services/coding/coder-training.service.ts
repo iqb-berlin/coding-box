@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { createHash } from 'crypto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -15,10 +16,12 @@ import { ResponseEntity } from '../../entities/response.entity';
 import User from '../../entities/user.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { ChunkEntity } from '../../entities/chunk.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { MissingsProfilesService } from './missings-profiles.service';
+import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
 
 interface CoderTrainingResponse {
   responseId: number;
@@ -31,6 +34,8 @@ interface CoderTrainingResponse {
   personGroup: string;
   bookletName: string;
   variable: string;
+  chunkTs?: number;
+  unitId?: number;
 }
 
 interface TrainingPackage {
@@ -57,7 +62,12 @@ interface CoderTrainingWithJobs {
   assigned_variable_bundles?: JobDefinitionVariableBundle[];
   assigned_coders?: number[];
   case_ordering_mode?: 'continuous' | 'alternating';
+  case_selection_mode?: string;
+  reference_training_ids?: number[];
+  reference_mode?: string | null;
 }
+
+export type TrainingResponseIdsMap = Record<string, number[]>;
 
 @Injectable()
 export class CoderTrainingService {
@@ -90,6 +100,8 @@ export class CoderTrainingService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
+    @InjectRepository(ChunkEntity)
+    private chunkRepository: Repository<ChunkEntity>,
     private codingJobService: CodingJobService,
     private workspaceFilesService: WorkspaceFilesService,
     private missingsProfilesService: MissingsProfilesService
@@ -132,6 +144,46 @@ export class CoderTrainingService {
     });
 
     return missingCodesByJobId;
+  }
+
+  /**
+   * Get response IDs used in the given trainings, grouped by variable (unitAlias:variableId).
+   * Used for referenceMode 'same' (only these cases) or 'different' (exclude these cases).
+   */
+  async getTrainingResponseIds(
+    workspaceId: number,
+    trainingIds: number[]
+  ): Promise<TrainingResponseIdsMap> {
+    if (trainingIds.length === 0) {
+      return {};
+    }
+
+    this.logger.log(`Getting response IDs for trainings ${trainingIds.join(', ')} in workspace ${workspaceId}`);
+
+    const rows = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('COALESCE(cju.unit_alias, cju.unit_name)', 'unitKey')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.response_id', 'responseId')
+      .where('cj.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds })
+      .distinct(true)
+      .getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
+
+    const result: TrainingResponseIdsMap = {};
+    for (const row of rows) {
+      const key = `${row.unitKey}:${row.variableId}`;
+      if (!result[key]) {
+        result[key] = [];
+      }
+      if (!result[key].includes(row.responseId)) {
+        result[key].push(row.responseId);
+      }
+    }
+
+    this.logger.log(`Found response IDs for ${Object.keys(result).length} variable configs`);
+    return result;
   }
 
   private mapDisplayCodeAndScore(
@@ -234,17 +286,88 @@ export class CoderTrainingService {
     };
   }
 
+  /**
+   * Fisher-Yates shuffle for random sampling
+   */
+  private shuffle<T>(arr: T[]): T[] {
+    const result = [...arr];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
   private sampleResponses(
     responses: CoderTrainingResponse[],
-    sampleCount: number
+    sampleCount: number,
+    caseSelectionMode: CaseSelectionMode = 'oldest_first'
   ): CoderTrainingResponse[] {
     if (responses.length <= sampleCount) {
       return responses;
     }
 
-    // Sort by response ID for deterministic, consistent ordering across all coders
-    const sorted = [...responses].sort((a, b) => a.responseId - b.responseId);
-    return sorted.slice(0, sampleCount);
+    const arr = [...responses];
+
+    switch (caseSelectionMode) {
+      case 'oldest_first': {
+        arr.sort((a, b) => {
+          const tsA = a.chunkTs ?? a.responseId;
+          const tsB = b.chunkTs ?? b.responseId;
+          if (tsA !== tsB) return tsA - tsB;
+          return a.responseId - b.responseId;
+        });
+        return arr.slice(0, sampleCount);
+      }
+      case 'newest_first': {
+        arr.sort((a, b) => {
+          const tsA = a.chunkTs ?? a.responseId;
+          const tsB = b.chunkTs ?? b.responseId;
+          if (tsA !== tsB) return tsB - tsA;
+          return b.responseId - a.responseId;
+        });
+        return arr.slice(0, sampleCount);
+      }
+      case 'random': {
+        return this.shuffle(arr).slice(0, sampleCount);
+      }
+      case 'random_per_testgroup': {
+        const byGroup = new Map<string, CoderTrainingResponse[]>();
+        for (const r of arr) {
+          const key = r.personGroup || '_ungrouped';
+          if (!byGroup.has(key)) byGroup.set(key, []);
+          byGroup.get(key)!.push(r);
+        }
+        const groups = Array.from(byGroup.values());
+        const perGroup = Math.ceil(sampleCount / groups.length);
+        const result: CoderTrainingResponse[] = [];
+        for (const group of groups) {
+          const sampled = this.shuffle(group).slice(0, perGroup);
+          result.push(...sampled);
+        }
+        return this.shuffle(result).slice(0, sampleCount);
+      }
+      case 'random_testgroups': {
+        const byGroup = new Map<string, CoderTrainingResponse[]>();
+        for (const r of arr) {
+          const key = r.personGroup || '_ungrouped';
+          if (!byGroup.has(key)) byGroup.set(key, []);
+          byGroup.get(key)!.push(r);
+        }
+        const shuffledGroups = this.shuffle(Array.from(byGroup.entries()));
+        const result: CoderTrainingResponse[] = [];
+        for (const [, groupResponses] of shuffledGroups) {
+          if (result.length >= sampleCount) break;
+          const shuffled = this.shuffle(groupResponses);
+          const remaining = sampleCount - result.length;
+          result.push(...shuffled.slice(0, remaining));
+        }
+        return result;
+      }
+      default:
+        arr.sort((a, b) => a.responseId - b.responseId);
+        return arr.slice(0, sampleCount);
+    }
   }
 
   private sortTrainingResponses(
@@ -278,9 +401,23 @@ export class CoderTrainingService {
   async generateCoderTrainingPackages(
     workspaceId: number,
     selectedCoders: { id: number; name: string }[],
-    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[]
+    variableConfigs: { variableId: string; unitId: string; sampleCount: number }[],
+    options?: {
+      caseSelectionMode?: CaseSelectionMode;
+      referenceTrainingIds?: number[];
+      referenceMode?: ReferenceMode;
+    }
   ): Promise<TrainingPackage[]> {
-    this.logger.log(`Generating coder training packages for workspace ${workspaceId} with ${selectedCoders.length} coders and ${variableConfigs.length} variable configs`);
+    const caseSelectionMode = options?.caseSelectionMode ?? 'oldest_first';
+    const referenceTrainingIds = options?.referenceTrainingIds ?? [];
+    const referenceMode = options?.referenceMode;
+
+    this.logger.log(`Generating coder training packages for workspace ${workspaceId} with ${selectedCoders.length} coders and ${variableConfigs.length} variable configs (caseSelectionMode=${caseSelectionMode})`);
+
+    const referenceResponseIdsByConfig =
+      referenceMode && referenceTrainingIds.length > 0 ?
+        await this.getTrainingResponseIds(workspaceId, referenceTrainingIds) :
+        null;
 
     // Load aggregation settings once for this workspace
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
@@ -327,7 +464,7 @@ export class CoderTrainingService {
 
       this.logger.log(`Found ${unitResponses.length} incomplete responses for unit ${unitId}, variable ${variableId}`);
 
-      const transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
+      let transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
         responseId: r.id,
         unitAlias: r.unit?.alias || '',
         variableId: r.variableid,
@@ -337,8 +474,79 @@ export class CoderTrainingService {
         personCode: r.unit?.booklet?.person?.code || '',
         personGroup: r.unit?.booklet?.person?.group || '',
         bookletName: r.unit?.booklet?.bookletinfo?.name || '',
-        variable: r.variableid
+        variable: r.variableid,
+        unitId: r.unitid
       }));
+
+      if (caseSelectionMode === 'oldest_first' || caseSelectionMode === 'newest_first') {
+        const unitIds = [...new Set(transformedResponses.map(r => r.unitId!).filter(Boolean))];
+        if (unitIds.length > 0) {
+          const chunks = await this.chunkRepository
+            .createQueryBuilder('chunk')
+            .where('chunk.unitid IN (:...unitIds)', { unitIds })
+            .getMany();
+
+          const chunkTsStatsByUnitAndVar = new Map<string, { min: number; max: number; hasMultiple: boolean }>();
+          for (const chunk of chunks) {
+            if (!chunk.variables) continue;
+
+            const chunkTs = Number(chunk.ts) || 0;
+            for (const v of chunk.variables.split(',').map(s => s.trim())) {
+              const key = `${chunk.unitid}:${v}`;
+              const existing = chunkTsStatsByUnitAndVar.get(key);
+              if (existing) {
+                if (chunkTs < existing.min) {
+                  existing.min = chunkTs;
+                  existing.hasMultiple = true;
+                }
+                if (chunkTs > existing.max) {
+                  existing.max = chunkTs;
+                  existing.hasMultiple = true;
+                }
+              } else {
+                chunkTsStatsByUnitAndVar.set(key, { min: chunkTs, max: chunkTs, hasMultiple: false });
+              }
+            }
+          }
+
+          const multipleKeys: string[] = [];
+          for (const [key, stats] of chunkTsStatsByUnitAndVar.entries()) {
+            if (stats.hasMultiple) multipleKeys.push(key);
+          }
+          if (multipleKeys.length > 0) {
+            const sample = multipleKeys.slice(0, 10).join(', ');
+            this.logger.debug(`Multiple chunk.ts values detected for ${multipleKeys.length} unit/variable keys. Sample: ${sample}`);
+          }
+
+          const pickOldest = caseSelectionMode === 'oldest_first';
+          transformedResponses = transformedResponses.map(r => {
+            const stats = chunkTsStatsByUnitAndVar.get(`${r.unitId}:${r.variableId}`);
+            let chunkTs: number | undefined;
+            if (stats) {
+              chunkTs = pickOldest ? stats.min : stats.max;
+            }
+            return {
+              ...r,
+              chunkTs
+            };
+          });
+        }
+      }
+
+      // De-duplicate identical responses per person/unit/variable/value (keep lowest responseId).
+      const dedupedByPersonValue = new Map<string, CoderTrainingResponse>();
+      for (const response of transformedResponses) {
+        const valueHash = createHash('sha1').update(response.value || '').digest('hex');
+        const key = `${response.personLogin}::${response.personCode}::${response.personGroup}::${response.unitName}::${response.variableId}::${valueHash}`;
+        const existing = dedupedByPersonValue.get(key);
+        if (!existing || response.responseId < existing.responseId) {
+          dedupedByPersonValue.set(key, response);
+        }
+      }
+      if (dedupedByPersonValue.size !== transformedResponses.length) {
+        this.logger.debug(`Removed ${transformedResponses.length - dedupedByPersonValue.size} duplicate responses for unit ${unitId}, variable ${variableId}.`);
+      }
+      transformedResponses = Array.from(dedupedByPersonValue.values());
 
       // Apply aggregation grouping: if threshold is set, keep only 1 representative per value group.
       // Derived variables have null/empty values — skip aggregation to avoid collapsing all responses into 1 group.
@@ -380,7 +588,20 @@ export class CoderTrainingService {
         responsesForSampling = transformedResponses;
       }
 
-      const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount);
+      if (referenceMode && referenceResponseIdsByConfig) {
+        const refIds = referenceResponseIdsByConfig[configKey] ?
+          new Set(referenceResponseIdsByConfig[configKey]) :
+          null;
+        if (refIds) {
+          if (referenceMode === 'same') {
+            responsesForSampling = responsesForSampling.filter(r => refIds.has(r.responseId));
+          } else if (referenceMode === 'different') {
+            responsesForSampling = responsesForSampling.filter(r => !refIds.has(r.responseId));
+          }
+        }
+      }
+
+      const sampledResponses = this.sampleResponses(responsesForSampling, sampleCount, caseSelectionMode);
       sampledResponsesByConfig.set(configKey, sampledResponses);
 
       this.logger.log(`Sampled ${sampledResponses.length} consistent responses for unit ${unitId}, variable ${variableId}`);
@@ -423,7 +644,10 @@ export class CoderTrainingService {
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
     assignedVariableBundles?: JobDefinitionVariableBundle[],
-    caseOrderingMode?: 'continuous' | 'alternating'
+    caseOrderingMode?: 'continuous' | 'alternating',
+    caseSelectionMode?: CaseSelectionMode,
+    referenceTrainingIds?: number[],
+    referenceMode?: ReferenceMode
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
@@ -432,6 +656,9 @@ export class CoderTrainingService {
       coderTraining.workspace_id = workspaceId;
       coderTraining.label = trainingLabel;
       coderTraining.case_ordering_mode = caseOrderingMode || 'continuous';
+      coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
+      coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
+      coderTraining.reference_mode = referenceMode ?? null;
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
 
@@ -472,7 +699,11 @@ export class CoderTrainingService {
 
       this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
-      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
+      const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
+        caseSelectionMode: caseSelectionMode ?? 'oldest_first',
+        referenceTrainingIds,
+        referenceMode
+      });
 
       // Build mapping from variable to bundle id and bundle sorting mode
       const variableToBundleMap = new Map<string, number>();
@@ -606,6 +837,7 @@ export class CoderTrainingService {
           codingJobUnit.booklet_name = response.bookletName;
           codingJobUnit.person_login = response.personLogin;
           codingJobUnit.person_code = response.personCode;
+          codingJobUnit.person_group = response.personGroup;
           codingJobUnit.is_open = true;
           codingJobUnit.variable_bundle_id = variableToBundleMap.get(`${response.unitName}::${response.variableId}`) || null;
           return codingJobUnit;
@@ -655,6 +887,9 @@ export class CoderTrainingService {
       updated_at: training.updated_at,
       jobsCount: training.codingJobs?.length || 0,
       case_ordering_mode: training.case_ordering_mode,
+      case_selection_mode: training.case_selection_mode,
+      reference_training_ids: training.reference_training_ids ?? undefined,
+      reference_mode: training.reference_mode ?? undefined,
       assigned_variables: training.variables?.map(v => ({
         variableId: v.variable_id,
         unitName: v.unit_name,
@@ -1034,7 +1269,10 @@ export class CoderTrainingService {
     missingsProfileId?: number,
     assignedVariables?: JobDefinitionVariable[],
     assignedVariableBundles?: JobDefinitionVariableBundle[],
-    caseOrderingMode?: 'continuous' | 'alternating'
+    caseOrderingMode?: 'continuous' | 'alternating',
+    caseSelectionMode?: CaseSelectionMode,
+    referenceTrainingIds?: number[],
+    referenceMode?: ReferenceMode
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
       this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
@@ -1079,6 +1317,9 @@ export class CoderTrainingService {
 
       training.label = trainingLabel;
       training.case_ordering_mode = caseOrderingMode || 'continuous';
+      training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
+      training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
+      training.reference_mode = referenceMode ?? null;
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
@@ -1131,7 +1372,11 @@ export class CoderTrainingService {
         }
 
         // Generate and create new jobs
-        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs);
+        const trainingPackages = await this.generateCoderTrainingPackages(workspaceId, selectedCoders, variableConfigs, {
+          caseSelectionMode: caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first',
+          referenceTrainingIds,
+          referenceMode
+        });
 
         // Build mapping from variable to bundle id and bundle sorting mode
         const variableToBundleMap = new Map<string, number>();

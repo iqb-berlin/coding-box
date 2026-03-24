@@ -333,6 +333,15 @@
               </div>
 
               <div class="filter-row availability-filter-row">
+                <span class="filter-label">Schulungsaufwand:</span>
+                <mat-button-toggle-group [(ngModel)]="trainingRequiredFilter" [ngModelOptions]="{standalone: true}" (change)="applyFilter()">
+                  <mat-button-toggle value="all">Alle</mat-button-toggle>
+                  <mat-button-toggle value="true">Erhöht</mat-button-toggle>
+                  <mat-button-toggle value="false">Normal</mat-button-toggle>
+                </mat-button-toggle-group>
+              </div>
+
+              <div class="filter-row availability-filter-row">
                 <span class="filter-label">Verfügbarkeit:</span>
                 <mat-button-toggle-group [value]="availabilityFilter" (change)="onAvailabilityChange($event)">
                   <mat-button-toggle value="all">Alle</mat-button-toggle>
@@ -372,6 +381,12 @@
                     <div class="variable-identifiers">
                       <div class="variable-id">
                         {{ variable.unitName }}_{{ variable.variableId }}
+                        @if (variable.coderTrainingRequired) {
+                        <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
+                          <mat-icon>school</mat-icon>
+                          Schulungsaufwand
+                        </mat-chip>
+                        }
                         @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
                         <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
                           {{ getAvailabilityText(variable) }} verfügbar

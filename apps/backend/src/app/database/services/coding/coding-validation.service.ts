@@ -199,7 +199,8 @@ export class CodingValidationService {
 
   async getCodingIncompleteVariables(
     workspaceId: number,
-    unitName?: string
+    unitName?: string,
+    trainingRequired?: boolean
   ): Promise<
     {
       unitName: string;
@@ -209,16 +210,18 @@ export class CodingValidationService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired: boolean;
     }[]
     > {
     try {
-      if (unitName) {
+      if (unitName || trainingRequired !== undefined) {
         this.logger.log(
-          `Querying CODING_INCOMPLETE variables for workspace ${workspaceId} and unit ${unitName} (not cached)`
+          `Querying CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
-          unitName
+          unitName,
+          trainingRequired
         );
         return await this.enrichVariablesWithCaseInfo(workspaceId, variables);
       }
@@ -232,6 +235,7 @@ export class CodingValidationService {
         availableCases: number;
         uniqueCasesAfterAggregation: number;
         isDerived: boolean;
+        coderTrainingRequired: boolean;
       }[]
       >(cacheKey);
       if (cachedResult) {
@@ -278,7 +282,7 @@ export class CodingValidationService {
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
+    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
   ): Promise<
     {
       unitName: string;
@@ -288,6 +292,7 @@ export class CodingValidationService {
       availableCases: number;
       uniqueCasesAfterAggregation: number;
       isDerived: boolean;
+      coderTrainingRequired: boolean;
     }[]
     > {
     const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
@@ -382,9 +387,10 @@ export class CodingValidationService {
 
   private async fetchCodingIncompleteVariablesFromDb(
     workspaceId: number,
-    unitName?: string
+    unitName?: string,
+    trainingRequired?: boolean
   ): Promise<
-    { unitName: string; variableId: string; responseCount: number; isDerived: boolean }[]
+    { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
@@ -426,10 +432,11 @@ export class CodingValidationService {
     );
 
     // Load both lookup maps from the file service
-    const [unitVariableMap, intendedIncompleteSchemeMap, derivedVariableMap] = await Promise.all([
+    const [unitVariableMap, intendedIncompleteSchemeMap, derivedVariableMap, trainingRequiredMap] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
       this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId),
-      this.workspaceFilesService.getDerivedVariableMap(workspaceId)
+      this.workspaceFilesService.getDerivedVariableMap(workspaceId),
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
     ]);
 
     // Build case-insensitive lookup structures
@@ -448,6 +455,11 @@ export class CodingValidationService {
       intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
     });
 
+    const trainingRequiredSets = new Map<string, Set<string>>();
+    trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
+      trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+    });
+
     this.logger.debug(
       `[DEBUG] unitVariableMap units: [${Array.from(validVariableSets.keys()).join(', ')}]`
     );
@@ -460,51 +472,57 @@ export class CodingValidationService {
       );
     }
 
-    // CODING_INCOMPLETE: include all variables that are in the unit variable map
-    const filteredCodingIncomplete = codingIncompleteRaw.filter(row => {
-      const validVars = validVariableSets.get(row.unitName?.toUpperCase());
-      const pass = validVars?.has(row.variableId) ?? false;
-      if (!pass) {
-        this.logger.debug(
-          `[DEBUG] CODING_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — not in unitVariableMap`
-        );
-      }
-      return pass;
-    });
+    // Filter results, applying trainingRequired filter if provided
+    const filterFn = (row: { unitName: string; variableId: string; responseCount: string }) => {
+      const unitKey = row.unitName?.toUpperCase();
+      const variableId = row.variableId;
 
-    // INTENDED_INCOMPLETE: include only variables where the coding scheme does NOT
-    // have an INTENDED_INCOMPLETE code type (those with it are correctly auto-coded
-    // and should not appear in manual coding).
-    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(row => {
-      const validVars = validVariableSets.get(row.unitName?.toUpperCase());
-      if (!validVars?.has(row.variableId)) {
-        this.logger.debug(
-          `[DEBUG] INTENDED_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — not in unitVariableMap`
-        );
-        return false;
+      // Basic validation
+      const validVars = validVariableSets.get(unitKey);
+      if (!validVars?.has(variableId)) return false;
+
+      // Filter by trainingRequired
+      const isRequired = trainingRequiredSets.get(unitKey)?.has(variableId) || false;
+      if (trainingRequired !== undefined) {
+        if (isRequired !== trainingRequired) {
+          return false;
+        }
       }
+      return true;
+    };
+
+    const filteredCodingIncomplete = codingIncompleteRaw.filter(filterFn);
+
+    // INTENDED_INCOMPLETE: also check scheme exclusion
+    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(row => {
+      if (!filterFn(row)) return false;
+
       const schemeVars = intendedIncompleteSchemeVars.get(row.unitName?.toUpperCase());
       const hasIntendedIncompleteInScheme = schemeVars?.has(row.variableId) ?? false;
       if (hasIntendedIncompleteInScheme) {
         this.logger.debug(
           `[DEBUG] INTENDED_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — has INTENDED_INCOMPLETE code in scheme`
         );
-      } else {
-        this.logger.debug(
-          `[DEBUG] INTENDED_INCOMPLETE INCLUDED ${row.unitName}::${row.variableId} — no INTENDED_INCOMPLETE code in scheme`
-        );
       }
       return !hasIntendedIncompleteInScheme;
     });
 
     // Merge results, summing response counts for variables that appear in both
-    const mergedMap = new Map<string, { unitName: string; variableId: string; responseCount: number; isDerived: boolean }>();
+    const mergedMap = new Map<string, {
+      unitName: string;
+      variableId: string;
+      responseCount: number;
+      isDerived: boolean;
+      coderTrainingRequired: boolean;
+    }>();
 
     for (const row of [...filteredCodingIncomplete, ...filteredIntendedIncomplete]) {
       const key = `${row.unitName}::${row.variableId}`;
       const existing = mergedMap.get(key);
       const count = parseInt(row.responseCount, 10);
       const isDerived = derivedVariableSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+      const coderTrainingRequired = trainingRequiredSets.get(row.unitName?.toUpperCase())?.has(row.variableId) ?? false;
+
       if (existing) {
         existing.responseCount += count;
       } else {
@@ -512,7 +530,8 @@ export class CodingValidationService {
           unitName: row.unitName,
           variableId: row.variableId,
           responseCount: count,
-          isDerived
+          isDerived,
+          coderTrainingRequired
         });
       }
     }

@@ -498,14 +498,35 @@ export class WorkspaceCodingStatisticsController {
 
       // Get all double-coded data
       const isExcludeTrainings = excludeTrainings !== 'false'; // Default true
-      const doubleCodedData =
-        await this.codingReviewService.getDoubleCodedVariablesForReview(
+      const allDoubleCodedItems = [];
+      let currentPage = 1;
+      const batchSize = 1000;
+      let hasMore = true;
+      let totalItemsData = 0;
+
+      while (hasMore) {
+        const doubleCodedData = await this.codingReviewService.getDoubleCodedVariablesForReview(
           workspace_id,
-          1,
-          10000,
+          currentPage,
+          batchSize,
           false, // onlyConflicts = false (needed for correct Kappa calculation)
           isExcludeTrainings
-        ); // Get all data
+        );
+
+        if (currentPage === 1) {
+          totalItemsData = doubleCodedData.total;
+        }
+
+        if (doubleCodedData.data.length > 0) {
+          allDoubleCodedItems.push(...doubleCodedData.data);
+        }
+
+        if (allDoubleCodedItems.length >= totalItemsData || doubleCodedData.data.length === 0) {
+          hasMore = false;
+        } else {
+          currentPage += 1;
+        }
+      }
 
       // Group by unit and variable
       const groupedData = new Map<
@@ -527,7 +548,7 @@ export class WorkspaceCodingStatisticsController {
       }>
       >();
 
-      doubleCodedData.data.forEach(item => {
+      allDoubleCodedItems.forEach(item => {
         // Apply filters if provided
         if (unitName && item.unitName !== unitName) return;
         if (variableId && item.variableId !== variableId) return;
@@ -641,7 +662,7 @@ export class WorkspaceCodingStatisticsController {
 
       const useWeightedMean = weightedMean !== 'false'; // Default true
       const workspaceSummary = {
-        totalDoubleCodedResponses: doubleCodedData.total,
+        totalDoubleCodedResponses: totalItemsData,
         totalCoderPairs: validKappaCount,
         averageKappa,
         variablesIncluded: uniqueVariables.size,

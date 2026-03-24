@@ -49,7 +49,45 @@ describe('CodingTrainingBackendService', () => {
         trainingLabel: 'Label',
         selectedCoders: [],
         variableConfigs: [],
-        missingsProfileId: undefined
+        missingsProfileId: undefined,
+        assignedVariables: undefined,
+        assignedVariableBundles: undefined,
+        caseOrderingMode: undefined,
+        caseSelectionMode: undefined,
+        referenceTrainingIds: undefined,
+        referenceMode: undefined
+      });
+      req.flush({});
+    });
+
+    it('should include case selection and reference options', () => {
+      service.createCoderTrainingJobs(
+        1,
+        [{ id: 2, name: 'Coder' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 3 }],
+        'With Options',
+        99,
+        [{ unitName: 'Unit', variableId: 'v1', sampleCount: 5 }],
+        [{ id: 7, name: 'Bundle', caseOrderingMode: 'alternating' }],
+        'alternating',
+        'random',
+        [10, 11],
+        'same'
+      ).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-training-jobs`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        trainingLabel: 'With Options',
+        selectedCoders: [{ id: 2, name: 'Coder' }],
+        variableConfigs: [{ variableId: 'v1', unitId: 'u1', sampleCount: 3 }],
+        missingsProfileId: 99,
+        assignedVariables: [{ unitName: 'Unit', variableId: 'v1', sampleCount: 5 }],
+        assignedVariableBundles: [{ id: 7, name: 'Bundle', caseOrderingMode: 'alternating' }],
+        caseOrderingMode: 'alternating',
+        caseSelectionMode: 'random',
+        referenceTrainingIds: [10, 11],
+        referenceMode: 'same'
       });
       req.flush({});
     });
@@ -60,6 +98,41 @@ describe('CodingTrainingBackendService', () => {
       service.updateCoderTrainingLabel(1, 10, 'New').subscribe();
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10/label`);
       expect(req.request.method).toBe('PUT');
+      req.flush({});
+    });
+  });
+
+  describe('updateCoderTraining', () => {
+    it('should include case selection and reference options', () => {
+      service.updateCoderTraining(
+        1,
+        10,
+        'Updated',
+        [{ id: 3, name: 'Coder 2' }],
+        [{ variableId: 'v2', unitId: 'u2', sampleCount: 2 }],
+        42,
+        undefined,
+        undefined,
+        'continuous',
+        'newest_first',
+        [5],
+        'different'
+      ).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual({
+        label: 'Updated',
+        selectedCoders: [{ id: 3, name: 'Coder 2' }],
+        variableConfigs: [{ variableId: 'v2', unitId: 'u2', sampleCount: 2 }],
+        missingsProfileId: 42,
+        assignedVariables: undefined,
+        assignedVariableBundles: undefined,
+        caseOrderingMode: 'continuous',
+        caseSelectionMode: 'newest_first',
+        referenceTrainingIds: [5],
+        referenceMode: 'different'
+      });
       req.flush({});
     });
   });

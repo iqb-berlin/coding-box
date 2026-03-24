@@ -7,6 +7,7 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingItem } from './coding-item-builder.service';
 
 /**
@@ -27,7 +28,8 @@ export class CodingListQueryService {
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly workspaceFilesService: WorkspaceFilesService,
-    private readonly workspaceCoreService: WorkspaceCoreService
+    private readonly workspaceCoreService: WorkspaceCoreService,
+    private readonly workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   /**
@@ -37,7 +39,8 @@ export class CodingListQueryService {
   async getCodingList(
     workspace_id: number,
     authToken: string,
-    serverUrl?: string
+    serverUrl?: string,
+    trainingRequired?: boolean
   ): Promise<{
       items: CodingItem[];
       total: number;
@@ -98,9 +101,21 @@ export class CodingListQueryService {
         .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
 
-      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspace_id);
-      if (ignoredUnits.length > 0) {
-        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+      const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      if (globalIgnoredUnits.length > 0) {
+        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+      }
+      if (ignoredBooklets.length > 0) {
+        queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
+      }
+      if (testletIgnoredUnits.length > 0) {
+        const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
+        const params: Record<string, string> = {};
+        testletIgnoredUnits.forEach((t, i) => {
+          params[`bId${i}`] = t.bookletId;
+          params[`uId${i}`] = t.unitId;
+        });
+        queryBuilder.andWhere(`NOT (${condition})`, params);
       }
 
       const [responses, total] = await queryBuilder.getManyAndCount();
@@ -108,9 +123,11 @@ export class CodingListQueryService {
       // 3) Load variable maps from WorkspaceFilesService
       //    unitVariableMap: unitName → Set of valid variable aliases (includes derived vars, excludes BASE/BASE_NO_VALUE)
       //    intendedIncompleteSchemeMap: unitName → Set of variable aliases that have INTENDED_INCOMPLETE code type in scheme
-      const [unitVariableMap, intendedIncompleteSchemeMap] = await Promise.all([
+      //    trainingRequiredMap: unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED property
+      const [unitVariableMap, intendedIncompleteSchemeMap, trainingRequiredMap] = await Promise.all([
         this.workspaceFilesService.getUnitVariableMap(workspace_id),
-        this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspace_id)
+        this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspace_id),
+        this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id)
       ]);
 
       const validVariableSets = new Map<string, Set<string>>();
@@ -123,12 +140,18 @@ export class CodingListQueryService {
         intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
       });
 
+      const trainingRequiredSets = new Map<string, Set<string>>();
+      trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
+        trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
+      });
+
       const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
 
       // 4) Filter responses:
       //    - Variable must exist in unitVariableMap (valid, non-BASE/BASE_NO_VALUE)
       //    - For INTENDED_INCOMPLETE: exclude if coding scheme already has INTENDED_INCOMPLETE code type
       //    - Also exclude variables matching media substrings and empty values
+      //    - Apply trainingRequired filter if provided
       const filtered = responses.filter(r => {
         const unitKey = r.unit?.name || '';
         const variableId = r.variableid || '';
@@ -146,6 +169,14 @@ export class CodingListQueryService {
         if (r.status_v1 !== codingIncompleteStatus) {
           const schemeVars = intendedIncompleteSchemeVars.get(unitKey.toUpperCase());
           if (schemeVars?.has(variableId)) return false;
+        }
+
+        // Apply trainingRequired filter
+        if (trainingRequired !== undefined) {
+          const isTrainingRequired = trainingRequiredSets.get(unitKey.toUpperCase())?.has(variableId) || false;
+          if (isTrainingRequired !== trainingRequired) {
+            return false;
+          }
         }
 
         return true;
@@ -207,13 +238,15 @@ export class CodingListQueryService {
    * Returns distinct unit/variable pairs.
    */
   async getCodingListVariables(
-    workspaceId: number
+    workspaceId: number,
+    trainingRequired?: boolean
   ): Promise<Array<{ unitName: string; variableId: string }>> {
     const queryBuilder = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.status_v1', 'statusV1')
@@ -237,9 +270,21 @@ export class CodingListQueryService {
        AND response.variableid NOT LIKE '%_0' ESCAPE '\\'`
     );
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    if (ignoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: ignoredUnits.map(u => u.toUpperCase()) });
+    const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    if (globalIgnoredUnits.length > 0) {
+      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
+    }
+    if (ignoredBooklets.length > 0) {
+      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
+    }
+    if (testletIgnoredUnits.length > 0) {
+      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
+      const params: Record<string, string> = {};
+      testletIgnoredUnits.forEach((t, i) => {
+        params[`bId${i}`] = t.bookletId;
+        params[`uId${i}`] = t.unitId;
+      });
+      queryBuilder.andWhere(`NOT (${condition})`, params);
     }
 
     const rawResults = await queryBuilder.getRawMany();
@@ -247,9 +292,11 @@ export class CodingListQueryService {
     // Load variable maps from WorkspaceFilesService:
     //   unitVariableMap: includes all valid variables (derived + base, excluding BASE/BASE_NO_VALUE)
     //   intendedIncompleteSchemeMap: variables that have INTENDED_INCOMPLETE code type in scheme (should be excluded for INTENDED_INCOMPLETE rows)
-    const [unitVariableMap, intendedIncompleteSchemeMap] = await Promise.all([
+    //   trainingRequiredMap: variables with CODER_TRAINING_REQUIRED property
+    const [unitVariableMap, intendedIncompleteSchemeMap, trainingRequiredMap] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
-      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId)
+      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId),
+      this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
     ]);
 
     const validVariableSets = new Map<string, Set<string>>();
@@ -260,6 +307,11 @@ export class CodingListQueryService {
     const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
     intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitName: string) => {
       intendedIncompleteSchemeVars.set(unitName.toUpperCase(), variables);
+    });
+
+    const trainingRequiredSets = new Map<string, Set<string>>();
+    trainingRequiredMap.forEach((variables: Set<string>, unitName: string) => {
+      trainingRequiredSets.set(unitName.toUpperCase(), variables);
     });
 
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
@@ -281,6 +333,14 @@ export class CodingListQueryService {
       if (statusV1 !== codingIncompleteStatus) {
         const schemeVars = intendedIncompleteSchemeVars.get(unitNameUpper);
         if (schemeVars?.has(variableId)) continue;
+      }
+
+      // Apply trainingRequired filter
+      if (trainingRequired !== undefined) {
+        const isTrainingRequired = trainingRequiredSets.get(unitNameUpper)?.has(variableId) || false;
+        if (isTrainingRequired !== trainingRequired) {
+          continue;
+        }
       }
 
       const key = `${row.unitName}::${variableId}`;

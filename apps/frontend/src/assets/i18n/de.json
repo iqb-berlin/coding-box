@@ -1319,6 +1319,7 @@
       "description": "Übersicht über leere Antworten und doppelte Werte basierend auf den Matching-Einstellungen.",
       "refresh": "Analyse aktualisieren",
       "empty-responses": "Leere Antworten",
+      "open": "offen",
       "duplicate-values": "Doppelte Werte",
       "groups": "Gruppen",
       "responses": "Antworten",
@@ -1333,7 +1334,8 @@
         "person": "Person",
         "group": "Gruppe",
         "booklet": "Booklet",
-        "value": "Wert"
+        "value": "Wert",
+        "status": "Status"
       },
       "apply-empty-coding-button": "Kodierung automatisch anwenden",
       "apply-empty-coding-tooltip": "Kodiert alle leeren Antworten CODING_COMPLETE, Code -98 und Score 0",
@@ -1479,6 +1481,22 @@
       "description": "Wählen Sie, wie die Kodierfälle sortiert werden: kontinuierlich nach Variablen oder abwechselnd nach Fällen.",
       "continuous": "Kontinuierlich - Alle Fälle einer Variable zusammen",
       "alternating": "Abwechselnd - Alle Variablen eines Falls, dann nächster Fall"
+    },
+    "case-selection-mode": {
+      "title": "Fallauswahl-Strategie",
+      "description": "Wählen Sie, welche Fälle für die Schulung ausgewählt werden.",
+      "oldest_first": "Älteste zuerst (erste n Fälle nach Zeitstempel)",
+      "newest_first": "Neueste zuerst (letzte n Fälle nach Zeitstempel)",
+      "random": "Komplett zufällig",
+      "random_per_testgroup": "Zufällig aus allen Testgruppen (gleich viele pro Gruppe)",
+      "random_testgroups": "Zufällige Testgruppen (eine Gruppe nach der anderen)"
+    },
+    "reference-trainings": {
+      "title": "Referenz-Schulung(en)",
+      "description": "Optional: Beschränken Sie die Fallauswahl auf Fälle aus anderen Schulungen.",
+      "select-placeholder": "Schulungen auswählen",
+      "same": "Nur gleiche Fälle wie in der/den gewählten Schulung(en)",
+      "different": "Nur andere Fälle als in der/den gewählten Schulung(en)"
     },
     "selection-summary": {
       "title": "Ausgewählte Elemente",
@@ -1701,12 +1719,30 @@
     "apply-decisions": "Entscheidungen anwenden",
     "apply-help-tooltip": "Behebt Konflikte für die ausgewählten Items. Die Kodierung wird auf 'CODING_COMPLETE' gesetzt und der Code des gewählten Kodierers wird als endgültiger Wert übernommen. Die ursprünglichen Kodierwerte werden in den Verlauf (v1, v2, v3) verschoben.",
     "apply-single-tooltip": "Diese Entscheidung anwenden",
+    "apply-disabled-tooltip": "Alle Kodierer müssen ihre Arbeit beenden, bevor der Konflikt gelöst werden kann.",
+    "coders-done": "Kodierer fertig",
+    "pending": "Ausstehend",
     "filter": {
-      "show-only-conflicts": "Nur Konflikte anzeigen"
+      "show-only-conflicts": "Nur Konflikte anzeigen",
+      "search-label": "Suchen",
+      "search-placeholder": "Einheit, Variable, Login, Code oder Gruppe...",
+      "coder-label": "Kodierer",
+      "all-coders": "Alle Kodierer",
+      "status-label": "Status",
+      "status-all": "Alle Status",
+      "status-done": "Alle fertig",
+      "status-pending": "Warten auf Kodierer"
+    },
+    "details": {
+      "given-answer": "Vollständige Antwort",
+      "coder-notes": "Anmerkungen der Kodierer",
+      "no-notes": "Keine Anmerkungen vorhanden.",
+      "person-context": "Personen-Kontext"
     },
     "statistics": {
       "showing-conflicts": "Zeige {{visible}} von {{total}} Konflikten",
-      "unresolved": "{{count}} ungelöst"
+      "unresolved": "{{count}} ungelöst",
+      "unresolved-on-page": "{{count}} ungelöst auf dieser Seite"
     },
     "conflict-indicator": "Konflikt: Kodierer haben unterschiedliche Codes vergeben",
     "comment-label": "Kommentar zur Auflösung (optional)",
@@ -1721,11 +1757,16 @@
       "substantial": "Substantiell",
       "almost-perfect": "Fast perfekt"
     },
+    "warnings": {
+      "incomplete-title": "Achtung: Kodierung unvollständig",
+      "incomplete-message": "Für diese Variable(n) haben noch nicht alle zugewiesenen Kodierer ein Ergebnis geliefert. Möchten Sie den Konflikt trotzdem jetzt schon mit dem gewählten Ergebnis auflösen? Dies kann nicht rückgängig gemacht werden."
+    },
     "errors": {
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
-      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt"
+      "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
+      "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt"
     },
     "success": {
       "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"

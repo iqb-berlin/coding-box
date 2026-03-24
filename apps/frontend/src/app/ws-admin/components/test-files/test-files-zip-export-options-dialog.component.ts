@@ -10,6 +10,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
 import { MatListModule, MatSelectionList } from '@angular/material/list';
+import { getFileTypeLabel } from '../../utils/file-utils';
 
 export type TestFilesZipExportOptions = {
   fileTypes: string[];
@@ -46,7 +47,7 @@ export type TestFilesZipExportOptionsDialogData = {
           (selectionChange)="onSelectionChange()"
         >
           @for (type of dialogData.availableFileTypes; track type) {
-          <mat-list-option [value]="type">{{ type }}</mat-list-option>
+          <mat-list-option [value]="type">{{ getFileTypeLabel(type) }}</mat-list-option>
           }
         </mat-selection-list>
       </div>
@@ -83,6 +84,8 @@ export class TestFilesZipExportOptionsDialogComponent implements AfterViewInit {
   data: TestFilesZipExportOptions = {
     fileTypes: []
   };
+
+  getFileTypeLabel = getFileTypeLabel;
 
   constructor(
     private dialogRef: MatDialogRef<TestFilesZipExportOptionsDialogComponent>,

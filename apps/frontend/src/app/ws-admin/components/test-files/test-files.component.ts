@@ -67,7 +67,7 @@ import {
   TestFilesZipExportOptions,
   TestFilesZipExportOptionsDialogComponent
 } from './test-files-zip-export-options-dialog.component';
-import { getFileIcon } from '../../utils/file-utils';
+import { getFileIcon, getFileTypeLabel } from '../../utils/file-utils';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { Result } from '../../../shared/services/file/import.service';
 import { MetadataDialogComponent, VomdMetadata } from '../../../shared/dialogs/metadata-dialog/metadata-dialog.component';
@@ -149,6 +149,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     { value: '1MB-10MB', display: '1MB - 10MB' },
     { value: '10MB+', display: '> 10MB' }
   ];
+
+  getFileTypeLabel = getFileTypeLabel;
 
   resourcePackagesModified = false;
 

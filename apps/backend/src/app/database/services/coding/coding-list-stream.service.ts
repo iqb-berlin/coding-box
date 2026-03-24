@@ -4,6 +4,7 @@ import * as ExcelJS from 'exceljs';
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { CodingItemBuilderService, CodingItem } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 interface JsonStream {
   on(event: 'data', listener: (item: CodingItem) => void): void;
@@ -28,7 +29,8 @@ export class CodingListStreamService {
   constructor(
     private readonly responseFilterService: CodingResponseFilterService,
     private readonly itemBuilderService: CodingItemBuilderService,
-    private readonly fileCacheService: CodingFileCacheService
+    private readonly fileCacheService: CodingFileCacheService,
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
   /**
@@ -38,10 +40,11 @@ export class CodingListStreamService {
     workspace_id: number,
     authToken: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ) {
     this.logger.log(
-      `Memory-efficient CSV export for workspace ${workspace_id}`
+      `Memory-efficient CSV export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
     );
     this.fileCacheService.clearCaches();
     const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
@@ -53,6 +56,11 @@ export class CodingListStreamService {
         let lastId = 0;
         let totalWritten = 0;
 
+        // Load training required map if filtering is requested
+        const trainingRequiredMap = trainingRequired !== undefined ?
+          await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
+          null;
+
         for (; ;) {
           const responses = await this.responseFilterService.getResponsesBatch(
             workspace_id,
@@ -62,21 +70,28 @@ export class CodingListStreamService {
 
           if (!responses.length) break;
 
-          // Process responses in parallel batches for better performance
+          // Process responses
           const items: CodingItem[] = [];
-          const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItem(
-            response,
-            authToken,
-            serverUrl!,
-            workspace_id
-          )
-          );
 
-          const results = await Promise.allSettled(processingPromises);
+          for (const response of responses) {
+            // Apply trainingRequired filter here
+            if (trainingRequired !== undefined && trainingRequiredMap) {
+              const unitKey = response.unit?.name || '';
+              const variableId = response.variableid || '';
+              const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
+              if (isRequired !== trainingRequired) {
+                continue;
+              }
+            }
 
-          for (const result of results) {
-            if (result.status === 'fulfilled' && result.value !== null) {
-              items.push(result.value);
+            const item = await this.itemBuilderService.buildCodingItem(
+              response,
+              authToken,
+              serverUrl!,
+              workspace_id
+            );
+            if (item) {
+              items.push(item);
             }
           }
 
@@ -130,10 +145,11 @@ export class CodingListStreamService {
     workspace_id: number,
     authToken?: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): Promise<Buffer> {
     this.logger.log(
-      `Streaming Excel export for workspace ${workspace_id}`
+      `Streaming Excel export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
     );
     this.fileCacheService.clearCaches();
 
@@ -175,6 +191,11 @@ export class CodingListStreamService {
       let lastId = 0;
       let totalWritten = 0;
 
+      // Load training required map if filtering is requested
+      const trainingRequiredMap = trainingRequired !== undefined ?
+        await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
+        null;
+
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
@@ -184,18 +205,25 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
-        const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItem(
-          response,
-          authToken!,
-          serverUrl!,
-          workspace_id
-        ));
+        for (const response of responses) {
+          // Apply trainingRequired filter here
+          if (trainingRequired !== undefined && trainingRequiredMap) {
+            const unitKey = response.unit?.name || '';
+            const variableId = response.variableid || '';
+            const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
+            if (isRequired !== trainingRequired) {
+              continue;
+            }
+          }
 
-        const results = await Promise.allSettled(processingPromises);
-
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value !== null) {
-            worksheet.addRow(result.value).commit();
+          const item = await this.itemBuilderService.buildCodingItem(
+            response,
+            authToken!,
+            serverUrl!,
+            workspace_id
+          );
+          if (item) {
+            worksheet.addRow(item).commit();
             totalWritten += 1;
           }
         }
@@ -249,10 +277,11 @@ export class CodingListStreamService {
     workspace_id: number,
     authToken: string,
     serverUrl?: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): JsonStream {
     this.logger.log(
-      `Memory-efficient JSON stream export for workspace ${workspace_id}`
+      `Memory-efficient JSON stream export for workspace ${workspace_id} (trainingRequired: ${trainingRequired})`
     );
     this.fileCacheService.clearCaches();
 
@@ -275,7 +304,8 @@ export class CodingListStreamService {
             listener as (item: CodingItem) => void,
             () => endListener?.(),
             err => errorListener?.(err),
-            progressCallback
+            progressCallback,
+            trainingRequired
           );
         } else if (event === 'end') {
           endListener = listener as () => void;
@@ -296,13 +326,19 @@ export class CodingListStreamService {
     dataListener: (item: CodingItem) => void,
     onEnd: () => void,
     onError: (error: Error) => void,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ) {
     try {
       const totalRows = await this.responseFilterService.countResponses(workspace_id);
       const batchSize = 5000;
       let lastId = 0;
       const totalWritten = 0;
+
+      // Load training required map if filtering is requested
+      const trainingRequiredMap = trainingRequired !== undefined ?
+        await this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspace_id) :
+        null;
 
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
@@ -313,19 +349,25 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
-        const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItem(
-          response,
-          authToken,
-          serverUrl,
-          workspace_id
-        )
-        );
+        for (const response of responses) {
+          // Apply trainingRequired filter here
+          if (trainingRequired !== undefined && trainingRequiredMap) {
+            const unitKey = response.unit?.name || '';
+            const variableId = response.variableid || '';
+            const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
+            if (isRequired !== trainingRequired) {
+              continue;
+            }
+          }
 
-        const results = await Promise.allSettled(processingPromises);
-
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value !== null) {
-            dataListener(result.value);
+          const item = await this.itemBuilderService.buildCodingItem(
+            response,
+            authToken,
+            serverUrl,
+            workspace_id
+          );
+          if (item) {
+            dataListener(item);
           }
         }
 
