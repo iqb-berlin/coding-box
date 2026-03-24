@@ -178,6 +178,7 @@ export class CodingAnalysisProcessor {
     return {
       emptyResponses: {
         total: emptyResponses.length,
+        totalUncoded: emptyResponses.filter(r => !r.isCoded).length,
         items: emptyResponses
       },
       duplicateValues: {
@@ -213,19 +214,19 @@ export class CodingAnalysisProcessor {
         value === '[]';
 
       if (isEmptyValue) {
-        if (response.status_v2 === null) {
-          emptyResponses.push({
-            unitName: response.unit?.name || '',
-            unitAlias: response.unit?.alias || null,
-            variableId: response.variableid,
-            personLogin: response.unit?.booklet?.person?.login || '',
-            personCode: response.unit?.booklet?.person?.code || '',
-            personGroup: response.unit?.booklet?.person?.group || '',
-            bookletName: response.unit?.booklet?.bookletinfo?.name || 'Unknown',
-            responseId: response.id,
-            value: response.value
-          });
-        }
+        emptyResponses.push({
+          unitName: response.unit?.name || '',
+          unitAlias: response.unit?.alias || null,
+          variableId: response.variableid,
+          personLogin: response.unit?.booklet?.person?.login || '',
+          personCode: response.unit?.booklet?.person?.code || '',
+          personGroup: response.unit?.booklet?.person?.group || '',
+          bookletName: response.unit?.booklet?.bookletinfo?.name || 'Unknown',
+          responseId: response.id,
+          value: response.value,
+          isCoded: response.status_v2 !== null,
+          assignedCode: response.code_v2
+        });
         continue; // Skip empty for duplicates
       }
 
@@ -275,6 +276,7 @@ export class CodingAnalysisProcessor {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
         total: 0,
+        totalUncoded: 0,
         items: []
       },
       duplicateValues: {

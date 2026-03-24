@@ -20,6 +20,7 @@ import User from '../database/entities/user.entity';
 import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
+import { ChunkEntity } from '../database/entities/chunk.entity';
 
 import {
   CodingJobService,
@@ -69,7 +70,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
       Setting,
       Persons,
       Unit,
-      Booklet
+      Booklet,
+      ChunkEntity
     ]),
     forwardRef(() => JobQueueModule),
     forwardRef(() => CacheModule),

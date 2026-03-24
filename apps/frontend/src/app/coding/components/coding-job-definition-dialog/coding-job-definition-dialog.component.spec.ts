@@ -174,7 +174,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should load variables and coders on init', () => {
     createComponent();
-    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined);
+    expect(mockCodingJobBackendService.getCodingIncompleteVariables).toHaveBeenCalledWith(1, undefined, undefined);
     expect(mockCoderService.getCoders).toHaveBeenCalled();
     expect(component.variables.length).toBe(3);
     expect(component.availableCoders.length).toBe(2);

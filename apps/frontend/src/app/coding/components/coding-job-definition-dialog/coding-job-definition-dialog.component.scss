@@ -450,6 +450,25 @@
             gap: 8px;
             flex-wrap: wrap;
 
+            .training-required-chip {
+              background-color: #fff3e0;
+              color: #e65100;
+              font-size: 0.72rem;
+              min-height: 20px;
+              padding: 2px 8px;
+              display: inline-flex;
+              align-items: center;
+              gap: 4px;
+              border-radius: 12px;
+
+              mat-icon {
+                font-size: 14px;
+                width: 14px;
+                height: 14px;
+                color: #e65100;
+              }
+            }
+
             .response-count {
               font-size: 0.85rem;
               color: rgba(0, 0, 0, 0.6);

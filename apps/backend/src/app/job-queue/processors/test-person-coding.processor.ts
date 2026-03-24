@@ -22,7 +22,7 @@ export class TestPersonCodingProcessor {
     this.logger.log(`Processing test person coding job ${job.id} for workspace ${job.data.workspaceId}`);
 
     try {
-      const BATCH_SIZE = 500;
+      const BATCH_SIZE = 50;
       const totalPersons = job.data.personIds.length;
       const combinedResult: CodingStatistics = { totalResponses: 0, statusCounts: {} };
 

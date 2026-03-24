@@ -469,9 +469,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       width: '500px'
     });
 
-    dialogRef.afterClosed().subscribe((format: ExportFormat | undefined) => {
-      if (format) {
-        this.codingManagementService.downloadCodingList(format);
+    dialogRef.afterClosed().subscribe((result: { format: ExportFormat; trainingRequired?: boolean } | undefined) => {
+      if (result && result.format) {
+        this.codingManagementService.downloadCodingList(result.format, result.trainingRequired);
       }
     });
   }

@@ -11,6 +11,11 @@ import { CreateWorkspaceDto } from '../../../../../../api-dto/workspaces/create-
 import { PaginatedWorkspacesDto } from '../../../../../../api-dto/workspaces/paginated-workspaces-dto';
 import { PaginatedWorkspaceUserDto } from '../../../../../../api-dto/workspaces/paginated-workspace-user-dto';
 import { SERVER_URL } from '../../injection-tokens';
+import { WorkspaceUserDto } from '../../../../../../api-dto/workspaces/workspace-user-dto';
+
+export interface CoderDto extends WorkspaceUserDto {
+  username: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -46,6 +51,18 @@ export class WorkspaceBackendService {
           total: 0,
           page: 0,
           limit: 0
+        }))
+      );
+  }
+
+  getWorkspaceCoders(workspaceId: number): Observable<{ data: CoderDto[], total: number }> {
+    return this.http
+      .get<{ data: CoderDto[], total: number }>(`${this.serverUrl}admin/workspace/${workspaceId}/coders`,
+      {})
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0
         }))
       );
   }

@@ -20,6 +20,7 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingExportService {
@@ -39,8 +40,26 @@ export class CodingExportService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private codingListService: CodingListService,
-    private workspaceCoreService: WorkspaceCoreService
+    private workspaceCoreService: WorkspaceCoreService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
+
+  private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits);
+    const ignoredBookletsSet = new Set(exclusions.ignoredBooklets);
+    const testletIgnoredUnits = exclusions.testletIgnoredUnits;
+
+    return (bookletName: string, unitName: string) => {
+      if (!unitName) return true;
+      if (globalIgnoredSet.has(unitName.toUpperCase())) return true;
+      if (bookletName && ignoredBookletsSet.has(bookletName.toUpperCase())) return true;
+      if (bookletName) {
+        return testletIgnoredUnits.some(t => t.bookletId === bookletName.toUpperCase() && t.unitId === unitName.toUpperCase());
+      }
+      return false;
+    };
+  }
 
   private variablePageMapsCache = new Map<string, Map<string, string>>();
   private currentWorkspaceId: number | null = null;
@@ -171,13 +190,15 @@ export class CodingExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): Promise<Readable> {
     return this.codingListService.getCodingListCsvStream(
       workspaceId,
       authToken || '',
       serverUrl || '',
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
   }
 
@@ -185,13 +206,15 @@ export class CodingExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): Promise<Buffer> {
     return this.codingListService.getCodingListAsExcel(
       workspaceId,
       authToken || '',
       serverUrl || '',
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
   }
 
@@ -199,13 +222,15 @@ export class CodingExportService {
     workspaceId: number,
     authToken: string,
     serverUrl: string,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean
   ): Promise<Readable> {
     const stream = this.codingListService.getCodingListJsonStream(
       workspaceId,
       authToken || '',
       serverUrl || '',
-      progressCallback
+      progressCallback,
+      trainingRequired
     );
 
     const passThrough = new PassThrough();
@@ -343,8 +368,7 @@ export class CodingExportService {
     this.logger.log(`Exporting aggregated results with most-frequent method for workspace ${workspaceId}`);
     if (checkCancellation) await checkCancellation();
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const isExcluded = await this.getExclusionChecker(workspaceId);
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
@@ -373,7 +397,7 @@ export class CodingExportService {
     const variableSet = new Set<string>();
     const variableUnitNames = new Map<string, string>();
     variableRecords.forEach(v => {
-      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+      if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
         const compositeKey = `${v.unitName}_${v.variableId}`;
         if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
           variableSet.add(compositeKey);
@@ -396,7 +420,7 @@ export class CodingExportService {
         .getRawMany();
 
       autoVariables.forEach(v => {
-        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           const compositeKey = `${v.unitName}_${v.variableId}`;
           variableSet.add(compositeKey);
           variableUnitNames.set(compositeKey, v.unitName);
@@ -645,8 +669,7 @@ export class CodingExportService {
     const COMMENTS_HEADER = 'Kommentare';
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const isExcluded = await this.getExclusionChecker(workspaceId);
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -670,7 +693,7 @@ export class CodingExportService {
     const variableSet = new Set<string>();
     const variableUnitNames = new Map<string, string>();
     variableRecords.forEach(v => {
-      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+      if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
         const compositeKey = `${v.unitName}_${v.variableId}`;
         if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
           variableSet.add(compositeKey);
@@ -693,7 +716,7 @@ export class CodingExportService {
         .getRawMany();
 
       autoVariables.forEach(v => {
-        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           const compositeKey = `${v.unitName}_${v.variableId}`;
           variableSet.add(compositeKey);
           variableUnitNames.set(compositeKey, v.unitName);
@@ -1001,8 +1024,7 @@ export class CodingExportService {
     const DEVIATION_COUNT_HEADER = 'Anzahl der Abweichungen';
     const COMMENTS_HEADER = 'Kommentare';
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const isExcluded = await this.getExclusionChecker(workspaceId);
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
@@ -1060,7 +1082,7 @@ export class CodingExportService {
 
     const colSet = new Set<string>();
     variableCoderPairs.forEach(v => {
-      if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+      if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
         if (!manualCodingVariableSet || manualCodingVariableSet.has(`${v.unitName}|${v.variableId}`)) {
           const cName = anonymizeCoders ? coderMapping.get(v.userName)! : v.userName;
           colSet.add(`${v.unitName}_${v.variableId}_${cName}`);
@@ -1071,8 +1093,11 @@ export class CodingExportService {
     if ((coderTrainingIds?.length || 0) > 0) {
       const managerVariablePairs = await this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('coder_training_discussion_result', 'ctdr', 'ctdr.response_id = resp.id')
         .select('unit.name', 'unitName')
+        .addSelect('bookletinfo.name', 'bookletName')
         .addSelect('resp.variableid', 'variableId')
         .addSelect('ctdr.training_id', 'trainingId')
         .addSelect('ctdr.response_id', 'responseId')
@@ -1091,7 +1116,7 @@ export class CodingExportService {
       );
 
       managerVariablePairs.forEach(pair => {
-        if (!pair.unitName || ignoredSet.has(pair.unitName.toUpperCase())) return;
+        if (!pair.unitName || isExcluded(pair.bookletName || '', pair.unitName)) return;
         if (manualCodingVariableSet && !manualCodingVariableSet.has(`${pair.unitName}|${pair.variableId}`)) return;
 
         const caseKey = `${parseInt(pair.trainingId, 10)}|${parseInt(pair.responseId, 10)}`;
@@ -1119,7 +1144,7 @@ export class CodingExportService {
         .getRawMany();
 
       autoVariables.forEach(v => {
-        if (v.unitName && !ignoredSet.has(v.unitName.toUpperCase())) {
+        if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           colSet.add(`${v.unitName}_${v.variableId}_Autocoder`);
         }
       });
@@ -1675,10 +1700,9 @@ export class CodingExportService {
       .addOrderBy('resp.variableid', 'ASC')
       .getRawMany();
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const isExcluded = await this.getExclusionChecker(workspaceId);
 
-    const filteredCombinations = combinations.filter(c => c.unitName && !ignoredSet.has(c.unitName.toUpperCase()))
+    const filteredCombinations = combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName))
       .slice(0, MAX_WORKSHEETS);
 
     if (filteredCombinations.length === 0) {
@@ -1930,8 +1954,7 @@ export class CodingExportService {
         }
       }
 
-      const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-      const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+      const isExcluded = await this.getExclusionChecker(workspaceId);
 
       let coderNameMapping: Map<string, string> | null = null;
       if (anonymizeCoders && !usePseudoCoders) {
@@ -2072,7 +2095,7 @@ export class CodingExportService {
 
         for (const unit of sortedUnitsBatch) {
           if (unit.code === null || unit.code === undefined) continue;
-          if (unit.unit_name && ignoredSet.has(unit.unit_name.toUpperCase())) continue;
+          if (unit.unit_name && isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) continue;
           if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
 
           const trainingId = unit.coding_job?.training_id ?? 0;
@@ -2197,11 +2220,10 @@ export class CodingExportService {
     this.applyJobFilters(codingJobUnitsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
     const codingJobUnitsRaw = await codingJobUnitsQuery.getMany();
 
-    const ignoredUnits = await this.workspaceCoreService.getIgnoredUnits(workspaceId);
-    const ignoredSet = new Set(ignoredUnits.map(u => u.toUpperCase()));
+    const isExcluded = await this.getExclusionChecker(workspaceId);
 
     const codingJobUnits = codingJobUnitsRaw.filter(
-      unit => unit.response?.unit?.name && !ignoredSet.has(unit.response.unit.name.toUpperCase())
+      unit => unit.response?.unit?.name && !isExcluded(unit.response.unit.booklet?.bookletinfo?.name || '', unit.response.unit.name)
     );
 
     this.logger.log(`Found ${codingJobUnits.length} coded coding job units for workspace ${workspaceId} after filtering ignored units`);

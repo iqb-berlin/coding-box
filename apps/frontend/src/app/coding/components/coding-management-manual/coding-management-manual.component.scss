@@ -1399,6 +1399,10 @@
           &.warning-icon {
             color: #ff9800;
           }
+
+          &.success-icon {
+            color: #4caf50;
+          }
         }
 
         .analysis-title-content {
@@ -1445,6 +1449,19 @@
             &.warning-count {
               color: #e65100;
               font-weight: 600;
+            }
+
+            &.success-count {
+              color: #2e7d32;
+              font-weight: 600;
+            }
+
+            .count-detail {
+              font-size: 12px;
+              color: #666;
+              font-weight: 400;
+              margin-left: 4px;
+              opacity: 0.8;
             }
           }
         }
@@ -1509,6 +1526,41 @@
 
         tr:last-child td {
           border-bottom: none;
+        }
+
+        .coded-row {
+          background-color: rgba(76, 175, 80, 0.04);
+          
+          &:hover td {
+            background-color: rgba(76, 175, 80, 0.08) !important;
+          }
+          
+          td {
+            color: #2e7d32;
+
+            &.value-cell {
+              font-style: italic;
+              opacity: 0.8;
+            }
+          }
+        }
+
+        .status-cell {
+          text-align: right;
+        }
+
+        .coded-badge {
+          display: inline-flex;
+          align-items: center;
+          background-color: #e8f5e9;
+          color: #2e7d32;
+          padding: 2px 10px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          border: 1px solid rgba(46, 125, 50, 0.2);
+          white-space: nowrap;
+          box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
       }
 

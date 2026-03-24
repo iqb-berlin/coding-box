@@ -40,4 +40,27 @@ describe('file-utils', () => {
       expect(fileUtils.extractUnitName('Unit10')).toBe('Unit10');
     });
   });
+
+  describe('getFileTypeLabel', () => {
+    it('should localize known base types', () => {
+      expect(fileUtils.getFileTypeLabel('Resource')).toBe('Ressource');
+      expect(fileUtils.getFileTypeLabel('Unit')).toBe('Aufgaben');
+      expect(fileUtils.getFileTypeLabel('Booklet')).toBe('Testhefte');
+      expect(fileUtils.getFileTypeLabel('TestTakers')).toBe('Testteilnehmer');
+      expect(fileUtils.getFileTypeLabel('Testtakers')).toBe('Testteilnehmer');
+      expect(fileUtils.getFileTypeLabel('Schemer')).toBe('Schemer');
+      expect(fileUtils.getFileTypeLabel('SysCheck')).toBe('Systemcheck');
+    });
+
+    it('should localize resource subtypes by extension', () => {
+      expect(fileUtils.getFileTypeLabel('Resource (.vocs)')).toBe('Ressource (.vocs)');
+      expect(fileUtils.getFileTypeLabel('Resource(.voud)')).toBe('Ressource (.voud)');
+      expect(fileUtils.getFileTypeLabel('resource ( .vomd )')).toBe('Ressource (.vomd)');
+      expect(fileUtils.getFileTypeLabel('RESOURCE (.HTML)')).toBe('Ressource (.html)');
+    });
+
+    it('should return original value for unknown types', () => {
+      expect(fileUtils.getFileTypeLabel('CustomType')).toBe('CustomType');
+    });
+  });
 });

@@ -5,6 +5,7 @@ import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import FileUpload from '../../entities/file_upload.entity';
@@ -177,10 +178,16 @@ describe('CodingProcessService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingProcessService,
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+          }
+        },
         { provide: getRepositoryToken(FileUpload), useValue: { find: jest.fn(), findBy: jest.fn(), findOne: jest.fn() } },
         { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
         { provide: getRepositoryToken(Unit), useValue: { createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder) } },
-        { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn(), createQueryBuilder: jest.fn() } },
         {
           provide: getRepositoryToken(ResponseEntity),
           useValue: {
@@ -224,10 +231,15 @@ describe('CodingProcessService', () => {
         createMockPerson(2)
       ]);
 
-      bookletRepository.find = jest.fn().mockResolvedValue([
-        createMockBooklet(1, '1'),
-        createMockBooklet(2, '2')
-      ]);
+      const mockBookletQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([
+          createMockBooklet(1, '1'),
+          createMockBooklet(2, '2')
+        ])
+      };
+      bookletRepository.createQueryBuilder = jest.fn().mockReturnValue(mockBookletQueryBuilder);
 
       mockUnits = [
         createMockUnit(1, 1, 'TEST_UNIT_1', 'ALIAS_1'),
@@ -275,7 +287,12 @@ describe('CodingProcessService', () => {
     it('should handle an empty person IDs array', async () => {
       // Override mocks to ensure no data is returned for empty array
       personsRepository.find = jest.fn().mockResolvedValue([]);
-      bookletRepository.find = jest.fn().mockResolvedValue([]);
+      const emptyBookletQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([])
+      };
+      bookletRepository.createQueryBuilder = jest.fn().mockReturnValue(emptyBookletQueryBuilder);
       mockUnitQueryBuilder = unitRepository.createQueryBuilder('unit') as unknown as MockQueryBuilder;
       (mockUnitQueryBuilder.getMany as jest.Mock).mockResolvedValue([]);
       responseRepository.find = jest.fn().mockResolvedValue([]);
@@ -297,7 +314,12 @@ describe('CodingProcessService', () => {
 
     it('should handle no booklets found', async () => {
       mockQueryBuilder.getMany.mockResolvedValueOnce(mockUnits); // Units found initially
-      bookletRepository.find = jest.fn().mockResolvedValue([]);
+      const emptyBookletQueryBuilder = {
+        where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([])
+      };
+      bookletRepository.createQueryBuilder = jest.fn().mockReturnValue(emptyBookletQueryBuilder);
 
       const result = await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun);
 

@@ -44,7 +44,7 @@ import { CodingJobBackendService, JobDefinition } from '../../services/coding-jo
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
-import { CoderTraining } from '../../models/coder-training.model';
+import { CoderTraining, CaseSelectionMode, ReferenceMode } from '../../models/coder-training.model';
 
 export interface VariableConfig {
   variableId: string;
@@ -117,6 +117,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   coders: Coder[] = [];
   selectedCoders: Set<number> = new Set();
   availableVariables: Variable[] = [];
+  availableTrainings: CoderTraining[] = [];
   availableBundles: VariableBundle[] = [];
   selectedBundleIds: Set<number> = new Set();
   isLoading = false;
@@ -139,6 +140,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.trainingForm = this.fb.group({
       trainingLabel: ['', [Validators.required]],
       caseOrderingMode: ['continuous'],
+      caseSelectionMode: ['oldest_first' as CaseSelectionMode],
+      referenceTrainingIds: [[] as number[]],
+      referenceMode: [null as ReferenceMode | null],
       variables: this.fb.array([])
     });
 
@@ -229,6 +233,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.loadCoders();
     this.loadAvailableVariables();
+    this.loadAvailableTrainings();
 
     // Population logic: wait for variables and bundles if in edit mode
     combineLatest([
@@ -260,6 +265,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (this.editTraining.case_ordering_mode) {
       this.trainingForm.get('caseOrderingMode')?.setValue(this.editTraining.case_ordering_mode);
     }
+    if (this.editTraining.case_selection_mode) {
+      this.trainingForm.get('caseSelectionMode')?.setValue(this.editTraining.case_selection_mode);
+    }
+    if (this.editTraining.reference_training_ids?.length) {
+      this.trainingForm.get('referenceTrainingIds')?.setValue([...this.editTraining.reference_training_ids]);
+    }
+    if (this.editTraining.reference_mode) {
+      this.trainingForm.get('referenceMode')?.setValue(this.editTraining.reference_mode);
+    }
 
     if (this.editTraining.assigned_coders) {
       this.selectedCoders = new Set(this.editTraining.assigned_coders);
@@ -284,9 +298,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             (b as { case_ordering_mode?: 'continuous' | 'alternating' }).case_ordering_mode ||
             this.editTraining?.case_ordering_mode ||
             'continuous';
-          this.addBundleVariables(b.id, sampleCount, caseOrderingMode);
+          this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
+          this.selectedBundleIds.add(b.id);
         }
       });
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
     }
 
     this.updateGroupedVariables();
@@ -324,6 +340,24 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         error: () => {
           this.showError('Fehler beim Laden der verfügbaren Variablen');
           this.isLoadingVariables = false;
+          this.changeDetectorRef.markForCheck();
+        }
+      });
+  }
+
+  private loadAvailableTrainings(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
+    this.codingTrainingBackendService.getCoderTrainings(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: trainings => {
+          this.availableTrainings = (trainings || []).filter(t => !this.editTraining || t.id !== this.editTraining!.id);
+          this.changeDetectorRef.markForCheck();
+        },
+        error: () => {
+          this.availableTrainings = [];
           this.changeDetectorRef.markForCheck();
         }
       });
@@ -382,7 +416,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
-  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating'): void {
+  addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
       this.showError('Variable-Bundle nicht gefunden');
@@ -413,11 +447,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       }
     });
 
-    if (addedCount > 0) {
+    if (addedCount > 0 && !silent) {
       this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt`);
     }
 
-    if (duplicateVariables.length > 0) {
+    if (duplicateVariables.length > 0 && !silent) {
       this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
     }
 
@@ -791,6 +825,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     const caseOrderingMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+    const caseSelectionMode = this.trainingForm.get('caseSelectionMode')?.value as CaseSelectionMode || 'oldest_first';
+    const referenceTrainingIds = (this.trainingForm.get('referenceTrainingIds')?.value as number[]) || [];
+    const referenceMode = this.trainingForm.get('referenceMode')?.value as ReferenceMode | null;
 
     const request$ = this.isEditMode ?
       this.codingTrainingBackendService.updateCoderTraining(
@@ -802,7 +839,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         undefined,
         assignedVariables,
         assignedVariableBundles,
-        caseOrderingMode
+        caseOrderingMode,
+        caseSelectionMode,
+        referenceTrainingIds.length ? referenceTrainingIds : undefined,
+        referenceMode ?? undefined
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
         workspaceId,
@@ -812,7 +852,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         undefined,
         assignedVariables,
         assignedVariableBundles,
-        caseOrderingMode
+        caseOrderingMode,
+        caseSelectionMode,
+        referenceTrainingIds.length ? referenceTrainingIds : undefined,
+        referenceMode ?? undefined
       );
 
     request$.subscribe({

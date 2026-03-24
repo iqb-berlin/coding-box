@@ -37,15 +37,29 @@ import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
+import { CacheService } from '../../../cache/cache.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
-  private unitVariableCache: Map<number, Map<string, Set<string>>> = new Map();
-  // Maps workspaceId → unitName → Set of variable IDs that have INTENDED_INCOMPLETE code in their coding scheme
-  private intendedIncompleteSchemeCache: Map<number, Map<string, Set<string>>> = new Map();
-  // Maps workspaceId → unitName → Set of variable aliases that are derived variables
-  private derivedVariableCache: Map<number, Map<string, Set<string>>> = new Map();
+  private readonly resourceTypeLabel = 'Resource';
+
+  private getCacheKey(workspaceId: number, type: string): string {
+    return `workspace_files:${type}:${workspaceId}`;
+  }
+
+  private toRedisMap(map: Map<string, Set<string>>): Record<string, string[]> {
+    return Object.fromEntries(
+      Array.from(map.entries()).map(([k, v]) => [k, Array.from(v)])
+    );
+  }
+
+  private fromRedisMap(data: Record<string, string[]> | null): Map<string, Set<string>> {
+    if (!data) return new Map();
+    return new Map(
+      Object.entries(data).map(([k, v]) => [k, new Set(v)])
+    );
+  }
 
   constructor(
     @InjectRepository(FileUpload)
@@ -61,8 +75,14 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileStorageService: WorkspaceFileStorageService,
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
-    private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService
+    private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
+    private cacheService: CacheService
   ) { }
+
+  private getResourceSubtypeExtension(fileType: string): string | null {
+    const match = fileType.match(/^Resource\s*\((\.[^)]+)\)$/i);
+    return match ? match[1].toLowerCase() : null;
+  }
 
   async findAllFileTypes(workspaceId: number): Promise<string[]> {
     this.logger.log(`Fetching all file types for workspace: ${workspaceId}`);
@@ -75,7 +95,28 @@ export class WorkspaceFilesService implements OnModuleInit {
         .andWhere('file.file_type IS NOT NULL')
         .getRawMany();
 
-      return result.map(item => item.file_type).sort();
+      const fileTypes = result.map(item => item.file_type);
+      const resourceExtensions = new Set(['.vocs', '.voud', '.vomd', '.html']);
+      if (fileTypes.includes(this.resourceTypeLabel)) {
+        const resourceFiles = await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .select('file.filename', 'filename')
+          .where('file.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
+          .getRawMany();
+
+        const resourceSubTypes = new Set<string>();
+        resourceFiles.forEach(({ filename }) => {
+          const extension = path.extname(String(filename)).toLowerCase();
+          if (resourceExtensions.has(extension)) {
+            resourceSubTypes.add(`${this.resourceTypeLabel} (${extension})`);
+          }
+        });
+
+        resourceSubTypes.forEach(t => fileTypes.push(t));
+      }
+
+      return Array.from(new Set(fileTypes)).sort();
     } catch (error) {
       this.logger.error(
         `Error fetching file types for workspace ${workspaceId}: ${error.message}`,
@@ -112,7 +153,14 @@ export class WorkspaceFilesService implements OnModuleInit {
       .where('file.workspace_id = :workspaceId', { workspaceId });
 
     if (fileType) {
-      qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      const resourceExtension = this.getResourceSubtypeExtension(fileType);
+      if (resourceExtension) {
+        qb = qb
+          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
+          .andWhere('LOWER(file.filename) LIKE :extension', { extension: `%${resourceExtension}` });
+      } else {
+        qb = qb.andWhere('file.file_type = :fileType', { fileType });
+      }
     }
 
     if (fileSize) {
@@ -194,6 +242,9 @@ export class WorkspaceFilesService implements OnModuleInit {
       .where('workspace_id = :workspaceId', { workspaceId: workspace_id })
       .andWhere('id IN (:...ids)', { ids: numericIds })
       .execute();
+
+    // Invalidate memory caches inside this service
+    await this.invalidateWorkspaceFileCaches(workspace_id);
 
     // Invalidate coding statistics cache since test files changed
     await this.codingStatisticsService.invalidateCache(workspace_id);
@@ -574,6 +625,9 @@ ${bookletRefs}
         overwriteExisting,
         overwriteAllowList
       );
+      // Invalidate memory caches inside this service
+      await this.invalidateWorkspaceFileCaches(workspace_id);
+
       await this.codingStatisticsService.invalidateCache(workspace_id);
       await this.codingStatisticsService.invalidateIncompleteVariablesCache(
         workspace_id
@@ -1554,21 +1608,52 @@ ${bookletRefs}
     try {
       this.logger.log(`Creating ZIP file for workspace ${workspaceId}`);
 
+      const normalizedFileTypes = (fileTypes || []).map(t => t.trim()).filter(Boolean);
+      const resourceExtensions = new Set<string>();
+      let resourceAllSelected = false;
+      const baseTypes = new Set<string>();
+
+      normalizedFileTypes.forEach(type => {
+        if (type === this.resourceTypeLabel) {
+          resourceAllSelected = true;
+          baseTypes.add(this.resourceTypeLabel);
+          resourceExtensions.clear();
+          return;
+        }
+        const extension = this.getResourceSubtypeExtension(type);
+        if (extension) {
+          if (!resourceAllSelected) {
+            resourceExtensions.add(extension);
+          }
+          baseTypes.add(this.resourceTypeLabel);
+          return;
+        }
+        baseTypes.add(type);
+      });
+
       let where: { workspace_id: number; file_type?: FindOperator<string> } = {
         workspace_id: workspaceId
       };
-      if (fileTypes && fileTypes.length > 0) {
+      if (baseTypes.size > 0) {
         where = {
           workspace_id: workspaceId,
-          file_type: In(fileTypes)
+          file_type: In(Array.from(baseTypes))
         };
       }
 
-      const files = await this.fileUploadRepository.find({
+      let files = await this.fileUploadRepository.find({
         where,
         order: { file_type: 'ASC', filename: 'ASC' },
         take: 3000
       });
+
+      if (!resourceAllSelected && resourceExtensions.size > 0) {
+        files = files.filter(file => {
+          if (file.file_type !== this.resourceTypeLabel) return true;
+          const extension = path.extname(file.filename).toLowerCase();
+          return resourceExtensions.has(extension);
+        });
+      }
 
       if (!files || files.length === 0) {
         this.logger.error(`No files found in workspace ${workspaceId}`);
@@ -2078,6 +2163,7 @@ ${bookletRefs}
       // Maps unitId → Map<schemeId, alias> for translating scheme IDs to response variableids
       const schemeIdToAliasMap = new Map<string, Map<string, string>>();
       const intendedIncompleteByUnit = new Map<string, Set<string>>();
+      const trainingRequiredByUnit = new Map<string, Set<string>>();
       for (const scheme of codingSchemes) {
         try {
           const unitId = scheme.file_id.replace('.VOCS', '');
@@ -2086,6 +2172,7 @@ ${bookletRefs}
               id: string;
               alias?: string;
               sourceType?: string;
+              processing?: string[];
               codes?: Array<{ type?: string }>;
             }[];
           };
@@ -2098,6 +2185,8 @@ ${bookletRefs}
             // Collect scheme variable IDs (not aliases!) that have INTENDED_INCOMPLETE code type.
             // These will be translated to aliases during unit XML parsing below.
             const intendedIncompleteSchemeIds = new Set<string>();
+            // Collect scheme variable IDs that have CODER_TRAINING_REQUIRED processing property.
+            const trainingRequiredSchemeIds = new Set<string>();
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
@@ -2115,6 +2204,12 @@ ${bookletRefs}
                   intendedIncompleteSchemeIds.add(vc.id);
                 }
               }
+              // Track variables with CODER_TRAINING_REQUIRED
+              if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
+                  trainingRequiredSchemeIds.add(vc.id);
+                }
+              }
             }
             codingSchemeMap.set(unitId, variableSourceTypes);
             schemeIdToAliasMap.set(unitId, idToAlias);
@@ -2124,10 +2219,12 @@ ${bookletRefs}
               );
               // Store by unitId so we can resolve to aliases during XML parsing
               intendedIncompleteByUnit.set(unitId, intendedIncompleteSchemeIds);
-            } else {
+            }
+            if (trainingRequiredSchemeIds.size > 0) {
               this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has NO INTENDED_INCOMPLETE code types`
+                `[DEBUG] Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
               );
+              trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
           }
         } catch (error) {
@@ -2144,6 +2241,8 @@ ${bookletRefs}
       const intendedIncompleteAliasByUnit = new Map<string, Set<string>>();
       // Tracks derived variable aliases per unit for derivedVariableCache
       const derivedVariablesByUnit = new Map<string, Set<string>>();
+      // Maps unitId → alias-keyed set of variables with CODER_TRAINING_REQUIRED
+      const trainingRequiredAliasByUnit = new Map<string, Set<string>>();
 
       for (const unitFile of unitFiles) {
         try {
@@ -2161,8 +2260,12 @@ ${bookletRefs}
             const variables = new Set<string>();
             // Scheme IDs that have INTENDED_INCOMPLETE code type (from the .VOCS file)
             const schemeIdsWithIntendedIncomplete = intendedIncompleteByUnit.get(unitName);
+            // Scheme IDs that have CODER_TRAINING_REQUIRED processing property
+            const schemeIdsWithTrainingRequired = trainingRequiredByUnit.get(unitName);
             // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
             const aliasesWithIntendedIncomplete = new Set<string>();
+            // Aliases that map to scheme IDs with CODER_TRAINING_REQUIRED
+            const aliasesWithTrainingRequired = new Set<string>();
             // Derived variable aliases for this unit
             const derivedAliases = new Set<string>();
 
@@ -2191,6 +2294,10 @@ ${bookletRefs}
                     this.logger.debug(
                       `[DEBUG] Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
+                  }
+                  // Check CODER_TRAINING_REQUIRED
+                  if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
+                    aliasesWithTrainingRequired.add(variable.$.alias);
                   }
                 }
               }
@@ -2248,6 +2355,10 @@ ${bookletRefs}
                     `[DEBUG] Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                   );
                 }
+                // Check CODER_TRAINING_REQUIRED
+                if (schemeIdsWithTrainingRequired?.has(schemeKey)) {
+                  aliasesWithTrainingRequired.add(alias);
+                }
               }
             } else {
               this.logger.debug(
@@ -2283,12 +2394,19 @@ ${bookletRefs}
                       `[DEBUG] Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
+                  // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
+                  if (schemeIdsWithTrainingRequired?.has(schemeId)) {
+                    aliasesWithTrainingRequired.add(resolvedAlias);
+                  }
                 }
               }
             }
 
             if (aliasesWithIntendedIncomplete.size > 0) {
               intendedIncompleteAliasByUnit.set(unitName, aliasesWithIntendedIncomplete);
+            }
+            if (aliasesWithTrainingRequired.size > 0) {
+              trainingRequiredAliasByUnit.set(unitName, aliasesWithTrainingRequired);
             }
             if (derivedAliases.size > 0) {
               derivedVariablesByUnit.set(unitName, derivedAliases);
@@ -2302,12 +2420,13 @@ ${bookletRefs}
         }
       }
 
-      this.unitVariableCache.set(workspaceId, unitVariables);
-      // Store alias-based map (not the scheme-ID-based intendedIncompleteByUnit)
-      this.intendedIncompleteSchemeCache.set(workspaceId, intendedIncompleteAliasByUnit);
-      this.derivedVariableCache.set(workspaceId, derivedVariablesByUnit);
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'unit_variables'), this.toRedisMap(unitVariables));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'intended_incomplete'), this.toRedisMap(intendedIncompleteAliasByUnit));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'training_required'), this.toRedisMap(trainingRequiredAliasByUnit));
+      await this.cacheService.set(this.getCacheKey(workspaceId, 'derived_variables'), this.toRedisMap(derivedVariablesByUnit));
+
       this.logger.log(
-        `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId}`
+        `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
       );
       this.logger.debug(
         `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
@@ -2326,10 +2445,13 @@ ${bookletRefs}
   async getUnitVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.unitVariableCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.unitVariableCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   /**
@@ -2341,10 +2463,13 @@ ${bookletRefs}
   async getIntendedIncompleteSchemeVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.intendedIncompleteSchemeCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'intended_incomplete');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.intendedIncompleteSchemeCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
   }
 
   /**
@@ -2354,10 +2479,29 @@ ${bookletRefs}
   async getDerivedVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    if (!this.derivedVariableCache.has(workspaceId)) {
+    const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
     }
-    return this.derivedVariableCache.get(workspaceId) || new Map();
+    return this.fromRedisMap(cached);
+  }
+
+  /**
+   * Returns a map of unitName → Set of variable aliases that have CODER_TRAINING_REQUIRED
+   * processing property in their coding scheme.
+   */
+  async getCoderTrainingRequiredVariableMap(
+    workspaceId: number
+  ): Promise<Map<string, Set<string>>> {
+    const cacheKey = this.getCacheKey(workspaceId, 'training_required');
+    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!cached) {
+      await this.refreshUnitVariableCache(workspaceId);
+      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
+    }
+    return this.fromRedisMap(cached);
   }
 
   async getUnitVariableDetails(
@@ -2397,6 +2541,10 @@ ${bookletRefs}
       string,
       Map<string, boolean>
       >();
+      const codingSchemeTrainingRequiredMap = new Map<
+      string,
+      Map<string, boolean>
+      >();
 
       for (const scheme of codingSchemes) {
         try {
@@ -2407,6 +2555,7 @@ ${bookletRefs}
             variableCodings?: {
               id: string;
               sourceType?: string;
+              processing?: string[];
               codes?: Array<{
                 id: number | string;
                 label?: string;
@@ -2427,11 +2576,18 @@ ${bookletRefs}
             >();
             const variableManualInstructions = new Map<string, boolean>();
             const variableClosedCoding = new Map<string, boolean>();
+            const variableTrainingRequired = new Map<string, boolean>();
 
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
               }
+              if (vc.id && vc.processing && Array.isArray(vc.processing)) {
+                if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
+                  variableTrainingRequired.set(vc.id, true);
+                }
+              }
+
               if (vc.id && vc.codes && Array.isArray(vc.codes)) {
                 const codes = vc.codes
                   .filter(code => code.id !== undefined)
@@ -2470,6 +2626,10 @@ ${bookletRefs}
               variableManualInstructions
             );
             codingSchemeClosedCodingMap.set(unitId, variableClosedCoding);
+            codingSchemeTrainingRequiredMap.set(
+              unitId,
+              variableTrainingRequired
+            );
           }
         } catch (error) {
           this.logger.error(
@@ -2515,6 +2675,7 @@ ${bookletRefs}
               isDerived?: boolean;
               hasManualInstruction?: boolean;
               hasClosedCoding?: boolean;
+              coderTrainingRequired?: boolean;
             }> = [];
 
             // Process BaseVariables
@@ -2552,6 +2713,10 @@ ${bookletRefs}
                     codingSchemeClosedCodingMap.get(unitName);
                   const hasClosedCoding =
                     unitClosedCoding?.get(variableId) || false;
+                  const unitTrainingRequired =
+                    codingSchemeTrainingRequiredMap.get(unitName);
+                  const coderTrainingRequired =
+                    unitTrainingRequired?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -2571,7 +2736,8 @@ ${bookletRefs}
                     codes: variableCodes,
                     isDerived: false,
                     hasManualInstruction,
-                    hasClosedCoding
+                    hasClosedCoding,
+                    coderTrainingRequired
                   });
                 }
               }
@@ -2612,6 +2778,10 @@ ${bookletRefs}
                     codingSchemeClosedCodingMap.get(unitName);
                   const hasClosedCoding =
                     unitClosedCoding?.get(variableId) || false;
+                  const unitTrainingRequired =
+                    codingSchemeTrainingRequiredMap.get(unitName);
+                  const coderTrainingRequired =
+                    unitTrainingRequired?.get(variableId) || false;
 
                   variables.push({
                     id: variableId,
@@ -2631,7 +2801,8 @@ ${bookletRefs}
                     codes: variableCodes,
                     isDerived: true,
                     hasManualInstruction,
-                    hasClosedCoding
+                    hasClosedCoding,
+                    coderTrainingRequired
                   });
                 }
               }
@@ -2665,5 +2836,20 @@ ${bookletRefs}
       );
       return [];
     }
+  }
+
+  /**
+   * Invalidates memory map caches for a given workspace. This is called when
+   * files are uploaded or deleted to ensure that updated coding schemes, etc.
+   * are correctly parsed on the next request.
+   */
+  async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'unit_variables')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'intended_incomplete')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'training_required')),
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'derived_variables'))
+    ]);
+    this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId} in Redis`);
   }
 }

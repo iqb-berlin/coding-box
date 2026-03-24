@@ -15,14 +15,17 @@ export class CodingExportService {
   private http = inject(HttpClient);
   private appService = inject(AppService);
 
-  getCodingListAsCsv(workspace_id: number): Observable<Blob> {
+  getCodingListAsCsv(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin);
+        if (trainingRequired !== undefined) {
+          params = params.set('trainingRequired', trainingRequired.toString());
+        }
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list`,
           {
@@ -34,14 +37,17 @@ export class CodingExportService {
     );
   }
 
-  getCodingListAsExcel(workspace_id: number): Observable<Blob> {
+  getCodingListAsExcel(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
-        const params = new HttpParams()
+        let params = new HttpParams()
           .set('authToken', token)
           .set('serverUrl', window.location.origin);
+        if (trainingRequired !== undefined) {
+          params = params.set('trainingRequired', trainingRequired.toString());
+        }
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/coding-list/excel`,
           {
@@ -187,7 +193,8 @@ export class CodingExportService {
     exportType: string,
     version?: 'v1' | 'v2' | 'v3',
     format?: 'csv' | 'json' | 'excel',
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    trainingRequired?: boolean
   ): Observable<{ jobId: string; message: string }> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspaceId, identity, 60).pipe(
@@ -198,6 +205,7 @@ export class CodingExportService {
           version,
           format,
           includeReplayUrl: includeReplayUrls,
+          trainingRequired,
           authToken: token,
           serverUrl: window.location.origin
         };
