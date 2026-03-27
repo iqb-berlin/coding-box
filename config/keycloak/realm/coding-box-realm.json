@@ -10,7 +10,7 @@
       "type" : "password",
       "value": "${CODING_BOX_ADMIN_PASSWORD}"
     } ],
-    "realmRoles" : [ "default-roles-coding-box" ]
+    "realmRoles" : [ "default-roles-coding-box", "admin" ]
   } ],
   "id": "c9fc1c7f-d85e-4ca8-b623-cc859f62df1f",
   "realm": "coding-box",
