@@ -5,7 +5,7 @@ import {
   forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { ValidationTask } from '../../entities/validation-task.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
@@ -72,6 +72,15 @@ export class ValidationTaskService {
       }
     }
     return task;
+  }
+
+  async getWorkspaceIdsForTaskIds(taskIds: number[]): Promise<Map<number, number>> {
+    if (taskIds.length === 0) return new Map();
+    const tasks = await this.taskRepository.find({
+      where: { id: In(taskIds) },
+      select: ['id', 'workspace_id']
+    });
+    return new Map(tasks.map(t => [t.id, t.workspace_id]));
   }
 
   async getValidationTasks(workspaceId: number): Promise<ValidationTask[]> {

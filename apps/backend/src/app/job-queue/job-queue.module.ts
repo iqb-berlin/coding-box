@@ -20,10 +20,11 @@ import { CodingModule } from '../coding/coding.module';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { CacheModule } from '../cache/cache.module';
 import { ResponseEntity } from '../database/entities/response.entity';
+import { ValidationTask } from '../database/entities/validation-task.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([ResponseEntity]),
+    TypeOrmModule.forFeature([ResponseEntity, ValidationTask]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
