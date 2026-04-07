@@ -15,6 +15,13 @@ import {
 import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { ResponseStatusValidationService } from '../../../../services/validation';
 
+interface ResponseStatusValidationResult {
+  data: InvalidVariableDto[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 /**
  * Panel component for response status validation.
  * Displays validation results for response status and allows deletion of invalid responses.
@@ -92,6 +99,7 @@ export class ResponseStatusValidationPanelComponent implements OnInit, OnDestroy
 
   isRunning = false;
   wasRun = false;
+  errorMessage: string | null = null;
   invalidStatusVariables: InvalidVariableDto[] = [];
   totalInvalid = 0;
   currentPage = 1;
@@ -119,22 +127,24 @@ export class ResponseStatusValidationPanelComponent implements OnInit, OnDestroy
   ) {}
 
   ngOnInit(): void {
-    const cachedResult = this.responseStatusValidationService.getCachedResult();
-    if (cachedResult) {
-      this.invalidStatusVariables = cachedResult.data;
-      this.totalInvalid = cachedResult.total;
-      this.currentPage = cachedResult.page;
-      this.pageSize = cachedResult.limit;
-      this.wasRun = true;
-    }
+    const cachedResult = this.responseStatusValidationService.observeValidationResult();
 
-    this.stateSubscription = this.responseStatusValidationService.observeCachedResult().subscribe(result => {
+    this.stateSubscription = cachedResult.subscribe(result => {
       if (result && !this.isRunning) {
-        this.invalidStatusVariables = result.data;
-        this.totalInvalid = result.total;
-        this.currentPage = result.page;
-        this.pageSize = result.limit;
         this.wasRun = true;
+        const details = result.details as Record<string, unknown>;
+        if (result.status === 'failed' && details?.error) {
+          this.errorMessage = details.error as string;
+          this.invalidStatusVariables = [];
+          this.totalInvalid = 0;
+        } else if (result.details) {
+          const statusResult = result.details as ResponseStatusValidationResult;
+          this.errorMessage = null;
+          this.invalidStatusVariables = statusResult.data || [];
+          this.totalInvalid = statusResult.total || 0;
+          this.currentPage = statusResult.page || 1;
+          this.pageSize = statusResult.limit || 10;
+        }
       }
     });
   }

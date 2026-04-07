@@ -23,31 +23,18 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
   protected validationType = 'variables';
 
   /**
-   * Validates variables by creating a validation task and retrieving results
-   */
-  validate(page: number = 1, limit: number = 10): Observable<VariablesValidationResult> {
-    return this.createTask(this.validationType, page, limit).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      switchMap(completedTask => this.getResults(completedTask.id)),
-      tap(result => {
-        this.saveResult(result);
-        this.removeTaskId();
-      })
-    );
-  }
-
-  /**
    * Deletes selected invalid variable responses
    */
   deleteSelected(responseIds: number[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      tap(() => this.removeTaskId()),
-      map(() => undefined)
-    );
+    return this.validationService
+      .createDeleteResponsesTask(workspaceId, responseIds)
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
+        tap(() => this.removeTaskId()),
+        map(() => undefined)
+      );
   }
 
   /**
@@ -55,12 +42,17 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    */
   deleteAll(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'variables').pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      tap(() => this.removeTaskId()),
-      map(() => undefined)
-    );
+    return this.validationService
+      .createDeleteAllResponsesTask(
+        workspaceId,
+        this.validationType as 'variables'
+      )
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
+        tap(() => this.removeTaskId()),
+        map(() => undefined)
+      );
   }
 
   /**
@@ -69,7 +61,8 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
   getValidationStatus(): 'not-run' | 'running' | 'success' | 'failed' {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
 
     if (taskIds.variables) {
       return 'running';
@@ -82,17 +75,22 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    * Fetches a specific page of validation results using the direct API (no task creation).
    * Used for pagination after the initial validation has been run.
    */
-  fetchPage(page: number = 1, limit: number = 10): Observable<VariablesValidationResult> {
+  fetchPage(
+    page: number = 1,
+    limit: number = 10
+  ): Observable<VariablesValidationResult> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService.validateVariables(workspaceId, page, limit).pipe(
-      tap(result => this.saveResult(result))
-    );
+    return this.validationService
+      .validateVariables(workspaceId, page, limit)
+      .pipe(tap(result => this.saveResult(result)));
   }
 
   /**
    * Calculates the validation status based on the result
    */
-  protected calculateStatus(result: VariablesValidationResult): 'success' | 'failed' | 'not-run' {
+  protected calculateStatus(
+    result: VariablesValidationResult
+  ): 'success' | 'failed' | 'not-run' {
     return result.total > 0 ? 'failed' : 'success';
   }
 
@@ -101,7 +99,11 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
    */
   getCachedResult(): VariablesValidationResult | null {
     const workspaceId = this.appService.selectedWorkspaceId;
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
-    return (results.variables?.details as unknown as VariablesValidationResult) || null;
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
+    return (
+      (results.variables?.details as unknown as VariablesValidationResult) ||
+      null
+    );
   }
 }

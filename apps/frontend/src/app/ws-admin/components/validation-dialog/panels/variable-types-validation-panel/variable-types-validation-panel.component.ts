@@ -15,6 +15,13 @@ import {
 import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableTypeValidationService } from '../../../../services/validation';
 
+interface VariableTypesValidationResult {
+  data: InvalidVariableDto[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 /**
  * Panel component for variable types validation.
  * Displays validation results for variable types and allows deletion of invalid responses.
@@ -92,6 +99,7 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
 
   isRunning = false;
   wasRun = false;
+  errorMessage: string | null = null;
   invalidTypeVariables: InvalidVariableDto[] = [];
   totalInvalid = 0;
   currentPage = 1;
@@ -120,22 +128,24 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
   ) {}
 
   ngOnInit(): void {
-    const cachedResult = this.variableTypeValidationService.getCachedResult();
-    if (cachedResult) {
-      this.invalidTypeVariables = cachedResult.data;
-      this.totalInvalid = cachedResult.total;
-      this.currentPage = cachedResult.page;
-      this.pageSize = cachedResult.limit;
-      this.wasRun = true;
-    }
+    const cachedResult = this.variableTypeValidationService.observeValidationResult();
 
-    this.stateSubscription = this.variableTypeValidationService.observeCachedResult().subscribe(result => {
+    this.stateSubscription = cachedResult.subscribe(result => {
       if (result && !this.isRunning) {
-        this.invalidTypeVariables = result.data;
-        this.totalInvalid = result.total;
-        this.currentPage = result.page;
-        this.pageSize = result.limit;
         this.wasRun = true;
+        const details = result.details as Record<string, unknown>;
+        if (result.status === 'failed' && details?.error) {
+          this.errorMessage = details.error as string;
+          this.invalidTypeVariables = [];
+          this.totalInvalid = 0;
+        } else if (result.details) {
+          const typeResult = result.details as VariableTypesValidationResult;
+          this.errorMessage = null;
+          this.invalidTypeVariables = typeResult.data || [];
+          this.totalInvalid = typeResult.total || 0;
+          this.currentPage = typeResult.page || 1;
+          this.pageSize = typeResult.limit || 10;
+        }
       }
     });
   }

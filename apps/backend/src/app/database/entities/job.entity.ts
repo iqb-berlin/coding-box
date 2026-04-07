@@ -37,8 +37,8 @@ export class Job {
   @Column({ type: 'text', nullable: true })
     result?: string;
 
-  @Column({ type: 'text', nullable: true })
-    type?: string;
+  // Type is added by TypeORM for inheritance discriminator column 'type'
+  type?: string;
 
   @CreateDateColumn()
     created_at: Date;
