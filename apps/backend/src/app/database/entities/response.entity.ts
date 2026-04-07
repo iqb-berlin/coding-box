@@ -8,6 +8,7 @@ import { Unit } from './unit.entity';
 @Entity('response')
 @Index(['unitid', 'variableid']) // Composite index for common query patterns
 @Index(['unitid', 'status']) // Composite index for filtering by status
+@Index(['status']) // Index for filtering by status distribution
 @Index(['status_v1']) // Index for filtering by coded status
 export class ResponseEntity {
   @PrimaryGeneratedColumn()

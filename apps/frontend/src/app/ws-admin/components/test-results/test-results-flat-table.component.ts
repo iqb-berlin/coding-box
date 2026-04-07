@@ -513,32 +513,49 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     }
 
     this.isLoadingFrequencies = true;
-    this.testResultService
-      .getFlatResponseFrequencies(
-        this.appService.selectedWorkspaceId,
-        combosToFetch
-      )
-      .subscribe((resp: FlatResponseFrequenciesResponse) => {
-        this.isLoadingFrequencies = false;
-        Object.entries(resp || {}).forEach(([key, incoming]) => {
-          const existing = this.frequenciesByComboKey.get(key);
-          if (!existing) {
-            this.frequenciesByComboKey.set(key, incoming);
-            return;
+    const batchSize = 25;
+    const batches: FlatResponseFrequencyRequestCombo[][] = [];
+    for (let i = 0; i < combosToFetch.length; i += batchSize) {
+      batches.push(combosToFetch.slice(i, i + batchSize));
+    }
+
+    let completedBatches = 0;
+    batches.forEach(batch => {
+      this.testResultService
+        .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch)
+        .subscribe({
+          next: (resp: FlatResponseFrequenciesResponse) => {
+            Object.entries(resp || {}).forEach(([key, incoming]) => {
+              const existing = this.frequenciesByComboKey.get(key);
+              if (!existing) {
+                this.frequenciesByComboKey.set(key, incoming);
+                return;
+              }
+
+              const mergedValues = new Map<string, FlatResponseFrequencyItem>();
+              (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
+              );
+              (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
+              );
+
+              this.frequenciesByComboKey.set(key, {
+                total: incoming.total ?? existing.total,
+                values: Array.from(mergedValues.values())
+              });
+            });
+            completedBatches += 1;
+            if (completedBatches === batches.length) {
+              this.isLoadingFrequencies = false;
+            }
+          },
+          error: () => {
+            completedBatches += 1;
+            if (completedBatches === batches.length) {
+              this.isLoadingFrequencies = false;
+            }
           }
-
-          const mergedValues = new Map<string, FlatResponseFrequencyItem>();
-          (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-          );
-          (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-          );
-
-          this.frequenciesByComboKey.set(key, {
-            total: incoming.total ?? existing.total,
-            values: Array.from(mergedValues.values())
-          });
         });
-      });
+    });
   }
 
   getFrequencySummary(row: FlatResponseRow): string {

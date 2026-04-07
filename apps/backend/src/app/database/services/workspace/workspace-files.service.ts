@@ -1,4 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  forwardRef, Inject, Injectable, Logger, OnModuleInit
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   FindOperator, In, Like, Repository
@@ -31,6 +33,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../../entities/persons.entity';
+// eslint-disable-next-line import/no-cycle
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
@@ -38,6 +41,8 @@ import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
+import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
+import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -76,7 +81,9 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) { }
 
   private getResourceSubtypeExtension(fileType: string): string | null {
@@ -2848,8 +2855,10 @@ ${bookletRefs}
       this.cacheService.delete(this.getCacheKey(workspaceId, 'unit_variables')),
       this.cacheService.delete(this.getCacheKey(workspaceId, 'intended_incomplete')),
       this.cacheService.delete(this.getCacheKey(workspaceId, 'training_required')),
-      this.cacheService.delete(this.getCacheKey(workspaceId, 'derived_variables'))
+      this.cacheService.delete(this.getCacheKey(workspaceId, 'derived_variables')),
+      this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);
+    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId} in Redis`);
   }
 }
