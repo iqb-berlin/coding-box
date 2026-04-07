@@ -79,6 +79,17 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
   }
 
   /**
+   * Fetches a specific page of validation results using the direct API (no task creation).
+   * Used for pagination after the initial validation has been run.
+   */
+  fetchPage(page: number = 1, limit: number = 10): Observable<VariableTypesValidationResult> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService.validateVariableTypes(workspaceId, page, limit).pipe(
+      tap(result => this.saveResult(result))
+    );
+  }
+
+  /**
    * Calculates the validation status based on the result
    */
   protected calculateStatus(result: VariableTypesValidationResult): 'success' | 'failed' | 'not-run' {

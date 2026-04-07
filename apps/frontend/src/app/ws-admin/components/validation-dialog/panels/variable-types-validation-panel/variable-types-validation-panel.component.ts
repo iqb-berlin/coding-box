@@ -180,7 +180,18 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
   onPageChange(event: PageEvent): void {
     this.currentPage = event.pageIndex + 1;
     this.pageSize = event.pageSize;
-    this.onValidate();
+    this.subscription?.unsubscribe();
+    this.subscription = this.variableTypeValidationService.fetchPage(this.currentPage, this.pageSize).subscribe({
+      next: result => {
+        this.invalidTypeVariables = result.data;
+        this.totalInvalid = result.total;
+        this.currentPage = result.page;
+        this.pageSize = result.limit;
+      },
+      error: () => {
+        this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', { duration: 5000 });
+      }
+    });
   }
 
   onSelectionChange(newSelection: Set<unknown>): void {

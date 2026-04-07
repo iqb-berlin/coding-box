@@ -16,6 +16,7 @@ import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ValidationBatchRunnerService } from '../../../shared/services/validation/validation-batch-runner.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { FileService } from '../../../shared/services/file/file.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import {
   TestTakersValidationPanelComponent,
@@ -68,6 +69,12 @@ describe('ValidationDialogComponent', () => {
   let dialogMock: {
     open: jest.Mock;
   };
+  let fileServiceMock: {
+    getUnitContentXml: jest.Mock;
+  };
+  let snackBarMock: {
+    open: jest.Mock;
+  };
 
   beforeEach(async () => {
     appServiceMock = { selectedWorkspaceId: 1 };
@@ -80,6 +87,8 @@ describe('ValidationDialogComponent', () => {
     batchRunnerMock = { startBatch: jest.fn() };
     dialogRefMock = { close: jest.fn() };
     dialogMock = { open: jest.fn() };
+    fileServiceMock = { getUnitContentXml: jest.fn().mockReturnValue(of('<Unit></Unit>')) };
+    snackBarMock = { open: jest.fn() };
 
     stateServiceMock.observeValidationResults.mockReturnValue(of({}));
     stateServiceMock.observeTaskIds.mockReturnValue(of({}));
@@ -97,10 +106,11 @@ describe('ValidationDialogComponent', () => {
         provideHttpClientTesting(),
         { provide: MAT_DIALOG_DATA, useValue: {} },
         { provide: MatDialogRef, useValue: dialogRefMock },
-        { provide: MatSnackBar, useValue: { open: jest.fn() } },
+        { provide: MatSnackBar, useFactory: () => snackBarMock },
         { provide: AppService, useValue: appServiceMock },
         { provide: ValidationTaskStateService, useValue: stateServiceMock },
         { provide: ValidationBatchRunnerService, useValue: batchRunnerMock },
+        { provide: FileService, useFactory: () => fileServiceMock },
         { provide: SERVER_URL, useValue: 'http://test' }
       ]
     })
@@ -153,13 +163,27 @@ describe('ValidationDialogComponent', () => {
     expect(batchRunnerMock.startBatch).toHaveBeenCalledWith(1, { force: true });
   });
 
-  it('should open content dialog for unit XML', () => {
-    dialogMock.open.mockReturnValue({
-      afterClosed: () => of(true)
-    } as unknown as MatDialogRef<ContentDialogComponent>);
-
+  it('should fetch XML and open content dialog for unit XML', () => {
     component.showUnitXml('test.xml');
-    expect(dialogMock.open).toHaveBeenCalledWith(ContentDialogComponent, expect.anything());
+    expect(fileServiceMock.getUnitContentXml).toHaveBeenCalledWith(1, 'test.xml');
+    expect(dialogMock.open).toHaveBeenCalledWith(ContentDialogComponent, expect.objectContaining({
+      data: expect.objectContaining({
+        title: 'Unit XML: test.xml',
+        content: '<Unit></Unit>',
+        isXml: true
+      })
+    }));
+  });
+
+  it('should show snackbar when XML content is null', () => {
+    fileServiceMock.getUnitContentXml.mockReturnValue(of(null));
+    component.showUnitXml('missing.xml');
+    expect(snackBarMock.open).toHaveBeenCalledWith(
+      'Fehler beim Abrufen der Unit-XML für missing.xml',
+      'Schließen',
+      { duration: 5000 }
+    );
+    expect(dialogMock.open).not.toHaveBeenCalled();
   });
 
   describe('getOverallStatus', () => {
