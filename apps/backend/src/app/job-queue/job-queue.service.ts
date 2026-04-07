@@ -79,6 +79,12 @@ export interface VariableAnalysisJobData {
   variableId?: string;
 }
 
+export interface ExternalCodingImportJobData {
+  workspaceId: number;
+  tempFilePath: string;
+  fileName: string;
+}
+
 export interface ExportJobData {
   workspaceId: number;
   userId: number;
@@ -167,7 +173,8 @@ export class JobQueueService {
     @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue,
     @InjectQueue('validation-task') private validationTaskQueue: Queue,
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
-    @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue
+    @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
+    @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue
   ) { }
 
   private async findActiveJob<T>(
@@ -780,5 +787,37 @@ export class JobQueueService {
         message: `Redis connection failed: ${error.message}`
       };
     }
+  }
+
+  // --- External Coding Import Queue Methods ---
+
+  async addExternalCodingImportJob(
+    data: ExternalCodingImportJobData,
+    options?: JobOptions
+  ): Promise<Job<ExternalCodingImportJobData>> {
+    const existing = await this.findActiveJob<ExternalCodingImportJobData>(
+      this.externalCodingImportQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An external coding import job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
+    this.logger.log(
+      `Adding external coding import job for workspace ${data.workspaceId}, file: ${data.fileName}`
+    );
+    return this.externalCodingImportQueue.add(data, {
+      attempts: 1,
+      removeOnComplete: { age: 3600 },
+      removeOnFail: { age: 86400 },
+      ...options
+    });
+  }
+
+  async getExternalCodingImportJob(
+    jobId: string
+  ): Promise<Job<ExternalCodingImportJobData>> {
+    return this.externalCodingImportQueue.getJob(jobId);
   }
 }

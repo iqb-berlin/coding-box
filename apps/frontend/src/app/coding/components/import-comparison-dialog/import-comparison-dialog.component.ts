@@ -1,5 +1,9 @@
-import { Component, Inject, OnInit } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import {
+  Component, Inject, OnInit, OnDestroy
+} from '@angular/core';
+import {
+  MAT_DIALOG_DATA, MatDialogModule, MatDialogRef
+} from '@angular/material/dialog';
 import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -11,6 +15,10 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatListModule } from '@angular/material/list';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import {
+  Subscription, interval, switchMap, takeWhile
+} from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 
@@ -56,7 +64,8 @@ export interface ImportComparisonData {
     TranslateModule,
     MatFormFieldModule,
     MatSelectModule,
-    MatListModule
+    MatListModule,
+    MatSnackBarModule
   ],
   template: `
     <div class="import-comparison-dialog">
@@ -75,6 +84,10 @@ export interface ImportComparisonData {
           <div *ngIf="data.isPreview" class="preview-notice">
             <mat-icon class="warning-icon">info</mat-icon>
             <span>Dies ist eine Vorschau. Die Änderungen wurden noch nicht angewendet.</span>
+          </div>
+          <div *ngIf="applyProgress >= 0" class="apply-progress">
+            <p>Import läuft... {{applyProgress}}%</p>
+            <mat-progress-bar mode="determinate" [value]="applyProgress"></mat-progress-bar>
           </div>
         </div>
 
@@ -365,9 +378,24 @@ export interface ImportComparisonData {
       padding: 16px 24px;
       gap: 8px;
     }
+
+    .apply-progress {
+      margin-top: 12px;
+      padding: 8px 12px;
+      background-color: #e3f2fd;
+      border-radius: 6px;
+      border-left: 4px solid #1976d2;
+    }
+
+    .apply-progress p {
+      margin: 0 0 8px 0;
+      color: #1565c0;
+      font-weight: 500;
+      font-size: 14px;
+    }
   `]
 })
-export class ImportComparisonDialogComponent implements OnInit {
+export class ImportComparisonDialogComponent implements OnInit, OnDestroy {
   displayedColumns: string[] = [
     'unitAlias',
     'variableId',
@@ -386,17 +414,24 @@ export class ImportComparisonDialogComponent implements OnInit {
   dataSource = new MatTableDataSource<ImportComparisonRow>([]);
   pageSize = 100;
   isLoading = false;
+  applyProgress = -1;
+
+  private pollingSubscription?: Subscription;
 
   constructor(
     public dialogRef: MatDialogRef<ImportComparisonDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: ImportComparisonData,
     private translateService: TranslateService,
-    private testPersonCodingService: TestPersonCodingService
+    private testPersonCodingService: TestPersonCodingService,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
     this.dataSource.data = this.data.affectedRows;
-    // Paginator will be set via template
+  }
+
+  ngOnDestroy(): void {
+    this.pollingSubscription?.unsubscribe();
   }
 
   onPageChange(event: PageEvent): void {
@@ -506,37 +541,90 @@ export class ImportComparisonDialogComponent implements OnInit {
     this.dialogRef.close();
   }
 
-  async applyImport(): Promise<void> {
+  applyImport(): void {
     if (!this.data.isPreview || !this.data.workspaceId || !this.data.fileData || !this.data.fileName) {
       return;
     }
 
     this.isLoading = true;
+    this.applyProgress = 0;
 
-    try {
-      await this.testPersonCodingService.importExternalCodingWithProgress(
-        this.data.workspaceId,
-        {
-          file: this.data.fileData,
-          fileName: this.data.fileName,
-          previewOnly: false
-        },
-        () => {
-          // Could show progress in dialog if needed
-        },
-        // onComplete callback
-        result => {
-          this.isLoading = false;
-          this.dialogRef.close({ applied: true, result });
-        },
-        // onError callback
-        () => {
-          this.isLoading = false;
-          // Could show error in dialog
+    this.testPersonCodingService.startExternalCodingImportJob(
+      this.data.workspaceId,
+      { file: this.data.fileData, fileName: this.data.fileName }
+    ).subscribe({
+      next: ({ jobId }) => {
+        this.pollImportJob(this.data.workspaceId!, jobId);
+      },
+      error: error => {
+        this.isLoading = false;
+        this.applyProgress = -1;
+        if (error.status === 409) {
+          this.snackBar.open(
+            'Ein Import läuft bereits für diesen Workspace.',
+            '',
+            { duration: 5000 }
+          );
+        } else {
+          this.snackBar.open(
+            `Import fehlgeschlagen: ${error.error?.message || error.message || 'Unbekannter Fehler'}`,
+            '',
+            { duration: 5000 }
+          );
         }
-      );
-    } catch {
-      this.isLoading = false;
-    }
+      }
+    });
+  }
+
+  private pollImportJob(workspaceId: number, jobId: string): void {
+    this.pollingSubscription = interval(2000).pipe(
+      switchMap(() => this.testPersonCodingService.getExternalCodingImportJobStatus(workspaceId, jobId)),
+      takeWhile(status => status.status !== 'completed' && status.status !== 'failed', true)
+    ).subscribe({
+      next: status => {
+        this.applyProgress = status.progress;
+
+        if (status.status === 'completed') {
+          this.fetchImportResult(workspaceId, jobId);
+        } else if (status.status === 'failed') {
+          this.isLoading = false;
+          this.applyProgress = -1;
+          this.snackBar.open(
+            `Import fehlgeschlagen: ${status.error || 'Unbekannter Fehler'}`,
+            '',
+            { duration: 5000 }
+          );
+        }
+      },
+      error: () => {
+        this.isLoading = false;
+        this.applyProgress = -1;
+        this.snackBar.open(
+          'Fehler beim Abfragen des Import-Status.',
+          '',
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  private fetchImportResult(workspaceId: number, jobId: string): void {
+    this.testPersonCodingService.getExternalCodingImportResult(workspaceId, jobId).subscribe({
+      next: result => {
+        this.isLoading = false;
+        this.applyProgress = -1;
+        this.dialogRef.close({ applied: true, result });
+      },
+      error: () => {
+        this.isLoading = false;
+        this.applyProgress = -1;
+        this.snackBar.open(
+          'Import abgeschlossen, aber Ergebnis konnte nicht geladen werden.',
+          '',
+          { duration: 5000 }
+        );
+        this.dialogRef.close({ applied: true });
+      }
+    });
   }
 }
