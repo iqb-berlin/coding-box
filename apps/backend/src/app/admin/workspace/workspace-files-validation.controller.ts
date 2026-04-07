@@ -153,7 +153,7 @@ export class WorkspaceFilesValidationController {
   @ApiOperation({
     summary: 'Validate response status',
     description:
-            'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED)'
+            'Validates if response status is one of the valid values (VALUE_CHANGED, NOT_REACHED, DISPLAYED, UNSET, PARTLY_DISPLAYED, CODING_COMPLETE)'
   })
   @ApiParam({
     name: 'workspace_id',
