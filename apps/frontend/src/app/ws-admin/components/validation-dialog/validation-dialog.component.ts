@@ -9,10 +9,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { MatExpansionModule } from '@angular/material/expansion';
+import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
+import { FileService } from '../../../shared/services/file/file.service';
 
 // Import panel components
 import {
@@ -51,6 +53,7 @@ import { ValidationBatchRunnerService } from '../../../shared/services/validatio
     MatButtonModule,
     MatIconModule,
     MatExpansionModule,
+    MatSnackBarModule,
     // Panel components
     ValidationResultBannerComponent,
     TestTakersValidationPanelComponent,
@@ -99,7 +102,9 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
     private appService: AppService,
     private validationTaskStateService: ValidationTaskStateService,
     private batchRunnerService: ValidationBatchRunnerService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private fileService: FileService,
+    private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
@@ -150,17 +155,25 @@ export class ValidationDialogComponent implements OnInit, OnDestroy {
   showUnitXml(fileName: string): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    this.dialog.open(ContentDialogComponent, {
-      data: {
-        title: `Unit XML: ${fileName}`,
-        content: `Loading ${fileName}...`,
-        type: 'xml',
-        workspaceId,
-        fileName
-      },
-      width: '80vw',
-      maxWidth: '1000px',
-      height: '80vh'
+    this.fileService.getUnitContentXml(workspaceId, fileName).subscribe(xmlContent => {
+      if (!xmlContent) {
+        this.snackBar.open(
+          `Fehler beim Abrufen der Unit-XML für ${fileName}`,
+          'Schließen',
+          { duration: 5000 }
+        );
+        return;
+      }
+      this.dialog.open(ContentDialogComponent, {
+        width: '80vw',
+        maxWidth: '1000px',
+        height: '80vh',
+        data: {
+          title: `Unit XML: ${fileName}`,
+          content: xmlContent,
+          isXml: true
+        }
+      });
     });
   }
 
