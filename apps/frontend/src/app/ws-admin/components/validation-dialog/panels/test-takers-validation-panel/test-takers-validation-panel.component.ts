@@ -4,13 +4,16 @@ import {
   Output,
   EventEmitter,
   OnInit,
-  OnDestroy
+  OnDestroy,
+  ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
 import {
@@ -37,7 +40,9 @@ import { TestTakersValidationService } from '../../../../services/validation';
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatTableModule,
+    MatPaginatorModule,
     MatIconModule,
     ValidationPanelHeaderComponent,
     ValidationGuidanceComponent
@@ -97,15 +102,35 @@ import { TestTakersValidationService } from '../../../../services/validation';
       table {
         width: 100%;
       }
+
+      .validation-panel-content {
+        position: relative;
+      }
+
+      .loading-fade {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .loading-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+      }
     `
   ]
 })
 export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
+  @ViewChild(MatPaginator) paginator!: MatPaginator;
+
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
   isRunning = false;
   wasRun = false;
+  isLoadingPage = false;
   result: TestTakersValidationDto | null = null;
   errorMessage: string | null = null;
   expandedPanel = false;
@@ -181,6 +206,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   private updatePaginatedMissingPersons(): void {
     if (this.result?.missingPersons) {
       this.paginatedMissingPersons.data = this.result.missingPersons;
+      this.paginatedMissingPersons.paginator = this.paginator;
     }
   }
 }

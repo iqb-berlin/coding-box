@@ -1,4 +1,6 @@
 import { Injectable } from '@angular/core';
+import { Observable } from 'rxjs';
+import { tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
 
 interface GroupResponsesValidationResult {
@@ -34,6 +36,20 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
     }
 
     return results.groupResponses?.status || 'not-run';
+  }
+
+  /**
+   * Fetches a specific page of validation results using the direct API (no task creation).
+   * Used for pagination after the initial validation has been run.
+   */
+  fetchPage(
+    page: number = 1,
+    limit: number = 10
+  ): Observable<GroupResponsesValidationResult> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService
+      .validateGroupResponses(workspaceId, page, limit)
+      .pipe(tap(result => this.saveResult(result)));
   }
 
   /**

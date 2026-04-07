@@ -3,18 +3,24 @@
     <coding-box-validation-panel-header
       title="Variablen-Prüfung"
       [status]="status"
-      [errorCount]="errorCount">
+      [errorCount]="errorCount"
+    >
     </coding-box-validation-panel-header>
   </mat-expansion-panel-header>
 
   <coding-box-validation-guidance
     description="Prüft, ob die Variable in der Unit.xml definiert ist."
     whyText="Undefinierte Variablen können nicht korrekt verarbeitet oder exportiert werden und deuten auf Inkonsistenzen zwischen Unit-Definitionen und Antwortdaten hin."
-    fixHint="Aktualisieren Sie die Unit.xml Dateien, um die fehlenden Variablen zu definieren, oder löschen Sie die ungültigen Antworten.">
+    fixHint="Aktualisieren Sie die Unit.xml Dateien, um die fehlenden Variablen zu definieren, oder löschen Sie die ungültigen Antworten."
+  >
   </coding-box-validation-guidance>
 
   <div class="validation-actions">
-    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+    <button
+      mat-button
+      (click)="onValidate()"
+      [disabled]="isRunning || disabled"
+    >
       Variablen prüfen
     </button>
   </div>
@@ -36,7 +42,10 @@
   @if (invalidVariables.length > 0 || totalInvalid > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Variablen gefunden.</span>
+      <span
+        >Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Variablen
+        gefunden.</span
+      >
     </div>
 
     @if (invalidVariables.length > 0) {
@@ -46,18 +55,24 @@
         </button>
         <button mat-button (click)="selectAll()">Alle auswählen</button>
         <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
-        <button mat-button color="warn" 
-                (click)="deleteSelected()" 
-                [disabled]="isDeletingResponses || selectedResponses.size === 0">
+        <button
+          mat-button
+          color="warn"
+          (click)="deleteSelected()"
+          [disabled]="isDeletingResponses || selectedResponses.size === 0"
+        >
           @if (isDeletingResponses) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
             Ausgewählte löschen ({{ selectedResponses.size }})
           }
         </button>
-        <button mat-button color="warn" 
-                (click)="deleteAll()" 
-                [disabled]="isDeletingResponses || invalidVariables.length === 0">
+        <button
+          mat-button
+          color="warn"
+          (click)="deleteAll()"
+          [disabled]="isDeletingResponses || invalidVariables.length === 0"
+        >
           @if (isDeletingResponses) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
@@ -75,13 +90,17 @@
           [currentPage]="currentPage"
           [selectedItems]="selectedResponses"
           [selectionKey]="'responseId'"
+          [loading]="isLoadingPage"
           (pageChange)="onPageChange($event)"
           (selectionChange)="onSelectionChange($event)"
-          (linkClick)="onLinkClick($event)">
+          (linkClick)="onLinkClick($event)"
+        >
         </coding-box-validation-data-table>
       </mat-expansion-panel>
     }
-  } @else if (!isRunning && invalidVariables.length === 0 && totalInvalid === 0 && wasRun) {
+  } @else if (
+    !isRunning && invalidVariables.length === 0 && totalInvalid === 0 && wasRun
+  ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
       <span>Prüfung bestanden: Keine ungültigen Variablen gefunden.</span>
