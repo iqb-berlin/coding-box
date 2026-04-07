@@ -66,7 +66,7 @@
                   <strong>Unit:</strong> {{ duplicate.unitName }} |
                   <strong>Variable:</strong> {{ duplicate.variableId }} |
                   <strong>Subform:</strong> {{ duplicate.subform }} |
-                  <strong>Testperson:</strong> {{ duplicate.testTakerLogin }} |
+                  <strong>Testperson:</strong> {{ duplicate.testTakerLogin }}{{ duplicate.testTakerCode ? ' (' + duplicate.testTakerCode + ')' : '' }}{{ duplicate.testTakerGroup ? ' [' + duplicate.testTakerGroup + ']' : '' }} |
                   <strong>Booklet:</strong> {{ duplicate.bookletName }}
                 </div>
               </div>

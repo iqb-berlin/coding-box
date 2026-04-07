@@ -5,6 +5,8 @@ export interface DuplicateResponseDto {
   subform: string;
   bookletName: string;
   testTakerLogin: string;
+  testTakerCode?: string;
+  testTakerGroup?: string;
   duplicates: {
     responseId: number;
     value: string;

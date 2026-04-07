@@ -246,17 +246,19 @@ export class ResponseManagementService {
         }
 
         const parts = key.split('|');
-        if (parts.length !== 4) {
+        if (parts.length !== 6) {
           this.logger.warn(`Invalid duplicate resolution key: ${key}`);
           continue;
         }
 
-        const unitId = Number(parts[0]);
+        const unitName = decodeURIComponent(parts[0] || '');
         const variableId = decodeURIComponent(parts[1] || '');
         const subform = decodeURIComponent(parts[2] || '');
         const testTakerLogin = decodeURIComponent(parts[3] || '');
+        const testTakerCode = decodeURIComponent(parts[4] || '');
+        const testTakerGroup = decodeURIComponent(parts[5] || '');
 
-        if (!unitId || Number.isNaN(unitId) || !variableId || !testTakerLogin) {
+        if (!unitName || !variableId || !testTakerLogin) {
           this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
           continue;
         }
@@ -269,7 +271,13 @@ export class ResponseManagementService {
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true })
           .andWhere('person.login = :testTakerLogin', { testTakerLogin })
-          .andWhere('unit.id = :unitId', { unitId })
+          .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
+            testTakerCode: testTakerCode || ''
+          })
+          .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
+            testTakerGroup: testTakerGroup || ''
+          })
+          .andWhere('unit.name = :unitName', { unitName })
           .andWhere('response.variableid = :variableId', { variableId })
           .andWhere("COALESCE(response.subform, '') = :subform", {
             subform: subform || ''
