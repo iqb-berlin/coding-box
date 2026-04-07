@@ -152,7 +152,7 @@ describe('WorkspaceTestResultsService', () => {
       dataSource,
       unitTagService,
       journalService,
-      {} as unknown as CacheService,
+      { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
       {} as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
@@ -183,14 +183,17 @@ describe('WorkspaceTestResultsService', () => {
       const personQb = mockQueryBuilder();
       (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(personQb);
       personQb.getRawMany.mockResolvedValue([{ group: 'group1' }, { group: 'group2' }]);
+      personQb.getRawOne.mockResolvedValue({ count: 2 });
 
       const bookletQb = mockQueryBuilder();
       (bookletRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletQb);
       bookletQb.getRawMany.mockResolvedValue([{ name: 'booklet1' }]);
+      bookletQb.getRawOne.mockResolvedValue({ count: 1 });
 
       const unitQb = mockQueryBuilder();
       (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
       unitQb.getRawMany.mockResolvedValue(['unit1', 'unit2']);
+      unitQb.getRawOne.mockResolvedValue({ count: 2 });
 
       const responseCountQb = mockQueryBuilder();
       const responseStatusQb = mockQueryBuilder();

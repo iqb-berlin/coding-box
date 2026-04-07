@@ -42,6 +42,7 @@ import { WorkspaceResponseValidationService } from '../validation/workspace-resp
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 
 @Injectable()

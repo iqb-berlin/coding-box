@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ConflictException } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -170,6 +170,14 @@ export class JobQueueService {
     @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue
   ) { }
 
+  private async findActiveJob<T>(
+    queue: Queue,
+    matchFn: (data: T) => boolean
+  ): Promise<Job<T> | undefined> {
+    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    return jobs.find(job => matchFn(job.data));
+  }
+
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
     options?: JobOptions
@@ -191,6 +199,15 @@ export class JobQueueService {
     version?: 'v1' | 'v2' | 'v3',
     options?: JobOptions
   ): Promise<Job<{ workspaceId: number; version?: 'v1' | 'v2' | 'v3' }>> {
+    const existing = await this.findActiveJob<{ workspaceId: number }>(
+      this.codingStatisticsQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A coding statistics job is already running for workspace ${workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding coding statistics job for workspace ${workspaceId} (version: ${version || 'v1'})`
     );
@@ -207,7 +224,17 @@ export class JobQueueService {
     workspaceId: number,
     processingDurationThresholdMs: number,
     options?: JobOptions
-  ): Promise<Job<FlatResponseFilterOptionsJobData>> {
+  ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
+    const existing = await this.findActiveJob<FlatResponseFilterOptionsJobData>(
+      this.flatResponseFilterOptionsQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      this.logger.debug(
+        `Skipping flat-response-filter-options job for workspace ${workspaceId} — already queued (job ${existing.id})`
+      );
+      return null;
+    }
     this.logger.log(
       `Adding flat response filter-options cache job for workspace ${workspaceId}`
     );
@@ -228,6 +255,18 @@ export class JobQueueService {
       `Adding upload job for workspace ${data.workspaceId}, file: ${data.file.originalname}`
     );
     return this.testResultsUploadQueue.add(data, options);
+  }
+
+  async assertNoActiveUploadForWorkspace(workspaceId: number): Promise<void> {
+    const existing = await this.findActiveJob<TestResultsUploadJobData>(
+      this.testResultsUploadQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An upload job is already running for workspace ${workspaceId} (job ${existing.id})`
+      );
+    }
   }
 
   async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData>> {
@@ -313,6 +352,15 @@ export class JobQueueService {
     data: ExportJobData,
     options?: JobOptions
   ): Promise<Job<ExportJobData>> {
+    const existing = await this.findActiveJob<ExportJobData>(
+      this.dataExportQueue,
+      d => d.workspaceId === data.workspaceId && d.exportType === data.exportType
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An export job of type '${data.exportType}' is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
     );
@@ -452,6 +500,15 @@ export class JobQueueService {
     data: CodebookGenerationJobData,
     options?: JobOptions
   ): Promise<Job<CodebookGenerationJobData>> {
+    const existing = await this.findActiveJob<CodebookGenerationJobData>(
+      this.codebookGenerationQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A codebook generation job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding codebook generation job for workspace ${data.workspaceId} with ${data.unitIds.length} units`
     );
@@ -484,6 +541,15 @@ export class JobQueueService {
     data: ValidationTaskJobData,
     options?: JobOptions
   ): Promise<Job<ValidationTaskJobData>> {
+    const existing = await this.findActiveJob<ValidationTaskJobData>(
+      this.validationTaskQueue,
+      d => d.taskId === data.taskId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A validation task job is already running for task ${data.taskId} (job ${existing.id})`
+      );
+    }
     this.logger.log(`Adding validation task job for task ${data.taskId}`);
     return this.validationTaskQueue.add(data, options);
   }

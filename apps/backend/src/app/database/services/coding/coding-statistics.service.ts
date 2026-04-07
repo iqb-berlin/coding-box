@@ -8,6 +8,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
