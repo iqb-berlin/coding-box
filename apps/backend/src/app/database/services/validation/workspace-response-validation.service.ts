@@ -10,7 +10,10 @@ import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
 
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
-import { DuplicateResponseDto, DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
+import {
+  DuplicateResponseDto,
+  DuplicateResponsesResultDto
+} from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { statusNumberToString } from '../../utils/response-status-converter';
 
 @Injectable()
@@ -34,7 +37,12 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
@@ -48,12 +56,26 @@ export class WorkspaceResponseValidationService {
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
-    const unitVariables = new Map<string, { aliases: Set<string>; ids: Set<string>; noValueAliases: Set<string>; noValueIds: Set<string> }>();
+    const unitVariables = new Map<
+    string,
+    {
+      aliases: Set<string>;
+      ids: Set<string>;
+      noValueAliases: Set<string>;
+      noValueIds: Set<string>;
+    }
+    >();
     for (const unitFile of unitFiles) {
       try {
         const xmlContent = unitFile.data.toString();
-        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
-        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+        const parsedXml = await parseStringPromise(xmlContent, {
+          explicitArray: false
+        });
+        if (
+          parsedXml.Unit &&
+          parsedXml.Unit.Metadata &&
+          parsedXml.Unit.Metadata.Id
+        ) {
           const unitName = parsedXml.Unit.Metadata.Id;
           const variables = {
             aliases: new Set<string>(),
@@ -61,8 +83,13 @@ export class WorkspaceResponseValidationService {
             noValueAliases: new Set<string>(),
             noValueIds: new Set<string>()
           };
-          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
-            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+          if (
+            parsedXml.Unit.BaseVariables &&
+            parsedXml.Unit.BaseVariables.Variable
+          ) {
+            const baseVariables = Array.isArray(
+              parsedXml.Unit.BaseVariables.Variable
+            ) ?
               parsedXml.Unit.BaseVariables.Variable :
               [parsedXml.Unit.BaseVariables.Variable];
             for (const variable of baseVariables) {
@@ -79,7 +106,9 @@ export class WorkspaceResponseValidationService {
           }
           unitVariables.set(unitName, variables);
         }
-      } catch (e) { /* empty */ }
+      } catch (e) {
+        /* empty */
+      }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
@@ -116,7 +145,8 @@ export class WorkspaceResponseValidationService {
     for (let i = 0; i < personIds.length; i += batchSize) {
       const personIdsBatch = personIds.slice(i, i + batchSize);
 
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+      const unitsBatch = await this.unitRepository
+        .createQueryBuilder('unit')
         .innerJoin('unit.booklet', 'booklet')
         .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
         .getMany();
@@ -125,7 +155,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -137,7 +169,9 @@ export class WorkspaceResponseValidationService {
     const unitIds = allUnits.map(unit => unit.id);
 
     if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No unit IDs found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -160,7 +194,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No responses found for units in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -197,17 +233,18 @@ export class WorkspaceResponseValidationService {
 
       const unitVars = unitVariables.get(unitName);
 
-      const isNoValueVariable = !!unitVars && (
-        unitVars.noValueAliases.has(variableId) || unitVars.noValueIds.has(variableId)
-      );
+      const isNoValueVariable =
+        !!unitVars &&
+        (unitVars.noValueAliases.has(variableId) ||
+          unitVars.noValueIds.has(variableId));
       if (isNoValueVariable) {
         continue;
       }
 
-      const isDefinedInUnit = !!unitVars && (
-        unitVars.aliases.has(variableId) ||
-        (!unitVars.aliases.has(variableId) && unitVars.ids.has(variableId))
-      );
+      const isDefinedInUnit =
+        !!unitVars &&
+        (unitVars.aliases.has(variableId) ||
+          (!unitVars.aliases.has(variableId) && unitVars.ids.has(variableId)));
       if (!isDefinedInUnit) {
         invalidVariables.push({
           fileName: `${unitName}`,
@@ -220,7 +257,10 @@ export class WorkspaceResponseValidationService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const validLimit =
+      limit === Number.MAX_SAFE_INTEGER ?
+        limit :
+        Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -237,7 +277,12 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
@@ -252,25 +297,50 @@ export class WorkspaceResponseValidationService {
       where: { workspace_id: workspaceId, file_type: 'Unit' }
     });
 
-    const unitVariableTypes = new Map<string, Map<string, { type: string; multiple?: boolean; nullable?: boolean }>>();
+    const unitVariableTypes = new Map<
+    string,
+    Map<string, { type: string; multiple?: boolean; nullable?: boolean }>
+    >();
 
     for (const unitFile of unitFiles) {
       try {
         const xmlContent = unitFile.data.toString();
-        const parsedXml = await parseStringPromise(xmlContent, { explicitArray: false });
-        if (parsedXml.Unit && parsedXml.Unit.Metadata && parsedXml.Unit.Metadata.Id) {
+        const parsedXml = await parseStringPromise(xmlContent, {
+          explicitArray: false
+        });
+        if (
+          parsedXml.Unit &&
+          parsedXml.Unit.Metadata &&
+          parsedXml.Unit.Metadata.Id
+        ) {
           const unitName = parsedXml.Unit.Metadata.Id;
-          const variableTypes = new Map<string, { type: string; multiple?: boolean; nullable?: boolean }>();
+          const variableTypes = new Map<
+          string,
+          { type: string; multiple?: boolean; nullable?: boolean }
+          >();
 
-          if (parsedXml.Unit.BaseVariables && parsedXml.Unit.BaseVariables.Variable) {
-            const baseVariables = Array.isArray(parsedXml.Unit.BaseVariables.Variable) ?
+          if (
+            parsedXml.Unit.BaseVariables &&
+            parsedXml.Unit.BaseVariables.Variable
+          ) {
+            const baseVariables = Array.isArray(
+              parsedXml.Unit.BaseVariables.Variable
+            ) ?
               parsedXml.Unit.BaseVariables.Variable :
               [parsedXml.Unit.BaseVariables.Variable];
 
             for (const variable of baseVariables) {
-              if (variable.$.alias && variable.$.type && variable.$.type !== 'no-value') {
-                const multiple = variable.$.multiple === 'true' || variable.$.multiple === true;
-                const nullable = variable.$.nullable === 'true' || variable.$.nullable === true;
+              if (
+                variable.$.alias &&
+                variable.$.type &&
+                variable.$.type !== 'no-value'
+              ) {
+                const multiple =
+                  variable.$.multiple === 'true' ||
+                  variable.$.multiple === true;
+                const nullable =
+                  variable.$.nullable === 'true' ||
+                  variable.$.nullable === true;
                 variableTypes.set(variable.$.alias, {
                   type: variable.$.type,
                   multiple: multiple || undefined,
@@ -282,7 +352,9 @@ export class WorkspaceResponseValidationService {
 
           unitVariableTypes.set(unitName, variableTypes);
         }
-      } catch (e) { /* empty */ }
+      } catch (e) {
+        /* empty */
+      }
     }
 
     const invalidVariables: InvalidVariableDto[] = [];
@@ -319,7 +391,8 @@ export class WorkspaceResponseValidationService {
     for (let i = 0; i < personIds.length; i += batchSize) {
       const personIdsBatch = personIds.slice(i, i + batchSize);
 
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+      const unitsBatch = await this.unitRepository
+        .createQueryBuilder('unit')
         .innerJoin('unit.booklet', 'booklet')
         .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
         .getMany();
@@ -328,7 +401,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -340,7 +415,9 @@ export class WorkspaceResponseValidationService {
     const unitIds = allUnits.map(unit => unit.id);
 
     if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No unit IDs found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -363,7 +440,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No responses found for units in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -413,7 +492,8 @@ export class WorkspaceResponseValidationService {
               value: value,
               responseId: response.id,
               expectedType: `${expectedType} (array)`,
-              errorReason: 'Variable has multiple=true but value is not an array'
+              errorReason:
+                'Variable has multiple=true but value is not an array'
             });
             continue;
           }
@@ -439,7 +519,8 @@ export class WorkspaceResponseValidationService {
             value: value,
             responseId: response.id,
             expectedType: `${expectedType} (array)`,
-            errorReason: 'Variable has multiple=true but value is not a valid JSON array'
+            errorReason:
+              'Variable has multiple=true but value is not a valid JSON array'
           });
           continue;
         }
@@ -470,7 +551,10 @@ export class WorkspaceResponseValidationService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const validLimit =
+      limit === Number.MAX_SAFE_INTEGER ?
+        limit :
+        Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -489,7 +573,9 @@ export class WorkspaceResponseValidationService {
     limit: number = 10
   ): Promise<DuplicateResponsesResultDto> {
     if (!workspaceId) {
-      this.logger.error('Workspace ID is required for validateDuplicateResponses');
+      this.logger.error(
+        'Workspace ID is required for validateDuplicateResponses'
+      );
       return {
         data: [],
         total: 0,
@@ -521,7 +607,9 @@ export class WorkspaceResponseValidationService {
     });
 
     if (booklets.length === 0) {
-      this.logger.warn(`No booklets found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No booklets found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -530,7 +618,9 @@ export class WorkspaceResponseValidationService {
       };
     }
 
-    const bookletMap = new Map(booklets.map(booklet => [booklet.id, booklet]));
+    const bookletMap = new Map(
+      booklets.map(booklet => [booklet.id, booklet])
+    );
 
     const batchSize = 1000;
     let allUnits: Unit[] = [];
@@ -545,7 +635,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allUnits.length === 0) {
-      this.logger.warn(`No units found for booklets in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No units found for booklets in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -567,7 +659,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No responses found for units in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -578,14 +672,23 @@ export class WorkspaceResponseValidationService {
 
     const responseGroups = new Map<string, ResponseEntity[]>();
     for (const response of allResponses) {
-      const key = `${response.unitid}_${response.variableid}_${response.subform || ''}`;
+      const unit = unitMap.get(response.unitid);
+      if (!unit) continue;
+      const booklet = bookletMap.get(unit.bookletid);
+      if (!booklet) continue;
+      const person = personMap.get(booklet.personid);
+      if (!person) continue;
+
+      const key = `${unit.name}|${response.variableid}|${response.subform || ''}|${person.login}|${person.code || ''}|${person.group || ''}`;
       if (!responseGroups.has(key)) {
         responseGroups.set(key, []);
       }
       responseGroups.get(key)?.push(response);
     }
 
-    const duplicateResponses: Array<DuplicateResponseDto & { subform: string }> = [];
+    const duplicateResponses: Array<
+    DuplicateResponseDto & { subform: string }
+    > = [];
     for (const [, responses] of responseGroups.entries()) {
       if (responses.length > 1) {
         const firstResponse = responses[0];
@@ -617,6 +720,8 @@ export class WorkspaceResponseValidationService {
           subform: firstResponse.subform || '',
           bookletName,
           testTakerLogin: person.login,
+          testTakerCode: person.code,
+          testTakerGroup: person.group,
           duplicates: responses.map(response => ({
             responseId: response.id,
             value: response.value || '',
@@ -634,7 +739,10 @@ export class WorkspaceResponseValidationService {
     });
 
     const validPage = Math.max(1, page);
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const validLimit =
+      limit === Number.MAX_SAFE_INTEGER ?
+        limit :
+        Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = duplicateResponses.slice(startIndex, endIndex);
@@ -651,7 +759,12 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Promise<{ data: InvalidVariableDto[]; total: number; page: number; limit: number }> {
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
@@ -662,7 +775,14 @@ export class WorkspaceResponseValidationService {
       };
     }
 
-    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED', 'CODING_COMPLETE'];
+    const validStatusValues = [
+      'VALUE_CHANGED',
+      'NOT_REACHED',
+      'DISPLAYED',
+      'UNSET',
+      'PARTLY_DISPLAYED',
+      'CODING_COMPLETE'
+    ];
 
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId, consider: true }
@@ -696,7 +816,8 @@ export class WorkspaceResponseValidationService {
     for (let i = 0; i < personIds.length; i += batchSize) {
       const personIdsBatch = personIds.slice(i, i + batchSize);
 
-      const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+      const unitsBatch = await this.unitRepository
+        .createQueryBuilder('unit')
         .innerJoin('unit.booklet', 'booklet')
         .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
         .getMany();
@@ -705,7 +826,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allUnits.length === 0) {
-      this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -717,7 +840,9 @@ export class WorkspaceResponseValidationService {
     const unitIds = allUnits.map(unit => unit.id);
 
     if (unitIds.length === 0) {
-      this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No unit IDs found for persons in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -740,7 +865,9 @@ export class WorkspaceResponseValidationService {
     }
 
     if (allResponses.length === 0) {
-      this.logger.warn(`No responses found for units in workspace ${workspaceId}`);
+      this.logger.warn(
+        `No responses found for units in workspace ${workspaceId}`
+      );
       return {
         data: [],
         total: 0,
@@ -780,7 +907,10 @@ export class WorkspaceResponseValidationService {
     }
 
     const validPage = Math.max(1, page);
-    const validLimit = limit === Number.MAX_SAFE_INTEGER ? limit : Math.min(Math.max(1, limit), 1000);
+    const validLimit =
+      limit === Number.MAX_SAFE_INTEGER ?
+        limit :
+        Math.min(Math.max(1, limit), 1000);
     const startIndex = (validPage - 1) * validLimit;
     const endIndex = startIndex + validLimit;
     const paginatedData = invalidVariables.slice(startIndex, endIndex);
@@ -793,7 +923,10 @@ export class WorkspaceResponseValidationService {
     };
   }
 
-  async deleteInvalidResponses(workspaceId: number, responseIds: number[]): Promise<number> {
+  async deleteInvalidResponses(
+    workspaceId: number,
+    responseIds: number[]
+  ): Promise<number> {
     try {
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
@@ -805,10 +938,12 @@ export class WorkspaceResponseValidationService {
         return 0;
       }
 
-      this.logger.log(`Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`);
+      this.logger.log(
+        `Deleting invalid responses for workspace ${workspaceId}: ${responseIds.join(', ')}`
+      );
 
       const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
+        where: { workspace_id: workspaceId }
       });
 
       if (persons.length === 0) {
@@ -824,44 +959,53 @@ export class WorkspaceResponseValidationService {
       }
 
       const batchSize = 1000;
-      let allUnits: Unit[] = [];
+      let allUnitIds: number[] = [];
 
       for (let i = 0; i < personIds.length; i += batchSize) {
         const personIdsBatch = personIds.slice(i, i + batchSize);
 
-        const unitsBatch = await this.unitRepository.createQueryBuilder('unit')
+        const unitsBatch = await this.unitRepository
+          .createQueryBuilder('unit')
+          .select('unit.id')
           .innerJoin('unit.booklet', 'booklet')
           .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-          .getMany();
+          .getRawMany();
 
-        allUnits = [...allUnits, ...unitsBatch];
+        allUnitIds = [...allUnitIds, ...unitsBatch.map(u => u.unit_id)];
       }
 
-      if (allUnits.length === 0) {
-        this.logger.warn(`No units found for persons in workspace ${workspaceId}`);
-        return 0;
-      }
-
-      const unitIds = allUnits.map(unit => unit.id);
-
-      if (unitIds.length === 0) {
-        this.logger.warn(`No unit IDs found for persons in workspace ${workspaceId}`);
+      if (allUnitIds.length === 0) {
+        this.logger.warn(
+          `No units found for persons in workspace ${workspaceId}`
+        );
         return 0;
       }
 
       let totalDeleted = 0;
+      const unitIdSet = new Set(allUnitIds);
 
       for (let i = 0; i < responseIds.length; i += batchSize) {
         const responseIdsBatch = responseIds.slice(i, i + batchSize);
 
-        for (let j = 0; j < unitIds.length; j += batchSize) {
-          const unitIdsBatch = unitIds.slice(j, j + batchSize);
+        // Filter responseIds to only include those belonging to units in this workspace
+        const validResponseIds: number[] = [];
 
+        // We need to check which responses actually belong to the units we found
+        const responsesToCheck = await this.responseRepository.find({
+          where: { id: In(responseIdsBatch) },
+          select: ['id', 'unitid']
+        });
+
+        for (const resp of responsesToCheck) {
+          if (unitIdSet.has(resp.unitid)) {
+            validResponseIds.push(resp.id);
+          }
+        }
+
+        if (validResponseIds.length > 0) {
           const deleteResult = await this.responseRepository.delete({
-            id: In(responseIdsBatch),
-            unitid: In(unitIdsBatch)
+            id: In(validResponseIds)
           });
-
           totalDeleted += deleteResult.affected || 0;
         }
       }
@@ -870,14 +1014,21 @@ export class WorkspaceResponseValidationService {
       return totalDeleted;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error deleting invalid responses: ${message}`, error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        `Error deleting invalid responses: ${message}`,
+        error instanceof Error ? error.stack : undefined
+      );
       throw new Error(`Error deleting invalid responses: ${message}`);
     }
   }
 
   async deleteAllInvalidResponses(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'
+    validationType:
+    | 'variables'
+    | 'variableTypes'
+    | 'responseStatus'
+    | 'duplicateResponses'
   ): Promise<number> {
     try {
       if (!workspaceId) {
@@ -885,13 +1036,21 @@ export class WorkspaceResponseValidationService {
         return 0;
       }
 
-      this.logger.log(`Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`);
+      this.logger.log(
+        `Deleting all invalid responses for workspace ${workspaceId} of type ${validationType}`
+      );
 
       if (validationType === 'duplicateResponses') {
-        const result = await this.validateDuplicateResponses(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        const result = await this.validateDuplicateResponses(
+          workspaceId,
+          1,
+          Number.MAX_SAFE_INTEGER
+        );
 
         if (result.data.length === 0) {
-          this.logger.warn(`No duplicate responses found for workspace ${workspaceId}`);
+          this.logger.warn(
+            `No duplicate responses found for workspace ${workspaceId}`
+          );
           return 0;
         }
 
@@ -906,7 +1065,9 @@ export class WorkspaceResponseValidationService {
         }
 
         if (responseIds.length === 0) {
-          this.logger.warn(`No duplicate response IDs found for workspace ${workspaceId}`);
+          this.logger.warn(
+            `No duplicate response IDs found for workspace ${workspaceId}`
+          );
           return 0;
         }
 
@@ -916,18 +1077,32 @@ export class WorkspaceResponseValidationService {
       let invalidResponses: InvalidVariableDto[] = [];
 
       if (validationType === 'variables') {
-        const result = await this.validateVariables(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        const result = await this.validateVariables(
+          workspaceId,
+          1,
+          Number.MAX_SAFE_INTEGER
+        );
         invalidResponses = result.data;
       } else if (validationType === 'variableTypes') {
-        const result = await this.validateVariableTypes(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        const result = await this.validateVariableTypes(
+          workspaceId,
+          1,
+          Number.MAX_SAFE_INTEGER
+        );
         invalidResponses = result.data;
       } else if (validationType === 'responseStatus') {
-        const result = await this.validateResponseStatus(workspaceId, 1, Number.MAX_SAFE_INTEGER);
+        const result = await this.validateResponseStatus(
+          workspaceId,
+          1,
+          Number.MAX_SAFE_INTEGER
+        );
         invalidResponses = result.data;
       }
 
       if (invalidResponses.length === 0) {
-        this.logger.warn(`No invalid responses found for workspace ${workspaceId} of type ${validationType}`);
+        this.logger.warn(
+          `No invalid responses found for workspace ${workspaceId} of type ${validationType}`
+        );
         return 0;
       }
 
@@ -936,14 +1111,19 @@ export class WorkspaceResponseValidationService {
         .map(variable => variable.responseId as number);
 
       if (responseIds.length === 0) {
-        this.logger.warn(`No response IDs found for invalid responses in workspace ${workspaceId} of type ${validationType}`);
+        this.logger.warn(
+          `No response IDs found for invalid responses in workspace ${workspaceId} of type ${validationType}`
+        );
         return 0;
       }
 
       return await this.deleteInvalidResponses(workspaceId, responseIds);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Error deleting all invalid responses: ${message}`, error instanceof Error ? error.stack : undefined);
+      this.logger.error(
+        `Error deleting all invalid responses: ${message}`,
+        error instanceof Error ? error.stack : undefined
+      );
       throw new Error(`Error deleting all invalid responses: ${message}`);
     }
   }
