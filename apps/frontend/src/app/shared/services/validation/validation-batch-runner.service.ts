@@ -1,9 +1,15 @@
 import { Injectable } from '@angular/core';
 import {
-  Observable, Subscription, from, of, throwError
+  Observable, Subscription, from, of, throwError, interval
 } from 'rxjs';
 import {
-  catchError, concatMap, map, switchMap, tap
+  catchError,
+  concatMap,
+  map,
+  switchMap,
+  tap,
+  filter,
+  take
 } from 'rxjs/operators';
 import { ValidationService } from './validation.service';
 import {
@@ -100,7 +106,7 @@ export class ValidationBatchRunnerService {
     type: BatchValidationType,
     options?: { force?: boolean; pollIntervalMs?: number }
   ): Observable<void> {
-    const pollIntervalMs = options?.pollIntervalMs ?? 2000;
+    const pollIntervalMs = options?.pollIntervalMs ?? 500;
 
     const existingResult =
       this.validationTaskStateService.getAllValidationResults(workspaceId)[
@@ -123,12 +129,35 @@ export class ValidationBatchRunnerService {
         this.validationTaskStateService.setTaskId(
           workspaceId,
           type,
-          createdTask.id
+          createdTask
         );
       }),
       switchMap((createdTask: ValidationTaskDto) => this.validationService
         .pollValidationTask(workspaceId, createdTask.id, pollIntervalMs)
         .pipe(
+          // Poll validation task returns the final task, but we want to update the state during polling too.
+          // Since pollValidationTask uses interval internally, we can't easily tap into it without changing it.
+          // Let's modify ValidationService.pollValidationTask to accept an update callback or return all steps.
+          // Or better, we can just implement the polling here.
+          switchMap(() => interval(pollIntervalMs).pipe(
+            switchMap(() => this.validationService.getValidationTask(
+              workspaceId,
+              createdTask.id
+            )
+            ),
+            tap((task: ValidationTaskDto) => {
+              this.validationTaskStateService.setTaskId(
+                workspaceId,
+                type,
+                task
+              );
+            }),
+            filter(
+              (task: ValidationTaskDto) => task.status !== 'pending' && task.status !== 'processing'
+            ),
+            take(1)
+          )
+          ),
           switchMap(finalTask => {
             this.validationTaskStateService.removeTaskId(workspaceId, type);
 

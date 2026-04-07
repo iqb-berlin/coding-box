@@ -100,7 +100,7 @@ describe('VariableValidationService', () => {
 
       service.deleteSelected(responseIds).subscribe(() => {
         expect(validationServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIds);
-        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', mockTask.id);
+        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', deleteMockTask);
         expect(stateServiceMock.removeTaskId).toHaveBeenCalledWith(workspaceId, 'variables');
         done();
       });
@@ -115,7 +115,7 @@ describe('VariableValidationService', () => {
 
       service.deleteAll().subscribe(() => {
         expect(validationServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'variables');
-        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', mockTask.id);
+        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'variables', deleteMockTask);
         done();
       });
     });
@@ -123,7 +123,7 @@ describe('VariableValidationService', () => {
 
   describe('getValidationStatus', () => {
     it('should return "running" if task exists', () => {
-      stateServiceMock.getAllTaskIds.mockReturnValue({ variables: 123 });
+      stateServiceMock.getAllTaskIds.mockReturnValue({ variables: mockTask });
       expect(service.getValidationStatus()).toBe('running');
     });
 

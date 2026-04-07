@@ -26,6 +26,7 @@ import {
   MissingPersonDto
 } from '../../../../../../../../../api-dto/files/testtakers-validation.dto';
 import { TestTakersValidationService } from '../../../../services/validation';
+import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 
 /**
  * Panel component for test takers validation.
@@ -136,9 +137,11 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   expandedPanel = false;
   paginatedMissingPersons = new MatTableDataSource<MissingPersonDto>([]);
   displayedColumns = ['group', 'login', 'code', 'reason'];
+  activeTask: ValidationTaskDto | null = null;
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
+  private taskSubscription?: Subscription;
 
   constructor(
     private testTakersValidationService: TestTakersValidationService
@@ -163,11 +166,20 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Observe active task
+    this.taskSubscription = this.testTakersValidationService
+      .observeValidationTask()
+      .subscribe(task => {
+        this.activeTask = task;
+        this.isRunning = !!task;
+      });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
     this.stateSubscription?.unsubscribe();
+    this.taskSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {

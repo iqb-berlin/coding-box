@@ -1738,44 +1738,12 @@ ${bookletRefs}
     }
   }
 
-  async validateVariables(
-    workspaceId: number,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
-    return this.workspaceResponseValidationService.validateVariables(
-      workspaceId,
-      page,
-      limit
-    );
-  }
-
-  async validateVariableTypes(
-    workspaceId: number,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
-    return this.workspaceResponseValidationService.validateVariableTypes(
-      workspaceId,
-      page,
-      limit
-    );
-  }
-
   async validateTestTakers(
-    workspaceId: number
+    workspaceId: number,
+    onProgress?: (progress: number) => void
   ): Promise<TestTakersValidationDto> {
     try {
+      if (onProgress) onProgress(10);
       const testTakers = await this.fileUploadRepository.find({
         where: {
           workspace_id: workspaceId,
@@ -1795,6 +1763,8 @@ ${bookletRefs}
           missingPersons: []
         };
       }
+
+      if (onProgress) onProgress(30);
 
       const testTakerLogins: TestTakerLoginDto[] = [];
       let totalGroups = 0;
@@ -1857,13 +1827,21 @@ ${bookletRefs}
         }
       }
 
+      if (onProgress) onProgress(60);
+
       const persons = await this.personsRepository.find({
         where: { workspace_id: workspaceId, consider: true }
       });
 
       const missingPersons: MissingPersonDto[] = [];
+      const totalPersons = persons.length;
+      let processedPersons = 0;
 
       for (const person of persons) {
+        processedPersons += 1;
+        if (processedPersons % 50 === 0 && onProgress) {
+          onProgress(60 + Math.floor((processedPersons / totalPersons) * 35));
+        }
         const found = testTakerLogins.some(
           login => login.group === person.group && login.login === person.login
         );
@@ -1899,19 +1877,22 @@ ${bookletRefs}
   async validateDuplicateResponses(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<DuplicateResponsesResultDto> {
     return this.workspaceResponseValidationService.validateDuplicateResponses(
       workspaceId,
       page,
-      limit
+      limit,
+      onProgress
     );
   }
 
   async validateResponseStatus(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       data: InvalidVariableDto[];
       total: number;
@@ -1921,14 +1902,54 @@ ${bookletRefs}
     return this.workspaceResponseValidationService.validateResponseStatus(
       workspaceId,
       page,
-      limit
+      limit,
+      onProgress
+    );
+  }
+
+  async validateVariables(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10,
+    onProgress?: (progress: number) => void
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    return this.workspaceResponseValidationService.validateVariables(
+      workspaceId,
+      page,
+      limit,
+      onProgress
+    );
+  }
+
+  async validateVariableTypes(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10,
+    onProgress?: (progress: number) => void
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    return this.workspaceResponseValidationService.validateVariableTypes(
+      workspaceId,
+      page,
+      limit,
+      onProgress
     );
   }
 
   async validateGroupResponses(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       testTakersFound: boolean;
       groupsWithResponses: { group: string; hasResponse: boolean }[];
@@ -1939,6 +1960,7 @@ ${bookletRefs}
       limit: number;
     }> {
     try {
+      if (onProgress) onProgress(10);
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
         return {
@@ -1972,6 +1994,8 @@ ${bookletRefs}
           limit
         };
       }
+
+      if (onProgress) onProgress(20);
 
       const groups: Set<string> = new Set();
 
@@ -2029,12 +2053,20 @@ ${bookletRefs}
         };
       }
 
+      if (onProgress) onProgress(40);
+
       // Check if each group has at least one response
       const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
       let allGroupsHaveResponses = true;
       let totalGroupsWithoutResponses = 0;
+      const totalGroups = groups.size;
+      let processedGroups = 0;
 
       for (const group of groups) {
+        processedGroups += 1;
+        if (onProgress) {
+          onProgress(40 + Math.floor((processedGroups / totalGroups) * 55));
+        }
         // Find persons with this group ID
         const persons = await this.personsRepository.find({
           where: { workspace_id: workspaceId, group, consider: true }

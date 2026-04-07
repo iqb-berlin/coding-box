@@ -14,6 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PageEvent } from '@angular/material/paginator';
 import { Subscription } from 'rxjs';
+import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
   ValidationStatus,
@@ -120,6 +121,7 @@ implements OnInit, OnDestroy {
   selectedResponses: Set<number> = new Set();
   expandedPanel = false;
   isDeletingResponses = false;
+  activeTask: ValidationTaskDto | null = null;
 
   tableColumns: ValidationTableColumn[] = [
     {
@@ -137,6 +139,7 @@ implements OnInit, OnDestroy {
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
+  private taskSubscription?: Subscription;
 
   constructor(
     private variableTypeValidationService: VariableTypeValidationService,
@@ -165,11 +168,20 @@ implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Observe active task
+    this.taskSubscription = this.variableTypeValidationService
+      .observeValidationTask()
+      .subscribe(task => {
+        this.activeTask = task;
+        this.isRunning = !!task;
+      });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
     this.stateSubscription?.unsubscribe();
+    this.taskSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {

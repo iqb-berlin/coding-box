@@ -23,7 +23,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIdsToDelete)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
         tap(() => this.removeTaskId()),
         map(() => undefined)
@@ -41,7 +41,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
         this.validationType as 'duplicateResponses'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
         tap(() => this.removeTaskId()),
         map(() => undefined)

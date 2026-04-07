@@ -15,6 +15,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
+import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
   ValidationStatus,
@@ -175,6 +176,7 @@ implements OnInit, OnDestroy {
   duplicateResponseTouchedKeys: Set<string> = new Set();
   expandedPanel = false;
   isResolvingDuplicates = false;
+  activeTask: ValidationTaskDto | null = null;
 
   // Pagination state
   pageSize = 10;
@@ -182,6 +184,7 @@ implements OnInit, OnDestroy {
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
+  private taskSubscription?: Subscription;
 
   constructor(
     private duplicateResponsesValidationService: DuplicateResponsesValidationService,
@@ -215,11 +218,20 @@ implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Observe active task
+    this.taskSubscription = this.duplicateResponsesValidationService
+      .observeValidationTask()
+      .subscribe(task => {
+        this.activeTask = task;
+        this.isRunning = !!task;
+      });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
     this.stateSubscription?.unsubscribe();
+    this.taskSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {

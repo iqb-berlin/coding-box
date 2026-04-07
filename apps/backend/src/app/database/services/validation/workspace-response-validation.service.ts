@@ -36,7 +36,8 @@ export class WorkspaceResponseValidationService {
   async validateVariables(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       data: InvalidVariableDto[];
       total: number;
@@ -52,6 +53,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(15);
 
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
@@ -111,6 +114,8 @@ export class WorkspaceResponseValidationService {
       }
     }
 
+    if (onProgress) onProgress(25);
+
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
@@ -126,6 +131,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(35);
 
     const personIds = persons.map(person => person.id);
 
@@ -153,6 +160,8 @@ export class WorkspaceResponseValidationService {
 
       allUnits = [...allUnits, ...unitsBatch];
     }
+
+    if (onProgress) onProgress(45);
 
     if (allUnits.length === 0) {
       this.logger.warn(
@@ -193,6 +202,8 @@ export class WorkspaceResponseValidationService {
       allResponses = [...allResponses, ...responsesBatch];
     }
 
+    if (onProgress) onProgress(60);
+
     if (allResponses.length === 0) {
       this.logger.warn(
         `No responses found for units in workspace ${workspaceId}`
@@ -205,7 +216,14 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    const totalResponses = allResponses.length;
+    let processedResponses = 0;
+
     for (const response of allResponses) {
+      processedResponses += 1;
+      if (processedResponses % 100 === 0 && onProgress) {
+        onProgress(60 + Math.floor((processedResponses / totalResponses) * 35));
+      }
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
@@ -276,7 +294,8 @@ export class WorkspaceResponseValidationService {
   async validateVariableTypes(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       data: InvalidVariableDto[];
       total: number;
@@ -292,6 +311,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(10);
 
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
@@ -357,6 +378,8 @@ export class WorkspaceResponseValidationService {
       }
     }
 
+    if (onProgress) onProgress(30);
+
     const invalidVariables: InvalidVariableDto[] = [];
 
     const persons = await this.personsRepository.find({
@@ -372,6 +395,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(40);
 
     const personIds = persons.map(person => person.id);
 
@@ -399,6 +424,8 @@ export class WorkspaceResponseValidationService {
 
       allUnits = [...allUnits, ...unitsBatch];
     }
+
+    if (onProgress) onProgress(50);
 
     if (allUnits.length === 0) {
       this.logger.warn(
@@ -439,6 +466,8 @@ export class WorkspaceResponseValidationService {
       allResponses = [...allResponses, ...responsesBatch];
     }
 
+    if (onProgress) onProgress(65);
+
     if (allResponses.length === 0) {
       this.logger.warn(
         `No responses found for units in workspace ${workspaceId}`
@@ -451,7 +480,14 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    const totalResponses = allResponses.length;
+    let processedResponses = 0;
+
     for (const response of allResponses) {
+      processedResponses += 1;
+      if (processedResponses % 100 === 0 && onProgress) {
+        onProgress(65 + Math.floor((processedResponses / totalResponses) * 30));
+      }
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
@@ -570,7 +606,8 @@ export class WorkspaceResponseValidationService {
   async validateDuplicateResponses(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<DuplicateResponsesResultDto> {
     if (!workspaceId) {
       this.logger.error(
@@ -583,6 +620,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(10);
 
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId, consider: true }
@@ -597,6 +636,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(20);
 
     const personIds = persons.map(person => person.id);
     const personMap = new Map(persons.map(person => [person.id, person]));
@@ -618,6 +659,8 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    if (onProgress) onProgress(35);
+
     const bookletMap = new Map(
       booklets.map(booklet => [booklet.id, booklet])
     );
@@ -633,6 +676,8 @@ export class WorkspaceResponseValidationService {
       });
       allUnits = [...allUnits, ...unitsBatch];
     }
+
+    if (onProgress) onProgress(50);
 
     if (allUnits.length === 0) {
       this.logger.warn(
@@ -658,6 +703,8 @@ export class WorkspaceResponseValidationService {
       allResponses = [...allResponses, ...responsesBatch];
     }
 
+    if (onProgress) onProgress(70);
+
     if (allResponses.length === 0) {
       this.logger.warn(
         `No responses found for units in workspace ${workspaceId}`
@@ -670,8 +717,14 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    const totalResponses = allResponses.length;
+    let processedResponses = 0;
     const responseGroups = new Map<string, ResponseEntity[]>();
     for (const response of allResponses) {
+      processedResponses += 1;
+      if (processedResponses % 100 === 0 && onProgress) {
+        onProgress(70 + Math.floor((processedResponses / totalResponses) * 25));
+      }
       const unit = unitMap.get(response.unitid);
       if (!unit) continue;
       const booklet = bookletMap.get(unit.bookletid);
@@ -758,7 +811,8 @@ export class WorkspaceResponseValidationService {
   async validateResponseStatus(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       data: InvalidVariableDto[];
       total: number;
@@ -774,6 +828,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(10);
 
     const validStatusValues = [
       'VALUE_CHANGED',
@@ -797,6 +853,8 @@ export class WorkspaceResponseValidationService {
         limit
       };
     }
+
+    if (onProgress) onProgress(20);
 
     const personIds = persons.map(person => person.id);
 
@@ -824,6 +882,8 @@ export class WorkspaceResponseValidationService {
 
       allUnits = [...allUnits, ...unitsBatch];
     }
+
+    if (onProgress) onProgress(35);
 
     if (allUnits.length === 0) {
       this.logger.warn(
@@ -864,6 +924,8 @@ export class WorkspaceResponseValidationService {
       allResponses = [...allResponses, ...responsesBatch];
     }
 
+    if (onProgress) onProgress(60);
+
     if (allResponses.length === 0) {
       this.logger.warn(
         `No responses found for units in workspace ${workspaceId}`
@@ -876,9 +938,15 @@ export class WorkspaceResponseValidationService {
       };
     }
 
+    const totalResponses = allResponses.length;
+    let processedResponses = 0;
     const invalidVariables: InvalidVariableDto[] = [];
 
     for (const response of allResponses) {
+      processedResponses += 1;
+      if (processedResponses % 100 === 0 && onProgress) {
+        onProgress(60 + Math.floor((processedResponses / totalResponses) * 40));
+      }
       const unit = response.unit;
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
