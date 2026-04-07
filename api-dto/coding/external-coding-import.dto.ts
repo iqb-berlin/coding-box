@@ -1,4 +1,4 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsBoolean } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ExternalCodingImportDto {
@@ -17,4 +17,13 @@ export class ExternalCodingImportDto {
   @IsOptional()
   @IsString()
     fileName?: string;
+
+  @ApiProperty({
+    description: 'If true, only preview without applying changes',
+    type: 'boolean',
+    required: false
+  })
+  @IsOptional()
+  @IsBoolean()
+    previewOnly?: boolean;
 }
