@@ -36,7 +36,8 @@ describe('WorkspaceFilesService.handleFile', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10]
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 
@@ -158,7 +159,8 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10]
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 
@@ -244,7 +246,8 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10]
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 
@@ -317,7 +320,8 @@ describe('WorkspaceFilesService.findFiles', () => {
     {} as unknown as CtorParams[7],
     {} as unknown as CtorParams[8],
     {} as unknown as CtorParams[9],
-    { delete: jest.fn() } as unknown as CtorParams[10]
+    { delete: jest.fn() } as unknown as CtorParams[10],
+    { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
   );
 
   beforeEach(() => {
@@ -364,7 +368,8 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
       {} as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10]
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
     );
   }
 

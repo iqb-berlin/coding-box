@@ -21,6 +21,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 function isSafeKey(key: string): boolean {

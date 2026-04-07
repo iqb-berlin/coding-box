@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { CodingFileCacheService } from './coding-file-cache.service';
+// eslint-disable-next-line import/no-cycle
 import { CodingListQueryService } from './coding-list-query.service';
 import { CodingListStreamService } from './coding-list-stream.service';
 

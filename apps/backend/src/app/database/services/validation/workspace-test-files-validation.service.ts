@@ -10,6 +10,7 @@ import Persons from '../../entities/persons.entity';
 
 import { FileValidationResultDto, FilteredTestTaker } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
