@@ -10,6 +10,8 @@ import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
@@ -37,6 +39,8 @@ import { DuplicateResponsesValidationService } from '../../../../services/valida
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
+    MatPaginatorModule,
     MatIconModule,
     MatSnackBarModule,
     ValidationPanelHeaderComponent,
@@ -136,6 +140,23 @@ import { DuplicateResponsesValidationService } from '../../../../services/valida
       .duplicate-cell-selected {
         outline: 2px solid rgba(33, 150, 243, 0.35);
       }
+
+      .validation-panel-content {
+        position: relative;
+      }
+
+      .loading-fade {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .loading-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+      }
     `
   ]
 })
@@ -146,6 +167,7 @@ implements OnInit, OnDestroy {
 
   isRunning = false;
   wasRun = false;
+  isLoadingPage = false;
   errorMessage: string | null = null;
   duplicateResponses: DuplicateResponseSelectionDto[] = [];
   totalDuplicates = 0;
@@ -153,6 +175,10 @@ implements OnInit, OnDestroy {
   duplicateResponseTouchedKeys: Set<string> = new Set();
   expandedPanel = false;
   isResolvingDuplicates = false;
+
+  // Pagination state
+  pageSize = 10;
+  currentPage = 1;
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -184,6 +210,8 @@ implements OnInit, OnDestroy {
             key: this.buildDuplicateKey(d)
           }));
           this.totalDuplicates = duplicateResult.total || 0;
+          this.currentPage = duplicateResult.page || 1;
+          this.pageSize = duplicateResult.limit || 10;
         }
       }
     });
@@ -209,14 +237,18 @@ implements OnInit, OnDestroy {
 
     this.isRunning = true;
     this.subscription = this.duplicateResponsesValidationService
-      .validate()
+      .validate(this.currentPage, this.pageSize)
       .subscribe({
         next: result => {
-          this.duplicateResponses = result.data.map(d => ({
+          this.duplicateResponses = (
+            result.data as DuplicateResponseSelectionDto[]
+          ).map(d => ({
             ...d,
             key: this.buildDuplicateKey(d)
           }));
           this.totalDuplicates = result.total;
+          this.currentPage = result.page;
+          this.pageSize = result.limit;
           this.wasRun = true;
           this.isRunning = false;
         },
@@ -229,6 +261,35 @@ implements OnInit, OnDestroy {
       });
 
     this.validate.emit();
+  }
+
+  onPageChange(event: PageEvent): void {
+    this.currentPage = event.pageIndex + 1;
+    this.pageSize = event.pageSize;
+    this.isLoadingPage = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.duplicateResponsesValidationService
+      .fetchPage(this.currentPage, this.pageSize)
+      .subscribe({
+        next: result => {
+          this.duplicateResponses = (
+            result.data as DuplicateResponseSelectionDto[]
+          ).map(d => ({
+            ...d,
+            key: this.buildDuplicateKey(d)
+          }));
+          this.totalDuplicates = result.total;
+          this.currentPage = result.page;
+          this.pageSize = result.limit;
+          this.isLoadingPage = false;
+        },
+        error: () => {
+          this.isLoadingPage = false;
+          this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 
   toggleExpansion(): void {

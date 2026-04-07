@@ -110,6 +110,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
 
   isRunning = false;
   wasRun = false;
+  isLoadingPage = false;
   errorMessage: string | null = null;
   invalidVariables: InvalidVariableDto[] = [];
   totalInvalid = 0;
@@ -207,6 +208,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   onPageChange(event: PageEvent): void {
     this.currentPage = event.pageIndex + 1;
     this.pageSize = event.pageSize;
+    this.isLoadingPage = true;
     this.subscription?.unsubscribe();
     this.subscription = this.variableValidationService
       .fetchPage(this.currentPage, this.pageSize)
@@ -216,8 +218,10 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.totalInvalid = result.total;
           this.currentPage = result.page;
           this.pageSize = result.limit;
+          this.isLoadingPage = false;
         },
         error: () => {
+          this.isLoadingPage = false;
           this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
             duration: 5000
           });

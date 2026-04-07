@@ -1,5 +1,10 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnInit,
+  OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
@@ -10,7 +15,11 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PageEvent } from '@angular/material/paginator';
 import { Subscription } from 'rxjs';
 import {
-  ValidationPanelHeaderComponent, ValidationStatus, ValidationGuidanceComponent, ValidationDataTableComponent, ValidationTableColumn
+  ValidationPanelHeaderComponent,
+  ValidationStatus,
+  ValidationGuidanceComponent,
+  ValidationDataTableComponent,
+  ValidationTableColumn
 } from '../../shared';
 import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableTypeValidationService } from '../../../../services/validation';
@@ -41,64 +50,68 @@ interface VariableTypesValidationResult {
     ValidationDataTableComponent
   ],
   templateUrl: './variable-types-validation-panel.component.html',
-  styles: [`
-    .validation-result {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-      padding: 8px 16px;
-      border-radius: 4px;
-      font-weight: 500;
-    }
+  styles: [
+    `
+      .validation-result {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-weight: 500;
+      }
 
-    .validation-success {
-      background-color: rgba(76, 175, 80, 0.1);
-      color: #4CAF50;
-      border: 1px solid #4CAF50;
-    }
+      .validation-success {
+        background-color: rgba(76, 175, 80, 0.1);
+        color: #4caf50;
+        border: 1px solid #4caf50;
+      }
 
-    .validation-error {
-      background-color: rgba(244, 67, 54, 0.1);
-      color: #F44336;
-      border: 1px solid #F44336;
-    }
+      .validation-error {
+        background-color: rgba(244, 67, 54, 0.1);
+        color: #f44336;
+        border: 1px solid #f44336;
+      }
 
-    .validation-result mat-icon {
-      margin-right: 8px;
-    }
+      .validation-result mat-icon {
+        margin-right: 8px;
+      }
 
-    .loading-container {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-    }
+      .loading-container {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+      }
 
-    .loading-text {
-      margin-left: 8px;
-    }
+      .loading-text {
+        margin-left: 8px;
+      }
 
-    .actions-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
+      .actions-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
 
-    .validation-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
-  `]
+      .validation-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+    `
+  ]
 })
-export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy {
+export class VariableTypesValidationPanelComponent
+implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
   @Output() showUnitXml = new EventEmitter<string>();
 
   isRunning = false;
   wasRun = false;
+  isLoadingPage = false;
   errorMessage: string | null = null;
   invalidTypeVariables: InvalidVariableDto[] = [];
   totalInvalid = 0;
@@ -110,7 +123,10 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
 
   tableColumns: ValidationTableColumn[] = [
     {
-      key: 'select', label: 'Auswählen', type: 'checkbox', width: '80px'
+      key: 'select',
+      label: 'Auswählen',
+      type: 'checkbox',
+      width: '80px'
     },
     { key: 'fileName', label: 'Dateiname', type: 'link' },
     { key: 'variableId', label: 'Variablen-ID' },
@@ -128,7 +144,8 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
   ) {}
 
   ngOnInit(): void {
-    const cachedResult = this.variableTypeValidationService.observeValidationResult();
+    const cachedResult =
+      this.variableTypeValidationService.observeValidationResult();
 
     this.stateSubscription = cachedResult.subscribe(result => {
       if (result && !this.isRunning) {
@@ -169,20 +186,24 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
     }
 
     this.isRunning = true;
-    this.subscription = this.variableTypeValidationService.validate(this.currentPage, this.pageSize).subscribe({
-      next: result => {
-        this.invalidTypeVariables = result.data;
-        this.totalInvalid = result.total;
-        this.currentPage = result.page;
-        this.pageSize = result.limit;
-        this.wasRun = true;
-        this.isRunning = false;
-      },
-      error: () => {
-        this.isRunning = false;
-        this.snackBar.open('Fehler bei der Validierung', 'Schließen', { duration: 5000 });
-      }
-    });
+    this.subscription = this.variableTypeValidationService
+      .validate(this.currentPage, this.pageSize)
+      .subscribe({
+        next: result => {
+          this.invalidTypeVariables = result.data;
+          this.totalInvalid = result.total;
+          this.currentPage = result.page;
+          this.pageSize = result.limit;
+          this.wasRun = true;
+          this.isRunning = false;
+        },
+        error: () => {
+          this.isRunning = false;
+          this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
 
     this.validate.emit();
   }
@@ -190,18 +211,25 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
   onPageChange(event: PageEvent): void {
     this.currentPage = event.pageIndex + 1;
     this.pageSize = event.pageSize;
+    this.isLoadingPage = true;
     this.subscription?.unsubscribe();
-    this.subscription = this.variableTypeValidationService.fetchPage(this.currentPage, this.pageSize).subscribe({
-      next: result => {
-        this.invalidTypeVariables = result.data;
-        this.totalInvalid = result.total;
-        this.currentPage = result.page;
-        this.pageSize = result.limit;
-      },
-      error: () => {
-        this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', { duration: 5000 });
-      }
-    });
+    this.subscription = this.variableTypeValidationService
+      .fetchPage(this.currentPage, this.pageSize)
+      .subscribe({
+        next: result => {
+          this.invalidTypeVariables = result.data;
+          this.totalInvalid = result.total;
+          this.currentPage = result.page;
+          this.pageSize = result.limit;
+          this.isLoadingPage = false;
+        },
+        error: () => {
+          this.isLoadingPage = false;
+          this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 
   onSelectionChange(newSelection: Set<unknown>): void {
@@ -236,18 +264,24 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
     }
 
     this.isDeletingResponses = true;
-    this.variableTypeValidationService.deleteSelected(Array.from(this.selectedResponses)).subscribe({
-      next: () => {
-        this.isDeletingResponses = false;
-        this.selectedResponses.clear();
-        this.snackBar.open('Ausgewählte Antworten wurden gelöscht', 'OK', { duration: 3000 });
-        this.onValidate();
-      },
-      error: () => {
-        this.isDeletingResponses = false;
-        this.snackBar.open('Fehler beim Löschen', 'Schließen', { duration: 5000 });
-      }
-    });
+    this.variableTypeValidationService
+      .deleteSelected(Array.from(this.selectedResponses))
+      .subscribe({
+        next: () => {
+          this.isDeletingResponses = false;
+          this.selectedResponses.clear();
+          this.snackBar.open('Ausgewählte Antworten wurden gelöscht', 'OK', {
+            duration: 3000
+          });
+          this.onValidate();
+        },
+        error: () => {
+          this.isDeletingResponses = false;
+          this.snackBar.open('Fehler beim Löschen', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 
   deleteAll(): void {
@@ -260,12 +294,16 @@ export class VariableTypesValidationPanelComponent implements OnInit, OnDestroy 
       next: () => {
         this.isDeletingResponses = false;
         this.selectedResponses.clear();
-        this.snackBar.open('Alle ungültigen Antworten wurden gelöscht', 'OK', { duration: 3000 });
+        this.snackBar.open('Alle ungültigen Antworten wurden gelöscht', 'OK', {
+          duration: 3000
+        });
         this.onValidate();
       },
       error: () => {
         this.isDeletingResponses = false;
-        this.snackBar.open('Fehler beim Löschen', 'Schließen', { duration: 5000 });
+        this.snackBar.open('Fehler beim Löschen', 'Schließen', {
+          duration: 5000
+        });
       }
     });
   }

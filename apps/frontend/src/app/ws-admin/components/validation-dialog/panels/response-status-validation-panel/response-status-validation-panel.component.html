@@ -75,6 +75,7 @@
           [currentPage]="currentPage"
           [selectedItems]="selectedResponses"
           [selectionKey]="'responseId'"
+          [loading]="isLoadingPage"
           (pageChange)="onPageChange($event)"
           (selectionChange)="onSelectionChange($event)"
           (linkClick)="onLinkClick($event)">
