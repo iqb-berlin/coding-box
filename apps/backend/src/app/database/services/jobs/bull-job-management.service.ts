@@ -81,6 +81,8 @@ export class BullJobManagementService {
         };
       }
 
+      await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', bullJob.data.workspaceId);
+
       const newJob = await this.jobQueueService.addTestPersonCodingJob({
         workspaceId: bullJob.data.workspaceId,
         personIds: bullJob.data.personIds,

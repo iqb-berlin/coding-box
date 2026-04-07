@@ -1,7 +1,14 @@
-import { Injectable, Logger, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ConflictException
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
+import { ValidationTask } from '../database/entities/validation-task.entity';
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
@@ -162,6 +169,20 @@ export interface RedisConnectionStatus {
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
 
+  private readonly DEPENDENCY_RULES: ReadonlyArray<{
+    target: string;
+    blockedBy: string;
+    label: string;
+  }> = [
+      { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
+      { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
+      { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+      { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
+      { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' }
+    ];
+
   constructor(
     @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
     @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
@@ -174,8 +195,59 @@ export class JobQueueService {
     @InjectQueue('validation-task') private validationTaskQueue: Queue,
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
     @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
-    @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue
+    @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
+    @InjectRepository(ValidationTask)
+    private readonly validationTaskRepository: Repository<ValidationTask>
   ) { }
+
+  private getQueue(name: string): Queue {
+    const map: Record<string, Queue> = {
+      'test-person-coding': this.testPersonCodingQueue,
+      'coding-statistics': this.codingStatisticsQueue,
+      'data-export': this.dataExportQueue,
+      'test-results-upload': this.testResultsUploadQueue,
+      'reset-coding-version': this.resetCodingVersionQueue,
+      'validation-task': this.validationTaskQueue,
+      'external-coding-import': this.externalCodingImportQueue
+    };
+    return map[name];
+  }
+
+  private async hasActiveJobForWorkspace(
+    queueName: string,
+    workspaceId: number
+  ): Promise<Job | undefined> {
+    const queue = this.getQueue(queueName);
+    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+
+    if (queueName === 'validation-task') {
+      const taskIds = jobs.map(j => j.data.taskId as number).filter(Boolean);
+      if (taskIds.length === 0) return undefined;
+      const tasks = await this.validationTaskRepository.find({
+        where: { id: In(taskIds) },
+        select: ['id', 'workspace_id']
+      });
+      const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
+      return jobs.find(j => taskWorkspaceMap.get(j.data.taskId) === workspaceId);
+    }
+
+    return jobs.find(j => j.data.workspaceId === workspaceId);
+  }
+
+  async assertNoDependencyConflicts(
+    targetQueue: string,
+    workspaceId: number
+  ): Promise<void> {
+    const rules = this.DEPENDENCY_RULES.filter(r => r.target === targetQueue);
+    for (const rule of rules) {
+      const blockingJob = await this.hasActiveJobForWorkspace(rule.blockedBy, workspaceId);
+      if (blockingJob) {
+        throw new ConflictException(
+          `Cannot start: a ${rule.label} job is still active for this workspace (job ${blockingJob.id}). Please wait until it completes.`
+        );
+      }
+    }
+  }
 
   private async findActiveJob<T>(
     queue: Queue,
@@ -359,6 +431,7 @@ export class JobQueueService {
     data: ExportJobData,
     options?: JobOptions
   ): Promise<Job<ExportJobData>> {
+    await this.assertNoDependencyConflicts('data-export', data.workspaceId);
     const existing = await this.findActiveJob<ExportJobData>(
       this.dataExportQueue,
       d => d.workspaceId === data.workspaceId && d.exportType === data.exportType
@@ -694,44 +767,6 @@ export class JobQueueService {
       'delayed'
     ]);
     return jobs.find(job => job.data.workspaceId === workspaceId) || null;
-  }
-
-  async hasActiveJobsForWorkspace(
-    workspaceId: number
-  ): Promise<{ blocked: boolean; reason?: string }> {
-    // Check reset-coding-version queue
-    const resetJobs = await this.resetCodingVersionQueue.getJobs([
-      'active',
-      'waiting',
-      'delayed'
-    ]);
-    const activeResetJob = resetJobs.find(
-      job => job.data.workspaceId === workspaceId
-    );
-    if (activeResetJob) {
-      return {
-        blocked: true,
-        reason: `A reset coding version job is already running for this workspace (job ${activeResetJob.id})`
-      };
-    }
-
-    // Check test-person-coding queue
-    const codingJobs = await this.testPersonCodingQueue.getJobs([
-      'active',
-      'waiting',
-      'delayed'
-    ]);
-    const activeCodingJob = codingJobs.find(
-      job => job.data.workspaceId === workspaceId
-    );
-    if (activeCodingJob) {
-      return {
-        blocked: true,
-        reason: `An auto-coding job is already running for this workspace (job ${activeCodingJob.id})`
-      };
-    }
-
-    return { blocked: false };
   }
 
   async checkRedisConnection(): Promise<RedisConnectionStatus> {

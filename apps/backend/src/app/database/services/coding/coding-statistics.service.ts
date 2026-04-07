@@ -305,6 +305,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       // Actually, if we are starting a job, we should probably clear any stale cache just to be sure.
       await this.cacheService.delete(cacheKey);
 
+      await this.jobQueueService.assertNoDependencyConflicts('coding-statistics', workspaceId);
+
       this.logger.log(
         `No cached coding statistics for workspace ${workspaceId} (version: ${version}), creating job to recalculate`
       );
