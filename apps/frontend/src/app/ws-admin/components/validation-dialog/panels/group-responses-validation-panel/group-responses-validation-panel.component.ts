@@ -103,6 +103,7 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
   displayedColumns = ['group', 'hasResponse'];
 
   private subscription?: Subscription;
+  private stateSubscription?: Subscription;
 
   constructor(
     private groupResponsesValidationService: GroupResponsesValidationService,
@@ -120,14 +121,33 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
       this.wasRun = true;
       this.updatePaginatedGroupResponses();
     }
+
+    this.stateSubscription = this.groupResponsesValidationService.observeCachedResult().subscribe(result => {
+      if (result && !this.isRunning) {
+        this.result = {
+          testTakersFound: result.testTakersFound,
+          groupsWithResponses: result.groupsWithResponses,
+          allGroupsHaveResponses: result.allGroupsHaveResponses
+        };
+        this.wasRun = true;
+        this.updatePaginatedGroupResponses();
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.stateSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {
     return this.groupResponsesValidationService.getValidationStatus();
+  }
+
+  get errorCount(): number {
+    if (!this.result) return 0;
+    if (!this.result.testTakersFound) return 1;
+    return this.result.groupsWithResponses.filter(g => !g.hasResponse).length;
   }
 
   onValidate(): void {

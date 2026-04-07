@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { Observable } from 'rxjs';
+import { distinctUntilChanged, map } from 'rxjs/operators';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
@@ -92,6 +93,21 @@ export abstract class BaseValidationService<TResult> {
     this.validationTaskStateService.removeTaskId(
       workspaceId,
       this.validationType as 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'
+    );
+  }
+
+  /**
+   * Observes cached results from the state service.
+   * Emits when the result for this validation type changes (e.g. after a batch run).
+   */
+  observeCachedResult(): Observable<TResult | null> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationTaskStateService.observeValidationResults(workspaceId).pipe(
+      map(results => {
+        const result = results[this.validationType];
+        return (result?.details as unknown as TResult) ?? null;
+      }),
+      distinctUntilChanged()
     );
   }
 

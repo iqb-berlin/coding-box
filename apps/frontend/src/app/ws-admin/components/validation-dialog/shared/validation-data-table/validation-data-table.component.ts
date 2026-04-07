@@ -1,9 +1,9 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, AfterViewInit
+  Component, Input, Output, EventEmitter, AfterViewInit
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
-import { MatPaginatorModule, MatPaginator, PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 
@@ -88,8 +88,6 @@ export interface ValidationTableColumn {
   `]
 })
 export class ValidationDataTableComponent<T> implements AfterViewInit {
-  @ViewChild('paginator') paginator!: MatPaginator;
-
   @Input() data: T[] = [];
   @Input() columns: ValidationTableColumn[] = [];
   @Input() totalItems = 0;
@@ -106,7 +104,6 @@ export class ValidationDataTableComponent<T> implements AfterViewInit {
   dataSource = new MatTableDataSource<T>([]);
 
   ngAfterViewInit(): void {
-    this.dataSource.paginator = this.paginator;
     this.updateDataSource();
   }
 

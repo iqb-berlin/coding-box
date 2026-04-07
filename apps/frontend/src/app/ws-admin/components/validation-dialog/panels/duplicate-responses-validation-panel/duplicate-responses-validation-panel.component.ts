@@ -138,6 +138,7 @@ export class DuplicateResponsesValidationPanelComponent implements OnInit, OnDes
   isResolvingDuplicates = false;
 
   private subscription?: Subscription;
+  private stateSubscription?: Subscription;
 
   constructor(
     private duplicateResponsesValidationService: DuplicateResponsesValidationService,
@@ -154,10 +155,22 @@ export class DuplicateResponsesValidationPanelComponent implements OnInit, OnDes
       this.totalDuplicates = cachedResult.total;
       this.wasRun = true;
     }
+
+    this.stateSubscription = this.duplicateResponsesValidationService.observeCachedResult().subscribe(result => {
+      if (result && !this.isRunning) {
+        this.duplicateResponses = (result.data as DuplicateResponseSelectionDto[]).map(d => ({
+          ...d,
+          key: this.buildDuplicateKey(d)
+        }));
+        this.totalDuplicates = result.total;
+        this.wasRun = true;
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.stateSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {
