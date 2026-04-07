@@ -98,6 +98,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   displayedColumns = ['group', 'login', 'code', 'reason'];
 
   private subscription?: Subscription;
+  private stateSubscription?: Subscription;
 
   constructor(private testTakersValidationService: TestTakersValidationService) {}
 
@@ -108,10 +109,19 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
       this.wasRun = true;
       this.updatePaginatedMissingPersons();
     }
+
+    this.stateSubscription = this.testTakersValidationService.observeCachedResult().subscribe(result => {
+      if (result && !this.isRunning) {
+        this.result = result;
+        this.wasRun = true;
+        this.updatePaginatedMissingPersons();
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.stateSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {

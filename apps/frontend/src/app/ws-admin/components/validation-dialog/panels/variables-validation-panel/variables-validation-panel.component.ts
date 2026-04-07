@@ -112,6 +112,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   ];
 
   private subscription?: Subscription;
+  private stateSubscription?: Subscription;
 
   constructor(
     private variableValidationService: VariableValidationService,
@@ -127,10 +128,21 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
       this.pageSize = cachedResult.limit;
       this.wasRun = true;
     }
+
+    this.stateSubscription = this.variableValidationService.observeCachedResult().subscribe(result => {
+      if (result && !this.isRunning) {
+        this.invalidVariables = result.data;
+        this.totalInvalid = result.total;
+        this.currentPage = result.page;
+        this.pageSize = result.limit;
+        this.wasRun = true;
+      }
+    });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.stateSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {
