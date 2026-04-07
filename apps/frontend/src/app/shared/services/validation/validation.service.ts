@@ -134,6 +134,7 @@ export class ValidationService {
       groupsWithResponses: { group: string; hasResponse: boolean }[];
       allGroupsHaveResponses: boolean;
       total: number;
+      totalGroupsWithoutResponses: number;
       page: number;
       limit: number;
     }> {
@@ -147,6 +148,7 @@ export class ValidationService {
       groupsWithResponses: { group: string; hasResponse: boolean }[];
       allGroupsHaveResponses: boolean;
       total: number;
+      totalGroupsWithoutResponses: number;
       page: number;
       limit: number;
     }>(
@@ -159,6 +161,7 @@ export class ValidationService {
           groupsWithResponses: [],
           allGroupsHaveResponses: false,
           total: 0,
+          totalGroupsWithoutResponses: 0,
           page,
           limit
         })

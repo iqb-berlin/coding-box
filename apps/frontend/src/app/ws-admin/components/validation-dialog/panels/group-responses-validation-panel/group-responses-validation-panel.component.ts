@@ -28,6 +28,7 @@ interface GroupResponsesValidationResult {
   groupsWithResponses: { group: string; hasResponse: boolean }[];
   allGroupsHaveResponses: boolean;
   total: number;
+  totalGroupsWithoutResponses: number;
   page: number;
   limit: number;
 }
@@ -191,10 +192,7 @@ implements OnInit, OnDestroy {
   }
 
   get errorCount(): number {
-    if (!this.result) {
-      return 0;
-    }
-    return this.result.groupsWithResponses.filter(g => !g.hasResponse).length;
+    return this.result?.totalGroupsWithoutResponses || 0;
   }
 
   onValidate(): void {

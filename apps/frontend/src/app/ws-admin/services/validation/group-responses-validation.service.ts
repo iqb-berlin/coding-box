@@ -8,6 +8,7 @@ interface GroupResponsesValidationResult {
   groupsWithResponses: { group: string; hasResponse: boolean }[];
   allGroupsHaveResponses: boolean;
   total: number;
+  totalGroupsWithoutResponses: number;
   page: number;
   limit: number;
 }
