@@ -662,7 +662,7 @@ export class WorkspaceResponseValidationService {
       };
     }
 
-    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED'];
+    const validStatusValues = ['VALUE_CHANGED', 'NOT_REACHED', 'DISPLAYED', 'UNSET', 'PARTLY_DISPLAYED', 'CODING_COMPLETE'];
 
     const persons = await this.personsRepository.find({
       where: { workspace_id: workspaceId, consider: true }

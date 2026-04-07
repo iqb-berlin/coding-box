@@ -262,3 +262,91 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
     expect(result.data).toEqual([]);
   });
 });
+
+describe('WorkspaceResponseValidationService.validateResponseStatus', () => {
+  const makeQueryBuilder = (units: Unit[]) => ({
+    innerJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getMany: jest.fn().mockResolvedValue(units)
+  });
+
+  it('accepts CODING_COMPLETE as a valid status', async () => {
+    const personsRepository = {
+      find: jest.fn().mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(makeQueryBuilder([
+        { id: 10, name: 'UNIT1' } as unknown as Unit
+      ]))
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'V1',
+          value: 'x',
+          status: 5, // CODING_COMPLETE
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity> & { find: jest.Mock };
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      {} as unknown as Repository<FileUpload>
+    );
+
+    const result = await service.validateResponseStatus(1, 1, 10);
+    expect(result.total).toBe(0);
+    expect(result.data).toEqual([]);
+  });
+
+  it('flags UNKNOWN_STATUS as invalid', async () => {
+    const personsRepository = {
+      find: jest.fn().mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(makeQueryBuilder([
+        { id: 10, name: 'UNIT1' } as unknown as Unit
+      ]))
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'V1',
+          value: 'x',
+          status: 99, // Unknown
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      {} as unknown as Repository<FileUpload>
+    );
+
+    const result = await service.validateResponseStatus(1, 1, 10);
+    expect(result.total).toBe(1);
+    expect(result.data[0].errorReason).toContain('Invalid response status');
+  });
+});
