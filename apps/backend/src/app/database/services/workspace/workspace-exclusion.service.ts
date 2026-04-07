@@ -2,9 +2,12 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from './workspace-core.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import FileUpload from '../../entities/file_upload.entity';
+import { CacheService } from '../../../cache/cache.service';
+import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 
 export type ExclusionContext = {
   unitId?: string;
@@ -17,8 +20,13 @@ export class WorkspaceExclusionService {
   constructor(
     private readonly workspaceCoreService: WorkspaceCoreService,
     @InjectRepository(FileUpload)
-    private readonly fileUploadRepository: Repository<FileUpload>
+    private readonly fileUploadRepository: Repository<FileUpload>,
+    private readonly cacheService: CacheService
   ) {}
+
+  async invalidateExclusionCache(workspaceId: number): Promise<void> {
+    await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
+  }
 
   async getExclusions(workspaceId: number): Promise<WorkspaceSettingsDto> {
     const workspace = await this.workspaceCoreService.findOne(workspaceId);
@@ -58,6 +66,17 @@ export class WorkspaceExclusionService {
     ignoredBooklets: string[];
     testletIgnoredUnits: { bookletId: string; unitId: string }[];
   }> {
+    const cacheKey = `${EXCLUSION_CACHE_PREFIX}${workspaceId}`;
+    const cached = await this.cacheService.get<{
+      globalIgnoredUnits: string[];
+      ignoredBooklets: string[];
+      testletIgnoredUnits: { bookletId: string; unitId: string }[];
+    }>(cacheKey);
+
+    if (cached) {
+      return cached;
+    }
+
     const exclusions = await this.getExclusions(workspaceId);
 
     const globalIgnoredUnits = (exclusions.ignoredUnits || []).map(u => u.toUpperCase());
@@ -108,6 +127,8 @@ export class WorkspaceExclusionService {
       }
     }
 
-    return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
+    const result = { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
+    await this.cacheService.set(cacheKey, result, 3600); // Cache for 1 hour
+    return result;
   }
 }

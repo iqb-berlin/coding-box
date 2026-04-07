@@ -480,6 +480,7 @@ export class CodingProcessService {
       // Step 12: Update responses in database - 100% progress
       const updateSuccess =
         await this.responseManagementService.updateResponsesInDatabase(
+          workspace_id,
           allCodedResponses,
           queryRunner,
           jobId,

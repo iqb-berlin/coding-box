@@ -25,11 +25,15 @@ import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
+// eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
+// eslint-disable-next-line import/no-cycle
 import { ResponseManagementService } from './response-management.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
 
 interface PersonWhere {
   code: string;
@@ -38,6 +42,26 @@ interface PersonWhere {
   consider: boolean;
   group?: string;
 }
+
+export type WorkspaceOverviewStats = {
+  testPersons: number;
+  testGroups: number;
+  uniqueBooklets: number;
+  uniqueUnits: number;
+  uniqueResponses: number;
+  responseStatusCounts: Record<string, number>;
+  sessionBrowserCounts: Record<string, number>;
+  sessionOsCounts: Record<string, number>;
+  sessionScreenCounts: Record<string, number>;
+};
+
+export type FlatFrequenciesResult = Record<
+string,
+{
+  total: number;
+  values: Array<{ value: string; count: number; p: number }>;
+}
+>;
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -157,44 +181,47 @@ export class WorkspaceTestResultsService {
     }
   }
 
-  async getWorkspaceTestResultsOverview(workspaceId: number): Promise<{
-    testPersons: number;
-    testGroups: number;
-    uniqueBooklets: number;
-    uniqueUnits: number;
-    uniqueResponses: number;
-    responseStatusCounts: Record<string, number>;
-    sessionBrowserCounts: Record<string, number>;
-    sessionOsCounts: Record<string, number>;
-    sessionScreenCounts: Record<string, number>;
-  }> {
+  async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
+      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`)
+    ]);
+  }
+
+  async getWorkspaceTestResultsOverview(workspaceId: number): Promise<WorkspaceOverviewStats> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
     }
 
-    const testPersons = await this.personsRepository.count({
+    const cacheKey = `${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`;
+    const cachedOverview = await this.cacheService.get<WorkspaceOverviewStats>(cacheKey);
+    if (cachedOverview) {
+      return cachedOverview;
+    }
+
+    const testPersonsPromise = this.personsRepository.count({
       where: { workspace_id: workspaceId, consider: true }
     });
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
-    const groupRows = await this.personsRepository
+    const testGroupsPromise = this.personsRepository
       .createQueryBuilder('person')
-      .select('DISTINCT person.group', 'group')
+      .select('COUNT(DISTINCT person.group)', 'count')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .getRawMany();
-    const testGroups = groupRows.length;
+      .getRawOne()
+      .then(res => Number(res?.count || 0));
 
-    const bookletRows = await this.bookletRepository
+    const uniqueBookletsPromise = this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .select('DISTINCT bookletinfo.name', 'name')
+      .select('COUNT(DISTINCT bookletinfo.name)', 'count')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .getRawMany();
-    const uniqueBooklets = bookletRows.length;
+      .getRawOne()
+      .then(res => Number(res?.count || 0));
 
     const unitKeyQuery = this.unitRepository
       .createQueryBuilder('unit')
@@ -206,8 +233,10 @@ export class WorkspaceTestResultsService {
       .andWhere('person.consider = :consider', { consider: true });
 
     this.applyExclusionsToQuery(unitKeyQuery, exclusions);
-    const unitRows = await unitKeyQuery.getRawMany();
-    const uniqueUnits = unitRows.length;
+    const uniqueUnitsPromise = unitKeyQuery
+      .select('COUNT(DISTINCT COALESCE(unit.alias, unit.name))', 'count')
+      .getRawOne()
+      .then(res => Number(res?.count || 0));
 
     const uniqueResponsesQuery = this.responseRepository
       .createQueryBuilder('response')
@@ -219,7 +248,7 @@ export class WorkspaceTestResultsService {
       .andWhere('person.consider = :consider', { consider: true });
 
     this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
-    const uniqueResponses = await uniqueResponsesQuery.getCount();
+    const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
 
     const statusRowsQuery = this.responseRepository
       .createQueryBuilder('response')
@@ -234,27 +263,25 @@ export class WorkspaceTestResultsService {
       .groupBy('response.status');
 
     this.applyExclusionsToQuery(statusRowsQuery, exclusions);
-    const statusRows = await statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
+    const statusRowsPromise = statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
 
-    const responseStatusCounts: Record<string, number> = {};
-    (statusRows || []).forEach(r => {
-      const num = Number(r.status);
-      const label = statusNumberToString(num) || String(num);
-      responseStatusCounts[label] = Number(r.count) || 0;
-    });
-
-    const mapSessionCounts = (
-      rows: Array<{ value: string | null; count: string | number }>
-    ): Record<string, number> => {
-      const out: Record<string, number> = {};
-      (rows || []).forEach(r => {
-        const key = String((r.value || '').trim() || 'unknown');
-        out[key] = Number(r.count) || 0;
-      });
-      return out;
-    };
-
-    const [browserRows, osRows, screenRows] = await Promise.all([
+    const [
+      testPersons,
+      testGroups,
+      uniqueBooklets,
+      uniqueUnits,
+      uniqueResponses,
+      statusRows,
+      browserRows,
+      osRows,
+      screenRows
+    ] = await Promise.all([
+      testPersonsPromise,
+      testGroupsPromise,
+      uniqueBookletsPromise,
+      uniqueUnitsPromise,
+      uniqueResponsesPromise,
+      statusRowsPromise,
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
@@ -287,11 +314,29 @@ export class WorkspaceTestResultsService {
         .getRawMany<{ value: string | null; count: string | number }>()
     ]);
 
+    const responseStatusCounts: Record<string, number> = {};
+    (statusRows || []).forEach(r => {
+      const num = Number(r.status);
+      const label = statusNumberToString(num) || String(num);
+      responseStatusCounts[label] = Number(r.count) || 0;
+    });
+
+    const mapSessionCounts = (
+      rows: Array<{ value: string | null; count: string | number }>
+    ): Record<string, number> => {
+      const out: Record<string, number> = {};
+      (rows || []).forEach(r => {
+        const key = String((r.value || '').trim() || 'unknown');
+        out[key] = Number(r.count) || 0;
+      });
+      return out;
+    };
+
     const sessionBrowserCounts = mapSessionCounts(browserRows);
     const sessionOsCounts = mapSessionCounts(osRows);
     const sessionScreenCounts = mapSessionCounts(screenRows);
 
-    return {
+    const result = {
       testPersons,
       testGroups,
       uniqueBooklets,
@@ -302,6 +347,9 @@ export class WorkspaceTestResultsService {
       sessionOsCounts,
       sessionScreenCounts
     };
+
+    await this.cacheService.set(cacheKey, result, 60); // Cache for 1 minute
+    return result;
   }
 
   async findPersonTestResults(
@@ -1375,6 +1423,19 @@ export class WorkspaceTestResultsService {
       return {};
     }
 
+    // Sort combos for consistent cache key
+    const sortedCombos = [...normalized].sort((a, b) => {
+      const keyA = `${a.unitKey}:${a.variableId}`;
+      const keyB = `${b.unitKey}:${b.variableId}`;
+      return keyA.localeCompare(keyB);
+    });
+
+    const cacheKey = `${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-${JSON.stringify(sortedCombos)}`;
+    const cached = await this.cacheService.get<FlatFrequenciesResult>(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
     const uniqueMap = new Map<
     string,
     { unitKey: string; variableId: string; values: string[] }
@@ -1503,12 +1564,13 @@ export class WorkspaceTestResultsService {
         return {
           value: v,
           count,
-          p: total > 0 ? count / total : 0
+          p: total > 0 ? (count / total) * 100 : 0
         };
       });
       result[key] = { total, values: rows };
     });
 
+    await this.cacheService.set(cacheKey, result, 300); // 5 minutes cache
     return result;
   }
 

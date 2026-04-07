@@ -1,21 +1,26 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+  forwardRef, Inject, Injectable, Logger
+} from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
 
 @Injectable()
 export class ResponseManagementService {
   private readonly logger = new Logger(ResponseManagementService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
     private readonly connection: DataSource,
-    private readonly journalService: JournalService
+    private readonly journalService: JournalService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) { }
 
   async updateResponsesInDatabase(
+    workspaceId: number,
     allCodedResponses: CodedResponse[],
     queryRunner: QueryRunner,
     jobId?: string,
@@ -25,6 +30,11 @@ export class ResponseManagementService {
   ): Promise<boolean> {
     if (allCodedResponses.length === 0) {
       await queryRunner.release();
+
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+
       return true;
     }
     const updateStart = Date.now();
@@ -186,6 +196,11 @@ export class ResponseManagementService {
       }
 
       await queryRunner.release();
+
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+
       return true;
     } catch (error) {
       this.logger.error(
@@ -306,6 +321,11 @@ export class ResponseManagementService {
         resolvedCount,
         success: true
       };
+    }).then(async result => {
+      if (result.success) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 
@@ -375,6 +395,11 @@ export class ResponseManagementService {
       }
 
       return { success: true, report };
+    }).then(async result => {
+      if (result.success) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 }
