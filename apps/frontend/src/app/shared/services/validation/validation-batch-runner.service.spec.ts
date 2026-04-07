@@ -7,15 +7,21 @@ import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 describe('ValidationBatchRunnerService', () => {
   let service: ValidationBatchRunnerService;
-  let validationServiceMock: jest.Mocked<ValidationService>;
+  let validationServiceMock: {
+    createValidationTask: jest.Mock;
+    pollValidationTask: jest.Mock;
+    getValidationResults: jest.Mock;
+    getValidationTask: jest.Mock;
+  };
   let stateServiceMock: jest.Mocked<ValidationTaskStateService>;
 
   beforeEach(() => {
     validationServiceMock = {
       createValidationTask: jest.fn(),
       pollValidationTask: jest.fn(),
-      getValidationResults: jest.fn()
-    } as unknown as jest.Mocked<ValidationService>;
+      getValidationResults: jest.fn(),
+      getValidationTask: jest.fn()
+    };
 
     stateServiceMock = {
       getBatchState: jest.fn().mockReturnValue({ status: 'idle' }),
@@ -45,26 +51,49 @@ describe('ValidationBatchRunnerService', () => {
   describe('startBatch', () => {
     it('should run all steps sequentially', fakeAsync(() => {
       const mockTaskId = 123;
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: mockTaskId } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto));
-      validationServiceMock.getValidationResults.mockReturnValue(of({ total: 0 }));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: mockTaskId } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({ id: mockTaskId, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of({ total: 0 })
+      );
 
       service.startBatch(1);
+      tick(500 * 6); // Trigger all 6 steps intervals
       tick();
 
       // All 6 steps should be called
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(6);
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(1, expect.objectContaining({ status: 'running' }));
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(1, expect.objectContaining({ status: 'completed' }));
+      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+        6
+      );
+      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'running' })
+      );
+      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'completed' })
+      );
     }));
 
     it('should handle step failure and set batch state to failed', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(throwError(() => new Error('Step failed')));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        throwError(() => new Error('Step failed'))
+      );
 
       service.startBatch(1);
       tick();
 
-      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(1, expect.objectContaining({ status: 'failed', error: 'Step failed' }));
+      expect(stateServiceMock.setBatchState).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ status: 'failed', error: 'Step failed' })
+      );
     }));
 
     it('should not start if already running (batch state status is running)', () => {
@@ -74,70 +103,142 @@ describe('ValidationBatchRunnerService', () => {
     });
 
     it('should skip step if results exist and not forced', fakeAsync(() => {
-      stateServiceMock.getAllValidationResults.mockReturnValue({ testTakers: { status: 'success', timestamp: 123 } });
+      stateServiceMock.getAllValidationResults.mockReturnValue({
+        testTakers: { status: 'success', timestamp: 123 }
+      });
 
       // Should skip testTakers, but run others
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: 1 } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: 1, status: 'completed' } as ValidationTaskDto));
-      validationServiceMock.getValidationResults.mockReturnValue(of({ total: 0 }));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: 1 } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of({ total: 0 })
+      );
 
       service.startBatch(1);
+      tick(500 * 5); // 5 steps
       tick();
 
       // 6 steps total, 1 skipped = 5 called
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(5);
+      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+        5
+      );
     }));
 
     it('should run step if results exist but forced', fakeAsync(() => {
-      stateServiceMock.getAllValidationResults.mockReturnValue({ testTakers: { status: 'success', timestamp: 123 } });
+      stateServiceMock.getAllValidationResults.mockReturnValue({
+        testTakers: { status: 'success', timestamp: 123 }
+      });
 
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: 1 } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: 1, status: 'completed' } as ValidationTaskDto));
-      validationServiceMock.getValidationResults.mockReturnValue(of({ total: 0 }));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: 1 } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of({ total: 0 })
+      );
 
       service.startBatch(1, { force: true });
+      tick(500 * 6);
       tick();
 
-      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(6);
+      expect(validationServiceMock.createValidationTask).toHaveBeenCalledTimes(
+        6
+      );
     }));
 
     it('should handle failed task from polling', fakeAsync(() => {
       const mockTaskId = 123;
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: mockTaskId } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: mockTaskId, status: 'failed', error: 'Task error' } as ValidationTaskDto));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: mockTaskId } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({
+          id: mockTaskId,
+          status: 'failed',
+          error: 'Task error'
+        } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({
+          id: mockTaskId,
+          status: 'failed',
+          error: 'Task error'
+        } as ValidationTaskDto)
+      );
 
       service.startBatch(1);
+      tick(500); // Trigger first interval
       tick();
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(1, 'testTakers', expect.objectContaining({ status: 'failed' }));
+      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+        1,
+        'testTakers',
+        expect.objectContaining({ status: 'failed' })
+      );
     }));
-  });
-
-  describe('evaluateResult', () => {
-    // Since evaluateResult is private, we test it through startBatch and verifying setValidationResult calls
 
     it('should evaluate variables result as failed if total > 0', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: 1 } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: 1, status: 'completed' } as ValidationTaskDto));
-      validationServiceMock.getValidationResults.mockReturnValue(of({ total: 5 }));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: 1 } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of({ total: 5 })
+      );
 
       // We only want to test one step, but startBatch runs all.
       // We can check if setValidationResult was called with 'failed' for 'variables'
       service.startBatch(1);
+      tick(500 * 2); // testTakers + variables
       tick();
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(1, 'variables', expect.objectContaining({ status: 'failed' }));
+      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+        1,
+        'variables',
+        expect.objectContaining({ status: 'failed' })
+      );
     }));
 
     it('should evaluate testTakers result as failed if testTakersFound is false', fakeAsync(() => {
-      validationServiceMock.createValidationTask.mockReturnValue(of({ id: 1 } as ValidationTaskDto));
-      validationServiceMock.pollValidationTask.mockReturnValue(of({ id: 1, status: 'completed' } as ValidationTaskDto));
-      validationServiceMock.getValidationResults.mockImplementation(() => of({ testTakersFound: false }));
+      validationServiceMock.createValidationTask.mockReturnValue(
+        of({ id: 1 } as ValidationTaskDto)
+      );
+      validationServiceMock.pollValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationTask.mockReturnValue(
+        of({ id: 1, status: 'completed' } as ValidationTaskDto)
+      );
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of({ testTakersFound: false })
+      );
 
       service.startBatch(1);
+      tick(500);
       tick();
 
-      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(1, 'testTakers', expect.objectContaining({ status: 'failed' }));
+      expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+        1,
+        'testTakers',
+        expect.objectContaining({ status: 'failed' })
+      );
     }));
   });
 });

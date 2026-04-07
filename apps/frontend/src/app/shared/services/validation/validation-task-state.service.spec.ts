@@ -1,5 +1,9 @@
 import { TestBed } from '@angular/core/testing';
-import { ValidationTaskStateService, ValidationResult } from './validation-task-state.service';
+import {
+  ValidationTaskStateService,
+  ValidationResult
+} from './validation-task-state.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 describe('ValidationTaskStateService', () => {
   let service: ValidationTaskStateService;
@@ -29,9 +33,10 @@ describe('ValidationTaskStateService', () => {
   });
 
   describe('setTaskId', () => {
-    it('should store task id', () => {
-      service.setTaskId(1, 'variables', 100);
-      expect(service.getAllTaskIds(1)).toEqual({ variables: 100 });
+    it('should store task', () => {
+      const mockTask = { id: 100 } as unknown as ValidationTaskDto;
+      service.setTaskId(1, 'variables', mockTask);
+      expect(service.getAllTaskIds(1)).toEqual({ variables: mockTask });
 
       service.removeTaskId(1, 'variables');
       expect(service.getAllTaskIds(1)).toEqual({});

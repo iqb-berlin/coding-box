@@ -101,7 +101,7 @@ describe('DuplicateResponsesValidationService', () => {
 
       service.resolveDuplicateGroup(responseIdsToDelete).subscribe(() => {
         expect(validationServiceMock.createDeleteResponsesTask).toHaveBeenCalledWith(workspaceId, responseIdsToDelete);
-        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', mockTask.id);
+        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', deleteMockTask);
         done();
       });
     });
@@ -115,7 +115,7 @@ describe('DuplicateResponsesValidationService', () => {
 
       service.resolveAllDuplicates().subscribe(() => {
         expect(validationServiceMock.createDeleteAllResponsesTask).toHaveBeenCalledWith(workspaceId, 'duplicateResponses');
-        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', mockTask.id);
+        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(workspaceId, 'duplicateResponses', deleteMockTask);
         done();
       });
     });

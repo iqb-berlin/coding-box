@@ -105,9 +105,9 @@ export abstract class BaseValidationService<TResult> {
   ): 'success' | 'failed' | 'not-run';
 
   /**
-   * Stores the task ID in the state service
+   * Stores the task details in the state service
    */
-  protected storeTaskId(taskId: number): void {
+  protected storeTaskId(task: ValidationTaskDto): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     this.validationTaskStateService.setTaskId(
       workspaceId,
@@ -118,12 +118,23 @@ export abstract class BaseValidationService<TResult> {
         | 'testTakers'
         | 'groupResponses'
         | 'duplicateResponses',
-      taskId
+      task
     );
   }
 
   /**
-   * Removes the task ID from the state service
+   * Observes the validation task from the state service.
+   */
+  observeValidationTask(): Observable<ValidationTaskDto | null> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationTaskStateService.observeTaskIds(workspaceId).pipe(
+      map(tasks => tasks[this.validationType] ?? null),
+      distinctUntilChanged()
+    );
+  }
+
+  /**
+   * Removes the task details from the state service
    */
   protected removeTaskId(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -201,7 +212,7 @@ export abstract class BaseValidationService<TResult> {
       this.validationType,
       ...(args as [number?, number?, Record<string, unknown>?])
     ).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+      tap((task: ValidationTaskDto) => this.storeTaskId(task)),
       switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
       switchMap(finalTask => this.getResults(finalTask.id)),
       tap(result => {

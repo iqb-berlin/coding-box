@@ -15,6 +15,7 @@ describe('WorkspaceTestFilesValidationService', () => {
   beforeEach(async () => {
     fileUploadRepository = {
       find: jest.fn(),
+      count: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue({
         select: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
@@ -133,6 +134,8 @@ describe('WorkspaceTestFilesValidationService', () => {
 
       return Promise.resolve([]);
     });
+
+    fileUploadRepository.count.mockResolvedValue(mockTestTakers.length);
 
     // getAllResourceIds using QueryBuilder
     const qbMock = fileUploadRepository.createQueryBuilder();

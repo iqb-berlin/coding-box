@@ -1,16 +1,23 @@
 /* eslint-disable max-classes-per-file */
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import {
-  MatDialog, MatDialogRef, MAT_DIALOG_DATA
+  MatDialog,
+  MatDialogRef,
+  MAT_DIALOG_DATA
 } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import {
-  Component, Input, Output, EventEmitter, CUSTOM_ELEMENTS_SCHEMA
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  CUSTOM_ELEMENTS_SCHEMA
 } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { ValidationDialogComponent } from './validation-dialog.component';
 import { AppService } from '../../../core/services/app.service';
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
@@ -29,26 +36,77 @@ import {
 import { ValidationResultBannerComponent } from './shared';
 
 // Mock all internal components
-@Component({ selector: 'coding-box-validation-result-banner', template: '', standalone: true })
-class MockBannerComponent { @Input() status: unknown; @Input() headline: unknown; @Input() subline: unknown; @Input() recommendation: unknown; }
+@Component({
+  selector: 'coding-box-validation-result-banner',
+  template: '',
+  standalone: true
+})
+class MockBannerComponent {
+  @Input() status: unknown;
+  @Input() headline: unknown;
+  @Input() subline: unknown;
+  @Input() recommendation: unknown;
+}
 
-@Component({ selector: 'coding-box-test-takers-validation-panel', template: '', standalone: true })
-class MockTestTakersPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-test-takers-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockTestTakersPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
-@Component({ selector: 'coding-box-variables-validation-panel', template: '', standalone: true })
-class MockVariablesPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-variables-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockVariablesPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
-@Component({ selector: 'coding-box-variable-types-validation-panel', template: '', standalone: true })
-class MockVariableTypesPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-variable-types-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockVariableTypesPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
-@Component({ selector: 'coding-box-response-status-validation-panel', template: '', standalone: true })
-class MockResponseStatusPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-response-status-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockResponseStatusPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
-@Component({ selector: 'coding-box-group-responses-validation-panel', template: '', standalone: true })
-class MockGroupResponsesPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-group-responses-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockGroupResponsesPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
-@Component({ selector: 'coding-box-duplicate-responses-validation-panel', template: '', standalone: true })
-class MockDuplicateResponsesPanel { @Input() disabled: unknown; @Output() validate = new EventEmitter<void>(); }
+@Component({
+  selector: 'coding-box-duplicate-responses-validation-panel',
+  template: '',
+  standalone: true
+})
+class MockDuplicateResponsesPanel {
+  @Input() disabled: unknown;
+  @Output() validate = new EventEmitter<void>();
+}
 
 describe('ValidationDialogComponent', () => {
   let component: ValidationDialogComponent;
@@ -87,7 +145,9 @@ describe('ValidationDialogComponent', () => {
     batchRunnerMock = { startBatch: jest.fn() };
     dialogRefMock = { close: jest.fn() };
     dialogMock = { open: jest.fn() };
-    fileServiceMock = { getUnitContentXml: jest.fn().mockReturnValue(of('<Unit></Unit>')) };
+    fileServiceMock = {
+      getUnitContentXml: jest.fn().mockReturnValue(of('<Unit></Unit>'))
+    };
     snackBarMock = { open: jest.fn() };
 
     stateServiceMock.observeValidationResults.mockReturnValue(of({}));
@@ -96,10 +156,7 @@ describe('ValidationDialogComponent', () => {
     stateServiceMock.getAllValidationResults.mockReturnValue({});
 
     await TestBed.configureTestingModule({
-      imports: [
-        NoopAnimationsModule,
-        ValidationDialogComponent
-      ],
+      imports: [NoopAnimationsModule, ValidationDialogComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
       providers: [
         provideHttpClient(),
@@ -126,9 +183,7 @@ describe('ValidationDialogComponent', () => {
             MockGroupResponsesPanel,
             MockDuplicateResponsesPanel
           ],
-          providers: [
-            { provide: MatDialog, useValue: dialogMock }
-          ]
+          providers: [{ provide: MatDialog, useValue: dialogMock }]
         },
         remove: {
           imports: [
@@ -165,14 +220,20 @@ describe('ValidationDialogComponent', () => {
 
   it('should fetch XML and open content dialog for unit XML', () => {
     component.showUnitXml('test.xml');
-    expect(fileServiceMock.getUnitContentXml).toHaveBeenCalledWith(1, 'test.xml');
-    expect(dialogMock.open).toHaveBeenCalledWith(ContentDialogComponent, expect.objectContaining({
-      data: expect.objectContaining({
-        title: 'Unit XML: test.xml',
-        content: '<Unit></Unit>',
-        isXml: true
+    expect(fileServiceMock.getUnitContentXml).toHaveBeenCalledWith(
+      1,
+      'test.xml'
+    );
+    expect(dialogMock.open).toHaveBeenCalledWith(
+      ContentDialogComponent,
+      expect.objectContaining({
+        data: expect.objectContaining({
+          title: 'Unit XML: test.xml',
+          content: '<Unit></Unit>',
+          isXml: true
+        })
       })
-    }));
+    );
   });
 
   it('should show snackbar when XML content is null', () => {
@@ -192,7 +253,9 @@ describe('ValidationDialogComponent', () => {
     });
 
     it('should return "running" if any task is active', () => {
-      (stateServiceMock.getAllTaskIds as jest.Mock).mockReturnValue({ variables: 123 });
+      (stateServiceMock.getAllTaskIds as jest.Mock).mockReturnValue({
+        variables: { id: 123 } as unknown as ValidationTaskDto
+      });
       expect(component.getOverallStatus()).toBe('running');
     });
 

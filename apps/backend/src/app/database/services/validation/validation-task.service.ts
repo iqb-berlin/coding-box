@@ -117,6 +117,19 @@ export class ValidationTaskService {
       task.progress = 10;
       await this.taskRepository.save(task);
 
+      const onProgress = async (progress: number) => {
+        // Update progress in database if it changed significantly (at least 5%)
+        // or if it's nearing completion.
+        if (
+          !task.progress ||
+          progress - task.progress >= 5 ||
+          (progress > 90 && progress !== task.progress)
+        ) {
+          task.progress = progress;
+          await this.taskRepository.save(task);
+        }
+      };
+
       let result: unknown;
       let taskData: Record<string, unknown> | null = null;
 
@@ -124,7 +137,10 @@ export class ValidationTaskService {
         try {
           taskData = JSON.parse(task.result);
         } catch (error) {
-          this.logger.error(`Error parsing task data for task ${taskId}: ${error.message}`, error.stack);
+          this.logger.error(
+            `Error parsing task data for task ${taskId}: ${error.message}`,
+            error.stack
+          );
         }
       }
 
@@ -133,47 +149,56 @@ export class ValidationTaskService {
           result = await this.validationService.validateVariables(
             task.workspace_id,
             task.page || 1,
-            task.limit || 10
+            task.limit || 10,
+            onProgress
           );
           break;
         case 'variableTypes':
           result = await this.validationService.validateVariableTypes(
             task.workspace_id,
             task.page || 1,
-            task.limit || 10
+            task.limit || 10,
+            onProgress
           );
           break;
         case 'responseStatus':
           result = await this.validationService.validateResponseStatus(
             task.workspace_id,
             task.page || 1,
-            task.limit || 10
+            task.limit || 10,
+            onProgress
           );
           break;
         case 'duplicateResponses':
           result = await this.validationService.validateDuplicateResponses(
             task.workspace_id,
             task.page || 1,
-            task.limit || 10
+            task.limit || 10,
+            onProgress
           );
           break;
         case 'testTakers':
-          result = await this.validationService.validateTestTakers(task.workspace_id);
+          result = await this.validationService.validateTestTakers(
+            task.workspace_id,
+            onProgress
+          );
           break;
         case 'groupResponses':
           result = await this.validationService.validateGroupResponses(
             task.workspace_id,
             task.page || 1,
-            task.limit || 10
+            task.limit || 10,
+            onProgress
           );
           break;
         case 'deleteResponses':
           if (taskData && Array.isArray(taskData.responseIds)) {
             const responseIds = taskData.responseIds as number[];
-            const deletedCount = await this.validationService.deleteInvalidResponses(
-              task.workspace_id,
-              responseIds
-            );
+            const deletedCount =
+              await this.validationService.deleteInvalidResponses(
+                task.workspace_id,
+                responseIds
+              );
             result = { deletedCount };
           } else {
             throw new Error('No response IDs provided for deletion');
@@ -181,11 +206,16 @@ export class ValidationTaskService {
           break;
         case 'deleteAllResponses':
           if (taskData && typeof taskData.validationType === 'string') {
-            const validationType = taskData.validationType as 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses';
-            const deletedCount = await this.validationService.deleteAllInvalidResponses(
-              task.workspace_id,
-              validationType
-            );
+            const validationType = taskData.validationType as
+              | 'variables'
+              | 'variableTypes'
+              | 'responseStatus'
+              | 'duplicateResponses';
+            const deletedCount =
+              await this.validationService.deleteAllInvalidResponses(
+                task.workspace_id,
+                validationType
+              );
             result = { deletedCount };
           } else {
             throw new Error('No validation type provided for deletion');

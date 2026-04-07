@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+
 export interface ValidationResult {
   status: 'success' | 'failed' | 'not-run';
   timestamp: number;
@@ -18,8 +20,8 @@ export interface ValidationBatchState {
   providedIn: 'root'
 })
 export class ValidationTaskStateService {
-  // Store task IDs by workspace ID and validation type
-  private activeTasks: Record<number, Record<string, number>> = {};
+  // Store task details by workspace ID and validation type
+  private activeTasks: Record<number, Record<string, ValidationTaskDto>> = {};
 
   // Store validation results by workspace ID and validation type
   private validationResults: Record<number, Record<string, ValidationResult>> = {};
@@ -27,11 +29,11 @@ export class ValidationTaskStateService {
   // Store batch status by workspace ID
   private batchState: Record<number, ValidationBatchState> = {};
 
-  private activeTasks$ = new BehaviorSubject<Record<number, Record<string, number>>>({});
+  private activeTasks$ = new BehaviorSubject<Record<number, Record<string, ValidationTaskDto>>>({});
   private validationResults$ = new BehaviorSubject<Record<number, Record<string, ValidationResult>>>({});
   private batchState$ = new BehaviorSubject<Record<number, ValidationBatchState>>({});
 
-  observeTaskIds(workspaceId: number): Observable<Record<string, number>> {
+  observeTaskIds(workspaceId: number): Observable<Record<string, ValidationTaskDto>> {
     return new Observable(subscriber => {
       const sub = this.activeTasks$.subscribe(all => subscriber.next(all[workspaceId] || {}));
       return () => sub.unsubscribe();
@@ -61,11 +63,11 @@ export class ValidationTaskStateService {
     this.batchState$.next({ ...this.batchState });
   }
 
-  setTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses', taskId: number): void {
+  setTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses', task: ValidationTaskDto): void {
     if (!this.activeTasks[workspaceId]) {
       this.activeTasks[workspaceId] = {};
     }
-    this.activeTasks[workspaceId][type] = taskId;
+    this.activeTasks[workspaceId][type] = task;
     this.activeTasks$.next({ ...this.activeTasks });
   }
 
@@ -76,7 +78,7 @@ export class ValidationTaskStateService {
     }
   }
 
-  getAllTaskIds(workspaceId: number): Record<string, number> {
+  getAllTaskIds(workspaceId: number): Record<string, ValidationTaskDto> {
     return this.activeTasks[workspaceId] || {};
   }
 

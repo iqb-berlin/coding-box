@@ -30,7 +30,7 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
     return this.validationService
       .createDeleteResponsesTask(workspaceId, responseIds)
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
         tap(() => this.removeTaskId()),
         map(() => undefined)
@@ -48,7 +48,7 @@ export class VariableValidationService extends BaseValidationService<VariablesVa
         this.validationType as 'variables'
       )
       .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
         tap(() => this.removeTaskId()),
         map(() => undefined)

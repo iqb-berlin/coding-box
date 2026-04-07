@@ -54,14 +54,33 @@ describe('TestTakersValidationService', () => {
 
       validationServiceMock.createValidationTask.mockReturnValue(of(mockTask));
       validationServiceMock.pollValidationTask.mockReturnValue(of(mockTask));
-      validationServiceMock.getValidationResults.mockReturnValue(of(mockResult));
+      validationServiceMock.getValidationResults.mockReturnValue(
+        of(mockResult)
+      );
 
       service.validate().subscribe(result => {
         expect(result).toEqual(mockResult);
-        expect(validationServiceMock.createValidationTask).toHaveBeenCalledWith(1, 'testTakers', undefined, undefined, undefined);
-        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(1, 'testTakers', 100);
-        expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(1, 'testTakers', expect.objectContaining({ status: 'success' }));
-        expect(stateServiceMock.removeTaskId).toHaveBeenCalledWith(1, 'testTakers');
+        expect(validationServiceMock.createValidationTask).toHaveBeenCalledWith(
+          1,
+          'testTakers',
+          undefined,
+          undefined,
+          undefined
+        );
+        expect(stateServiceMock.setTaskId).toHaveBeenCalledWith(
+          1,
+          'testTakers',
+          mockTask
+        );
+        expect(stateServiceMock.setValidationResult).toHaveBeenCalledWith(
+          1,
+          'testTakers',
+          expect.objectContaining({ status: 'success' })
+        );
+        expect(stateServiceMock.removeTaskId).toHaveBeenCalledWith(
+          1,
+          'testTakers'
+        );
         done();
       });
     });
@@ -69,13 +88,17 @@ describe('TestTakersValidationService', () => {
 
   describe('getValidationStatus', () => {
     it('should return "running" if taskId exists', () => {
-      stateServiceMock.getAllTaskIds.mockReturnValue({ testTakers: 100 });
+      stateServiceMock.getAllTaskIds.mockReturnValue({
+        testTakers: { id: 100 } as unknown as ValidationTaskDto
+      });
       expect(service.getValidationStatus()).toBe('running');
     });
 
     it('should return result status if no taskId exists', () => {
       stateServiceMock.getAllTaskIds.mockReturnValue({});
-      stateServiceMock.getAllValidationResults.mockReturnValue({ testTakers: { status: 'failed', timestamp: 123 } });
+      stateServiceMock.getAllValidationResults.mockReturnValue({
+        testTakers: { status: 'failed', timestamp: 123 }
+      });
       expect(service.getValidationStatus()).toBe('failed');
     });
 
@@ -89,7 +112,9 @@ describe('TestTakersValidationService', () => {
   describe('getCachedResult', () => {
     it('should return result details from state', () => {
       const mockResult = { testTakersFound: true };
-      stateServiceMock.getAllValidationResults.mockReturnValue({ testTakers: { status: 'success', timestamp: 123, details: mockResult } });
+      stateServiceMock.getAllValidationResults.mockReturnValue({
+        testTakers: { status: 'success', timestamp: 123, details: mockResult }
+      });
       expect(service.getCachedResult()).toEqual(mockResult);
     });
 

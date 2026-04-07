@@ -16,6 +16,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
+import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
   ValidationStatus,
@@ -150,9 +151,11 @@ implements OnInit, OnDestroy {
   totalItems = 0;
   pageSize = 10;
   currentPage = 1;
+  activeTask: ValidationTaskDto | null = null;
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
+  private taskSubscription?: Subscription;
 
   constructor(
     private groupResponsesValidationService: GroupResponsesValidationService,
@@ -180,11 +183,20 @@ implements OnInit, OnDestroy {
         }
       }
     });
+
+    // Observe active task
+    this.taskSubscription = this.groupResponsesValidationService
+      .observeValidationTask()
+      .subscribe(task => {
+        this.activeTask = task;
+        this.isRunning = !!task;
+      });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
     this.stateSubscription?.unsubscribe();
+    this.taskSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {
