@@ -18,7 +18,10 @@ import {
   ValidationStatus,
   ValidationGuidanceComponent
 } from '../../shared';
-import { DuplicateResponseDto } from '../../../../../../../../../api-dto/files/duplicate-response.dto';
+import {
+  DuplicateResponseDto,
+  DuplicateResponsesResultDto
+} from '../../../../../../../../../api-dto/files/duplicate-response.dto';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationService } from '../../../../services/validation';
 
@@ -143,6 +146,7 @@ implements OnInit, OnDestroy {
 
   isRunning = false;
   wasRun = false;
+  errorMessage: string | null = null;
   duplicateResponses: DuplicateResponseSelectionDto[] = [];
   totalDuplicates = 0;
   duplicateResponseSelections: Map<string, number> = new Map();
@@ -160,32 +164,29 @@ implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     const cachedResult =
-      this.duplicateResponsesValidationService.getCachedResult();
-    if (cachedResult && cachedResult.data) {
-      this.duplicateResponses = (
-        cachedResult.data as DuplicateResponseSelectionDto[]
-      ).map(d => ({
-        ...d,
-        key: this.buildDuplicateKey(d)
-      }));
-      this.totalDuplicates = cachedResult.total;
-      this.wasRun = true;
-    }
+      this.duplicateResponsesValidationService.observeValidationResult();
 
-    this.stateSubscription = this.duplicateResponsesValidationService
-      .observeCachedResult()
-      .subscribe(result => {
-        if (result && !this.isRunning) {
+    this.stateSubscription = cachedResult.subscribe(result => {
+      if (result && !this.isRunning) {
+        this.wasRun = true;
+        const details = result.details as Record<string, unknown>;
+        if (result.status === 'failed' && details?.error) {
+          this.errorMessage = details.error as string;
+          this.duplicateResponses = [];
+          this.totalDuplicates = 0;
+        } else if (result.details) {
+          const duplicateResult = result.details as DuplicateResponsesResultDto;
+          this.errorMessage = null;
           this.duplicateResponses = (
-            result.data as DuplicateResponseSelectionDto[]
+            (duplicateResult.data || []) as DuplicateResponseSelectionDto[]
           ).map(d => ({
             ...d,
             key: this.buildDuplicateKey(d)
           }));
-          this.totalDuplicates = result.total;
-          this.wasRun = true;
+          this.totalDuplicates = duplicateResult.total || 0;
         }
-      });
+      }
+    });
   }
 
   ngOnDestroy(): void {

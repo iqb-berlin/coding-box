@@ -21,8 +21,15 @@
 
   @if (isRunning) {
     <div class="loading-container">
-      <mat-spinner class="mat-spinner"></mat-spinner>
+      <mat-spinner class="mat-spinner" diameter="30"></mat-spinner>
       <p class="loading-text">Testpersonen werden geprüft...</p>
+    </div>
+  }
+
+  @if (errorMessage) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Fehler bei der Validierung: {{ errorMessage }}</span>
     </div>
   }
 

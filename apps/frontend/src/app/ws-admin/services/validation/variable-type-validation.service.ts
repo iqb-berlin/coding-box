@@ -23,28 +23,13 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
   protected validationType = 'variableTypes';
 
   /**
-   * Validates variable types by creating a validation task and retrieving results
-   */
-  validate(page: number = 1, limit: number = 10): Observable<VariableTypesValidationResult> {
-    return this.createTask(this.validationType, page, limit).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      switchMap(completedTask => this.getResults(completedTask.id)),
-      tap(result => {
-        this.saveResult(result);
-        this.removeTaskId();
-      })
-    );
-  }
-
-  /**
    * Deletes selected invalid variable type responses
    */
   deleteSelected(responseIds: number[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
       tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
+      switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );
@@ -57,7 +42,7 @@ export class VariableTypeValidationService extends BaseValidationService<Variabl
     const workspaceId = this.appService.selectedWorkspaceId;
     return this.validationService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'variableTypes').pipe(
       tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
+      switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
       tap(() => this.removeTaskId()),
       map(() => undefined)
     );

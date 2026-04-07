@@ -3,33 +3,51 @@
     <coding-box-validation-panel-header
       title="Duplikate-Prüfung"
       [status]="status"
-      [badgeText]="totalDuplicates > 0 ? totalDuplicates + ' Duplikate' : undefined">
+      [badgeText]="
+        totalDuplicates > 0 ? totalDuplicates + ' Duplikate' : undefined
+      "
+    >
     </coding-box-validation-panel-header>
   </mat-expansion-panel-header>
 
   <coding-box-validation-guidance
     description="Prüft, ob doppelte Antworten für die gleiche Variable, Unit und Testperson existieren."
     whyText="Duplikate können zu inkonsistenten Daten und Problemen bei der Auswertung führen. Sie entstehen oft durch mehrfaches Importieren derselben Daten."
-    fixHint="Wählen Sie für jede Duplikatgruppe die zu behaltende Antwort aus oder lassen Sie das System automatisch die beste Antwort auswählen.">
+    fixHint="Wählen Sie für jede Duplikatgruppe die zu behaltende Antwort aus oder lassen Sie das System automatisch die beste Antwort auswählen."
+  >
   </coding-box-validation-guidance>
 
   <div class="validation-actions">
-    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+    <button
+      mat-button
+      (click)="onValidate()"
+      [disabled]="isRunning || disabled"
+    >
       Duplikate prüfen
     </button>
   </div>
 
   @if (isRunning) {
     <div class="loading-container">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Duplikate werden geprüft...</p>
+      <mat-spinner class="mat-spinner" diameter="30"></mat-spinner>
+      <p class="loading-text">Doppelte Antworten werden geprüft...</p>
+    </div>
+  }
+
+  @if (errorMessage) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Fehler bei der Validierung: {{ errorMessage }}</span>
     </div>
   }
 
   @if (duplicateResponses.length > 0 || totalDuplicates > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Prüfung fehlgeschlagen: {{ totalDuplicates }} doppelte Antworten gefunden.</span>
+      <span
+        >Prüfung fehlgeschlagen: {{ totalDuplicates }} doppelte Antworten
+        gefunden.</span
+      >
     </div>
 
     @if (duplicateResponses.length > 0) {
@@ -37,18 +55,24 @@
         <button mat-button (click)="toggleExpansion()">
           {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
         </button>
-        <button mat-button color="primary" 
-                (click)="resolveSelectedDuplicates()" 
-                [disabled]="isResolvingDuplicates || !hasSelectedDuplicateResponses()">
+        <button
+          mat-button
+          color="primary"
+          (click)="resolveSelectedDuplicates()"
+          [disabled]="isResolvingDuplicates || !hasSelectedDuplicateResponses()"
+        >
           @if (isResolvingDuplicates) {
             <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
           } @else {
             Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
           }
         </button>
-        <button mat-button color="warn" 
-                (click)="resolveAllDuplicates()" 
-                [disabled]="isResolvingDuplicates || duplicateResponses.length === 0">
+        <button
+          mat-button
+          color="warn"
+          (click)="resolveAllDuplicates()"
+          [disabled]="isResolvingDuplicates || duplicateResponses.length === 0"
+        >
           @if (isResolvingDuplicates) {
             <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
           } @else {
@@ -66,12 +90,21 @@
                   <strong>Unit:</strong> {{ duplicate.unitName }} |
                   <strong>Variable:</strong> {{ duplicate.variableId }} |
                   <strong>Subform:</strong> {{ duplicate.subform }} |
-                  <strong>Testperson:</strong> {{ duplicate.testTakerLogin }}{{ duplicate.testTakerCode ? ' (' + duplicate.testTakerCode + ')' : '' }}{{ duplicate.testTakerGroup ? ' [' + duplicate.testTakerGroup + ']' : '' }} |
-                  <strong>Booklet:</strong> {{ duplicate.bookletName }}
+                  <strong>Testperson:</strong> {{ duplicate.testTakerLogin
+                  }}{{
+                    duplicate.testTakerCode
+                      ? ' (' + duplicate.testTakerCode + ')'
+                      : ''
+                  }}{{
+                    duplicate.testTakerGroup
+                      ? ' [' + duplicate.testTakerGroup + ']'
+                      : ''
+                  }}
+                  | <strong>Booklet:</strong> {{ duplicate.bookletName }}
                 </div>
               </div>
 
-              <div class="actions-container" style="margin-top: 8px;">
+              <div class="actions-container" style="margin-top: 8px">
                 <span>
                   <strong>{{ getDuplicateConflictLabel(duplicate) }}</strong>
                   @if (isDuplicateGroupTouched(duplicate)) {
@@ -80,14 +113,21 @@
                     <span> | Keine Auswahl gesetzt</span>
                   }
                 </span>
-                <button mat-button 
-                        (click)="selectSuggestedDuplicateResponse(duplicate)" 
-                        [disabled]="isResolvingDuplicates">
+                <button
+                  mat-button
+                  (click)="selectSuggestedDuplicateResponse(duplicate)"
+                  [disabled]="isResolvingDuplicates"
+                >
                   Vorschlag übernehmen
                 </button>
-                <button mat-button color="primary" 
-                        (click)="resolveDuplicateGroup(duplicate)" 
-                        [disabled]="isResolvingDuplicates || !isDuplicateGroupTouched(duplicate)">
+                <button
+                  mat-button
+                  color="primary"
+                  (click)="resolveDuplicateGroup(duplicate)"
+                  [disabled]="
+                    isResolvingDuplicates || !isDuplicateGroupTouched(duplicate)
+                  "
+                >
                   Auflösen
                 </button>
               </div>
@@ -103,26 +143,66 @@
                     </tr>
                   </thead>
                   <tbody>
-                    @for (responseDuplicate of duplicate.duplicates; track responseDuplicate.responseId) {
-                      <tr [ngClass]="{ 'duplicate-row-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) }">
+                    @for (
+                      responseDuplicate of duplicate.duplicates;
+                      track responseDuplicate.responseId
+                    ) {
+                      <tr
+                        [ngClass]="{
+                          'duplicate-row-selected': isDuplicateRowSelected(
+                            duplicate,
+                            responseDuplicate.responseId
+                          )
+                        }"
+                      >
                         <td>
-                          <input type="radio"
-                                 name="duplicate_{{ duplicate.key }}"
-                                 [value]="responseDuplicate.responseId"
-                                 [checked]="isSelectedDuplicateResponse(duplicate, responseDuplicate.responseId)"
-                                 (change)="selectDuplicateResponse(duplicate, responseDuplicate.responseId)">
+                          <input
+                            type="radio"
+                            name="duplicate_{{ duplicate.key }}"
+                            [value]="responseDuplicate.responseId"
+                            [checked]="
+                              isSelectedDuplicateResponse(
+                                duplicate,
+                                responseDuplicate.responseId
+                              )
+                            "
+                            (change)="
+                              selectDuplicateResponse(
+                                duplicate,
+                                responseDuplicate.responseId
+                              )
+                            "
+                          />
                         </td>
                         <td>{{ responseDuplicate.responseId }}</td>
-                        <td [ngClass]="{ 
-                          'duplicate-cell-conflict': isDuplicateValueConflicting(duplicate, responseDuplicate.responseId), 
-                          'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) 
-                        }">
+                        <td
+                          [ngClass]="{
+                            'duplicate-cell-conflict':
+                              isDuplicateValueConflicting(
+                                duplicate,
+                                responseDuplicate.responseId
+                              ),
+                            'duplicate-cell-selected': isDuplicateRowSelected(
+                              duplicate,
+                              responseDuplicate.responseId
+                            )
+                          }"
+                        >
                           {{ responseDuplicate.value }}
                         </td>
-                        <td [ngClass]="{ 
-                          'duplicate-cell-conflict': isDuplicateStatusConflicting(duplicate, responseDuplicate.responseId), 
-                          'duplicate-cell-selected': isDuplicateRowSelected(duplicate, responseDuplicate.responseId) 
-                        }">
+                        <td
+                          [ngClass]="{
+                            'duplicate-cell-conflict':
+                              isDuplicateStatusConflicting(
+                                duplicate,
+                                responseDuplicate.responseId
+                              ),
+                            'duplicate-cell-selected': isDuplicateRowSelected(
+                              duplicate,
+                              responseDuplicate.responseId
+                            )
+                          }"
+                        >
                           {{ responseDuplicate.status }}
                         </td>
                       </tr>
@@ -135,7 +215,12 @@
         </div>
       </mat-expansion-panel>
     }
-  } @else if (!isRunning && duplicateResponses.length === 0 && totalDuplicates === 0 && wasRun) {
+  } @else if (
+    !isRunning &&
+    duplicateResponses.length === 0 &&
+    totalDuplicates === 0 &&
+    wasRun
+  ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
       <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>

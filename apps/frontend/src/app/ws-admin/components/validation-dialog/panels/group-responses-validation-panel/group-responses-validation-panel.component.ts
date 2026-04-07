@@ -12,6 +12,15 @@ import { Subscription } from 'rxjs';
 import { ValidationPanelHeaderComponent, ValidationStatus, ValidationGuidanceComponent } from '../../shared';
 import { GroupResponsesValidationService } from '../../../../services/validation';
 
+interface GroupResponsesValidationResult {
+  testTakersFound: boolean;
+  groupsWithResponses: { group: string; hasResponse: boolean }[];
+  allGroupsHaveResponses: boolean;
+  total: number;
+  page: number;
+  limit: number;
+}
+
 /**
  * Panel component for group responses validation.
  * Displays validation results showing which test person groups have responses.
@@ -92,15 +101,11 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
 
   isRunning = false;
   wasRun = false;
-  result: {
-    testTakersFound: boolean;
-    groupsWithResponses: { group: string; hasResponse: boolean }[];
-    allGroupsHaveResponses: boolean;
-  } | null = null;
-
+  errorMessage: string | null = null;
+  result: GroupResponsesValidationResult | null = null;
   expandedPanel = false;
   paginatedGroupResponses = new MatTableDataSource<{ group: string; hasResponse: boolean }>([]);
-  displayedColumns = ['group', 'hasResponse'];
+  displayedColumns = ['group', 'status'];
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -111,26 +116,20 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
   ) {}
 
   ngOnInit(): void {
-    const cachedResult = this.groupResponsesValidationService.getCachedResult();
-    if (cachedResult) {
-      this.result = {
-        testTakersFound: cachedResult.testTakersFound,
-        groupsWithResponses: cachedResult.groupsWithResponses,
-        allGroupsHaveResponses: cachedResult.allGroupsHaveResponses
-      };
-      this.wasRun = true;
-      this.updatePaginatedGroupResponses();
-    }
+    const cachedResult = this.groupResponsesValidationService.observeValidationResult();
 
-    this.stateSubscription = this.groupResponsesValidationService.observeCachedResult().subscribe(result => {
+    this.stateSubscription = cachedResult.subscribe(result => {
       if (result && !this.isRunning) {
-        this.result = {
-          testTakersFound: result.testTakersFound,
-          groupsWithResponses: result.groupsWithResponses,
-          allGroupsHaveResponses: result.allGroupsHaveResponses
-        };
         this.wasRun = true;
-        this.updatePaginatedGroupResponses();
+        const details = result.details as Record<string, unknown>;
+        if (result.status === 'failed' && details?.error) {
+          this.errorMessage = details.error as string;
+          this.result = null;
+        } else if (result.details) {
+          this.errorMessage = null;
+          this.result = result.details as GroupResponsesValidationResult;
+          this.updatePaginatedGroupResponses();
+        }
       }
     });
   }
@@ -145,8 +144,9 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
   }
 
   get errorCount(): number {
-    if (!this.result) return 0;
-    if (!this.result.testTakersFound) return 1;
+    if (!this.result) {
+      return 0;
+    }
     return this.result.groupsWithResponses.filter(g => !g.hasResponse).length;
   }
 
@@ -158,11 +158,7 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
     this.isRunning = true;
     this.subscription = this.groupResponsesValidationService.validate().subscribe({
       next: result => {
-        this.result = {
-          testTakersFound: result.testTakersFound,
-          groupsWithResponses: result.groupsWithResponses,
-          allGroupsHaveResponses: result.allGroupsHaveResponses
-        };
+        this.result = result;
         this.wasRun = true;
         this.isRunning = false;
         this.updatePaginatedGroupResponses();
