@@ -1,4 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  forwardRef, Inject, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Connection, In, Repository } from 'typeorm';
 import Workspace from '../../entities/workspace.entity';
@@ -9,6 +11,10 @@ import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/wo
 import { AdminWorkspaceNotFoundException } from '../../../exceptions/admin-workspace-not-found.exception';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
+import { CacheService } from '../../../cache/cache.service';
+import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -17,7 +23,10 @@ export class WorkspaceCoreService {
   constructor(
     @InjectRepository(Workspace)
     private workspaceRepository: Repository<Workspace>,
-    private connection: Connection
+    private connection: Connection,
+    private readonly cacheService: CacheService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) { }
 
   async findAll(options?: { page: number; limit: number }): Promise<[WorkspaceInListDto[], number]> {
@@ -86,6 +95,7 @@ export class WorkspaceCoreService {
       if (workspaceData.name) workspaceGroupToUpdate.name = workspaceData.name;
       if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
       await this.workspaceRepository.save(workspaceGroupToUpdate);
+      await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
     }
   }
 
@@ -142,8 +152,9 @@ export class WorkspaceCoreService {
     const settings = (workspace.settings || {}) as any;
     settings.ignoredUnits = ignoredUnits;
     workspace.settings = settings;
-
     await this.workspaceRepository.save(workspace);
+    await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
+    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
   }
 
   async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsDto> {
@@ -157,5 +168,7 @@ export class WorkspaceCoreService {
 
     workspace.settings = { ...(workspace.settings || {}), ...newSettings };
     await this.workspaceRepository.save(workspace);
+    await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
+    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
   }
 }
