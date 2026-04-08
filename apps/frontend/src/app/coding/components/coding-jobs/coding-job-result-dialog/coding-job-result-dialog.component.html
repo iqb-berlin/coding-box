@@ -88,6 +88,18 @@
           {{result.codingIssueOptionLabel || '-'}}
         </mat-cell>
       </ng-container>
+      
+      <ng-container matColumnDef="doubleCoding">
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding-results.column-double-coding' | translate }}</mat-header-cell>
+        <mat-cell *matCellDef="let result">
+          <mat-icon *ngIf="result.isDoubleCoded" color="primary" 
+                    [matTooltip]="('coding-results.tooltip-other-coder' | translate) + result.otherCoders.join(', ')"
+                    matTooltipPosition="above">
+            assignment
+          </mat-icon>
+          <span *ngIf="!result.isDoubleCoded">-</span>
+        </mat-cell>
+      </ng-container>
 
       <ng-container matColumnDef="notes">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Notizen</mat-header-cell>

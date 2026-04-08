@@ -511,7 +511,19 @@ export class WsgCodingJobController {
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number
-  ): Promise<Array<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string }>> {
+  ): Promise<Array<{
+        responseId: number;
+        unitName: string;
+        unitAlias: string | null;
+        variableId: string;
+        variableAnchor: string;
+        bookletName: string;
+        personLogin: string;
+        personCode: string;
+        personGroup: string;
+        isDoubleCoded: boolean;
+        otherCoders: string[];
+      }>> {
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, false);
   }
