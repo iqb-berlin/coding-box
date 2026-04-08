@@ -12,6 +12,6 @@ export default {
     ]
   },
   moduleFileExtensions: ['ts', 'js', 'html'],
-  transformIgnorePatterns: ['node_modules/(?!mathml2omml)'],
+  transformIgnorePatterns: ['node_modules/(?!mathml2omml|@types/passport|@nestjs/passport)'],
   coverageDirectory: '../../coverage/apps/backend'
 };

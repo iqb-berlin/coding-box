@@ -38,7 +38,8 @@ describe('GroupResponsesValidationService', () => {
     allGroupsHaveResponses: true,
     total: 0,
     page: 1,
-    limit: 10
+    limit: 10,
+    totalGroupsWithoutResponses: 0
   };
 
   beforeEach(() => {
