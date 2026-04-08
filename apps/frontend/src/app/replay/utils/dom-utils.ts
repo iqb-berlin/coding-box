@@ -17,8 +17,17 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
   try {
     if (iframe.contentDocument) {
       const allAspectSections = iframe.contentDocument.querySelectorAll('aspect-section');
-      Array.from(allAspectSections).forEach(element => {
-        const directChildDivs = element.querySelectorAll(':scope > div');
+      const elementsByAlias = findElementsByDataAlias(iframe);
+
+      // Reset borders on all potential highlight targets to clear previous state
+      // 1. Reset all elements with aliases (handles individual highlights like cloze fields)
+      Object.values(elementsByAlias).forEach(el => {
+        el.style.border = '';
+      });
+
+      // 2. Reset direct child divs of all aspect-sections (handles standard section highlighting)
+      Array.from(allAspectSections).forEach(section => {
+        const directChildDivs = section.querySelectorAll(':scope > div');
         directChildDivs.forEach(div => {
           (div as HTMLElement).style.border = '';
         });
@@ -28,10 +37,26 @@ export function highlightAspectSectionWithAnchor(iframe: HTMLIFrameElement, anch
 
       // If anchor is provided, filter aspect-section tags that contain the element with the specified anchor
       if (anchor) {
-        const elements = findElementsByDataAlias(iframe);
-        const anchorElement = elements[anchor];
+        const anchorElement = elementsByAlias[anchor];
 
         if (anchorElement) {
+          // If the element is part of a cloze with multiple fields, only highlight the field itself.
+          const clozeElement = anchorElement.closest('aspect-cloze');
+          if (clozeElement) {
+            const aliasedInside = clozeElement.querySelectorAll('[data-element-alias]');
+            // Exclude the cloze itself if it has an alias
+            const variablesInside = Array.from(aliasedInside).filter(el => el !== clozeElement);
+            if (variablesInside.length > 1) {
+              anchorElement.style.border = '3px solid #4285f4';
+              // Find containing aspect-section to include it in the return value
+              const parentSection = anchorElement.closest('aspect-section');
+              if (parentSection) {
+                result.push(parentSection as HTMLElement);
+              }
+              return result;
+            }
+          }
+
           // Filter aspect-section tags that contain the anchor element
           filteredElements = Array.from(allAspectSections).filter(aspectSection => aspectSection.contains(anchorElement));
 
@@ -68,8 +93,8 @@ export function findElementsByDataAlias(iframe: HTMLIFrameElement): Record<strin
 
   try {
     if (iframe.contentDocument) {
-      // Query for all div elements with data-element-alias attribute
-      const elements = iframe.contentDocument.querySelectorAll('div[data-element-alias]');
+      // Query for all elements with data-element-alias attribute
+      const elements = iframe.contentDocument.querySelectorAll('[data-element-alias]');
 
       // Create a mapping of aliases to elements
       elements.forEach((element: Element) => {
