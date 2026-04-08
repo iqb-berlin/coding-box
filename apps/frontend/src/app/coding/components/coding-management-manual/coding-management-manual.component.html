@@ -303,11 +303,29 @@
         <div *ngIf="codingProgressOverview" class="coding-progress-section statistics-section"
           [class.blurred-content]="isLoadingCodingProgress">
           <div class="statistics-card">
-            <h2 class="section-title">Kodierungsfortschritt</h2>
+            <h2 class="section-title" style="display: flex; align-items: center;">
+              Kodierungsfortschritt
+              <button mat-icon-button (click)="showProgressInfo = !showProgressInfo"
+                      [matTooltip]="'coding-management-manual.coding-progress.info-tooltip' | translate"
+                      style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+                <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+              </button>
+            </h2>
+
+            <div *ngIf="showProgressInfo" class="info-alert" style="background-color: #e3f2fd; border-left: 4px solid #1976d2; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+              <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #1976d2; margin-top: 2px;">school</mat-icon>
+              <div>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.coding-progress.info-total-title' | translate }}</strong>
+                <span style="display: block; margin-bottom: 10px;">{{ 'coding-management-manual.coding-progress.info-total-desc' | translate }}</span>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.coding-progress.info-completed-title' | translate }}</strong>
+                <span style="display: block;">{{ 'coding-management-manual.coding-progress.info-completed-desc' | translate }}</span>
+              </div>
+            </div>
+
             <div class="coverage-stats">
-              <div class="stat-item">
-                <span class="stat-label">Gesamt zu kodierende Fälle:</span>
-                <span class="stat-value">{{codingProgressOverview.totalCasesToCode}}</span>
+              <div class="stat-item" style="cursor: pointer;" (click)="showTotalDetails = !showTotalDetails" matTooltip="Klicken, um die Zusammensetzung anzuzeigen">
+                <span class="stat-label">Gesamt zu kodierende Fälle: <mat-icon style="font-size: 16px; vertical-align: middle;">{{ showTotalDetails ? 'expand_less' : 'expand_more' }}</mat-icon></span>
+                <span class="stat-value" style="text-decoration: underline; color: var(--color-primary);">{{codingProgressOverview.totalCasesToCode}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Abgeschlossene Fälle:</span>
@@ -324,7 +342,31 @@
                   number:'1.1-1'}}%</span>
               </div>
             </div>
-            <div class="coverage-bar">
+
+            <div *ngIf="showTotalDetails" class="total-details-container" style="margin-top: 15px; border: 1px solid #e0e0e0; border-radius: 4px; padding: 10px; max-height: 300px; overflow-y: auto; background-color: #fafafa;">
+              <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; color: #555;">Zusammensetzung nach Variablen</h4>
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                <thead>
+                  <tr style="border-bottom: 1px solid #ccc; text-align: left;">
+                    <th style="padding: 6px;">Unit</th>
+                    <th style="padding: 6px;">Variable</th>
+                    <th style="padding: 6px; text-align: right;">Anzahl Fälle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let variable of codingIncompleteVariables" style="border-bottom: 1px solid #eee;">
+                    <td style="padding: 6px;">{{variable.unitName}}</td>
+                    <td style="padding: 6px;">{{variable.variableId}}</td>
+                    <td style="padding: 6px; text-align: right; font-weight: bold;">{{variable.responseCount}}</td>
+                  </tr>
+                  <tr *ngIf="codingIncompleteVariables.length === 0">
+                    <td colspan="3" style="padding: 10px; text-align: center; color: #888;">Keine offenen Variablen gefunden.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="coverage-bar" style="margin-top: 15px;">
               <div class="coverage-fill" [style.width.%]="codingProgressOverview.completionPercentage"></div>
             </div>
           </div>
@@ -345,8 +387,13 @@
         <div *ngIf="variableCoverageOverview" class="variable-coverage-section statistics-section"
           [class.blurred-content]="isLoadingVariableCoverage">
           <div class="statistics-card">
-            <h2 class="section-title">
+            <h2 class="section-title" style="display: flex; align-items: center;">
               Variablenabdeckung
+              <button mat-icon-button (click)="showVariableCoverageInfo = !showVariableCoverageInfo"
+                      [matTooltip]="'coding-management-manual.variable-coverage.info-tooltip' | translate"
+                      style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+                <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+              </button>
               <button mat-icon-button (click)="refreshAllStatistics()" matTooltip="Statistiken manuell aktualisieren">
                 <mat-icon>refresh</mat-icon>
               </button>
@@ -356,6 +403,18 @@
                 {{variableCoverageOverview.conflictedVariables}} Konflikte
               </span>
             </h2>
+
+            <div *ngIf="showVariableCoverageInfo" class="info-alert" style="background-color: #e8f5e9; border-left: 4px solid #2e7d32; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+              <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #2e7d32; margin-top: 2px;">help_outline</mat-icon>
+              <div>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.variable-coverage.info-total-title' | translate }}</strong>
+                <span style="display: block; margin-bottom: 10px;">{{ 'coding-management-manual.variable-coverage.info-total-desc' | translate }}</span>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.variable-coverage.info-covered-title' | translate }}</strong>
+                <span style="display: block; margin-bottom: 10px;">{{ 'coding-management-manual.variable-coverage.info-covered-desc' | translate }}</span>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.variable-coverage.info-completeness-title' | translate }}</strong>
+                <span style="display: block;">{{ 'coding-management-manual.variable-coverage.info-completeness-desc' | translate }}</span>
+              </div>
+            </div>
 
             <!-- Overall Coverage Stats -->
             <div class="coverage-stats">
@@ -457,8 +516,24 @@
           </div>
         </div>
 
-        <div class="coding-jobs-container">
-          <h3>Kodierjobs</h3>
+        <div class="coding-jobs-container" style="margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px;">
+          <h3 style="display: flex; align-items: center; margin-bottom: 20px;">
+            Kodierjobs
+            <button mat-icon-button (click)="showCodingJobsInfo = !showCodingJobsInfo"
+                    [matTooltip]="'coding-management-manual.coding-jobs.info-tooltip' | translate"
+                    style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+              <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+            </button>
+          </h3>
+
+          <div *ngIf="showCodingJobsInfo" class="info-alert" style="background-color: #e8eaf6; border-left: 4px solid #3f51b5; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+            <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #3f51b5; margin-top: 2px;">assignment</mat-icon>
+            <div>
+              <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.coding-jobs.info-title' | translate }}</strong>
+              <span style="display: block;">{{ 'coding-management-manual.coding-jobs.info-desc' | translate }}</span>
+            </div>
+          </div>
+
           <coding-box-coding-jobs (jobsChanged)="onJobDefinitionChanged()"></coding-box-coding-jobs>
         </div>
 
@@ -466,7 +541,24 @@
         <div *ngIf="caseCoverageOverview" class="case-coverage-section statistics-section"
           [class.blurred-content]="isLoadingCaseCoverage">
           <div class="statistics-card">
-            <h2 class="section-title">Fälle in Kodierjobs</h2>
+            <h2 class="section-title" style="display: flex; align-items: center;">
+              Fälle in Kodierjobs
+              <button mat-icon-button (click)="showCaseCoverageInfo = !showCaseCoverageInfo"
+                      [matTooltip]="'coding-management-manual.case-coverage.info-tooltip' | translate"
+                      style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+                <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+              </button>
+            </h2>
+
+            <div *ngIf="showCaseCoverageInfo" class="info-alert" style="background-color: #fff3e0; border-left: 4px solid #f57c00; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+              <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #f57c00; margin-top: 2px;">info_outline</mat-icon>
+              <div>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.case-coverage.info-total-title' | translate }}</strong>
+                <span style="display: block; margin-bottom: 10px;">{{ 'coding-management-manual.case-coverage.info-total-desc' | translate }}</span>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.case-coverage.info-assigned-title' | translate }}</strong>
+                <span style="display: block;">{{ 'coding-management-manual.case-coverage.info-assigned-desc' | translate }}</span>
+              </div>
+            </div>
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">Gesamt zu kodierende Fälle:</span>
@@ -509,7 +601,24 @@
         <!-- Applied Results Section -->
         <div *ngIf="appliedResultsOverview" class="applied-results-section">
           <div class="statistics-card">
-            <h2 class="section-title">{{ 'applied-results-overview.title' | translate }}</h2>
+            <h2 class="section-title" style="display: flex; align-items: center;">
+              {{ 'applied-results-overview.title' | translate }}
+              <button mat-icon-button (click)="showAppliedResultsInfo = !showAppliedResultsInfo"
+                      [matTooltip]="'coding-management-manual.applied-results.info-tooltip' | translate"
+                      style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+                <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+              </button>
+            </h2>
+
+            <div *ngIf="showAppliedResultsInfo" class="info-alert" style="background-color: #f3e5f5; border-left: 4px solid #7b1fa2; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+              <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #7b1fa2; margin-top: 2px;">auto_awesome</mat-icon>
+              <div>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.applied-results.info-total-title' | translate }}</strong>
+                <span style="display: block; margin-bottom: 10px;">{{ 'coding-management-manual.applied-results.info-total-desc' | translate }}</span>
+                <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.applied-results.info-applied-title' | translate }}</strong>
+                <span style="display: block;">{{ 'coding-management-manual.applied-results.info-applied-desc' | translate }}</span>
+              </div>
+            </div>
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">{{ 'applied-results-overview.coding-incomplete' | translate }}</span>
@@ -543,14 +652,45 @@
         </div>
 
 
-        <div class="coder-training-list-container">
-          <h3>Kodierer-Schulungen</h3>
+        <div class="coder-training-list-container" style="margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px;">
+          <h3 style="display: flex; align-items: center; margin-bottom: 20px;">
+            Kodierer-Schulungen
+            <button mat-icon-button (click)="showCoderTrainingsInfo = !showCoderTrainingsInfo"
+                    [matTooltip]="'coding-management-manual.coder-trainings.info-tooltip' | translate"
+                    style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+              <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+            </button>
+          </h3>
+
+          <div *ngIf="showCoderTrainingsInfo" class="info-alert" style="background-color: #fff8e1; border-left: 4px solid #ffb300; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+            <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #ffb300; margin-top: 2px;">school</mat-icon>
+            <div>
+              <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.coder-trainings.info-title' | translate }}</strong>
+              <span style="display: block;">{{ 'coding-management-manual.coder-trainings.info-desc' | translate }}</span>
+            </div>
+          </div>
           <coding-box-coder-trainings-list (onCreateTraining)="openCoderTraining()"
             (onEditTraining)="openTrainingEdit($event)">
           </coding-box-coder-trainings-list>
         </div>
-        <div class="variable-bundle-container">
-          <h3>Variablenbündel</h3>
+        <div class="variable-bundle-container" style="margin-top: 30px; border-top: 1px solid #e0e0e0; padding-top: 20px;">
+          <h3 style="display: flex; align-items: center; margin-bottom: 20px;">
+            Variablenbündel
+            <button mat-icon-button (click)="showVariableBundlesInfo = !showVariableBundlesInfo"
+                    [matTooltip]="'coding-management-manual.variable-bundles.info-tooltip' | translate"
+                    style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+              <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+            </button>
+          </h3>
+
+          <div *ngIf="showVariableBundlesInfo" class="info-alert" style="background-color: #e1f5fe; border-left: 4px solid #0288d1; padding: 12px; border-radius: 4px; margin-bottom: 20px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+            <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #0288d1; margin-top: 2px;">layers</mat-icon>
+            <div>
+              <strong style="display: block; margin-bottom: 4px;">{{ 'coding-management-manual.variable-bundles.info-title' | translate }}</strong>
+              <span style="display: block;">{{ 'coding-management-manual.variable-bundles.info-desc' | translate }}</span>
+            </div>
+          </div>
+
           <coding-box-variable-bundle-manager></coding-box-variable-bundle-manager>
         </div>
       </div>

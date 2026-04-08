@@ -125,6 +125,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   showEmptyResponsesDetails = false;
   showDuplicateValuesDetails = false;
   isApplyingEmptyCoding = false;
+  showProgressInfo = false;
+  showTotalDetails = false;
+  showVariableCoverageInfo = false;
+  showCaseCoverageInfo = false;
+  showAppliedResultsInfo = false;
+  showVariableBundlesInfo = false;
+  showCoderTrainingsInfo = false;
+  showCodingJobsInfo = false;
 
   // Duplicate aggregation state
   duplicateAggregationThreshold = 2;
