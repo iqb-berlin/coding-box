@@ -18,6 +18,8 @@ describe('TestTakersValidationPanelComponent', () => {
     getValidationStatus: jest.Mock;
     getCachedResult: jest.Mock;
     observeCachedResult: jest.Mock;
+    observeValidationResult: jest.Mock;
+    observeValidationTask: jest.Mock;
   };
 
   const mockResult = {
@@ -33,7 +35,9 @@ describe('TestTakersValidationPanelComponent', () => {
       validate: jest.fn(),
       getValidationStatus: jest.fn(),
       getCachedResult: jest.fn(),
-      observeCachedResult: jest.fn().mockReturnValue(EMPTY)
+      observeCachedResult: jest.fn().mockReturnValue(EMPTY),
+      observeValidationResult: jest.fn().mockReturnValue(EMPTY),
+      observeValidationTask: jest.fn().mockReturnValue(EMPTY)
     };
 
     await TestBed.configureTestingModule({
@@ -80,7 +84,7 @@ describe('TestTakersValidationPanelComponent', () => {
   });
 
   it('should load cached result on init', () => {
-    serviceMock.getCachedResult.mockReturnValue(mockResult);
+    serviceMock.observeValidationResult.mockReturnValue(of({ status: 'success', details: mockResult }));
     component.ngOnInit();
     expect(component.result).toEqual(mockResult as unknown as typeof component.result);
     expect(component.wasRun).toBe(true);
