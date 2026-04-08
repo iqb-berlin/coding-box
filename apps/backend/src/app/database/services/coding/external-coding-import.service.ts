@@ -143,7 +143,7 @@ export class ExternalCodingImportService {
       this.logger.log(`Parsed ${parsedData.length} rows from external coding file`);
       progressCallback?.(20, `Parsed ${parsedData.length} rows from file`);
 
-      const updatedRows = 0;
+      let updatedRows = 0;
       const processedRows = parsedData.length;
       const affectedRows: Array<{
         unitAlias: string;
@@ -282,6 +282,7 @@ export class ExternalCodingImportService {
                     .where('id = :responseId', { responseId: validation.responseId })
                     .execute();
                 }
+                updatedRows += validationResults.length;
               }
 
               // Add comparison data for each affected response

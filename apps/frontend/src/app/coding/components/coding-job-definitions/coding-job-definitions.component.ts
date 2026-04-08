@@ -18,6 +18,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -75,7 +76,8 @@ interface BulkCreationResult {
     MatButtonModule,
     MatMenuModule,
     MatCardModule,
-    MatChipsModule
+    MatChipsModule,
+    MatTooltipModule
   ]
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
@@ -93,6 +95,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   isLoading = false;
   isBulkCreating = false;
   coders: Coder[] = [];
+  showInfo = false;
 
   displayedColumns: string[] = [
     'actions',
@@ -534,7 +537,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         }
 
         this.snackBar.open(
-          result.message,
+          this.translateService.instant(
+            'coding-job-definitions.messages.snackbar.jobs-created',
+            { count: result.jobsCreated }
+          ),
           this.translateService.instant('common.close'),
           { duration: 3000 }
         );

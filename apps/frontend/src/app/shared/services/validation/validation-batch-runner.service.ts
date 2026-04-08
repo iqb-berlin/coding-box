@@ -1,22 +1,21 @@
 import { Injectable } from '@angular/core';
 import {
-  Observable,
-  Subscription,
-  from,
-  of,
-  throwError
+  Observable, Subscription, from, of, throwError, interval
 } from 'rxjs';
 import {
   catchError,
   concatMap,
-  filter,
   map,
   switchMap,
-  take,
-  tap
+  tap,
+  filter,
+  take
 } from 'rxjs/operators';
 import { ValidationService } from './validation.service';
-import { ValidationTaskStateService, ValidationResult } from './validation-task-state.service';
+import {
+  ValidationTaskStateService,
+  ValidationResult
+} from './validation-task-state.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 export type BatchValidationType =
@@ -45,7 +44,7 @@ export class ValidationBatchRunnerService {
   constructor(
     private validationService: ValidationService,
     private validationTaskStateService: ValidationTaskStateService
-  ) { }
+  ) {}
 
   startBatch(
     workspaceId: number,
@@ -65,34 +64,41 @@ export class ValidationBatchRunnerService {
       startedAt: Date.now()
     });
 
-    this.runningBatches[workspaceId] = from(this.steps).pipe(
-      concatMap(type => this.runStep(workspaceId, type, options)),
-      tap(() => {
-        this.validationTaskStateService.setBatchState(workspaceId, {
-          status: 'completed',
-          startedAt: this.validationTaskStateService.getBatchState(workspaceId).startedAt,
-          finishedAt: Date.now()
-        });
-      }),
-      map(() => undefined),
-      catchError(err => {
-        const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
-        this.validationTaskStateService.setBatchState(workspaceId, {
-          status: 'failed',
-          startedAt: this.validationTaskStateService.getBatchState(workspaceId).startedAt,
-          finishedAt: Date.now(),
-          error: message
-        });
-        return throwError(() => err);
-      })
-    ).subscribe({
-      next: () => { },
-      error: () => { },
-      complete: () => {
-        this.runningBatches[workspaceId]?.unsubscribe();
-        delete this.runningBatches[workspaceId];
-      }
-    });
+    this.runningBatches[workspaceId] = from(this.steps)
+      .pipe(
+        concatMap(type => this.runStep(workspaceId, type, options)),
+        tap(() => {
+          this.validationTaskStateService.setBatchState(workspaceId, {
+            status: 'completed',
+            startedAt:
+              this.validationTaskStateService.getBatchState(workspaceId)
+                .startedAt,
+            finishedAt: Date.now()
+          });
+        }),
+        map(() => undefined),
+        catchError(err => {
+          const message =
+            err instanceof Error ? err.message : 'Unbekannter Fehler';
+          this.validationTaskStateService.setBatchState(workspaceId, {
+            status: 'failed',
+            startedAt:
+              this.validationTaskStateService.getBatchState(workspaceId)
+                .startedAt,
+            finishedAt: Date.now(),
+            error: message
+          });
+          return throwError(() => err);
+        })
+      )
+      .subscribe({
+        next: () => {},
+        error: () => {},
+        complete: () => {
+          this.runningBatches[workspaceId]?.unsubscribe();
+          delete this.runningBatches[workspaceId];
+        }
+      });
   }
 
   private runStep(
@@ -100,10 +106,14 @@ export class ValidationBatchRunnerService {
     type: BatchValidationType,
     options?: { force?: boolean; pollIntervalMs?: number }
   ): Observable<void> {
-    const pollIntervalMs = options?.pollIntervalMs ?? 2000;
+    const pollIntervalMs = options?.pollIntervalMs ?? 500;
 
-    const existingResult = this.validationTaskStateService.getAllValidationResults(workspaceId)[type];
-    const existingTaskId = this.validationTaskStateService.getAllTaskIds(workspaceId)[type];
+    const existingResult =
+      this.validationTaskStateService.getAllValidationResults(workspaceId)[
+        type
+      ];
+    const existingTaskId =
+      this.validationTaskStateService.getAllTaskIds(workspaceId)[type];
 
     if (!options?.force && existingResult && !existingTaskId) {
       return of(undefined);
@@ -116,12 +126,38 @@ export class ValidationBatchRunnerService {
 
     return this.validationService.createValidationTask(workspaceId, type).pipe(
       tap(createdTask => {
-        this.validationTaskStateService.setTaskId(workspaceId, type, createdTask.id);
+        this.validationTaskStateService.setTaskId(
+          workspaceId,
+          type,
+          createdTask
+        );
       }),
       switchMap((createdTask: ValidationTaskDto) => this.validationService
-        .pollValidationTask(workspaceId, createdTask.id, pollIntervalMs).pipe(
-          filter(t => t.status === 'completed' || t.status === 'failed'),
-          take(1),
+        .pollValidationTask(workspaceId, createdTask.id, pollIntervalMs)
+        .pipe(
+          // Poll validation task returns the final task, but we want to update the state during polling too.
+          // Since pollValidationTask uses interval internally, we can't easily tap into it without changing it.
+          // Let's modify ValidationService.pollValidationTask to accept an update callback or return all steps.
+          // Or better, we can just implement the polling here.
+          switchMap(() => interval(pollIntervalMs).pipe(
+            switchMap(() => this.validationService.getValidationTask(
+              workspaceId,
+              createdTask.id
+            )
+            ),
+            tap((task: ValidationTaskDto) => {
+              this.validationTaskStateService.setTaskId(
+                workspaceId,
+                type,
+                task
+              );
+            }),
+            filter(
+              (task: ValidationTaskDto) => task.status !== 'pending' && task.status !== 'processing'
+            ),
+            take(1)
+          )
+          ),
           switchMap(finalTask => {
             this.validationTaskStateService.removeTaskId(workspaceId, type);
 
@@ -131,23 +167,40 @@ export class ValidationBatchRunnerService {
                 timestamp: Date.now(),
                 details: { error: finalTask.error || 'Unbekannter Fehler' }
               };
-              this.validationTaskStateService.setValidationResult(workspaceId, type, result);
+              this.validationTaskStateService.setValidationResult(
+                workspaceId,
+                type,
+                result
+              );
               return of(undefined);
             }
 
-            return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(
-              tap((stepResult: unknown) => {
-                const validationResult = this.evaluateResult(type, stepResult);
-                this.validationTaskStateService.setValidationResult(workspaceId, type, validationResult);
-              }),
-              map(() => undefined)
-            );
+            return this.validationService
+              .getValidationResults(workspaceId, finalTask.id)
+              .pipe(
+                tap((stepResult: unknown) => {
+                  const validationResult = this.evaluateResult(
+                    type,
+                    stepResult
+                  );
+                  this.validationTaskStateService.setValidationResult(
+                    workspaceId,
+                    type,
+                    validationResult
+                  );
+                }),
+                map(() => undefined)
+              );
           })
-        ))
+        )
+      )
     );
   }
 
-  private evaluateResult(type: BatchValidationType, result: unknown): ValidationResult {
+  private evaluateResult(
+    type: BatchValidationType,
+    result: unknown
+  ): ValidationResult {
     const now = Date.now();
 
     const asPaginated = (r: unknown): { total?: number } => (r as { total?: number }) || {};
@@ -174,9 +227,14 @@ export class ValidationBatchRunnerService {
       }
 
       case 'testTakers': {
-        const r = result as { testTakersFound?: boolean; missingPersons?: unknown[] };
+        const r = result as {
+          testTakersFound?: boolean;
+          missingPersons?: unknown[];
+        };
         const testTakersFound = Boolean(r?.testTakersFound);
-        const missingPersonsCount = Array.isArray(r?.missingPersons) ? r.missingPersons.length : 0;
+        const missingPersonsCount = Array.isArray(r?.missingPersons) ?
+          r.missingPersons.length :
+          0;
         const hasErrors = !testTakersFound || missingPersonsCount > 0;
         return {
           status: hasErrors ? 'failed' : 'success',
@@ -186,7 +244,10 @@ export class ValidationBatchRunnerService {
       }
 
       case 'groupResponses': {
-        const r = result as { testTakersFound?: boolean; allGroupsHaveResponses?: boolean };
+        const r = result as {
+          testTakersFound?: boolean;
+          allGroupsHaveResponses?: boolean;
+        };
         const testTakersFound = Boolean(r?.testTakersFound);
         const allGroupsHaveResponses = Boolean(r?.allGroupsHaveResponses);
         const hasErrors = !testTakersFound || !allGroupsHaveResponses;

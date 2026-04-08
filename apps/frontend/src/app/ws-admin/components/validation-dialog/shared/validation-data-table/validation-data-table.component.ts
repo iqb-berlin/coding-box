@@ -1,11 +1,18 @@
 import {
-  Component, Input, Output, EventEmitter, ViewChild, AfterViewInit
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  AfterViewInit,
+  OnChanges,
+  SimpleChanges
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
-import { MatPaginatorModule, MatPaginator, PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 export interface ValidationTableColumn {
   key: string;
@@ -25,10 +32,17 @@ export interface ValidationTableColumn {
     MatTableModule,
     MatPaginatorModule,
     MatCheckboxModule,
-    MatButtonModule
+    MatButtonModule,
+    MatProgressBarModule
   ],
   template: `
-    <div class="table-container">
+    <div class="table-container" [class.table-loading]="loading">
+      @if (loading) {
+        <mat-progress-bar
+          mode="indeterminate"
+          class="loading-progress"
+        ></mat-progress-bar>
+      }
       <table mat-table [dataSource]="dataSource">
         @for (column of columns; track column.key) {
           <ng-container [matColumnDef]="column.key">
@@ -37,12 +51,21 @@ export interface ValidationTableColumn {
             </th>
             <td mat-cell *matCellDef="let element">
               @if (column.type === 'checkbox') {
-                <input type="checkbox"
-                       [checked]="isSelected(element)"
-                       (change)="toggleSelection(element)"
-                       [disabled]="!canSelect(element)">
+                <input
+                  type="checkbox"
+                  [checked]="isSelected(element)"
+                  (change)="toggleSelection(element)"
+                  [disabled]="!canSelect(element) || loading"
+                />
               } @else if (column.type === 'link') {
-                <a class="table-link" (click)="$event.preventDefault(); onLinkClick(element, column.key)">
+                <a
+                  class="table-link"
+                  [class.disabled-link]="loading"
+                  (click)="
+                    $event.preventDefault();
+                    !loading && onLinkClick(element, column.key)
+                  "
+                >
                   {{ getValue(element, column.key) }}
                 </a>
               } @else {
@@ -53,7 +76,7 @@ export interface ValidationTableColumn {
         }
 
         <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-        <tr mat-row *matRowDef="let _row; columns: displayedColumns;"></tr>
+        <tr mat-row *matRowDef="let _row; columns: displayedColumns"></tr>
       </table>
 
       <mat-paginator
@@ -62,34 +85,58 @@ export interface ValidationTableColumn {
         [pageSizeOptions]="pageSizeOptions"
         [length]="totalItems"
         [pageIndex]="currentPage - 1"
+        [disabled]="loading"
         (page)="onPageChange($event)"
-        aria-label="Seite auswählen">
+        aria-label="Seite auswählen"
+      >
       </mat-paginator>
     </div>
   `,
-  styles: [`
-    .table-container {
-      width: 100%;
-    }
+  styles: [
+    `
+      .table-container {
+        width: 100%;
+        position: relative;
+      }
 
-    table {
-      width: 100%;
-    }
+      .table-loading {
+        opacity: 0.6;
+        pointer-events: none;
+      }
 
-    mat-paginator {
-      margin-top: 16px;
-    }
+      .loading-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+      }
 
-    .table-link {
-      cursor: pointer;
-      color: #2196F3;
-      text-decoration: underline;
-    }
-  `]
+      table {
+        width: 100%;
+      }
+
+      mat-paginator {
+        margin-top: 16px;
+      }
+
+      .table-link {
+        cursor: pointer;
+        color: #2196f3;
+        text-decoration: underline;
+      }
+
+      .disabled-link {
+        cursor: default;
+        color: inherit;
+        text-decoration: none;
+        opacity: 0.5;
+      }
+    `
+  ]
 })
-export class ValidationDataTableComponent<T> implements AfterViewInit {
-  @ViewChild('paginator') paginator!: MatPaginator;
-
+export class ValidationDataTableComponent<T>
+implements AfterViewInit, OnChanges {
   @Input() data: T[] = [];
   @Input() columns: ValidationTableColumn[] = [];
   @Input() totalItems = 0;
@@ -98,6 +145,7 @@ export class ValidationDataTableComponent<T> implements AfterViewInit {
   @Input() pageSizeOptions = [10, 25, 50, 100];
   @Input() selectedItems: Set<unknown> = new Set();
   @Input() selectionKey = 'id';
+  @Input() loading = false;
 
   @Output() pageChange = new EventEmitter<PageEvent>();
   @Output() selectionChange = new EventEmitter<Set<unknown>>();
@@ -106,12 +154,13 @@ export class ValidationDataTableComponent<T> implements AfterViewInit {
   dataSource = new MatTableDataSource<T>([]);
 
   ngAfterViewInit(): void {
-    this.dataSource.paginator = this.paginator;
     this.updateDataSource();
   }
 
-  ngOnChanges(): void {
-    this.updateDataSource();
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes.data) {
+      this.updateDataSource();
+    }
   }
 
   get displayedColumns(): string[] {

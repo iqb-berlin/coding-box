@@ -23,31 +23,18 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
   protected validationType = 'responseStatus';
 
   /**
-   * Validates response status by creating a validation task and retrieving results
-   */
-  validate(page: number = 1, limit: number = 10): Observable<ResponseStatusValidationResult> {
-    return this.createTask(this.validationType, page, limit).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      switchMap(completedTask => this.getResults(completedTask.id)),
-      tap(result => {
-        this.saveResult(result);
-        this.removeTaskId();
-      })
-    );
-  }
-
-  /**
    * Deletes selected invalid response status responses
    */
   deleteSelected(responseIds: number[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService.createDeleteResponsesTask(workspaceId, responseIds).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      tap(() => this.removeTaskId()),
-      map(() => undefined)
-    );
+    return this.validationService
+      .createDeleteResponsesTask(workspaceId, responseIds)
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
+        tap(() => this.removeTaskId()),
+        map(() => undefined)
+      );
   }
 
   /**
@@ -55,12 +42,17 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
    */
   deleteAll(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService.createDeleteAllResponsesTask(workspaceId, this.validationType as 'responseStatus').pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      tap(() => this.removeTaskId()),
-      map(() => undefined)
-    );
+    return this.validationService
+      .createDeleteAllResponsesTask(
+        workspaceId,
+        this.validationType as 'responseStatus'
+      )
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task)),
+        switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
+        tap(() => this.removeTaskId()),
+        map(() => undefined)
+      );
   }
 
   /**
@@ -69,7 +61,8 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
   getValidationStatus(): 'not-run' | 'running' | 'success' | 'failed' {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
 
     if (taskIds.responseStatus) {
       return 'running';
@@ -79,9 +72,25 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
   }
 
   /**
+   * Fetches a specific page of validation results using the direct API (no task creation).
+   * Used for pagination after the initial validation has been run.
+   */
+  fetchPage(
+    page: number = 1,
+    limit: number = 10
+  ): Observable<ResponseStatusValidationResult> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService
+      .validateResponseStatus(workspaceId, page, limit)
+      .pipe(tap(result => this.saveResult(result)));
+  }
+
+  /**
    * Calculates the validation status based on the result
    */
-  protected calculateStatus(result: ResponseStatusValidationResult): 'success' | 'failed' | 'not-run' {
+  protected calculateStatus(
+    result: ResponseStatusValidationResult
+  ): 'success' | 'failed' | 'not-run' {
     return result.total > 0 ? 'failed' : 'success';
   }
 
@@ -90,7 +99,11 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
    */
   getCachedResult(): ResponseStatusValidationResult | null {
     const workspaceId = this.appService.selectedWorkspaceId;
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
-    return (results.responseStatus?.details as unknown as ResponseStatusValidationResult) || null;
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
+    return (
+      (results.responseStatus
+        ?.details as unknown as ResponseStatusValidationResult) || null
+    );
   }
 }

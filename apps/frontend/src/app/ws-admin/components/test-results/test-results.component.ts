@@ -455,7 +455,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.validationStatusInterval = window.setInterval(() => {
       this.checkValidationStatus();
-    }, 5000);
+    }, 1000);
   }
 
   private stopValidationStatusCheck(): void {
@@ -475,12 +475,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     );
 
     if (Object.keys(taskIds).length > 0) {
-      for (const [type, taskId] of Object.entries(taskIds)) {
+      for (const [type, task] of Object.entries(taskIds)) {
         this.validationService
-          .getValidationTask(this.appService.selectedWorkspaceId, taskId)
+          .getValidationTask(this.appService.selectedWorkspaceId, task.id)
           .subscribe({
-            next: task => {
-              if (task.status === 'completed' || task.status === 'failed') {
+            next: updatedTask => {
+              if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
                   type as
@@ -489,6 +489,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                     | 'responseStatus'
                     | 'testTakers'
                     | 'groupResponses'
+                );
+              } else {
+                // Update task details in state service to keep progress up to date
+                this.validationTaskStateService.setTaskId(
+                  this.appService.selectedWorkspaceId,
+                  type as
+                    | 'variables'
+                    | 'variableTypes'
+                    | 'responseStatus'
+                    | 'testTakers'
+                    | 'groupResponses'
+                    | 'duplicateResponses',
+                  updatedTask
                 );
               }
             },
@@ -1102,35 +1115,40 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     limit: number = 50,
     searchText: string = ''
   ): void {
-    const validPage = Math.max(0, page);
-    this.isLoading = !this.isSearching;
+    this.isLoading = true;
     this.testResultService
       .getTestResults(
         this.appService.selectedWorkspaceId,
-        validPage,
+        page,
         limit,
         searchText
       )
-      .subscribe(response => {
-        this.isLoading = false;
-        this.isSearching = false;
-        const { data, total } = response;
-        this.updateTable(data, total);
+      .subscribe({
+        next: response => {
+          this.isLoading = false;
+          this.isSearching = false;
+          const { data, total } = response;
+          this.updateTable(data, total);
+        },
+        error: () => {
+          this.isLoading = false;
+        }
       });
   }
 
   private loadWorkspaceOverview(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      this.overview = null;
-      return;
-    }
-
+    this.overview = null;
     this.isLoadingOverview = true;
     this.testResultService
       .getWorkspaceOverview(this.appService.selectedWorkspaceId)
-      .subscribe(result => {
-        this.overview = result;
-        this.isLoadingOverview = false;
+      .subscribe({
+        next: result => {
+          this.overview = result;
+          this.isLoadingOverview = false;
+        },
+        error: () => {
+          this.isLoadingOverview = false;
+        }
       });
   }
 

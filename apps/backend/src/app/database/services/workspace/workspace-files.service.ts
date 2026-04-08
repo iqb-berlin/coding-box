@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  forwardRef,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   FindOperator, In, Like, Repository
@@ -8,7 +14,9 @@ import AdmZip = require('adm-zip');
 import * as path from 'path';
 import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import FileUpload, { StructuredFileData } from '../../entities/file_upload.entity';
+import FileUpload, {
+  StructuredFileData
+} from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
@@ -31,6 +39,7 @@ import {
   TestTakersValidationDto
 } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../../entities/persons.entity';
+// eslint-disable-next-line import/no-cycle
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-validation.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
@@ -38,6 +47,9 @@ import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
+import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -54,11 +66,11 @@ export class WorkspaceFilesService implements OnModuleInit {
     );
   }
 
-  private fromRedisMap(data: Record<string, string[]> | null): Map<string, Set<string>> {
+  private fromRedisMap(
+    data: Record<string, string[]> | null
+  ): Map<string, Set<string>> {
     if (!data) return new Map();
-    return new Map(
-      Object.entries(data).map(([k, v]) => [k, new Set(v)])
-    );
+    return new Map(Object.entries(data).map(([k, v]) => [k, new Set(v)]));
   }
 
   constructor(
@@ -76,8 +88,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceFileParsingService: WorkspaceFileParsingService,
     private workspaceResponseValidationService: WorkspaceResponseValidationService,
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
-    private cacheService: CacheService
-  ) { }
+    private cacheService: CacheService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+  ) {}
 
   private getResourceSubtypeExtension(fileType: string): string | null {
     const match = fileType.match(/^Resource\s*\((\.[^)]+)\)$/i);
@@ -102,7 +116,9 @@ export class WorkspaceFilesService implements OnModuleInit {
           .createQueryBuilder('file')
           .select('file.filename', 'filename')
           .where('file.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
+          .andWhere('file.file_type = :fileType', {
+            fileType: this.resourceTypeLabel
+          })
           .getRawMany();
 
         const resourceSubTypes = new Set<string>();
@@ -156,8 +172,12 @@ export class WorkspaceFilesService implements OnModuleInit {
       const resourceExtension = this.getResourceSubtypeExtension(fileType);
       if (resourceExtension) {
         qb = qb
-          .andWhere('file.file_type = :fileType', { fileType: this.resourceTypeLabel })
-          .andWhere('LOWER(file.filename) LIKE :extension', { extension: `%${resourceExtension}` });
+          .andWhere('file.file_type = :fileType', {
+            fileType: this.resourceTypeLabel
+          })
+          .andWhere('LOWER(file.filename) LIKE :extension', {
+            extension: `%${resourceExtension}`
+          });
       } else {
         qb = qb.andWhere('file.file_type = :fileType', { fileType });
       }
@@ -444,7 +464,9 @@ ${bookletRefs}
     }
   }
 
-  async getItemIdsFromMetadataFiles(workspaceId: number): Promise<{ fileId: string; id: number; items: string[] }[]> {
+  async getItemIdsFromMetadataFiles(
+    workspaceId: number
+  ): Promise<{ fileId: string; id: number; items: string[] }[]> {
     try {
       const metadataFiles = await this.fileUploadRepository.find({
         where: {
@@ -475,13 +497,17 @@ ${bookletRefs}
             }
           }
         } catch (e) {
-          this.logger.warn(`Failed to parse metadata file ${file.filename}: ${e.message}`);
+          this.logger.warn(
+            `Failed to parse metadata file ${file.filename}: ${e.message}`
+          );
         }
       });
 
       return result.sort((a, b) => a.fileId.localeCompare(b.fileId));
     } catch (error) {
-      this.logger.error(`Error fetching item IDs from metadata files: ${error.message}`);
+      this.logger.error(
+        `Error fetching item IDs from metadata files: ${error.message}`
+      );
       return [];
     }
   }
@@ -532,13 +558,13 @@ ${bookletRefs}
       const isConflict = (
         value: unknown
       ): value is TestFilesUploadConflictDto & { conflict: true } => !!value &&
-      typeof value === 'object' &&
+        typeof value === 'object' &&
         (value as { conflict?: unknown }).conflict === true;
 
       const isFailedResult = (
         value: unknown
       ): value is { failed: true; filename: string; reason: string } => !!value &&
-      typeof value === 'object' &&
+        typeof value === 'object' &&
         (value as { failed?: unknown }).failed === true &&
         typeof (value as { filename?: unknown }).filename === 'string' &&
         typeof (value as { reason?: unknown }).reason === 'string';
@@ -579,7 +605,8 @@ ${bookletRefs}
 
       for (let i = 0; i < files.length; i += batchSize) {
         const batch = files.slice(i, i + batchSize);
-        const tasks: Array<{ filename: string; promise: Promise<unknown> }> = [];
+        const tasks: Array<{ filename: string; promise: Promise<unknown> }> =
+          [];
 
         batch.forEach(file => {
           const promises = this.handleFile(
@@ -731,7 +758,8 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          ).catch(error => this.toFailedUploadResult(file.originalname, error))
+          ).catch(error => this.toFailedUploadResult(file.originalname, error)
+          )
         );
         break;
       case 'text/html':
@@ -741,7 +769,8 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          ).catch(error => this.toFailedUploadResult(file.originalname, error))
+          ).catch(error => this.toFailedUploadResult(file.originalname, error)
+          )
         );
         break;
       case 'application/octet-stream':
@@ -751,7 +780,8 @@ ${bookletRefs}
             file,
             overwriteExisting,
             overwriteAllowList
-          ).catch(error => this.toFailedUploadResult(file.originalname, error))
+          ).catch(error => this.toFailedUploadResult(file.originalname, error)
+          )
         );
         break;
       case 'application/zip':
@@ -850,7 +880,8 @@ ${bookletRefs}
         const errorsPreview = (xmlValidation.errors || []).slice(0, maxErrors);
         const failureMessage = `XSD validation failed: ${file.originalname}`;
         this.logger.warn(
-          `XSD validation failed on upload: ${file.originalname} (errors: ${xmlValidation.errors.length
+          `XSD validation failed on upload: ${file.originalname} (errors: ${
+            xmlValidation.errors.length
           }) ${JSON.stringify(errorsPreview)}`
         );
         return this.toFailedUploadResult(file.originalname, failureMessage);
@@ -1168,23 +1199,33 @@ ${bookletRefs}
       });
       const fileIdNormalized = (fileUpload.file_id || '').toUpperCase();
 
-      this.logger.log(`[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`);
+      this.logger.log(
+        `[OctetStream] Checking existing file: ID=${fileIdNormalized}, Exists=${!!existing}`
+      );
       if (overwriteAllowList) {
-        this.logger.log(`[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`);
+        this.logger.log(
+          `[OctetStream] OverwriteAllowList: ${Array.from(overwriteAllowList).join(', ')}`
+        );
       }
 
       const overwriteAllowed =
         overwriteExisting &&
         (!overwriteAllowList || overwriteAllowList.has(fileIdNormalized));
 
-      this.logger.log(`[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`);
+      this.logger.log(
+        `[OctetStream] Overwrite Decision: Allowed=${overwriteAllowed}, OverwriteExisting=${overwriteExisting}`
+      );
 
       if (existing && !overwriteAllowed) {
         if (overwriteExisting && overwriteAllowList) {
-          this.logger.log(`[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`);
+          this.logger.log(
+            `[OctetStream] Skipping because not in allow list: ${fileIdNormalized}`
+          );
           return await Promise.resolve();
         }
-        this.logger.log(`[OctetStream] Conflict detected for ${fileIdNormalized}`);
+        this.logger.log(
+          `[OctetStream] Conflict detected for ${fileIdNormalized}`
+        );
         return {
           conflict: true,
           fileId: fileUpload.file_id,
@@ -1247,29 +1288,32 @@ ${bookletRefs}
       const ENTRY_BATCH_SIZE = 25;
       for (let i = 0; i < zipEntries.length; i += ENTRY_BATCH_SIZE) {
         const batch = zipEntries.slice(i, i + ENTRY_BATCH_SIZE);
-        const batchResults = await Promise.all(batch.map(async entry => {
-          const sanitizedEntryName =
-            this.workspaceFileStorageService.sanitizePath(entry.entryName);
-          const entryData = entry.getData();
-          const nestedFile = <FileIo>{
-            originalname: path.basename(sanitizedEntryName),
-            buffer: entryData,
-            mimetype: this.workspaceFileStorageService.getMimeType(
-              sanitizedEntryName
-            ),
-            size: entryData.length,
-            fieldname: '',
-            encoding: ''
-          };
+        const batchResults = await Promise.all(
+          batch.map(async entry => {
+            const sanitizedEntryName =
+              this.workspaceFileStorageService.sanitizePath(entry.entryName);
+            const entryData = entry.getData();
+            const nestedFile = <FileIo>{
+              originalname: path.basename(sanitizedEntryName),
+              buffer: entryData,
+              mimetype:
+                this.workspaceFileStorageService.getMimeType(
+                  sanitizedEntryName
+                ),
+              size: entryData.length,
+              fieldname: '',
+              encoding: ''
+            };
 
-          const nestedPromises = this.handleFile(
-            workspaceId,
-            nestedFile,
-            overwriteExisting,
-            overwriteAllowList
-          );
-          return Promise.all(nestedPromises);
-        }));
+            const nestedPromises = this.handleFile(
+              workspaceId,
+              nestedFile,
+              overwriteExisting,
+              overwriteAllowList
+            );
+            return Promise.all(nestedPromises);
+          })
+        );
         batchResults.forEach(res => results.push(...res));
       }
       return results;
@@ -1284,23 +1328,26 @@ ${bookletRefs}
 
   static cleanResponses(rows: ResponseDto[]): ResponseDto[] {
     return Object.values(
-      rows.reduce((agg, response) => {
-        const key = [response.test_person, response.unit_id].join('@@@@@@');
-        if (agg[key]) {
-          if (!agg[key].responses.length && response.responses.length) {
-            agg[key].responses = response.responses;
+      rows.reduce(
+        (agg, response) => {
+          const key = [response.test_person, response.unit_id].join('@@@@@@');
+          if (agg[key]) {
+            if (!agg[key].responses.length && response.responses.length) {
+              agg[key].responses = response.responses;
+            }
+            if (
+              !Object.keys(agg[key].unit_state || {}).length &&
+              Object.keys(response.unit_state || {}).length
+            ) {
+              agg[key].unit_state = response.unit_state;
+            }
+          } else {
+            agg[key] = response;
           }
-          if (
-            !Object.keys(agg[key].unit_state || {}).length &&
-            Object.keys(response.unit_state || {}).length
-          ) {
-            agg[key].unit_state = response.unit_state;
-          }
-        } else {
-          agg[key] = response;
-        }
-        return agg;
-      }, <{ [key: string]: ResponseDto }>{})
+          return agg;
+        },
+        <{ [key: string]: ResponseDto }>{}
+      )
     );
   }
 
@@ -1608,7 +1655,9 @@ ${bookletRefs}
     try {
       this.logger.log(`Creating ZIP file for workspace ${workspaceId}`);
 
-      const normalizedFileTypes = (fileTypes || []).map(t => t.trim()).filter(Boolean);
+      const normalizedFileTypes = (fileTypes || [])
+        .map(t => t.trim())
+        .filter(Boolean);
       const resourceExtensions = new Set<string>();
       let resourceAllSelected = false;
       const baseTypes = new Set<string>();
@@ -1689,44 +1738,12 @@ ${bookletRefs}
     }
   }
 
-  async validateVariables(
-    workspaceId: number,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
-    return this.workspaceResponseValidationService.validateVariables(
-      workspaceId,
-      page,
-      limit
-    );
-  }
-
-  async validateVariableTypes(
-    workspaceId: number,
-    page: number = 1,
-    limit: number = 10
-  ): Promise<{
-      data: InvalidVariableDto[];
-      total: number;
-      page: number;
-      limit: number;
-    }> {
-    return this.workspaceResponseValidationService.validateVariableTypes(
-      workspaceId,
-      page,
-      limit
-    );
-  }
-
   async validateTestTakers(
-    workspaceId: number
+    workspaceId: number,
+    onProgress?: (progress: number) => void
   ): Promise<TestTakersValidationDto> {
     try {
+      if (onProgress) onProgress(10);
       const testTakers = await this.fileUploadRepository.find({
         where: {
           workspace_id: workspaceId,
@@ -1746,6 +1763,8 @@ ${bookletRefs}
           missingPersons: []
         };
       }
+
+      if (onProgress) onProgress(30);
 
       const testTakerLogins: TestTakerLoginDto[] = [];
       let totalGroups = 0;
@@ -1808,13 +1827,21 @@ ${bookletRefs}
         }
       }
 
+      if (onProgress) onProgress(60);
+
       const persons = await this.personsRepository.find({
         where: { workspace_id: workspaceId, consider: true }
       });
 
       const missingPersons: MissingPersonDto[] = [];
+      const totalPersons = persons.length;
+      let processedPersons = 0;
 
       for (const person of persons) {
+        processedPersons += 1;
+        if (processedPersons % 50 === 0 && onProgress) {
+          onProgress(60 + Math.floor((processedPersons / totalPersons) * 35));
+        }
         const found = testTakerLogins.some(
           login => login.group === person.group && login.login === person.login
         );
@@ -1850,19 +1877,22 @@ ${bookletRefs}
   async validateDuplicateResponses(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<DuplicateResponsesResultDto> {
     return this.workspaceResponseValidationService.validateDuplicateResponses(
       workspaceId,
       page,
-      limit
+      limit,
+      onProgress
     );
   }
 
   async validateResponseStatus(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       data: InvalidVariableDto[];
       total: number;
@@ -1872,23 +1902,65 @@ ${bookletRefs}
     return this.workspaceResponseValidationService.validateResponseStatus(
       workspaceId,
       page,
-      limit
+      limit,
+      onProgress
+    );
+  }
+
+  async validateVariables(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10,
+    onProgress?: (progress: number) => void
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    return this.workspaceResponseValidationService.validateVariables(
+      workspaceId,
+      page,
+      limit,
+      onProgress
+    );
+  }
+
+  async validateVariableTypes(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10,
+    onProgress?: (progress: number) => void
+  ): Promise<{
+      data: InvalidVariableDto[];
+      total: number;
+      page: number;
+      limit: number;
+    }> {
+    return this.workspaceResponseValidationService.validateVariableTypes(
+      workspaceId,
+      page,
+      limit,
+      onProgress
     );
   }
 
   async validateGroupResponses(
     workspaceId: number,
     page: number = 1,
-    limit: number = 10
+    limit: number = 10,
+    onProgress?: (progress: number) => void
   ): Promise<{
       testTakersFound: boolean;
       groupsWithResponses: { group: string; hasResponse: boolean }[];
       allGroupsHaveResponses: boolean;
       total: number;
+      totalGroupsWithoutResponses: number;
       page: number;
       limit: number;
     }> {
     try {
+      if (onProgress) onProgress(10);
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
         return {
@@ -1896,6 +1968,7 @@ ${bookletRefs}
           groupsWithResponses: [],
           allGroupsHaveResponses: false,
           total: 0,
+          totalGroupsWithoutResponses: 0,
           page,
           limit
         };
@@ -1916,10 +1989,13 @@ ${bookletRefs}
           groupsWithResponses: [],
           allGroupsHaveResponses: false,
           total: 0,
+          totalGroupsWithoutResponses: 0,
           page,
           limit
         };
       }
+
+      if (onProgress) onProgress(20);
 
       const groups: Set<string> = new Set();
 
@@ -1971,16 +2047,26 @@ ${bookletRefs}
           groupsWithResponses: [],
           allGroupsHaveResponses: false,
           total: 0,
+          totalGroupsWithoutResponses: 0,
           page,
           limit
         };
       }
 
+      if (onProgress) onProgress(40);
+
       // Check if each group has at least one response
       const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
       let allGroupsHaveResponses = true;
+      let totalGroupsWithoutResponses = 0;
+      const totalGroups = groups.size;
+      let processedGroups = 0;
 
       for (const group of groups) {
+        processedGroups += 1;
+        if (onProgress) {
+          onProgress(40 + Math.floor((processedGroups / totalGroups) * 55));
+        }
         // Find persons with this group ID
         const persons = await this.personsRepository.find({
           where: { workspace_id: workspaceId, group, consider: true }
@@ -1990,6 +2076,7 @@ ${bookletRefs}
           // No persons found for this group
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
+          totalGroupsWithoutResponses += 1;
           continue;
         }
 
@@ -2002,6 +2089,7 @@ ${bookletRefs}
           );
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
+          totalGroupsWithoutResponses += 1;
           continue;
         }
 
@@ -2026,6 +2114,7 @@ ${bookletRefs}
         if (allUnits.length === 0) {
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
+          totalGroupsWithoutResponses += 1;
           continue;
         }
 
@@ -2037,6 +2126,7 @@ ${bookletRefs}
           );
           groupsWithResponses.push({ group, hasResponse: false });
           allGroupsHaveResponses = false;
+          totalGroupsWithoutResponses += 1;
           continue;
         }
 
@@ -2057,6 +2147,7 @@ ${bookletRefs}
 
         if (!hasResponse) {
           allGroupsHaveResponses = false;
+          totalGroupsWithoutResponses += 1;
         }
       }
 
@@ -2075,6 +2166,7 @@ ${bookletRefs}
         groupsWithResponses: paginatedGroupsWithResponses,
         allGroupsHaveResponses,
         total: groupsWithResponses.length,
+        totalGroupsWithoutResponses,
         page: validPage,
         limit: validLimit
       };
@@ -2259,9 +2351,11 @@ ${bookletRefs}
             const unitName = parsedXml.Unit.Metadata.Id;
             const variables = new Set<string>();
             // Scheme IDs that have INTENDED_INCOMPLETE code type (from the .VOCS file)
-            const schemeIdsWithIntendedIncomplete = intendedIncompleteByUnit.get(unitName);
+            const schemeIdsWithIntendedIncomplete =
+              intendedIncompleteByUnit.get(unitName);
             // Scheme IDs that have CODER_TRAINING_REQUIRED processing property
-            const schemeIdsWithTrainingRequired = trainingRequiredByUnit.get(unitName);
+            const schemeIdsWithTrainingRequired =
+              trainingRequiredByUnit.get(unitName);
             // Aliases that map to those scheme IDs — keyed by alias (= response variableid)
             const aliasesWithIntendedIncomplete = new Set<string>();
             // Aliases that map to scheme IDs with CODER_TRAINING_REQUIRED
@@ -2340,13 +2434,19 @@ ${bookletRefs}
                   continue;
                 }
                 if (sourceType === 'BASE_NO_VALUE') {
-                  this.logger.debug('[DEBUG]  → EXCLUDED from cache: sourceType is BASE_NO_VALUE');
+                  this.logger.debug(
+                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE_NO_VALUE'
+                  );
                 } else if (sourceType === 'BASE') {
-                  this.logger.debug('[DEBUG]  → EXCLUDED from cache: sourceType is BASE');
+                  this.logger.debug(
+                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE'
+                  );
                 } else {
                   variables.add(alias);
                   derivedAliases.add(alias);
-                  this.logger.debug(`[DEBUG]  → ADDED to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}"`);
+                  this.logger.debug(
+                    `[DEBUG]  → ADDED to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}"`
+                  );
                 }
                 // Check if this derived variable's scheme ID has INTENDED_INCOMPLETE code type
                 if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
@@ -2403,10 +2503,16 @@ ${bookletRefs}
             }
 
             if (aliasesWithIntendedIncomplete.size > 0) {
-              intendedIncompleteAliasByUnit.set(unitName, aliasesWithIntendedIncomplete);
+              intendedIncompleteAliasByUnit.set(
+                unitName,
+                aliasesWithIntendedIncomplete
+              );
             }
             if (aliasesWithTrainingRequired.size > 0) {
-              trainingRequiredAliasByUnit.set(unitName, aliasesWithTrainingRequired);
+              trainingRequiredAliasByUnit.set(
+                unitName,
+                aliasesWithTrainingRequired
+              );
             }
             if (derivedAliases.size > 0) {
               derivedVariablesByUnit.set(unitName, derivedAliases);
@@ -2414,25 +2520,40 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${
+              (e as Error).message
             }`
           );
         }
       }
 
-      await this.cacheService.set(this.getCacheKey(workspaceId, 'unit_variables'), this.toRedisMap(unitVariables));
-      await this.cacheService.set(this.getCacheKey(workspaceId, 'intended_incomplete'), this.toRedisMap(intendedIncompleteAliasByUnit));
-      await this.cacheService.set(this.getCacheKey(workspaceId, 'training_required'), this.toRedisMap(trainingRequiredAliasByUnit));
-      await this.cacheService.set(this.getCacheKey(workspaceId, 'derived_variables'), this.toRedisMap(derivedVariablesByUnit));
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'unit_variables'),
+        this.toRedisMap(unitVariables)
+      );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'intended_incomplete'),
+        this.toRedisMap(intendedIncompleteAliasByUnit)
+      );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'training_required'),
+        this.toRedisMap(trainingRequiredAliasByUnit)
+      );
+      await this.cacheService.set(
+        this.getCacheKey(workspaceId, 'derived_variables'),
+        this.toRedisMap(derivedVariablesByUnit)
+      );
 
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
       );
       this.logger.debug(
         `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
-        `${intendedIncompleteAliasByUnit.size} units with INTENDED_INCOMPLETE codes. ${
-          Array.from(intendedIncompleteAliasByUnit.entries())
-            .map(([u, vars]) => `${u}: [${Array.from(vars).join(', ')}]`).join(' | ')}`
+          `${intendedIncompleteAliasByUnit.size} units with INTENDED_INCOMPLETE codes. ${Array.from(
+            intendedIncompleteAliasByUnit.entries()
+          )
+            .map(([u, vars]) => `${u}: [${Array.from(vars).join(', ')}]`)
+            .join(' | ')}`
       );
     } catch (error) {
       this.logger.error(
@@ -2446,10 +2567,13 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
-    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
     }
     return this.fromRedisMap(cached);
   }
@@ -2464,10 +2588,13 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'intended_incomplete');
-    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
     }
     return this.fromRedisMap(cached);
   }
@@ -2480,10 +2607,13 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
-    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
     }
     return this.fromRedisMap(cached);
   }
@@ -2496,10 +2626,13 @@ ${bookletRefs}
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
     const cacheKey = this.getCacheKey(workspaceId, 'training_required');
-    const cached = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    const cached =
+      await this.cacheService.get<Record<string, string[]>>(cacheKey);
     if (!cached) {
       await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(await this.cacheService.get<Record<string, string[]>>(cacheKey));
+      return this.fromRedisMap(
+        await this.cacheService.get<Record<string, string[]>>(cacheKey)
+      );
     }
     return this.fromRedisMap(cached);
   }
@@ -2819,7 +2952,8 @@ ${bookletRefs}
           }
         } catch (e) {
           this.logger.warn(
-            `Error parsing unit file ${unitFile.file_id}: ${(e as Error).message
+            `Error parsing unit file ${unitFile.file_id}: ${
+              (e as Error).message
             }`
           );
         }
@@ -2846,10 +2980,22 @@ ${bookletRefs}
   async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
     await Promise.all([
       this.cacheService.delete(this.getCacheKey(workspaceId, 'unit_variables')),
-      this.cacheService.delete(this.getCacheKey(workspaceId, 'intended_incomplete')),
-      this.cacheService.delete(this.getCacheKey(workspaceId, 'training_required')),
-      this.cacheService.delete(this.getCacheKey(workspaceId, 'derived_variables'))
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'intended_incomplete')
+      ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'training_required')
+      ),
+      this.cacheService.delete(
+        this.getCacheKey(workspaceId, 'derived_variables')
+      ),
+      this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);
-    this.logger.log(`Invalidated workspace files caches for workspace ${workspaceId} in Redis`);
+    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+      workspaceId
+    );
+    this.logger.log(
+      `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
+    );
   }
 }

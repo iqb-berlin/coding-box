@@ -384,6 +384,62 @@ export class TestPersonCodingService {
     }
   }
 
+  startExternalCodingImportJob(
+    workspaceId: number,
+    data: { file: string; fileName?: string }
+  ): Observable<{ jobId: string }> {
+    return this.http
+      .post<{ jobId: string }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/apply`,
+      { file: data.file, fileName: data.fileName },
+      { headers: this.authHeader }
+    );
+  }
+
+  getExternalCodingImportJobStatus(
+    workspaceId: number,
+    jobId: string
+  ): Observable<{
+      status: string;
+      progress: number;
+      result?: {
+        message: string;
+        processedRows: number;
+        updatedRows: number;
+        errorCount: number;
+        affectedRowCount: number;
+      };
+      error?: string;
+    }> {
+    return this.http
+      .get<{
+      status: string;
+      progress: number;
+      result?: {
+        message: string;
+        processedRows: number;
+        updatedRows: number;
+        errorCount: number;
+        affectedRowCount: number;
+      };
+      error?: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/job/${jobId}`,
+      { headers: this.authHeader }
+    );
+  }
+
+  getExternalCodingImportResult(
+    workspaceId: number,
+    jobId: string
+  ): Observable<ExternalCodingImportResultDto> {
+    return this.http
+      .get<ExternalCodingImportResultDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/job/${jobId}/result`,
+      { headers: this.authHeader }
+    );
+  }
+
   getCodingProgressOverview(workspaceId: number): Observable<{
     totalCasesToCode: number;
     completedCases: number;
@@ -671,7 +727,8 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = false,
     search?: string,
     coderId?: number,
-    statusFilter?: string
+    statusFilter?: string,
+    resolvedFilter?: string
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -681,6 +738,7 @@ export class TestPersonCodingService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -715,6 +773,10 @@ export class TestPersonCodingService {
       params = params.set('statusFilter', statusFilter);
     }
 
+    if (resolvedFilter && resolvedFilter !== 'all') {
+      params = params.set('resolvedFilter', resolvedFilter);
+    }
+
     return this.http
       .get<{
       data: Array<{
@@ -725,6 +787,7 @@ export class TestPersonCodingService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;

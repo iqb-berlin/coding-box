@@ -21,6 +21,32 @@
   }
 }
 
+@keyframes shimmer {
+  0% {
+    background-position: -468px 0;
+  }
+  100% {
+    background-position: 468px 0;
+  }
+}
+
+.skeleton {
+  background: #f6f7f8;
+  background-image: linear-gradient(
+    to right,
+    #f6f7f8 0%,
+    #edeef1 20%,
+    #f6f7f8 40%,
+    #f6f7f8 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 800px 104px;
+  display: inline-block;
+  position: relative;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 4px;
+}
+
 // Page header styles
 .page-header {
   margin-bottom: 24px;
@@ -107,6 +133,22 @@
       font-weight: 700;
       letter-spacing: -0.2px;
     }
+
+    &.skeleton-metric {
+      border-color: rgba(0, 0, 0, 0.05);
+      background-color: transparent;
+
+      .skeleton-label {
+        width: 60%;
+        height: 12px;
+      }
+
+      .skeleton-value {
+        width: 40%;
+        height: 24px;
+        margin-top: 4px;
+      }
+    }
   }
 
   .overview-status {
@@ -147,6 +189,13 @@
         background-color: rgba(25, 118, 210, 0.08);
         padding: 2px 8px;
         border-radius: 999px;
+      }
+
+      &.skeleton-chip {
+        width: 100px;
+        height: 32px;
+        border: none;
+        background-color: transparent;
       }
     }
   }

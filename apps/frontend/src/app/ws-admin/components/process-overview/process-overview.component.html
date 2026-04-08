@@ -1,0 +1,114 @@
+<h2 mat-dialog-title>
+  Zentrale Prozess-Übersicht
+</h2>
+
+<mat-dialog-content>
+  <div class="process-overview-container">
+    <div class="filter-row">
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Status</mat-label>
+        <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilter()">
+          <mat-option value="">Alle Status</mat-option>
+          <mat-option *ngFor="let status of statusOptions" [value]="status">
+            {{ status | uppercase }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>Typ (Queue)</mat-label>
+        <mat-select [(ngModel)]="typeFilter" (selectionChange)="applyFilter()">
+          <mat-option value="">Alle Typen</mat-option>
+          <mat-option *ngFor="let type of availableTypes" [value]="type">
+            {{ type }}
+          </mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field appearance="outline" class="filter-field search-field">
+        <mat-label>Suchen...</mat-label>
+        <input matInput [(ngModel)]="searchFilter" (keyup)="applyFilter()" placeholder="ID oder Name">
+        <mat-icon matSuffix>search</mat-icon>
+      </mat-form-field>
+
+      <div class="filter-actions">
+        <button mat-button (click)="clearFilters()" [disabled]="!statusFilter && !typeFilter && !searchFilter">
+          <mat-icon>filter_list_off</mat-icon> Filter leeren
+        </button>
+      </div>
+    </div>
+
+    <div class="table-actions">
+      <button mat-raised-button color="primary" (click)="loadProcesses()">
+        <mat-icon>refresh</mat-icon> Aktualisieren
+      </button>
+    </div>
+
+    <div class="table-container">
+      <div class="loading-overlay" *ngIf="isLoading">
+        <mat-spinner diameter="40"></mat-spinner>
+      </div>
+
+      <div class="mat-elevation-z2 table-wrapper">
+        <table mat-table [dataSource]="processes" class="mat-table" [class.loading-table]="isLoading">
+          
+          <ng-container matColumnDef="queueName">
+            <th mat-header-cell *matHeaderCellDef> Typ (Queue) </th>
+            <td mat-cell *matCellDef="let element"> {{ element.queueName }} </td>
+          </ng-container>
+
+          <ng-container matColumnDef="status">
+            <th mat-header-cell *matHeaderCellDef> Status </th>
+            <td mat-cell *matCellDef="let element" class="status-cell" [ngClass]="element.status">
+              {{ element.status | uppercase }}
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="progress">
+            <th mat-header-cell *matHeaderCellDef> Fortschritt </th>
+            <td mat-cell *matCellDef="let element">
+              <ng-container *ngIf="isNumber(element.progress); else defaultProgress">
+                {{ element.progress }} %
+              </ng-container>
+              <ng-template #defaultProgress>
+                {{ element.progress | json }}
+              </ng-template>
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="timestamp">
+            <th mat-header-cell *matHeaderCellDef> Erstellt / Aktualisiert </th>
+            <td mat-cell *matCellDef="let element"> 
+              {{ element.timestamp | date:'short' }} 
+            </td>
+          </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <th mat-header-cell *matHeaderCellDef> Aktionen </th>
+            <td mat-cell *matCellDef="let element">
+              <button mat-icon-button color="warn" (click)="deleteProcess(element)" matTooltip="Abbrechen / Entfernen">
+                <mat-icon>delete</mat-icon>
+              </button>
+            </td>
+          </ng-container>
+
+          <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+          <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+        </table>
+        
+        <mat-paginator [pageSizeOptions]="[5, 10, 20]"
+                       showFirstLastButtons
+                       aria-label="Select page of periodic elements">
+        </mat-paginator>
+
+        <div *ngIf="processes.data.length === 0 && !isLoading" class="no-data">
+          Keine Prozesse in der Warteschlange.
+        </div>
+      </div>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button mat-dialog-close>Schließen</button>
+</mat-dialog-actions>

@@ -1,14 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { switchMap, tap } from 'rxjs/operators';
+import { tap } from 'rxjs/operators';
 import { BaseValidationService } from './base-validation.service';
-import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 interface GroupResponsesValidationResult {
   testTakersFound: boolean;
   groupsWithResponses: { group: string; hasResponse: boolean }[];
   allGroupsHaveResponses: boolean;
   total: number;
+  totalGroupsWithoutResponses: number;
   page: number;
   limit: number;
 }
@@ -24,27 +24,13 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
   protected validationType = 'groupResponses';
 
   /**
-   * Validates group responses by creating a validation task and retrieving results
-   */
-  validate(page: number = 1, limit: number = 10): Observable<GroupResponsesValidationResult> {
-    return this.createTask(this.validationType, page, limit).pipe(
-      tap((task: ValidationTaskDto) => this.storeTaskId(task.id)),
-      switchMap((task: ValidationTaskDto) => this.pollTask(task.id)),
-      switchMap(completedTask => this.getResults(completedTask.id)),
-      tap(result => {
-        this.saveResult(result);
-        this.removeTaskId();
-      })
-    );
-  }
-
-  /**
    * Gets the current validation status
    */
   getValidationStatus(): 'not-run' | 'running' | 'success' | 'failed' {
     const workspaceId = this.appService.selectedWorkspaceId;
     const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
 
     if (taskIds.groupResponses) {
       return 'running';
@@ -54,10 +40,28 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
   }
 
   /**
+   * Fetches a specific page of validation results using the direct API (no task creation).
+   * Used for pagination after the initial validation has been run.
+   */
+  fetchPage(
+    page: number = 1,
+    limit: number = 10
+  ): Observable<GroupResponsesValidationResult> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService
+      .validateGroupResponses(workspaceId, page, limit)
+      .pipe(tap(result => this.saveResult(result)));
+  }
+
+  /**
    * Calculates the validation status based on the result
    */
-  protected calculateStatus(result: GroupResponsesValidationResult): 'success' | 'failed' | 'not-run' {
-    return (!result.testTakersFound || !result.allGroupsHaveResponses) ? 'failed' : 'success';
+  protected calculateStatus(
+    result: GroupResponsesValidationResult
+  ): 'success' | 'failed' | 'not-run' {
+    return !result.testTakersFound || !result.allGroupsHaveResponses ?
+      'failed' :
+      'success';
   }
 
   /**
@@ -65,7 +69,11 @@ export class GroupResponsesValidationService extends BaseValidationService<Group
    */
   getCachedResult(): GroupResponsesValidationResult | null {
     const workspaceId = this.appService.selectedWorkspaceId;
-    const results = this.validationTaskStateService.getAllValidationResults(workspaceId);
-    return (results.groupResponses?.details as unknown as GroupResponsesValidationResult) || null;
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
+    return (
+      (results.groupResponses
+        ?.details as unknown as GroupResponsesValidationResult) || null
+    );
   }
 }

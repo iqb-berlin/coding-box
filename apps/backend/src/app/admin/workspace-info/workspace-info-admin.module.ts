@@ -9,14 +9,17 @@ import { ValidationTaskController } from '../workspace/validation-task.controlle
 import { BookletInfoController } from '../workspace/booklet-info.controller';
 import { UnitInfoController } from '../workspace/unit-info.controller';
 import { MissingsProfilesController } from '../workspace/missings-profiles.controller';
+import { WorkspaceProcessesController } from '../workspace/workspace-processes.controller';
 import { AccessRightsMatrixService } from '../workspace/access-rights-matrix.service';
+import { JobQueueModule } from '../../job-queue/job-queue.module';
 
 @Module({
   imports: [
     DatabaseModule,
     WorkspaceModule,
     AuthModule,
-    CodingModule
+    CodingModule,
+    JobQueueModule
   ],
   controllers: [
     WorkspaceController,
@@ -24,7 +27,8 @@ import { AccessRightsMatrixService } from '../workspace/access-rights-matrix.ser
     ValidationTaskController,
     BookletInfoController,
     UnitInfoController,
-    MissingsProfilesController
+    MissingsProfilesController,
+    WorkspaceProcessesController
   ],
   providers: [
     AccessRightsMatrixService

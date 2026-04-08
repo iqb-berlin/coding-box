@@ -339,6 +339,8 @@ export class CodingJobBackendService {
       personLogin: string;
       personCode: string;
       personGroup: string;
+      isDoubleCoded: boolean;
+      otherCoders: string[];
     }>
     > {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
@@ -353,6 +355,8 @@ export class CodingJobBackendService {
       personLogin: string;
       personCode: string;
       personGroup: string;
+      isDoubleCoded: boolean;
+      otherCoders: string[];
     }>
     >(url, { headers: this.authHeader });
   }

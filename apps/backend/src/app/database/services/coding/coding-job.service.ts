@@ -21,6 +21,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import FileUpload from '../../entities/file_upload.entity';
 import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 function isSafeKey(key: string): boolean {
@@ -848,7 +849,21 @@ export class CodingJobService {
     return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
-  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{ responseId: number; unitName: string; unitAlias: string | null; variableId: string; variableAnchor: string; bookletName: string; personLogin: string; personCode: string; personGroup: string; notes: string | null; variableBundleId: number | null }[]> {
+  async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{
+    responseId: number;
+    unitName: string;
+    unitAlias: string | null;
+    variableId: string;
+    variableAnchor: string;
+    bookletName: string;
+    personLogin: string;
+    personCode: string;
+    personGroup: string;
+    notes: string | null;
+    variableBundleId: number | null;
+    isDoubleCoded: boolean;
+    otherCoders: string[];
+  }[]> {
     const whereClause: { coding_job_id: number; is_open?: boolean } = { coding_job_id: codingJobId };
 
     if (onlyOpen) {
@@ -888,6 +903,32 @@ export class CodingJobService {
       ]
     });
 
+    // Detect double coding and other coders
+    const responseIds = codingJobUnits.map(unit => unit.response_id);
+    const otherCodersMap = new Map<number, Set<string>>();
+
+    if (responseIds.length > 0) {
+      const otherUnits = await this.codingJobUnitRepository.find({
+        where: {
+          response_id: In(responseIds),
+          coding_job_id: Not(codingJobId)
+        },
+        relations: ['coding_job', 'coding_job.codingJobCoders', 'coding_job.codingJobCoders.user']
+      });
+
+      otherUnits.forEach(unit => {
+        if (!otherCodersMap.has(unit.response_id)) {
+          otherCodersMap.set(unit.response_id, new Set<string>());
+        }
+        const coderSet = otherCodersMap.get(unit.response_id)!;
+        unit.coding_job?.codingJobCoders?.forEach(cjc => {
+          if (cjc.user) {
+            coderSet.add(cjc.user.username || `Coder ${cjc.user_id}`);
+          }
+        });
+      });
+    }
+
     const buckets = new Map<number | 'unbundled', CodingJobUnit[]>();
     for (const b of bundles) {
       buckets.set(b.variable_bundle_id, []);
@@ -909,19 +950,24 @@ export class CodingJobService {
       sortedUnits = sortedUnits.concat(units);
     }
 
-    return sortedUnits.map(unit => ({
-      responseId: unit.response_id,
-      unitName: unit.unit_name,
-      unitAlias: unit.unit_alias,
-      variableId: unit.variable_id,
-      variableAnchor: unit.variable_anchor,
-      bookletName: unit.booklet_name,
-      personLogin: unit.person_login,
-      personCode: unit.person_code,
-      personGroup: unit.person_group,
-      notes: unit.notes,
-      variableBundleId: unit.variable_bundle_id
-    }));
+    return sortedUnits.map(unit => {
+      const otherCoders = Array.from(otherCodersMap.get(unit.response_id) || []);
+      return {
+        responseId: unit.response_id,
+        unitName: unit.unit_name,
+        unitAlias: unit.unit_alias,
+        variableId: unit.variable_id,
+        variableAnchor: unit.variable_anchor,
+        bookletName: unit.booklet_name,
+        personLogin: unit.person_login,
+        personCode: unit.person_code,
+        personGroup: unit.person_group,
+        notes: unit.notes,
+        variableBundleId: unit.variable_bundle_id,
+        isDoubleCoded: otherCoders.length > 0,
+        otherCoders: otherCoders
+      };
+    });
   }
 
   private async getSlimResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<SlimResponse[]> {
@@ -1062,6 +1108,7 @@ export class CodingJobService {
       const chunk = responses.slice(i, i + BATCH_SIZE);
       const units = chunk.map(r => repo.create({
         coding_job_id: codingJobId,
+        workspace_id: workspaceId,
         response_id: r.id,
         unit_name: r.unitName,
         unit_alias: r.unitAlias,
@@ -1074,6 +1121,22 @@ export class CodingJobService {
         variable_bundle_id: r.variableBundleId || null
       }));
       await repo.save(units);
+
+      // Reset response status for non-training jobs to ensure a fresh coding/review cycle
+      if (!codingJob.training_id) {
+        const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+        const responseIds = chunk.map(r => r.id);
+        const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+        await responseRepo.update(
+          { id: In(responseIds) },
+          {
+            status_v2: incompleteStatus,
+            code_v2: null,
+            score_v2: null
+          }
+        );
+      }
     }
   }
 
@@ -1168,16 +1231,26 @@ export class CodingJobService {
         }
       }
 
-      await this.saveCodingJobUnitsSubset(savedCodingJob.id, unitSubset, manager);
+      await this.saveCodingJobUnitsSubset(savedCodingJob.id, workspaceId, unitSubset, manager);
 
       return savedCodingJob;
     });
   }
 
-  private async saveCodingJobUnitsSubset(codingJobId: number, responses: SlimResponse[], manager?: EntityManager): Promise<void> {
+  private async saveCodingJobUnitsSubset(
+    codingJobId: number,
+    workspaceId: number,
+    responses: SlimResponse[],
+    manager?: EntityManager
+  ): Promise<void> {
     if (responses.length === 0) {
       return;
     }
+
+    // Get coding job to check if it's a training job
+    const codingJobRepo = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
+    const codingJob = await codingJobRepo.findOne({ where: { id: codingJobId } });
+    const isTraining = codingJob?.training_id !== null && codingJob?.training_id !== undefined;
 
     const unitRepo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
     const BATCH_SIZE = 500;
@@ -1185,6 +1258,7 @@ export class CodingJobService {
       const chunk = responses.slice(i, i + BATCH_SIZE);
       const units = chunk.map(r => unitRepo.create({
         coding_job_id: codingJobId,
+        workspace_id: workspaceId,
         response_id: r.id,
         unit_name: r.unitName,
         unit_alias: r.unitAlias,
@@ -1197,6 +1271,22 @@ export class CodingJobService {
         variable_bundle_id: r.variableBundleId || null
       }));
       await unitRepo.save(units);
+
+      // Reset response status for non-training jobs
+      if (!isTraining) {
+        const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+        const responseIds = chunk.map(r => r.id);
+        const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+        await responseRepo.update(
+          { id: In(responseIds) },
+          {
+            status_v2: incompleteStatus,
+            code_v2: null,
+            score_v2: null
+          }
+        );
+      }
     }
   }
 

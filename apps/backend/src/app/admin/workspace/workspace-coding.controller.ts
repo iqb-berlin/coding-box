@@ -4,8 +4,7 @@ import {
   Param,
   Post,
   Query,
-  UseGuards,
-  ConflictException
+  UseGuards
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -57,13 +56,7 @@ export class WorkspaceCodingController {
       @WorkspaceId() workspace_id: number,
       @Query('autoCoderRun') autoCoderRun: string
   ): Promise<CodingStatistics> {
-    // Check for active reset jobs (mutual blocking)
-    const activeResetJob = await this.jobQueueService.getActiveResetCodingVersionJob(workspace_id);
-    if (activeResetJob) {
-      throw new ConflictException(
-        `A reset coding version job is already running for this workspace (job ${activeResetJob.id}). Please wait until it completes.`
-      );
-    }
+    await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
 
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
     return this.codingProcessService.codeTestPersons(

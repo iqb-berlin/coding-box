@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, IsNull, Not, Repository
+  Brackets, In, Repository
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -56,15 +56,27 @@ export class CodingProgressService {
       }))
       .getCount();
 
-    const completedCases = await this.codingJobUnitRepository.count({
-      where: {
-        coding_job: {
-          workspace_id: workspaceId,
-          training_id: IsNull()
-        },
-        code: Not(IsNull())
-      }
-    });
+    const completedCasesResult = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('cju.code IS NOT NULL')
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .select('COUNT(DISTINCT cju.response_id)', 'count')
+      .getRawOne();
+
+    const completedCases = parseInt(completedCasesResult?.count || '0', 10);
 
     const completionPercentage =
       totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
