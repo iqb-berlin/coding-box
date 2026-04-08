@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
@@ -201,16 +202,118 @@ export class JobQueueService {
   ) { }
 
   private getQueue(name: string): Queue {
-    const map: Record<string, Queue> = {
-      'test-person-coding': this.testPersonCodingQueue,
-      'coding-statistics': this.codingStatisticsQueue,
-      'data-export': this.dataExportQueue,
-      'test-results-upload': this.testResultsUploadQueue,
-      'reset-coding-version': this.resetCodingVersionQueue,
-      'validation-task': this.validationTaskQueue,
-      'external-coding-import': this.externalCodingImportQueue
-    };
-    return map[name];
+    return this.getAllQueues().get(name);
+  }
+
+  private getAllQueues(): Map<string, Queue> {
+    return new Map([
+      ['test-person-coding', this.testPersonCodingQueue],
+      ['coding-statistics', this.codingStatisticsQueue],
+      ['data-export', this.dataExportQueue],
+      ['flat-response-filter-options', this.flatResponseFilterOptionsQueue],
+      ['test-results-upload', this.testResultsUploadQueue],
+      ['codebook-generation', this.codebookGenerationQueue],
+      ['reset-coding-version', this.resetCodingVersionQueue],
+      ['validation-task', this.validationTaskQueue],
+      ['response-analysis', this.responseAnalysisQueue],
+      ['variable-analysis', this.variableAnalysisQueue],
+      ['external-coding-import', this.externalCodingImportQueue]
+    ]);
+  }
+
+  async cancelJob(queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    try {
+      const state = await job.getState();
+      if (state === 'waiting' || state === 'delayed' || state === 'completed' || state === 'failed') {
+        await job.remove();
+        return true;
+      }
+      if (state === 'active') {
+        if (queueName === 'data-export') {
+          await job.update({ ...job.data, isCancelled: true });
+        }
+        await job.discard();
+        await job.remove(); // Also remove active jobs once discarded to clear it from UI
+        return true;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async deleteJob(queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    try {
+      await job.remove();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getAllWorkspaceJobs(workspaceId: number): Promise<ProcessDto[]> {
+    const queues = this.getAllQueues();
+    const processPromises: Promise<ProcessDto[]>[] = [];
+
+    for (const [queueName, queue] of queues.entries()) {
+      processPromises.push(
+        queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
+          let matchedJobs = jobs;
+          if (queueName === 'validation-task') {
+            const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
+            if (taskIds.length === 0) return [];
+            const tasks = await this.validationTaskRepository.find({
+              where: { id: In(taskIds) },
+              select: ['id', 'workspace_id']
+            });
+            const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
+            matchedJobs = jobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+          } else {
+            matchedJobs = jobs.filter(j => j.data && j.data.workspaceId === workspaceId);
+          }
+
+          const mappedPromises = matchedJobs.map(async job => {
+            const state = await job.getState();
+            let progress: unknown = job.progress();
+
+            // For completed jobs, ensure progress shows as 100% if it's numeric/empty
+            if (state === 'completed') {
+              if (typeof progress !== 'object' || progress === null) {
+                progress = 100;
+              }
+            } else if (progress === undefined || progress === null) {
+              progress = 0;
+            }
+
+            return {
+              id: job.id,
+              queueName: queueName,
+              status: state as ProcessDto['status'],
+              progress: progress,
+              data: job.data,
+              failedReason: job.failedReason,
+              timestamp: job.timestamp,
+              processedOn: job.processedOn,
+              finishedOn: job.finishedOn
+            } as ProcessDto;
+          });
+          return Promise.all(mappedPromises);
+        })
+      );
+    }
+
+    const results = await Promise.all(processPromises);
+    return results.flat().sort((a, b) => b.timestamp - a.timestamp);
   }
 
   private async hasActiveJobForWorkspace(
