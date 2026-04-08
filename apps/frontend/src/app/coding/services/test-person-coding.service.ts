@@ -727,7 +727,8 @@ export class TestPersonCodingService {
     excludeTrainings: boolean = false,
     search?: string,
     coderId?: number,
-    statusFilter?: string
+    statusFilter?: string,
+    resolvedFilter?: string
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -737,6 +738,7 @@ export class TestPersonCodingService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -771,6 +773,10 @@ export class TestPersonCodingService {
       params = params.set('statusFilter', statusFilter);
     }
 
+    if (resolvedFilter && resolvedFilter !== 'all') {
+      params = params.set('resolvedFilter', resolvedFilter);
+    }
+
     return this.http
       .get<{
       data: Array<{
@@ -781,6 +787,7 @@ export class TestPersonCodingService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;

@@ -1770,6 +1770,7 @@
     "apply-disabled-tooltip": "Alle Kodierer müssen ihre Arbeit beenden, bevor der Konflikt gelöst werden kann.",
     "coders-done": "Kodierer fertig",
     "pending": "Ausstehend",
+    "applied": "Angewandt",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
       "search-label": "Suchen",
@@ -1779,7 +1780,11 @@
       "status-label": "Status",
       "status-all": "Alle Status",
       "status-done": "Alle fertig",
-      "status-pending": "Warten auf Kodierer"
+      "status-pending": "Warten auf Kodierer",
+      "resolved-label": "Entscheidung",
+      "resolved-all": "Alle",
+      "resolved-done": "Angewandt",
+      "resolved-unresolved": "Offen"
     },
     "details": {
       "given-answer": "Vollständige Antwort",

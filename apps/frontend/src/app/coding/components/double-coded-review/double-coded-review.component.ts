@@ -51,6 +51,7 @@ interface DoubleCodedItem {
   personCode: string;
   bookletName: string;
   givenAnswer: string;
+  isResolved: boolean;
   coderResults: CoderResult[];
   selectedCoderResult?: CoderResult;
 }
@@ -114,7 +115,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<string>('all');
+  resolvedControl = new FormControl<string>('all');
   availableCoders: { id: number; name: string }[] = [];
+  private resultsApplied = false;
   private destroy$ = new Subject<void>();
 
   selectionForm!: FormGroup;
@@ -136,8 +139,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const search$ = this.searchControl.valueChanges.pipe(debounceTime(500), distinctUntilChanged());
     const coder$ = this.coderControl.valueChanges.pipe(distinctUntilChanged());
     const status$ = this.statusControl.valueChanges.pipe(distinctUntilChanged());
+    const resolved$ = this.resolvedControl.valueChanges.pipe(distinctUntilChanged());
 
-    merge(search$, coder$, status$)
+    merge(search$, coder$, status$, resolved$)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.onFilterChange();
@@ -210,8 +214,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   hasConflict(item: DoubleCodedItem): boolean {
     const validResults = item.coderResults.filter(cr => cr.code !== null);
     if (validResults.length < 2) {
-      // If none or only one coded, we can't have a conflict per se yet,
-      // but it's "incomplete" if more are expected.
       return false;
     }
     const firstCode = validResults[0].code;
@@ -222,9 +224,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return item.coderResults.every(cr => cr.code !== null);
   }
 
-  getCodedCount(item: DoubleCodedItem): string {
-    const codedCount = item.coderResults.filter(cr => cr.code !== null).length;
-    return `${codedCount}/${item.coderResults.length}`;
+  getCodedCount(item: DoubleCodedItem): number {
+    return item.coderResults.filter(cr => cr.code !== null).length;
   }
 
   onFilterChange(): void {
@@ -236,7 +237,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const currentItems = this.dataSource.data;
     return currentItems.every(item => {
       if (!this.hasConflict(item)) {
-        return true; // Non-conflicting items don't need resolution
+        return true;
       }
       const controlName = this.getItemControlName(item);
       const value = this.selectionForm.get(controlName)?.value;
@@ -271,15 +272,16 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       this.currentPage,
       this.pageSize,
       this.showOnlyConflicts,
-      false, // excludeTrainings handled by backend
+      false,
       this.searchControl.value || undefined,
       this.coderControl.value || undefined,
-      this.statusControl.value || undefined
+      this.statusControl.value || undefined,
+      this.resolvedControl.value || undefined
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
           ...item,
-          selectedCoderResult: item.coderResults[0] // Default to first coder
+          selectedCoderResult: item.coderResults[0]
         }));
         this.dataSource.data = this.allData;
         this.totalItems = response.total;
@@ -318,12 +320,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    // Collect decisions from current (visible) items on the page
     const decisions: Array<{ responseId: number; selectedJobId: number; resolutionComment?: string }> = [];
     const currentItems = this.getCurrentItems();
     let hasIncomplete = false;
 
     currentItems.forEach(item => {
+      if (item.isResolved) return; // Skip already resolved items
+
       const decision = this.getDecisionForItem(item);
       if (decision) {
         decisions.push(decision);
@@ -401,7 +404,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           selectedJobId: selectedResult.jobId
         };
 
-        // Add comment if provided for conflicting items
         if (this.hasConflict(item)) {
           const commentControlName = this.getCommentControlName(item);
           const comment = this.selectionForm.get(commentControlName)?.value;
@@ -427,6 +429,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         }).subscribe(message => {
           this.showSuccess(message);
         });
+        this.resultsApplied = true;
         this.loadData();
       },
       error: () => {
@@ -490,6 +493,12 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         return this.translateService.instant('code-selector.coding-issue-options.technical-problems');
       default:
         return '';
+    }
+  }
+
+  close(): void {
+    if (this.dialogRef) {
+      this.dialogRef.close({ resultsApplied: this.resultsApplied });
     }
   }
 }
