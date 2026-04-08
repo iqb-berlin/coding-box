@@ -425,6 +425,9 @@ export class UploadResultsService {
 
     this.logger.log(`Queueing upload jobs for workspace ${workspace_id} (files: ${originalFiles.length})`);
 
+    await this.jobQueueService.assertNoActiveUploadForWorkspace(workspace_id);
+    await this.jobQueueService.assertNoDependencyConflicts('test-results-upload', workspace_id);
+
     const MAX_FILES_LENGTH = 1000;
     if (originalFiles.length > MAX_FILES_LENGTH) {
       this.logger.error(`Too many files to upload: ${originalFiles.length}`);

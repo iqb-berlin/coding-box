@@ -5,7 +5,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, EMPTY } from 'rxjs';
 import { TestTakersValidationPanelComponent } from './test-takers-validation-panel.component';
 import { TestTakersValidationService } from '../../../../services/validation';
 import { ValidationPanelHeaderComponent, ValidationGuidanceComponent } from '../../shared';
@@ -17,6 +17,9 @@ describe('TestTakersValidationPanelComponent', () => {
     validate: jest.Mock;
     getValidationStatus: jest.Mock;
     getCachedResult: jest.Mock;
+    observeCachedResult: jest.Mock;
+    observeValidationResult: jest.Mock;
+    observeValidationTask: jest.Mock;
   };
 
   const mockResult = {
@@ -31,7 +34,10 @@ describe('TestTakersValidationPanelComponent', () => {
     serviceMock = {
       validate: jest.fn(),
       getValidationStatus: jest.fn(),
-      getCachedResult: jest.fn()
+      getCachedResult: jest.fn(),
+      observeCachedResult: jest.fn().mockReturnValue(EMPTY),
+      observeValidationResult: jest.fn().mockReturnValue(EMPTY),
+      observeValidationTask: jest.fn().mockReturnValue(EMPTY)
     };
 
     await TestBed.configureTestingModule({
@@ -78,7 +84,7 @@ describe('TestTakersValidationPanelComponent', () => {
   });
 
   it('should load cached result on init', () => {
-    serviceMock.getCachedResult.mockReturnValue(mockResult);
+    serviceMock.observeValidationResult.mockReturnValue(of({ status: 'success', details: mockResult }));
     component.ngOnInit();
     expect(component.result).toEqual(mockResult as unknown as typeof component.result);
     expect(component.wasRun).toBe(true);

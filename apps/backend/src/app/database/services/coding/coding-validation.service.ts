@@ -11,6 +11,7 @@ import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expe
 import { ValidationResultDto } from '../../../../../../../api-dto/coding/validation-result.dto';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { CodingJobService } from './coding-job.service';
 

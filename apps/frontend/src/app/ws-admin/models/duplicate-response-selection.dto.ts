@@ -1,17 +1,8 @@
+import { DuplicateResponseDto } from '../../../../../../api-dto/files/duplicate-response.dto';
+
 /**
  * DTO for duplicate response selection
  */
-export interface DuplicateResponseSelectionDto {
+export interface DuplicateResponseSelectionDto extends DuplicateResponseDto {
   key: string;
-  unitId: number;
-  unitName: string;
-  variableId: string;
-  subform: string;
-  testTakerLogin: string;
-  bookletName: string;
-  duplicates: {
-    responseId: number;
-    value: string | null;
-    status: string | null;
-  }[];
 }

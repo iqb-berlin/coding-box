@@ -18,8 +18,9 @@
   mat-dialog-actions {
     flex-shrink: 0;
     margin-bottom: 0;
-    padding-right: 24px;
-    padding-bottom: 16px;
+    padding: 16px 24px;
+    justify-content: flex-end;
+    border-top: 1px solid #e0e0e0;
   }
 }
 
@@ -100,204 +101,11 @@
       }
     }
 
-    .kappa-card {
+    .filter-card {
       margin-bottom: 24px;
-
-      mat-card-header {
-        mat-card-title {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-
-          mat-icon {
-            color: #1976d2;
-          }
-        }
-      }
-
-      .kappa-info {
-        p {
-          margin-bottom: 16px;
-          color: #666;
-          font-size: 14px;
-          line-height: 1.5;
-        }
-
-        .no-kappa-data {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 32px;
-          background-color: #f8f9fa;
-          border-radius: 8px;
-          border: 1px solid #e9ecef;
-
-          mat-icon {
-            font-size: 48px;
-            width: 48px;
-            height: 48px;
-            color: #ccc;
-            margin-bottom: 16px;
-          }
-
-          p {
-            margin: 0;
-            color: #666;
-            font-size: 16px;
-          }
-        }
-
-        .kappa-results {
-          margin-bottom: 24px;
-
-          .kappa-unit-variable {
-            margin-bottom: 20px;
-            padding: 16px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-
-            h4 {
-              margin: 0 0 16px 0;
-              color: #1976d2;
-              font-size: 16px;
-              font-weight: 600;
-            }
-
-            .kappa-pairs {
-              display: flex;
-              flex-direction: column;
-              gap: 12px;
-
-              .kappa-pair {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                padding: 12px 16px;
-                background-color: white;
-                border-radius: 6px;
-                border: 1px solid #e0e0e0;
-
-                .coder-names {
-                  display: flex;
-                  align-items: center;
-                  gap: 8px;
-                  font-weight: 500;
-
-                  .coder1, .coder2 {
-                    color: #1976d2;
-                  }
-
-                  .vs {
-                    color: #666;
-                    font-weight: normal;
-                  }
-                }
-
-                .kappa-values {
-                  display: flex;
-                  gap: 20px;
-                  align-items: center;
-
-                  .kappa-value, .agreement-value, .interpretation {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-
-                    .label {
-                      font-size: 12px;
-                      color: #666;
-                      margin-bottom: 2px;
-                      font-weight: 500;
-                    }
-
-                    .value {
-                      font-size: 16px;
-                      font-weight: 600;
-
-                      &.kappa-poor {
-                        color: #d32f2f;
-                      }
-
-                      &.kappa-fair {
-                        color: #f57c00;
-                      }
-
-                      &.kappa-moderate {
-                        color: #fbc02d;
-                      }
-
-                      &.kappa-substantial {
-                        color: #388e3c;
-                      }
-
-                      &.kappa-perfect {
-                        color: #1976d2;
-                      }
-
-                      &.kappa-na {
-                        color: #999;
-                      }
-                    }
-
-                    .interpretation-text {
-                      font-size: 12px;
-                      color: #666;
-                      font-style: italic;
-                      text-align: center;
-                      max-width: 120px;
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        .kappa-scale {
-          border-top: 1px solid #e9ecef;
-          padding-top: 16px;
-
-          h4 {
-            margin: 0 0 16px 0;
-            color: #333;
-            font-size: 14px;
-            font-weight: 600;
-          }
-
-          .kappa-scale-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 12px 16px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #e9ecef;
-            min-width: 120px;
-
-            .kappa-range {
-              font-weight: 600;
-              color: #1976d2;
-              font-size: 14px;
-              margin-bottom: 4px;
-            }
-
-            .kappa-label {
-              font-size: 12px;
-              color: #666;
-              text-align: center;
-            }
-          }
-        }
-      }
-    }
-
-    .review-card {
+      
       .filter-section {
         padding: 16px 24px;
-        border-bottom: 1px solid #e0e0e0;
-        margin-bottom: 16px;
         display: flex;
         align-items: center;
         flex-wrap: wrap;
@@ -362,186 +170,276 @@
         }
       }
 
-      .review-table {
-        width: 100%;
+      .review-card {
         margin-bottom: 24px;
 
-        th {
-          background-color: #f5f5f5;
-          font-weight: 600;
-          font-size: 14px;
-          padding: 16px 12px;
-        }
+        .card-header-content {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          width: 100%;
+          padding: 16px 24px;
+          box-sizing: border-box;
 
-        td {
-          padding: 16px 12px;
-          vertical-align: top;
-        }
-
-        .unit-variable-cell {
-          .unit-name {
-            font-weight: 500;
-            color: #1976d2;
-            margin-bottom: 4px;
-          }
-
-          .variable-id {
-            font-size: 14px;
-            color: #666;
-          }
-        }
-
-        .person-info-cell {
-          .person-login {
-            font-weight: 500;
-            margin-bottom: 2px;
-          }
-
-          .person-code {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 2px;
-          }
-
-          .booklet-name {
-            font-size: 14px;
-            color: #999;
-          }
-        }
-
-        .given-answer-cell {
-          font-family: monospace;
-          background-color: #f9f9f9;
-          padding: 8px 12px;
-          border-radius: 4px;
-          max-width: 200px;
-          max-height: 150px;
-          overflow-y: auto;
-          word-break: break-word;
-          white-space: pre-wrap;
-        }
-
-        .coder-results-cell {
-          position: relative;
-          padding-top: 10px;
-
-          .conflict-icon {
-            position: absolute;
-            top: 2px;
-            left: -4px;
-            font-size: 18px;
-            width: 18px;
-            height: 18px;
-          }
-
-          .coder-results-list {
+          .title-group {
             display: flex;
             flex-direction: column;
-            gap: 8px;
+          }
 
-            .coder-result-row {
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 6px 10px;
-              background-color: #f5f7fa;
-              border-radius: 4px;
-              border-left: 3px solid #1976d2;
+          .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
 
-              .coder-name-badge {
-                font-weight: 600;
-                font-size: 13px;
+            .help-icon {
+              color: #757575;
+              cursor: help;
+              font-size: 20px;
+              width: 20px;
+              height: 20px;
+
+              &:hover {
                 color: #1976d2;
-                min-width: 60px;
-                display: flex;
-                align-items: center;
-                gap: 4px;
-
-                .job-name {
-                  font-weight: 400;
-                  font-size: 11px;
-                  color: #757575;
-                }
-              }
-
-              .coder-value, .coder-score {
-                display: flex;
-                align-items: center;
-                gap: 4px;
-                font-size: 13px;
-
-                .label {
-                  color: #666;
-                  font-size: 11px;
-                  text-transform: uppercase;
-                }
-
-                .value {
-                  font-weight: 500;
-                  color: #333;
-                }
-              }
-
-              .note-icon {
-                font-size: 16px;
-                width: 16px;
-                height: 16px;
-                color: #ff9800;
-                cursor: help;
-                margin-left: auto;
               }
             }
           }
         }
 
-        .selection-cell {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
+        .review-table {
+          width: 100%;
+          margin-bottom: 24px;
 
-          .coder-selection {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
+          th {
+            background-color: #f5f5f5;
+            font-weight: 600;
+            font-size: 14px;
+            padding: 16px 12px;
+          }
 
-            .coder-radio {
+          td {
+            padding: 16px 12px;
+            vertical-align: top;
+          }
+
+          .resolved-row {
+            background-color: #fcfcfc;
+            
+            td {
+              opacity: 0.6;
+              transition: opacity 0.3s ease;
+            }
+
+            &:hover td {
+              opacity: 1;
+            }
+          }
+
+          .unit-variable-cell {
+            .unit-name {
+              font-weight: 500;
+              color: #1976d2;
               margin-bottom: 4px;
             }
+
+            .variable-id {
+              font-size: 14px;
+              color: #666;
+            }
           }
 
-          .comment-field {
-            width: 100%;
-            margin-top: 8px;
+          .person-info-cell {
+            .person-login {
+              font-weight: 500;
+              margin-bottom: 2px;
+            }
 
-            textarea {
-              min-height: 60px;
+            .person-code {
               font-size: 14px;
-              line-height: 1.5;
+              color: #666;
+              margin-bottom: 2px;
+            }
+
+            .booklet-name {
+              font-size: 14px;
+              color: #999;
+            }
+          }
+
+          .given-answer-cell {
+            font-family: monospace;
+            background-color: #f9f9f9;
+            padding: 8px 12px;
+            border-radius: 4px;
+            max-width: 200px;
+            max-height: 150px;
+            overflow-y: auto;
+            word-break: break-word;
+            white-space: pre-wrap;
+          }
+
+          .coder-results-cell {
+            position: relative;
+            padding-top: 10px;
+
+            .conflict-icon {
+              position: absolute;
+              top: 2px;
+              left: -4px;
+              font-size: 18px;
+              width: 18px;
+              height: 18px;
+              z-index: 2;
+            }
+
+            .coder-results-list {
+              display: flex;
+              flex-direction: column;
+              gap: 10px;
+
+              .coder-result-card {
+                display: flex;
+                flex-direction: column;
+                padding: 10px;
+                background-color: #fff;
+                border: 1px solid #e0e4e8;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+                transition: all 0.2s ease;
+                word-break: break-all;
+
+                &:hover {
+                  border-color: #1976d2;
+                  box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+                }
+
+                &.pending {
+                  background-color: #fafbfc;
+                  border-style: dashed;
+                  opacity: 0.7;
+                }
+
+                .coder-header {
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  margin-bottom: 8px;
+                  padding-bottom: 4px;
+                  border-bottom: 1px solid #f0f2f5;
+
+                  .coder-name {
+                    font-weight: 600;
+                    font-size: 13px;
+                    color: #2c3e50;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+
+                    .coder-icon {
+                      font-size: 16px;
+                      width: 16px;
+                      height: 16px;
+                      color: #7f8c8d;
+                    }
+                  }
+
+                  .job-id-badge {
+                    font-size: 10px;
+                    padding: 2px 6px;
+                    background-color: #edf2f7;
+                    color: #4a5568;
+                    border-radius: 4px;
+                    max-width: 80px;
+                    white-space: nowrap;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                  }
+                }
+
+                .coder-data-grid {
+                  display: grid;
+                  grid-template-columns: 1fr 1fr;
+                  gap: 8px;
+
+                  .data-item {
+                    display: flex;
+                    flex-direction: column;
+
+                    .data-label {
+                      font-size: 9px;
+                      color: #94a3b8;
+                      text-transform: uppercase;
+                      letter-spacing: 0.5px;
+                      margin-bottom: 2px;
+                    }
+
+                    .data-value {
+                      font-weight: 700;
+                      font-size: 13px;
+                      color: #1e293b;
+                    }
+                  }
+                }
+
+                .coder-notes-row {
+                  display: flex;
+                  gap: 8px;
+                  margin-top: 8px;
+                  padding-top: 6px;
+                  border-top: 1px dashed #edf2f7;
+                  justify-content: flex-end;
+
+                  mat-icon {
+                    font-size: 16px;
+                    width: 16px;
+                    height: 16px;
+                    cursor: help;
+                    opacity: 0.8;
+
+                    &:hover {
+                      opacity: 1;
+                    }
+                  }
+
+                  .note-icon {
+                    color: #f59e0b;
+                  }
+                }
+              }
+            }
+          }
+
+          .selection-cell {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+
+            .coder-selection {
+              display: flex;
+              flex-direction: column;
+              gap: 8px;
+
+              .coder-radio {
+                margin-bottom: 4px;
+              }
+            }
+
+            .comment-field {
+              width: 100%;
+              margin-top: 8px;
+
+              textarea {
+                min-height: 60px;
+                font-size: 14px;
+                line-height: 1.5;
+              }
             }
           }
         }
-      }
 
-      mat-card-actions {
-        padding: 16px 24px;
-        justify-content: flex-end;
-
-        .actions-wrapper {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-
-          .help-icon {
-            color: #757575;
-            cursor: help;
-            font-size: 20px;
-            width: 20px;
-            height: 20px;
-
-            &:hover {
-              color: #1976d2;
-            }
-          }
+        mat-card-actions {
+          padding: 16px 24px;
+          justify-content: flex-end;
+          display: none; // Hidden because shifted to header for better accessibility
         }
       }
     }
@@ -563,7 +461,6 @@
   }
 }
 
-// Global Reset for Paginator to not break layout if needed (optional)
 ::ng-deep .mat-mdc-paginator {
   background: transparent;
 }
@@ -578,16 +475,6 @@
   }
 }
 
-// Fix for dialog actions whitespace
-mat-dialog-actions {
-  min-height: auto;
-  padding: 8px 0;
-  margin: 0;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-// Ensure container doesn't add extra padding at bottom that conflicts with actions
 .double-coded-review-container {
   padding-bottom: 0 !important;
 }
@@ -613,22 +500,25 @@ mat-dialog-actions {
     }
 
     .review-card {
+      .card-header-content {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+
+        .header-actions {
+          width: 100%;
+          justify-content: stretch;
+          
+          button {
+            flex-grow: 1;
+          }
+        }
+      }
+
       .review-table {
         th, td {
           padding: 8px 4px;
           font-size: 12px;
-        }
-
-        .coder-results-cell {
-          .coder-result-item {
-            padding: 6px 8px;
-
-            .coder-details {
-              flex-direction: column;
-              align-items: flex-start;
-              gap: 4px;
-            }
-          }
         }
       }
     }
@@ -658,6 +548,22 @@ mat-dialog-actions {
     color: #2e7d32;
   }
 
+  &.resolved {
+    background-color: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+    border: 1px solid #1976d2;
+  }
+
+  .status-label {
+    &.resolved {
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.5px;
+    }
+  }
+
   .progress-dots {
     display: flex;
     gap: 4px;
@@ -682,7 +588,7 @@ mat-dialog-actions {
 }
 
 .incomplete-row {
-  opacity: 0.7;
+  opacity: 0.8;
 }
 
 .pending-coder {

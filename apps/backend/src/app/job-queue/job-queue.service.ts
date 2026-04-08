@@ -1,7 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ConflictException
+} from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bull';
+import { InjectRepository } from '@nestjs/typeorm';
+import { In, Repository } from 'typeorm';
 import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
+import { ValidationTask } from '../database/entities/validation-task.entity';
+import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
@@ -77,6 +85,12 @@ export interface VariableAnalysisJobData {
   workspaceId: number;
   unitId?: number;
   variableId?: string;
+}
+
+export interface ExternalCodingImportJobData {
+  workspaceId: number;
+  tempFilePath: string;
+  fileName: string;
 }
 
 export interface ExportJobData {
@@ -156,6 +170,20 @@ export interface RedisConnectionStatus {
 export class JobQueueService {
   private readonly logger = new Logger(JobQueueService.name);
 
+  private readonly DEPENDENCY_RULES: ReadonlyArray<{
+    target: string;
+    blockedBy: string;
+    label: string;
+  }> = [
+      { target: 'test-results-upload', blockedBy: 'validation-task', label: 'validation' },
+      { target: 'test-person-coding', blockedBy: 'test-results-upload', label: 'test results upload' },
+      { target: 'test-person-coding', blockedBy: 'reset-coding-version', label: 'reset coding version' },
+      { target: 'coding-statistics', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'coding-statistics', blockedBy: 'external-coding-import', label: 'external coding import' },
+      { target: 'data-export', blockedBy: 'test-person-coding', label: 'auto-coding' },
+      { target: 'reset-coding-version', blockedBy: 'test-person-coding', label: 'auto-coding' }
+    ];
+
   constructor(
     @InjectQueue('test-person-coding') private testPersonCodingQueue: Queue,
     @InjectQueue('coding-statistics') private codingStatisticsQueue: Queue,
@@ -167,8 +195,170 @@ export class JobQueueService {
     @InjectQueue('reset-coding-version') private resetCodingVersionQueue: Queue,
     @InjectQueue('validation-task') private validationTaskQueue: Queue,
     @InjectQueue('response-analysis') private responseAnalysisQueue: Queue,
-    @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue
+    @InjectQueue('variable-analysis') private variableAnalysisQueue: Queue,
+    @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
+    @InjectRepository(ValidationTask)
+    private readonly validationTaskRepository: Repository<ValidationTask>
   ) { }
+
+  private getQueue(name: string): Queue {
+    return this.getAllQueues().get(name);
+  }
+
+  private getAllQueues(): Map<string, Queue> {
+    return new Map([
+      ['test-person-coding', this.testPersonCodingQueue],
+      ['coding-statistics', this.codingStatisticsQueue],
+      ['data-export', this.dataExportQueue],
+      ['flat-response-filter-options', this.flatResponseFilterOptionsQueue],
+      ['test-results-upload', this.testResultsUploadQueue],
+      ['codebook-generation', this.codebookGenerationQueue],
+      ['reset-coding-version', this.resetCodingVersionQueue],
+      ['validation-task', this.validationTaskQueue],
+      ['response-analysis', this.responseAnalysisQueue],
+      ['variable-analysis', this.variableAnalysisQueue],
+      ['external-coding-import', this.externalCodingImportQueue]
+    ]);
+  }
+
+  async cancelJob(queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    try {
+      const state = await job.getState();
+      if (state === 'waiting' || state === 'delayed' || state === 'completed' || state === 'failed') {
+        await job.remove();
+        return true;
+      }
+      if (state === 'active') {
+        if (queueName === 'data-export') {
+          await job.update({ ...job.data, isCancelled: true });
+        }
+        await job.discard();
+        await job.remove(); // Also remove active jobs once discarded to clear it from UI
+        return true;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async deleteJob(queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    try {
+      await job.remove();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getAllWorkspaceJobs(workspaceId: number): Promise<ProcessDto[]> {
+    const queues = this.getAllQueues();
+    const processPromises: Promise<ProcessDto[]>[] = [];
+
+    for (const [queueName, queue] of queues.entries()) {
+      processPromises.push(
+        queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
+          let matchedJobs = jobs;
+          if (queueName === 'validation-task') {
+            const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
+            if (taskIds.length === 0) return [];
+            const tasks = await this.validationTaskRepository.find({
+              where: { id: In(taskIds) },
+              select: ['id', 'workspace_id']
+            });
+            const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
+            matchedJobs = jobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+          } else {
+            matchedJobs = jobs.filter(j => j.data && j.data.workspaceId === workspaceId);
+          }
+
+          const mappedPromises = matchedJobs.map(async job => {
+            const state = await job.getState();
+            let progress: unknown = job.progress();
+
+            // For completed jobs, ensure progress shows as 100% if it's numeric/empty
+            if (state === 'completed') {
+              if (typeof progress !== 'object' || progress === null) {
+                progress = 100;
+              }
+            } else if (progress === undefined || progress === null) {
+              progress = 0;
+            }
+
+            return {
+              id: job.id,
+              queueName: queueName,
+              status: state as ProcessDto['status'],
+              progress: progress,
+              data: job.data,
+              failedReason: job.failedReason,
+              timestamp: job.timestamp,
+              processedOn: job.processedOn,
+              finishedOn: job.finishedOn
+            } as ProcessDto;
+          });
+          return Promise.all(mappedPromises);
+        })
+      );
+    }
+
+    const results = await Promise.all(processPromises);
+    return results.flat().sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  private async hasActiveJobForWorkspace(
+    queueName: string,
+    workspaceId: number
+  ): Promise<Job | undefined> {
+    const queue = this.getQueue(queueName);
+    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+
+    if (queueName === 'validation-task') {
+      const taskIds = jobs.map(j => j.data.taskId as number).filter(Boolean);
+      if (taskIds.length === 0) return undefined;
+      const tasks = await this.validationTaskRepository.find({
+        where: { id: In(taskIds) },
+        select: ['id', 'workspace_id']
+      });
+      const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
+      return jobs.find(j => taskWorkspaceMap.get(j.data.taskId) === workspaceId);
+    }
+
+    return jobs.find(j => j.data.workspaceId === workspaceId);
+  }
+
+  async assertNoDependencyConflicts(
+    targetQueue: string,
+    workspaceId: number
+  ): Promise<void> {
+    const rules = this.DEPENDENCY_RULES.filter(r => r.target === targetQueue);
+    for (const rule of rules) {
+      const blockingJob = await this.hasActiveJobForWorkspace(rule.blockedBy, workspaceId);
+      if (blockingJob) {
+        throw new ConflictException(
+          `Cannot start: a ${rule.label} job is still active for this workspace (job ${blockingJob.id}). Please wait until it completes.`
+        );
+      }
+    }
+  }
+
+  private async findActiveJob<T>(
+    queue: Queue,
+    matchFn: (data: T) => boolean
+  ): Promise<Job<T> | undefined> {
+    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    return jobs.find(job => matchFn(job.data));
+  }
 
   async addTestPersonCodingJob(
     data: TestPersonCodingJobData,
@@ -191,6 +381,15 @@ export class JobQueueService {
     version?: 'v1' | 'v2' | 'v3',
     options?: JobOptions
   ): Promise<Job<{ workspaceId: number; version?: 'v1' | 'v2' | 'v3' }>> {
+    const existing = await this.findActiveJob<{ workspaceId: number }>(
+      this.codingStatisticsQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A coding statistics job is already running for workspace ${workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding coding statistics job for workspace ${workspaceId} (version: ${version || 'v1'})`
     );
@@ -207,7 +406,17 @@ export class JobQueueService {
     workspaceId: number,
     processingDurationThresholdMs: number,
     options?: JobOptions
-  ): Promise<Job<FlatResponseFilterOptionsJobData>> {
+  ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
+    const existing = await this.findActiveJob<FlatResponseFilterOptionsJobData>(
+      this.flatResponseFilterOptionsQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      this.logger.debug(
+        `Skipping flat-response-filter-options job for workspace ${workspaceId} — already queued (job ${existing.id})`
+      );
+      return null;
+    }
     this.logger.log(
       `Adding flat response filter-options cache job for workspace ${workspaceId}`
     );
@@ -228,6 +437,18 @@ export class JobQueueService {
       `Adding upload job for workspace ${data.workspaceId}, file: ${data.file.originalname}`
     );
     return this.testResultsUploadQueue.add(data, options);
+  }
+
+  async assertNoActiveUploadForWorkspace(workspaceId: number): Promise<void> {
+    const existing = await this.findActiveJob<TestResultsUploadJobData>(
+      this.testResultsUploadQueue,
+      d => d.workspaceId === workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An upload job is already running for workspace ${workspaceId} (job ${existing.id})`
+      );
+    }
   }
 
   async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData>> {
@@ -313,6 +534,16 @@ export class JobQueueService {
     data: ExportJobData,
     options?: JobOptions
   ): Promise<Job<ExportJobData>> {
+    await this.assertNoDependencyConflicts('data-export', data.workspaceId);
+    const existing = await this.findActiveJob<ExportJobData>(
+      this.dataExportQueue,
+      d => d.workspaceId === data.workspaceId && d.exportType === data.exportType
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An export job of type '${data.exportType}' is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding export job for workspace ${data.workspaceId}, type: ${data.exportType}`
     );
@@ -452,6 +683,15 @@ export class JobQueueService {
     data: CodebookGenerationJobData,
     options?: JobOptions
   ): Promise<Job<CodebookGenerationJobData>> {
+    const existing = await this.findActiveJob<CodebookGenerationJobData>(
+      this.codebookGenerationQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A codebook generation job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding codebook generation job for workspace ${data.workspaceId} with ${data.unitIds.length} units`
     );
@@ -484,6 +724,15 @@ export class JobQueueService {
     data: ValidationTaskJobData,
     options?: JobOptions
   ): Promise<Job<ValidationTaskJobData>> {
+    const existing = await this.findActiveJob<ValidationTaskJobData>(
+      this.validationTaskQueue,
+      d => d.taskId === data.taskId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A validation task job is already running for task ${data.taskId} (job ${existing.id})`
+      );
+    }
     this.logger.log(`Adding validation task job for task ${data.taskId}`);
     return this.validationTaskQueue.add(data, options);
   }
@@ -623,44 +872,6 @@ export class JobQueueService {
     return jobs.find(job => job.data.workspaceId === workspaceId) || null;
   }
 
-  async hasActiveJobsForWorkspace(
-    workspaceId: number
-  ): Promise<{ blocked: boolean; reason?: string }> {
-    // Check reset-coding-version queue
-    const resetJobs = await this.resetCodingVersionQueue.getJobs([
-      'active',
-      'waiting',
-      'delayed'
-    ]);
-    const activeResetJob = resetJobs.find(
-      job => job.data.workspaceId === workspaceId
-    );
-    if (activeResetJob) {
-      return {
-        blocked: true,
-        reason: `A reset coding version job is already running for this workspace (job ${activeResetJob.id})`
-      };
-    }
-
-    // Check test-person-coding queue
-    const codingJobs = await this.testPersonCodingQueue.getJobs([
-      'active',
-      'waiting',
-      'delayed'
-    ]);
-    const activeCodingJob = codingJobs.find(
-      job => job.data.workspaceId === workspaceId
-    );
-    if (activeCodingJob) {
-      return {
-        blocked: true,
-        reason: `An auto-coding job is already running for this workspace (job ${activeCodingJob.id})`
-      };
-    }
-
-    return { blocked: false };
-  }
-
   async checkRedisConnection(): Promise<RedisConnectionStatus> {
     try {
       this.logger.log('Checking Redis connection status...');
@@ -714,5 +925,37 @@ export class JobQueueService {
         message: `Redis connection failed: ${error.message}`
       };
     }
+  }
+
+  // --- External Coding Import Queue Methods ---
+
+  async addExternalCodingImportJob(
+    data: ExternalCodingImportJobData,
+    options?: JobOptions
+  ): Promise<Job<ExternalCodingImportJobData>> {
+    const existing = await this.findActiveJob<ExternalCodingImportJobData>(
+      this.externalCodingImportQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `An external coding import job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
+    this.logger.log(
+      `Adding external coding import job for workspace ${data.workspaceId}, file: ${data.fileName}`
+    );
+    return this.externalCodingImportQueue.add(data, {
+      attempts: 1,
+      removeOnComplete: { age: 3600 },
+      removeOnFail: { age: 86400 },
+      ...options
+    });
+  }
+
+  async getExternalCodingImportJob(
+    jobId: string
+  ): Promise<Job<ExternalCodingImportJobData>> {
+    return this.externalCodingImportQueue.getJob(jobId);
   }
 }

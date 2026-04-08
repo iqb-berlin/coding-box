@@ -5,8 +5,7 @@ import {
   Param,
   Req,
   UseGuards,
-  Body,
-  ConflictException
+  Body
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -106,11 +105,7 @@ export class WorkspaceCodingVersionController {
                    },
                    @Req() request: RequestWithUser
   ): Promise<{ jobId: string; message: string }> {
-    // Check for active jobs (mutual blocking with auto-coding)
-    const { blocked, reason } = await this.jobQueueService.hasActiveJobsForWorkspace(workspace_id);
-    if (blocked) {
-      throw new ConflictException(reason);
-    }
+    await this.jobQueueService.assertNoDependencyConflicts('reset-coding-version', workspace_id);
 
     const job = await this.jobQueueService.addResetCodingVersionJob({
       workspaceId: workspace_id,

@@ -6,16 +6,20 @@ import {
   of,
   interval,
   switchMap,
-  takeWhile,
   map,
-  forkJoin
+  forkJoin,
+  filter,
+  take
 } from 'rxjs';
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { SERVER_URL } from '../../../injection-tokens';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
-import { ResolveDuplicateResponsesRequestDto, ResolveDuplicateResponsesResponseDto } from '../../../models/duplicate-response-selection.dto';
+import {
+  ResolveDuplicateResponsesRequestDto,
+  ResolveDuplicateResponsesResponseDto
+} from '../../../models/duplicate-response-selection.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -31,166 +35,225 @@ export class ValidationService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  validateVariables(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+  validateVariables(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<PaginatedResponse<InvalidVariableDto>> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
-    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`,
-      { params }
-    ).pipe(
-      catchError(() => of({
-        data: [],
-        total: 0,
-        page,
-        limit
-      }))
-    );
+    return this.http
+      .get<
+    PaginatedResponse<InvalidVariableDto>
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`, { params })
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })
+        )
+      );
   }
 
-  validateVariableTypes(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+  validateVariableTypes(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<PaginatedResponse<InvalidVariableDto>> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
-    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`,
-      { params }
-    ).pipe(
-      catchError(() => of({
-        data: [],
-        total: 0,
-        page,
-        limit
-      }))
-    );
+    return this.http
+      .get<
+    PaginatedResponse<InvalidVariableDto>
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variable-types`, { params })
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })
+        )
+      );
   }
 
-  validateResponseStatus(workspaceId: number, page: number = 1, limit: number = 10): Observable<PaginatedResponse<InvalidVariableDto>> {
+  validateResponseStatus(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<PaginatedResponse<InvalidVariableDto>> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
-    return this.http.get<PaginatedResponse<InvalidVariableDto>>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`,
-      { params }
-    ).pipe(
-      catchError(() => of({
-        data: [],
-        total: 0,
-        page,
-        limit
-      }))
-    );
+    return this.http
+      .get<
+    PaginatedResponse<InvalidVariableDto>
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-response-status`, { params })
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })
+        )
+      );
   }
 
   validateTestTakers(workspaceId: number): Observable<TestTakersValidationDto> {
-    return this.http.get<TestTakersValidationDto>(
+    return this.http
+      .get<TestTakersValidationDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-testtakers`,
       {}
-    ).pipe(
-      catchError(() => of({
-        testTakersFound: false,
-        totalGroups: 0,
-        totalLogins: 0,
-        totalBookletCodes: 0,
-        missingPersons: []
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          testTakersFound: false,
+          totalGroups: 0,
+          totalLogins: 0,
+          totalBookletCodes: 0,
+          missingPersons: []
+        })
+        )
+      );
   }
 
-  validateGroupResponses(workspaceId: number, page: number = 1, limit: number = 10): Observable<{
-    testTakersFound: boolean;
-    groupsWithResponses: { group: string; hasResponse: boolean }[];
-    allGroupsHaveResponses: boolean;
-    total: number;
-    page: number;
-    limit: number;
-  }> {
-    const params = new HttpParams()
-      .set('page', page.toString())
-      .set('limit', limit.toString());
-
-    return this.http.get<{
+  validateGroupResponses(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<{
       testTakersFound: boolean;
       groupsWithResponses: { group: string; hasResponse: boolean }[];
       allGroupsHaveResponses: boolean;
       total: number;
+      totalGroupsWithoutResponses: number;
+      page: number;
+      limit: number;
+    }> {
+    const params = new HttpParams()
+      .set('page', page.toString())
+      .set('limit', limit.toString());
+
+    return this.http
+      .get<{
+      testTakersFound: boolean;
+      groupsWithResponses: { group: string; hasResponse: boolean }[];
+      allGroupsHaveResponses: boolean;
+      total: number;
+      totalGroupsWithoutResponses: number;
       page: number;
       limit: number;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-group-responses`,
       { params }
-    ).pipe(
-      catchError(() => of({
-        testTakersFound: false,
-        groupsWithResponses: [],
-        allGroupsHaveResponses: false,
-        total: 0,
-        page,
-        limit
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          testTakersFound: false,
+          groupsWithResponses: [],
+          allGroupsHaveResponses: false,
+          total: 0,
+          totalGroupsWithoutResponses: 0,
+          page,
+          limit
+        })
+        )
+      );
   }
 
-  validateDuplicateResponses(workspaceId: number, page: number = 1, limit: number = 10): Observable<DuplicateResponsesResultDto> {
+  validateDuplicateResponses(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 10
+  ): Observable<DuplicateResponsesResultDto> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
-    return this.http.get<DuplicateResponsesResultDto>(
+    return this.http
+      .get<DuplicateResponsesResultDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/validate-duplicate-responses`,
       { params }
-    ).pipe(
-      catchError(() => of({
-        data: [],
-        total: 0,
-        page,
-        limit
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          data: [],
+          total: 0,
+          page,
+          limit
+        })
+        )
+      );
   }
 
   resolveDuplicateResponses(
     workspaceId: number,
     resolutionData: ResolveDuplicateResponsesRequestDto
   ): Observable<ResolveDuplicateResponsesResponseDto> {
-    return this.http.post<ResolveDuplicateResponsesResponseDto>(
+    return this.http
+      .post<ResolveDuplicateResponsesResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/resolve-duplicates`,
       resolutionData,
       {}
-    ).pipe(
-      catchError(() => of({
-        resolvedCount: 0,
-        success: false
-      }))
-    );
+    )
+      .pipe(
+        catchError(() => of({
+          resolvedCount: 0,
+          success: false
+        })
+        )
+      );
   }
 
-  deleteInvalidResponses(workspaceId: number, responseIds: number[]): Observable<number> {
+  deleteInvalidResponses(
+    workspaceId: number,
+    responseIds: number[]
+  ): Observable<number> {
     const params = new HttpParams().set('responseIds', responseIds.join(','));
-    return this.http.delete<number>(
+    return this.http
+      .delete<number>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/invalid-responses`,
       { params }
-    ).pipe(
-      catchError(() => of(0))
-    );
+    )
+      .pipe(catchError(() => of(0)));
   }
 
-  deleteAllInvalidResponses(workspaceId: number, validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'): Observable<number> {
+  deleteAllInvalidResponses(
+    workspaceId: number,
+    validationType:
+    | 'variables'
+    | 'variableTypes'
+    | 'responseStatus'
+    | 'duplicateResponses'
+  ): Observable<number> {
     const params = new HttpParams().set('validationType', validationType);
-    return this.http.delete<number>(
+    return this.http
+      .delete<number>(
       `${this.serverUrl}admin/workspace/${workspaceId}/files/all-invalid-responses`,
       { params }
-    ).pipe(
-      catchError(() => of(0))
-    );
+    )
+      .pipe(catchError(() => of(0)));
   }
 
   createValidationTask(
     workspaceId: number,
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
+    type:
+    | 'variables'
+    | 'variableTypes'
+    | 'responseStatus'
+    | 'testTakers'
+    | 'groupResponses'
+    | 'deleteResponses'
+    | 'deleteAllResponses'
+    | 'duplicateResponses',
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
@@ -218,15 +281,17 @@ export class ValidationService {
       });
     }
 
-    return this.http.post<ValidationTaskDto>(
+    return this.http
+      .post<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
       null,
       { params }
-    ).pipe(
-      catchError(error => {
-        throw error;
-      })
-    );
+    )
+      .pipe(
+        catchError(error => {
+          throw error;
+        })
+      );
   }
 
   createDeleteResponsesTask(
@@ -244,7 +309,11 @@ export class ValidationService {
 
   createDeleteAllResponsesTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses'
+    validationType:
+    | 'variables'
+    | 'variableTypes'
+    | 'responseStatus'
+    | 'duplicateResponses'
   ): Observable<ValidationTaskDto> {
     return this.createValidationTask(
       workspaceId,
@@ -255,38 +324,49 @@ export class ValidationService {
     );
   }
 
-  getValidationTask(workspaceId: number, taskId: number): Observable<ValidationTaskDto> {
-    return this.http.get<ValidationTaskDto>(
+  getValidationTask(
+    workspaceId: number,
+    taskId: number
+  ): Observable<ValidationTaskDto> {
+    return this.http
+      .get<ValidationTaskDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}`,
       {}
-    ).pipe(
-      catchError(error => {
-        throw error;
-      })
-    );
+    )
+      .pipe(
+        catchError(error => {
+          throw error;
+        })
+      );
   }
 
   getValidationTasks(workspaceId: number): Observable<ValidationTaskDto[]> {
-    return this.http.get<ValidationTaskDto[]>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`,
-      {}
-    ).pipe(
-      catchError(error => {
-        // Error occurred while getting validation tasks
-        throw error;
-      })
-    );
+    return this.http
+      .get<
+    ValidationTaskDto[]
+    >(`${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks`, {})
+      .pipe(
+        catchError(error => {
+          // Error occurred while getting validation tasks
+          throw error;
+        })
+      );
   }
 
-  getValidationResults(workspaceId: number, taskId: number): Observable<unknown> {
-    return this.http.get<unknown>(
+  getValidationResults(
+    workspaceId: number,
+    taskId: number
+  ): Observable<unknown> {
+    return this.http
+      .get<unknown>(
       `${this.serverUrl}admin/workspace/${workspaceId}/validation-tasks/${taskId}/results`,
       {}
-    ).pipe(
-      catchError(error => {
-        throw error;
-      })
-    );
+    )
+      .pipe(
+        catchError(error => {
+          throw error;
+        })
+      );
   }
 
   pollValidationTask(
@@ -296,7 +376,10 @@ export class ValidationService {
   ): Observable<ValidationTaskDto> {
     return interval(pollInterval).pipe(
       switchMap(() => this.getValidationTask(workspaceId, taskId)),
-      takeWhile(task => task.status === 'pending' || task.status === 'processing', true)
+      filter(
+        task => task.status !== 'pending' && task.status !== 'processing'
+      ),
+      take(1)
     );
   }
 
@@ -306,7 +389,9 @@ export class ValidationService {
     return this.getValidationTasks(workspaceId).pipe(
       switchMap(tasks => {
         // Filter completed tasks and group by validation type
-        const completedTasks = tasks.filter(task => task.status === 'completed');
+        const completedTasks = tasks.filter(
+          task => task.status === 'completed'
+        );
         const tasksByType: Record<string, ValidationTaskDto[]> = {};
 
         for (const task of completedTasks) {
@@ -321,34 +406,59 @@ export class ValidationService {
         for (const type in tasksByType) {
           if (Object.prototype.hasOwnProperty.call(tasksByType, type)) {
             // Sort by creation date in descending order
-            tasksByType[type].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+            tasksByType[type].sort(
+              (a, b) => new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime()
+            );
             latestTasks[type] = tasksByType[type][0];
           }
         }
 
-        const resultObservables: Array<Observable<[string, { task: ValidationTaskDto; result: unknown }]>> = [];
+        const resultObservables: Array<
+        Observable<[string, { task: ValidationTaskDto; result: unknown }]>
+        > = [];
 
         for (const type in latestTasks) {
           if (Object.prototype.hasOwnProperty.call(latestTasks, type)) {
             const task = latestTasks[type];
             resultObservables.push(
               this.getValidationResults(workspaceId, task.id).pipe(
-                map<unknown, [string, { task: ValidationTaskDto; result: unknown }]>(
-                  result => [type, { task, result }] as [string, { task: ValidationTaskDto; result: unknown }]
+                map<
+                unknown,
+                [string, { task: ValidationTaskDto; result: unknown }]
+                >(
+                  result => [type, { task, result }] as [
+                    string,
+                    { task: ValidationTaskDto; result: unknown }
+                  ]
                 ),
-                catchError(() => of([type, { task, result: null }] as [string, { task: ValidationTaskDto; result: unknown }]))
+                catchError(() => of([type, { task, result: null }] as [
+                  string,
+                  { task: ValidationTaskDto; result: unknown }
+                ])
+                )
               )
             );
           }
         }
 
         if (resultObservables.length === 0) {
-          return of<Record<string, { task: ValidationTaskDto; result: unknown }>>({});
+          return of<
+          Record<string, { task: ValidationTaskDto; result: unknown }>
+          >({});
         }
 
-        return forkJoin<[string, { task: ValidationTaskDto; result: unknown }][]>(resultObservables).pipe(
-          map<[string, { task: ValidationTaskDto; result: unknown }][], Record<string, { task: ValidationTaskDto; result: unknown }>>(results => {
-            const resultMap: Record<string, { task: ValidationTaskDto; result: unknown }> = {};
+        return forkJoin<
+        [string, { task: ValidationTaskDto; result: unknown }][]
+        >(resultObservables).pipe(
+          map<
+          [string, { task: ValidationTaskDto; result: unknown }][],
+          Record<string, { task: ValidationTaskDto; result: unknown }>
+          >(results => {
+            const resultMap: Record<
+            string,
+            { task: ValidationTaskDto; result: unknown }
+            > = {};
             for (const [type, data] of results) {
               resultMap[type] = data;
             }
@@ -356,7 +466,8 @@ export class ValidationService {
           })
         );
       }),
-      catchError(() => of<Record<string, { task: ValidationTaskDto; result: unknown }>>({}))
+      catchError(() => of<Record<string, { task: ValidationTaskDto; result: unknown }>>({})
+      )
     );
   }
 }

@@ -20,9 +20,21 @@
   </div>
 
   @if (isRunning) {
-    <div class="loading-container">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Antwortstatus wird geprüft...</p>
+      <div class="loading-container">
+        <mat-spinner class="mat-spinner" diameter="30" [mode]="activeTask?.progress ? 'determinate' : 'indeterminate'" [value]="activeTask?.progress"></mat-spinner>
+        <p class="loading-text">
+          Antwortstatus werden geprüft...
+          @if (activeTask?.progress) {
+            ({{ activeTask?.progress }}%)
+          }
+        </p>
+      </div>
+    }
+
+  @if (errorMessage) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Fehler bei der Validierung: {{ errorMessage }}</span>
     </div>
   }
 
@@ -68,6 +80,7 @@
           [currentPage]="currentPage"
           [selectedItems]="selectedResponses"
           [selectionKey]="'responseId'"
+          [loading]="isLoadingPage"
           (pageChange)="onPageChange($event)"
           (selectionChange)="onSelectionChange($event)"
           (linkClick)="onLinkClick($event)">

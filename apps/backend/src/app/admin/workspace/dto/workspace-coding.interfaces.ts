@@ -27,13 +27,16 @@ export interface DoubleCodedReviewItem {
   personCode: string;
   bookletName: string;
   givenAnswer: string;
+  isResolved: boolean;
   coderResults: Array<{
     coderId: number;
     coderName: string;
     jobId: number;
+    jobName: string;
     code: number | null;
     score: number | null;
     notes: string | null;
+    supervisorComment: string | null;
     codedAt: Date;
   }>;
 }

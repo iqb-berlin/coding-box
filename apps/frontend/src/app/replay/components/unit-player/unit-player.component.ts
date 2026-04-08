@@ -281,7 +281,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             }
 
             case 'vo.FromPlayer.StartedNotification':
-              this.setPageList(msgData.validPages, msgData.currentPage);
+              this.setPageList(this.getValidPagesAsIds(msgData.validPages), msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
               this.notifyResponseVisible();
@@ -290,9 +290,10 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
             case 'vopStateChangedNotification':
               if (msgData.playerState) {
                 const pages = msgData.playerState.validPages;
-                const current = msgData.playerState.currentPage.toString();
-                this.setPageList(Object.keys(pages), msgData.playerState.currentPage);
-                this.validPages.next({ pages: Object.keys(pages), current });
+                const current = msgData.playerState.currentPage?.toString() || '';
+                const pageIds = this.getValidPagesAsIds(pages);
+                this.setPageList(pageIds, msgData.playerState.currentPage);
+                this.validPages.next({ pages: pageIds || [], current });
               }
               if (msgData.unitState) {
                 this.responses = Object.values(msgData.unitState.dataParts)
@@ -304,7 +305,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             case 'vo.FromPlayer.ChangedDataTransfer':
-              this.setPageList(msgData.validPages, msgData.currentPage);
+              this.setPageList(this.getValidPagesAsIds(msgData.validPages), msgData.currentPage);
               this.setPresentationStatus(msgData.presentationComplete);
               this.setResponsesStatus(msgData.responsesGiven);
               this.notifyResponseVisible();
@@ -568,6 +569,21 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
         { type: messageType, sessionId: this.sessionId, target: pageId };
 
     this.postMessageTarget?.postMessage(messagePayload, '*');
+  }
+
+  private getValidPagesAsIds(pages?: unknown): string[] | undefined {
+    if (pages === undefined || pages === null) {
+      return undefined;
+    }
+    if (Array.isArray(pages)) {
+      return pages.map((p: unknown) => {
+        if (typeof p === 'object' && p !== null && 'id' in p) {
+          return (p as { id: unknown }).id?.toString() || '';
+        }
+        return String(p);
+      });
+    }
+    return Object.keys(pages as Record<string, unknown>);
   }
 
   ngOnDestroy(): void {

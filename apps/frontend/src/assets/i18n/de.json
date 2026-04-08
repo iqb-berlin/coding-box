@@ -176,6 +176,7 @@
     "users": "Nutzer:innen",
     "workspaces": "Arbeitsbereiche",
     "settings": "Einstellungen",
+    "processes": "Prozesse",
     "units-count": "Anzahl der Aufgaben",
     "test-files": "Testdateien",
     "test-persons": "Testpersonen",
@@ -1206,6 +1207,51 @@
     }
   },
   "coding-management-manual": {
+    "coding-progress": {
+      "info-tooltip": "Erklärung zur Berechnung der Fortschrittswerte anzeigen",
+      "info-total-title": "Gesamt zu kodierende Fälle",
+      "info-total-desc": "Zählt die Basisanzahl eindeutiger Antworten, die noch der manuellen Kodierung bedürfen. Antworten von ausgeschlossenen Testteilnehmern werden dynamisch abgezogen.",
+      "info-completed-title": "Abgeschlossene Fälle",
+      "info-completed-desc": "Zählt die Anzahl der eindeutigen Fälle, für die mindestens eine abschließende Kodierung in den Jobs vorliegt. Doppelkodierungen werden hierbei als ein Fall gezählt, um eine konsistente Fortschrittsanzeige von maximal 100% zu gewährleisten."
+    },
+    "variable-coverage": {
+      "info-tooltip": "Erklärung zur Variablenabdeckung anzeigen",
+      "info-total-title": "Gesamt Variablen",
+      "info-total-desc": "Anzahl aller eindeutigen Variablen im Arbeitsbereich, die Antworten enthalten, welche manuell kodiert werden müssen.",
+      "info-covered-title": "Abgedeckte Variablen",
+      "info-covered-desc": "Gibt an, wie viele Variablen bereits mindestens einer Job-Definition zugeordnet sind.",
+      "info-completeness-title": "Vollständigkeit der Abdeckung",
+      "info-completeness-desc": "Eine Variable gilt als 'Vollständig abgedeckt', wenn alle zugehörigen Antworten bereits in Kodierjobs verteilt wurden. Bei 'Partiell abgedeckt' sind zwar einige, aber noch nicht alle Antworten in Jobs zugewiesen."
+    },
+    "case-coverage": {
+      "info-tooltip": "Erklärung zur Fallabdeckung anzeigen",
+      "info-total-title": "Gesamt zu kodierende Fälle",
+      "info-total-desc": "Anzahl der eindeutigen Antwort-Fälle, die eine manuelle Kodierung benötigen.",
+      "info-assigned-title": "Zugeordnete Fälle",
+      "info-assigned-desc": "Gibt an, wie viele dieser Fälle bereits in Kodierjobs verteilt wurden. Dabei wird zwischen einfachem (1 Kodierer) und doppeltem (2 Kodierer) Besatz unterschieden."
+    },
+    "applied-results": {
+      "info-tooltip": "Erklärung zur Anwendung der Ergebnisse anzeigen",
+      "info-total-title": "Gesamt zu kodierende Fälle",
+      "info-total-desc": "Anzahl der eindeutigen Antwort-Fälle, die eine manuelle Kodierung benötigen.",
+      "info-applied-title": "Angewendete Ergebnisse",
+      "info-applied-desc": "Zählt Fälle, deren Kodierung bereits final in den Datenbestand übernommen wurde. Dies geschieht nach Abschluss der Kodierjobs und ggf. nach Konfliktlösung bei Doppelkodierungen."
+    },
+    "variable-bundles": {
+      "info-tooltip": "Erklärung zu Variablenbündeln anzeigen",
+      "info-title": "Was sind Variablenbündel?",
+      "info-desc": "Variablenbündel ermöglichen es Ihnen, mehrere zusammengehörige Variablen zu einer logischen Einheit zusammenzufassen. Dies ist besonders hilfreich, wenn bestimmte Variablen immer vom selben Kodierer bearbeitet werden sollen (z. B. verschiedene Aspekte einer komplexen Aufgabe). Bündel können bei der Erstellung von Kodierjobs direkt ausgewählt werden."
+    },
+    "coder-trainings": {
+      "info-tooltip": "Erklärung zu Kodierer-Schulungen anzeigen",
+      "info-title": "Was sind Kodierer-Schulungen?",
+      "info-desc": "Kodierer-Schulungen dienen dazu, Kodierer anhand von vorgegebenen Testfällen in das Kodieren von Variablen einzuarbeiten. Die in Schulungen erzielten Kodierungen fließen nicht als finale Ergebnisse in den Datenbestand ein. So können Sie sicherstellen, dass Kodierer das Manual verstanden haben, bevor sie produktive Kodierjobs zugewiesen bekommen."
+    },
+    "coding-jobs": {
+      "info-tooltip": "Erklärung zu Kodierjobs anzeigen",
+      "info-title": "Was sind Kodierjobs?",
+      "info-desc": "Kodierjobs sind die konkreten Arbeitsaufträge für Ihre Kodierer. Hierbei definieren Sie, welche Variablen (oder Bündel) von welchen Kodierern bearbeitet werden sollen. Ein Kodierjob enthält alle notwendigen Fälle und stellt sicher, dass die Arbeitslast gemäß Ihren Vorgaben (Einfach- oder Doppelkodierung) verteilt wird. Abgeschlossene Jobs können Sie anschließend in den Datenbestand übernehmen."
+    },
     "errors": {
       "no-file-selected": "Keine Datei ausgewählt",
       "invalid-file-type": "Bitte wählen Sie eine CSV- oder Excel-Datei aus (.csv, .xlsx, .xls)",
@@ -1604,6 +1650,9 @@
   },
   "coding-job-definitions": {
     "title": "Job-Definitionen",
+    "info-tooltip": "Erklärung zu Job-Definitionen anzeigen",
+    "info-title": "Was sind Job-Definitionen?",
+    "info-desc": "Job-Definitionen dienen als Planungsvorlagen für Ihre Kodierjobs. Hier legen Sie vorab fest, welche Variablen bearbeitet werden sollen und wie viele Kodierer für Einfach- oder Doppelkodierungen eingesetzt werden. Sobald eine Definition geprüft und freigegeben wurde, können daraus die konkreten Kodierjobs für die Kodierer erzeugt werden.",
     "create-new": "Neue Definition erstellen",
     "loading": "Lade Job-Definitionen...",
     "bulk-creation-in-progress": "Kodier-Jobs werden erstellt...",
@@ -1722,6 +1771,7 @@
     "apply-disabled-tooltip": "Alle Kodierer müssen ihre Arbeit beenden, bevor der Konflikt gelöst werden kann.",
     "coders-done": "Kodierer fertig",
     "pending": "Ausstehend",
+    "applied": "Angewandt",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
       "search-label": "Suchen",
@@ -1731,7 +1781,11 @@
       "status-label": "Status",
       "status-all": "Alle Status",
       "status-done": "Alle fertig",
-      "status-pending": "Warten auf Kodierer"
+      "status-pending": "Warten auf Kodierer",
+      "resolved-label": "Entscheidung",
+      "resolved-all": "Alle",
+      "resolved-done": "Angewandt",
+      "resolved-unresolved": "Offen"
     },
     "details": {
       "given-answer": "Vollständige Antwort",
@@ -1813,6 +1867,8 @@
     }
   },
   "coding-results": {
+    "column-double-coding": "Doppelkodierung",
+    "tooltip-other-coder": "Anderer Kodierer: ",
     "apply": {
       "error": {
         "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}",

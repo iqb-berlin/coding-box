@@ -3,33 +3,59 @@
     <coding-box-validation-panel-header
       title="Variablentypen-Prüfung"
       [status]="status"
-      [errorCount]="errorCount">
+      [errorCount]="errorCount"
+    >
     </coding-box-validation-panel-header>
   </mat-expansion-panel-header>
 
   <coding-box-validation-guidance
     description="Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json)."
     whyText="Falsche Variablentypen können zu Fehlern bei der Datenverarbeitung, Auswertung und beim Export führen."
-    fixHint="Korrigieren Sie die Variablendefinitionen in der Unit.xml oder löschen Sie die ungültigen Antworten.">
+    fixHint="Korrigieren Sie die Variablendefinitionen in der Unit.xml oder löschen Sie die ungültigen Antworten."
+  >
   </coding-box-validation-guidance>
 
   <div class="validation-actions">
-    <button mat-button (click)="onValidate()" [disabled]="isRunning || disabled">
+    <button
+      mat-button
+      (click)="onValidate()"
+      [disabled]="isRunning || disabled"
+    >
       Variablentypen prüfen
     </button>
   </div>
 
   @if (isRunning) {
     <div class="loading-container">
-      <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Variablentypen werden geprüft...</p>
+      <mat-spinner
+        class="mat-spinner"
+        diameter="30"
+        [mode]="activeTask?.progress ? 'determinate' : 'indeterminate'"
+        [value]="activeTask?.progress"
+      ></mat-spinner>
+      <p class="loading-text">
+        Variablentypen werden geprüft...
+        @if (activeTask?.progress) {
+          ({{ activeTask?.progress }}%)
+        }
+      </p>
+    </div>
+  }
+
+  @if (errorMessage) {
+    <div class="validation-result validation-error">
+      <mat-icon>error</mat-icon>
+      <span>Fehler bei der Validierung: {{ errorMessage }}</span>
     </div>
   }
 
   @if (invalidTypeVariables.length > 0 || totalInvalid > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span>Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Variablenwerte gefunden.</span>
+      <span
+        >Prüfung fehlgeschlagen: {{ totalInvalid }} ungültige Variablenwerte
+        gefunden.</span
+      >
     </div>
 
     @if (invalidTypeVariables.length > 0) {
@@ -39,18 +65,24 @@
         </button>
         <button mat-button (click)="selectAll()">Alle auswählen</button>
         <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
-        <button mat-button color="warn" 
-                (click)="deleteSelected()" 
-                [disabled]="isDeletingResponses || selectedResponses.size === 0">
+        <button
+          mat-button
+          color="warn"
+          (click)="deleteSelected()"
+          [disabled]="isDeletingResponses || selectedResponses.size === 0"
+        >
           @if (isDeletingResponses) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
             Ausgewählte löschen ({{ selectedResponses.size }})
           }
         </button>
-        <button mat-button color="warn" 
-                (click)="deleteAll()" 
-                [disabled]="isDeletingResponses || invalidTypeVariables.length === 0">
+        <button
+          mat-button
+          color="warn"
+          (click)="deleteAll()"
+          [disabled]="isDeletingResponses || invalidTypeVariables.length === 0"
+        >
           @if (isDeletingResponses) {
             <mat-spinner diameter="20"></mat-spinner> Löschen...
           } @else {
@@ -68,13 +100,20 @@
           [currentPage]="currentPage"
           [selectedItems]="selectedResponses"
           [selectionKey]="'responseId'"
+          [loading]="isLoadingPage"
           (pageChange)="onPageChange($event)"
           (selectionChange)="onSelectionChange($event)"
-          (linkClick)="onLinkClick($event)">
+          (linkClick)="onLinkClick($event)"
+        >
         </coding-box-validation-data-table>
       </mat-expansion-panel>
     }
-  } @else if (!isRunning && invalidTypeVariables.length === 0 && totalInvalid === 0 && wasRun) {
+  } @else if (
+    !isRunning &&
+    invalidTypeVariables.length === 0 &&
+    totalInvalid === 0 &&
+    wasRun
+  ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
       <span>Prüfung bestanden: Keine ungültigen Variablenwerte gefunden.</span>

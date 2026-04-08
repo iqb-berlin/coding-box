@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
+// eslint-disable-next-line import/no-cycle
 import { CodingResponseFilterService } from './coding-response-filter.service';
 import { CodingItemBuilderService, CodingItem } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 interface JsonStream {

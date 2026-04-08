@@ -1,16 +1,38 @@
 import {
-  Component, Input, Output, EventEmitter, OnInit, OnDestroy
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnInit,
+  OnDestroy
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
+import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
-import { ValidationPanelHeaderComponent, ValidationStatus, ValidationGuidanceComponent } from '../../shared';
+import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
+import {
+  ValidationPanelHeaderComponent,
+  ValidationStatus,
+  ValidationGuidanceComponent
+} from '../../shared';
 import { GroupResponsesValidationService } from '../../../../services/validation';
+
+interface GroupResponsesValidationResult {
+  testTakersFound: boolean;
+  groupsWithResponses: { group: string; hasResponse: boolean }[];
+  allGroupsHaveResponses: boolean;
+  total: number;
+  totalGroupsWithoutResponses: number;
+  page: number;
+  limit: number;
+}
 
 /**
  * Panel component for group responses validation.
@@ -24,85 +46,116 @@ import { GroupResponsesValidationService } from '../../../../services/validation
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
+    MatProgressBarModule,
     MatTableModule,
+    MatPaginatorModule,
     MatIconModule,
     MatSnackBarModule,
     ValidationPanelHeaderComponent,
     ValidationGuidanceComponent
   ],
   templateUrl: './group-responses-validation-panel.component.html',
-  styles: [`
-    .validation-result {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-      padding: 8px 16px;
-      border-radius: 4px;
-      font-weight: 500;
-    }
+  styles: [
+    `
+      .validation-result {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-weight: 500;
+      }
 
-    .validation-success {
-      background-color: rgba(76, 175, 80, 0.1);
-      color: #4CAF50;
-      border: 1px solid #4CAF50;
-    }
+      .validation-success {
+        background-color: rgba(76, 175, 80, 0.1);
+        color: #4caf50;
+        border: 1px solid #4caf50;
+      }
 
-    .validation-error {
-      background-color: rgba(244, 67, 54, 0.1);
-      color: #F44336;
-      border: 1px solid #F44336;
-    }
+      .validation-error {
+        background-color: rgba(244, 67, 54, 0.1);
+        color: #f44336;
+        border: 1px solid #f44336;
+      }
 
-    .validation-result mat-icon {
-      margin-right: 8px;
-    }
+      .validation-result mat-icon {
+        margin-right: 8px;
+      }
 
-    .loading-container {
-      display: flex;
-      align-items: center;
-      margin: 10px 0;
-    }
+      .loading-container {
+        display: flex;
+        align-items: center;
+        margin: 10px 0;
+      }
 
-    .loading-text {
-      margin-left: 8px;
-    }
+      .loading-text {
+        margin-left: 8px;
+      }
 
-    .actions-container {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
+      .actions-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
 
-    .validation-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-    }
+      .validation-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
 
-    table {
-      width: 100%;
-    }
-  `]
+      table {
+        width: 100%;
+      }
+
+      .validation-panel-content {
+        position: relative;
+      }
+
+      .loading-fade {
+        opacity: 0.6;
+        pointer-events: none;
+      }
+
+      .loading-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+      }
+    `
+  ]
 })
-export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy {
+export class GroupResponsesValidationPanelComponent
+implements OnInit, OnDestroy {
   @Input() disabled = false;
   @Output() validate = new EventEmitter<void>();
 
   isRunning = false;
   wasRun = false;
-  result: {
-    testTakersFound: boolean;
-    groupsWithResponses: { group: string; hasResponse: boolean }[];
-    allGroupsHaveResponses: boolean;
-  } | null = null;
-
+  isLoadingPage = false;
+  errorMessage: string | null = null;
+  result: GroupResponsesValidationResult | null = null;
   expandedPanel = false;
-  paginatedGroupResponses = new MatTableDataSource<{ group: string; hasResponse: boolean }>([]);
-  displayedColumns = ['group', 'hasResponse'];
+  paginatedGroupResponses = new MatTableDataSource<{
+    group: string;
+    hasResponse: boolean;
+  }>([]);
+
+  displayedColumns = ['group', 'status'];
+
+  // Pagination state
+  totalItems = 0;
+  pageSize = 10;
+  currentPage = 1;
+  activeTask: ValidationTaskDto | null = null;
 
   private subscription?: Subscription;
+  private stateSubscription?: Subscription;
+  private taskSubscription?: Subscription;
 
   constructor(
     private groupResponsesValidationService: GroupResponsesValidationService,
@@ -110,24 +163,48 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
   ) {}
 
   ngOnInit(): void {
-    const cachedResult = this.groupResponsesValidationService.getCachedResult();
-    if (cachedResult) {
-      this.result = {
-        testTakersFound: cachedResult.testTakersFound,
-        groupsWithResponses: cachedResult.groupsWithResponses,
-        allGroupsHaveResponses: cachedResult.allGroupsHaveResponses
-      };
-      this.wasRun = true;
-      this.updatePaginatedGroupResponses();
-    }
+    const cachedResult =
+      this.groupResponsesValidationService.observeValidationResult();
+
+    this.stateSubscription = cachedResult.subscribe(result => {
+      if (result && !this.isRunning) {
+        this.wasRun = true;
+        const details = result.details as Record<string, unknown>;
+        if (result.status === 'failed' && details?.error) {
+          this.errorMessage = details.error as string;
+          this.result = null;
+        } else if (result.details) {
+          this.errorMessage = null;
+          this.result = result.details as GroupResponsesValidationResult;
+          this.totalItems = this.result.total || 0;
+          this.currentPage = this.result.page || 1;
+          this.pageSize = this.result.limit || 10;
+          this.updatePaginatedGroupResponses();
+        }
+      }
+    });
+
+    // Observe active task
+    this.taskSubscription = this.groupResponsesValidationService
+      .observeValidationTask()
+      .subscribe(task => {
+        this.activeTask = task;
+        this.isRunning = !!task;
+      });
   }
 
   ngOnDestroy(): void {
     this.subscription?.unsubscribe();
+    this.stateSubscription?.unsubscribe();
+    this.taskSubscription?.unsubscribe();
   }
 
   get status(): ValidationStatus {
     return this.groupResponsesValidationService.getValidationStatus();
+  }
+
+  get errorCount(): number {
+    return this.result?.totalGroupsWithoutResponses || 0;
   }
 
   onValidate(): void {
@@ -136,24 +213,52 @@ export class GroupResponsesValidationPanelComponent implements OnInit, OnDestroy
     }
 
     this.isRunning = true;
-    this.subscription = this.groupResponsesValidationService.validate().subscribe({
-      next: result => {
-        this.result = {
-          testTakersFound: result.testTakersFound,
-          groupsWithResponses: result.groupsWithResponses,
-          allGroupsHaveResponses: result.allGroupsHaveResponses
-        };
-        this.wasRun = true;
-        this.isRunning = false;
-        this.updatePaginatedGroupResponses();
-      },
-      error: () => {
-        this.isRunning = false;
-        this.snackBar.open('Fehler bei der Validierung', 'Schließen', { duration: 5000 });
-      }
-    });
+    this.subscription = this.groupResponsesValidationService
+      .validate(this.currentPage, this.pageSize)
+      .subscribe({
+        next: result => {
+          this.result = result;
+          this.totalItems = result.total || 0;
+          this.currentPage = result.page || 1;
+          this.pageSize = result.limit || 10;
+          this.wasRun = true;
+          this.isRunning = false;
+          this.updatePaginatedGroupResponses();
+        },
+        error: () => {
+          this.isRunning = false;
+          this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
 
     this.validate.emit();
+  }
+
+  onPageChange(event: PageEvent): void {
+    this.currentPage = event.pageIndex + 1;
+    this.pageSize = event.pageSize;
+    this.isLoadingPage = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.groupResponsesValidationService
+      .fetchPage(this.currentPage, this.pageSize)
+      .subscribe({
+        next: result => {
+          this.result = result;
+          this.totalItems = result.total || 0;
+          this.currentPage = result.page || 1;
+          this.pageSize = result.limit || 10;
+          this.updatePaginatedGroupResponses();
+          this.isLoadingPage = false;
+        },
+        error: () => {
+          this.isLoadingPage = false;
+          this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 
   toggleExpansion(): void {

@@ -8,6 +8,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
@@ -303,6 +304,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       // However, the original code deleted it. Let's keep deleting it just in case of race conditions or partial writes?
       // Actually, if we are starting a job, we should probably clear any stale cache just to be sure.
       await this.cacheService.delete(cacheKey);
+
+      await this.jobQueueService.assertNoDependencyConflicts('coding-statistics', workspaceId);
 
       this.logger.log(
         `No cached coding statistics for workspace ${workspaceId} (version: ${version}), creating job to recalculate`

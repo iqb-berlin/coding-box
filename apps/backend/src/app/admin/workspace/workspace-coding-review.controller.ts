@@ -64,9 +64,9 @@ export class WorkspaceCodingReviewController {
     type: Number
   })
   @ApiQuery({
-    name: 'statusFilter',
+    name: 'resolvedFilter',
     required: false,
-    description: 'Filter by coding status (all, done, pending)',
+    description: 'Filter by resolution status (all, resolved, unresolved)',
     type: String
   })
   @ApiOkResponse({
@@ -89,6 +89,7 @@ export class WorkspaceCodingReviewController {
                 type: 'string',
                 description: 'The given answer by the test person'
               },
+              isResolved: { type: 'boolean', description: 'Whether the variable is already resolved' },
               coderResults: {
                 type: 'array',
                 items: {
@@ -142,7 +143,8 @@ export class WorkspaceCodingReviewController {
                    @Query('excludeTrainings') excludeTrainings?: string,
                    @Query('search') search?: string,
                    @Query('coderId') coderId?: number,
-                   @Query('statusFilter') statusFilter?: string
+                   @Query('statusFilter') statusFilter?: string,
+                   @Query('resolvedFilter') resolvedFilter?: string
   ): Promise<DoubleCodedReviewResponse> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
@@ -157,7 +159,8 @@ export class WorkspaceCodingReviewController {
       isExcludeTrainings,
       search,
       coderId,
-      statusFilter
+      statusFilter,
+      resolvedFilter
     );
   }
 

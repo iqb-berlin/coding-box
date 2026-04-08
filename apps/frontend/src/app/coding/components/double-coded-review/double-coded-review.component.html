@@ -6,91 +6,112 @@
 
   <mat-dialog-content class="double-coded-review-container">
     <div class="content-section">
+      <!-- Stable Filter Section -->
+      <mat-card class="filter-card">
+        <mat-card-content>
+          <div class="filter-section">
+            <mat-checkbox [(ngModel)]="showOnlyConflicts" 
+                          (change)="onFilterChange()" 
+                          [ngModelOptions]="{standalone: true}"
+                          color="primary">
+              {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
+            </mat-checkbox>
+
+            <mat-form-field appearance="outline" class="search-field">
+              <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
+              <input matInput [formControl]="searchControl" placeholder="{{ 'double-coded-review.filter.search-placeholder' | translate }}">
+              <mat-icon matSuffix *ngIf="!searchControl.value">search</mat-icon>
+              <button *ngIf="searchControl.value" matSuffix mat-icon-button aria-label="Clear" (click)="searchControl.setValue('')">
+                <mat-icon>close</mat-icon>
+              </button>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="filter-dropdown">
+              <mat-label>{{ 'double-coded-review.filter.coder-label' | translate }}</mat-label>
+              <mat-select [formControl]="coderControl">
+                <mat-option [value]="null">{{ 'double-coded-review.filter.all-coders' | translate }}</mat-option>
+                @for (coder of availableCoders; track coder.id) {
+                  <mat-option [value]="coder.id">{{ coder.name }}</mat-option>
+                }
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="filter-dropdown small">
+              <mat-label>{{ 'double-coded-review.filter.status-label' | translate }}</mat-label>
+              <mat-select [formControl]="statusControl">
+                <mat-option value="all">{{ 'double-coded-review.filter.status-all' | translate }}</mat-option>
+                <mat-option value="done">{{ 'double-coded-review.filter.status-done' | translate }}</mat-option>
+                <mat-option value="pending">{{ 'double-coded-review.filter.status-pending' | translate }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+
+            <mat-form-field appearance="outline" class="filter-dropdown small">
+              <mat-label>{{ 'double-coded-review.filter.resolved-label' | translate }}</mat-label>
+              <mat-select [formControl]="resolvedControl">
+                <mat-option value="all">{{ 'double-coded-review.filter.resolved-all' | translate }}</mat-option>
+                <mat-option value="unresolved">{{ 'double-coded-review.filter.resolved-unresolved' | translate }}</mat-option>
+                <mat-option value="resolved">{{ 'double-coded-review.filter.resolved-done' | translate }}</mat-option>
+              </mat-select>
+            </mat-form-field>
+            
+            @if (showOnlyConflicts) {
+              <div class="statistics">
+                <span class="stat-text">
+                  {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
+                </span>
+                @if (getUnresolvedCount() > 0) {
+                  <span class="unresolved-text">
+                    {{ 'double-coded-review.statistics.unresolved-on-page' | translate:{count: getUnresolvedCount()} }}
+                  </span>
+                }
+              </div>
+            }
+          </div>
+        </mat-card-content>
+      </mat-card>
+
       @if (isLoading) {
         <div class="loading-container">
           <mat-spinner diameter="40"></mat-spinner>
           <p>{{ 'double-coded-review.loading' | translate }}</p>
         </div>
       } @else {
-        @if (dataSource.data.length === 0 && showOnlyConflicts) {
+        @if (dataSource.data.length === 0) {
           <mat-card class="no-data-card">
             <mat-card-content>
               <div class="no-data-content">
-                <mat-icon class="no-data-icon">check_circle</mat-icon>
-                <h3>{{ 'double-coded-review.no-conflicts.title' | translate }}</h3>
-                <p>{{ 'double-coded-review.no-conflicts.message' | translate }}</p>
-              </div>
-            </mat-card-content>
-          </mat-card>
-        } @else if (dataSource.data.length === 0) {
-          <mat-card class="no-data-card">
-            <mat-card-content>
-              <div class="no-data-content">
-                <mat-icon class="no-data-icon">info</mat-icon>
-                <h3>{{ 'double-coded-review.no-data.title' | translate }}</h3>
-                <p>{{ 'double-coded-review.no-data.message' | translate }}</p>
+                <mat-icon class="no-data-icon">{{ showOnlyConflicts ? 'check_circle' : 'info' }}</mat-icon>
+                <h3>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
+                <p>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
               </div>
             </mat-card-content>
           </mat-card>
         } @else {
           <mat-card class="review-card">
             <mat-card-header>
-              <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
-              <mat-card-subtitle>{{ 'double-coded-review.table-subtitle' | translate:{count: totalItems} }}</mat-card-subtitle>
+              <div class="card-header-content">
+                <div class="title-group">
+                  <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
+                  <mat-card-subtitle>{{ 'double-coded-review.table-subtitle' | translate:{count: totalItems} }}</mat-card-subtitle>
+                </div>
+                <div class="header-actions">
+                  <button
+                    mat-raised-button
+                    color="primary"
+                    (click)="applyReviewDecisions()"
+                    [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
+                    <mat-icon>check_circle</mat-icon>
+                    {{ 'double-coded-review.apply-decisions' | translate }}
+                  </button>
+                  <mat-icon class="help-icon"
+                            matTooltip="{{ 'double-coded-review.apply-help-tooltip' | translate }}">
+                    help_outline
+                  </mat-icon>
+                </div>
+              </div>
             </mat-card-header>
 
             <mat-card-content>
-              <div class="filter-section">
-                <mat-checkbox [(ngModel)]="showOnlyConflicts" 
-                              (change)="onFilterChange()" 
-                              [ngModelOptions]="{standalone: true}"
-                              color="primary">
-                  {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
-                </mat-checkbox>
-
-                <mat-form-field appearance="outline" class="search-field">
-                  <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
-                  <input matInput [formControl]="searchControl" placeholder="{{ 'double-coded-review.filter.search-placeholder' | translate }}">
-                  <mat-icon matSuffix *ngIf="!searchControl.value">search</mat-icon>
-                  <button *ngIf="searchControl.value" matSuffix mat-icon-button aria-label="Clear" (click)="searchControl.setValue('')">
-                    <mat-icon>close</mat-icon>
-                  </button>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="filter-dropdown">
-                  <mat-label>{{ 'double-coded-review.filter.coder-label' | translate }}</mat-label>
-                  <mat-select [formControl]="coderControl">
-                    <mat-option [value]="null">{{ 'double-coded-review.filter.all-coders' | translate }}</mat-option>
-                    @for (coder of availableCoders; track coder.id) {
-                      <mat-option [value]="coder.id">{{ coder.name }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" class="filter-dropdown small">
-                  <mat-label>{{ 'double-coded-review.filter.status-label' | translate }}</mat-label>
-                  <mat-select [formControl]="statusControl">
-                    <mat-option value="all">{{ 'double-coded-review.filter.status-all' | translate }}</mat-option>
-                    <mat-option value="done">{{ 'double-coded-review.filter.status-done' | translate }}</mat-option>
-                    <mat-option value="pending">{{ 'double-coded-review.filter.status-pending' | translate }}</mat-option>
-                  </mat-select>
-                </mat-form-field>
-                
-                @if (showOnlyConflicts) {
-                  <div class="statistics">
-                    <span class="stat-text">
-                        <!-- If filtering restricts to conflicts, totalItems IS the total conflict count -->
-                      {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
-                    </span>
-                    @if (getUnresolvedCount() > 0) {
-                      <span class="unresolved-text">
-                        {{ 'double-coded-review.statistics.unresolved-on-page' | translate:{count: getUnresolvedCount()} }}
-                      </span>
-                    }
-                  </div>
-                }
-              </div>
-
               <form [formGroup]="selectionForm">
                 <table mat-table [dataSource]="dataSource" class="review-table">
                   <!-- Unit & Variable Column -->
@@ -136,28 +157,37 @@
                         }
                         <div class="coder-results-list">
                           @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <div class="coder-result-row">
-                              <span class="coder-name-badge" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
-                                {{ result.coderName }}
-                                @if (result.jobName) {
-                                  <span class="job-name">({{ result.jobName }})</span>
-                                }
-                              </span>
-                              <span class="coder-value">
-                                <span class="label">{{ 'double-coded-review.code-label' | translate }}:</span>
-                                <span class="value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
-                              </span>
-                              @if (result.score !== null) {
-                                <span class="coder-score">
-                                  <span class="label">{{ 'double-coded-review.score-label' | translate }}:</span>
-                                  <span class="value">{{ result.score }}</span>
+                            <div class="coder-result-card" [ngClass]="{'pending': result.code === null}">
+                              <div class="coder-header">
+                                <span class="coder-name" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
+                                  <mat-icon class="coder-icon">person</mat-icon>
+                                  {{ result.coderName }}
                                 </span>
-                              }
-                              @if (result.notes) {
-                                <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                              }
-                              @if (result.supervisorComment) {
-                                <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
+                                @if (result.jobName) {
+                                  <span class="job-id-badge" [matTooltip]="result.jobName">{{ result.jobName }}</span>
+                                }
+                              </div>
+                              <div class="coder-data-grid">
+                                <div class="data-item">
+                                  <span class="data-label">{{ 'double-coded-review.code-label' | translate }}:</span>
+                                  <span class="data-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
+                                </div>
+                                @if (result.score !== null) {
+                                  <div class="data-item">
+                                    <span class="data-label">{{ 'double-coded-review.score-label' | translate }}:</span>
+                                    <span class="data-value">{{ result.score }}</span>
+                                  </div>
+                                }
+                              </div>
+                              @if (result.notes || result.supervisorComment) {
+                                <div class="coder-notes-row">
+                                  @if (result.notes) {
+                                    <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                                  }
+                                  @if (result.supervisorComment) {
+                                    <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
+                                  }
+                                </div>
                               }
                             </div>
                           }
@@ -172,52 +202,57 @@
                     <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
                       <div class="selection-cell">
                         <div class="coding-status" 
-                             [ngClass]="isAllCodersDone(element) ? 'complete' : 'incomplete'"
-                             [matTooltip]="getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate)">
-                          <div class="progress-dots">
+                             [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
+                             [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+                          <div class="progress-dots" *ngIf="!element.isResolved">
                             @for (result of element.coderResults; track $index) {
                               <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
                             }
                           </div>
+                          <mat-icon *ngIf="element.isResolved" color="primary">check_circle</mat-icon>
+                          <span *ngIf="element.isResolved" class="status-label resolved">{{ 'double-coded-review.applied' | translate }}</span>
                         </div>
-                        <mat-radio-group
-                          [formControlName]="getItemControlName(element)"
-                          (change)="onSelectionChange(element, $event.value)"
-                          class="coder-selection">
-                          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
-                                {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
-                                @if (result.code === null) {
-                                  <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
-                                }
-                            </mat-radio-button>
-                          }
-                        </mat-radio-group>
-                        
-                        @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
-                          <mat-form-field class="comment-field" appearance="outline">
-                            <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
-                            <textarea matInput
-                                      [formControlName]="getCommentControlName(element)"
-                                      rows="2"
-                                      [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
-                          </mat-form-field>
-                        }
 
-                        <div class="row-actions">
-                          <button mat-mini-fab color="primary"
-                                  [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
-                                  (click)="applySingleDecision(element)"
-                                  matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
-                            <mat-icon>check</mat-icon>
-                          </button>
-                        </div>
+                        <ng-container *ngIf="!element.isResolved">
+                          <mat-radio-group
+                            [formControlName]="getItemControlName(element)"
+                            (change)="onSelectionChange(element, $event.value)"
+                            class="coder-selection">
+                            @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
+                              <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
+                                  {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
+                                  @if (result.code === null) {
+                                    <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
+                                  }
+                              </mat-radio-button>
+                            }
+                          </mat-radio-group>
+                          
+                          @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
+                            <mat-form-field class="comment-field" appearance="outline">
+                              <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                              <textarea matInput
+                                        [formControlName]="getCommentControlName(element)"
+                                        rows="2"
+                                        [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
+                            </mat-form-field>
+                          }
+
+                          <div class="row-actions">
+                            <button mat-mini-fab color="primary"
+                                    [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
+                                    (click)="applySingleDecision(element)"
+                                    matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
+                              <mat-icon>check</mat-icon>
+                            </button>
+                          </div>
+                        </ng-container>
                       </div>
                     </td>
                   </ng-container>
 
                   <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                  <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+                  <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'resolved-row': row.isResolved}"></tr>
                 </table>
               </form>
 
@@ -229,23 +264,6 @@
                 showFirstLastButtons>
               </mat-paginator>
             </mat-card-content>
-
-            <mat-card-actions>
-              <div class="actions-wrapper">
-                <button
-                  mat-raised-button
-                  color="primary"
-                  (click)="applyReviewDecisions()"
-                  [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
-                  <mat-icon>check_circle</mat-icon>
-                  {{ 'double-coded-review.apply-decisions' | translate }}
-                </button>
-                <mat-icon class="help-icon"
-                          matTooltip="{{ 'double-coded-review.apply-help-tooltip' | translate }}">
-                  help_outline
-                </mat-icon>
-              </div>
-            </mat-card-actions>
           </mat-card>
         }
       }
@@ -253,7 +271,7 @@
   </mat-dialog-content>
 
   <mat-dialog-actions align="end">
-    <button mat-button (click)="dialogRef.close()">Schließen</button>
+    <button mat-raised-button color="accent" (click)="close()">Schließen</button>
   </mat-dialog-actions>
 </div>
 
@@ -269,62 +287,112 @@
   </div>
 
   <div class="content-section">
+    <!-- Stable Filter Section for Standalone View -->
+    <mat-card class="filter-card">
+      <mat-card-content>
+        <div class="filter-section">
+          <mat-checkbox [(ngModel)]="showOnlyConflicts" 
+                        (change)="onFilterChange()" 
+                        [ngModelOptions]="{standalone: true}"
+                        color="primary">
+            {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
+          </mat-checkbox>
+
+          <mat-form-field appearance="outline" class="search-field">
+            <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
+            <input matInput [formControl]="searchControl" placeholder="{{ 'double-coded-review.filter.search-placeholder' | translate }}">
+            <mat-icon matSuffix *ngIf="!searchControl.value">search</mat-icon>
+            <button *ngIf="searchControl.value" matSuffix mat-icon-button aria-label="Clear" (click)="searchControl.setValue('')">
+              <mat-icon>close</mat-icon>
+            </button>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-dropdown">
+            <mat-label>{{ 'double-coded-review.filter.coder-label' | translate }}</mat-label>
+            <mat-select [formControl]="coderControl">
+              <mat-option [value]="null">{{ 'double-coded-review.filter.all-coders' | translate }}</mat-option>
+              @for (coder of availableCoders; track coder.id) {
+                <mat-option [value]="coder.id">{{ coder.name }}</mat-option>
+              }
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-dropdown small">
+            <mat-label>{{ 'double-coded-review.filter.status-label' | translate }}</mat-label>
+            <mat-select [formControl]="statusControl">
+              <mat-option value="all">{{ 'double-coded-review.filter.status-all' | translate }}</mat-option>
+              <mat-option value="done">{{ 'double-coded-review.filter.status-done' | translate }}</mat-option>
+              <mat-option value="pending">{{ 'double-coded-review.filter.status-pending' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-dropdown small">
+            <mat-label>{{ 'double-coded-review.filter.resolved-label' | translate }}</mat-label>
+            <mat-select [formControl]="resolvedControl">
+              <mat-option value="all">{{ 'double-coded-review.filter.resolved-all' | translate }}</mat-option>
+              <mat-option value="unresolved">{{ 'double-coded-review.filter.resolved-unresolved' | translate }}</mat-option>
+              <mat-option value="resolved">{{ 'double-coded-review.filter.resolved-done' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+          
+          @if (showOnlyConflicts) {
+            <div class="statistics">
+              <span class="stat-text">
+                {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
+              </span>
+              @if (getUnresolvedCount() > 0) {
+                <span class="unresolved-text">
+                  {{ 'double-coded-review.statistics.unresolved-on-page' | translate:{count: getUnresolvedCount()} }}
+                </span>
+              }
+            </div>
+          }
+        </div>
+      </mat-card-content>
+    </mat-card>
+
     @if (isLoading) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
         <p>{{ 'double-coded-review.loading' | translate }}</p>
       </div>
     } @else {
-      @if (dataSource.data.length === 0 && showOnlyConflicts) {
+      @if (dataSource.data.length === 0) {
         <mat-card class="no-data-card">
           <mat-card-content>
             <div class="no-data-content">
-              <mat-icon class="no-data-icon">check_circle</mat-icon>
-              <h3>{{ 'double-coded-review.no-conflicts.title' | translate }}</h3>
-              <p>{{ 'double-coded-review.no-conflicts.message' | translate }}</p>
-            </div>
-          </mat-card-content>
-        </mat-card>
-      } @else if (dataSource.data.length === 0) {
-        <mat-card class="no-data-card">
-          <mat-card-content>
-            <div class="no-data-content">
-              <mat-icon class="no-data-icon">info</mat-icon>
-              <h3>{{ 'double-coded-review.no-data.title' | translate }}</h3>
-              <p>{{ 'double-coded-review.no-data.message' | translate }}</p>
+              <mat-icon class="no-data-icon">{{ showOnlyConflicts ? 'check_circle' : 'info' }}</mat-icon>
+              <h3>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
+              <p>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
             </div>
           </mat-card-content>
         </mat-card>
       } @else {
         <mat-card class="review-card">
           <mat-card-header>
-            <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
-            <mat-card-subtitle>{{ 'double-coded-review.table-subtitle' | translate:{count: totalItems} }}</mat-card-subtitle>
+            <div class="card-header-content">
+              <div class="title-group">
+                <mat-card-title>{{ 'double-coded-review.table-title' | translate }}</mat-card-title>
+                <mat-card-subtitle>{{ 'double-coded-review.table-subtitle' | translate:{count: totalItems} }}</mat-card-subtitle>
+              </div>
+              <div class="header-actions">
+                <button
+                  mat-raised-button
+                  color="primary"
+                  (click)="applyReviewDecisions()"
+                  [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
+                  <mat-icon>check_circle</mat-icon>
+                  {{ 'double-coded-review.apply-decisions' | translate }}
+                </button>
+                <mat-icon class="help-icon"
+                          matTooltip="{{ 'double-coded-review.apply-help-tooltip' | translate }}">
+                  help_outline
+                </mat-icon>
+              </div>
+            </div>
           </mat-card-header>
 
           <mat-card-content>
-            <div class="filter-section">
-              <mat-checkbox [(ngModel)]="showOnlyConflicts" 
-                            (change)="onFilterChange()" 
-                            [ngModelOptions]="{standalone: true}"
-                            color="primary">
-                {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
-              </mat-checkbox>
-              
-              @if (showOnlyConflicts) {
-                <div class="statistics">
-                  <span class="stat-text">
-                    {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
-                  </span>
-                  @if (getUnresolvedCount() > 0) {
-                    <span class="unresolved-text">
-                      {{ 'double-coded-review.statistics.unresolved-on-page' | translate:{count: getUnresolvedCount()} }}
-                    </span>
-                  }
-                </div>
-              }
-            </div>
-
             <form [formGroup]="selectionForm">
               <table mat-table [dataSource]="dataSource" class="review-table">
                 <!-- Unit & Variable Column -->
@@ -364,89 +432,109 @@
                 <ng-container matColumnDef="coderResults">
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
                   <td mat-cell *matCellDef="let element">
-                      <div class="coder-results-cell">
-                        @if (hasConflict(element)) {
-                          <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
-                        }
-                        <div class="coder-results-list">
-                          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <div class="coder-result-row">
-                              <span class="coder-name-badge" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
+                    <div class="coder-results-cell">
+                      @if (hasConflict(element)) {
+                        <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
+                      }
+                      <div class="coder-results-list">
+                        @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
+                          <div class="coder-result-card" [ngClass]="{'pending': result.code === null}">
+                            <div class="coder-header">
+                              <span class="coder-name" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
+                                <mat-icon class="coder-icon">person</mat-icon>
                                 {{ result.coderName }}
-                                @if (result.jobName) {
-                                  <span class="job-name">({{ result.jobName }})</span>
-                                }
                               </span>
-                              <span class="coder-value">
-                                <span class="label">{{ 'double-coded-review.code-label' | translate }}:</span>
-                                <span class="value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
-                              </span>
-                              @if (result.score !== null) {
-                                <span class="coder-score">
-                                  <span class="label">{{ 'double-coded-review.score-label' | translate }}:</span>
-                                  <span class="value">{{ result.score }}</span>
-                                </span>
-                              }
-                              @if (result.notes) {
-                                <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                              }
-                              @if (result.supervisorComment) {
-                                <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
+                              @if (result.jobName) {
+                                <span class="job-id-badge" [matTooltip]="result.jobName">{{ result.jobName }}</span>
                               }
                             </div>
-                          }
-                        </div>
+                            <div class="coder-data-grid">
+                              <div class="data-item">
+                                <span class="data-label">{{ 'double-coded-review.code-label' | translate }}:</span>
+                                <span class="data-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
+                              </div>
+                              @if (result.score !== null) {
+                                <div class="data-item">
+                                  <span class="data-label">{{ 'double-coded-review.score-label' | translate }}:</span>
+                                  <span class="data-value">{{ result.score }}</span>
+                                </div>
+                              }
+                            </div>
+                            @if (result.notes || result.supervisorComment) {
+                              <div class="coder-notes-row">
+                                @if (result.notes) {
+                                  <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                                }
+                                @if (result.supervisorComment) {
+                                  <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
+                                }
+                              </div>
+                            }
+                          </div>
+                        }
                       </div>
+                    </div>
                   </td>
                 </ng-container>
+                
 
                 <!-- Selection Column -->
                 <ng-container matColumnDef="selection">
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
                   <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
                     <div class="selection-cell">
-                      <div class="coding-status" [ngClass]="isAllCodersDone(element) ? 'complete' : 'incomplete'">
-                        <mat-icon>{{ isAllCodersDone(element) ? 'check_circle' : 'pending' }}</mat-icon>
-                        <span>{{ getCodedCount(element) }} {{ 'double-coded-review.coders-done' | translate }}</span>
+                      <div class="coding-status" 
+                           [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
+                           [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+                        <div class="progress-dots" *ngIf="!element.isResolved">
+                          @for (result of element.coderResults; track $index) {
+                            <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
+                          }
+                        </div>
+                        <mat-icon *ngIf="element.isResolved" color="primary">check_circle</mat-icon>
+                        <span *ngIf="element.isResolved" class="status-label resolved">{{ 'double-coded-review.applied' | translate }}</span>
                       </div>
-                      <mat-radio-group
-                        [formControlName]="getItemControlName(element)"
-                        (change)="onSelectionChange(element, $event.value)"
-                        class="coder-selection">
-                        @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                          <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
-                              {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
-                              @if (result.code === null) {
-                                <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
-                              }
-                          </mat-radio-button>
-                        }
-                      </mat-radio-group>
-                      
-                      @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
-                        <mat-form-field class="comment-field" appearance="outline">
-                          <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
-                          <textarea matInput
-                                    [formControlName]="getCommentControlName(element)"
-                                    rows="2"
-                                    [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
-                        </mat-form-field>
-                      }
 
-                      <div class="row-actions">
-                        <button mat-mini-fab color="primary"
-                                [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
-                                (click)="applySingleDecision(element)"
-                                matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
-                          <mat-icon>check</mat-icon>
-                        </button>
-                      </div>
+                      <ng-container *ngIf="!element.isResolved">
+                        <mat-radio-group
+                          [formControlName]="getItemControlName(element)"
+                          (change)="onSelectionChange(element, $event.value)"
+                          class="coder-selection">
+                          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
+                            <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
+                                {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
+                                @if (result.code === null) {
+                                  <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
+                                }
+                            </mat-radio-button>
+                          }
+                        </mat-radio-group>
+                        
+                        @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
+                          <mat-form-field class="comment-field" appearance="outline">
+                            <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+                            <textarea matInput
+                                      [formControlName]="getCommentControlName(element)"
+                                      rows="2"
+                                      [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
+                          </mat-form-field>
+                        }
+
+                        <div class="row-actions">
+                          <button mat-mini-fab color="primary"
+                                  [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
+                                  (click)="applySingleDecision(element)"
+                                  matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
+                            <mat-icon>check</mat-icon>
+                          </button>
+                        </div>
+                      </ng-container>
                     </div>
                   </td>
                 </ng-container>
 
                 <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'resolved-row': row.isResolved}"></tr>
               </table>
             </form>
 
@@ -458,23 +546,6 @@
               showFirstLastButtons>
             </mat-paginator>
           </mat-card-content>
-
-          <mat-card-actions>
-            <div class="actions-wrapper">
-              <button
-                mat-raised-button
-                color="primary"
-                (click)="applyReviewDecisions()"
-                [disabled]="dataSource.data.length === 0 || !areAllVisibleConflictsResolved() || isLoading">
-                <mat-icon>check_circle</mat-icon>
-                {{ 'double-coded-review.apply-decisions' | translate }}
-              </button>
-              <mat-icon class="help-icon"
-                        matTooltip="{{ 'double-coded-review.apply-help-tooltip' | translate }}">
-                help_outline
-              </mat-icon>
-            </div>
-          </mat-card-actions>
         </mat-card>
       }
     }

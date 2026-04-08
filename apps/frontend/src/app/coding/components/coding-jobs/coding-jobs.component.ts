@@ -798,12 +798,18 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   openDoubleCodedReviewDialog(): void {
-    this.dialog.open(DoubleCodedReviewComponent, {
+    const dialogRef = this.dialog.open(DoubleCodedReviewComponent, {
       width: '98vw',
       maxWidth: '100vw',
       height: '95vh',
       maxHeight: '100vh',
       data: {}
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result?.resultsApplied) {
+        this.jobsChanged.emit();
+      }
     });
   }
 

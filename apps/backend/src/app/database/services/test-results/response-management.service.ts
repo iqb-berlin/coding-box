@@ -1,21 +1,26 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, QueryRunner } from 'typeorm';
+import {
+  forwardRef, Inject, Injectable, Logger
+} from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
 
 @Injectable()
 export class ResponseManagementService {
   private readonly logger = new Logger(ResponseManagementService.name);
 
   constructor(
-    @InjectRepository(ResponseEntity)
     private readonly connection: DataSource,
-    private readonly journalService: JournalService
+    private readonly journalService: JournalService,
+    @Inject(forwardRef(() => WorkspaceTestResultsService))
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) { }
 
   async updateResponsesInDatabase(
+    workspaceId: number,
     allCodedResponses: CodedResponse[],
     queryRunner: QueryRunner,
     jobId?: string,
@@ -25,6 +30,11 @@ export class ResponseManagementService {
   ): Promise<boolean> {
     if (allCodedResponses.length === 0) {
       await queryRunner.release();
+
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+
       return true;
     }
     const updateStart = Date.now();
@@ -186,6 +196,11 @@ export class ResponseManagementService {
       }
 
       await queryRunner.release();
+
+      if (workspaceId) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+
       return true;
     } catch (error) {
       this.logger.error(
@@ -231,17 +246,19 @@ export class ResponseManagementService {
         }
 
         const parts = key.split('|');
-        if (parts.length !== 4) {
+        if (parts.length !== 6) {
           this.logger.warn(`Invalid duplicate resolution key: ${key}`);
           continue;
         }
 
-        const unitId = Number(parts[0]);
+        const unitName = decodeURIComponent(parts[0] || '');
         const variableId = decodeURIComponent(parts[1] || '');
         const subform = decodeURIComponent(parts[2] || '');
         const testTakerLogin = decodeURIComponent(parts[3] || '');
+        const testTakerCode = decodeURIComponent(parts[4] || '');
+        const testTakerGroup = decodeURIComponent(parts[5] || '');
 
-        if (!unitId || Number.isNaN(unitId) || !variableId || !testTakerLogin) {
+        if (!unitName || !variableId || !testTakerLogin) {
           this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
           continue;
         }
@@ -254,7 +271,13 @@ export class ResponseManagementService {
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true })
           .andWhere('person.login = :testTakerLogin', { testTakerLogin })
-          .andWhere('unit.id = :unitId', { unitId })
+          .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
+            testTakerCode: testTakerCode || ''
+          })
+          .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
+            testTakerGroup: testTakerGroup || ''
+          })
+          .andWhere('unit.name = :unitName', { unitName })
           .andWhere('response.variableid = :variableId', { variableId })
           .andWhere("COALESCE(response.subform, '') = :subform", {
             subform: subform || ''
@@ -306,6 +329,11 @@ export class ResponseManagementService {
         resolvedCount,
         success: true
       };
+    }).then(async result => {
+      if (result.success) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 
@@ -375,6 +403,11 @@ export class ResponseManagementService {
       }
 
       return { success: true, report };
+    }).then(async result => {
+      if (result.success) {
+        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 }

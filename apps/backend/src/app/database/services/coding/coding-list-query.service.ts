@@ -5,6 +5,7 @@ import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { extractVariableLocation } from '../../../utils/voud/extractVariableLocation';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';

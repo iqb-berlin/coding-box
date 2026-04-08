@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
 import { CodingFileCacheService } from './coding-file-cache.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
