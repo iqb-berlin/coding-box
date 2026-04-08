@@ -49,6 +49,8 @@ interface CodingResult {
   givenCode?: string | number;
   givenScore?: number;
   notes?: string;
+  isDoubleCoded?: boolean;
+  otherCoders?: string[];
 }
 
 interface CodingProgressEntry {
@@ -99,6 +101,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
     'code',
     'score',
     'codingIssueOption',
+    'doubleCoding',
     'notes',
     'actions'
   ];
@@ -185,7 +188,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
                     codingIssueOptionLabel: reviewIssueOption !== null ? this.getCodingIssueOption(reviewIssueOption) : undefined,
                     givenCode: reviewIssueOption !== null && progress?.id && this.isPositiveCode(progress.id) ? progress.id : undefined,
                     givenScore: reviewIssueOption !== null && progress?.score !== undefined && progress?.score !== null ? progress.score : undefined,
-                    notes: notes
+                    notes: notes,
+                    isDoubleCoded: unit.isDoubleCoded,
+                    otherCoders: unit.otherCoders
                   };
                 });
                 this.isLoading = false;

@@ -66,7 +66,7 @@ export class CodingReviewService {
         .leftJoin('b.person', 'p')
         .select('cju.response_id', 'responseId')
         .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
-        .where('cju.workspace_id = :workspaceId', { workspaceId })
+        .where('cj.workspace_id = :workspaceId', { workspaceId })
         .groupBy('cju.response_id')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
 
