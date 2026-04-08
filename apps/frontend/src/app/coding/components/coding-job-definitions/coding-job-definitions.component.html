@@ -1,10 +1,25 @@
 <div class="job-definitions-container">
   <div class="header-actions" *ngIf="!selectionMode">
-    <h3>{{ 'coding-job-definitions.title' | translate }}</h3>
+    <h3 style="display: flex; align-items: center; margin: 0;">
+      {{ 'coding-job-definitions.title' | translate }}
+      <button mat-icon-button (click)="showInfo = !showInfo"
+              [matTooltip]="'coding-job-definitions.info-tooltip' | translate"
+              style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
+        <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+      </button>
+    </h3>
     <button mat-stroked-button color="primary" (click)="createDefinition()">
       <mat-icon>add</mat-icon>
       {{ 'coding-job-definitions.create-new' | translate }}
     </button>
+  </div>
+
+  <div *ngIf="showInfo" class="info-alert" style="background-color: #fce4ec; border-left: 4px solid #ad1457; padding: 12px; border-radius: 4px; margin-bottom: 20px; margin-top: 10px; font-size: 13px; color: #333; display: flex; align-items: start; gap: 8px;">
+    <mat-icon style="font-size: 20px; width: 20px; height: 20px; color: #ad1457; margin-top: 2px;">description</mat-icon>
+    <div>
+      <strong style="display: block; margin-bottom: 4px;">{{ 'coding-job-definitions.info-title' | translate }}</strong>
+      <span style="display: block;">{{ 'coding-job-definitions.info-desc' | translate }}</span>
+    </div>
   </div>
 
 
