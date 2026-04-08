@@ -27,6 +27,7 @@ export class CodingReviewService {
     search?: string,
     coderId?: number,
     statusFilter?: string,
+    resolvedFilter?: string,
     includeRelations: boolean = true
   ): Promise<{
       data: Array<{
@@ -37,6 +38,7 @@ export class CodingReviewService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -55,7 +57,7 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts})`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, resolvedFilter=${resolvedFilter})`
       );
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
@@ -66,21 +68,27 @@ export class CodingReviewService {
         .leftJoin('b.person', 'p')
         .select('cju.response_id', 'responseId')
         .addSelect('COUNT(DISTINCT cju.coding_job_id)', 'jobCount')
+        .addSelect('resp.status_v2', 'responseStatus')
         .where('cj.workspace_id = :workspaceId', { workspaceId })
         .groupBy('cju.response_id')
+        .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
 
       if (onlyConflicts) {
         // A conflict exists if there are different codes for the same response.
         // We use COALESCE to handle NULL codes as a distinct value (-999999).
-        // If all codes are the same, COUNT(DISTINCT ...) will be 1.
-        // If there are differences, it will be > 1.
         query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+      }
 
-        // Also permanently hide items from the conflict list if a supervisor already resolved them
-        query.andWhere('resp.status_v2 != :completeStatus', {
-          completeStatus: statusStringToNumber('CODING_COMPLETE')
-        });
+      // Applied Status Filter Logic
+      const completeStatus = statusStringToNumber('CODING_COMPLETE');
+      if (resolvedFilter === 'resolved') {
+        query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
+      } else if (resolvedFilter === 'unresolved') {
+        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
+      } else if (onlyConflicts && !resolvedFilter) {
+        // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
+        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
       }
 
       if (excludeTrainings) {
@@ -97,32 +105,25 @@ export class CodingReviewService {
 
       if (coderId) {
         // Filter by responses where the specific coder is involved
-        // We use a subquery to find all response IDs that have a job for this coder
         query.andWhere(subQuery => {
           const sub = subQuery
             .subQuery()
             .select('cju2.response_id')
             .from('coding_job_unit', 'cju2')
             .leftJoin('cju2.coding_job', 'cj2')
-            .where('cj2.coder_id = :coderId', { coderId })
+            .leftJoin('cj2.codingJobCoders', 'cjc2')
+            .where('cjc2.user_id = :coderId', { coderId })
             .getQuery();
           return `cju.response_id IN ${sub}`;
         });
       }
 
       if (statusFilter === 'done') {
-        // At least one result must exist and COUNT(code) must match COUNT(total jobs)
         query.andHaving('COUNT(cju.code) = COUNT(cju.coding_job_id)');
       } else if (statusFilter === 'pending') {
-        // At least one coder hasn't submitted a code
         query.andHaving('COUNT(cju.code) < COUNT(cju.coding_job_id)');
       }
 
-      // Get the total count efficiently using a subquery to avoid loading all IDs into memory
-      // This is necessary because of the GROUP BY and HAVING clauses.
-      // We use raw query execution here because `query.getQuery()` returns compiled SQL
-      // with positional parameters ($1, $2) which cannot be passed cleanly back into another
-      // QueryBuilder using `setParameters()` out-of-the-box.
       const [sql, params] = query.getQueryAndParameters();
       const countResult = await this.codingJobUnitRepository.query(
         `SELECT COUNT(*) as "total" FROM (${sql}) "subquery"`,
@@ -140,11 +141,16 @@ export class CodingReviewService {
         };
       }
 
-      // Apply ordering and pagination at the database level to ensure stable sorts
       query.orderBy('cju.response_id', 'ASC');
       query.offset((page - 1) * limit).limit(limit);
       const paginatedRawResults = await query.getRawMany();
       const paginatedResponseIds = paginatedRawResults.map(row => row.responseId);
+
+      // Store raw status info to map it back after relation fetch
+      const statusMap = new Map<number, number>();
+      paginatedRawResults.forEach(row => {
+        statusMap.set(row.responseId, row.responseStatus);
+      });
 
       const relations = includeRelations ? [
         'coding_job',
@@ -165,8 +171,6 @@ export class CodingReviewService {
         relations
       });
 
-      // After fetching relations, explicitly remove any individual items that belong to trainings
-      // Since `where: { response_id: In() }` indiscriminately loaded all records for these responses.
       const finalCodingJobUnits = excludeTrainings ?
         codingJobUnits.filter(unit => !unit.coding_job?.training_id) :
         codingJobUnits;
@@ -181,6 +185,7 @@ export class CodingReviewService {
         personCode: string;
         bookletName: string;
         givenAnswer: string;
+        isResolved: boolean;
         coderResults: Array<{
           coderId: number;
           coderName: string;
@@ -199,6 +204,7 @@ export class CodingReviewService {
         const responseId = unit.response_id;
 
         if (!responseGroups.has(responseId)) {
+          const responseStatus = statusMap.get(responseId);
           responseGroups.set(responseId, {
             responseId: responseId,
             unitName: unit.response?.unit?.name || '',
@@ -207,13 +213,14 @@ export class CodingReviewService {
             personCode: unit.response?.unit?.booklet?.person?.code || '',
             bookletName: unit.response?.unit?.booklet?.bookletinfo?.name || '',
             givenAnswer: unit.response?.value || '',
+            isResolved: responseStatus === completeStatus,
             coderResults: []
           });
         }
 
         const group = responseGroups.get(responseId)!;
 
-        const coder = unit.coding_job?.codingJobCoders?.[0]; // Assuming one coder per job
+        const coder = unit.coding_job?.codingJobCoders?.[0];
         if (coder) {
           group.coderResults.push({
             coderId: coder.user_id,
@@ -278,7 +285,6 @@ export class CodingReviewService {
       await this.responseRepository.manager.transaction(async transactionalEntityManager => {
         for (const decision of decisions) {
           try {
-            // Get the selected coder's coding_job_unit entry
             const selectedCodingJobUnit =
               await transactionalEntityManager.findOne(CodingJobUnit, {
                 where: {
@@ -316,23 +322,17 @@ export class CodingReviewService {
             let updatedValue = response.value || '';
             const boundary = '\n\n--- ORIGINAL RESPONSE ---\n';
 
-            // Clean up any historical ghost-append headers that were manually injected previously
-            // This restores the student's submission text exactly to full pristine form.
             if (updatedValue.includes(boundary)) {
               const parts = updatedValue.split(boundary);
               updatedValue = parts[parts.length - 1];
             }
 
-            // Purge any stale supervisor comments from ALL coder rows on this specific response
-            // This mathematically prevents the "Changed Mind" problem inherently: if a supervisor switches
-            // the winning coder tomorrow, the old winning coder automatically loses their legacy comment.
             await transactionalEntityManager.update(
               CodingJobUnit,
               { response_id: decision.responseId },
               { supervisor_comment: null }
             );
 
-            // Reassign the fresh, correct supervisor comment strictly to the winner
             if (decision.resolutionComment && decision.resolutionComment.trim()) {
               selectedCodingJobUnit.supervisor_comment = decision.resolutionComment.trim();
               await transactionalEntityManager.save(CodingJobUnit, selectedCodingJobUnit);
@@ -435,11 +435,12 @@ export class CodingReviewService {
           workspaceId,
           currentPage,
           batchSize,
-          false, // onlyConflicts = false (needed for correct Kappa calculation)
-          excludeTrainings, // use passed parameter
-          undefined, // no search for kappa calc
-          undefined, // no coderId for kappa calc
-          undefined, // no statusFilter for kappa calc
+          false, // onlyConflicts = false
+          excludeTrainings,
+          undefined, // search
+          undefined, // coderId
+          undefined, // statusFilter
+          undefined, // resolvedFilter
           false // includeRelations = false
         );
 
@@ -522,22 +523,15 @@ export class CodingReviewService {
         }
       }
 
-      // Calculate mean kappa
-      // Reference: R eatPrep meanKappa function
-      // https://github.com/sachseka/eatPrep/blob/8dc0b54748c095508c20fde07843e61b73a42141/R/rater_functions.R#L98
-      // R default: weighted.mean(dfr$kappa, dfr$N)
-      // R alternative: mean(dfr$kappa, na.rm = TRUE)
       let averageKappa: number | null;
 
       if (weightedMean) {
-        // Weighted mean: weight each pair's kappa by number of valid pairs (N)
-        // This matches the R default behavior: weighted.mean(dfr$kappa, dfr$N)
         let totalWeightedKappa = 0;
         let totalWeight = 0;
 
         for (const result of coderPairs) {
           if (result.kappa !== null && !Number.isNaN(result.kappa)) {
-            const weight = result.validPairs; // N = number of valid pairs
+            const weight = result.validPairs;
             totalWeightedKappa += result.kappa * weight;
             totalWeight += weight;
           }
@@ -545,8 +539,6 @@ export class CodingReviewService {
 
         averageKappa = totalWeight > 0 ? totalWeightedKappa / totalWeight : null;
       } else {
-        // Simple arithmetic mean (unweighted)
-        // This matches R behavior with weight.mean = FALSE
         let totalKappa = 0;
         let validKappaCount = 0;
 

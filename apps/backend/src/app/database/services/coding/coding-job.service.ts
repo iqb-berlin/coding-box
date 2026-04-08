@@ -923,7 +923,7 @@ export class CodingJobService {
         const coderSet = otherCodersMap.get(unit.response_id)!;
         unit.coding_job?.codingJobCoders?.forEach(cjc => {
           if (cjc.user) {
-            coderSet.add(cjc.user.displayName || cjc.user.username || cjc.user.name || `Coder ${cjc.user_id}`);
+            coderSet.add(cjc.user.username || `Coder ${cjc.user_id}`);
           }
         });
       });
@@ -1121,6 +1121,22 @@ export class CodingJobService {
         variable_bundle_id: r.variableBundleId || null
       }));
       await repo.save(units);
+
+      // Reset response status for non-training jobs to ensure a fresh coding/review cycle
+      if (!codingJob.training_id) {
+        const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+        const responseIds = chunk.map(r => r.id);
+        const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+        await responseRepo.update(
+          { id: In(responseIds) },
+          {
+            status_v2: incompleteStatus,
+            code_v2: null,
+            score_v2: null
+          }
+        );
+      }
     }
   }
 
@@ -1231,6 +1247,11 @@ export class CodingJobService {
       return;
     }
 
+    // Get coding job to check if it's a training job
+    const codingJobRepo = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
+    const codingJob = await codingJobRepo.findOne({ where: { id: codingJobId } });
+    const isTraining = codingJob?.training_id !== null && codingJob?.training_id !== undefined;
+
     const unitRepo = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
     const BATCH_SIZE = 500;
     for (let i = 0; i < responses.length; i += BATCH_SIZE) {
@@ -1250,6 +1271,22 @@ export class CodingJobService {
         variable_bundle_id: r.variableBundleId || null
       }));
       await unitRepo.save(units);
+
+      // Reset response status for non-training jobs
+      if (!isTraining) {
+        const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+        const responseIds = chunk.map(r => r.id);
+        const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+
+        await responseRepo.update(
+          { id: In(responseIds) },
+          {
+            status_v2: incompleteStatus,
+            code_v2: null,
+            score_v2: null
+          }
+        );
+      }
     }
   }
 
