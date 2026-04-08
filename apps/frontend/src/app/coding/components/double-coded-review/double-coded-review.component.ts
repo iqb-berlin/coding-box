@@ -110,7 +110,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   currentPage = 1;
   pageSize = 50;
   isLoading = false;
-  showOnlyConflicts = true;
+  showOnlyConflicts = false;
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<string>('all');
