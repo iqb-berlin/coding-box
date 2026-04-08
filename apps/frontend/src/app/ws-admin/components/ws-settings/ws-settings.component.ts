@@ -21,6 +21,7 @@ import { EditMissingsProfilesDialogComponent } from '../../../coding/components/
 import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/replay-statistics-dialog.component';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
+import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -65,6 +66,18 @@ export class WsSettingsComponent implements OnInit {
         .subscribe(enabled => {
           this.autoFetchCodingStatistics = enabled;
         });
+    }
+  }
+
+  openProcessOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (workspaceId) {
+      this.dialog.open(ProcessOverviewComponent, {
+        width: '1200px',
+        maxWidth: '95vw',
+        maxHeight: '90vh',
+        data: { workspaceId }
+      });
     }
   }
 
