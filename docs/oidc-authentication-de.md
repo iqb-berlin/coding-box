@@ -135,13 +135,25 @@ Der Admin-Status wird aus dem `realm_access.roles` Array des Benutzers gelesen. 
 Der Admin-Account wird über Umgebungsvariablen konfiguriert:
 
 ```bash
-CODING_BOX_ADMIN_NAME=admin
-CODING_BOX_ADMIN_EMAIL=admin@example.com
-CODING_BOX_ADMIN_PASSWORD=secure_password
+CODING_BOX_ADMIN_NAME=coding-box-admin
+CODING_BOX_ADMIN_EMAIL=coding-box-admin@localhost
+CODING_BOX_ADMIN_PASSWORD=change_me
 CODING_BOX_ADMIN_CREATED_TIMESTAMP=1234567890
 ```
 
 Diese Variablen werden in der Realm-Konfiguration verwendet, um den initialen Admin-Benutzer zu erstellen.
+
+**Standard-Anmeldedaten für die lokale Entwicklung:**
+
+- **Keycloak Admin Console** (http://localhost:8080/admin):
+  - Benutzername: `admin`
+  - Passwort: `change_me`
+
+- **Kodierbox Realm** (http://localhost:8080/realms/coding-box):
+  - Benutzername: `coding-box-admin`
+  - Passwort: `change_me`
+
+**Wichtig:** Ändern Sie diese Passwörter nach dem ersten Login aus Sicherheitsgründen.
 
 #### Theme-Anpassung
 
