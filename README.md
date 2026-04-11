@@ -51,7 +51,20 @@ Stellen Sie sicher, dass die folgenden Tools auf Ihrem System installiert sind:
    cp .env.dev.template .env.dev
    ```
 
-2. Installieren Sie die Abhängigkeiten:
+2. Kopieren Sie die Vorlage der Keycloak-Realm-Konfiguration:
+
+   ```
+   cp config/keycloak/realm/coding-box-realm.config.template config/keycloak/realm/coding-box-realm.config
+   ```
+
+3. Ersetzen Sie den Shell-Befehl für den Timestamp durch einen numerischen Wert:
+
+   Öffnen Sie die Datei `config/keycloak/realm/coding-box-realm.config` und ersetzen Sie
+   `CODING_BOX_ADMIN_CREATED_TIMESTAMP=date --utc +"%s%3N"`
+   durch einen aktuellen Timestamp in Millisekunden, z.B.:
+   `CODING_BOX_ADMIN_CREATED_TIMESTAMP=1775907461877`
+
+4. Installieren Sie die Abhängigkeiten:
 
    ```
    npm install
