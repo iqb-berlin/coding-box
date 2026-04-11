@@ -70,6 +70,20 @@ Stellen Sie sicher, dass die folgenden Tools auf Ihrem System installiert sind:
    npm install
    ```
 
+5. **Standard-Anmeldedaten für die Entwicklung**
+
+   Nach dem Start der Umgebung sind folgende Standard-Anmeldedaten verfügbar:
+
+   - **Keycloak Admin Console** (http://localhost:8080/admin):
+     - Benutzername: `admin`
+     - Passwort: `change_me`
+
+   - **Kodierbox Realm** (http://localhost:8080/realms/coding-box):
+     - Benutzername: `coding-box-admin`
+     - Passwort: `change_me`
+
+   **Wichtig:** Ändern Sie diese Passwörter nach dem ersten Login aus Sicherheitsgründen.
+
 ---
 
 ## Entwicklungsprozess
