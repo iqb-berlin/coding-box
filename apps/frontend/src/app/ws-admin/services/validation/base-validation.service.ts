@@ -97,6 +97,11 @@ export abstract class BaseValidationService<TResult> {
     );
   }
 
+  protected invalidateWorkspaceValidationCache(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    this.validationTaskStateService.invalidateWorkspace(workspaceId);
+  }
+
   /**
    * Calculates the validation status based on the result
    */

@@ -25,7 +25,10 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }
@@ -43,7 +46,10 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }
