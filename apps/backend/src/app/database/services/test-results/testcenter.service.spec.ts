@@ -9,6 +9,7 @@ import { TestcenterService } from './testcenter.service';
 import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { Person, Response, Log } from '../shared';
+import { CacheService } from '../../../cache/cache.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
@@ -35,6 +36,13 @@ describe('TestCenterService', () => {
         {
           provide: WorkspaceFilesService,
           useValue: createMock<WorkspaceFilesService>()
+        },
+        {
+          provide: CacheService,
+          useValue: createMock<CacheService>({
+            get: jest.fn().mockResolvedValue(null),
+            set: jest.fn().mockResolvedValue(true)
+          })
         }
       ]
     }).compile();
