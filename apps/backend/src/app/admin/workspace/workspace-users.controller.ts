@@ -2,7 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get, Param, Post, Query, UseGuards
+  Get, Param, Post, Query, Request, UnauthorizedException, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
 import WorkspaceUser from '../../database/entities/workspace_user.entity';
+import { UsersService } from '../../database/services/users';
 import { WorkspaceUsersService } from '../../database/services/workspace';
 import { WorkspaceId } from './workspace.decorator';
 
@@ -22,7 +23,8 @@ import { WorkspaceId } from './workspace.decorator';
 export class WorkspaceUsersController {
   constructor(
     private workspaceUsersService: WorkspaceUsersService,
-    private authService: AuthService
+    private authService: AuthService,
+    private usersService: UsersService
   ) {}
 
   @Get(':workspace_id/:user_id/token/:duration')
@@ -111,7 +113,7 @@ export class WorkspaceUsersController {
 
   @Post(':workspaceId/users')
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Set workspace users', description: 'Assigns users to a workspace' })
   @ApiParam({ name: 'workspaceId', type: Number, description: 'ID of the workspace' })
   @ApiBody({
@@ -130,7 +132,18 @@ export class WorkspaceUsersController {
   @ApiBadRequestResponse({ description: 'Invalid user IDs or workspace ID' })
   @ApiTags('admin users')
   async setWorkspaceUsers(@Body() userIds: number[],
-    @Param('workspaceId') workspaceId: number) {
+    @Param('workspaceId') workspaceId: number,
+    @Request() req) {
+    // Check if the user is admin (prefer JWT role claim, fallback to DB flag)
+    const tokenIsAdmin = req.user?.isAdmin === true;
+    if (!tokenIsAdmin) {
+      const userIdentity = req.user?.id;
+      const user = userIdentity ? await this.usersService.findUserByIdentity(userIdentity) : null;
+      if (!user || !user.isAdmin) {
+        throw new UnauthorizedException('Only admin users can assign users to workspaces');
+      }
+    }
+
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
   }
 

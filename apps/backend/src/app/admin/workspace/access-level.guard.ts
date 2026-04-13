@@ -33,10 +33,31 @@ export class AccessLevelGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
-    const userId = request.user?.id;
+    const requestUserId = request.user?.id;
 
-    if (!userId) {
+    if (!requestUserId) {
       throw new UnauthorizedException('User ID not found in request');
+    }
+
+    // Prefer the admin claim from validated JWT data.
+    if (request.user?.isAdmin === true) {
+      return true;
+    }
+
+    let userId: number;
+    if (typeof requestUserId === 'number') {
+      userId = requestUserId;
+    } else {
+      const numericUserId = Number(requestUserId);
+      if (Number.isInteger(numericUserId) && numericUserId > 0) {
+        userId = numericUserId;
+      } else {
+        const user = await this.usersService.findUserByIdentity(requestUserId);
+        if (!user) {
+          throw new UnauthorizedException('User not found');
+        }
+        userId = user.id;
+      }
     }
 
     // Get workspace ID from route params
