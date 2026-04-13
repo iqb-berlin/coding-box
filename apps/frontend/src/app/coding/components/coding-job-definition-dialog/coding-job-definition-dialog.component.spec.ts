@@ -281,6 +281,23 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('should not load coders by job id when editing a definition and should keep assigned coder selection', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedCoders: [1]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    expect(mockCoderService.getCodersByJobId).not.toHaveBeenCalled();
+    expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
+  });
+
   describe('Bulk Creation', () => {
     it('should open bulk creation dialog when mode=job and >1 variables selected', async () => {
       createComponent({ mode: 'job', isEdit: false });
