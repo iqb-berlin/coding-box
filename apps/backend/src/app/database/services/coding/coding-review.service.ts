@@ -171,9 +171,23 @@ export class CodingReviewService {
         relations
       });
 
-      const finalCodingJobUnits = excludeTrainings ?
-        codingJobUnits.filter(unit => !unit.coding_job?.training_id) :
-        codingJobUnits;
+      const finalCodingJobUnits = codingJobUnits.filter(unit => {
+        // Ignore orphaned coding_job_unit rows from deleted jobs.
+        if (!unit.coding_job) {
+          return false;
+        }
+
+        // Keep result assembly aligned with the workspace-scoped base query.
+        if (unit.coding_job.workspace_id !== workspaceId) {
+          return false;
+        }
+
+        if (excludeTrainings && unit.coding_job.training_id) {
+          return false;
+        }
+
+        return true;
+      });
 
       const responseGroups = new Map<
       number,
