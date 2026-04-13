@@ -1774,6 +1774,10 @@
     "applied": "Angewandt",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
+      "agreement-label": "Übereinstimmung",
+      "agreement-all": "Alle",
+      "agreement-match": "Nur Übereinstimmung",
+      "agreement-differ": "Nur Abweichung",
       "search-label": "Suchen",
       "search-placeholder": "Einheit, Variable, Login, Code oder Gruppe...",
       "coder-label": "Kodierer",

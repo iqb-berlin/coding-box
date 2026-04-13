@@ -69,6 +69,12 @@ export class WorkspaceCodingReviewController {
     description: 'Filter by resolution status (all, resolved, unresolved)',
     type: String
   })
+  @ApiQuery({
+    name: 'agreementFilter',
+    required: false,
+    description: 'Filter by agreement status (all, match, differ)',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Double-coded variables retrieved for review',
     schema: {
@@ -144,7 +150,8 @@ export class WorkspaceCodingReviewController {
                    @Query('search') search?: string,
                    @Query('coderId') coderId?: number,
                    @Query('statusFilter') statusFilter?: string,
-                   @Query('resolvedFilter') resolvedFilter?: string
+                   @Query('resolvedFilter') resolvedFilter?: string,
+                   @Query('agreementFilter') agreementFilter?: 'all' | 'match' | 'differ'
   ): Promise<DoubleCodedReviewResponse> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
@@ -160,7 +167,8 @@ export class WorkspaceCodingReviewController {
       search,
       coderId,
       statusFilter,
-      resolvedFilter
+      resolvedFilter,
+      agreementFilter
     );
   }
 

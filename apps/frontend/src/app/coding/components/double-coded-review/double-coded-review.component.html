@@ -10,12 +10,14 @@
       <mat-card class="filter-card">
         <mat-card-content>
           <div class="filter-section">
-            <mat-checkbox [(ngModel)]="showOnlyConflicts" 
-                          (change)="onFilterChange()" 
-                          [ngModelOptions]="{standalone: true}"
-                          color="primary">
-              {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
-            </mat-checkbox>
+            <mat-form-field appearance="outline" class="filter-dropdown small">
+              <mat-label>{{ 'double-coded-review.filter.agreement-label' | translate }}</mat-label>
+              <mat-select [formControl]="agreementControl">
+                <mat-option value="all">{{ 'double-coded-review.filter.agreement-all' | translate }}</mat-option>
+                <mat-option value="match">{{ 'double-coded-review.filter.agreement-match' | translate }}</mat-option>
+                <mat-option value="differ">{{ 'double-coded-review.filter.agreement-differ' | translate }}</mat-option>
+              </mat-select>
+            </mat-form-field>
 
             <mat-form-field appearance="outline" class="search-field">
               <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
@@ -54,7 +56,7 @@
               </mat-select>
             </mat-form-field>
             
-            @if (showOnlyConflicts) {
+            @if (agreementControl.value === 'differ') {
               <div class="statistics">
                 <span class="stat-text">
                   {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
@@ -80,9 +82,9 @@
           <mat-card class="no-data-card">
             <mat-card-content>
               <div class="no-data-content">
-                <mat-icon class="no-data-icon">{{ showOnlyConflicts ? 'check_circle' : 'info' }}</mat-icon>
-                <h3>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
-                <p>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
+                <mat-icon class="no-data-icon">{{ agreementControl.value === 'differ' ? 'check_circle' : 'info' }}</mat-icon>
+                <h3>{{ (agreementControl.value === 'differ' ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
+                <p>{{ (agreementControl.value === 'differ' ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
               </div>
             </mat-card-content>
           </mat-card>
@@ -219,7 +221,7 @@
                             (change)="onSelectionChange(element, $event.value)"
                             class="coder-selection">
                             @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                              <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
+                              <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
                                   {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
                                   @if (result.code === null) {
                                     <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
@@ -291,12 +293,14 @@
     <mat-card class="filter-card">
       <mat-card-content>
         <div class="filter-section">
-          <mat-checkbox [(ngModel)]="showOnlyConflicts" 
-                        (change)="onFilterChange()" 
-                        [ngModelOptions]="{standalone: true}"
-                        color="primary">
-            {{ 'double-coded-review.filter.show-only-conflicts' | translate }}
-          </mat-checkbox>
+          <mat-form-field appearance="outline" class="filter-dropdown small">
+            <mat-label>{{ 'double-coded-review.filter.agreement-label' | translate }}</mat-label>
+            <mat-select [formControl]="agreementControl">
+              <mat-option value="all">{{ 'double-coded-review.filter.agreement-all' | translate }}</mat-option>
+              <mat-option value="match">{{ 'double-coded-review.filter.agreement-match' | translate }}</mat-option>
+              <mat-option value="differ">{{ 'double-coded-review.filter.agreement-differ' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
 
           <mat-form-field appearance="outline" class="search-field">
             <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
@@ -335,7 +339,7 @@
             </mat-select>
           </mat-form-field>
           
-          @if (showOnlyConflicts) {
+          @if (agreementControl.value === 'differ') {
             <div class="statistics">
               <span class="stat-text">
                 {{ 'double-coded-review.statistics.showing-conflicts' | translate:{visible: dataSource.data.length, total: totalItems} }}
@@ -361,9 +365,9 @@
         <mat-card class="no-data-card">
           <mat-card-content>
             <div class="no-data-content">
-              <mat-icon class="no-data-icon">{{ showOnlyConflicts ? 'check_circle' : 'info' }}</mat-icon>
-              <h3>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
-              <p>{{ (showOnlyConflicts ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
+              <mat-icon class="no-data-icon">{{ agreementControl.value === 'differ' ? 'check_circle' : 'info' }}</mat-icon>
+              <h3>{{ (agreementControl.value === 'differ' ? 'double-coded-review.no-conflicts.title' : 'double-coded-review.no-data.title') | translate }}</h3>
+              <p>{{ (agreementControl.value === 'differ' ? 'double-coded-review.no-conflicts.message' : 'double-coded-review.no-data.message') | translate }}</p>
             </div>
           </mat-card-content>
         </mat-card>
@@ -501,7 +505,7 @@
                           (change)="onSelectionChange(element, $event.value)"
                           class="coder-selection">
                           @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <mat-radio-button [value]="result.coderId.toString()" class="coder-radio" [disabled]="result.code === null">
+                            <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
                                 {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
                                 @if (result.code === null) {
                                   <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
