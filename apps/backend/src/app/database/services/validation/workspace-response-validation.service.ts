@@ -2,13 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
+import * as cheerio from 'cheerio';
 
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import Workspace from '../../entities/workspace.entity';
+import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import {
@@ -32,13 +34,10 @@ export class WorkspaceResponseValidationService {
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(FileUpload)
     private filesRepository: Repository<FileUpload>,
-    private workspaceExclusionService: WorkspaceExclusionService = {
-      resolveExclusionsForQueries: async () => ({
-        globalIgnoredUnits: [],
-        ignoredBooklets: [],
-        testletIgnoredUnits: []
-      })
-    } as unknown as WorkspaceExclusionService
+    @InjectRepository(Workspace)
+    private workspaceRepository: Repository<Workspace> = {
+      findOne: async () => null
+    } as unknown as Repository<Workspace>
   ) {}
 
   private static normalizeExclusionKey(value: string | null | undefined): string {
@@ -49,6 +48,84 @@ export class WorkspaceResponseValidationService {
     return WorkspaceResponseValidationService
       .normalizeExclusionKey(value)
       .replace(/\.XML$/i, '');
+  }
+
+  private async resolveExclusionsForValidation(workspaceId: number): Promise<{
+    globalIgnoredUnits: string[];
+    ignoredBooklets: string[];
+    testletIgnoredUnits: { bookletId: string; unitId: string }[];
+  }> {
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId }
+    });
+    const settings = (workspace?.settings || {}) as WorkspaceSettingsDto;
+
+    const globalIgnoredUnits = (settings.ignoredUnits || []).map(
+      item => WorkspaceResponseValidationService.normalizeUnitKey(item)
+    );
+    const ignoredBooklets = (settings.ignoredBooklets || []).map(
+      item => WorkspaceResponseValidationService.normalizeExclusionKey(item)
+    );
+    const testletIgnoredUnits: { bookletId: string; unitId: string }[] = [];
+
+    if ((settings.ignoredTestlets || []).length === 0) {
+      return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
+    }
+
+    const ignoredTestlets = settings.ignoredTestlets || [];
+    const bookletsToParse = Array.from(
+      new Set(
+        ignoredTestlets.map(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.bookletId))
+      )
+    );
+
+    const bookletFiles = await this.filesRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Booklet'
+      }
+    });
+
+    for (const bookletFile of bookletFiles) {
+      const bookletId = WorkspaceResponseValidationService
+        .normalizeExclusionKey(bookletFile.file_id);
+      if (!bookletId || !bookletsToParse.includes(bookletId)) {
+        continue;
+      }
+      try {
+        const $ = cheerio.load(bookletFile.data, { xmlMode: true });
+        const testletsToIgnore = ignoredTestlets
+          .filter(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.bookletId) === bookletId)
+          .map(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.testletId));
+
+        $('Unit, unit').each((_, element) => {
+          const unitIdRaw = $(element).attr('id');
+          const unitId =
+            WorkspaceResponseValidationService.normalizeUnitKey(unitIdRaw);
+          if (!unitId) {
+            return;
+          }
+
+          let current = $(element).parent();
+          while (
+            current.length &&
+            String(current[0].tagName || '').toLowerCase() === 'testlet'
+          ) {
+            const testletId = WorkspaceResponseValidationService
+              .normalizeExclusionKey(current.attr('id'));
+            if (testletId && testletsToIgnore.includes(testletId)) {
+              testletIgnoredUnits.push({ bookletId, unitId });
+              break;
+            }
+            current = current.parent();
+          }
+        });
+      } catch (e) {
+        /* empty */
+      }
+    }
+
+    return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
   }
 
   async validateVariables(
@@ -214,10 +291,7 @@ export class WorkspaceResponseValidationService {
       };
     }
 
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        workspaceId
-      );
+    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
     const ignoredUnits = new Set(
       (exclusions.globalIgnoredUnits || []).map(
         WorkspaceResponseValidationService.normalizeUnitKey

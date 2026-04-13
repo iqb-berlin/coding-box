@@ -5,7 +5,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import Workspace from '../../entities/workspace.entity';
 
 describe('WorkspaceResponseValidationService.validateVariables', () => {
   const makeUnitXml = (
@@ -359,13 +359,13 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
       ])
     } as unknown as Repository<ResponseEntity>;
 
-    const workspaceExclusionService = {
-      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-        globalIgnoredUnits: ['UNIT1'],
-        ignoredBooklets: [],
-        testletIgnoredUnits: []
-      })
-    } as unknown as WorkspaceExclusionService;
+    const workspaceRepository = {
+      findOne: jest.fn().mockResolvedValue({
+        settings: {
+          ignoredUnits: ['UNIT1']
+        }
+      } as unknown as Workspace)
+    } as unknown as Repository<Workspace>;
 
     const service = new WorkspaceResponseValidationService(
       responseRepository,
@@ -373,7 +373,7 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
       personsRepository,
       {} as unknown as Repository<Booklet>,
       filesRepository,
-      workspaceExclusionService
+      workspaceRepository
     );
 
     const result = await service.validateVariables(1, 1, 10);
