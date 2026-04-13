@@ -1800,6 +1800,7 @@ export class CodingJobService {
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      jobDefinitionId?: number;
     }
   ): Promise<{
       success: boolean;
@@ -2087,6 +2088,7 @@ export class CodingJobService {
                 name: jobName,
                 assignedCoders: [coder.id],
                 caseOrderingMode: itemCaseOrderingMode,
+                jobDefinitionId: request.jobDefinitionId,
                 ...(itemObj.type === 'bundle' ?
                   { variableBundleIds: [(itemObj.item as { id: number }).id] } :
                   { variables: itemVariables }

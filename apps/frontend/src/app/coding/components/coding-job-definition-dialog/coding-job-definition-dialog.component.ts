@@ -1010,7 +1010,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.codingJobForm.value.doubleCodingPercentage,
         data.selectedVariableBundles,
         this.codingJobForm.value.caseOrderingMode,
-        this.codingJobForm.value.maxCodingCases
+        this.codingJobForm.value.maxCodingCases,
+        this.data.jobDefinitionId
       ));
 
       if (result && result.success) {

@@ -482,7 +482,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         await this.createBulkJobsFromDefinition(
           dialogData,
           workspaceId,
-          result
+          result,
+          definition.id
         );
       }
     } catch (error) {
@@ -498,7 +499,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private async createBulkJobsFromDefinition(
     data: BulkCreationData,
     workspaceId: number,
-    creationResult: BulkCreationResult
+    creationResult: BulkCreationResult,
+    jobDefinitionId?: number
   ): Promise<void> {
     this.isBulkCreating = true;
     try {
@@ -517,7 +519,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           data.doubleCodingPercentage,
           data.selectedVariableBundles,
           data.caseOrderingMode,
-          data.maxCodingCases
+          data.maxCodingCases,
+          jobDefinitionId
         )
       );
 
