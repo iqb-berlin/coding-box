@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { TestGroupsInfoDto } from '../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto as ImportOptions } from '../../../../../../api-dto/files/import-options.dto';
+import { ImportWorkspaceFilesProgressDto } from '../../../../../../api-dto/files/import-workspace-progress.dto';
 
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -126,6 +127,11 @@ export class WorkspaceTestCenterController {
     description: 'Whether to overwrite existing logs',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'importRunId',
+    required: false,
+    description: 'Optional run id to provide upload progress during import'
+  })
   @ApiOkResponse({ description: 'Files imported successfully', type: Object })
   @ApiBadRequestResponse({ description: 'Failed to import files' })
   async importWorkspaceFiles(
@@ -145,7 +151,8 @@ export class WorkspaceTestCenterController {
       @Query('booklets') booklets: string,
       @Query('metadata') metadata: string,
       @Query('overwriteFileIds') overwriteFileIds: string,
-      @Query('overwriteExistingLogs') overwriteExistingLogs: string
+      @Query('overwriteExistingLogs') overwriteExistingLogs: string,
+      @Query('importRunId') importRunId: string
   ): Promise<Result> {
     const importOptions: ImportOptions = {
       definitions: definitions,
@@ -176,7 +183,8 @@ export class WorkspaceTestCenterController {
           opts: ImportOptions,
           groups: string,
           overwriteExistingLogs: boolean,
-          overwriteFileIds?: string[]
+          overwriteFileIds?: string[],
+          importRunId?: string
         ) => Promise<Result>;
       }
     ).importWorkspaceFiles(
@@ -188,7 +196,8 @@ export class WorkspaceTestCenterController {
       importOptions,
       testGroups,
       overwriteLogs,
-      overwriteIds.length ? overwriteIds : undefined
+      overwriteIds.length ? overwriteIds : undefined,
+      importRunId
     );
 
     if (result?.success) {
@@ -199,6 +208,34 @@ export class WorkspaceTestCenterController {
     }
 
     return result;
+  }
+
+  @Get(':workspace_id/importWorkspaceFiles/progress')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiOperation({
+    summary: 'Get running testcenter import progress',
+    description:
+      'Returns live progress for a testcenter import run (planned/uploaded/current file per option).'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    required: true,
+    description: 'ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'importRunId',
+    required: true,
+    description: 'Import run id used when starting importWorkspaceFiles'
+  })
+  @ApiOkResponse({ type: Object })
+  async getImportWorkspaceFilesProgress(
+    @Param('workspace_id') workspace_id: string,
+      @Query('importRunId') importRunId: string
+  ): Promise<ImportWorkspaceFilesProgressDto> {
+    return this.testCenterService.getImportWorkspaceFilesProgress(
+      workspace_id,
+      importRunId
+    );
   }
 
   @Get(':workspace_id/importWorkspaceFiles/testGroups')
