@@ -54,16 +54,16 @@ describe('WorkspaceBackendService', () => {
   });
 
   describe('addWorkspace', () => {
-    it('should populate headers and body', () => {
+    it('should return the new workspace id', () => {
       const mockDto = { name: 'New' };
       service.addWorkspace(mockDto as CreateWorkspaceDto).subscribe(res => {
-        expect(res).toBe(true);
+        expect(res).toBe(17);
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(mockDto);
-      req.flush(true);
+      req.flush(17);
     });
   });
 });

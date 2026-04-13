@@ -11,12 +11,15 @@ import {
 } from '@angular/common/http';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { HashLocationStrategy, LocationStrategy } from '@angular/common';
+import { HashLocationStrategy, LocationStrategy, registerLocaleData } from '@angular/common';
+import localeDeAt from '@angular/common/locales/de-AT';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
+
+registerLocaleData(localeDeAt);
 
 export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
   return new TranslateHttpLoader(http, './assets/i18n/', '.json');
