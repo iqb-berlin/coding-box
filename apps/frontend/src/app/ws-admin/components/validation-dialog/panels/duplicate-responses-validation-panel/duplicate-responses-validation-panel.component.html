@@ -75,6 +75,17 @@
           </button>
           <button
             mat-button
+            (click)="exportCsv()"
+            [disabled]="isExporting || isLoadingPage"
+          >
+            @if (isExporting) {
+              <mat-spinner diameter="20"></mat-spinner> Export...
+            } @else {
+              CSV exportieren
+            }
+          </button>
+          <button
+            mat-button
             color="primary"
             (click)="resolveSelectedDuplicates()"
             [disabled]="

@@ -94,6 +94,17 @@
             <button mat-button (click)="toggleExpansion()">
               {{ expandedPanel ? 'Liste einklappen' : 'Liste ausklappen' }}
             </button>
+            <button
+              mat-button
+              (click)="exportCsv()"
+              [disabled]="isExporting || isLoadingPage"
+            >
+              @if (isExporting) {
+                <mat-spinner diameter="20"></mat-spinner> Export...
+              } @else {
+                CSV exportieren
+              }
+            </button>
           </div>
 
           <mat-expansion-panel [expanded]="expandedPanel">
