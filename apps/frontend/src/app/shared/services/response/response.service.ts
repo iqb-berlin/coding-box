@@ -12,6 +12,7 @@ import { logger } from 'nx/src/utils/logger';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultService } from '../test-result/test-result.service';
+import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 
 @Injectable({
   providedIn: 'root'
@@ -20,6 +21,7 @@ export class ResponseService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private testResultService = inject(TestResultService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -51,6 +53,7 @@ export class ResponseService {
           // Invalidate cache if deletion was successful
           if (success) {
             this.testResultService.invalidateCache(workspace_id);
+            this.validationTaskStateService.invalidateWorkspace(workspace_id);
           }
         })
       );
@@ -87,6 +90,7 @@ export class ResponseService {
         // Invalidate cache if deletion was successful
         if (result.success) {
           this.testResultService.invalidateCache(workspaceId);
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
         }
       })
     );
@@ -142,6 +146,7 @@ export class ResponseService {
         // Invalidate cache if any responses were deleted successfully
         if (result.success) {
           this.testResultService.invalidateCache(workspaceId);
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
         }
       })
     );

@@ -24,6 +24,7 @@ describe('DuplicateResponsesValidationService', () => {
     setValidationResult: jest.Mock;
     getAllTaskIds: jest.Mock;
     getAllValidationResults: jest.Mock;
+    invalidateWorkspace: jest.Mock;
   };
 
   const workspaceId = 1;
@@ -58,7 +59,8 @@ describe('DuplicateResponsesValidationService', () => {
       removeTaskId: jest.fn(),
       setValidationResult: jest.fn(),
       getAllTaskIds: jest.fn(),
-      getAllValidationResults: jest.fn()
+      getAllValidationResults: jest.fn(),
+      invalidateWorkspace: jest.fn()
     };
 
     TestBed.configureTestingModule({

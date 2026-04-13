@@ -547,19 +547,18 @@ implements OnInit, OnDestroy {
       .fetchPage(1, Number.MAX_SAFE_INTEGER)
       .subscribe({
         next: result => {
-          const rows = result.data.flatMap(duplicate =>
-            duplicate.duplicates.map(duplicateValue => ({
-              unitName: duplicate.unitName,
-              variableId: duplicate.variableId,
-              subform: duplicate.subform || '',
-              bookletName: duplicate.bookletName || '',
-              testTakerGroup: duplicate.testTakerGroup || '',
-              testTakerLogin: duplicate.testTakerLogin || '',
-              testTakerCode: duplicate.testTakerCode || '',
-              responseId: duplicateValue.responseId,
-              value: duplicateValue.value,
-              status: duplicateValue.status
-            }))
+          const rows = result.data.flatMap(duplicate => duplicate.duplicates.map(duplicateValue => ({
+            unitName: duplicate.unitName,
+            variableId: duplicate.variableId,
+            subform: duplicate.subform || '',
+            bookletName: duplicate.bookletName || '',
+            testTakerGroup: duplicate.testTakerGroup || '',
+            testTakerLogin: duplicate.testTakerLogin || '',
+            testTakerCode: duplicate.testTakerCode || '',
+            responseId: duplicateValue.responseId,
+            value: duplicateValue.value,
+            status: duplicateValue.status
+          }))
           );
 
           const csvContent = buildCsv(rows, [
