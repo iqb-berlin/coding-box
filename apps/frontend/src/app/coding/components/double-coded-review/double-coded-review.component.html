@@ -132,6 +132,7 @@
 
             <mat-card-content>
               <form [formGroup]="selectionForm">
+                <div class="review-table-wrapper">
                 <table mat-table [dataSource]="dataSource" class="review-table">
                   <!-- Unit & Variable Column -->
                   <ng-container matColumnDef="unitVariable">
@@ -161,68 +162,61 @@
                     <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.given-answer' | translate }}</th>
                     <td mat-cell *matCellDef="let element">
                       <div class="given-answer-cell">
-                        {{ element.givenAnswer || 'N/A' }}
-                      </div>
-                    </td>
-                  </ng-container>
-
-                  <!-- Coder Results Column -->
-                  <ng-container matColumnDef="coderResults">
-                    <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
-                    <td mat-cell *matCellDef="let element">
-                      <div class="coder-results-cell">
-                        @if (hasConflict(element)) {
-                          <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
-                        }
-                        <div class="coder-results-list">
-                          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <div class="coder-result-card" [ngClass]="{'pending': result.code === null}">
-                              <div class="coder-header">
-                                <span class="coder-name" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
-                                  <mat-icon class="coder-icon">person</mat-icon>
-                                  {{ result.coderName }}
-                                </span>
-                                @if (result.jobName) {
-                                  <span class="job-id-badge" [matTooltip]="result.jobName">{{ result.jobName }}</span>
-                                }
-                              </div>
-                              <div class="coder-data-grid">
-                                <div class="data-item">
-                                  <span class="data-label">{{ 'double-coded-review.code-label' | translate }}:</span>
-                                  <span class="data-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
-                                </div>
-                                @if (result.score !== null) {
-                                  <div class="data-item">
-                                    <span class="data-label">{{ 'double-coded-review.score-label' | translate }}:</span>
-                                    <span class="data-value">{{ result.score }}</span>
-                                  </div>
-                                }
-                              </div>
-                              @if (result.notes || result.supervisorComment) {
-                                <div class="coder-notes-row">
-                                  @if (result.notes) {
-                                    <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                                  }
-                                  @if (result.supervisorComment) {
-                                    <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
-                                  }
-                                </div>
-                              }
-                            </div>
-                          }
+                        <button
+                          mat-icon-button
+                          color="primary"
+                          type="button"
+                          [disabled]="isLoading || replayLoadingByResponseId[element.responseId]"
+                          [matTooltip]="'coding-management.tooltips.view-in-replay' | translate"
+                          (click)="openReplay(element.responseId)">
+                          <mat-icon>{{ replayLoadingByResponseId[element.responseId] ? 'hourglass_top' : 'play_circle' }}</mat-icon>
+                        </button>
+                        <div class="answer-text" [matTooltip]="element.givenAnswer || 'N/A'">
+                          {{ element.givenAnswer || 'N/A' }}
                         </div>
                       </div>
                     </td>
                   </ng-container>
 
+                  @for (columnId of dynamicCoderColumns; track columnId) {
+                    <ng-container [matColumnDef]="columnId">
+                      <th mat-header-cell *matHeaderCellDef [matTooltip]="getCoderColumnTooltip(columnId)">
+                        {{ getCoderColumnHeader(columnId) }}
+                      </th>
+                      <td mat-cell *matCellDef="let element">
+                        @if (getCoderResultForColumn(element, columnId); as result) {
+                          <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
+                            <div class="coder-code-row">
+                              <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
+                              @if (result.score !== null) {
+                                <span class="coder-score-value">({{ result.score }})</span>
+                              }
+                            </div>
+                            @if (result.notes) {
+                              <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                            }
+                            @if (result.supervisorComment) {
+                              <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
+                            }
+                          </div>
+                        } @else {
+                          <span class="missing-value">-</span>
+                        }
+                      </td>
+                    </ng-container>
+                  }
+
                   <!-- Selection Column -->
                   <ng-container matColumnDef="selection">
-                    <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
+                    <th mat-header-cell *matHeaderCellDef>{{ getSelectionColumnHeader() }}</th>
                     <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
                       <div class="selection-cell">
                         <div class="coding-status" 
                              [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
                              [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+                          @if (hasConflict(element) && !element.isResolved) {
+                            <mat-icon class="conflict-icon" color="warn" [matTooltip]="'double-coded-review.conflict-indicator' | translate">warning</mat-icon>
+                          }
                           <div class="progress-dots" *ngIf="!element.isResolved">
                             @for (result of element.coderResults; track $index) {
                               <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
@@ -239,7 +233,8 @@
                             class="coder-selection">
                             @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
                               <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
-                                  {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
+                                  <span class="radio-coder-name" [matTooltip]="result.jobName || ''">{{ result.coderName }}</span>
+                                  <span class="radio-coder-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
                                   @if (result.code === null) {
                                     <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
                                   }
@@ -270,9 +265,10 @@
                     </td>
                   </ng-container>
 
-                  <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
-                  <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'resolved-row': row.isResolved}"></tr>
+                <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+                <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'resolved-row': row.isResolved}"></tr>
                 </table>
+              </div>
               </form>
 
               <mat-paginator
@@ -432,6 +428,7 @@
 
           <mat-card-content>
             <form [formGroup]="selectionForm">
+              <div class="review-table-wrapper">
               <table mat-table [dataSource]="dataSource" class="review-table">
                 <!-- Unit & Variable Column -->
                 <ng-container matColumnDef="unitVariable">
@@ -461,69 +458,61 @@
                   <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.given-answer' | translate }}</th>
                   <td mat-cell *matCellDef="let element">
                     <div class="given-answer-cell">
-                      {{ element.givenAnswer || 'N/A' }}
-                    </div>
-                  </td>
-                </ng-container>
-
-                <!-- Coder Results Column -->
-                <ng-container matColumnDef="coderResults">
-                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.coder-results' | translate }}</th>
-                  <td mat-cell *matCellDef="let element">
-                    <div class="coder-results-cell">
-                      @if (hasConflict(element)) {
-                        <mat-icon class="conflict-icon" color="warn" title="{{ 'double-coded-review.conflict-indicator' | translate }}">warning</mat-icon>
-                      }
-                      <div class="coder-results-list">
-                        @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                          <div class="coder-result-card" [ngClass]="{'pending': result.code === null}">
-                            <div class="coder-header">
-                              <span class="coder-name" [matTooltip]="result.jobName ? 'Job: ' + result.jobName : ''">
-                                <mat-icon class="coder-icon">person</mat-icon>
-                                {{ result.coderName }}
-                              </span>
-                              @if (result.jobName) {
-                                <span class="job-id-badge" [matTooltip]="result.jobName">{{ result.jobName }}</span>
-                              }
-                            </div>
-                            <div class="coder-data-grid">
-                              <div class="data-item">
-                                <span class="data-label">{{ 'double-coded-review.code-label' | translate }}:</span>
-                                <span class="data-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) }}</span>
-                              </div>
-                              @if (result.score !== null) {
-                                <div class="data-item">
-                                  <span class="data-label">{{ 'double-coded-review.score-label' | translate }}:</span>
-                                  <span class="data-value">{{ result.score }}</span>
-                                </div>
-                              }
-                            </div>
-                            @if (result.notes || result.supervisorComment) {
-                              <div class="coder-notes-row">
-                                @if (result.notes) {
-                                  <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
-                                }
-                                @if (result.supervisorComment) {
-                                  <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="'Resolution Comment: ' + result.supervisorComment">rate_review</mat-icon>
-                                }
-                              </div>
-                            }
-                          </div>
-                        }
+                      <button
+                        mat-icon-button
+                        color="primary"
+                        type="button"
+                        [disabled]="isLoading || replayLoadingByResponseId[element.responseId]"
+                        [matTooltip]="'coding-management.tooltips.view-in-replay' | translate"
+                        (click)="openReplay(element.responseId)">
+                        <mat-icon>{{ replayLoadingByResponseId[element.responseId] ? 'hourglass_top' : 'play_circle' }}</mat-icon>
+                      </button>
+                      <div class="answer-text" [matTooltip]="element.givenAnswer || 'N/A'">
+                        {{ element.givenAnswer || 'N/A' }}
                       </div>
                     </div>
                   </td>
                 </ng-container>
-                
+
+                @for (columnId of dynamicCoderColumns; track columnId) {
+                  <ng-container [matColumnDef]="columnId">
+                    <th mat-header-cell *matHeaderCellDef [matTooltip]="getCoderColumnTooltip(columnId)">
+                      {{ getCoderColumnHeader(columnId) }}
+                    </th>
+                    <td mat-cell *matCellDef="let element">
+                      @if (getCoderResultForColumn(element, columnId); as result) {
+                        <div class="coder-column-cell" [ngClass]="{'pending': result.code === null}">
+                          <div class="coder-code-row">
+                            <span class="coder-code-value" [matTooltip]="getCodeLabel(result.code)">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
+                            @if (result.score !== null) {
+                              <span class="coder-score-value">({{ result.score }})</span>
+                            }
+                          </div>
+                          @if (result.notes) {
+                            <mat-icon class="note-icon" [matTooltip]="result.notes">comment</mat-icon>
+                          }
+                          @if (result.supervisorComment) {
+                            <mat-icon class="supervisor-comment-icon" color="primary" [matTooltip]="result.supervisorComment">rate_review</mat-icon>
+                          }
+                        </div>
+                      } @else {
+                        <span class="missing-value">-</span>
+                      }
+                    </td>
+                  </ng-container>
+                }
 
                 <!-- Selection Column -->
                 <ng-container matColumnDef="selection">
-                  <th mat-header-cell *matHeaderCellDef>{{ 'double-coded-review.columns.selection' | translate }}</th>
+                  <th mat-header-cell *matHeaderCellDef>{{ getSelectionColumnHeader() }}</th>
                   <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
                     <div class="selection-cell">
                       <div class="coding-status" 
                            [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
                            [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+                        @if (hasConflict(element) && !element.isResolved) {
+                          <mat-icon class="conflict-icon" color="warn" [matTooltip]="'double-coded-review.conflict-indicator' | translate">warning</mat-icon>
+                        }
                         <div class="progress-dots" *ngIf="!element.isResolved">
                           @for (result of element.coderResults; track $index) {
                             <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
@@ -540,7 +529,8 @@
                           class="coder-selection">
                           @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
                             <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
-                                {{ result.coderName }} {{ result.jobName ? '(' + result.jobName + ')' : '' }}
+                                <span class="radio-coder-name" [matTooltip]="result.jobName || ''">{{ result.coderName }}</span>
+                                <span class="radio-coder-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
                                 @if (result.code === null) {
                                   <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
                                 }
@@ -574,6 +564,7 @@
                 <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
                 <tr mat-row *matRowDef="let row; columns: displayedColumns;" [ngClass]="{'resolved-row': row.isResolved}"></tr>
               </table>
+              </div>
             </form>
 
             <mat-paginator
