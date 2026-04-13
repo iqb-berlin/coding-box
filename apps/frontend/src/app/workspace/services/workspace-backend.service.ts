@@ -67,11 +67,11 @@ export class WorkspaceBackendService {
       );
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
     return this.http
-      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, {})
+      .post<number>(`${this.serverUrl}admin/workspace`, workspaceData, {})
       .pipe(
-        catchError(() => of(false))
+        catchError(() => of(null))
       );
   }
 

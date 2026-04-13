@@ -16,7 +16,8 @@ describe('AccessLevelGuard (Backend)', () => {
 
     const mockUsersService = {
       getUserIsAdmin: jest.fn(),
-      getUserAccessLevel: jest.fn()
+      getUserAccessLevel: jest.fn(),
+      findUserByIdentity: jest.fn()
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -39,14 +40,15 @@ describe('AccessLevelGuard (Backend)', () => {
   });
 
   const createMockExecutionContext = (
-    userId: number,
+    userId: number | string,
     workspaceId: string,
-    requiredLevel?: number
+    requiredLevel?: number,
+    isAdmin = false
   ): ExecutionContext => {
     const context = {
       switchToHttp: () => ({
         getRequest: () => ({
-          user: { id: userId },
+          user: { id: userId, isAdmin },
           params: { workspace_id: workspaceId }
         })
       }),
@@ -83,6 +85,18 @@ describe('AccessLevelGuard (Backend)', () => {
   });
 
   describe('Security Validation - System Admin Bypass', () => {
+    it('should allow access when JWT admin claim is true', async () => {
+      reflector.get.mockReturnValue(4);
+      const context = createMockExecutionContext('4fecd283-bd64-4930-aee8-07e58df323bf', '123', 4, true);
+
+      const result = await guard.canActivate(context);
+
+      expect(result).toBe(true);
+      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(usersService.getUserIsAdmin).not.toHaveBeenCalled();
+      expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+    });
+
     it('should allow system admin to access any workspace', async () => {
       reflector.get.mockReturnValue(4);
       usersService.getUserIsAdmin.mockResolvedValue(true);
@@ -109,6 +123,20 @@ describe('AccessLevelGuard (Backend)', () => {
   describe('Security Validation - Access Level Checks', () => {
     beforeEach(() => {
       usersService.getUserIsAdmin.mockResolvedValue(false);
+    });
+
+    it('should resolve DB user id from UUID identity', async () => {
+      reflector.get.mockReturnValue(2);
+      usersService.findUserByIdentity.mockResolvedValue({ id: 42 } as never);
+      usersService.getUserAccessLevel.mockResolvedValue(2);
+      const context = createMockExecutionContext('4fecd283-bd64-4930-aee8-07e58df323bf', '123', 2);
+
+      const result = await guard.canActivate(context);
+
+      expect(result).toBe(true);
+      expect(usersService.findUserByIdentity).toHaveBeenCalledWith('4fecd283-bd64-4930-aee8-07e58df323bf');
+      expect(usersService.getUserIsAdmin).toHaveBeenCalledWith(42);
+      expect(usersService.getUserAccessLevel).toHaveBeenCalledWith(42, 123);
     });
 
     it('should allow access when user has exact required access level', async () => {
@@ -248,6 +276,15 @@ describe('AccessLevelGuard (Backend)', () => {
       } as unknown as ExecutionContext;
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    });
+
+    it('should deny access when identity cannot be resolved', async () => {
+      reflector.get.mockReturnValue(1);
+      usersService.findUserByIdentity.mockResolvedValue(null);
+      const context = createMockExecutionContext('missing-identity', '123', 1);
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(context)).rejects.toThrow('User not found');
     });
 
     it('should deny access when workspace ID is missing', async () => {

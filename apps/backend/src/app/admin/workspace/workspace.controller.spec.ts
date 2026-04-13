@@ -4,7 +4,7 @@ import { WorkspaceController } from './workspace.controller';
 import { AuthService } from '../../auth/service/auth.service';
 import { UsersService } from '../../database/services/users';
 import { TestcenterService, UploadResultsService } from '../../database/services/test-results';
-import { WorkspaceCoreService } from '../../database/services/workspace';
+import { WorkspaceCoreService, WorkspaceUsersService } from '../../database/services/workspace';
 import { AccessRightsMatrixService } from './access-rights-matrix.service';
 
 describe('WorkspaceController', () => {
@@ -33,6 +33,10 @@ describe('WorkspaceController', () => {
         {
           provide: WorkspaceCoreService,
           useValue: createMock<WorkspaceCoreService>()
+        },
+        {
+          provide: WorkspaceUsersService,
+          useValue: createMock<WorkspaceUsersService>()
         },
         {
           provide: AccessRightsMatrixService,

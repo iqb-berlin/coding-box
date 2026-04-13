@@ -134,11 +134,14 @@ export class WorkspaceUsersController {
   async setWorkspaceUsers(@Body() userIds: number[],
     @Param('workspaceId') workspaceId: number,
     @Request() req) {
-    // Check if the user is admin
-    const userIdentity = req.user.id;
-    const user = await this.usersService.findUserByIdentity(userIdentity);
-    if (!user || !user.isAdmin) {
-      throw new UnauthorizedException('Only admin users can assign users to workspaces');
+    // Check if the user is admin (prefer JWT role claim, fallback to DB flag)
+    const tokenIsAdmin = req.user?.isAdmin === true;
+    if (!tokenIsAdmin) {
+      const userIdentity = req.user?.id;
+      const user = userIdentity ? await this.usersService.findUserByIdentity(userIdentity) : null;
+      if (!user || !user.isAdmin) {
+        throw new UnauthorizedException('Only admin users can assign users to workspaces');
+      }
     }
 
     return this.workspaceUsersService.setWorkspaceUsers(workspaceId, userIds);
