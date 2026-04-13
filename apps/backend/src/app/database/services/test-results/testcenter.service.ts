@@ -16,6 +16,11 @@ import {
   TestFilesUploadUploadedDto,
   TestFilesUploadFailedDto
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import {
+  ImportWorkspaceFilesProgressDto,
+  ImportWorkspaceOptionKey
+} from '../../../../../../../api-dto/files/import-workspace-progress.dto';
+import { CacheService } from '../../../cache/cache.service';
 
 export { Result };
 
@@ -49,7 +54,8 @@ export class TestcenterService {
   constructor(
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private cacheService: CacheService
   ) {}
 
   persons: Person[] = [];
@@ -342,6 +348,137 @@ export class TestcenterService {
     );
   }
 
+  private importProgressKey(workspaceId: string, importRunId: string): string {
+    return `testcenter_import_progress:${workspaceId}:${importRunId}`;
+  }
+
+  private createInitialProgress(
+    importRunId: string,
+    optionBuckets: Record<ImportWorkspaceOptionKey, File[]>
+  ): ImportWorkspaceFilesProgressDto {
+    const options = (Object.keys(optionBuckets) as ImportWorkspaceOptionKey[]).map(
+      optionKey => ({
+        optionKey,
+        planned: optionBuckets[optionKey].length,
+        processed: 0,
+        uploaded: 0,
+        failed: 0,
+        status: 'pending' as const
+      })
+    );
+
+    return {
+      importRunId,
+      status: 'running',
+      totalPlanned: options.reduce((sum, option) => sum + option.planned, 0),
+      totalProcessed: 0,
+      totalUploaded: 0,
+      totalFailed: 0,
+      options,
+      updatedAt: Date.now()
+    };
+  }
+
+  private async loadProgress(
+    workspaceId: string,
+    importRunId?: string
+  ): Promise<ImportWorkspaceFilesProgressDto | null> {
+    if (!importRunId) return null;
+    return this.cacheService.get<ImportWorkspaceFilesProgressDto>(
+      this.importProgressKey(workspaceId, importRunId)
+    );
+  }
+
+  private async saveProgress(
+    workspaceId: string,
+    importRunId: string,
+    progress: ImportWorkspaceFilesProgressDto
+  ): Promise<void> {
+    progress.updatedAt = Date.now();
+    await this.cacheService.set(
+      this.importProgressKey(workspaceId, importRunId),
+      progress,
+      3600
+    );
+  }
+
+  async getImportWorkspaceFilesProgress(
+    workspaceId: string,
+    importRunId: string
+  ): Promise<ImportWorkspaceFilesProgressDto> {
+    const progress = await this.loadProgress(workspaceId, importRunId);
+    if (progress) return progress;
+
+    return {
+      importRunId,
+      status: 'unknown',
+      totalPlanned: 0,
+      totalProcessed: 0,
+      totalUploaded: 0,
+      totalFailed: 0,
+      options: [],
+      updatedAt: Date.now()
+    };
+  }
+
+  private async setCurrentFileProgress(
+    workspaceId: string,
+    importRunId: string | undefined,
+    optionKey: ImportWorkspaceOptionKey,
+    fileName: string
+  ): Promise<void> {
+    if (!importRunId) return;
+    const progress = await this.loadProgress(workspaceId, importRunId);
+    if (!progress) return;
+
+    progress.currentOption = optionKey;
+    progress.currentFile = fileName;
+    progress.options = progress.options.map(option => {
+      if (option.optionKey !== optionKey) return option;
+      return {
+        ...option,
+        currentFile: fileName,
+        status: 'active'
+      };
+    });
+    await this.saveProgress(workspaceId, importRunId, progress);
+  }
+
+  private async applyFileResultProgress(
+    workspaceId: string,
+    importRunId: string | undefined,
+    optionKey: ImportWorkspaceOptionKey,
+    uploadedDelta: number,
+    failedDelta: number
+  ): Promise<void> {
+    if (!importRunId) return;
+    const progress = await this.loadProgress(workspaceId, importRunId);
+    if (!progress) return;
+
+    progress.totalProcessed += 1;
+    progress.totalUploaded += uploadedDelta;
+    progress.totalFailed += failedDelta;
+
+    progress.options = progress.options.map(option => {
+      if (option.optionKey !== optionKey) return option;
+      const processed = option.processed + 1;
+      const updated = {
+        ...option,
+        processed,
+        uploaded: option.uploaded + uploadedDelta,
+        failed: option.failed + failedDelta,
+        currentFile: undefined
+      };
+      updated.status =
+        processed >= updated.planned ? 'completed' : 'pending';
+      return updated;
+    });
+
+    progress.currentFile = undefined;
+    progress.currentOption = undefined;
+    await this.saveProgress(workspaceId, importRunId, progress);
+  }
+
   private async importFiles(
     workspace_id: string,
     tc_workspace: string,
@@ -349,7 +486,8 @@ export class TestcenterService {
     url: string,
     authToken: string,
     importOptions: ImportOptions,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    importRunId?: string
   ): Promise<{
       success: boolean;
       testFiles: number;
@@ -407,35 +545,67 @@ export class TestcenterService {
       const overwriteIdSet = new Set((overwriteFileIds || []).filter(Boolean));
       const onlyOverwriteSelected = overwriteIdSet.size > 0;
 
-      const allSelected: File[] = [
-        ...playerArr,
-        ...unitsArr,
-        ...definitionsArr,
-        ...codingsArr,
-        ...bookletsArr,
-        ...testTakersArr,
-        ...metadataArr
-      ];
+      const optionBuckets: Record<ImportWorkspaceOptionKey, File[]> = {
+        definitions: definitionsArr,
+        units: unitsArr,
+        player: playerArr,
+        codings: codingsArr,
+        booklets: bookletsArr,
+        testTakers: testTakersArr,
+        metadata: metadataArr
+      };
 
-      const filteredSelected = onlyOverwriteSelected ?
-        allSelected.filter(f => overwriteIdSet.has(f.id)) :
-        allSelected;
-
-      const filePromises: Promise<File>[] = filteredSelected.map(file => Promise.resolve(file)
+      const filteredOptionBuckets = (Object.keys(
+        optionBuckets
+      ) as ImportWorkspaceOptionKey[]).reduce(
+        (acc, optionKey) => {
+          const source = optionBuckets[optionKey];
+          acc[optionKey] = onlyOverwriteSelected ?
+            source.filter(f => overwriteIdSet.has(f.id)) :
+            source;
+          return acc;
+        },
+        {
+          definitions: [] as File[],
+          units: [] as File[],
+          player: [] as File[],
+          codings: [] as File[],
+          booklets: [] as File[],
+          testTakers: [] as File[],
+          metadata: [] as File[]
+        } as Record<ImportWorkspaceOptionKey, File[]>
       );
+
+      if (importRunId) {
+        await this.saveProgress(
+          workspace_id,
+          importRunId,
+          this.createInitialProgress(importRunId, filteredOptionBuckets)
+        );
+      }
+
+      const filesWithOption: Array<{
+        optionKey: ImportWorkspaceOptionKey;
+        file: File;
+      }> = (Object.keys(filteredOptionBuckets) as ImportWorkspaceOptionKey[])
+        .flatMap(
+          optionKey => filteredOptionBuckets[optionKey].map(file => ({
+            optionKey,
+            file
+          }))
+        );
 
       const uploadedFiles: TestFilesUploadUploadedDto[] = [];
       const failedFiles: TestFilesUploadFailedDto[] = [];
-      const fetchedFiles: Array<{
-        data: File;
-        name: string;
-        type: string;
-        size: number;
-        id: string;
-      }> = [];
+      const conflicts: NonNullable<TestFilesUploadResultDto['conflicts']> = [];
 
-      for (const filePromise of filePromises) {
-        const file = await filePromise;
+      for (const { optionKey, file } of filesWithOption) {
+        await this.setCurrentFileProgress(
+          workspace_id,
+          importRunId,
+          optionKey,
+          file.name
+        );
         try {
           const fetched = await this.getFile(
             file,
@@ -444,43 +614,88 @@ export class TestcenterService {
             authToken,
             url
           );
-          fetchedFiles.push(fetched);
-          uploadedFiles.push({
-            fileId: fetched.id,
-            filename: fetched.name,
-            fileType: fetched.type
-          });
+
+          const dbEntries = this.createDatabaseEntries([fetched], workspace_id);
+          const perFileResult = await (
+            this.workspaceFilesService as unknown as {
+              testCenterImport: (
+                entries: Record<string, unknown>[],
+                overwriteFileIds?: string[]
+              ) => Promise<TestFilesUploadResultDto>;
+            }
+          ).testCenterImport(dbEntries, overwriteFileIds);
+
+          const uploadedCount =
+            Number(
+              perFileResult.uploaded ||
+                (perFileResult.uploadedFiles || []).length
+            ) || 0;
+          const failedCount =
+            Number(
+              perFileResult.failed || (perFileResult.failedFiles || []).length
+            ) || 0;
+
+          if ((perFileResult.uploadedFiles || []).length > 0) {
+            uploadedFiles.push(...(perFileResult.uploadedFiles || []));
+          } else if (uploadedCount > 0) {
+            uploadedFiles.push({
+              fileId: fetched.id,
+              filename: fetched.name,
+              fileType: fetched.type
+            });
+          }
+
+          if ((perFileResult.failedFiles || []).length > 0) {
+            failedFiles.push(...(perFileResult.failedFiles || []));
+          }
+          if ((perFileResult.conflicts || []).length > 0) {
+            conflicts.push(...(perFileResult.conflicts || []));
+          }
+
+          await this.applyFileResultProgress(
+            workspace_id,
+            importRunId,
+            optionKey,
+            uploadedCount,
+            failedCount
+          );
         } catch (e) {
           failedFiles.push({
             filename: file.name,
             reason: e instanceof Error ? e.message : 'Failed to fetch file'
           });
+          await this.applyFileResultProgress(
+            workspace_id,
+            importRunId,
+            optionKey,
+            0,
+            1
+          );
         }
       }
-
-      const dbEntries = this.createDatabaseEntries(fetchedFiles, workspace_id);
-
-      const dbImportResult = await (
-        this.workspaceFilesService as unknown as {
-          testCenterImport: (
-            entries: Record<string, unknown>[],
-            overwriteFileIds?: string[]
-          ) => Promise<TestFilesUploadResultDto>;
-        }
-      ).testCenterImport(dbEntries, overwriteFileIds);
       const uploadResult: TestFilesUploadResultDto = {
-        total: Number(dbImportResult.total || 0) + failedFiles.length,
-        uploaded: Number(
-          dbImportResult.uploaded || (dbImportResult.uploadedFiles || []).length
-        ),
-        failed:
-          Number(
-            dbImportResult.failed || (dbImportResult.failedFiles || []).length
-          ) + failedFiles.length,
-        uploadedFiles: dbImportResult.uploadedFiles || [],
-        failedFiles: [...(dbImportResult.failedFiles || []), ...failedFiles],
-        conflicts: dbImportResult.conflicts
+        total: filesWithOption.length,
+        uploaded: uploadedFiles.length,
+        failed: failedFiles.length,
+        uploadedFiles,
+        failedFiles,
+        conflicts
       };
+
+      if (importRunId) {
+        const progress = await this.loadProgress(workspace_id, importRunId);
+        if (progress) {
+          progress.status = 'completed';
+          progress.currentFile = undefined;
+          progress.currentOption = undefined;
+          progress.options = progress.options.map(option => ({
+            ...option,
+            currentFile: undefined,
+            status: option.processed >= option.planned ? 'completed' : option.status
+          }));
+          await this.saveProgress(workspace_id, importRunId, progress);
+        }
+      }
 
       return {
         success: uploadResult.uploaded > 0,
@@ -508,6 +723,16 @@ export class TestcenterService {
           }
         ]
       };
+      if (importRunId) {
+        const progress = await this.loadProgress(workspace_id, importRunId);
+        if (progress) {
+          progress.status = 'failed';
+          progress.error = error instanceof Error ? error.message : 'Unknown error';
+          progress.currentFile = undefined;
+          progress.currentOption = undefined;
+          await this.saveProgress(workspace_id, importRunId, progress);
+        }
+      }
       return {
         success: false,
         testFiles: 0,
@@ -551,18 +776,9 @@ export class TestcenterService {
     authToken: string,
     importOptions: ImportOptions,
     testGroups: string,
-    overwriteExistingLogs?: boolean
-  ): Promise<Result>;
-  async importWorkspaceFiles(
-    workspace_id: string,
-    tc_workspace: string,
-    server: string,
-    url: string,
-    authToken: string,
-    importOptions: ImportOptions,
-    testGroups: string,
     overwriteExistingLogs: boolean = true,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    importRunId?: string
   ): Promise<Result> {
     const { responses, logs } = importOptions;
     const result: Result = {
@@ -640,7 +856,8 @@ export class TestcenterService {
           url,
           authToken,
           importOptions,
-          overwriteFileIds
+          overwriteFileIds,
+          importRunId
         );
         result.testFiles = filesResult.testFiles;
         result.success = filesResult.success;
@@ -671,6 +888,16 @@ export class TestcenterService {
           error?.message || error
         }`
       );
+      if (importRunId) {
+        const progress = await this.loadProgress(workspace_id, importRunId);
+        if (progress) {
+          progress.status = 'failed';
+          progress.error = error?.message || 'Unknown error';
+          progress.currentFile = undefined;
+          progress.currentOption = undefined;
+          await this.saveProgress(workspace_id, importRunId, progress);
+        }
+      }
       result.success = false;
       return result;
     }
