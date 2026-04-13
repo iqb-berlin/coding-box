@@ -42,7 +42,8 @@ describe('TestCenterImportComponent', () => {
     };
     const importMock = {
       importTestcenterGroups: jest.fn(),
-      importWorkspaceFiles: jest.fn()
+      importWorkspaceFiles: jest.fn(),
+      getImportWorkspaceFilesProgress: jest.fn().mockReturnValue(of(null))
     };
     const workspaceAdminMock = {
       getAuthToken: jest.fn().mockReturnValue(''),

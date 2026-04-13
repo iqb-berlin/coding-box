@@ -21,8 +21,11 @@ import { MatInput } from '@angular/material/input';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatIcon } from '@angular/material/icon';
-import { catchError, firstValueFrom, of } from 'rxjs';
+import {
+  catchError, firstValueFrom, interval, of, startWith, Subscription, switchMap
+} from 'rxjs';
 import { DatePipe } from '@angular/common';
 import {
   MatCell,
@@ -51,6 +54,10 @@ import {
   TestFilesUploadConflictsDialogResult
 } from '../test-files/test-files-upload-conflicts-dialog.component';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import {
+  ImportWorkspaceFilesProgressDto,
+  ImportWorkspaceOptionKey
+} from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 
 export type WorkspaceAdmin = {
   label: string;
@@ -92,6 +99,7 @@ export interface ImportFormValues {
     MatOption,
     MatCheckbox,
     MatProgressSpinner,
+    MatProgressBar,
     MatIcon,
     FormsModule,
     DatePipe,
@@ -173,6 +181,11 @@ export class TestCenterImportComponent {
   showTestGroups: boolean = false;
   importingTestGroups: string[] = [];
   importProgressPercent: number = 0;
+  totalUploadsExpected: number = 0;
+  completedUploads: number = 0;
+  importRunId: string | null = null;
+  uploadProgressDetails: ImportWorkspaceFilesProgressDto | null = null;
+  private progressPollingSub?: Subscription;
 
   constructor() {
     this.loginForm = this.fb.group({
@@ -265,6 +278,10 @@ export class TestCenterImportComponent {
         }
       }
     }
+  }
+
+  ngOnDestroy(): void {
+    this.stopUploadProgressPolling();
   }
 
   toggleRow(group: TestGroupsInfoDto): void {
@@ -438,6 +455,7 @@ export class TestCenterImportComponent {
     const selectedGroupNames = this.selectedRows.map(
       group => group.groupName
     );
+    this.initializeUploadProgress(selectedGroupNames.length);
 
     // Store the test group names for display in loading message
     this.importingTestGroups = selectedGroupNames;
@@ -448,15 +466,18 @@ export class TestCenterImportComponent {
     if (needsConfirmation) {
       this.isUploadingTestFiles = false;
       this.isUploadingTestResults = false;
+      this.resetUploadProgress();
 
       this.confirmOverwriteLogs().then(confirmed => {
         if (confirmed) {
           this.isUploadingTestFiles = true;
           this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.initializeUploadProgress(selectedGroupNames.length);
           this.performImport(formValues, selectedGroupNames, true);
         } else {
           this.isUploadingTestFiles = true;
           this.isUploadingTestResults = this.data.importType === 'testResults';
+          this.initializeUploadProgress(selectedGroupNames.length);
           this.performImport(formValues, selectedGroupNames, false);
         }
       });
@@ -466,6 +487,16 @@ export class TestCenterImportComponent {
   }
 
   loadingMessage = 'Testresultate werden hochgeladen...';
+
+  readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
+    definitions: 'Aufgabendefinitionen',
+    units: 'Aufgaben (Units-XML)',
+    player: 'Player',
+    codings: 'Kodierschemata',
+    booklets: 'Testhefte',
+    testTakers: 'Testteilnehmer',
+    metadata: 'Metadaten'
+  };
 
   private performImport(
     formValues: ImportFormValues,
@@ -495,6 +526,9 @@ export class TestCenterImportComponent {
       return;
     }
 
+    this.importRunId = this.createImportRunId();
+    this.startUploadProgressPolling(this.importRunId);
+
     this.importService
       .importWorkspaceFiles(
         this.appService.selectedWorkspaceId,
@@ -505,15 +539,18 @@ export class TestCenterImportComponent {
         formValues.importOptions,
         selectedGroupNames,
         overwriteExistingLogs,
-        overwriteFileIds
+        overwriteFileIds,
+        this.importRunId
       )
       .subscribe({
         next: data => {
+          this.incrementCompletedUploads();
           // Keep the latest response for non-testFiles flows.
           // For the two-step testFiles flow we store the initial response separately to avoid self-merging.
           this.uploadData = data;
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
+          this.stopUploadProgressPolling();
 
           if (this.data.importType === 'testResults') {
             // Do not open a nested dialog here; return a payload to the caller.
@@ -650,6 +687,8 @@ export class TestCenterImportComponent {
           };
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
+          this.stopUploadProgressPolling();
+          this.resetUploadProgress();
         }
       });
   }
@@ -697,6 +736,7 @@ export class TestCenterImportComponent {
         );
 
         mergedResult = this.mergeImportResults(mergedResult, currentResult);
+        this.incrementCompletedUploads();
       }
 
       this.importProgressPercent = 100;
@@ -720,6 +760,75 @@ export class TestCenterImportComponent {
       this.isUploadingTestFiles = false;
       this.isUploadingTestResults = false;
       this.importProgressPercent = 0;
+      this.resetUploadProgress();
     }
+  }
+
+  get uploadProgressPercent(): number {
+    if (this.totalUploadsExpected <= 0) return 0;
+    return Math.round((this.completedUploads / this.totalUploadsExpected) * 100);
+  }
+
+  private initializeUploadProgress(selectedGroupCount: number): void {
+    if (this.data.importType === 'testResults') {
+      this.totalUploadsExpected = selectedGroupCount;
+      this.completedUploads = 0;
+      this.uploadProgressDetails = null;
+      return;
+    }
+
+    this.totalUploadsExpected = 1;
+    this.completedUploads = 0;
+    this.uploadProgressDetails = null;
+  }
+
+  private incrementCompletedUploads(): void {
+    if (this.totalUploadsExpected <= 0) return;
+    this.completedUploads = Math.min(
+      this.completedUploads + 1,
+      this.totalUploadsExpected
+    );
+  }
+
+  private resetUploadProgress(): void {
+    this.stopUploadProgressPolling();
+    this.totalUploadsExpected = 0;
+    this.completedUploads = 0;
+    this.importRunId = null;
+    this.uploadProgressDetails = null;
+  }
+
+  private createImportRunId(): string {
+    return `tc-import-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }
+
+  private startUploadProgressPolling(importRunId: string): void {
+    this.stopUploadProgressPolling();
+    this.progressPollingSub = interval(700).pipe(
+      startWith(0),
+      switchMap(() => this.importService.getImportWorkspaceFilesProgress(
+        this.appService.selectedWorkspaceId,
+        importRunId
+      ))
+    ).subscribe(progress => {
+      if (!progress) return;
+
+      this.uploadProgressDetails = progress;
+      this.totalUploadsExpected = progress.totalPlanned;
+      this.completedUploads = progress.totalUploaded;
+
+      if (progress.status === 'completed' || progress.status === 'failed') {
+        this.stopUploadProgressPolling();
+      }
+    });
+  }
+
+  private stopUploadProgressPolling(): void {
+    this.progressPollingSub?.unsubscribe();
+    this.progressPollingSub = undefined;
+  }
+
+  get visibleOptionProgress(): NonNullable<ImportWorkspaceFilesProgressDto['options']> {
+    return (this.uploadProgressDetails?.options || []).filter(option => option.planned > 0);
   }
 }
