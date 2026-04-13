@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   Observable,
+  Subject,
   catchError,
   of
 } from 'rxjs';
@@ -83,9 +84,15 @@ export interface WorkspaceGroupCodingStats {
 export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private autoCodingCompletedSubject = new Subject<void>();
+  autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+  }
+
+  notifyAutoCodingCompleted(): void {
+    this.autoCodingCompletedSubject.next();
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
