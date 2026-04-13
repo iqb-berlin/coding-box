@@ -27,6 +27,7 @@ import {
 } from '../../../../../../../../../api-dto/files/duplicate-response.dto';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationService } from '../../../../services/validation';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 /**
  * Panel component for duplicate responses validation.
@@ -169,6 +170,7 @@ implements OnInit, OnDestroy {
   isRunning = false;
   wasRun = false;
   isLoadingPage = false;
+  isExporting = false;
   errorMessage: string | null = null;
   duplicateResponses: DuplicateResponseSelectionDto[] = [];
   totalDuplicates = 0;
@@ -532,5 +534,59 @@ implements OnInit, OnDestroy {
           }
         });
     });
+  }
+
+  exportCsv(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.duplicateResponsesValidationService
+      .fetchPage(1, Number.MAX_SAFE_INTEGER)
+      .subscribe({
+        next: result => {
+          const rows = result.data.flatMap(duplicate =>
+            duplicate.duplicates.map(duplicateValue => ({
+              unitName: duplicate.unitName,
+              variableId: duplicate.variableId,
+              subform: duplicate.subform || '',
+              bookletName: duplicate.bookletName || '',
+              testTakerGroup: duplicate.testTakerGroup || '',
+              testTakerLogin: duplicate.testTakerLogin || '',
+              testTakerCode: duplicate.testTakerCode || '',
+              responseId: duplicateValue.responseId,
+              value: duplicateValue.value,
+              status: duplicateValue.status
+            }))
+          );
+
+          const csvContent = buildCsv(rows, [
+            { header: 'Unit', value: row => row.unitName },
+            { header: 'Variablen-ID', value: row => row.variableId },
+            { header: 'Subform', value: row => row.subform },
+            { header: 'Booklet', value: row => row.bookletName },
+            { header: 'Gruppe', value: row => row.testTakerGroup },
+            { header: 'Login', value: row => row.testTakerLogin },
+            { header: 'Code', value: row => row.testTakerCode },
+            { header: 'Response-ID', value: row => row.responseId },
+            { header: 'Wert', value: row => row.value },
+            { header: 'Status', value: row => row.status }
+          ]);
+
+          downloadCsvFile('validierung-duplikate.csv', csvContent);
+          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+            duration: 3000
+          });
+          this.isExporting = false;
+        },
+        error: () => {
+          this.isExporting = false;
+          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 }
