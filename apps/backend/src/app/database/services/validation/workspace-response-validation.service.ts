@@ -8,6 +8,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import {
@@ -30,8 +31,25 @@ export class WorkspaceResponseValidationService {
     @InjectRepository(Booklet)
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(FileUpload)
-    private filesRepository: Repository<FileUpload>
+    private filesRepository: Repository<FileUpload>,
+    private workspaceExclusionService: WorkspaceExclusionService = {
+      resolveExclusionsForQueries: async () => ({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService
   ) {}
+
+  private static normalizeExclusionKey(value: string | null | undefined): string {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  private static normalizeUnitKey(value: string | null | undefined): string {
+    return WorkspaceResponseValidationService
+      .normalizeExclusionKey(value)
+      .replace(/\.XML$/i, '');
+  }
 
   async validateVariables(
     workspaceId: number,
@@ -107,6 +125,27 @@ export class WorkspaceResponseValidationService {
               }
             }
           }
+          if (
+            parsedXml.Unit.DerivedVariables &&
+            parsedXml.Unit.DerivedVariables.Variable
+          ) {
+            const derivedVariables = Array.isArray(
+              parsedXml.Unit.DerivedVariables.Variable
+            ) ?
+              parsedXml.Unit.DerivedVariables.Variable :
+              [parsedXml.Unit.DerivedVariables.Variable];
+            for (const variable of derivedVariables) {
+              const isNoValue = variable.$?.type === 'no-value';
+              if (variable.$?.alias) {
+                variables.aliases.add(variable.$.alias);
+                if (isNoValue) variables.noValueAliases.add(variable.$.alias);
+              }
+              if (variable.$?.id) {
+                variables.ids.add(variable.$.id);
+                if (isNoValue) variables.noValueIds.add(variable.$.id);
+              }
+            }
+          }
           unitVariables.set(unitName, variables);
         }
       } catch (e) {
@@ -166,6 +205,89 @@ export class WorkspaceResponseValidationService {
     if (allUnits.length === 0) {
       this.logger.warn(
         `No units found for persons in workspace ${workspaceId}`
+      );
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const ignoredUnits = new Set(
+      (exclusions.globalIgnoredUnits || []).map(
+        WorkspaceResponseValidationService.normalizeUnitKey
+      )
+    );
+    const ignoredBooklets = new Set(
+      (exclusions.ignoredBooklets || []).map(
+        WorkspaceResponseValidationService.normalizeExclusionKey
+      )
+    );
+    const testletIgnoredUnits = new Set(
+      (exclusions.testletIgnoredUnits || []).map(
+        t => `${WorkspaceResponseValidationService.normalizeExclusionKey(t.bookletId)}|${WorkspaceResponseValidationService.normalizeUnitKey(t.unitId)}`
+      )
+    );
+
+    const hasBookletBasedExclusions =
+      ignoredBooklets.size > 0 || testletIgnoredUnits.size > 0;
+    const bookletIds = Array.from(
+      new Set(
+        allUnits
+          .map(unit => unit.bookletid)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+    const bookletNameById = new Map<number, string>();
+
+    if (hasBookletBasedExclusions && bookletIds.length > 0) {
+      for (let i = 0; i < bookletIds.length; i += batchSize) {
+        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+        const bookletsBatch = await this.bookletRepository.find({
+          where: { id: In(bookletIdsBatch) }
+        });
+        bookletsBatch.forEach(booklet => {
+          bookletNameById.set(
+            booklet.id,
+            WorkspaceResponseValidationService.normalizeExclusionKey(
+              booklet.bookletinfo?.name
+            )
+          );
+        });
+      }
+    }
+
+    allUnits = allUnits.filter(unit => {
+      const unitKey = WorkspaceResponseValidationService.normalizeUnitKey(
+        unit.name
+      );
+      if (ignoredUnits.has(unitKey)) {
+        return false;
+      }
+      if (!hasBookletBasedExclusions) {
+        return true;
+      }
+      const bookletKey = bookletNameById.get(unit.bookletid) || '';
+      if (bookletKey && ignoredBooklets.has(bookletKey)) {
+        return false;
+      }
+      if (
+        bookletKey &&
+        testletIgnoredUnits.has(`${bookletKey}|${unitKey}`)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (allUnits.length === 0) {
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
       );
       return {
         data: [],

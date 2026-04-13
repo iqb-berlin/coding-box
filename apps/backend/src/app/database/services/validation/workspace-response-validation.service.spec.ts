@@ -5,6 +5,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 describe('WorkspaceResponseValidationService.validateVariables', () => {
   const makeUnitXml = (
@@ -251,6 +252,128 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
       personsRepository,
       {} as unknown as Repository<Booklet>,
       filesRepository
+    );
+
+    const result = await service.validateVariables(1, 1, 10);
+    expect(result.total).toBe(0);
+    expect(result.data).toEqual([]);
+  });
+
+  it('accepts response variableid matching derived variable alias in unit xml', async () => {
+    const filesRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          data: Buffer.from(
+            '<?xml version="1.0" encoding="utf-8"?>' +
+              '<Unit>' +
+              '<Metadata><Id>UNIT1</Id></Metadata>' +
+              '<BaseVariables></BaseVariables>' +
+              '<DerivedVariables><Variable id="DV1" alias="DA1" type="string" /></DerivedVariables>' +
+              '</Unit>'
+          )
+        } as unknown as FileUpload
+      ])
+    } as unknown as Repository<FileUpload>;
+
+    const personsRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(
+          makeQueryBuilder([{ id: 10, name: 'UNIT1' } as unknown as Unit])
+        )
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'DA1',
+          value: 'x',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      filesRepository
+    );
+
+    const result = await service.validateVariables(1, 1, 10);
+    expect(result.total).toBe(0);
+    expect(result.data).toEqual([]);
+  });
+
+  it('ignores units from exclusions in variable validation', async () => {
+    const filesRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          data: makeUnitXml('UNIT1', [
+            { id: 'V1', alias: 'A1', type: 'string' }
+          ])
+        } as unknown as FileUpload
+      ])
+    } as unknown as Repository<FileUpload>;
+
+    const personsRepository = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+
+    const unitRepository = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(
+          makeQueryBuilder([
+            { id: 10, name: 'UNIT1', bookletid: 99 } as unknown as Unit
+          ])
+        )
+    } as unknown as Repository<Unit>;
+
+    const responseRepository = {
+      find: jest.fn().mockResolvedValue([
+        {
+          id: 100,
+          unitid: 10,
+          variableid: 'UNKNOWN',
+          value: 'x',
+          unit: {
+            id: 10,
+            name: 'UNIT1'
+          } as unknown as Unit
+        } as unknown as ResponseEntity
+      ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: ['UNIT1'],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepository,
+      unitRepository,
+      personsRepository,
+      {} as unknown as Repository<Booklet>,
+      filesRepository,
+      workspaceExclusionService
     );
 
     const result = await service.validateVariables(1, 1, 10);
