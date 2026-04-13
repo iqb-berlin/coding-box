@@ -2,6 +2,7 @@ import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
 import { EventEmitter } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
 } from '@angular/material/dialog';
@@ -14,6 +15,7 @@ import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } fro
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
@@ -144,7 +146,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: TranslateService, useValue: mockTranslateService },
-        { provide: MatDialog, useValue: mockMatDialog }
+        { provide: MatDialog, useValue: mockMatDialog },
+        { provide: SERVER_URL, useValue: 'http://localhost:3333/' },
+        provideHttpClient()
       ]
     }).overrideComponent(CodingJobDefinitionDialogComponent, {
       remove: {

@@ -4,6 +4,7 @@ import { catchError, Observable, of } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto as ImportOptions, ImportResultDto as Result } from '../../../../../../../api-dto/files/import-options.dto';
+import { ImportWorkspaceFilesProgressDto } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 
 export { ImportOptions, Result };
 
@@ -23,7 +24,8 @@ export class ImportService {
     importOptions: ImportOptions,
     testGroups: string[],
     overwriteExistingLogs: boolean = false,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    importRunId?: string
   ): Observable<Result> {
     const {
       units,
@@ -53,7 +55,8 @@ export class ImportService {
       .set('metadata', String(metadata))
       .set('testGroups', String(testGroups.join(',')))
       .set('overwriteExistingLogs', String(overwriteExistingLogs))
-      .set('overwriteFileIds', String((overwriteFileIds || []).join(';')));
+      .set('overwriteFileIds', String((overwriteFileIds || []).join(';')))
+      .set('importRunId', String(importRunId || ''));
 
     return this.http
       .get<Result>(
@@ -79,6 +82,19 @@ export class ImportService {
         })
         )
       );
+  }
+
+  getImportWorkspaceFilesProgress(
+    workspace_id: number,
+    importRunId: string
+  ): Observable<ImportWorkspaceFilesProgressDto | null> {
+    const params = new HttpParams().set('importRunId', importRunId);
+    return this.http
+      .get<ImportWorkspaceFilesProgressDto>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/importWorkspaceFiles/progress`,
+      { params }
+    )
+      .pipe(catchError(() => of(null)));
   }
 
   importTestcenterGroups(

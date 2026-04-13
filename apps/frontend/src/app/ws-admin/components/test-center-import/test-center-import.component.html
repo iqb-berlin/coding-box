@@ -236,6 +236,40 @@
         </p>
         } @if (isUploadingTestFiles) {
         <p class="loading-text">Testdateien werden hochgeladen...</p>
+        @if (totalUploadsExpected > 0) {
+        <div class="upload-progress">
+          <p class="loading-subtext">
+            Uploads abgeschlossen: {{ completedUploads }} /
+            {{ totalUploadsExpected }}
+          </p>
+          <mat-progress-bar
+            mode="determinate"
+            [value]="uploadProgressPercent"
+          ></mat-progress-bar>
+        </div>
+        }
+        @if (uploadProgressDetails && visibleOptionProgress.length > 0) {
+        <div class="option-progress-list">
+          @for (option of visibleOptionProgress; track option.optionKey) {
+          <div class="option-progress-item">
+            <div class="option-progress-title">
+              {{ optionLabels[option.optionKey] }}:
+              {{ option.uploaded }} / {{ option.planned }} hochgeladen
+            </div>
+            <div class="option-progress-meta">
+              Verarbeitet: {{ option.processed }} / {{ option.planned }}
+              @if (option.currentFile) {
+              <span class="current-file">Aktuelle Datei: {{ option.currentFile }}</span>
+              }
+            </div>
+          </div>
+          }
+        </div>
+        } @if (uploadProgressDetails?.currentFile) {
+        <p class="loading-subtext">
+          Aktuell wird verarbeitet: {{ uploadProgressDetails?.currentFile }}
+        </p>
+        }
         }
       </div>
       } @if (!isUploadingTestResults && !isUploadingTestFiles) {
@@ -299,8 +333,20 @@
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
       <p class="loading-text">{{ loadingMessage }}</p>
-      @if (importProgressPercent > 0) {
-      <p class="loading-text">Fortschritt: {{ importProgressPercent }}%</p>
+      @if (totalUploadsExpected > 0) {
+      <div class="upload-progress">
+        <p class="loading-subtext">
+          Uploads abgeschlossen: {{ completedUploads }} /
+          {{ totalUploadsExpected }}
+        </p>
+        <mat-progress-bar
+          mode="determinate"
+          [value]="uploadProgressPercent"
+        ></mat-progress-bar>
+      </div>
+      <p class="loading-subtext">Fortschritt: {{ uploadProgressPercent }}%</p>
+      } @else if (importProgressPercent > 0) {
+      <p class="loading-subtext">Fortschritt: {{ importProgressPercent }}%</p>
       }
     </div>
     } @if (!isUploadingTestResults) {
