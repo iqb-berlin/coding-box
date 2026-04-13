@@ -38,6 +38,7 @@ import { DistributedCodingService } from '../../services/distributed-coding.serv
 import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 export interface CodingJobDefinitionDialogData {
@@ -118,6 +119,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
   private codingJobService = inject(CodingJobService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
@@ -206,6 +208,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.loadCodingIncompleteVariables();
       this.applyAvailabilityFilter();
     });
+
+    this.testPersonCodingService.autoCodingCompleted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.loadCodingIncompleteVariables(this.unitNameFilter || undefined, true);
+      });
   }
 
   ngOnDestroy(): void {
@@ -315,14 +323,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadCodingIncompleteVariables(unitNameFilter?: string): void {
+  loadCodingIncompleteVariables(unitNameFilter?: string, forceReload: boolean = false): void {
     this.isLoadingVariableAnalysis = true;
     const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
 
-    if (this.data.preloadedVariables && !unitNameFilter && trainingRequired === undefined) {
+    if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
       this.applyJobDefinitionUsage();
-      this.dataSource.data = this.variables;
+      this.applyAvailabilityFilter();
       this.processVariableSelection();
       this.totalVariableAnalysisRecords = this.variables.length;
       this.isLoadingVariableAnalysis = false;
@@ -343,7 +351,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       next: variables => {
         this.variables = variables;
         this.applyJobDefinitionUsage();
-        this.dataSource.data = this.variables;
+        this.applyAvailabilityFilter();
         this.processVariableSelection();
         this.totalVariableAnalysisRecords = variables.length;
         this.isLoadingVariableAnalysis = false;
