@@ -4,7 +4,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent, MatPaginatorIntl } from '@angular/material/paginator';
@@ -70,7 +69,6 @@ interface DoubleCodedItem {
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatRadioModule,
-    MatCheckboxModule,
     MatFormFieldModule,
     MatInputModule,
     MatSnackBarModule,
@@ -112,6 +110,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   pageSize = 50;
   isLoading = false;
   showOnlyConflicts = false;
+  agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<string>('all');
@@ -136,12 +135,13 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   private setupFilters(): void {
+    const agreement$ = this.agreementControl.valueChanges.pipe(distinctUntilChanged());
     const search$ = this.searchControl.valueChanges.pipe(debounceTime(500), distinctUntilChanged());
     const coder$ = this.coderControl.valueChanges.pipe(distinctUntilChanged());
     const status$ = this.statusControl.valueChanges.pipe(distinctUntilChanged());
     const resolved$ = this.resolvedControl.valueChanges.pipe(distinctUntilChanged());
 
-    merge(search$, coder$, status$, resolved$)
+    merge(agreement$, search$, coder$, status$, resolved$)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.onFilterChange();
@@ -196,9 +196,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
       let defaultValue = '';
       if (resolvedResult) {
-        defaultValue = resolvedResult.coderId.toString();
+        defaultValue = resolvedResult.jobId.toString();
       } else if (item.coderResults.length > 0) {
-        defaultValue = item.coderResults[0].coderId.toString();
+        defaultValue = item.coderResults[0].jobId.toString();
       }
 
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
@@ -229,6 +229,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   onFilterChange(): void {
+    this.showOnlyConflicts = this.agreementControl.value === 'differ';
     this.currentPage = 1;
     this.loadData();
   }
@@ -257,6 +258,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   loadData(): void {
     this.isLoading = true;
+    const agreementFilter = this.agreementControl.value || 'all';
+    this.showOnlyConflicts = agreementFilter === 'differ';
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -276,7 +279,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       this.searchControl.value || undefined,
       this.coderControl.value || undefined,
       this.statusControl.value || undefined,
-      this.resolvedControl.value || undefined
+      this.resolvedControl.value || undefined,
+      agreementFilter
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
@@ -304,8 +308,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
-  onSelectionChange(item: DoubleCodedItem, coderId: string): void {
-    const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === coderId);
+  onSelectionChange(item: DoubleCodedItem, selectedJobId: string): void {
+    const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
     if (selectedResult) {
       item.selectedCoderResult = selectedResult;
     }
@@ -394,10 +398,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private getDecisionForItem(item: DoubleCodedItem): { responseId: number; selectedJobId: number; resolutionComment?: string } | null {
     const controlName = this.getItemControlName(item);
-    const selectedCoderId = this.selectionForm.get(controlName)?.value;
+    const selectedJobId = this.selectionForm.get(controlName)?.value;
 
-    if (selectedCoderId) {
-      const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
+    if (selectedJobId) {
+      const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
       if (selectedResult) {
         const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
           responseId: item.responseId,

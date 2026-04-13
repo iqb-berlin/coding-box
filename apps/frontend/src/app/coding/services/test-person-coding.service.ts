@@ -735,7 +735,8 @@ export class TestPersonCodingService {
     search?: string,
     coderId?: number,
     statusFilter?: string,
-    resolvedFilter?: string
+    resolvedFilter?: string,
+    agreementFilter?: 'all' | 'match' | 'differ'
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -782,6 +783,10 @@ export class TestPersonCodingService {
 
     if (resolvedFilter && resolvedFilter !== 'all') {
       params = params.set('resolvedFilter', resolvedFilter);
+    }
+
+    if (agreementFilter && agreementFilter !== 'all') {
+      params = params.set('agreementFilter', agreementFilter);
     }
 
     return this.http

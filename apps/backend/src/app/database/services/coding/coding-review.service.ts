@@ -28,6 +28,7 @@ export class CodingReviewService {
     coderId?: number,
     statusFilter?: string,
     resolvedFilter?: string,
+    agreementFilter?: 'all' | 'match' | 'differ',
     includeRelations: boolean = true
   ): Promise<{
       data: Array<{
@@ -57,7 +58,7 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, resolvedFilter=${resolvedFilter})`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter})`
       );
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
@@ -74,10 +75,17 @@ export class CodingReviewService {
         .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
 
-      if (onlyConflicts) {
-        // A conflict exists if there are different codes for the same response.
-        // We use COALESCE to handle NULL codes as a distinct value (-999999).
-        query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+      if (agreementFilter === 'differ') {
+        // Conflict: at least two codes available and they differ.
+        query.andHaving('COUNT(cju.code) > 1');
+        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+      } else if (agreementFilter === 'match') {
+        // Match: no differing non-null codes.
+        query.andHaving('COUNT(DISTINCT cju.code) <= 1');
+      } else if (onlyConflicts) {
+        // Legacy behavior for older clients that still use onlyConflicts.
+        query.andHaving('COUNT(cju.code) > 1');
+        query.andHaving('COUNT(DISTINCT cju.code) > 1');
       }
 
       // Applied Status Filter Logic
@@ -86,7 +94,7 @@ export class CodingReviewService {
         query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
       } else if (resolvedFilter === 'unresolved') {
         query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
-      } else if (onlyConflicts && !resolvedFilter) {
+      } else if ((agreementFilter === 'differ' || (onlyConflicts && agreementFilter !== 'match')) && !resolvedFilter) {
         // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
         query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
       }
@@ -455,6 +463,7 @@ export class CodingReviewService {
           undefined, // coderId
           undefined, // statusFilter
           undefined, // resolvedFilter
+          undefined, // agreementFilter
           false // includeRelations = false
         );
 
