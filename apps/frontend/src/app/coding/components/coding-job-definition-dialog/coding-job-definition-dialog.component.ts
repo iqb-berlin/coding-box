@@ -182,7 +182,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
-    if (this.data.isEdit && this.data.codingJob?.id) {
+    if (this.data.isEdit && this.data.mode === 'job' && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
     }
 
