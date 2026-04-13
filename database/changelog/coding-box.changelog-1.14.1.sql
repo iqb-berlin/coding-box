@@ -68,7 +68,7 @@ definition_features AS (
       (
         SELECT array_agg(DISTINCT ((value ->> 'id')::INTEGER))
         FROM jsonb_array_elements(COALESCE(jd.assigned_variable_bundles, '[]'::jsonb)) AS bundle_values(value)
-        WHERE value ? 'id'
+        WHERE jsonb_exists(value, 'id')
       ),
       ARRAY[]::INTEGER[]
     ) AS bundle_ids
@@ -112,32 +112,5 @@ WHERE cj.id = c.job_id
   AND cj.job_definition_id IS NULL
   AND c.candidate_count = 1
   AND c.matched_definition_id IS NOT NULL;
-
-DO $$
-DECLARE
-  v_total INTEGER;
-  v_updated INTEGER;
-  v_ambiguous INTEGER;
-  v_unmatched INTEGER;
-BEGIN
-  SELECT COUNT(*) INTO v_total
-  FROM tmp_job_definition_backfill_candidates;
-
-  SELECT COUNT(*) INTO v_updated
-  FROM tmp_job_definition_backfill_candidates
-  WHERE candidate_count = 1
-    AND matched_definition_id IS NOT NULL;
-
-  SELECT COUNT(*) INTO v_ambiguous
-  FROM tmp_job_definition_backfill_candidates
-  WHERE candidate_count > 1;
-
-  SELECT COUNT(*) INTO v_unmatched
-  FROM tmp_job_definition_backfill_candidates
-  WHERE candidate_count = 0;
-
-  RAISE NOTICE 'Backfill job_definition_id: total=% updated=% ambiguous=% unmatched=%',
-    v_total, v_updated, v_ambiguous, v_unmatched;
-END $$;
 
 -- rollback SELECT 1;
