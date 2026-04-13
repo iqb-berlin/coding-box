@@ -89,11 +89,11 @@ export class WorkspaceService {
       );
   }
 
-  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<boolean> {
+  addWorkspace(workspaceData: CreateWorkspaceDto): Observable<number | null> {
     return this.http
-      .post<boolean>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
+      .post<number>(`${this.serverUrl}admin/workspace`, workspaceData, { headers: this.authHeader })
       .pipe(
-        catchError(() => of(false))
+        catchError(() => of(null))
       );
   }
 

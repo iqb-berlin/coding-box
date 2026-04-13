@@ -11,7 +11,8 @@ import {
 } from '@angular/common/http';
 import { TranslateHttpLoader } from '@ngx-translate/http-loader';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
-import { HashLocationStrategy, LocationStrategy } from '@angular/common';
+import { HashLocationStrategy, LocationStrategy, registerLocaleData } from '@angular/common';
+import localeDeAt from '@angular/common/locales/de-AT';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -19,20 +20,10 @@ import { journalInterceptor } from './core/interceptors/journal-interceptor';
 import { SERVER_URL } from './injection-tokens';
 import { AUTH_SESSION_IDLE_TIMEOUT_MS } from './core/services/auth-session.config';
 
-const translationCacheBust = Date.now().toString();
+registerLocaleData(localeDeAt);
 
-export class CacheBustingTranslateLoader implements TranslateLoader {
-  constructor(private http: HttpClient) {}
-
-  getTranslation(lang: string): Observable<Record<string, unknown>> {
-    return this.http.get<Record<string, unknown>>(
-      `./assets/i18n/${lang}.json?v=${translationCacheBust}`
-    );
-  }
-}
-
-export function createTranslateLoader(http: HttpClient): CacheBustingTranslateLoader {
-  return new CacheBustingTranslateLoader(http);
+export function createTranslateLoader(http: HttpClient): TranslateHttpLoader {
+  return new TranslateHttpLoader(http, './assets/i18n/', '.json');
 }
 
 export const appConfig: ApplicationConfig = {
