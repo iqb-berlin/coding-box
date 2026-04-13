@@ -46,6 +46,7 @@ interface TrainingComparison {
   personLogin: string;
   personGroup: string;
   testPerson: string;
+  givenAnswer?: string;
   coders: Array<{
     trainingId: number;
     trainingLabel: string;
@@ -66,6 +67,7 @@ interface WithinTrainingComparison {
   personLogin?: string;
   personCode?: string;
   personGroup?: string;
+  givenAnswer?: string;
   replayCode?: number | null;
   replayScore?: number | null;
   discussionCode?: number | null;
@@ -178,7 +180,7 @@ export class CodingResultsComparisonComponent implements OnInit {
   isLoading = false;
   isLoadingKappa = false;
   dataSource = new MatTableDataSource<TrainingComparison | WithinTrainingComparison>([]);
-  displayedColumns: string[] = ['index', 'unitName', 'variableId', 'personLogin', 'personCode', 'personGroup', 'match'];
+  displayedColumns: string[] = ['index', 'unitVariable', 'personInfo', 'givenAnswer', 'match'];
   dynamicCoderColumns: string[] = [];
   availableTrainings: CoderTraining[] = [];
   filteredTrainings: CoderTraining[] = [];
@@ -609,12 +611,10 @@ export class CodingResultsComparisonComponent implements OnInit {
   }
 
   private updateDisplayedColumns(): void {
-    const baseColumns = ['index', 'unitName', 'variableId'];
+    const baseColumns = ['index', 'unitVariable', 'personInfo', 'givenAnswer'];
     this.dynamicCoderColumns = [];
 
     if (this.comparisonMode === 'between-trainings') {
-      const personColumns = ['personLogin', 'personCode', 'personGroup'];
-
       // Generate columns for selected coders
       this.availableCodersFromTrainings.forEach(coder => {
         const key = `${coder.trainingId}_${coder.coderId}`;
@@ -623,18 +623,15 @@ export class CodingResultsComparisonComponent implements OnInit {
         }
       });
 
-      this.displayedColumns = [...baseColumns, ...personColumns, 'match', 'replay', ...this.dynamicCoderColumns];
+      this.displayedColumns = [...baseColumns, 'match', ...this.dynamicCoderColumns];
     } else if (this.comparisonMode === 'within-training') {
-      // For within training, we show detailed person info
-      const personColumns = ['personLogin', 'personCode', 'personGroup'];
-
       if (this.selectedTrainingForWithin && this.withinTrainingData.length > 0) {
         // Filter columns based on selected coders
         const selectedCoderIds = this.codersFormControl.value || [];
         this.dynamicCoderColumns = selectedCoderIds.map(jobId => `coder_${jobId}`);
-        this.displayedColumns = [...baseColumns, ...personColumns, 'match', 'replay', ...this.dynamicCoderColumns, 'discussion'];
+        this.displayedColumns = [...baseColumns, 'match', ...this.dynamicCoderColumns, 'discussion'];
       } else {
-        this.displayedColumns = [...baseColumns, ...personColumns, 'match', 'replay', 'discussion'];
+        this.displayedColumns = [...baseColumns, 'match', 'discussion'];
       }
     }
   }
@@ -837,6 +834,7 @@ export class CodingResultsComparisonComponent implements OnInit {
             personLogin: item.personLogin,
             personCode: item.personCode,
             personGroup: item.personGroup,
+            givenAnswer: item.givenAnswer,
             replayCode: item.replayCode,
             replayScore: item.replayScore,
             discussionCode: item.discussionCode,
