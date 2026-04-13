@@ -736,7 +736,9 @@ export class TestPersonCodingService {
     coderId?: number,
     statusFilter?: string,
     resolvedFilter?: string,
-    agreementFilter?: 'all' | 'match' | 'differ'
+    agreementFilter?: 'all' | 'match' | 'differ',
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[]
   ): Observable<{
       data: Array<{
         responseId: number;
@@ -787,6 +789,14 @@ export class TestPersonCodingService {
 
     if (agreementFilter && agreementFilter !== 'all') {
       params = params.set('agreementFilter', agreementFilter);
+    }
+
+    if (jobDefinitionIds?.length) {
+      params = params.set('jobDefinitionIds', jobDefinitionIds.join(','));
+    }
+
+    if (coderTrainingIds?.length) {
+      params = params.set('coderTrainingIds', coderTrainingIds.join(','));
     }
 
     return this.http

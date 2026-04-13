@@ -29,6 +29,8 @@ export class CodingReviewService {
     statusFilter?: string,
     resolvedFilter?: string,
     agreementFilter?: 'all' | 'match' | 'differ',
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
     includeRelations: boolean = true
   ): Promise<{
       data: Array<{
@@ -58,7 +60,7 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter})`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter}, jobDefinitionFilters=${jobDefinitionIds?.length || 0}, trainingFilters=${coderTrainingIds?.length || 0})`
       );
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
@@ -101,6 +103,23 @@ export class CodingReviewService {
 
       if (excludeTrainings) {
         query.andWhere('cj.training_id IS NULL');
+      }
+
+      if (this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+        const scopeClauses: string[] = [];
+        const scopeParams: Record<string, number[]> = {};
+
+        if (jobDefinitionIds?.length) {
+          scopeClauses.push('cj.job_definition_id IN (:...jobDefinitionIds)');
+          scopeParams.jobDefinitionIds = jobDefinitionIds;
+        }
+
+        if (coderTrainingIds?.length) {
+          scopeClauses.push('cj.training_id IN (:...coderTrainingIds)');
+          scopeParams.coderTrainingIds = coderTrainingIds;
+        }
+
+        query.andWhere(`(${scopeClauses.join(' OR ')})`, scopeParams);
       }
 
       if (search && search.trim() !== '') {
@@ -194,6 +213,10 @@ export class CodingReviewService {
           return false;
         }
 
+        if (!this.isIncludedByScope(unit.coding_job.job_definition_id, unit.coding_job.training_id, jobDefinitionIds, coderTrainingIds)) {
+          return false;
+        }
+
         return true;
       });
 
@@ -279,6 +302,26 @@ export class CodingReviewService {
         'Could not get double-coded variables for review. Please check the database connection.'
       );
     }
+  }
+
+  private hasScopeFilters(jobDefinitionIds?: number[], coderTrainingIds?: number[]): boolean {
+    return !!(jobDefinitionIds?.length || coderTrainingIds?.length);
+  }
+
+  private isIncludedByScope(
+    jobDefinitionId: number | undefined,
+    trainingId: number | undefined,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[]
+  ): boolean {
+    if (!this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+      return true;
+    }
+
+    const matchesJobDefinition = !!(jobDefinitionIds?.length && jobDefinitionId && jobDefinitionIds.includes(jobDefinitionId));
+    const matchesTraining = !!(coderTrainingIds?.length && trainingId && coderTrainingIds.includes(trainingId));
+
+    return matchesJobDefinition || matchesTraining;
   }
 
   async applyDoubleCodedResolutions(
@@ -464,6 +507,8 @@ export class CodingReviewService {
           undefined, // statusFilter
           undefined, // resolvedFilter
           undefined, // agreementFilter
+          undefined, // jobDefinitionIds
+          undefined, // coderTrainingIds
           false // includeRelations = false
         );
 

@@ -75,6 +75,18 @@ export class WorkspaceCodingReviewController {
     description: 'Filter by agreement status (all, match, differ)',
     type: String
   })
+  @ApiQuery({
+    name: 'jobDefinitionIds',
+    required: false,
+    description: 'Comma-separated list of coding job definition IDs to include',
+    type: String
+  })
+  @ApiQuery({
+    name: 'coderTrainingIds',
+    required: false,
+    description: 'Comma-separated list of coder training IDs to include',
+    type: String
+  })
   @ApiOkResponse({
     description: 'Double-coded variables retrieved for review',
     schema: {
@@ -151,12 +163,16 @@ export class WorkspaceCodingReviewController {
                    @Query('coderId') coderId?: number,
                    @Query('statusFilter') statusFilter?: string,
                    @Query('resolvedFilter') resolvedFilter?: string,
-                   @Query('agreementFilter') agreementFilter?: 'all' | 'match' | 'differ'
+                   @Query('agreementFilter') agreementFilter?: 'all' | 'match' | 'differ',
+                   @Query('jobDefinitionIds') jobDefinitionIds?: string,
+                   @Query('coderTrainingIds') coderTrainingIds?: string
   ): Promise<DoubleCodedReviewResponse> {
     const validPage = Math.max(1, page);
     const validLimit = Math.min(Math.max(1, limit), 100); // Max 100 items per page for review
     const isOnlyConflicts = onlyConflicts === 'true';
     const isExcludeTrainings = excludeTrainings === 'true';
+    const selectedJobDefinitionIds = this.parseIdList(jobDefinitionIds);
+    const selectedCoderTrainingIds = this.parseIdList(coderTrainingIds);
 
     return this.codingReviewService.getDoubleCodedVariablesForReview(
       workspace_id,
@@ -168,8 +184,23 @@ export class WorkspaceCodingReviewController {
       coderId,
       statusFilter,
       resolvedFilter,
-      agreementFilter
+      agreementFilter,
+      selectedJobDefinitionIds,
+      selectedCoderTrainingIds
     );
+  }
+
+  private parseIdList(rawIds?: string): number[] | undefined {
+    if (!rawIds) {
+      return undefined;
+    }
+
+    const parsedIds = rawIds
+      .split(',')
+      .map(id => parseInt(id.trim(), 10))
+      .filter(id => !Number.isNaN(id));
+
+    return parsedIds.length > 0 ? parsedIds : undefined;
   }
 
   @Post(':workspace_id/coding/double-coded-review/apply-resolutions')
