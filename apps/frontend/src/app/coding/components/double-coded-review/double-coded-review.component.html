@@ -19,6 +19,23 @@
               </mat-select>
             </mat-form-field>
 
+            <mat-form-field appearance="outline" class="filter-dropdown">
+              <mat-label>{{ 'double-coded-review.filter.scope-label' | translate }}</mat-label>
+              <mat-select [formControl]="scopeControl" multiple>
+                <mat-select-trigger>{{ getScopeSelectionSummary() }}</mat-select-trigger>
+                <mat-optgroup [label]="'double-coded-review.filter.scope-job-definitions' | translate">
+                  @for (definition of availableJobDefinitions; track definition.id) {
+                    <mat-option [value]="'job_' + definition.id">{{ definition.label }}</mat-option>
+                  }
+                </mat-optgroup>
+                <mat-optgroup [label]="'double-coded-review.filter.scope-trainings' | translate">
+                  @for (training of availableCoderTrainings; track training.id) {
+                    <mat-option [value]="'training_' + training.id">{{ training.label }}</mat-option>
+                  }
+                </mat-optgroup>
+              </mat-select>
+            </mat-form-field>
+
             <mat-form-field appearance="outline" class="search-field">
               <mat-label>{{ 'double-coded-review.filter.search-label' | translate }}</mat-label>
               <input matInput [formControl]="searchControl" placeholder="{{ 'double-coded-review.filter.search-placeholder' | translate }}">
@@ -299,6 +316,23 @@
               <mat-option value="all">{{ 'double-coded-review.filter.agreement-all' | translate }}</mat-option>
               <mat-option value="match">{{ 'double-coded-review.filter.agreement-match' | translate }}</mat-option>
               <mat-option value="differ">{{ 'double-coded-review.filter.agreement-differ' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline" class="filter-dropdown">
+            <mat-label>{{ 'double-coded-review.filter.scope-label' | translate }}</mat-label>
+            <mat-select [formControl]="scopeControl" multiple>
+              <mat-select-trigger>{{ getScopeSelectionSummary() }}</mat-select-trigger>
+              <mat-optgroup [label]="'double-coded-review.filter.scope-job-definitions' | translate">
+                @for (definition of availableJobDefinitions; track definition.id) {
+                  <mat-option [value]="'job_' + definition.id">{{ definition.label }}</mat-option>
+                }
+              </mat-optgroup>
+              <mat-optgroup [label]="'double-coded-review.filter.scope-trainings' | translate">
+                @for (training of availableCoderTrainings; track training.id) {
+                  <mat-option [value]="'training_' + training.id">{{ training.label }}</mat-option>
+                }
+              </mat-optgroup>
             </mat-select>
           </mat-form-field>
 

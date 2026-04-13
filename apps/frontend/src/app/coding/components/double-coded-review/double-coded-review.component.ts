@@ -22,13 +22,16 @@ import {
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge
+  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
+import { JobDefinition } from '../../services/coding-job-backend.service';
+import { CoderTraining } from '../../models/coder-training.model';
 
 interface CoderResult {
   coderId: number;
@@ -89,6 +92,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private workspaceService = inject(WorkspaceBackendService);
+  private codingFacadeService = inject(CodingFacadeService);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
@@ -115,7 +119,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<string>('all');
   resolvedControl = new FormControl<string>('all');
+  scopeControl = new FormControl<string[]>([]);
   availableCoders: { id: number; name: string }[] = [];
+  availableJobDefinitions: Array<{ id: number; label: string }> = [];
+  availableCoderTrainings: Array<{ id: number; label: string }> = [];
   private resultsApplied = false;
   private destroy$ = new Subject<void>();
 
@@ -126,7 +133,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.initializeForm();
     this.setupFilters();
     this.loadCoders();
-    this.loadData();
+    this.loadFilterOptions();
   }
 
   ngOnDestroy(): void {
@@ -140,8 +147,11 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const coder$ = this.coderControl.valueChanges.pipe(distinctUntilChanged());
     const status$ = this.statusControl.valueChanges.pipe(distinctUntilChanged());
     const resolved$ = this.resolvedControl.valueChanges.pipe(distinctUntilChanged());
+    const scope$ = this.scopeControl.valueChanges.pipe(
+      distinctUntilChanged((a, b) => JSON.stringify(a || []) === JSON.stringify(b || []))
+    );
 
-    merge(agreement$, search$, coder$, status$, resolved$)
+    merge(agreement$, search$, coder$, status$, resolved$, scope$)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.onFilterChange();
@@ -166,6 +176,93 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private initializeForm(): void {
     this.selectionForm = this.fb.group({});
+  }
+
+  private loadFilterOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.loadData();
+      return;
+    }
+
+    forkJoin({
+      jobDefinitions: this.codingFacadeService.getJobDefinitions(workspaceId).pipe(catchError(() => of([] as JobDefinition[]))),
+      coderTrainings: this.codingFacadeService.getCoderTrainings(workspaceId).pipe(catchError(() => of([] as CoderTraining[])))
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ jobDefinitions, coderTrainings }) => {
+        const sortedJobDefinitions = [...jobDefinitions]
+          .filter(definition => definition.id !== undefined)
+          .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+        this.availableJobDefinitions = sortedJobDefinitions.map(definition => ({
+          id: definition.id!,
+          label: this.getJobDefinitionLabel(definition)
+        }));
+
+        this.availableCoderTrainings = coderTrainings.map(training => ({
+          id: training.id,
+          label: training.label || `Training #${training.id}`
+        }));
+
+        if ((!this.scopeControl.value || this.scopeControl.value.length === 0) && this.availableJobDefinitions.length > 0) {
+          this.scopeControl.setValue([`job_${this.availableJobDefinitions[0].id}`], { emitEvent: false });
+        }
+
+        this.loadData();
+      });
+  }
+
+  private getJobDefinitionLabel(definition: JobDefinition): string {
+    const definitionId = definition.id ?? 0;
+    const status = definition.status ? ` (${definition.status})` : '';
+    return `Definition #${definitionId}${status}`;
+  }
+
+  getScopeSelectionSummary(): string {
+    const selectedScopes = this.scopeControl.value || [];
+    if (selectedScopes.length === 0) {
+      return this.translateService.instant('double-coded-review.filter.scope-all');
+    }
+
+    if (selectedScopes.length === 1) {
+      return this.getScopeLabel(selectedScopes[0]);
+    }
+
+    const selectedJobDefinitions = this.getSelectedJobDefinitionIds().length;
+    const selectedTrainings = this.getSelectedCoderTrainingIds().length;
+    return this.translateService.instant('double-coded-review.filter.scope-summary', {
+      jobs: selectedJobDefinitions,
+      trainings: selectedTrainings
+    });
+  }
+
+  private getScopeLabel(scope: string): string {
+    if (scope.startsWith('job_')) {
+      const scopeId = parseInt(scope.replace('job_', ''), 10);
+      return this.availableJobDefinitions.find(definition => definition.id === scopeId)?.label || `Definition #${scopeId}`;
+    }
+
+    if (scope.startsWith('training_')) {
+      const scopeId = parseInt(scope.replace('training_', ''), 10);
+      return this.availableCoderTrainings.find(training => training.id === scopeId)?.label || `Training #${scopeId}`;
+    }
+
+    return scope;
+  }
+
+  private getSelectedJobDefinitionIds(): number[] {
+    return (this.scopeControl.value || [])
+      .filter(scope => scope.startsWith('job_'))
+      .map(scope => parseInt(scope.replace('job_', ''), 10))
+      .filter(id => !Number.isNaN(id));
+  }
+
+  private getSelectedCoderTrainingIds(): number[] {
+    return (this.scopeControl.value || [])
+      .filter(scope => scope.startsWith('training_'))
+      .map(scope => parseInt(scope.replace('training_', ''), 10))
+      .filter(id => !Number.isNaN(id));
   }
 
   getCurrentItems(): DoubleCodedItem[] {
@@ -280,7 +377,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       this.coderControl.value || undefined,
       this.statusControl.value || undefined,
       this.resolvedControl.value || undefined,
-      agreementFilter
+      agreementFilter,
+      this.getSelectedJobDefinitionIds(),
+      this.getSelectedCoderTrainingIds()
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
