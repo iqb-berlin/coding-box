@@ -27,6 +27,7 @@ import {
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { UnitInfoDto } from '../../../../../../../api-dto/unit-info/unit-info.dto';
 import { SERVER_URL } from '../../../injection-tokens';
+import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 
 export interface BookletUnit {
   id: number;
@@ -55,6 +56,7 @@ interface PaginatedResponse<T> {
 export class FileService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private validationTaskStateService = inject(ValidationTaskStateService);
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -109,6 +111,12 @@ export class FileService {
         )
       ),
       of(true)
+    ).pipe(
+      tap(success => {
+        if (success) {
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        }
+      })
     );
   }
 
@@ -155,9 +163,15 @@ export class FileService {
         `&overwriteFileIds=${encodeURIComponent(overwriteFileIds.join(','))}` :
         '';
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/upload?overwriteExisting=${overwriteExisting}${overwriteIdsQuery}`;
-    return this.http.post<TestFilesUploadResultDto>(url, formData, {
+    return this.http
+      .post<TestFilesUploadResultDto>(url, formData, {
       headers: this.authHeader
-    });
+    })
+      .pipe(
+        tap(() => {
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        })
+      );
   }
 
   uploadTestResults(
@@ -398,7 +412,14 @@ export class FileService {
       {},
       { headers: this.authHeader }
     )
-      .pipe(catchError(() => of(false)));
+      .pipe(
+        tap(success => {
+          if (success) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        }),
+        catchError(() => of(false))
+      );
   }
 
   getBookletUnits(

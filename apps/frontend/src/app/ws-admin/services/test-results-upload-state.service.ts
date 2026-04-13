@@ -11,6 +11,7 @@ import { TestResultsUploadResultDialogComponent } from '../components/test-resul
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 
 export interface PendingUploadBatch {
   workspaceId: number;
@@ -29,6 +30,7 @@ export interface PendingUploadBatch {
 export class TestResultsUploadStateService {
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
 
@@ -112,6 +114,7 @@ export class TestResultsUploadStateService {
 
   private finishBatch(batch: PendingUploadBatch) {
     this.testResultService.invalidateCache(batch.workspaceId);
+    this.validationTaskStateService.invalidateWorkspace(batch.workspaceId);
 
     const workspaceOverview$ = this.testResultService.getWorkspaceOverview(batch.workspaceId).pipe(
       catchError(() => of(batch.beforeOverview))
