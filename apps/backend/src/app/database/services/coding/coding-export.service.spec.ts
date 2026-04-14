@@ -107,4 +107,119 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
 
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
   });
+
+  it('ignores invalid job/training/coder filter ids', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as { applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void }).applyJobFilters(
+      queryBuilder,
+      [Number.NaN, -2, 0],
+      [Number.NaN, -1],
+      [0, -3]
+    );
+
+    expect(queryBuilder.andWhere).not.toHaveBeenCalled();
+  });
+
+  it('applies normalized scoped filters for job/training/coder ids', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as { applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void }).applyJobFilters(
+      queryBuilder,
+      [1, 1, Number.NaN, -1],
+      [3, 3, 0],
+      [7, 7, Number.NaN]
+    );
+
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      1,
+      '(cj.job_definition_id IN (:...jobDefinitionIds) OR cj.training_id IN (:...coderTrainingIds))',
+      { jobDefinitionIds: [1], coderTrainingIds: [3] }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('EXISTS'),
+      { coderIds: [7] }
+    );
+  });
+
+  it('applies only job-definition filter when only job ids are selected', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as {
+      applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
+    }).applyJobFilters(queryBuilder, [11], undefined, undefined);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.job_definition_id IN (:...jobDefinitionIds))',
+      { jobDefinitionIds: [11] }
+    );
+  });
+
+  it('applies only training filter when only training ids are selected', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as {
+      applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
+    }).applyJobFilters(queryBuilder, undefined, [22], undefined);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      '(cj.training_id IN (:...coderTrainingIds))',
+      { coderTrainingIds: [22] }
+    );
+  });
+
+  it('applies only coder filter when only coder ids are selected', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as {
+      applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
+    }).applyJobFilters(queryBuilder, undefined, undefined, [33]);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(1);
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      expect.stringContaining('EXISTS'),
+      { coderIds: [33] }
+    );
+  });
+
+  it('combines job/training scope with coder filter when all are selected', () => {
+    const { service } = createServiceWithDetailedMocks(1);
+    const queryBuilder = {
+      andWhere: jest.fn().mockReturnThis()
+    };
+
+    (service as unknown as {
+      applyJobFilters: (query: unknown, jobDefinitionIds?: number[], coderTrainingIds?: number[], coderIds?: number[]) => void
+    }).applyJobFilters(queryBuilder, [44], [55], [66]);
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledTimes(2);
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      1,
+      '(cj.job_definition_id IN (:...jobDefinitionIds) OR cj.training_id IN (:...coderTrainingIds))',
+      { jobDefinitionIds: [44], coderTrainingIds: [55] }
+    );
+    expect(queryBuilder.andWhere).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('EXISTS'),
+      { coderIds: [66] }
+    );
+  });
 });
