@@ -96,6 +96,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   isBulkCreating = false;
   coders: Coder[] = [];
   showInfo = false;
+  private readonly variablePreviewLimit = 12;
+  private expandedVariableDefinitions = new WeakSet<JobDefinition>();
 
   displayedColumns: string[] = [
     'actions',
@@ -209,6 +211,44 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       .join(', ');
   }
 
+  getVariableItems(definition: JobDefinition): string[] {
+    if (!definition.assignedVariables || definition.assignedVariables.length === 0) {
+      return [];
+    }
+    return definition.assignedVariables.map(
+      variable => `${variable.unitName}.${variable.variableId}`
+    );
+  }
+
+  getVisibleVariableItems(definition: JobDefinition): string[] {
+    const variables = this.getVariableItems(definition);
+    if (this.isVariableListExpanded(definition)) {
+      return variables;
+    }
+    return variables.slice(0, this.variablePreviewLimit);
+  }
+
+  hasHiddenVariables(definition: JobDefinition): boolean {
+    return this.getVariableItems(definition).length > this.variablePreviewLimit;
+  }
+
+  getHiddenVariableCount(definition: JobDefinition): number {
+    return Math.max(0, this.getVariableItems(definition).length - this.variablePreviewLimit);
+  }
+
+  isVariableListExpanded(definition: JobDefinition): boolean {
+    return this.expandedVariableDefinitions.has(definition);
+  }
+
+  toggleVariableList(definition: JobDefinition, event: Event): void {
+    event.stopPropagation();
+    if (this.expandedVariableDefinitions.has(definition)) {
+      this.expandedVariableDefinitions.delete(definition);
+      return;
+    }
+    this.expandedVariableDefinitions.add(definition);
+  }
+
   getStatusLabel(status: string): string {
     return (
       this.translateService.instant(
@@ -226,7 +266,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     };
 
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '1200px',
+      width: '95vw',
+      maxWidth: '1600px',
       height: '90vh',
       data: dialogData,
       disableClose: true
@@ -271,7 +312,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     };
 
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '1200px',
+      width: '95vw',
+      maxWidth: '1600px',
       height: '90vh',
       data: dialogData,
       disableClose: true

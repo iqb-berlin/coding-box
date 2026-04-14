@@ -5,7 +5,7 @@
       <button mat-icon-button (click)="showInfo = !showInfo"
               [matTooltip]="'coding-job-definitions.info-tooltip' | translate"
               style="width: 28px; height: 28px; padding: 0; margin-left: 8px;">
-        <mat-icon style="font-size: 20px; color: var(--color-primary); display: flex; align-items: center; justify-content: center;">info</mat-icon>
+        <mat-icon style="font-size: 20px; color: #1976d2; display: flex; align-items: center; justify-content: center;">info</mat-icon>
       </button>
     </h3>
     <button mat-stroked-button color="primary" (click)="createDefinition()">
@@ -33,7 +33,7 @@
     <span>{{ 'coding-job-definitions.bulk-creation-in-progress' | translate }}</span>
   </div>
 
-  <div *ngIf="!isLoading && jobDefinitions.length > 0">
+  <div *ngIf="!isLoading && jobDefinitions.length > 0" class="job-definitions-table-wrapper">
     <table mat-table [dataSource]="jobDefinitions" class="job-definitions-table">
       <!-- Actions Column -->
       <ng-container matColumnDef="actions">
@@ -88,8 +88,27 @@
       <!-- Variables Column -->
       <ng-container matColumnDef="variables">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding-job-definitions.table-headers.variables' | translate }}</th>
-        <td mat-cell *matCellDef="let definition">
-          {{ getVariableNames(definition) }}
+        <td mat-cell *matCellDef="let definition" class="variables-cell">
+          <ng-container *ngIf="getVariableItems(definition).length > 0; else noVariablesAssigned">
+            <div class="variables-count">{{ getVariableItems(definition).length }} Variablen</div>
+            <div class="variable-chip-list" [class.expanded]="isVariableListExpanded(definition)">
+              <span class="variable-chip" *ngFor="let variableName of getVisibleVariableItems(definition)">
+                {{ variableName }}
+              </span>
+            </div>
+            <button
+              *ngIf="hasHiddenVariables(definition)"
+              mat-stroked-button
+              color="primary"
+              type="button"
+              class="toggle-variables-button"
+              (click)="toggleVariableList(definition, $event)">
+              {{ isVariableListExpanded(definition)
+              ? 'Weniger anzeigen'
+              : '+' + getHiddenVariableCount(definition) + ' weitere anzeigen' }}
+            </button>
+          </ng-container>
+          <ng-template #noVariablesAssigned>-</ng-template>
         </td>
       </ng-container>
 
