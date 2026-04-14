@@ -4,7 +4,6 @@ import {
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule, MatTableDataSource } from '@angular/material/table';
-import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent, MatPaginatorIntl } from '@angular/material/paginator';
@@ -23,13 +22,17 @@ import {
 } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge
+  Subject, debounceTime, distinctUntilChanged, takeUntil, map, merge, catchError, of, forkJoin, switchMap, take, finalize
 } from 'rxjs';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceBackendService } from '../../../workspace/services/workspace-backend.service';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
+import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
+import { JobDefinition } from '../../services/coding-job-backend.service';
+import { CoderTraining } from '../../models/coder-training.model';
+import { CodingStatisticsService } from '../../services/coding-statistics.service';
 
 interface CoderResult {
   coderId: number;
@@ -56,6 +59,14 @@ interface DoubleCodedItem {
   selectedCoderResult?: CoderResult;
 }
 
+interface CoderColumnMeta {
+  columnId: string;
+  coderId: number;
+  jobId: number;
+  label: string;
+  jobName: string;
+}
+
 @Component({
   selector: 'coding-box-double-coded-review',
   templateUrl: './double-coded-review.component.html',
@@ -70,7 +81,6 @@ interface DoubleCodedItem {
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatRadioModule,
-    MatCheckboxModule,
     MatFormFieldModule,
     MatInputModule,
     MatSnackBarModule,
@@ -91,19 +101,18 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private translateService = inject(TranslateService);
   private dialog = inject(MatDialog);
   private workspaceService = inject(WorkspaceBackendService);
+  private codingFacadeService = inject(CodingFacadeService);
+  private codingStatisticsService = inject(CodingStatisticsService);
 
   constructor(
     @Optional() public dialogRef: MatDialogRef<DoubleCodedReviewComponent>,
     @Optional() @Inject(MAT_DIALOG_DATA) public dialogData: unknown
   ) {}
 
-  displayedColumns: string[] = [
-    'unitVariable',
-    'personInfo',
-    'givenAnswer',
-    'coderResults',
-    'selection'
-  ];
+  private staticColumns: string[] = ['unitVariable', 'personInfo', 'givenAnswer'];
+  dynamicCoderColumns: string[] = [];
+  displayedColumns: string[] = [...this.staticColumns, 'selection'];
+  coderColumnMeta: Record<string, CoderColumnMeta> = {};
 
   dataSource = new MatTableDataSource<DoubleCodedItem>([]);
   allData: DoubleCodedItem[] = [];
@@ -112,22 +121,27 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   pageSize = 50;
   isLoading = false;
   showOnlyConflicts = false;
+  agreementControl = new FormControl<'all' | 'match' | 'differ'>('all');
   searchControl = new FormControl('');
   coderControl = new FormControl<number | null>(null);
   statusControl = new FormControl<string>('all');
   resolvedControl = new FormControl<string>('all');
+  scopeControl = new FormControl<string[]>([]);
   availableCoders: { id: number; name: string }[] = [];
+  availableJobDefinitions: Array<{ id: number; label: string }> = [];
+  availableCoderTrainings: Array<{ id: number; label: string }> = [];
   private resultsApplied = false;
   private destroy$ = new Subject<void>();
 
   selectionForm!: FormGroup;
   selectedItem: DoubleCodedItem | null = null;
+  replayLoadingByResponseId: Record<number, boolean> = {};
 
   ngOnInit(): void {
     this.initializeForm();
     this.setupFilters();
     this.loadCoders();
-    this.loadData();
+    this.loadFilterOptions();
   }
 
   ngOnDestroy(): void {
@@ -136,12 +150,16 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   private setupFilters(): void {
+    const agreement$ = this.agreementControl.valueChanges.pipe(distinctUntilChanged());
     const search$ = this.searchControl.valueChanges.pipe(debounceTime(500), distinctUntilChanged());
     const coder$ = this.coderControl.valueChanges.pipe(distinctUntilChanged());
     const status$ = this.statusControl.valueChanges.pipe(distinctUntilChanged());
     const resolved$ = this.resolvedControl.valueChanges.pipe(distinctUntilChanged());
+    const scope$ = this.scopeControl.valueChanges.pipe(
+      distinctUntilChanged((a, b) => JSON.stringify(a || []) === JSON.stringify(b || []))
+    );
 
-    merge(search$, coder$, status$, resolved$)
+    merge(agreement$, search$, coder$, status$, resolved$, scope$)
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.onFilterChange();
@@ -166,6 +184,93 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private initializeForm(): void {
     this.selectionForm = this.fb.group({});
+  }
+
+  private loadFilterOptions(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.loadData();
+      return;
+    }
+
+    forkJoin({
+      jobDefinitions: this.codingFacadeService.getJobDefinitions(workspaceId).pipe(catchError(() => of([] as JobDefinition[]))),
+      coderTrainings: this.codingFacadeService.getCoderTrainings(workspaceId).pipe(catchError(() => of([] as CoderTraining[])))
+    })
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(({ jobDefinitions, coderTrainings }) => {
+        const sortedJobDefinitions = [...jobDefinitions]
+          .filter(definition => definition.id !== undefined)
+          .sort((a, b) => (b.id || 0) - (a.id || 0));
+
+        this.availableJobDefinitions = sortedJobDefinitions.map(definition => ({
+          id: definition.id!,
+          label: this.getJobDefinitionLabel(definition)
+        }));
+
+        this.availableCoderTrainings = coderTrainings.map(training => ({
+          id: training.id,
+          label: training.label || `Training #${training.id}`
+        }));
+
+        if ((!this.scopeControl.value || this.scopeControl.value.length === 0) && this.availableJobDefinitions.length > 0) {
+          this.scopeControl.setValue([`job_${this.availableJobDefinitions[0].id}`], { emitEvent: false });
+        }
+
+        this.loadData();
+      });
+  }
+
+  private getJobDefinitionLabel(definition: JobDefinition): string {
+    const definitionId = definition.id ?? 0;
+    const status = definition.status ? ` (${definition.status})` : '';
+    return `Definition #${definitionId}${status}`;
+  }
+
+  getScopeSelectionSummary(): string {
+    const selectedScopes = this.scopeControl.value || [];
+    if (selectedScopes.length === 0) {
+      return this.translateService.instant('double-coded-review.filter.scope-all');
+    }
+
+    if (selectedScopes.length === 1) {
+      return this.getScopeLabel(selectedScopes[0]);
+    }
+
+    const selectedJobDefinitions = this.getSelectedJobDefinitionIds().length;
+    const selectedTrainings = this.getSelectedCoderTrainingIds().length;
+    return this.translateService.instant('double-coded-review.filter.scope-summary', {
+      jobs: selectedJobDefinitions,
+      trainings: selectedTrainings
+    });
+  }
+
+  private getScopeLabel(scope: string): string {
+    if (scope.startsWith('job_')) {
+      const scopeId = parseInt(scope.replace('job_', ''), 10);
+      return this.availableJobDefinitions.find(definition => definition.id === scopeId)?.label || `Definition #${scopeId}`;
+    }
+
+    if (scope.startsWith('training_')) {
+      const scopeId = parseInt(scope.replace('training_', ''), 10);
+      return this.availableCoderTrainings.find(training => training.id === scopeId)?.label || `Training #${scopeId}`;
+    }
+
+    return scope;
+  }
+
+  private getSelectedJobDefinitionIds(): number[] {
+    return (this.scopeControl.value || [])
+      .filter(scope => scope.startsWith('job_'))
+      .map(scope => parseInt(scope.replace('job_', ''), 10))
+      .filter(id => !Number.isNaN(id));
+  }
+
+  private getSelectedCoderTrainingIds(): number[] {
+    return (this.scopeControl.value || [])
+      .filter(scope => scope.startsWith('training_'))
+      .map(scope => parseInt(scope.replace('training_', ''), 10))
+      .filter(id => !Number.isNaN(id));
   }
 
   getCurrentItems(): DoubleCodedItem[] {
@@ -196,9 +301,9 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
       let defaultValue = '';
       if (resolvedResult) {
-        defaultValue = resolvedResult.coderId.toString();
+        defaultValue = resolvedResult.jobId.toString();
       } else if (item.coderResults.length > 0) {
-        defaultValue = item.coderResults[0].coderId.toString();
+        defaultValue = item.coderResults[0].jobId.toString();
       }
 
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
@@ -207,6 +312,91 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       if (this.hasConflict(item) || (resolvedResult && resolvedResult.supervisorComment)) {
         const defaultComment = resolvedResult ? (resolvedResult.supervisorComment || '') : '';
         this.selectionForm.addControl(commentControlName, new FormControl(defaultComment));
+      }
+    });
+  }
+
+  private updateDisplayedColumns(items: DoubleCodedItem[]): void {
+    const meta: Record<string, CoderColumnMeta> = {};
+
+    items.forEach(item => {
+      item.coderResults.forEach(result => {
+        const columnId = `coder_${result.jobId}`;
+        if (!meta[columnId]) {
+          meta[columnId] = {
+            columnId,
+            coderId: result.coderId,
+            jobId: result.jobId,
+            label: result.coderName,
+            jobName: result.jobName
+          };
+        }
+      });
+    });
+
+    this.coderColumnMeta = meta;
+    this.dynamicCoderColumns = Object.values(meta)
+      .sort((a, b) => a.label.localeCompare(b.label, 'de', { sensitivity: 'base' }))
+      .map(column => column.columnId);
+
+    this.displayedColumns = [...this.staticColumns, ...this.dynamicCoderColumns, 'selection'];
+  }
+
+  getSelectionColumnHeader(): string {
+    return this.appService.authData.userName ||
+      this.appService.loggedUser?.preferred_username ||
+      this.translateService.instant('double-coded-review.columns.selection');
+  }
+
+  getCoderColumnHeader(columnId: string): string {
+    return this.coderColumnMeta[columnId]?.label || this.translateService.instant('double-coded-review.columns.coder-results');
+  }
+
+  getCoderColumnTooltip(columnId: string): string {
+    const meta = this.coderColumnMeta[columnId];
+    if (!meta) return '';
+    return meta.jobName ? `${meta.label} (${meta.jobName})` : meta.label;
+  }
+
+  getCoderResultForColumn(item: DoubleCodedItem, columnId: string): CoderResult | undefined {
+    const meta = this.coderColumnMeta[columnId];
+    if (!meta) return undefined;
+    return item.coderResults.find(result => result.jobId === meta.jobId);
+  }
+
+  openReplay(responseId: number): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const identity = this.appService.loggedUser?.sub || '';
+
+    if (!workspaceId || !responseId) {
+      this.showError(this.translateService.instant('coding-management.descriptions.missing-replay-info'));
+      return;
+    }
+
+    this.replayLoadingByResponseId[responseId] = true;
+    this.appService.createToken(workspaceId, identity, 3600).pipe(
+      take(1),
+      switchMap(token => {
+        if (!token) {
+          this.showError(this.translateService.instant('coding-management.descriptions.missing-token'));
+          return of({ replayUrl: '' });
+        }
+        return this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).pipe(take(1));
+      }),
+      finalize(() => {
+        this.replayLoadingByResponseId[responseId] = false;
+      })
+    ).subscribe({
+      next: result => {
+        if (!result.replayUrl) {
+          this.showError(this.translateService.instant('double-coded-review.errors.replay-failed'));
+          return;
+        }
+
+        window.open(result.replayUrl, '_blank');
+      },
+      error: () => {
+        this.showError(this.translateService.instant('double-coded-review.errors.replay-failed'));
       }
     });
   }
@@ -229,6 +419,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   onFilterChange(): void {
+    this.showOnlyConflicts = this.agreementControl.value === 'differ';
     this.currentPage = 1;
     this.loadData();
   }
@@ -257,6 +448,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   loadData(): void {
     this.isLoading = true;
+    const agreementFilter = this.agreementControl.value || 'all';
+    this.showOnlyConflicts = agreementFilter === 'differ';
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
@@ -276,13 +469,17 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       this.searchControl.value || undefined,
       this.coderControl.value || undefined,
       this.statusControl.value || undefined,
-      this.resolvedControl.value || undefined
+      this.resolvedControl.value || undefined,
+      agreementFilter,
+      this.getSelectedJobDefinitionIds(),
+      this.getSelectedCoderTrainingIds()
     ).subscribe({
       next: response => {
         this.allData = response.data.map(item => ({
           ...item,
           selectedCoderResult: item.coderResults[0]
         }));
+        this.updateDisplayedColumns(this.allData);
         this.dataSource.data = this.allData;
         this.totalItems = response.total;
 
@@ -290,6 +487,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       },
       error: () => {
+        this.updateDisplayedColumns([]);
         this.translateService.get('double-coded-review.errors.failed-to-load').subscribe(message => {
           this.showError(message);
         });
@@ -304,8 +502,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     this.loadData();
   }
 
-  onSelectionChange(item: DoubleCodedItem, coderId: string): void {
-    const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === coderId);
+  onSelectionChange(item: DoubleCodedItem, selectedJobId: string): void {
+    const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
     if (selectedResult) {
       item.selectedCoderResult = selectedResult;
     }
@@ -394,10 +592,10 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private getDecisionForItem(item: DoubleCodedItem): { responseId: number; selectedJobId: number; resolutionComment?: string } | null {
     const controlName = this.getItemControlName(item);
-    const selectedCoderId = this.selectionForm.get(controlName)?.value;
+    const selectedJobId = this.selectionForm.get(controlName)?.value;
 
-    if (selectedCoderId) {
-      const selectedResult = item.coderResults.find(cr => cr.coderId.toString() === selectedCoderId);
+    if (selectedJobId) {
+      const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
       if (selectedResult) {
         const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
           responseId: item.responseId,

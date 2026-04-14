@@ -24,6 +24,7 @@ import {
 } from '../../shared';
 import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableTypeValidationService } from '../../../../services/validation';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 interface VariableTypesValidationResult {
   data: InvalidVariableDto[];
@@ -121,6 +122,7 @@ implements OnInit, OnDestroy {
   selectedResponses: Set<number> = new Set();
   expandedPanel = false;
   isDeletingResponses = false;
+  isExporting = false;
   activeTask: ValidationTaskDto | null = null;
 
   tableColumns: ValidationTableColumn[] = [
@@ -318,5 +320,43 @@ implements OnInit, OnDestroy {
         });
       }
     });
+  }
+
+  exportCsv(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.variableTypeValidationService
+      .fetchPage(1, Number.MAX_SAFE_INTEGER)
+      .subscribe({
+        next: result => {
+          const csvContent = buildCsv(result.data, [
+            { header: 'Dateiname', value: row => row.fileName },
+            { header: 'Variablen-ID', value: row => row.variableId },
+            { header: 'Wert', value: row => row.value },
+            {
+              header: 'Erwarteter Typ',
+              value: row => row.expectedType ?? ''
+            },
+            { header: 'Fehlergrund', value: row => row.errorReason ?? '' },
+            { header: 'Response-ID', value: row => row.responseId ?? '' }
+          ]);
+
+          downloadCsvFile('validierung-variablentypen.csv', csvContent);
+          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+            duration: 3000
+          });
+          this.isExporting = false;
+        },
+        error: () => {
+          this.isExporting = false;
+          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 }

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Readable } from 'stream';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, Not } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request } from 'express';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
@@ -129,6 +129,54 @@ export class CodingResultsExportService {
       variableAnchor: variableId,
       authToken
     });
+  }
+
+  private normalizeCodingIssueOption(issueOption: number | null | undefined): number | null {
+    if (issueOption === null || issueOption === undefined || issueOption === 0) {
+      return null;
+    }
+    const normalized = Math.abs(issueOption);
+    return [1, 2, 3, 4].includes(normalized) ? normalized : null;
+  }
+
+  private getCodingIssueText(issueOption: number | null | undefined): string {
+    const normalized = this.normalizeCodingIssueOption(issueOption);
+    if (normalized === null) {
+      return '';
+    }
+    const issueTexts: Record<number, string> = {
+      1: 'Code-Vergabe unsicher',
+      2: 'Neuer Code nötig',
+      3: 'Ungültig (Spaßantwort)',
+      4: 'Technische Probleme'
+    };
+    return issueTexts[normalized] || '';
+  }
+
+  private getCodingIssueSuffix(issueOption: number | null | undefined): string {
+    const normalized = this.normalizeCodingIssueOption(issueOption);
+    if (normalized === null) {
+      return '';
+    }
+    const issueSuffixes: Record<number, string> = {
+      1: 'unsicher',
+      2: 'neuer Code nötig',
+      3: 'ungültig',
+      4: 'technische Probleme'
+    };
+    return issueSuffixes[normalized] || '';
+  }
+
+  private formatCodeWithIssueSuffix(code: number | null | undefined, issueOption: number | null | undefined): string {
+    const mappedCode = mapCodeForExport(code);
+    if (mappedCode === null) {
+      return '';
+    }
+    const issueSuffix = this.getCodingIssueSuffix(issueOption);
+    if (!issueSuffix) {
+      return mappedCode.toString();
+    }
+    return `${mappedCode} (${issueSuffix})`;
   }
 
   async exportCodingResultsAggregated(
@@ -477,7 +525,12 @@ export class CodingResultsExportService {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('Coding Results');
 
-      const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
+      const dataMap = new Map<string, Map<string, {
+        code: number | null;
+        score: number | null;
+        comment: string | null;
+        codingIssueOption: number | null;
+      }>>();
       const testPersons = new Set<string>();
       const variables = new Set<string>();
       const personGroups = new Map<string, string>();
@@ -554,7 +607,12 @@ export class CodingResultsExportService {
         const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
         const comment = unit.notes || null;
 
-        dataMap.get(rowKey)!.set(coderName, { code, score, comment });
+        dataMap.get(rowKey)!.set(coderName, {
+          code,
+          score,
+          comment,
+          codingIssueOption: unit.coding_issue_option ?? null
+        });
       }
 
       // 2. Process auto-only responses if requested
@@ -607,7 +665,8 @@ export class CodingResultsExportService {
           dataMap.get(rowKey)!.set(autoCoderName, {
             code: mapCodeForExport(resp.code_v1),
             score: resp.score_v1,
-            comment: null
+            comment: null,
+            codingIssueOption: null
           });
         }
       }
@@ -673,11 +732,12 @@ export class CodingResultsExportService {
             if (outputCommentsInsteadOfCodes) {
               row[coderName] = coding?.comment || '';
             } else {
-              row[coderName] = mapCodeForExport(coding?.code ?? null) ?? '';
+              row[coderName] = this.formatCodeWithIssueSuffix(coding?.code ?? null, coding?.codingIssueOption ?? null);
             }
 
-            if (coding?.code !== null && coding?.code !== undefined) {
-              codes.push(coding.code);
+            const mappedCode = mapCodeForExport(coding?.code ?? null);
+            if (mappedCode !== null && mappedCode !== undefined) {
+              codes.push(mappedCode);
             }
             if (coding?.comment) {
               comments.push(`${coderName}: ${coding.comment}`);
@@ -779,7 +839,12 @@ export class CodingResultsExportService {
       const worksheet = workbook.addWorksheet('Coding Results');
 
       // Structure: testPersonKey -> variableKey_coderName -> { code, score, comment }
-      const dataMap = new Map<string, Map<string, { code: number | null; score: number | null; comment: string | null }>>();
+      const dataMap = new Map<string, Map<string, {
+        code: number | null;
+        score: number | null;
+        comment: string | null;
+        codingIssueOption: number | null;
+      }>>();
       const testPersons = new Set<string>();
       const variableCoderColumns = new Set<string>();
       const personGroups = new Map<string, string>();
@@ -858,7 +923,12 @@ export class CodingResultsExportService {
         const score = unit.response?.score_v3 ?? unit.response?.score_v2 ?? unit.response?.score_v1 ?? null;
         const comment = unit.notes || null;
 
-        dataMap.get(testPersonKey)!.set(columnKey, { code, score, comment });
+        dataMap.get(testPersonKey)!.set(columnKey, {
+          code,
+          score,
+          comment,
+          codingIssueOption: unit.coding_issue_option ?? null
+        });
       }
 
       // 2. Process auto-only responses if requested
@@ -913,7 +983,8 @@ export class CodingResultsExportService {
           dataMap.get(testPersonKey)!.set(columnKey, {
             code: mapCodeForExport(resp.code_v1),
             score: resp.score_v1,
-            comment: null
+            comment: null,
+            codingIssueOption: null
           });
         }
       }
@@ -970,11 +1041,12 @@ export class CodingResultsExportService {
           if (outputCommentsInsteadOfCodes) {
             row[columnLabel] = coding?.comment || '';
           } else {
-            row[columnLabel] = mapCodeForExport(coding?.code ?? null) ?? '';
+            row[columnLabel] = this.formatCodeWithIssueSuffix(coding?.code ?? null, coding?.codingIssueOption ?? null);
           }
 
-          if (coding?.code !== null && coding?.code !== undefined) {
-            allCodes.push(coding.code);
+          const mappedCode = mapCodeForExport(coding?.code ?? null);
+          if (mappedCode !== null && mappedCode !== undefined) {
+            allCodes.push(mappedCode);
           }
           if (coding?.comment) {
             const coderName = columnKey.split('_').slice(-1)[0];
@@ -1092,7 +1164,11 @@ export class CodingResultsExportService {
 
         // Collect all variables and testpersons for this coder
         const variableSet = new Set<string>();
-        const testPersonMap = new Map<string, Map<string, { code: number | null; score: number | null }>>();
+        const testPersonMap = new Map<string, Map<string, {
+          code: number | null;
+          score: number | null;
+          codingIssueOption: number | null;
+        }>>();
         const testPersonComments = new Map<string, Map<string, string | null>>();
         const testPersonList: string[] = [];
         const personGroups = new Map<string, string>();
@@ -1100,70 +1176,40 @@ export class CodingResultsExportService {
         const variableMetadata = new Map<string, { unitName: string; variableId: string; displayHeader: string }>();
 
         for (const job of jobs) {
-          // Get responses for this job's variables and units
-          const unitIds = job.codingJobUnits
-            .filter(ju => ju.unit_name && !isExcluded(ju.response?.unit?.booklet?.bookletinfo?.name || '', ju.unit_name))
-            .map(ju => ju.response?.unit?.id)
-            .filter((id): id is number => id !== undefined);
           const jobVariables = variablesByJobId.get(job.id) || [];
-          const variableIds = jobVariables.map(jv => jv.variable_id);
+          const variableIdSet = new Set(jobVariables.map(jv => jv.variable_id));
+          if (variableIdSet.size === 0) continue;
 
-          if (unitIds.length === 0 || variableIds.length === 0) continue;
+          for (const unit of job.codingJobUnits) {
+            const unitName = unit.unit_name;
+            const variableId = unit.variable_id;
 
-          const responses = await this.responseRepository.find({
-            where: {
-              unitid: In(unitIds),
-              variableid: In(variableIds),
-              status_v1: Not(In(EXCLUDED_STATUSES))
-            },
-            relations: ['unit', 'unit.booklet', 'unit.booklet.person'],
-            select: {
-              id: true,
-              variableid: true,
-              code_v1: true,
-              score_v1: true,
-              code_v2: true,
-              score_v2: true,
-              code_v3: true,
-              score_v3: true,
-              unit: {
-                id: true,
-                name: true,
-                booklet: {
-                  id: true,
-                  person: {
-                    id: true,
-                    login: true,
-                    code: true,
-                    group: true
-                  }
-                }
-              }
-            }
-          });
-
-          for (const response of responses) {
-            const person = response.unit?.booklet?.person;
-            const testPersonKey = `${person?.login}_${person?.code}`;
-            const variableId = response.variableid;
-            const unitName = response.unit?.name;
-
-            if (!unitName || !variableId) {
+            if (!unitName || !variableId || !variableIdSet.has(variableId)) {
               continue;
             }
 
-            const compositeKey = JSON.stringify([unitName, variableId]);
-            const latestCoding = getLatestCode(response);
+            if (isExcluded(unit.booklet_name || '', unitName)) {
+              continue;
+            }
 
-            // Store person group and booklet
+            if (unit.response?.status_v1 !== null && EXCLUDED_STATUSES.includes(unit.response.status_v1)) {
+              continue;
+            }
+
+            if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unitName}|${variableId}`)) {
+              continue;
+            }
+
+            const testPersonKey = `${unit.person_login}_${unit.person_code}`;
+            const compositeKey = JSON.stringify([unitName, variableId]);
+
             if (!personGroups.has(testPersonKey)) {
-              personGroups.set(testPersonKey, person?.group || '');
+              personGroups.set(testPersonKey, unit.person_group || '');
             }
             if (!personBooklets.has(testPersonKey)) {
-              personBooklets.set(testPersonKey, response.unit?.booklet?.bookletinfo?.name || '');
+              personBooklets.set(testPersonKey, unit.booklet_name || '');
             }
 
-            // Store metadata for this variable key
             if (!variableMetadata.has(compositeKey)) {
               variableMetadata.set(compositeKey, {
                 unitName,
@@ -1177,37 +1223,28 @@ export class CodingResultsExportService {
               testPersonList.push(testPersonKey);
             }
 
-            testPersonMap.get(testPersonKey)!.set(compositeKey, {
-              code: latestCoding.code,
-              score: latestCoding.score
-            });
-            // Apply manual coding filter if needed
-            if (manualCodingVariableSet) {
-              const variableKey = `${unitName}|${response.variableid}`;
-              if (!manualCodingVariableSet.has(variableKey)) {
-                continue;
-              }
+            let latestScore: number | null = null;
+            let latestCode: number | null = null;
+            if (unit.response) {
+              const latestCoding = getLatestCode(unit.response);
+              latestCode = latestCoding.code;
+              latestScore = latestCoding.score;
             }
 
-            variableSet.add(compositeKey);
-          }
+            testPersonMap.get(testPersonKey)!.set(compositeKey, {
+              code: unit.code ?? latestCode,
+              score: latestScore,
+              codingIssueOption: unit.coding_issue_option ?? null
+            });
 
-          // Fetch comments if needed
-          if (outputCommentsInsteadOfCodes) {
-            for (const unit of job.codingJobUnits) {
-              if (!unit.notes) continue;
-
-              const person = unit.response?.unit?.booklet?.person;
-              const testPersonKey = `${person?.login}_${person?.code}`;
-              const unitName = unit.response?.unit?.name;
-              if (!unitName || !unit.variable_id) continue;
-              const compositeKey = JSON.stringify([unitName, unit.variable_id]);
-
+            if (outputCommentsInsteadOfCodes && unit.notes) {
               if (!testPersonComments.has(testPersonKey)) {
                 testPersonComments.set(testPersonKey, new Map());
               }
               testPersonComments.get(testPersonKey)!.set(compositeKey, unit.notes);
             }
+
+            variableSet.add(compositeKey);
           }
         }
 
@@ -1277,7 +1314,7 @@ export class CodingResultsExportService {
               const comment = comments?.get(variableKey);
               row[variableHeader] = comment || '';
             } else {
-              row[variableHeader] = coding?.code ?? '';
+              row[variableHeader] = this.formatCodeWithIssueSuffix(coding?.code ?? null, coding?.codingIssueOption ?? null);
             }
           }
 
@@ -1414,7 +1451,7 @@ export class CodingResultsExportService {
             const worksheetName = generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
             const worksheet = workbook.addWorksheet(worksheetName);
 
-            const testPersonMap = new Map<string, Map<string, number | null>>();
+            const testPersonMap = new Map<string, Map<string, { code: number | null; codingIssueOption: number | null }>>();
             const testPersonComments = new Map<string, Map<string, string | null>>();
             const coderSet = new Set<string>();
             const testPersonData = new Map<string, { login: string; code: string; group: string; booklet: string }>();
@@ -1446,7 +1483,10 @@ export class CodingResultsExportService {
               if (!testPersonMap.has(testPersonKey)) {
                 testPersonMap.set(testPersonKey, new Map());
               }
-              testPersonMap.get(testPersonKey)!.set(coderName, unit.code);
+              testPersonMap.get(testPersonKey)!.set(coderName, {
+                code: unit.code,
+                codingIssueOption: unit.coding_issue_option ?? null
+              });
 
               if (includeComments) {
                 if (!testPersonComments.has(testPersonKey)) {
@@ -1524,7 +1564,9 @@ export class CodingResultsExportService {
               for (let coderIndex = 0; coderIndex < coderList.length; coderIndex++) {
                 const coder = coderList[coderIndex];
                 const displayCoder = displayCoderList[coderIndex];
-                const code = codings.get(coder) ?? null;
+                const coding = codings.get(coder);
+                const code = coding?.code ?? null;
+                const codingIssueOption = coding?.codingIssueOption ?? null;
 
                 if (outputCommentsInsteadOfCodes) {
                   // Output comments instead of codes
@@ -1532,7 +1574,7 @@ export class CodingResultsExportService {
                   const comment = comments?.get(coder);
                   row[displayCoder] = comment || '';
                 } else {
-                  row[displayCoder] = mapCodeForExport(code) ?? '';
+                  row[displayCoder] = this.formatCodeWithIssueSuffix(code, codingIssueOption);
                 }
 
                 // Only include non-negative codes in modal value calculation
@@ -1584,7 +1626,8 @@ export class CodingResultsExportService {
 
               if (includeDoubleCoded) {
                 const codedByCount = coderList.filter(coder => {
-                  const code = codings.get(coder) ?? null;
+                  const coding = codings.get(coder);
+                  const code = coding?.code ?? null;
                   return code !== null && code >= 0;
                 }).length;
                 row[DOUBLE_CODED_HEADER] = codedByCount > 1 ? 1 : 0;
@@ -1710,7 +1753,7 @@ export class CodingResultsExportService {
 
       const pseudoCoderMappings = new Map<string, Map<string, string>>();
       const csvRows: string[] = [];
-      const headerColumns = ['"Person Login"', '"Person Code"', '"Person Group"', '"Kodierer"', '"Unit"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"'];
+      const headerColumns = ['"Person Login"', '"Person Code"', '"Person Group"', '"Kodierer"', '"Unit"', '"Variable"', '"Kommentar"', '"Kodierzeitpunkt"', '"Code"', '"Code-Hinweis"'];
       if (includeReplayUrl) {
         headerColumns.push('"Replay URL"');
       }
@@ -1772,22 +1815,11 @@ export class CodingResultsExportService {
 
         const escapeCsvField = (field: string): string => `"${field.replace(/"/g, '""')}"`;
 
-        const getCodingIssueText = (issueOption: number | null): string => {
-          if (!issueOption) return '';
-          const issueTexts: { [key: number]: string } = {
-            1: 'Code-Vergabe unsicher',
-            2: 'Neuer Code nötig',
-            3: 'Ungültig (Spaßantwort)',
-            4: 'Technische Probleme'
-          };
-          return issueTexts[issueOption] || '';
-        };
-
         let commentValue: string;
         if (outputCommentsInsteadOfCodes) {
           commentValue = unit.notes || '';
         } else if (unit.coding_issue_option) {
-          commentValue = getCodingIssueText(unit.coding_issue_option);
+          commentValue = this.getCodingIssueText(unit.coding_issue_option);
         } else if (unit.code === 0) {
           commentValue = '';
         } else {
@@ -1796,6 +1828,7 @@ export class CodingResultsExportService {
 
         const mappedCode = mapCodeForExport(unit.code);
         const codeValue = mappedCode === null ? '' : mappedCode.toString();
+        const codeIssueValue = this.getCodingIssueText(unit.coding_issue_option);
 
         const rowFields = [
           escapeCsvField(personLogin),
@@ -1806,7 +1839,8 @@ export class CodingResultsExportService {
           escapeCsvField(unit.variable_id),
           escapeCsvField(commentValue),
           escapeCsvField(timestamp),
-          escapeCsvField(codeValue)
+          escapeCsvField(codeValue),
+          escapeCsvField(codeIssueValue)
         ];
 
         if (includeReplayUrl && req) {

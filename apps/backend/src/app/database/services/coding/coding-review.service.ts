@@ -28,6 +28,9 @@ export class CodingReviewService {
     coderId?: number,
     statusFilter?: string,
     resolvedFilter?: string,
+    agreementFilter?: 'all' | 'match' | 'differ',
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
     includeRelations: boolean = true
   ): Promise<{
       data: Array<{
@@ -57,7 +60,7 @@ export class CodingReviewService {
     }> {
     try {
       this.logger.log(
-        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, resolvedFilter=${resolvedFilter})`
+        `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter}, jobDefinitionFilters=${jobDefinitionIds?.length || 0}, trainingFilters=${coderTrainingIds?.length || 0})`
       );
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
@@ -74,10 +77,17 @@ export class CodingReviewService {
         .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
 
-      if (onlyConflicts) {
-        // A conflict exists if there are different codes for the same response.
-        // We use COALESCE to handle NULL codes as a distinct value (-999999).
-        query.andHaving('COUNT(DISTINCT COALESCE(cju.code, -999999)) > 1');
+      if (agreementFilter === 'differ') {
+        // Conflict: at least two codes available and they differ.
+        query.andHaving('COUNT(cju.code) > 1');
+        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+      } else if (agreementFilter === 'match') {
+        // Match: no differing non-null codes.
+        query.andHaving('COUNT(DISTINCT cju.code) <= 1');
+      } else if (onlyConflicts) {
+        // Legacy behavior for older clients that still use onlyConflicts.
+        query.andHaving('COUNT(cju.code) > 1');
+        query.andHaving('COUNT(DISTINCT cju.code) > 1');
       }
 
       // Applied Status Filter Logic
@@ -86,13 +96,30 @@ export class CodingReviewService {
         query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
       } else if (resolvedFilter === 'unresolved') {
         query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
-      } else if (onlyConflicts && !resolvedFilter) {
+      } else if ((agreementFilter === 'differ' || (onlyConflicts && agreementFilter !== 'match')) && !resolvedFilter) {
         // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
         query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
       }
 
       if (excludeTrainings) {
         query.andWhere('cj.training_id IS NULL');
+      }
+
+      if (this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+        const scopeClauses: string[] = [];
+        const scopeParams: Record<string, number[]> = {};
+
+        if (jobDefinitionIds?.length) {
+          scopeClauses.push('cj.job_definition_id IN (:...jobDefinitionIds)');
+          scopeParams.jobDefinitionIds = jobDefinitionIds;
+        }
+
+        if (coderTrainingIds?.length) {
+          scopeClauses.push('cj.training_id IN (:...coderTrainingIds)');
+          scopeParams.coderTrainingIds = coderTrainingIds;
+        }
+
+        query.andWhere(`(${scopeClauses.join(' OR ')})`, scopeParams);
       }
 
       if (search && search.trim() !== '') {
@@ -171,9 +198,27 @@ export class CodingReviewService {
         relations
       });
 
-      const finalCodingJobUnits = excludeTrainings ?
-        codingJobUnits.filter(unit => !unit.coding_job?.training_id) :
-        codingJobUnits;
+      const finalCodingJobUnits = codingJobUnits.filter(unit => {
+        // Ignore orphaned coding_job_unit rows from deleted jobs.
+        if (!unit.coding_job) {
+          return false;
+        }
+
+        // Keep result assembly aligned with the workspace-scoped base query.
+        if (unit.coding_job.workspace_id !== workspaceId) {
+          return false;
+        }
+
+        if (excludeTrainings && unit.coding_job.training_id) {
+          return false;
+        }
+
+        if (!this.isIncludedByScope(unit.coding_job.job_definition_id, unit.coding_job.training_id, jobDefinitionIds, coderTrainingIds)) {
+          return false;
+        }
+
+        return true;
+      });
 
       const responseGroups = new Map<
       number,
@@ -257,6 +302,26 @@ export class CodingReviewService {
         'Could not get double-coded variables for review. Please check the database connection.'
       );
     }
+  }
+
+  private hasScopeFilters(jobDefinitionIds?: number[], coderTrainingIds?: number[]): boolean {
+    return !!(jobDefinitionIds?.length || coderTrainingIds?.length);
+  }
+
+  private isIncludedByScope(
+    jobDefinitionId: number | undefined,
+    trainingId: number | undefined,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[]
+  ): boolean {
+    if (!this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+      return true;
+    }
+
+    const matchesJobDefinition = !!(jobDefinitionIds?.length && jobDefinitionId && jobDefinitionIds.includes(jobDefinitionId));
+    const matchesTraining = !!(coderTrainingIds?.length && trainingId && coderTrainingIds.includes(trainingId));
+
+    return matchesJobDefinition || matchesTraining;
   }
 
   async applyDoubleCodedResolutions(
@@ -441,6 +506,9 @@ export class CodingReviewService {
           undefined, // coderId
           undefined, // statusFilter
           undefined, // resolvedFilter
+          undefined, // agreementFilter
+          undefined, // jobDefinitionIds
+          undefined, // coderTrainingIds
           false // includeRelations = false
         );
 

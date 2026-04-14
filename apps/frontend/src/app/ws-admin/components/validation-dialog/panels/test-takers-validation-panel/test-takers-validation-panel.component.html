@@ -80,6 +80,13 @@
             <button mat-button (click)="toggleExpansion()">
               {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
             </button>
+            <button mat-button (click)="exportCsv()" [disabled]="isExporting">
+              @if (isExporting) {
+                <mat-spinner diameter="20"></mat-spinner> Export...
+              } @else {
+                CSV exportieren
+              }
+            </button>
           </div>
 
           <mat-expansion-panel [expanded]="expandedPanel">

@@ -2,6 +2,7 @@ import {
   ComponentFixture, TestBed, fakeAsync, tick
 } from '@angular/core/testing';
 import { EventEmitter } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 import {
   MAT_DIALOG_DATA, MatDialog, MatDialogRef, MatDialogModule
 } from '@angular/material/dialog';
@@ -14,6 +15,7 @@ import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } fro
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { AppService } from '../../../core/services/app.service';
+import { SERVER_URL } from '../../../injection-tokens';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
@@ -56,7 +58,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       variables: [
-        { unitName: 'Unit 1', variableId: 'Var 1' }
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 3', variableId: 'Var 3' }
       ]
     }
   ];
@@ -144,7 +147,9 @@ describe('CodingJobDefinitionDialogComponent', () => {
         { provide: MAT_DIALOG_DATA, useValue: mockData },
         { provide: MatSnackBar, useValue: mockSnackBar },
         { provide: TranslateService, useValue: mockTranslateService },
-        { provide: MatDialog, useValue: mockMatDialog }
+        { provide: MatDialog, useValue: mockMatDialog },
+        { provide: SERVER_URL, useValue: 'http://localhost:3333/' },
+        provideHttpClient()
       ]
     }).overrideComponent(CodingJobDefinitionDialogComponent, {
       remove: {
@@ -281,6 +286,23 @@ describe('CodingJobDefinitionDialogComponent', () => {
     }));
   });
 
+  it('should not load coders by job id when editing a definition and should keep assigned coder selection', () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedCoders: [1]
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    expect(mockCoderService.getCodersByJobId).not.toHaveBeenCalled();
+    expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
+  });
+
   describe('Bulk Creation', () => {
     it('should open bulk creation dialog when mode=job and >1 variables selected', async () => {
       createComponent({ mode: 'job', isEdit: false });
@@ -317,6 +339,20 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTotalCodingCases()).toBe(5);
 
     component.codingJobForm.patchValue({ maxCodingCases: 100 });
+    expect(component.getTotalCodingCases()).toBe(14);
+  });
+
+  it('should use synchronized availability for bundle variables in total case count', () => {
+    createComponent();
+
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    if (bundle) {
+      component.selectedVariableBundles.select(bundle);
+    }
+
+    // Unit 1 -> 10 available, Unit 3 -> 4 available
     expect(component.getTotalCodingCases()).toBe(14);
   });
 

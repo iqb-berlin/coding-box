@@ -1,11 +1,12 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import {
-  catchError, Observable, of, Subject
+  catchError, Observable, of, Subject, tap
 } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
+import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 
 export interface TestResultsResponse {
   data: TestResultItem[];
@@ -137,6 +138,7 @@ export class TestResultService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private cacheService = inject(TestResultCacheService);
+  private validationTaskStateService = inject(ValidationTaskStateService);
 
   private workspaceCacheInvalidatedSubject = new Subject<number>();
   readonly workspaceCacheInvalidated$ =
@@ -563,6 +565,13 @@ export class TestResultService {
       };
     }>(`${this.serverUrl}admin/workspace/${workspaceId}/units/${unitId}`, {})
       .pipe(
+        // Unit removals can invalidate all cached validation findings.
+        // We clear only after a successful backend delete.
+        tap(result => {
+          if (result.success) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        }),
         catchError(() => {
           logger.error(`Error deleting unit with ID: ${unitId}`);
           return of({
@@ -595,6 +604,11 @@ export class TestResultService {
       {}
     )
       .pipe(
+        tap(result => {
+          if (result.success) {
+            this.validationTaskStateService.invalidateWorkspace(workspaceId);
+          }
+        }),
         catchError(() => {
           logger.error(`Error deleting booklet with ID: ${bookletId}`);
           return of({

@@ -1,5 +1,11 @@
 .job-definitions-container {
   width: 100%;
+
+  .job-definitions-table-wrapper {
+    width: 100%;
+    overflow-x: auto;
+  }
+
   .header-actions {
     display: flex;
     flex-direction: column;
@@ -34,6 +40,7 @@
     width: 100%;
     border-spacing: 0;
     table-layout: fixed;
+    min-width: 1180px;
 
     th {
       background-color: #f5f5f5;
@@ -44,11 +51,11 @@
       border-bottom: 2px solid #e0e0e0;
       color: #333;
 
-      &:first-child { width: 15%; } // actions
-      &:nth-child(2) { width: 15%; } // status
-      &:nth-child(3) { width: 25%; } // variables
-      &:nth-child(4) { width: 25%; } // codersCount
-      &:nth-child(5) { width: 20%; } // bundlesCount
+      &:first-child { width: 14%; } // actions
+      &:nth-child(2) { width: 12%; } // status
+      &:nth-child(3) { width: 42%; } // variables
+      &:nth-child(4) { width: 17%; } // codersCount
+      &:nth-child(5) { width: 15%; } // bundlesCount
     }
 
     td {
@@ -56,10 +63,49 @@
       border-bottom: 1px solid #e0e0e0;
       font-size: 0.875em;
       color: #555;
+      vertical-align: top;
 
       &:first-child {
         font-weight: 600;
         color: #333;
+      }
+    }
+
+    .variables-cell {
+      .variables-count {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #1976d2;
+        margin-bottom: 8px;
+      }
+
+      .variable-chip-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        max-height: 90px;
+        overflow: hidden;
+
+        &.expanded {
+          max-height: none;
+        }
+      }
+
+      .variable-chip {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background-color: #e3f2fd;
+        border: 1px solid #bbdefb;
+        color: #0d47a1;
+        font-size: 0.78rem;
+        line-height: 1.4;
+      }
+
+      .toggle-variables-button {
+        margin-top: 8px;
+        height: 28px;
+        font-size: 0.75rem;
       }
     }
 

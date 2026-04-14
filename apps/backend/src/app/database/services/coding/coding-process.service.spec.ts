@@ -20,11 +20,13 @@ jest.mock('@iqb/responses', () => ({
   }
 }));
 
-jest.mock('cheerio', () => jest.fn().mockImplementation(() => ({
-  find: jest.fn().mockReturnValue({
-    text: jest.fn().mockReturnValue('test-scheme-ref')
-  })
-})));
+jest.mock('cheerio', () => ({
+  load: jest.fn().mockImplementation(() => (selector: string) => ({
+    text: jest.fn().mockReturnValue(
+      selector === 'codingSchemeRef' ? 'test-scheme-ref' : ''
+    )
+  }))
+}));
 
 describe('CodingProcessService', () => {
   let service: CodingProcessService;

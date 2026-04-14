@@ -27,6 +27,7 @@ import {
 } from '../../../../../../../../../api-dto/files/testtakers-validation.dto';
 import { TestTakersValidationService } from '../../../../services/validation';
 import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 /**
  * Panel component for test takers validation.
@@ -132,6 +133,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
   isRunning = false;
   wasRun = false;
   isLoadingPage = false;
+  isExporting = false;
   result: TestTakersValidationDto | null = null;
   errorMessage: string | null = null;
   expandedPanel = false;
@@ -220,5 +222,22 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
       this.paginatedMissingPersons.data = this.result.missingPersons;
       this.paginatedMissingPersons.paginator = this.paginator;
     }
+  }
+
+  exportCsv(): void {
+    if (this.isExporting || !this.result) {
+      return;
+    }
+
+    this.isExporting = true;
+    const csvContent = buildCsv(this.result.missingPersons || [], [
+      { header: 'Gruppe', value: row => row.group },
+      { header: 'Login', value: row => row.login },
+      { header: 'Code', value: row => row.code },
+      { header: 'Grund', value: row => row.reason }
+    ]);
+
+    downloadCsvFile('validierung-testpersonen.csv', csvContent);
+    this.isExporting = false;
   }
 }

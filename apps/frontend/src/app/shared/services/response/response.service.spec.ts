@@ -4,11 +4,13 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { ResponseService } from './response.service';
 import { TestResultService } from '../test-result/test-result.service';
 import { SERVER_URL } from '../../../injection-tokens';
+import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 
 describe('ResponseService', () => {
   let service: ResponseService;
   let httpMock: HttpTestingController;
   let testResultServiceMock: jest.Mocked<TestResultService>;
+  let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
 
   const mockServerUrl = 'http://localhost/api/';
   const mockWorkspaceId = 1;
@@ -17,6 +19,9 @@ describe('ResponseService', () => {
     testResultServiceMock = {
       invalidateCache: jest.fn()
     } as unknown as jest.Mocked<TestResultService>;
+    validationTaskStateServiceMock = {
+      invalidateWorkspace: jest.fn()
+    };
 
     Object.defineProperty(window, 'localStorage', {
       value: {
@@ -31,6 +36,10 @@ describe('ResponseService', () => {
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
         { provide: TestResultService, useValue: testResultServiceMock },
+        {
+          provide: ValidationTaskStateService,
+          useValue: validationTaskStateServiceMock
+        },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });

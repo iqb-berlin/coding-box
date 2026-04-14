@@ -24,6 +24,7 @@ import {
 } from '../../shared';
 import { InvalidVariableDto } from '../../../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableValidationService } from '../../../../services/validation';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 interface VariablesValidationResult {
   data: InvalidVariableDto[];
@@ -120,6 +121,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   selectedResponses: Set<number> = new Set();
   expandedPanel = false;
   isDeletingResponses = false;
+  isExporting = false;
   activeTask: ValidationTaskDto | null = null;
 
   tableColumns: ValidationTableColumn[] = [
@@ -315,5 +317,38 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         });
       }
     });
+  }
+
+  exportCsv(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.variableValidationService
+      .fetchPage(1, Number.MAX_SAFE_INTEGER)
+      .subscribe({
+        next: result => {
+          const csvContent = buildCsv(result.data, [
+            { header: 'Dateiname', value: row => row.fileName },
+            { header: 'Variablen-ID', value: row => row.variableId },
+            { header: 'Wert', value: row => row.value },
+            { header: 'Response-ID', value: row => row.responseId ?? '' }
+          ]);
+
+          downloadCsvFile('validierung-variablen.csv', csvContent);
+          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+            duration: 3000
+          });
+          this.isExporting = false;
+        },
+        error: () => {
+          this.isExporting = false;
+          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 }

@@ -301,6 +301,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         this.loadResponseAnalysis();
       });
 
+    this.testPersonCodingService.autoCodingCompleted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.refreshAllStatistics();
+        this.loadResponseAnalysis();
+        this.reloadCodingJobsList();
+        if (this.codingJobDefinitionsComponent) {
+          this.codingJobDefinitionsComponent.refresh();
+        }
+      });
+
     this.loadCodingProgressOverview();
     this.loadVariableCoverageOverview();
     this.loadCaseCoverageOverview();

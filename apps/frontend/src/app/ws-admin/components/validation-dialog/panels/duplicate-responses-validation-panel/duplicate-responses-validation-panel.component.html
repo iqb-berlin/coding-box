@@ -69,9 +69,30 @@
       </div>
 
       @if (duplicateResponses.length > 0) {
+        <div class="auto-resolve-info">
+          <p class="auto-resolve-info-title">Was macht „Alle automatisch auflösen“?</p>
+          <ul>
+            <li>Pro Duplikatgruppe bleibt genau eine Antwort erhalten.</li>
+            <li>Bevorzugt werden nicht-leere Werte.</li>
+            <li>Bei Gleichstand bleibt die neueste Antwort (höchste Antwort-ID).</li>
+            <li>Alle übrigen Antworten der Gruppe werden gelöscht.</li>
+          </ul>
+        </div>
+
         <div class="actions-container">
           <button mat-button (click)="toggleExpansion()">
             {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
+          </button>
+          <button
+            mat-button
+            (click)="exportCsv()"
+            [disabled]="isExporting || isLoadingPage"
+          >
+            @if (isExporting) {
+              <mat-spinner diameter="20"></mat-spinner> Export...
+            } @else {
+              CSV exportieren
+            }
           </button>
           <button
             mat-button

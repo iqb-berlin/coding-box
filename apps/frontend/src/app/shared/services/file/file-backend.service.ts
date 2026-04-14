@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
@@ -24,6 +24,19 @@ export class FileBackendService {
     const body = fileTypes && fileTypes.length > 0 ? { fileTypes } : {};
     return this.http.post(url, body, {
       responseType: 'blob'
+    });
+  }
+
+  downloadWorkspaceFilesAsZipWithProgress(
+    workspaceId: number,
+    fileTypes?: string[]
+  ): Observable<HttpEvent<Blob>> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/download-zip`;
+    const body = fileTypes && fileTypes.length > 0 ? { fileTypes } : {};
+    return this.http.post(url, body, {
+      responseType: 'blob',
+      reportProgress: true,
+      observe: 'events'
     });
   }
 

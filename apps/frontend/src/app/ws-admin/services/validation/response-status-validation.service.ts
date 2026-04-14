@@ -32,7 +32,10 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }
@@ -50,7 +53,10 @@ export class ResponseStatusValidationService extends BaseValidationService<Respo
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }

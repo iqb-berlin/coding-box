@@ -2,12 +2,15 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
+import * as cheerio from 'cheerio';
 
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
+import Workspace from '../../entities/workspace.entity';
+import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 
 import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import {
@@ -30,8 +33,126 @@ export class WorkspaceResponseValidationService {
     @InjectRepository(Booklet)
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(FileUpload)
-    private filesRepository: Repository<FileUpload>
+    private filesRepository: Repository<FileUpload>,
+    @InjectRepository(Workspace)
+    private workspaceRepository: Repository<Workspace> = {
+      findOne: async () => null
+    } as unknown as Repository<Workspace>
   ) {}
+
+  private static normalizeExclusionKey(value: string | null | undefined): string {
+    return String(value || '').trim().toUpperCase();
+  }
+
+  private static normalizeUnitKey(value: string | null | undefined): string {
+    return WorkspaceResponseValidationService
+      .normalizeExclusionKey(value)
+      .replace(/\.XML$/i, '');
+  }
+
+  private static hasValue(value: string | null | undefined): number {
+    return String(value || '').trim() !== '' ? 1 : 0;
+  }
+
+  private selectBestDuplicateResponseId(
+    duplicates: DuplicateResponseDto['duplicates']
+  ): number | null {
+    if (!duplicates || duplicates.length === 0) {
+      return null;
+    }
+
+    const sorted = [...duplicates].sort((a, b) => {
+      const valuePriorityDiff =
+        WorkspaceResponseValidationService.hasValue(b.value) -
+        WorkspaceResponseValidationService.hasValue(a.value);
+      if (valuePriorityDiff !== 0) {
+        return valuePriorityDiff;
+      }
+
+      // Deterministic fallback: keep newest entry by ID.
+      return b.responseId - a.responseId;
+    });
+
+    return sorted[0]?.responseId ?? null;
+  }
+
+  private async resolveExclusionsForValidation(workspaceId: number): Promise<{
+    globalIgnoredUnits: string[];
+    ignoredBooklets: string[];
+    testletIgnoredUnits: { bookletId: string; unitId: string }[];
+  }> {
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId }
+    });
+    const settings = (workspace?.settings || {}) as WorkspaceSettingsDto;
+
+    const globalIgnoredUnits = (settings.ignoredUnits || []).map(
+      item => WorkspaceResponseValidationService.normalizeUnitKey(item)
+    );
+    const ignoredBooklets = (settings.ignoredBooklets || []).map(
+      item => WorkspaceResponseValidationService.normalizeExclusionKey(item)
+    );
+    const testletIgnoredUnits: { bookletId: string; unitId: string }[] = [];
+
+    if ((settings.ignoredTestlets || []).length === 0) {
+      return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
+    }
+
+    const ignoredTestlets = settings.ignoredTestlets || [];
+    const bookletsToParse = Array.from(
+      new Set(
+        ignoredTestlets.map(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.bookletId))
+      )
+    );
+
+    const bookletFiles = await this.filesRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_type: 'Booklet'
+      }
+    });
+
+    for (const bookletFile of bookletFiles) {
+      const bookletId = WorkspaceResponseValidationService
+        .normalizeExclusionKey(bookletFile.file_id);
+      if (!bookletId || !bookletsToParse.includes(bookletId)) {
+        continue;
+      }
+      try {
+        const $ = cheerio.load(bookletFile.data, { xmlMode: true });
+        const testletsToIgnore = ignoredTestlets
+          .filter(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.bookletId) === bookletId)
+          .map(item => WorkspaceResponseValidationService.normalizeExclusionKey(item.testletId));
+
+        $('Unit, unit').each((_, element) => {
+          const unitIdRaw = $(element).attr('id');
+          const unitId =
+            WorkspaceResponseValidationService.normalizeUnitKey(unitIdRaw);
+          if (!unitId) {
+            return;
+          }
+
+          let current = $(element).parent();
+          while (
+            current.length &&
+            String(current[0].tagName || '').toLowerCase() === 'testlet'
+          ) {
+            const testletId = WorkspaceResponseValidationService
+              .normalizeExclusionKey(current.attr('id'));
+            if (testletId && testletsToIgnore.includes(testletId)) {
+              testletIgnoredUnits.push({ bookletId, unitId });
+              break;
+            }
+            current = current.parent();
+          }
+        });
+      } catch (e) {
+        /* empty */
+      }
+    }
+
+    return { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits };
+  }
 
   async validateVariables(
     workspaceId: number,
@@ -107,6 +228,27 @@ export class WorkspaceResponseValidationService {
               }
             }
           }
+          if (
+            parsedXml.Unit.DerivedVariables &&
+            parsedXml.Unit.DerivedVariables.Variable
+          ) {
+            const derivedVariables = Array.isArray(
+              parsedXml.Unit.DerivedVariables.Variable
+            ) ?
+              parsedXml.Unit.DerivedVariables.Variable :
+              [parsedXml.Unit.DerivedVariables.Variable];
+            for (const variable of derivedVariables) {
+              const isNoValue = variable.$?.type === 'no-value';
+              if (variable.$?.alias) {
+                variables.aliases.add(variable.$.alias);
+                if (isNoValue) variables.noValueAliases.add(variable.$.alias);
+              }
+              if (variable.$?.id) {
+                variables.ids.add(variable.$.id);
+                if (isNoValue) variables.noValueIds.add(variable.$.id);
+              }
+            }
+          }
           unitVariables.set(unitName, variables);
         }
       } catch (e) {
@@ -166,6 +308,86 @@ export class WorkspaceResponseValidationService {
     if (allUnits.length === 0) {
       this.logger.warn(
         `No units found for persons in workspace ${workspaceId}`
+      );
+      return {
+        data: [],
+        total: 0,
+        page,
+        limit
+      };
+    }
+
+    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
+    const ignoredUnits = new Set(
+      (exclusions.globalIgnoredUnits || []).map(
+        WorkspaceResponseValidationService.normalizeUnitKey
+      )
+    );
+    const ignoredBooklets = new Set(
+      (exclusions.ignoredBooklets || []).map(
+        WorkspaceResponseValidationService.normalizeExclusionKey
+      )
+    );
+    const testletIgnoredUnits = new Set(
+      (exclusions.testletIgnoredUnits || []).map(
+        t => `${WorkspaceResponseValidationService.normalizeExclusionKey(t.bookletId)}|${WorkspaceResponseValidationService.normalizeUnitKey(t.unitId)}`
+      )
+    );
+
+    const hasBookletBasedExclusions =
+      ignoredBooklets.size > 0 || testletIgnoredUnits.size > 0;
+    const bookletIds = Array.from(
+      new Set(
+        allUnits
+          .map(unit => unit.bookletid)
+          .filter((id): id is number => typeof id === 'number')
+      )
+    );
+    const bookletNameById = new Map<number, string>();
+
+    if (hasBookletBasedExclusions && bookletIds.length > 0) {
+      for (let i = 0; i < bookletIds.length; i += batchSize) {
+        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
+        const bookletsBatch = await this.bookletRepository.find({
+          where: { id: In(bookletIdsBatch) }
+        });
+        bookletsBatch.forEach(booklet => {
+          bookletNameById.set(
+            booklet.id,
+            WorkspaceResponseValidationService.normalizeExclusionKey(
+              booklet.bookletinfo?.name
+            )
+          );
+        });
+      }
+    }
+
+    allUnits = allUnits.filter(unit => {
+      const unitKey = WorkspaceResponseValidationService.normalizeUnitKey(
+        unit.name
+      );
+      if (ignoredUnits.has(unitKey)) {
+        return false;
+      }
+      if (!hasBookletBasedExclusions) {
+        return true;
+      }
+      const bookletKey = bookletNameById.get(unit.bookletid) || '';
+      if (bookletKey && ignoredBooklets.has(bookletKey)) {
+        return false;
+      }
+      if (
+        bookletKey &&
+        testletIgnoredUnits.has(`${bookletKey}|${unitKey}`)
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    if (allUnits.length === 0) {
+      this.logger.warn(
+        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
       );
       return {
         data: [],
@@ -360,12 +582,12 @@ export class WorkspaceResponseValidationService {
                   variable.$.multiple === 'true' ||
                   variable.$.multiple === true;
                 const nullable =
-                  variable.$.nullable === 'true' ||
-                  variable.$.nullable === true;
+                  !(variable.$.nullable === 'false' ||
+                    variable.$.nullable === false);
                 variableTypes.set(variable.$.alias, {
                   type: variable.$.type,
                   multiple: multiple || undefined,
-                  nullable: nullable || undefined
+                  nullable: nullable
                 });
               }
             }
@@ -517,6 +739,21 @@ export class WorkspaceResponseValidationService {
       const expectedType = variableInfo.type;
       const isMultiple = variableInfo.multiple === true;
       const isNullable = variableInfo.nullable !== false;
+      const isMissingValue = this.isMissingVariableValue(value, isMultiple);
+
+      if (isMissingValue) {
+        if (!isNullable) {
+          invalidVariables.push({
+            fileName: `${unitName}`,
+            variableId: variableId,
+            value: value,
+            responseId: response.id,
+            expectedType: expectedType,
+            errorReason: 'Variable has nullable=false but value is null or empty'
+          });
+        }
+        continue;
+      }
 
       if (isMultiple) {
         try {
@@ -560,18 +797,6 @@ export class WorkspaceResponseValidationService {
           });
           continue;
         }
-      }
-
-      if (!isNullable && (!value || value.trim() === '')) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: value,
-          responseId: response.id,
-          expectedType: expectedType,
-          errorReason: 'Variable has nullable=false but value is null or empty'
-        });
-        continue;
       }
 
       if (!this.isValidValueForType(value, expectedType)) {
@@ -1125,8 +1350,14 @@ export class WorkspaceResponseValidationService {
         const responseIds: number[] = [];
         for (const duplicateResponse of result.data) {
           if (duplicateResponse.duplicates.length > 1) {
+            const selectedResponseId = this.selectBestDuplicateResponseId(
+              duplicateResponse.duplicates
+            );
+            if (!selectedResponseId) {
+              continue;
+            }
             const duplicateIds = duplicateResponse.duplicates
-              .slice(1)
+              .filter(duplicate => duplicate.responseId !== selectedResponseId)
               .map(duplicate => duplicate.responseId);
             responseIds.push(...duplicateIds);
           }
@@ -1230,5 +1461,20 @@ export class WorkspaceResponseValidationService {
       default:
         return true;
     }
+  }
+
+  private isMissingVariableValue(value: string, isMultiple: boolean): boolean {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return true;
+    }
+    if (trimmedValue.toLowerCase() === 'null') {
+      return true;
+    }
+    // Legacy imports can store missing non-multiple responses as JSON empty array.
+    if (!isMultiple && trimmedValue === '[]') {
+      return true;
+    }
+    return false;
   }
 }

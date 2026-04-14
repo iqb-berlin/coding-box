@@ -4,14 +4,20 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { CodingJobBackendService } from './coding-job-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodingJob } from '../models/coding-job.model';
+import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 
 describe('CodingJobBackendService', () => {
   let service: CodingJobBackendService;
   let httpMock: HttpTestingController;
+  let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
 
   const mockServerUrl = 'http://localhost/api/';
 
   beforeEach(() => {
+    validationTaskStateServiceMock = {
+      invalidateWorkspace: jest.fn()
+    };
+
     Object.defineProperty(window, 'localStorage', {
       value: {
         getItem: jest.fn().mockReturnValue('mock-token')
@@ -24,6 +30,10 @@ describe('CodingJobBackendService', () => {
         CodingJobBackendService,
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
+        {
+          provide: ValidationTaskStateService,
+          useValue: validationTaskStateServiceMock
+        },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });

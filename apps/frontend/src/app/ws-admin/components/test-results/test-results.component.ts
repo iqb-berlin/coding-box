@@ -1759,13 +1759,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openValidationDialog(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const shouldAutoStart = workspaceId ?
+      !this.validationTaskStateService.hasAnyValidationResult(workspaceId) :
+      true;
+
     const dialogRef = this.dialog.open(ValidationDialogComponent, {
       width: '90vw',
       maxWidth: '1400px',
       height: '90vh',
       autoFocus: false,
       data: {
-        autoStart: true
+        autoStart: shouldAutoStart
       }
     });
 

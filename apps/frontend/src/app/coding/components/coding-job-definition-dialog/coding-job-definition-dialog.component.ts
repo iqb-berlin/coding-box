@@ -38,6 +38,7 @@ import { DistributedCodingService } from '../../services/distributed-coding.serv
 import { AppService } from '../../../core/services/app.service';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { CodingJobBulkCreationDialogComponent, BulkCreationData, BulkCreationResult } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 
 export interface CodingJobDefinitionDialogData {
@@ -118,6 +119,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   private coderService = inject(CoderService);
   private snackBar = inject(MatSnackBar);
   private codingJobService = inject(CodingJobService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private matDialog = inject(MatDialog);
   private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
@@ -180,7 +182,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadVariableBundles();
     this.loadAvailableCoders();
-    if (this.data.isEdit && this.data.codingJob?.id) {
+    if (this.data.isEdit && this.data.mode === 'job' && this.data.codingJob?.id) {
       this.loadCoders(this.data.codingJob.id);
     }
 
@@ -206,6 +208,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       this.loadCodingIncompleteVariables();
       this.applyAvailabilityFilter();
     });
+
+    this.testPersonCodingService.autoCodingCompleted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.loadCodingIncompleteVariables(this.unitNameFilter || undefined, true);
+      });
   }
 
   ngOnDestroy(): void {
@@ -315,14 +323,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadCodingIncompleteVariables(unitNameFilter?: string): void {
+  loadCodingIncompleteVariables(unitNameFilter?: string, forceReload: boolean = false): void {
     this.isLoadingVariableAnalysis = true;
     const trainingRequired = this.trainingRequiredFilter === 'all' ? undefined : this.trainingRequiredFilter === 'true';
 
-    if (this.data.preloadedVariables && !unitNameFilter && trainingRequired === undefined) {
+    if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
       this.applyJobDefinitionUsage();
-      this.dataSource.data = this.variables;
+      this.applyAvailabilityFilter();
       this.processVariableSelection();
       this.totalVariableAnalysisRecords = this.variables.length;
       this.isLoadingVariableAnalysis = false;
@@ -343,7 +351,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       next: variables => {
         this.variables = variables;
         this.applyJobDefinitionUsage();
-        this.dataSource.data = this.variables;
+        this.applyAvailabilityFilter();
         this.processVariableSelection();
         this.totalVariableAnalysisRecords = variables.length;
         this.isLoadingVariableAnalysis = false;
@@ -393,11 +401,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           const enrichedBundles = bundles.map(bundle => ({
             ...bundle,
             variables: bundle.variables.map((bundleVar: Variable) => {
-              const matchingVar = this.variables.find(v => v.unitName === bundleVar.unitName && v.variableId === bundleVar.variableId);
-              return {
-                ...bundleVar,
-                responseCount: matchingVar?.responseCount || 0
-              };
+              const metrics = this.getVariableMetrics(bundleVar);
+              return { ...bundleVar, ...metrics };
             })
           }));
 
@@ -503,7 +508,39 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 
+    this.syncBundleVariablesWithAvailability();
     this.syncSelectionWithAvailability();
+  }
+
+  private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
+    const matchingVar = this.variables.find(
+      v => v.unitName === variable.unitName && v.variableId === variable.variableId
+    );
+
+    return {
+      responseCount: matchingVar?.responseCount ?? 0,
+      availableCases: matchingVar?.availableCases,
+      uniqueCasesAfterAggregation: matchingVar?.uniqueCasesAfterAggregation,
+      casesInJobs: matchingVar?.casesInJobs,
+      isDerived: matchingVar?.isDerived,
+      coderTrainingRequired: matchingVar?.coderTrainingRequired
+    };
+  }
+
+  private syncBundleVariablesWithAvailability(): void {
+    if (!this.variableBundles || this.variableBundles.length === 0) {
+      return;
+    }
+
+    this.variableBundles = this.variableBundles.map(bundle => ({
+      ...bundle,
+      variables: bundle.variables.map(bundleVar => {
+        const metrics = this.getVariableMetrics(bundleVar);
+        return { ...bundleVar, ...metrics };
+      })
+    }));
+
+    this.bundlesDataSource.data = this.variableBundles;
   }
 
   private syncSelectionWithAvailability(): void {
@@ -1002,7 +1039,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.codingJobForm.value.doubleCodingPercentage,
         data.selectedVariableBundles,
         this.codingJobForm.value.caseOrderingMode,
-        this.codingJobForm.value.maxCodingCases
+        this.codingJobForm.value.maxCodingCases,
+        this.data.jobDefinitionId
       ));
 
       if (result && result.success) {
