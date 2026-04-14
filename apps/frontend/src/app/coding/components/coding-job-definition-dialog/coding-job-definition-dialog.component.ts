@@ -401,11 +401,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           const enrichedBundles = bundles.map(bundle => ({
             ...bundle,
             variables: bundle.variables.map((bundleVar: Variable) => {
-              const matchingVar = this.variables.find(v => v.unitName === bundleVar.unitName && v.variableId === bundleVar.variableId);
-              return {
-                ...bundleVar,
-                responseCount: matchingVar?.responseCount || 0
-              };
+              const metrics = this.getVariableMetrics(bundleVar);
+              return { ...bundleVar, ...metrics };
             })
           }));
 
@@ -511,7 +508,39 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 
+    this.syncBundleVariablesWithAvailability();
     this.syncSelectionWithAvailability();
+  }
+
+  private getVariableMetrics(variable: Pick<Variable, 'unitName' | 'variableId'>): Pick<Variable, 'responseCount' | 'availableCases' | 'uniqueCasesAfterAggregation' | 'casesInJobs' | 'isDerived' | 'coderTrainingRequired'> {
+    const matchingVar = this.variables.find(
+      v => v.unitName === variable.unitName && v.variableId === variable.variableId
+    );
+
+    return {
+      responseCount: matchingVar?.responseCount ?? 0,
+      availableCases: matchingVar?.availableCases,
+      uniqueCasesAfterAggregation: matchingVar?.uniqueCasesAfterAggregation,
+      casesInJobs: matchingVar?.casesInJobs,
+      isDerived: matchingVar?.isDerived,
+      coderTrainingRequired: matchingVar?.coderTrainingRequired
+    };
+  }
+
+  private syncBundleVariablesWithAvailability(): void {
+    if (!this.variableBundles || this.variableBundles.length === 0) {
+      return;
+    }
+
+    this.variableBundles = this.variableBundles.map(bundle => ({
+      ...bundle,
+      variables: bundle.variables.map(bundleVar => {
+        const metrics = this.getVariableMetrics(bundleVar);
+        return { ...bundleVar, ...metrics };
+      })
+    }));
+
+    this.bundlesDataSource.data = this.variableBundles;
   }
 
   private syncSelectionWithAvailability(): void {

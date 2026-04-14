@@ -582,10 +582,8 @@ export class WorkspaceResponseValidationService {
                   variable.$.multiple === 'true' ||
                   variable.$.multiple === true;
                 const nullable =
-                  variable.$.nullable === 'false' ||
-                    variable.$.nullable === false ?
-                    false :
-                    true;
+                  !(variable.$.nullable === 'false' ||
+                    variable.$.nullable === false);
                 variableTypes.set(variable.$.alias, {
                   type: variable.$.type,
                   multiple: multiple || undefined,
