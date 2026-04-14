@@ -50,6 +50,32 @@ export class WorkspaceResponseValidationService {
       .replace(/\.XML$/i, '');
   }
 
+  private static hasValue(value: string | null | undefined): number {
+    return String(value || '').trim() !== '' ? 1 : 0;
+  }
+
+  private selectBestDuplicateResponseId(
+    duplicates: DuplicateResponseDto['duplicates']
+  ): number | null {
+    if (!duplicates || duplicates.length === 0) {
+      return null;
+    }
+
+    const sorted = [...duplicates].sort((a, b) => {
+      const valuePriorityDiff =
+        WorkspaceResponseValidationService.hasValue(b.value) -
+        WorkspaceResponseValidationService.hasValue(a.value);
+      if (valuePriorityDiff !== 0) {
+        return valuePriorityDiff;
+      }
+
+      // Deterministic fallback: keep newest entry by ID.
+      return b.responseId - a.responseId;
+    });
+
+    return sorted[0]?.responseId ?? null;
+  }
+
   private async resolveExclusionsForValidation(workspaceId: number): Promise<{
     globalIgnoredUnits: string[];
     ignoredBooklets: string[];
@@ -1321,8 +1347,14 @@ export class WorkspaceResponseValidationService {
         const responseIds: number[] = [];
         for (const duplicateResponse of result.data) {
           if (duplicateResponse.duplicates.length > 1) {
+            const selectedResponseId = this.selectBestDuplicateResponseId(
+              duplicateResponse.duplicates
+            );
+            if (!selectedResponseId) {
+              continue;
+            }
             const duplicateIds = duplicateResponse.duplicates
-              .slice(1)
+              .filter(duplicate => duplicate.responseId !== selectedResponseId)
               .map(duplicate => duplicate.responseId);
             responseIds.push(...duplicateIds);
           }

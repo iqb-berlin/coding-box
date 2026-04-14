@@ -1,4 +1,4 @@
-import { Repository, DeleteResult } from 'typeorm';
+import { Repository, DeleteResult, In } from 'typeorm';
 import { WorkspaceResponseValidationService } from './workspace-response-validation.service';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -968,7 +968,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
     expect(result).toBe(1);
   });
 
-  it('deletes duplicate responses keeping first', async () => {
+  it('deletes duplicate responses keeping best candidate', async () => {
     const personsRepo = {
       find: jest
         .fn()
@@ -1019,6 +1019,83 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
       'duplicateResponses'
     );
     expect(result).toBe(1);
+  });
+
+  it('prefers non-empty value, then newest response id', async () => {
+    const personsRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            id: 1, workspace_id: 1, consider: true, login: 'user1'
+          }
+        ])
+    } as unknown as Repository<Persons>;
+    const bookletRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { id: 20, personid: 1, bookletinfo: { name: 'B1' } }
+        ])
+    } as unknown as Repository<Booklet>;
+    const unitRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue(
+          makeQueryBuilder([
+            { id: 10, name: 'U1', bookletid: 20 } as unknown as Unit
+          ])
+        ),
+      find: jest.fn().mockResolvedValue([{ id: 10, name: 'U1', bookletid: 20 }])
+    } as unknown as Repository<Unit>;
+
+    const duplicateRows = [
+      {
+        id: 100, unitid: 10, variableid: 'A1', value: '', status: 1
+      },
+      {
+        id: 101, unitid: 10, variableid: 'A1', value: 'x', status: 2
+      },
+      {
+        id: 102, unitid: 10, variableid: 'A1', value: 'x', status: 1
+      }
+    ];
+
+    const deleteMock = jest.fn().mockResolvedValue({ affected: 2 } as DeleteResult);
+    const responseRepo = {
+      find: jest.fn().mockImplementation(({ where }) => {
+        if (where?.id) {
+          const findOperator = where.id as unknown as {
+            value?: number[];
+            [key: string]: unknown;
+          };
+          const idValues =
+            findOperator.value ||
+            (Reflect.get(findOperator, '_value') as number[] | undefined) ||
+            [];
+          return Promise.resolve(
+            duplicateRows.filter(row => idValues.includes(row.id))
+          );
+        }
+        return Promise.resolve(duplicateRows);
+      }),
+      delete: deleteMock
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepo,
+      unitRepo,
+      personsRepo,
+      bookletRepo,
+      {} as Repository<FileUpload>
+    );
+    const result = await service.deleteAllInvalidResponses(
+      1,
+      'duplicateResponses'
+    );
+
+    expect(result).toBe(2);
+    expect(deleteMock).toHaveBeenCalledWith({ id: In([100, 101]) });
   });
 
   it('returns 0 when workspaceId is not provided', async () => {

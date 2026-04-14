@@ -34,7 +34,7 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
   }
 
   /**
-   * Resolves all duplicate responses automatically using a smart selection algorithm
+   * Resolves all duplicate responses automatically using backend selection rules
    */
   resolveAllDuplicates(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
