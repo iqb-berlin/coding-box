@@ -500,6 +500,233 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
     expect(result.data[0].errorReason).toContain('integer');
   });
 
+  it('treats [] as missing value for non-multiple nullable variable', async () => {
+    const makeUnitXml = (
+      unitId: string,
+      variables: Array<{
+        alias: string;
+        type: string;
+        multiple?: boolean;
+        nullable?: boolean;
+      }>
+    ): Buffer => {
+      const vars = variables
+        .map(v => {
+          const multipleAttribute =
+            typeof v.multiple === 'boolean' ? ` multiple="${v.multiple}"` : '';
+          const nullableAttribute =
+            typeof v.nullable === 'boolean' ? ` nullable="${v.nullable}"` : '';
+          return `<Variable alias="${v.alias}" type="${v.type}"${multipleAttribute}${nullableAttribute}/>`;
+        })
+        .join('');
+      return Buffer.from(
+        `<Unit><Metadata><Id>${unitId}</Id></Metadata><BaseVariables>${vars}</BaseVariables></Unit>`
+      );
+    };
+
+    const filesRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          { data: makeUnitXml('U1', [{ alias: 'A1', type: 'integer' }]) }
+        ])
+    } as unknown as Repository<FileUpload>;
+    const personsRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+    const unitRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue({
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
+        })
+    } as unknown as Repository<Unit>;
+    const responseRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            id: 100,
+            unitid: 10,
+            variableid: 'A1',
+            value: '[]',
+            unit: { id: 10, name: 'U1' }
+          }
+        ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepo,
+      unitRepo,
+      personsRepo,
+      {} as Repository<Booklet>,
+      filesRepo
+    );
+    const result = await service.validateVariableTypes(1, 1, 10);
+    expect(result.total).toBe(0);
+  });
+
+  it('flags [] as invalid when variable is non-multiple and nullable=false', async () => {
+    const makeUnitXml = (
+      unitId: string,
+      variables: Array<{
+        alias: string;
+        type: string;
+        multiple?: boolean;
+        nullable?: boolean;
+      }>
+    ): Buffer => {
+      const vars = variables
+        .map(v => {
+          const multipleAttribute =
+            typeof v.multiple === 'boolean' ? ` multiple="${v.multiple}"` : '';
+          const nullableAttribute =
+            typeof v.nullable === 'boolean' ? ` nullable="${v.nullable}"` : '';
+          return `<Variable alias="${v.alias}" type="${v.type}"${multipleAttribute}${nullableAttribute}/>`;
+        })
+        .join('');
+      return Buffer.from(
+        `<Unit><Metadata><Id>${unitId}</Id></Metadata><BaseVariables>${vars}</BaseVariables></Unit>`
+      );
+    };
+
+    const filesRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            data: makeUnitXml('U1', [
+              {
+                alias: 'A1',
+                type: 'integer',
+                nullable: false
+              }
+            ])
+          }
+        ])
+    } as unknown as Repository<FileUpload>;
+    const personsRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+    const unitRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue({
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
+        })
+    } as unknown as Repository<Unit>;
+    const responseRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            id: 100,
+            unitid: 10,
+            variableid: 'A1',
+            value: '[]',
+            unit: { id: 10, name: 'U1' }
+          }
+        ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepo,
+      unitRepo,
+      personsRepo,
+      {} as Repository<Booklet>,
+      filesRepo
+    );
+    const result = await service.validateVariableTypes(1, 1, 10);
+    expect(result.total).toBe(1);
+    expect(result.data[0].errorReason).toContain('nullable=false');
+  });
+
+  it('accepts [] for multiple=true variable', async () => {
+    const makeUnitXml = (
+      unitId: string,
+      variables: Array<{
+        alias: string;
+        type: string;
+        multiple?: boolean;
+        nullable?: boolean;
+      }>
+    ): Buffer => {
+      const vars = variables
+        .map(v => {
+          const multipleAttribute =
+            typeof v.multiple === 'boolean' ? ` multiple="${v.multiple}"` : '';
+          const nullableAttribute =
+            typeof v.nullable === 'boolean' ? ` nullable="${v.nullable}"` : '';
+          return `<Variable alias="${v.alias}" type="${v.type}"${multipleAttribute}${nullableAttribute}/>`;
+        })
+        .join('');
+      return Buffer.from(
+        `<Unit><Metadata><Id>${unitId}</Id></Metadata><BaseVariables>${vars}</BaseVariables></Unit>`
+      );
+    };
+
+    const filesRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            data: makeUnitXml('U1', [
+              {
+                alias: 'A1',
+                type: 'integer',
+                multiple: true
+              }
+            ])
+          }
+        ])
+    } as unknown as Repository<FileUpload>;
+    const personsRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: 1, workspace_id: 1, consider: true }])
+    } as unknown as Repository<Persons>;
+    const unitRepo = {
+      createQueryBuilder: jest
+        .fn()
+        .mockReturnValue({
+          innerJoin: jest.fn().mockReturnThis(),
+          where: jest.fn().mockReturnThis(),
+          getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
+        })
+    } as unknown as Repository<Unit>;
+    const responseRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([
+          {
+            id: 100,
+            unitid: 10,
+            variableid: 'A1',
+            value: '[]',
+            unit: { id: 10, name: 'U1' }
+          }
+        ])
+    } as unknown as Repository<ResponseEntity>;
+
+    const service = new WorkspaceResponseValidationService(
+      responseRepo,
+      unitRepo,
+      personsRepo,
+      {} as Repository<Booklet>,
+      filesRepo
+    );
+    const result = await service.validateVariableTypes(1, 1, 10);
+    expect(result.total).toBe(0);
+  });
+
   it('accepts valid boolean value', async () => {
     const makeUnitXml = (
       unitId: string,
