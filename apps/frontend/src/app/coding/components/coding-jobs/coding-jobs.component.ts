@@ -136,6 +136,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     this.dataSource.paginator = value;
     this.lastKnownPaginator = value;
   }
+
   private lastKnownPaginator?: MatPaginator;
 
   @Output() jobsChanged = new EventEmitter<void>();
