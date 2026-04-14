@@ -26,8 +26,10 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
+import { HttpEventType, HttpResponse } from '@angular/common/http';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
+import { MatProgressBar } from '@angular/material/progress-bar';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, finalize } from 'rxjs/operators';
 import {
@@ -109,6 +111,7 @@ import { base64ToUtf8 } from '../../../shared/utils/common-utils';
     MatLabel,
     MatSelect,
     MatOption,
+    MatProgressBar,
     MatPaginator,
     MatIconButton,
     MatTooltip
@@ -138,6 +141,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   isDownloadingAllFiles = false;
   isDeleting = false;
   isUploading = false;
+  downloadProgressPercent = 0;
+  downloadProgressLoadedBytes = 0;
+  downloadProgressTotalBytes = 0;
+  downloadProgressStatus: 'preparing' | 'downloading' = 'preparing';
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -209,7 +216,14 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return 'Datei(en) werden gelöscht...';
     }
     if (this.isDownloadingAllFiles) {
-      return 'ZIP-Datei wird erstellt und heruntergeladen...';
+      if (this.downloadProgressStatus === 'preparing') {
+        return 'ZIP-Datei wird vorbereitet...';
+      }
+
+      const totalText = this.downloadProgressTotalBytes > 0 ?
+        ` / ${this.formatBytes(this.downloadProgressTotalBytes)}` :
+        '';
+      return `ZIP-Download: ${this.downloadProgressPercent}% (${this.formatBytes(this.downloadProgressLoadedBytes)}${totalText})`;
     }
     if (this.isValidating) {
       return 'Validierung wird durchgeführt...';
@@ -588,28 +602,56 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       }
 
       this.isDownloadingAllFiles = true;
+      this.downloadProgressPercent = 0;
+      this.downloadProgressLoadedBytes = 0;
+      this.downloadProgressTotalBytes = 0;
+      this.downloadProgressStatus = 'preparing';
       this.fileBackendService
-        .downloadWorkspaceFilesAsZip(
+        .downloadWorkspaceFilesAsZipWithProgress(
           this.appService.selectedWorkspaceId,
           result.fileTypes
         )
         .subscribe({
-          next: (blob: Blob) => {
-            const url = window.URL.createObjectURL(blob);
-            const anchor = document.createElement('a');
-            anchor.href = url;
-            anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
-            document.body.appendChild(anchor);
-            anchor.click();
-            document.body.removeChild(anchor);
-            window.URL.revokeObjectURL(url);
-            this.isDownloadingAllFiles = false;
+          next: event => {
+            if (event.type === HttpEventType.DownloadProgress) {
+              this.downloadProgressStatus = 'downloading';
+              this.downloadProgressLoadedBytes = event.loaded;
+              this.downloadProgressTotalBytes = event.total || 0;
+              this.downloadProgressPercent =
+                event.total && event.total > 0 ?
+                  Math.min(
+                    100,
+                    Math.round((event.loaded / event.total) * 100)
+                  ) :
+                  0;
+              return;
+            }
 
-            this.snackBar.open(
-              'ZIP-Datei wurde erfolgreich heruntergeladen.',
-              'OK',
-              { duration: 3000 }
-            );
+            if (event instanceof HttpResponse) {
+              const blob = event.body;
+              if (!blob) {
+                throw new Error('Leere ZIP-Antwort erhalten.');
+              }
+
+              const url = window.URL.createObjectURL(blob);
+              const anchor = document.createElement('a');
+              anchor.href = url;
+              anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
+              document.body.appendChild(anchor);
+              anchor.click();
+              document.body.removeChild(anchor);
+              window.URL.revokeObjectURL(url);
+              this.downloadProgressPercent = 100;
+              this.downloadProgressLoadedBytes = blob.size;
+              this.downloadProgressTotalBytes = blob.size;
+              this.isDownloadingAllFiles = false;
+
+              this.snackBar.open(
+                'ZIP-Datei wurde erfolgreich heruntergeladen.',
+                'OK',
+                { duration: 3000 }
+              );
+            }
           },
           error: () => {
             this.isDownloadingAllFiles = false;
@@ -621,6 +663,39 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           }
         });
     });
+  }
+
+  get downloadProgressValue(): number {
+    return this.downloadProgressStatus === 'downloading' ?
+      this.downloadProgressPercent :
+      0;
+  }
+
+  get isDownloadProgressIndeterminate(): boolean {
+    return (
+      this.isDownloadingAllFiles &&
+      this.downloadProgressStatus === 'preparing'
+    );
+  }
+
+  private formatBytes(bytes: number): string {
+    if (!bytes || bytes < 0) {
+      return '0 B';
+    }
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    }
+
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let value = bytes / 1024;
+    let unitIndex = 0;
+
+    while (value >= 1024 && unitIndex < units.length - 1) {
+      value /= 1024;
+      unitIndex += 1;
+    }
+
+    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
   }
 
   validateFiles(): void {

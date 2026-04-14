@@ -3,6 +3,11 @@
   <div class="busy-overlay" aria-busy="true" aria-live="polite">
     <mat-spinner class="mat-spinner"></mat-spinner>
     <p class="loading-text">{{ busyText }}</p>
+    @if (isDownloadingAllFiles) {
+    <mat-progress-bar class="download-progress-bar" [mode]="isDownloadProgressIndeterminate ? 'indeterminate' : 'determinate'"
+      [value]="downloadProgressValue">
+    </mat-progress-bar>
+    }
   </div>
   }
   <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
