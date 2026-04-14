@@ -185,15 +185,21 @@ export class ExportComponent {
   }
 
   get finalJobDefinitionIds(): number[] {
-    return this.selectedCombinedJobIds
-      .filter(id => id.startsWith('job_'))
-      .map(id => parseInt(id.replace('job_', ''), 10));
+    return Array.from(new Set(
+      this.selectedCombinedJobIds
+        .filter(id => id.startsWith('job_'))
+        .map(id => parseInt(id.replace('job_', ''), 10))
+        .filter(id => Number.isInteger(id) && id > 0)
+    ));
   }
 
   get finalCoderTrainingIds(): number[] {
-    return this.selectedCombinedJobIds
-      .filter(id => id.startsWith('training_'))
-      .map(id => parseInt(id.replace('training_', ''), 10));
+    return Array.from(new Set(
+      this.selectedCombinedJobIds
+        .filter(id => id.startsWith('training_'))
+        .map(id => parseInt(id.replace('training_', ''), 10))
+        .filter(id => Number.isInteger(id) && id > 0)
+    ));
   }
 
   onExport(): void {
