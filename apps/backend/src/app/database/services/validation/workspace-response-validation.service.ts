@@ -582,12 +582,14 @@ export class WorkspaceResponseValidationService {
                   variable.$.multiple === 'true' ||
                   variable.$.multiple === true;
                 const nullable =
-                  variable.$.nullable === 'true' ||
-                  variable.$.nullable === true;
+                  variable.$.nullable === 'false' ||
+                    variable.$.nullable === false ?
+                    false :
+                    true;
                 variableTypes.set(variable.$.alias, {
                   type: variable.$.type,
                   multiple: multiple || undefined,
-                  nullable: nullable || undefined
+                  nullable: nullable
                 });
               }
             }
@@ -739,6 +741,21 @@ export class WorkspaceResponseValidationService {
       const expectedType = variableInfo.type;
       const isMultiple = variableInfo.multiple === true;
       const isNullable = variableInfo.nullable !== false;
+      const isMissingValue = this.isMissingVariableValue(value, isMultiple);
+
+      if (isMissingValue) {
+        if (!isNullable) {
+          invalidVariables.push({
+            fileName: `${unitName}`,
+            variableId: variableId,
+            value: value,
+            responseId: response.id,
+            expectedType: expectedType,
+            errorReason: 'Variable has nullable=false but value is null or empty'
+          });
+        }
+        continue;
+      }
 
       if (isMultiple) {
         try {
@@ -782,18 +799,6 @@ export class WorkspaceResponseValidationService {
           });
           continue;
         }
-      }
-
-      if (!isNullable && (!value || value.trim() === '')) {
-        invalidVariables.push({
-          fileName: `${unitName}`,
-          variableId: variableId,
-          value: value,
-          responseId: response.id,
-          expectedType: expectedType,
-          errorReason: 'Variable has nullable=false but value is null or empty'
-        });
-        continue;
       }
 
       if (!this.isValidValueForType(value, expectedType)) {
@@ -1458,5 +1463,20 @@ export class WorkspaceResponseValidationService {
       default:
         return true;
     }
+  }
+
+  private isMissingVariableValue(value: string, isMultiple: boolean): boolean {
+    const trimmedValue = value.trim();
+    if (!trimmedValue) {
+      return true;
+    }
+    if (trimmedValue.toLowerCase() === 'null') {
+      return true;
+    }
+    // Legacy imports can store missing non-multiple responses as JSON empty array.
+    if (!isMultiple && trimmedValue === '[]') {
+      return true;
+    }
+    return false;
   }
 }
