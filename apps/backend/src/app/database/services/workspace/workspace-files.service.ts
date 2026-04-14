@@ -1692,8 +1692,7 @@ ${bookletRefs}
 
       let files = await this.fileUploadRepository.find({
         where,
-        order: { file_type: 'ASC', filename: 'ASC' },
-        take: 3000
+        order: { file_type: 'ASC', filename: 'ASC' }
       });
 
       if (!resourceAllSelected && resourceExtensions.size > 0) {

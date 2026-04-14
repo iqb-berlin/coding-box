@@ -140,6 +140,10 @@
   color: #666;
 }
 
+.busy-overlay .download-progress-bar {
+  width: min(420px, 70vw);
+}
+
 .busy-overlay .mat-spinner {
   margin-bottom: 0;
 }
