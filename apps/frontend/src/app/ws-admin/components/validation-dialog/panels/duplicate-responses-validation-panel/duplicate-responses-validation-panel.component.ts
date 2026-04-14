@@ -27,6 +27,7 @@ import {
 } from '../../../../../../../../../api-dto/files/duplicate-response.dto';
 import { DuplicateResponseSelectionDto } from '../../../../models/duplicate-response-selection.dto';
 import { DuplicateResponsesValidationService } from '../../../../services/validation';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 /**
  * Panel component for duplicate responses validation.
@@ -158,6 +159,29 @@ import { DuplicateResponsesValidationService } from '../../../../services/valida
         right: 0;
         z-index: 10;
       }
+
+      .auto-resolve-info {
+        margin: 0 0 12px 0;
+        padding: 10px 12px;
+        border: 1px solid #b3e5fc;
+        border-radius: 4px;
+        background-color: #e1f5fe;
+        color: #01579b;
+      }
+
+      .auto-resolve-info-title {
+        font-weight: 600;
+        margin: 0 0 6px 0;
+      }
+
+      .auto-resolve-info ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .auto-resolve-info li {
+        margin: 2px 0;
+      }
     `
   ]
 })
@@ -169,6 +193,7 @@ implements OnInit, OnDestroy {
   isRunning = false;
   wasRun = false;
   isLoadingPage = false;
+  isExporting = false;
   errorMessage: string | null = null;
   duplicateResponses: DuplicateResponseSelectionDto[] = [];
   totalDuplicates = 0;
@@ -408,18 +433,11 @@ implements OnInit, OnDestroy {
   selectSuggestedDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto
   ): void {
-    // Smart selection: prefer non-empty values, then by status priority
-    const rankStatus = (s: string): number => {
-      if (s === 'DISPLAYED') return 4;
-      if (s === 'VALUE_CHANGED') return 3;
-      if (s === 'FOCUS_CHANGED') return 2;
-      return 1;
-    };
-
-    const best = (duplicate.duplicates || []).sort((a, b) => {
+    // Smart selection: prefer non-empty values, then keep newest response id.
+    const best = [...(duplicate.duplicates || [])].sort((a, b) => {
       if (a.value && !b.value) return -1;
       if (!a.value && b.value) return 1;
-      return rankStatus(b.status || '') - rankStatus(a.status || '');
+      return b.responseId - a.responseId;
     })[0];
 
     if (best) {
@@ -532,5 +550,58 @@ implements OnInit, OnDestroy {
           }
         });
     });
+  }
+
+  exportCsv(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.duplicateResponsesValidationService
+      .fetchPage(1, Number.MAX_SAFE_INTEGER)
+      .subscribe({
+        next: result => {
+          const rows = result.data.flatMap(duplicate => duplicate.duplicates.map(duplicateValue => ({
+            unitName: duplicate.unitName,
+            variableId: duplicate.variableId,
+            subform: duplicate.subform || '',
+            bookletName: duplicate.bookletName || '',
+            testTakerGroup: duplicate.testTakerGroup || '',
+            testTakerLogin: duplicate.testTakerLogin || '',
+            testTakerCode: duplicate.testTakerCode || '',
+            responseId: duplicateValue.responseId,
+            value: duplicateValue.value,
+            status: duplicateValue.status
+          }))
+          );
+
+          const csvContent = buildCsv(rows, [
+            { header: 'Unit', value: row => row.unitName },
+            { header: 'Variablen-ID', value: row => row.variableId },
+            { header: 'Subform', value: row => row.subform },
+            { header: 'Booklet', value: row => row.bookletName },
+            { header: 'Gruppe', value: row => row.testTakerGroup },
+            { header: 'Login', value: row => row.testTakerLogin },
+            { header: 'Code', value: row => row.testTakerCode },
+            { header: 'Response-ID', value: row => row.responseId },
+            { header: 'Wert', value: row => row.value },
+            { header: 'Status', value: row => row.status }
+          ]);
+
+          downloadCsvFile('validierung-duplikate.csv', csvContent);
+          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+            duration: 3000
+          });
+          this.isExporting = false;
+        },
+        error: () => {
+          this.isExporting = false;
+          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 }

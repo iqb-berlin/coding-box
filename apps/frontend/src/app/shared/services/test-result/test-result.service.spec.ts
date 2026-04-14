@@ -5,11 +5,13 @@ import { of } from 'rxjs';
 import { TestResultService } from './test-result.service';
 import { TestResultCacheService } from './test-result-cache.service';
 import { SERVER_URL } from '../../../injection-tokens';
+import { ValidationTaskStateService } from '../validation/validation-task-state.service';
 
 describe('TestResultService', () => {
   let service: TestResultService;
   let httpMock: HttpTestingController;
   let cacheServiceMock: jest.Mocked<TestResultCacheService>;
+  let validationTaskStateServiceMock: { invalidateWorkspace: jest.Mock };
 
   const mockServerUrl = 'http://localhost/api/';
   const mockWorkspaceId = 1;
@@ -20,6 +22,9 @@ describe('TestResultService', () => {
       getPersonTestResults: jest.fn(),
       invalidateWorkspaceCache: jest.fn()
     } as unknown as jest.Mocked<TestResultCacheService>;
+    validationTaskStateServiceMock = {
+      invalidateWorkspace: jest.fn()
+    };
 
     // Mock localStorage
     Object.defineProperty(window, 'localStorage', {
@@ -35,6 +40,10 @@ describe('TestResultService', () => {
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),
         { provide: TestResultCacheService, useValue: cacheServiceMock },
+        {
+          provide: ValidationTaskStateService,
+          useValue: validationTaskStateServiceMock
+        },
         { provide: SERVER_URL, useValue: mockServerUrl }
       ]
     });

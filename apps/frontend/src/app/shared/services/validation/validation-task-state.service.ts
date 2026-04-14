@@ -16,6 +16,23 @@ export interface ValidationBatchState {
   error?: string;
 }
 
+export type ValidationType =
+  | 'variables'
+  | 'variableTypes'
+  | 'responseStatus'
+  | 'testTakers'
+  | 'groupResponses'
+  | 'duplicateResponses';
+
+const ALL_VALIDATION_TYPES: ValidationType[] = [
+  'testTakers',
+  'variables',
+  'variableTypes',
+  'responseStatus',
+  'duplicateResponses',
+  'groupResponses'
+];
+
 @Injectable({
   providedIn: 'root'
 })
@@ -63,7 +80,11 @@ export class ValidationTaskStateService {
     this.batchState$.next({ ...this.batchState });
   }
 
-  setTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses', task: ValidationTaskDto): void {
+  setTaskId(
+    workspaceId: number,
+    type: ValidationType,
+    task: ValidationTaskDto
+  ): void {
     if (!this.activeTasks[workspaceId]) {
       this.activeTasks[workspaceId] = {};
     }
@@ -71,7 +92,7 @@ export class ValidationTaskStateService {
     this.activeTasks$.next({ ...this.activeTasks });
   }
 
-  removeTaskId(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses'): void {
+  removeTaskId(workspaceId: number, type: ValidationType): void {
     if (this.activeTasks[workspaceId]) {
       delete this.activeTasks[workspaceId][type];
       this.activeTasks$.next({ ...this.activeTasks });
@@ -84,7 +105,7 @@ export class ValidationTaskStateService {
 
   setValidationResult(
     workspaceId: number,
-    type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'duplicateResponses',
+    type: ValidationType,
     result: ValidationResult
   ): void {
     if (!this.validationResults[workspaceId]) {
@@ -96,5 +117,32 @@ export class ValidationTaskStateService {
 
   getAllValidationResults(workspaceId: number): Record<string, ValidationResult> {
     return this.validationResults[workspaceId] || {};
+  }
+
+  hasAnyValidationResult(workspaceId: number): boolean {
+    const results = this.getAllValidationResults(workspaceId);
+    return Object.keys(results).length > 0;
+  }
+
+  hasCompleteValidationResults(workspaceId: number): boolean {
+    const results = this.getAllValidationResults(workspaceId);
+    return ALL_VALIDATION_TYPES.every(type => Boolean(results[type]));
+  }
+
+  invalidateWorkspace(workspaceId: number): void {
+    if (this.activeTasks[workspaceId]) {
+      delete this.activeTasks[workspaceId];
+      this.activeTasks$.next({ ...this.activeTasks });
+    }
+
+    if (this.validationResults[workspaceId]) {
+      delete this.validationResults[workspaceId];
+      this.validationResults$.next({ ...this.validationResults });
+    }
+
+    if (this.batchState[workspaceId]) {
+      delete this.batchState[workspaceId];
+      this.batchState$.next({ ...this.batchState });
+    }
   }
 }

@@ -23,6 +23,7 @@ import {
   ValidationGuidanceComponent
 } from '../../shared';
 import { GroupResponsesValidationService } from '../../../../services/validation';
+import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
 
 interface GroupResponsesValidationResult {
   testTakersFound: boolean;
@@ -137,6 +138,7 @@ implements OnInit, OnDestroy {
   isRunning = false;
   wasRun = false;
   isLoadingPage = false;
+  isExporting = false;
   errorMessage: string | null = null;
   result: GroupResponsesValidationResult | null = null;
   expandedPanel = false;
@@ -269,5 +271,42 @@ implements OnInit, OnDestroy {
     if (this.result?.groupsWithResponses) {
       this.paginatedGroupResponses.data = this.result.groupsWithResponses;
     }
+  }
+
+  exportCsv(): void {
+    if (this.isExporting) {
+      return;
+    }
+
+    this.isExporting = true;
+    this.subscription?.unsubscribe();
+    this.subscription = this.groupResponsesValidationService
+      .fetchPage(1, Number.MAX_SAFE_INTEGER)
+      .subscribe({
+        next: result => {
+          const groupsWithoutResponses = result.groupsWithResponses
+            .filter(groupResponse => !groupResponse.hasResponse);
+
+          const csvContent = buildCsv(groupsWithoutResponses, [
+            { header: 'Gruppe', value: row => row.group },
+            {
+              header: 'Hat Antwort',
+              value: row => (row.hasResponse ? 'Ja' : 'Nein')
+            }
+          ]);
+
+          downloadCsvFile('validierung-gruppenantworten.csv', csvContent);
+          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+            duration: 3000
+          });
+          this.isExporting = false;
+        },
+        error: () => {
+          this.isExporting = false;
+          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+            duration: 5000
+          });
+        }
+      });
   }
 }

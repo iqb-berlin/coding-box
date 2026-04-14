@@ -1774,6 +1774,15 @@
     "applied": "Angewandt",
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
+      "agreement-label": "Übereinstimmung",
+      "agreement-all": "Alle",
+      "agreement-match": "Nur Übereinstimmung",
+      "agreement-differ": "Nur Abweichung",
+      "scope-label": "Job-Definition / Schulung",
+      "scope-all": "Alle Job-Definitionen und Schulungen",
+      "scope-summary": "{{jobs}} Definition(en), {{trainings}} Schulung(en)",
+      "scope-job-definitions": "Job-Definitionen",
+      "scope-trainings": "Schulungen",
       "search-label": "Suchen",
       "search-placeholder": "Einheit, Variable, Login, Code oder Gruppe...",
       "coder-label": "Kodierer",
@@ -1820,7 +1829,8 @@
       "failed-to-load": "Fehler beim Laden der doppelkodierten Variablen",
       "failed-to-apply": "Fehler beim Anwenden der Auflösungen",
       "no-decisions": "Keine Entscheidungen zum Anwenden ausgewählt",
-      "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt"
+      "no-decision-for-item": "Keine Entscheidung für diese Variable ausgewählt",
+      "replay-failed": "Replay konnte für diese Antwort nicht geöffnet werden"
     },
     "success": {
       "resolutions-applied": "{{count}} Auflösung(en) erfolgreich angewendet"

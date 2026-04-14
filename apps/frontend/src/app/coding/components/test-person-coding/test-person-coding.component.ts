@@ -117,6 +117,7 @@ export class TestPersonCodingComponent implements OnInit {
   groupsLoading = false;
 
   autoCoderRun: number = 1;
+  private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
     this.loadAllJobs();
@@ -165,8 +166,7 @@ export class TestPersonCodingComponent implements OnInit {
                 this.stopJobStatusPolling();
 
                 if (activeJob.status === 'completed') {
-                  this.loadStatistics();
-                  this.loadCodingList(this.currentPage, this.pageSize);
+                  this.handleAutoCodingCompleted(activeJob.jobId);
                 }
               }
             }
@@ -257,8 +257,7 @@ export class TestPersonCodingComponent implements OnInit {
               this.translateService.instant('close'),
               { duration: 3000 }
             );
-            this.loadStatistics();
-            this.loadCodingList(this.currentPage, this.pageSize);
+            this.handleAutoCodingCompleted();
           }
         }),
         catchError(error => {
@@ -320,8 +319,7 @@ export class TestPersonCodingComponent implements OnInit {
                 this.translateService.instant('close'),
                 { duration: 3000 }
               );
-              this.loadStatistics();
-              this.loadCodingList(this.currentPage, this.pageSize);
+              this.handleAutoCodingCompleted(jobId);
             } else if (status.status === 'failed') {
               this.snackBar.open(
                 this.translateService.instant(
@@ -362,6 +360,20 @@ export class TestPersonCodingComponent implements OnInit {
     }
     this.activeJobId = null;
     this.jobStatus = null;
+  }
+
+  private handleAutoCodingCompleted(jobId?: string): void {
+    if (jobId) {
+      if (this.lastNotifiedCompletedJobId === jobId) {
+        return;
+      }
+      this.lastNotifiedCompletedJobId = jobId;
+    }
+
+    this.loadStatistics();
+    this.loadCodingList(this.currentPage, this.pageSize);
+    this.loadWorkspaceGroups();
+    this.testPersonCodingService.notifyAutoCodingCompleted();
   }
 
   cancelJob(jobId?: string): void {

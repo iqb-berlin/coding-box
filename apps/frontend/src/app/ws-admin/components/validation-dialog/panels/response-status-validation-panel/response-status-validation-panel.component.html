@@ -49,6 +49,17 @@
         <button mat-button (click)="toggleExpansion()">
           {{ expandedPanel ? 'Details ausblenden' : 'Details anzeigen' }}
         </button>
+        <button
+          mat-button
+          (click)="exportCsv()"
+          [disabled]="isExporting || isLoadingPage"
+        >
+          @if (isExporting) {
+            <mat-spinner diameter="20"></mat-spinner> Export...
+          } @else {
+            CSV exportieren
+          }
+        </button>
         <button mat-button (click)="selectAll()">Alle auswählen</button>
         <button mat-button (click)="deselectAll()">Auswahl aufheben</button>
         <button mat-button color="warn" 

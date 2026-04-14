@@ -6,7 +6,8 @@
     "types": ["jest", "node"],
     "baseUrl": ".",
     "paths": {
-      "keycloak-js": ["src/mocks/keycloak-js.d.ts"]
+      "keycloak-js": ["src/mocks/keycloak-js.d.ts"],
+      "@iqb/metadata-resolver": ["../../node_modules/@iqb/metadata-resolver/dist/index.d.mts"]
     }
   },
   "files": ["src/test-setup.ts"],

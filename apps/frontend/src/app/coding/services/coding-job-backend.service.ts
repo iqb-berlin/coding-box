@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { map, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
+import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import {
   CodingJob,
   Variable,
@@ -80,6 +81,7 @@ interface PaginatedResponse<T> {
 export class CodingJobBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+  private validationTaskStateService = inject(ValidationTaskStateService);
 
   private get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -378,7 +380,13 @@ export class CodingJobBackendService {
       skippedReviewCount: number;
       messageKey: string;
       messageParams?: Record<string, unknown>;
-    }>(url, {}, { headers: this.authHeader });
+    }>(url, {}, { headers: this.authHeader }).pipe(
+      tap(result => {
+        if (result.success) {
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        }
+      })
+    );
   }
 
   bulkApplyCodingResults(workspaceId: number): Observable<{
@@ -419,7 +427,13 @@ export class CodingJobBackendService {
           message: string;
         };
       }>;
-    }>(url, {}, { headers: this.authHeader });
+    }>(url, {}, { headers: this.authHeader }).pipe(
+      tap(result => {
+        if (result.success && result.totalUpdatedResponses > 0) {
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        }
+      })
+    );
   }
 
   createJobDefinition(

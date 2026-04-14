@@ -506,63 +506,51 @@
             </td>
           </ng-container>
 
-          <!-- Unit Name Column -->
-          <ng-container matColumnDef="unitName">
+          <!-- Unit & Variable Column -->
+          <ng-container matColumnDef="unitVariable">
             <th mat-header-cell *matHeaderCellDef mat-sort-header="unitName">
-              Aufgabe
+              Aufgabe/Variable
             </th>
             <td mat-cell *matCellDef="let comparison">
-              <strong>{{ comparison.unitName }}</strong>
+              <div class="unit-variable-cell">
+                <div class="unit-name">{{ comparison.unitName }}</div>
+                <div class="variable-id">{{ comparison.variableId }}</div>
+              </div>
             </td>
           </ng-container>
 
-          <!-- Variable ID Column -->
-          <ng-container matColumnDef="variableId">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="variableId">
-              Variable
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              <code>{{ comparison.variableId }}</code>
-            </td>
-          </ng-container>
-
-          <!-- Testperson Column -->
-          <ng-container matColumnDef="testperson">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="testperson">
-              Testperson
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              {{ comparison.testperson }}
-            </td>
-          </ng-container>
-
-          <!-- Person Login Column -->
-          <ng-container matColumnDef="personLogin">
+          <!-- Person Info Column -->
+          <ng-container matColumnDef="personInfo">
             <th mat-header-cell *matHeaderCellDef mat-sort-header="personLogin">
-              Person Login
+              Personeninformationen
             </th>
             <td mat-cell *matCellDef="let comparison">
-              {{ comparison.personLogin }}
+              <div class="person-info-cell">
+                <div class="person-login">{{ comparison.personLogin || '-' }}</div>
+                <div class="person-code">{{ comparison.personCode || '-' }}</div>
+                <div class="person-group">{{ comparison.personGroup || '-' }}</div>
+              </div>
             </td>
           </ng-container>
 
-          <!-- Person Code Column -->
-          <ng-container matColumnDef="personCode">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="personCode">
-              Person Code
-            </th>
+          <!-- Given Answer Column -->
+          <ng-container matColumnDef="givenAnswer">
+            <th mat-header-cell *matHeaderCellDef>Gegebene Antwort</th>
             <td mat-cell *matCellDef="let comparison">
-              {{ comparison.personCode }}
-            </td>
-          </ng-container>
-
-          <!-- Person Group Column -->
-          <ng-container matColumnDef="personGroup">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header="personGroup">
-              Person Gruppe
-            </th>
-            <td mat-cell *matCellDef="let comparison">
-              {{ comparison.personGroup }}
+              <div class="given-answer-cell">
+                <button
+                  mat-icon-button
+                  type="button"
+                  color="primary"
+                  (click)="openReplay(comparison)"
+                  matTooltip="Replay inkl. Kodieranweisungen öffnen"
+                >
+                  <mat-icon>play_circle</mat-icon>
+                </button>
+                <div class="answer-text" [matTooltip]="comparison.givenAnswer || 'N/A'">
+                  {{ comparison.givenAnswer || 'N/A' }}
+                </div>
+              </div>
             </td>
           </ng-container>
 
@@ -581,20 +569,6 @@
               <mat-icon>{{
                 areCodesTheSame(comparison) ? 'check_circle' : 'cancel'
               }}</mat-icon>
-            </td>
-          </ng-container>
-
-          <ng-container matColumnDef="replay">
-            <th mat-header-cell *matHeaderCellDef>Replay</th>
-            <td mat-cell *matCellDef="let comparison">
-              <button
-                mat-icon-button
-                type="button"
-                (click)="openReplay(comparison)"
-                matTooltip="Replay inkl. Kodieranweisungen öffnen"
-              >
-                <mat-icon>play_circle</mat-icon>
-              </button>
             </td>
           </ng-container>
 

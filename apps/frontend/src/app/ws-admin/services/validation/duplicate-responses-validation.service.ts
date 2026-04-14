@@ -25,13 +25,16 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }
 
   /**
-   * Resolves all duplicate responses automatically using a smart selection algorithm
+   * Resolves all duplicate responses automatically using backend selection rules
    */
   resolveAllDuplicates(): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -43,7 +46,10 @@ export class DuplicateResponsesValidationService extends BaseValidationService<D
       .pipe(
         tap((task: ValidationTaskDto) => this.storeTaskId(task)),
         switchMap((task: ValidationTaskDto) => this.handleTaskResult(task)),
-        tap(() => this.removeTaskId()),
+        tap(() => {
+          this.removeTaskId();
+          this.invalidateWorkspaceValidationCache();
+        }),
         map(() => undefined)
       );
   }

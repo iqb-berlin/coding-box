@@ -129,7 +129,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   originalData: CodingJob[] = [];
 
   @ViewChild(MatSort) sort!: MatSort;
-  @ViewChild(MatPaginator) paginator!: MatPaginator;
+  @ViewChild(MatPaginator) set paginator(value: MatPaginator | undefined) {
+    if (!value) {
+      return;
+    }
+    this.dataSource.paginator = value;
+    this.lastKnownPaginator = value;
+  }
+
+  private lastKnownPaginator?: MatPaginator;
 
   @Output() jobsChanged = new EventEmitter<void>();
 
@@ -164,7 +172,9 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   ngAfterViewInit(): void {
     this.dataSource.sort = this.sort;
-    this.dataSource.paginator = this.paginator;
+    if (this.lastKnownPaginator) {
+      this.dataSource.paginator = this.lastKnownPaginator;
+    }
   }
 
   loadCodingJobs(): void {
@@ -286,19 +296,16 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   onStatusFilterChange(): void {
     this.selection.clear();
     this.applyAllFilters();
-    this.applyFilter();
   }
 
   onCoderFilterChange(): void {
     this.selection.clear();
     this.applyAllFilters();
-    this.applyFilter();
   }
 
   onJobNameFilterChange(): void {
     this.selection.clear();
     this.applyAllFilters();
-    this.applyFilter();
   }
 
   private applyAllFilters(): void {
@@ -327,6 +334,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     this.dataSource.data = filteredData;
+    this.lastKnownPaginator?.firstPage();
   }
 
   getVariables(job: CodingJob): string {
@@ -427,7 +435,8 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
   createCodingJob(): void {
     const dialogRef = this.dialog.open(CodingJobDefinitionDialogComponent, {
-      width: '1200px',
+      width: '95vw',
+      maxWidth: '1600px',
       data: {
         isEdit: false,
         preloadedVariables: this.preloadedVariables || []

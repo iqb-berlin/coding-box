@@ -986,7 +986,8 @@ export class WorkspaceCodingStatisticsController {
           }
         },
         doubleCodingAbsolute: { type: 'number' },
-        doubleCodingPercentage: { type: 'number' }
+        doubleCodingPercentage: { type: 'number' },
+        jobDefinitionId: { type: 'number' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -1062,6 +1063,7 @@ export class WorkspaceCodingStatisticsController {
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
+                     jobDefinitionId?: number;
                    }
   ): Promise<{
         success: boolean;
