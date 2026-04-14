@@ -58,7 +58,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
       variables: [
-        { unitName: 'Unit 1', variableId: 'Var 1' }
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 3', variableId: 'Var 3' }
       ]
     }
   ];
@@ -338,6 +339,20 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getTotalCodingCases()).toBe(5);
 
     component.codingJobForm.patchValue({ maxCodingCases: 100 });
+    expect(component.getTotalCodingCases()).toBe(14);
+  });
+
+  it('should use synchronized availability for bundle variables in total case count', () => {
+    createComponent();
+
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    if (bundle) {
+      component.selectedVariableBundles.select(bundle);
+    }
+
+    // Unit 1 -> 10 available, Unit 3 -> 4 available
     expect(component.getTotalCodingCases()).toBe(14);
   });
 
