@@ -397,7 +397,10 @@ export class CodingProcessService {
 
       // Step 9: Extract coding scheme references - 80% progress
       const schemeExtractStart = Date.now();
-      const { codingSchemeRefs, unitToCodingSchemeRefMap } =
+      const {
+        codingSchemeRefs,
+        unitToCodingSchemeRefMap
+      } =
         await this.extractCodingSchemeReferences(
           units,
           fileIdToTestFileMap,
@@ -840,7 +843,27 @@ export class CodingProcessService {
           }
           statistics.statusCounts[codedStatus] += 1;
 
-          const existingResponse = responses.find(r => String(r.variableid) === codedResult.id);
+          const mappedIdFromAlias = variableAliasToIdMap.get(codedResult.id);
+          const possibleVariableIds = new Set<string>([codedResult.id]);
+          if (mappedIdFromAlias) {
+            possibleVariableIds.add(mappedIdFromAlias);
+          }
+          const possibleVariableIdsNormalized = new Set(
+            Array.from(possibleVariableIds).map(v => String(v).toUpperCase())
+          );
+          const codedSubform = codedResult.subform || '';
+
+          // Prefer updates for the same variable + subform to avoid generating
+          // duplicates on repeated autocoder runs (especially for derived vars).
+          const matchingResponses = responses
+            .filter(
+              r => possibleVariableIdsNormalized.has(
+                String(r.variableid).toUpperCase()
+              ) &&
+                String(r.subform || '') === codedSubform
+            )
+            .sort((a, b) => b.id - a.id);
+          const existingResponse = matchingResponses[0];
 
           const codedResponse: CodedResponse = {
             id: existingResponse ? existingResponse.id : -1
@@ -966,11 +989,17 @@ export class CodingProcessService {
         if (queryRunner) {
           await queryRunner.release();
         }
-        return { codingSchemeRefs, unitToCodingSchemeRefMap };
+        return {
+          codingSchemeRefs,
+          unitToCodingSchemeRefMap
+        };
       }
     }
 
-    return { codingSchemeRefs, unitToCodingSchemeRefMap };
+    return {
+      codingSchemeRefs,
+      unitToCodingSchemeRefMap
+    };
   }
 
   private normalizeAutocoderStatus(status: string): string {

@@ -159,6 +159,29 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
         right: 0;
         z-index: 10;
       }
+
+      .auto-resolve-info {
+        margin: 0 0 12px 0;
+        padding: 10px 12px;
+        border: 1px solid #b3e5fc;
+        border-radius: 4px;
+        background-color: #e1f5fe;
+        color: #01579b;
+      }
+
+      .auto-resolve-info-title {
+        font-weight: 600;
+        margin: 0 0 6px 0;
+      }
+
+      .auto-resolve-info ul {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .auto-resolve-info li {
+        margin: 2px 0;
+      }
     `
   ]
 })
@@ -410,18 +433,11 @@ implements OnInit, OnDestroy {
   selectSuggestedDuplicateResponse(
     duplicate: DuplicateResponseSelectionDto
   ): void {
-    // Smart selection: prefer non-empty values, then by status priority
-    const rankStatus = (s: string): number => {
-      if (s === 'DISPLAYED') return 4;
-      if (s === 'VALUE_CHANGED') return 3;
-      if (s === 'FOCUS_CHANGED') return 2;
-      return 1;
-    };
-
-    const best = (duplicate.duplicates || []).sort((a, b) => {
+    // Smart selection: prefer non-empty values, then keep newest response id.
+    const best = [...(duplicate.duplicates || [])].sort((a, b) => {
       if (a.value && !b.value) return -1;
       if (!a.value && b.value) return 1;
-      return rankStatus(b.status || '') - rankStatus(a.status || '');
+      return b.responseId - a.responseId;
     })[0];
 
     if (best) {
