@@ -40,6 +40,10 @@ import { CodingJobResultDialogComponent } from './coding-job-result-dialog/codin
 import { CoderTraining } from '../../models/coder-training.model';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
+import {
+  TransferCodingCasesDialogComponent,
+  TransferCodingCasesDialogResult
+} from './transfer-coding-cases-dialog/transfer-coding-cases-dialog.component';
 
 interface BulkApplyResultItem {
   jobId: number;
@@ -819,6 +823,55 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       if (result?.resultsApplied) {
         this.jobsChanged.emit();
       }
+    });
+  }
+
+  openTransferCodingCasesDialog(): void {
+    if (!this.allCoders?.length) {
+      this.snackBar.open('Keine Kodierer verfügbar', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.snackBar.open('Kein Workspace ausgewählt', 'Schließen', { duration: 3000 });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(TransferCodingCasesDialogComponent, {
+      width: '560px',
+      maxWidth: '95vw',
+      data: { coders: this.allCoders }
+    });
+
+    dialogRef.afterClosed().subscribe((result?: TransferCodingCasesDialogResult) => {
+      if (!result) {
+        return;
+      }
+
+      this.codingJobBackendService.transferCodingCases(
+        workspaceId,
+        result.sourceCoderId,
+        result.targetCoderId
+      ).subscribe({
+        next: transferResult => {
+          this.snackBar.open(
+            `Übertragung erfolgreich: ${transferResult.transferredCases} Fälle in ${transferResult.affectedJobs} Job(s) angepasst`,
+            'Schließen',
+            { duration: 4000 }
+          );
+          this.loadCodingJobs();
+          this.jobsChanged.emit();
+        },
+        error: error => {
+          const apiMessage = error?.error?.message;
+          this.snackBar.open(
+            apiMessage || 'Fehler beim Übertragen der Kodierfälle',
+            'Schließen',
+            { duration: 5000 }
+          );
+        }
+      });
     });
   }
 

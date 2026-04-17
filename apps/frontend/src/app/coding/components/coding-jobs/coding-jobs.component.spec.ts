@@ -67,6 +67,14 @@ describe('CodingJobsComponent', () => {
       deleteCodingJob: jest.fn().mockReturnValue(of({ success: true })),
       startCodingJob: jest.fn().mockReturnValue(of({ items: [], total: 0 })),
       restartCodingJobWithOpenUnits: jest.fn().mockReturnValue(of({})),
+      transferCodingCases: jest.fn().mockReturnValue(of({
+        sourceCoderId: 1,
+        targetCoderId: 2,
+        affectedJobs: 2,
+        updatedAssignments: 2,
+        removedDuplicateAssignments: 0,
+        transferredCases: 10
+      })),
       applyCodingResults: jest.fn().mockReturnValue(of({ success: true })),
       bulkApplyCodingResults: jest.fn().mockReturnValue(of({
         success: true, jobsProcessed: 0, totalUpdatedResponses: 0, results: []
@@ -398,6 +406,24 @@ describe('CodingJobsComponent', () => {
     expect(codingJobBackendServiceMock.bulkApplyCodingResults).toHaveBeenCalledWith(1);
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Massenanwendung abgeschlossen'),
+      'Schließen',
+      expect.objectContaining({})
+    );
+  });
+
+  it('should transfer coding cases between coders', () => {
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of({
+        sourceCoderId: 1,
+        targetCoderId: 2
+      })
+    });
+
+    component.openTransferCodingCasesDialog();
+
+    expect(codingJobBackendServiceMock.transferCodingCases).toHaveBeenCalledWith(1, 1, 2);
+    expect(matSnackBarMock.open).toHaveBeenCalledWith(
+      expect.stringContaining('Übertragung erfolgreich'),
       'Schließen',
       expect.objectContaining({})
     );
