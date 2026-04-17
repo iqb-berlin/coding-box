@@ -23,6 +23,9 @@ import { DatabaseAdminController } from '../database/database-admin.controller';
 import { DatabaseExportProcessor } from '../database/database-export.processor';
 import { DatabaseExportService } from '../database/database-export.service';
 import { Setting } from '../../database/entities/setting.entity';
+import FileUpload from '../../database/entities/file_upload.entity';
+import { ContentPoolSettingsController } from '../content-pool/content-pool-settings.controller';
+import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
 
 @Module({
   imports: [
@@ -32,7 +35,7 @@ import { Setting } from '../../database/entities/setting.entity';
     AuthModule,
     CodingModule,
     HttpModule,
-    TypeOrmModule.forFeature([Setting]),
+    TypeOrmModule.forFeature([Setting, FileUpload]),
     BullModule.registerQueue({
       name: 'database-export'
     }),
@@ -50,11 +53,13 @@ import { Setting } from '../../database/entities/setting.entity';
     ReplayStatisticsController,
     VariableBundleController,
     CodingJobsController,
-    DatabaseAdminController
+    DatabaseAdminController,
+    ContentPoolSettingsController
   ],
   providers: [
     DatabaseExportService,
-    DatabaseExportProcessor
+    DatabaseExportProcessor,
+    ContentPoolIntegrationService
   ]
 })
 export class CoreAdminModule { }

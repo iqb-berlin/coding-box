@@ -1,6 +1,7 @@
 import { HttpClient, HttpHeaders } from '@angular/common/http';
-import { Component, OnDestroy, inject } from '@angular/core';
-
+import {
+  Component, OnDestroy, OnInit, inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -9,10 +10,13 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { Subscription, timer } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 import { AppService, standardLogo } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
+import { SystemSettingsService } from '../../../core/services/system-settings.service';
+import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
 
 type DatabaseExportStatus =
@@ -47,13 +51,15 @@ interface DatabaseExportJobState {
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatProgressBarModule
+    MatProgressBarModule,
+    MatSlideToggleModule
   ]
 })
-export class SysAdminSettingsComponent implements OnDestroy {
+export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   appService = inject(AppService);
   private http = inject(HttpClient);
   private logoService = inject(LogoService);
+  private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
   private exportPollingSubscription: Subscription | null = null;
 
@@ -66,6 +72,12 @@ export class SysAdminSettingsComponent implements OnDestroy {
   databaseExportProgress = 0;
   databaseExportStatus: DatabaseExportStatus | null = null;
   databaseExportError: string | null = null;
+  isLoadingContentPoolSettings = false;
+  isSavingContentPoolSettings = false;
+  contentPoolSettings: ContentPoolSettings = {
+    enabled: false,
+    baseUrl: ''
+  };
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   private readonly exportBaseUrl = `${window.location.origin}/api/admin/database/export/sqlite`;
 
@@ -73,6 +85,10 @@ export class SysAdminSettingsComponent implements OnDestroy {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
     this.logoAltText = this.appService.appLogo.alt;
     this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
+  }
+
+  ngOnInit(): void {
+    this.loadContentPoolSettings();
   }
 
   onFileSelected(event: Event): void {
@@ -255,6 +271,68 @@ export class SysAdminSettingsComponent implements OnDestroy {
     }
   }
 
+  loadContentPoolSettings(): void {
+    this.isLoadingContentPoolSettings = true;
+    this.systemSettingsService.getContentPoolSettings().subscribe({
+      next: settings => {
+        this.contentPoolSettings = {
+          enabled: !!settings.enabled,
+          baseUrl: (settings.baseUrl || '').trim()
+        };
+        this.isLoadingContentPoolSettings = false;
+      },
+      error: () => {
+        this.isLoadingContentPoolSettings = false;
+        this.snackBar.open(
+          'Content-Pool-Einstellungen konnten nicht geladen werden.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  saveContentPoolSettings(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isSavingContentPoolSettings = true;
+    this.systemSettingsService
+      .updateContentPoolSettings({
+        enabled: this.contentPoolSettings.enabled,
+        baseUrl: normalizedBaseUrl
+      })
+      .subscribe({
+        next: settings => {
+          this.contentPoolSettings = {
+            enabled: !!settings.enabled,
+            baseUrl: (settings.baseUrl || '').trim()
+          };
+          this.isSavingContentPoolSettings = false;
+          this.snackBar.open(
+            'Content-Pool-Einstellungen wurden gespeichert.',
+            'Schließen',
+            { duration: 3000 }
+          );
+        },
+        error: error => {
+          this.isSavingContentPoolSettings = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 4000 });
+        }
+      });
+  }
+
   exportDatabase(): void {
     if (this.isExporting) {
       return;
@@ -404,7 +482,6 @@ export class SysAdminSettingsComponent implements OnDestroy {
     if (Array.isArray(payload?.error?.message)) {
       return payload.error.message.join(', ');
     }
-
     if (typeof payload?.error?.message === 'string') {
       return payload.error.message;
     }
