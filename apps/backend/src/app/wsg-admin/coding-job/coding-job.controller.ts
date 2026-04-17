@@ -29,11 +29,14 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../../admin/workspace/workspace.guard';
 import { WorkspaceId } from '../../admin/workspace/workspace.decorator';
+import { AccessLevelGuard, RequireAccessLevel } from '../../admin/workspace/access-level.guard';
 import { CodingJobService, CodingReplayService } from '../../database/services/coding';
 import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
+import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
+import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfer-coding-cases-result.dto';
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -42,6 +45,38 @@ export class WsgCodingJobController {
     private readonly codingJobService: CodingJobService,
     private readonly codingReplayService: CodingReplayService
   ) { }
+
+  @Post('transfer-cases')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Transfer coding cases between coders',
+    description: 'Transfers coding jobs/cases assigned to one coder to another coder within the same workspace'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiOkResponse({
+    description: 'Coding cases transferred successfully',
+    type: TransferCodingCasesResultDto
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid transfer request.'
+  })
+  async transferCodingCases(
+    @WorkspaceId() workspaceId: number,
+      @Body() transferCodingCasesDto: TransferCodingCasesDto
+  ): Promise<TransferCodingCasesResultDto> {
+    return this.codingJobService.transferCodingCases(
+      workspaceId,
+      transferCodingCasesDto.sourceCoderId,
+      transferCodingCasesDto.targetCoderId
+    );
+  }
 
   @Get()
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
