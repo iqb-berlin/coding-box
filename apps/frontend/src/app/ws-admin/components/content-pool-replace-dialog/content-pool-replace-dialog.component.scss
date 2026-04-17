@@ -1,0 +1,35 @@
+.dialog-content {
+  min-width: min(90vw, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.info-text {
+  margin: 0;
+  color: #333;
+}
+
+.credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.load-acps-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.error-message {
+  border-radius: 6px;
+  background: #ffe9e9;
+  border: 1px solid #f0bcbc;
+  color: #8b1d1d;
+  padding: 10px 12px;
+}

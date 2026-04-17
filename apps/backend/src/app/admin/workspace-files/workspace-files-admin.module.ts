@@ -13,7 +13,10 @@ import { WorkspaceFilesContentController } from '../workspace/workspace-files-co
 import { WorkspaceFilesInfoController } from '../workspace/workspace-files-info.controller';
 import { GithubReleasesController } from '../workspace/github-releases.controller';
 import { GithubReleasesService } from '../workspace/github-releases.service';
+import { WorkspaceContentPoolController } from '../workspace/workspace-content-pool.controller';
+import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
 import FileUpload from '../../database/entities/file_upload.entity';
+import { Setting } from '../../database/entities/setting.entity';
 
 @Module({
   imports: [
@@ -24,17 +27,19 @@ import FileUpload from '../../database/entities/file_upload.entity';
     CacheModule,
     JobQueueModule,
     HttpModule,
-    TypeOrmModule.forFeature([FileUpload])
+    TypeOrmModule.forFeature([FileUpload, Setting])
   ],
   controllers: [
     WorkspaceFilesController,
     WorkspaceFilesValidationController,
     WorkspaceFilesContentController,
     WorkspaceFilesInfoController,
-    GithubReleasesController
+    GithubReleasesController,
+    WorkspaceContentPoolController
   ],
   providers: [
-    GithubReleasesService
+    GithubReleasesService,
+    ContentPoolIntegrationService
   ]
 })
 export class WorkspaceFilesAdminModule { }

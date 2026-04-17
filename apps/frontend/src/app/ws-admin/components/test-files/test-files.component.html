@@ -20,6 +20,17 @@
       <mat-icon>upload</mat-icon>
       {{ 'file-upload.upload-test-files' | translate }}
     </a>
+    @if (contentPoolSettings.enabled) {
+      <a
+        mat-raised-button
+        color="accent"
+        [disabled]="isBusy || !canTransferCodingSchemeToContentPool()"
+        (click)="openContentPoolReplaceDialogForSelectedFile()"
+        matTooltip="Ersetzt ein vorhandenes .vocs-Kodierschema im gewählten Content-Pool-ACP">
+        <mat-icon>cloud_upload</mat-icon>
+        Kodierschema zu Content Pool
+      </a>
+    }
     <a mat-raised-button color="primary" [disabled]="isBusy || tableCheckboxSelection.selected.length === 0"
       (click)="deleteFiles()">
       <mat-icon>delete</mat-icon>
