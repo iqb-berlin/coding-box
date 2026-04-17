@@ -83,4 +83,27 @@ describe('CodingJobBackendService', () => {
       req.flush({});
     });
   });
+
+  describe('transferCodingCases', () => {
+    it('should post transfer request for coder cases', () => {
+      service.transferCodingCases(7, 11, 22).subscribe(response => {
+        expect(response.affectedJobs).toBe(3);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/7/coding-job/transfer-cases`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        sourceCoderId: 11,
+        targetCoderId: 22
+      });
+      req.flush({
+        sourceCoderId: 11,
+        targetCoderId: 22,
+        affectedJobs: 3,
+        updatedAssignments: 3,
+        removedDuplicateAssignments: 0,
+        transferredCases: 42
+      });
+    });
+  });
 });

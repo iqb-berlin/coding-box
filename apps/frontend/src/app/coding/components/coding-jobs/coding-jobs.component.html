@@ -57,6 +57,10 @@
         <mat-icon>rule</mat-icon>
         Alle Ergebnisse anwenden
       </button>
+      <button mat-button (click)="openTransferCodingCasesDialog()">
+        <mat-icon>swap_horiz</mat-icon>
+        Fälle übertragen
+      </button>
       }
       <button mat-raised-button color="warn" (click)="bulkDeleteCodingJobs()"
         [disabled]="selection.selected.length === 0" class="bulk-delete-button">
