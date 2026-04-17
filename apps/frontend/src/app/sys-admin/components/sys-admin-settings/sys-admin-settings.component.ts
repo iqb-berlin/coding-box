@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, OnInit, inject } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -8,8 +8,11 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { AppService, standardLogo } from '../../../core/services/app.service';
 import { LogoService } from '../../../core/services/logo.service';
+import { SystemSettingsService } from '../../../core/services/system-settings.service';
+import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
 
 @Component({
@@ -24,12 +27,14 @@ import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
-    MatProgressBarModule
+    MatProgressBarModule,
+    MatSlideToggleModule
   ]
 })
-export class SysAdminSettingsComponent {
+export class SysAdminSettingsComponent implements OnInit {
   appService = inject(AppService);
   private logoService = inject(LogoService);
+  private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
 
   selectedFile: File | null = null;
@@ -38,12 +43,22 @@ export class SysAdminSettingsComponent {
   logoAltText = '';
   backgroundColorValue = '';
   isExporting = false;
+  isLoadingContentPoolSettings = false;
+  isSavingContentPoolSettings = false;
+  contentPoolSettings: ContentPoolSettings = {
+    enabled: false,
+    baseUrl: ''
+  };
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
 
   constructor() {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
     this.logoAltText = this.appService.appLogo.alt;
     this.backgroundColorValue = this.appService.appLogo.bodyBackground || '';
+  }
+
+  ngOnInit(): void {
+    this.loadContentPoolSettings();
   }
 
   onFileSelected(event: Event): void {
@@ -205,6 +220,68 @@ export class SysAdminSettingsComponent {
     });
   }
 
+  loadContentPoolSettings(): void {
+    this.isLoadingContentPoolSettings = true;
+    this.systemSettingsService.getContentPoolSettings().subscribe({
+      next: settings => {
+        this.contentPoolSettings = {
+          enabled: !!settings.enabled,
+          baseUrl: (settings.baseUrl || '').trim()
+        };
+        this.isLoadingContentPoolSettings = false;
+      },
+      error: () => {
+        this.isLoadingContentPoolSettings = false;
+        this.snackBar.open(
+          'Content-Pool-Einstellungen konnten nicht geladen werden.',
+          'Schließen',
+          { duration: 3000 }
+        );
+      }
+    });
+  }
+
+  saveContentPoolSettings(): void {
+    const normalizedBaseUrl = (this.contentPoolSettings.baseUrl || '').trim();
+    if (this.contentPoolSettings.enabled && !normalizedBaseUrl) {
+      this.snackBar.open(
+        'Bitte eine Content-Pool URL hinterlegen, bevor das Feature aktiviert wird.',
+        'Schließen',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    this.isSavingContentPoolSettings = true;
+    this.systemSettingsService
+      .updateContentPoolSettings({
+        enabled: this.contentPoolSettings.enabled,
+        baseUrl: normalizedBaseUrl
+      })
+      .subscribe({
+        next: settings => {
+          this.contentPoolSettings = {
+            enabled: !!settings.enabled,
+            baseUrl: (settings.baseUrl || '').trim()
+          };
+          this.isSavingContentPoolSettings = false;
+          this.snackBar.open(
+            'Content-Pool-Einstellungen wurden gespeichert.',
+            'Schließen',
+            { duration: 3000 }
+          );
+        },
+        error: error => {
+          this.isSavingContentPoolSettings = false;
+          const message = this.extractErrorMessage(
+            error,
+            'Content-Pool-Einstellungen konnten nicht gespeichert werden.'
+          );
+          this.snackBar.open(message, 'Schließen', { duration: 4000 });
+        }
+      });
+  }
+
   exportDatabase(): void {
     if (this.isExporting) {
       return;
@@ -255,5 +332,21 @@ export class SysAdminSettingsComponent {
       .finally(() => {
         this.isExporting = false;
       });
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    const payload = error as {
+      error?: {
+        message?: string | string[];
+      };
+    };
+
+    if (Array.isArray(payload?.error?.message)) {
+      return payload.error.message.join(', ');
+    }
+    if (typeof payload?.error?.message === 'string') {
+      return payload.error.message;
+    }
+    return fallback;
   }
 }

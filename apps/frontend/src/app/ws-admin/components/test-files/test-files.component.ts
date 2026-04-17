@@ -77,6 +77,9 @@ import {
   GithubReleasesDialogComponent
 } from '../github-releases-dialog/github-releases-dialog.component';
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
+import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
+import { ContentPoolSettings } from '../../models/content-pool.model';
+import { ContentPoolReplaceDialogComponent } from '../content-pool-replace-dialog/content-pool-replace-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -124,6 +127,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
+  private contentPoolIntegrationService = inject(ContentPoolIntegrationService);
 
   displayedColumns: string[] = [
     'selectCheckbox',
@@ -139,6 +143,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   isLoading = false;
   isValidating = false;
   isDownloadingAllFiles = false;
+  isLoadingContentPoolConfig = false;
   isDeleting = false;
   isUploading = false;
   downloadProgressPercent = 0;
@@ -160,6 +165,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   getFileTypeLabel = getFileTypeLabel;
 
   resourcePackagesModified = false;
+  contentPoolSettings: ContentPoolSettings = {
+    enabled: false,
+    baseUrl: ''
+  };
 
   textFilterValue: string = '';
   @ViewChild(MatSort) sort!: MatSort;
@@ -173,6 +182,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadTestFiles();
+    this.loadContentPoolSettings();
     this.textFilterSubscription = this.textFilterChanged
       .pipe(debounceTime(300))
       .subscribe(() => {
@@ -308,6 +318,102 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     this.selectedFileType = '';
     this.selectedFileSize = '';
     this.applyFilters();
+  }
+
+  private loadContentPoolSettings(): void {
+    this.isLoadingContentPoolConfig = true;
+    this.contentPoolIntegrationService
+      .getWorkspaceConfig(this.appService.selectedWorkspaceId)
+      .pipe(
+        finalize(() => {
+          this.isLoadingContentPoolConfig = false;
+        })
+      )
+      .subscribe({
+        next: settings => {
+          this.contentPoolSettings = {
+            enabled: !!settings.enabled,
+            baseUrl: (settings.baseUrl || '').trim()
+          };
+        },
+        error: () => {
+          this.contentPoolSettings = {
+            enabled: false,
+            baseUrl: ''
+          };
+        }
+      });
+  }
+
+  isVocsCodingSchemeFile(file: FilesInListDto): boolean {
+    return (
+      file.file_type === 'Resource' &&
+      file.filename.toLowerCase().endsWith('.vocs')
+    );
+  }
+
+  canTransferCodingSchemeToContentPool(): boolean {
+    if (this.isLoadingContentPoolConfig || !this.contentPoolSettings.enabled) {
+      return false;
+    }
+
+    if (!this.contentPoolSettings.baseUrl) {
+      return false;
+    }
+
+    if (this.tableCheckboxSelection.selected.length !== 1) {
+      return false;
+    }
+
+    return this.isVocsCodingSchemeFile(this.tableCheckboxSelection.selected[0]);
+  }
+
+  openContentPoolReplaceDialogForSelectedFile(): void {
+    if (!this.contentPoolSettings.enabled) {
+      this.snackBar.open(
+        'Die Content-Pool-Integration ist aktuell deaktiviert.',
+        'OK',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    if (!this.contentPoolSettings.baseUrl) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    if (this.tableCheckboxSelection.selected.length !== 1) {
+      this.snackBar.open('Bitte genau eine Datei auswählen.', 'OK', {
+        duration: 3000
+      });
+      return;
+    }
+
+    const selectedFile = this.tableCheckboxSelection.selected[0];
+    if (!this.isVocsCodingSchemeFile(selectedFile)) {
+      this.snackBar.open(
+        'Nur Resource-Dateien mit Endung .vocs können übertragen werden.',
+        'OK',
+        { duration: 3500 }
+      );
+      return;
+    }
+
+    this.dialog.open(ContentPoolReplaceDialogComponent, {
+      width: '700px',
+      maxWidth: '95vw',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId,
+        fileId: selectedFile.id,
+        fileName: selectedFile.filename,
+        settings: this.contentPoolSettings
+      }
+    });
   }
 
   private showUploadSummary(result: TestFilesUploadResultDto): void {
