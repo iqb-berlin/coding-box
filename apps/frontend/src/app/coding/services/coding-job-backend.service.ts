@@ -75,6 +75,15 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
+export interface TransferCodingCasesResponse {
+  sourceCoderId: number;
+  targetCoderId: number;
+  affectedJobs: number;
+  updatedAssignments: number;
+  removedDuplicateAssignments: number;
+  transferredCases: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -202,6 +211,19 @@ export class CodingJobBackendService {
   ): Observable<{ success: boolean }> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
     return this.http.delete<{ success: boolean }>(url, { headers: this.authHeader });
+  }
+
+  transferCodingCases(
+    workspaceId: number,
+    sourceCoderId: number,
+    targetCoderId: number
+  ): Observable<TransferCodingCasesResponse> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/transfer-cases`;
+    return this.http.post<TransferCodingCasesResponse>(
+      url,
+      { sourceCoderId, targetCoderId },
+      { headers: this.authHeader }
+    );
   }
 
   startCodingJob(
