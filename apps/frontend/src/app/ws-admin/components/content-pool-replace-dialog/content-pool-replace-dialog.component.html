@@ -1,0 +1,78 @@
+<h2 mat-dialog-title>Kodierschema in Content Pool ersetzen</h2>
+
+<mat-dialog-content class="dialog-content">
+  <p class="info-text">
+    Datei: <strong>{{ data.fileName }}</strong>
+  </p>
+  <p class="info-text">
+    Content-Pool: <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
+  </p>
+
+  <div class="credentials-grid">
+    <mat-form-field appearance="outline">
+      <mat-label>Benutzername</mat-label>
+      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isReplacing">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Passwort</mat-label>
+      <input
+        matInput
+        type="password"
+        [(ngModel)]="password"
+        [disabled]="isLoadingAcps || isReplacing">
+    </mat-form-field>
+  </div>
+
+  <div class="load-acps-actions">
+    <button
+      mat-stroked-button
+      color="primary"
+      (click)="loadAcps()"
+      [disabled]="isLoadingAcps || isReplacing">
+      <mat-icon>login</mat-icon>
+      {{ isLoadingAcps ? 'Lade ACPs...' : 'Anmelden und ACPs laden' }}
+    </button>
+    @if (isLoadingAcps) {
+      <mat-spinner diameter="20"></mat-spinner>
+    }
+  </div>
+
+  @if (hasAuthenticated) {
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>ACP auswählen</mat-label>
+      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isReplacing">
+        @for (acp of acps; track acp.id) {
+          <mat-option [value]="acp.id">
+            {{ acp.name || acp.packageId || acp.id }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>Changelog-Eintrag für neue ACP-Version</mat-label>
+      <textarea
+        matInput
+        rows="3"
+        [(ngModel)]="changelog"
+        [disabled]="isReplacing"></textarea>
+    </mat-form-field>
+  }
+
+  @if (errorMessage) {
+    <div class="error-message">{{ errorMessage }}</div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="isReplacing">Abbrechen</button>
+  <button
+    mat-raised-button
+    color="primary"
+    (click)="replaceCodingScheme()"
+    [disabled]="isReplacing || !hasAuthenticated || !selectedAcpId">
+    <mat-icon>publish</mat-icon>
+    {{ isReplacing ? 'Übertrage...' : 'Kodierschema ersetzen' }}
+  </button>
+</mat-dialog-actions>

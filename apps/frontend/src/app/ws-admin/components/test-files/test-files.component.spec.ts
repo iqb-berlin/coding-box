@@ -14,6 +14,7 @@ import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestFilesUploadConflictsDialogComponent } from './test-files-upload-conflicts-dialog.component';
+import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 
 describe('TestFilesComponent', () => {
   let component: TestFilesComponent;
@@ -34,6 +35,12 @@ describe('TestFilesComponent', () => {
       downloadFile: jest.fn(),
       validateFiles: jest.fn(),
       createDummyTestTakerFile: jest.fn()
+    };
+
+    const contentPoolIntegrationServiceMock = {
+      getWorkspaceConfig: jest.fn().mockReturnValue(
+        of({ enabled: false, baseUrl: '' })
+      )
     };
 
     const dialogMock = {
@@ -70,6 +77,10 @@ describe('TestFilesComponent', () => {
         {
           provide: MatSnackBar,
           useValue: snackBarMock
+        },
+        {
+          provide: ContentPoolIntegrationService,
+          useValue: contentPoolIntegrationServiceMock
         }
       ]
     }).compileComponents();
