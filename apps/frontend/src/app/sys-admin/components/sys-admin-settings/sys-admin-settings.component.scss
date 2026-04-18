@@ -323,3 +323,45 @@ mat-form-field {
   text-align: center;
   max-width: 350px;
 }
+
+.database-export-card {
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.database-export-container {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.export-description {
+  margin: 0 0 12px 0;
+  color: #555;
+  line-height: 1.5;
+}
+
+.export-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.export-progress {
+  margin-top: 16px;
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.export-error {
+  margin-top: 12px;
+  color: #b00020;
+  font-weight: 500;
+}
