@@ -599,6 +599,12 @@
                           <li class="testlet-nested-item" [class.ignored-testlet]="isTestletIgnored(file.filename, testlet.id)">
                             <mat-icon class="testlet-icon">layers</mat-icon>
                             <span class="testlet-label">{{ testlet.label || testlet.id }}</span>
+                            <button mat-icon-button class="testlet-action-button testlet-bulk-action-button"
+                                    [disabled]="isApplyingTestletBulk"
+                                    (click)="toggleTestletIgnoreForAllBooklets(file.filename, testlet.id); $event.stopPropagation()"
+                                    matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Dieses Testlet in allen Testheften wiederherstellen' : 'Dieses Testlet in allen Testheften ignorieren' }}">
+                              <mat-icon>{{ isApplyingTestletBulk ? 'hourglass_top' : 'done_all' }}</mat-icon>
+                            </button>
                             <button mat-icon-button class="testlet-action-button"
                                     (click)="toggleTestletIgnore(file.filename, testlet.id); $event.stopPropagation()"
                                     matTooltip="{{ isTestletIgnored(file.filename, testlet.id) ? 'Testlet wiederherstellen' : 'Testlet ignorieren' }}">
