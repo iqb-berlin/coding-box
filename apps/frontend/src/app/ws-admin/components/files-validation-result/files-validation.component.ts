@@ -201,6 +201,7 @@ export class FilesValidationDialogComponent implements OnInit {
   bookletData: Map<string, BookletInfoDto> = new Map();
   expandedBooklets: Set<string> = new Set();
   loadingBooklets: Set<string> = new Set();
+  isApplyingTestletBulk = false;
   selectedTabIndex = 0;
 
   private workspaceService = inject(WorkspaceService);
@@ -677,6 +678,103 @@ export class FilesValidationDialogComponent implements OnInit {
     return this.ignoredTestlets.some(t => t.bookletId === normBooklet);
   }
 
+  private getExistingBookletIdsFromValidation(): string[] {
+    const bookletIds = new Set<string>();
+    this.validationResults.forEach(result => {
+      result.booklets.files.forEach(file => {
+        if (file.exists && file.filename) {
+          bookletIds.add(file.filename.toUpperCase());
+        }
+      });
+    });
+    return Array.from(bookletIds);
+  }
+
+  private async ensureBookletData(bookletId: string): Promise<BookletInfoDto | null> {
+    const normalizedBookletId = bookletId.toUpperCase();
+    const cached = this.bookletData.get(normalizedBookletId);
+    if (cached) {
+      return cached;
+    }
+    if (!this.data.workspaceId) {
+      return null;
+    }
+
+    try {
+      this.loadingBooklets.add(normalizedBookletId);
+      const info = await firstValueFrom(
+        this.fileService.getBookletInfo(this.data.workspaceId, normalizedBookletId)
+      );
+      this.bookletData.set(normalizedBookletId, info);
+      return info;
+    } catch {
+      return null;
+    } finally {
+      this.loadingBooklets.delete(normalizedBookletId);
+      this.cdr.markForCheck();
+    }
+  }
+
+  private async findBookletsWithTestlet(testletId: string): Promise<string[]> {
+    const normalizedTestletId = testletId.toUpperCase();
+    const bookletIds = this.getExistingBookletIdsFromValidation();
+    const matchingBooklets: string[] = [];
+
+    for (const bookletId of bookletIds) {
+      const info = await this.ensureBookletData(bookletId);
+      if (!info?.testlets?.length) {
+        continue;
+      }
+
+      const hasTestlet = info.testlets.some(
+        testlet => (testlet.id || '').toUpperCase() === normalizedTestletId
+      );
+      if (hasTestlet) {
+        matchingBooklets.push(bookletId);
+      }
+    }
+
+    return matchingBooklets;
+  }
+
+  private applyTestletIgnoreToBooklets(
+    bookletIds: string[],
+    testletId: string,
+    shouldIgnore: boolean
+  ): { nextIgnoredTestlets: { bookletId: string; testletId: string }[]; changedCount: number } {
+    const normalizedTestletId = testletId.toUpperCase();
+    const existingMap = new Map<string, { bookletId: string; testletId: string }>();
+    this.ignoredTestlets.forEach(entry => {
+      existingMap.set(`${entry.bookletId}|${entry.testletId}`, entry);
+    });
+
+    let changedCount = 0;
+    bookletIds.forEach(bookletId => {
+      const normalizedBookletId = bookletId.toUpperCase();
+      const key = `${normalizedBookletId}|${normalizedTestletId}`;
+      const wasIgnored = existingMap.has(key);
+
+      if (shouldIgnore) {
+        existingMap.set(key, {
+          bookletId: normalizedBookletId,
+          testletId: normalizedTestletId
+        });
+      } else {
+        existingMap.delete(key);
+      }
+
+      const isIgnoredNow = existingMap.has(key);
+      if (wasIgnored !== isIgnoredNow) {
+        changedCount += 1;
+      }
+    });
+
+    return {
+      nextIgnoredTestlets: Array.from(existingMap.values()),
+      changedCount
+    };
+  }
+
   toggleBookletExpand(bookletId: string): void {
     if (!bookletId) return;
     const normalized = bookletId.toUpperCase();
@@ -781,6 +879,58 @@ export class FilesValidationDialogComponent implements OnInit {
         () => this.snackBar.open('Testlet ignoriert', 'OK', { duration: 3000 }),
         () => this.ignoredTestlets.splice(this.ignoredTestlets.findIndex(t => t.bookletId === normBooklet && t.testletId === normTestlet), 1)
       );
+    }
+  }
+
+  async toggleTestletIgnoreForAllBooklets(bookletId: string, testletId: string): Promise<void> {
+    if (!bookletId || !testletId || !this.data.workspaceId || this.isApplyingTestletBulk) {
+      return;
+    }
+
+    const normalizedBookletId = bookletId.toUpperCase();
+    const normalizedTestletId = testletId.toUpperCase();
+    const shouldIgnore = !this.isTestletIgnored(normalizedBookletId, normalizedTestletId);
+
+    this.isApplyingTestletBulk = true;
+    this.cdr.markForCheck();
+
+    try {
+      const matchingBooklets = await this.findBookletsWithTestlet(normalizedTestletId);
+      if (matchingBooklets.length === 0) {
+        this.snackBar.open('Keine passenden Testhefte mit diesem Testlet gefunden', 'OK', { duration: 3000 });
+        return;
+      }
+
+      const previousIgnoredTestlets = [...this.ignoredTestlets];
+      const { nextIgnoredTestlets, changedCount } = this.applyTestletIgnoreToBooklets(
+        matchingBooklets,
+        normalizedTestletId,
+        shouldIgnore
+      );
+
+      if (changedCount === 0) {
+        const unchangedMessage = shouldIgnore ?
+          'Testlet ist bereits in allen betroffenen Testheften ignoriert' :
+          'Testlet ist bereits in allen betroffenen Testheften wiederhergestellt';
+        this.snackBar.open(unchangedMessage, 'OK', { duration: 3000 });
+        return;
+      }
+
+      this.ignoredTestlets = nextIgnoredTestlets;
+      this.saveCurrentWorkspaceSettings(
+        () => {
+          const bookletLabel = changedCount === 1 ? '1 Testheft' : `${changedCount} Testhefte`;
+          const actionLabel = shouldIgnore ? 'ignoriert' : 'wiederhergestellt';
+          this.snackBar.open(`Testlet in ${bookletLabel} ${actionLabel}`, 'OK', { duration: 3000 });
+        },
+        () => {
+          this.ignoredTestlets = previousIgnoredTestlets;
+          this.cdr.markForCheck();
+        }
+      );
+    } finally {
+      this.isApplyingTestletBulk = false;
+      this.cdr.markForCheck();
     }
   }
 
