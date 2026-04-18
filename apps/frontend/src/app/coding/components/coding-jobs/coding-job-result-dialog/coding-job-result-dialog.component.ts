@@ -478,7 +478,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
               { queryParams: queryParams })
           );
 
-        window.open(`#/${url}`, '_blank');
+        window.open(`${window.location.origin}/#${url}`, '_blank');
       },
       error: () => {
         loadingSnackBar.dismiss();
