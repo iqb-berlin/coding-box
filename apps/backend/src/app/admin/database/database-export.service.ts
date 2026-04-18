@@ -6,6 +6,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as sqlite3 from 'sqlite3';
 import { promisify } from 'util';
+import { DatabaseExportCancelledError } from './database-export-cancelled.error';
+
+type ExportProgressCallback = (
+  progress: number,
+  message: string
+) => Promise<void> | void;
+
+type ExportCancellationCheck = () => Promise<boolean> | boolean;
 
 @Injectable()
 export class DatabaseExportService {
@@ -14,6 +22,180 @@ export class DatabaseExportService {
   constructor(
     @InjectDataSource() private readonly dataSource: DataSource
   ) {}
+
+  async exportToSqliteFile(
+    outputFilePath: string,
+    onProgress?: ExportProgressCallback,
+    isCancelled?: ExportCancellationCheck
+  ): Promise<void> {
+    const outputDir = path.dirname(outputFilePath);
+
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const db = new sqlite3.Database(outputFilePath);
+    const dbRun = promisify(db.run.bind(db));
+    const dbClose = promisify(db.close.bind(db));
+
+    try {
+      await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
+      await this.throwIfCancelled(isCancelled);
+
+      const tables = await this.dataSource.query(`
+        SELECT table_name
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+        ORDER BY table_name
+      `);
+
+      const exportableTables = tables
+        .map(table => table.table_name as string)
+        .filter(tableName => !tableName.startsWith('typeorm_') && tableName !== 'migrations');
+
+      await this.throwIfCancelled(isCancelled);
+
+      // Keep the export in a single SQLite file (without .wal sidecar files).
+      await dbRun('PRAGMA journal_mode=DELETE');
+      await dbRun('PRAGMA synchronous=NORMAL');
+      await dbRun('PRAGMA cache_size=10000');
+      await dbRun('PRAGMA temp_store=memory');
+
+      const rowCounts = new Map<string, number>();
+      let totalRows = 0;
+
+      for (const tableName of exportableTables) {
+        await this.throwIfCancelled(isCancelled);
+        const countResult = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM "${tableName}"`
+        );
+        const rowCount = Number(countResult[0]?.count ?? 0);
+        rowCounts.set(tableName, rowCount);
+        totalRows += rowCount;
+      }
+
+      await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
+
+      let processedRows = 0;
+      let processedTables = 0;
+      const totalTables = exportableTables.length || 1;
+
+      for (const tableName of exportableTables) {
+        await this.throwIfCancelled(isCancelled);
+        this.logger.log(`Processing table: ${tableName}`);
+
+        const columns = await this.dataSource.query(`
+          SELECT column_name, data_type, is_nullable
+          FROM information_schema.columns
+          WHERE table_name = $1 AND table_schema = 'public'
+          ORDER BY ordinal_position
+        `, [tableName]);
+
+        const columnDefs = columns
+          .map(col => {
+            const colType = this.mapPostgresTypeToSqlite(col.data_type);
+            const nullable = col.is_nullable === 'YES' ? '' : ' NOT NULL';
+            return `"${col.column_name}" ${colType}${nullable}`;
+          })
+          .join(', ');
+
+        await dbRun(
+          `CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`
+        );
+
+        const totalRowsInTable = rowCounts.get(tableName) ?? 0;
+        if (totalRowsInTable === 0) {
+          processedTables += 1;
+          await this.reportProgress(
+            onProgress,
+            this.calculateProgress(
+              processedRows,
+              totalRows,
+              processedTables,
+              totalTables
+            ),
+            `Tabelle ${tableName} abgeschlossen`
+          );
+          continue;
+        }
+
+        const batchSize = 1000;
+        let offset = 0;
+
+        while (offset < totalRowsInTable) {
+          await this.throwIfCancelled(isCancelled);
+
+          const rows = await this.dataSource.query(`
+            SELECT * FROM "${tableName}"
+            ORDER BY (SELECT NULL)
+            LIMIT $1 OFFSET $2
+          `, [batchSize, offset]);
+
+          if (rows.length === 0) {
+            break;
+          }
+
+          const columnNames = columns.map(col => `"${col.column_name}"`).join(', ');
+          const placeholders = columns.map(() => '?').join(', ');
+          const insertSql = `INSERT INTO "${tableName}" (${columnNames}) VALUES (${placeholders})`;
+
+          await dbRun('BEGIN TRANSACTION');
+          try {
+            for (const row of rows) {
+              const values = columns.map(col => this.normalizeSqliteValue(row[col.column_name]));
+              await dbRun(insertSql, values);
+            }
+            await dbRun('COMMIT');
+          } catch (error) {
+            await dbRun('ROLLBACK');
+            throw error;
+          }
+
+          offset += rows.length;
+          processedRows += rows.length;
+
+          await this.reportProgress(
+            onProgress,
+            this.calculateProgress(
+              processedRows,
+              totalRows,
+              processedTables,
+              totalTables
+            ),
+            `Tabelle ${tableName}: ${Math.min(offset, totalRowsInTable)}/${totalRowsInTable}`
+          );
+        }
+
+        processedTables += 1;
+        this.logger.log(`Completed table ${tableName}`);
+      }
+
+      await dbClose();
+      await this.reportProgress(onProgress, 100, 'Export abgeschlossen');
+    } catch (error) {
+      try {
+        await dbClose();
+      } catch (closeError) {
+        this.logger.error(
+          `Error closing SQLite file: ${closeError?.message || closeError}`,
+          closeError?.stack
+        );
+      }
+
+      if (fs.existsSync(outputFilePath)) {
+        try {
+          fs.unlinkSync(outputFilePath);
+        } catch (cleanupError) {
+          this.logger.error(
+            `Error deleting failed export file: ${cleanupError?.message || cleanupError}`,
+            cleanupError?.stack
+          );
+        }
+      }
+
+      throw error;
+    }
+  }
 
   async exportToSqliteStream(response: Response): Promise<void> {
     const tempDir = path.join(process.cwd(), 'temp');
@@ -455,6 +637,64 @@ export class DatabaseExportService {
 
       throw error;
     }
+  }
+
+  private normalizeSqliteValue(value: unknown): unknown {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'boolean') {
+      return value ? 1 : 0;
+    }
+
+    if (value instanceof Date) {
+      return value.toISOString();
+    }
+
+    if (typeof value === 'object') {
+      return JSON.stringify(value);
+    }
+
+    return value;
+  }
+
+  private async throwIfCancelled(
+    isCancelled?: ExportCancellationCheck
+  ): Promise<void> {
+    if (!isCancelled) {
+      return;
+    }
+
+    if (await isCancelled()) {
+      throw new DatabaseExportCancelledError();
+    }
+  }
+
+  private async reportProgress(
+    callback: ExportProgressCallback | undefined,
+    progress: number,
+    message: string
+  ): Promise<void> {
+    if (!callback) {
+      return;
+    }
+
+    const boundedProgress = Math.max(0, Math.min(100, Math.round(progress)));
+    await callback(boundedProgress, message);
+  }
+
+  private calculateProgress(
+    processedRows: number,
+    totalRows: number,
+    processedTables: number,
+    totalTables: number
+  ): number {
+    if (totalRows > 0) {
+      return Math.min(99, Math.max(1, (processedRows / totalRows) * 99));
+    }
+
+    return Math.min(99, Math.max(1, (processedTables / totalTables) * 99));
   }
 
   private mapPostgresTypeToSqlite(postgresType: string): string {
