@@ -115,6 +115,15 @@ lint-frontend:
 lint-frontend-e2e:
 	$(MAKE) -f $(MK_FILE_DIR)/lint.mk -C $(MK_FILE_DIR) $@
 
+replay-health-help:
+	$(MAKE) -f $(MK_FILE_DIR)/replay-health.mk -C $(MK_FILE_DIR) $@
+replay-health:
+	$(MAKE) -f $(MK_FILE_DIR)/replay-health.mk -C $(MK_FILE_DIR) $@
+replay-health-prod:
+	$(MAKE) -f $(MK_FILE_DIR)/replay-health.mk -C $(MK_FILE_DIR) $@
+replay-health-prod-full:
+	$(MAKE) -f $(MK_FILE_DIR)/replay-health.mk -C $(MK_FILE_DIR) $@
+
 coding-box-up:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 coding-box-down:

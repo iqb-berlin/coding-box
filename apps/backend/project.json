@@ -67,6 +67,13 @@
         "passWithNoTests": true
       }
     },
+    "replay-health": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx ts-node --compiler-options {\\\"module\\\":\\\"commonjs\\\"} --project tsconfig.base.json scripts/replay-health-check.ts",
+        "forwardAllArgs": true
+      }
+    },
     "compodoc": {
       "executor": "@twittwer/compodoc:compodoc",
       "options": {

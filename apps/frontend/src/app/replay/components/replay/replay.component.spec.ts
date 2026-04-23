@@ -47,6 +47,7 @@ class ReplayBackendServiceMock {
 
 class AppServiceMock {
   selectedWorkspaceId = 42;
+  postMessage$ = of({ data: {}, source: null } as unknown as MessageEvent);
 }
 
 class MatSnackBarMock {
@@ -70,6 +71,7 @@ describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
   let snackBar: MatSnackBarMock;
+  let replayBackendService: ReplayBackendServiceMock;
 
   beforeEach(async () => {
     // Spy on token validation
@@ -97,6 +99,8 @@ describe('ReplayComponent', () => {
     fixture = TestBed.createComponent(ReplayComponent);
     component = fixture.componentInstance;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
+    replayBackendService =
+      TestBed.inject(ReplayBackendService) as unknown as ReplayBackendServiceMock;
     fixture.detectChanges();
     await fixture.whenStable();
   });
@@ -114,6 +118,26 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('player data');
     expect(component.unitDef).toBe('unitDef data');
     expect(component.responses).toBeDefined();
+  });
+
+  it('should expose a ready marker for replay health checks', () => {
+    component.replayStatus = 'loading';
+
+    component.onResponseVisible();
+    fixture.detectChanges();
+
+    const replayContainer =
+      fixture.nativeElement.querySelector('.replay-container') as HTMLElement;
+    expect(replayContainer.getAttribute('data-replay-status')).toBe('ready');
+  });
+
+  it('should skip replay statistics in health check mode', () => {
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.isHealthCheckMode = true;
+
+    component.onResponseVisible();
+
+    expect(replayBackendService.storeReplayStatistics).not.toHaveBeenCalled();
   });
 
   it('should handle invalid testPerson in setTestPerson', () => {

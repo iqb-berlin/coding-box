@@ -1,5 +1,8 @@
 <div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode"
-  [class.resizing]="isResizing" (window:keydown)="onKeyDown($any($event))">
+  [class.resizing]="isResizing" [attr.data-replay-status]="replayStatus"
+  [attr.data-replay-error]="replayErrorMessage || null"
+  [attr.data-replay-health-check]="isHealthCheckMode ? 'true' : null"
+  (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 
   @if (isCodingMode || isBookletReplayMode) {

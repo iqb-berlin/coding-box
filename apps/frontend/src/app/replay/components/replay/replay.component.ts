@@ -84,6 +84,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   currentUnitIndex: number = 0;
   totalUnits: number = 0;
   isWatermarkTruncated: boolean = false;
+  replayStatus: 'idle' | 'loading' | 'ready' | 'error' = 'idle';
+  replayErrorMessage: string | null = null;
+  isHealthCheckMode: boolean = false;
   private authToken: string = '';
   private errorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
   private pageErrorSnackbarRef: MatSnackBarRef<TextOnlySnackBar> | null = null;
@@ -124,6 +127,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private openErrorSnackBar(message: string, action: string) {
+    this.markReplayError(message);
     this.errorSnackbarRef = this.errorSnackBar
       .open(message, action, { panelClass: ['snackbar-error'] });
     this.errorSnackbarRef.afterDismissed().subscribe(() => {
@@ -135,6 +139,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private openPageErrorSnackBar(message: string, action: string) {
     if (!this.errorSnackbarRef) {
+      this.markReplayError(message);
       this.pageErrorSnackbarRef = this.pageErrorSnackBar
         .open(message, action, { panelClass: ['snackbar-error'] });
     }
@@ -165,6 +170,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.routeStartTime = performance.now();
         this.resetSnackBars();
         this.resetUnitData();
+        this.markReplayLoading();
         this.authToken = await this.getAuthToken();
         let workspace: string | undefined;
         try {
@@ -176,6 +182,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.workspaceId = Number(workspace);
 
         const queryParams = await firstValueFrom(this.route.queryParams);
+        this.isHealthCheckMode = queryParams.healthCheck === '1';
         this.isCodingMode = queryParams.mode === 'coding';
         this.isBookletReplayMode = queryParams.mode === 'booklet-view';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
@@ -316,6 +323,21 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     setTimeout(() => this.isLoaded.next(true));
   }
 
+  private markReplayLoading(): void {
+    this.replayStatus = 'loading';
+    this.replayErrorMessage = null;
+  }
+
+  private markReplayReady(): void {
+    this.replayStatus = 'ready';
+    this.replayErrorMessage = null;
+  }
+
+  private markReplayError(message: string): void {
+    this.replayStatus = 'error';
+    this.replayErrorMessage = message;
+  }
+
   setUnitParams(params: Params): void {
     const {
       page, testPerson, unitId, anchor
@@ -356,6 +378,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (changes.unitIdInput) {
       this.resetUnitData();
       this.resetSnackBars();
+      this.markReplayLoading();
 
       if (this.authToken) {
         const tokenValidation = validateToken(this.authToken);
@@ -508,6 +531,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onResponseVisible(): void {
+    if (this.replayStatus !== 'error') {
+      this.markReplayReady();
+    }
+
     if (this.successStoredForCurrentReplay) {
       return;
     }
@@ -527,6 +554,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private storeReplayStatistics(success: boolean, duration: number, errorMessage?: string): void {
+    if (this.isHealthCheckMode) return;
+
     const workspaceId = this.getWorkspaceIdFromToken();
     if (!workspaceId) return;
 
@@ -654,6 +683,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
       this.pageErrorSnackbarRef = null;
+      if (this.successStoredForCurrentReplay && !this.errorSnackbarRef) {
+        this.markReplayReady();
+      }
     }
   }
 
@@ -668,6 +700,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+    this.replayStatus = 'idle';
+    this.replayErrorMessage = null;
     this.codingService.resetCodingData();
   }
 
