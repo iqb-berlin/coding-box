@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { ValidationService } from '../validation.service';
+import { ValidationService } from '../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../models/validation-task.dto';
 
 @Injectable({

@@ -1,16 +1,16 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
-import { UserBackendService } from '../user-backend.service';
-import { ServerResponse } from '../authentication.service';
-import { WorkspaceBackendService } from '../workspace-backend.service';
-import { FileService, BookletUnit } from '../file.service';
-import { FileBackendService } from '../file-backend.service';
-import { ImportService, ImportOptions, Result } from '../import.service';
-import { UnitTagService } from '../unit-tag.service';
-import { UnitNoteService } from '../unit-note.service';
-import { ResourcePackageService } from '../resource-package.service';
-import { UnitService } from '../unit.service';
+import { UserBackendService } from '../../shared/services/user/user-backend.service';
+import { ServerResponse } from '../../core/services/authentication.service';
+import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
+import { FileService, BookletUnit } from '../../shared/services/file/file.service';
+import { FileBackendService } from '../../shared/services/file/file-backend.service';
+import { ImportService, ImportOptions, Result } from '../../shared/services/file/import.service';
+import { UnitTagService } from '../../shared/services/unit/unit-tag.service';
+import { UnitNoteService } from '../../shared/services/unit/unit-note.service';
+import { ResourcePackageService } from '../../shared/services/response/resource-package.service';
+import { UnitService } from '../../shared/services/unit/unit.service';
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
 import { UserWorkspaceAccessDto } from '../../../../../../api-dto/workspaces/user-workspace-access-dto';
 import { UserFullDto } from '../../../../../../api-dto/user/user-full-dto';
@@ -26,7 +26,7 @@ import { UnitNoteDto } from '../../../../../../api-dto/unit-notes/unit-note.dto'
 import { FileDownloadDto } from '../../../../../../api-dto/files/file-download.dto';
 import { FileValidationResultDto } from '../../../../../../api-dto/files/file-validation-result.dto';
 import { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
-import { TestResultsUploadResultDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { BookletInfoDto } from '../../../../../../api-dto/booklet-info/booklet-info.dto';
@@ -156,7 +156,7 @@ export class WorkspaceFacadeService {
     return this.fileService.uploadTestFiles(workspaceId, files, overwriteExisting, overwriteFileIds);
   }
 
-  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses', overwriteExisting: boolean = true, overwriteMode: 'skip' | 'merge' | 'replace' = 'skip', scope: string = 'person', filters?: Record<string, unknown>): Observable<TestResultsUploadResultDto> {
+  uploadTestResults(workspaceId: number, files: FileList | null, resultType: 'logs' | 'responses', overwriteExisting: boolean = true, overwriteMode: 'skip' | 'merge' | 'replace' = 'skip', scope: string = 'person', filters?: Record<string, unknown>): Observable<TestResultsUploadJobDto[]> {
     return this.fileService.uploadTestResults(workspaceId, files, resultType, overwriteExisting, overwriteMode, scope, filters);
   }
 
