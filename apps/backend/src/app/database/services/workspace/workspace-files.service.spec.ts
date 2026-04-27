@@ -128,6 +128,77 @@ describe('WorkspaceFilesService.handleFile', () => {
   });
 });
 
+describe('WorkspaceFilesService.onModuleInit', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn()
+  };
+
+  const mockFileUploadRepository = {
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should refresh the startup unit variable cache for raw workspace_id values', async () => {
+    mockQueryBuilder.getRawMany.mockResolvedValue([{ workspace_id: '1' }]);
+    const service = makeService();
+    const refreshSpy = jest
+      .spyOn(service, 'refreshUnitVariableCache')
+      .mockResolvedValue(undefined);
+
+    await service.onModuleInit();
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(refreshSpy).toHaveBeenCalledWith(1);
+    expect(refreshSpy).not.toHaveBeenCalledWith(undefined);
+  });
+
+  it('should skip invalid startup workspace ids', async () => {
+    mockQueryBuilder.getRawMany.mockResolvedValue([{ workspace_id: null }]);
+    const service = makeService();
+    const refreshSpy = jest
+      .spyOn(service, 'refreshUnitVariableCache')
+      .mockResolvedValue(undefined);
+    const errorSpy = jest.spyOn(Logger.prototype, 'error');
+
+    await service.onModuleInit();
+
+    expect(refreshSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Skipping unit variable cache refresh for invalid workspace id: null'
+    );
+  });
+});
+
 describe('WorkspaceFilesService.deleteTestFiles', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
