@@ -1,10 +1,21 @@
-  .coder-trainings-container {
-    padding: 24px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
+:host {
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.coder-trainings-container {
+  padding: clamp(8px, 2vw, 24px);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
 
   .header-row {
     display: flex;
@@ -17,15 +28,35 @@
 
   .header-actions {
     display: flex;
-    align-items: center;
-    gap: 16px;
+    align-items: stretch;
+    gap: 12px;
     flex-wrap: wrap;
+    min-width: 0;
+    width: 100%;
+
+    button {
+      min-height: 40px;
+      height: auto;
+      line-height: 1.2;
+      white-space: normal;
+      border-radius: 8px;
+    }
+  }
+
+  .filter-field {
+    width: min(260px, 100%);
+    min-width: 0;
   }
 
   .trainings-table {
+    display: block;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     max-height: 70vh;
     overflow-y: auto;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   }
@@ -33,6 +64,8 @@
   mat-header-row {
     background-color: #f5f5f5;
     min-height: 56px;
+    width: fit-content;
+    min-width: 720px;
   }
 
   mat-header-cell {
@@ -45,6 +78,8 @@
     min-height: 52px;
     border-bottom: 1px solid #e0e0e0;
     transition: background-color 0.2s ease;
+    width: fit-content;
+    min-width: 720px;
 
     &:hover {
       background-color: #e3f2fd;
@@ -55,6 +90,8 @@
   mat-cell {
     font-size: 14px;
     color: #555;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .loading-container {
@@ -111,12 +148,14 @@
 
     span {
       font-weight: 500;
+      overflow-wrap: anywhere;
     }
   }
 
   .action-buttons {
     display: flex;
     gap: 4px;
+    justify-content: center;
   }
 
   .mat-column-label {
@@ -145,5 +184,22 @@
     .trainings-table {
       overflow-x: auto;
     }
+  }
+}
+
+@media (max-width: 576px) {
+  .coder-trainings-container {
+    padding: 8px;
+  }
+
+  .header-actions,
+  .header-actions button,
+  .filter-field {
+    width: 100%;
+  }
+
+  mat-header-row,
+  mat-row {
+    min-width: 640px;
   }
 }
