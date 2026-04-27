@@ -1,3 +1,20 @@
-.container{
-  margin:10px;
+.container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 10px 0 16px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+button[mat-button] {
+  min-width: 44px;
+  padding: 0 10px;
+}
+
+@media (max-width: 480px) {
+  .container {
+    justify-content: flex-start;
+    margin-top: 4px;
+  }
 }

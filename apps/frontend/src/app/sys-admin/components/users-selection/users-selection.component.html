@@ -1,4 +1,4 @@
-  <div>
+<div class="users-selection">
   @if (userObjectsDatasource.data.length) {
     <coding-box-search-filter
       [title]="'search-filter.filter-users' | translate"
@@ -9,7 +9,7 @@
   <mat-table [dataSource]="userObjectsDatasource"
              matSortDisableClear
              matSort
-             class="scroll-area">
+             class="scroll-area users-table">
     <ng-container matColumnDef="selectCheckbox">
       <mat-header-cell *matHeaderCellDef class="fx-flex-row-fix-70">
         <mat-checkbox [checked]="(tableSelectionCheckboxes | hasSelectionValue : tableSelectionCheckboxes.selected.length) &&  (tableSelectionCheckboxes.selected.length | isAllSelected : userObjectsDatasource.data.length)"
@@ -49,4 +49,4 @@
     <mat-header-row *matHeaderRowDef="displayedUserColumns"></mat-header-row>
     <mat-row *matRowDef="let row; columns: displayedUserColumns;"></mat-row>
   </mat-table>
-  </div>
+</div>
