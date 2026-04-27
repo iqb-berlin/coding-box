@@ -1,5 +1,5 @@
 <div class="admin-tab-content">
-  <div class="fx-column-start-stretch ">
+  <div class="users-content fx-column-start-stretch">
   <coding-box-users-menu [selectedUser]="selectedUsers"
                           [selectedRows]="selectedRows"
                           [checkedRows]="selectedRows"
@@ -8,7 +8,7 @@
                          (usersDeleted)="deleteUsers($event)"
                          (setUserWorkspaceAccessRights) ="setUserWorkspaceAccessRight($event)">
   </coding-box-users-menu>
-    <div class="fx-column-start-start">
+    <div class="users-list">
       <coding-box-users-selection class="fx-flex-row-50 object-list"
                                   (userSelectionChanged)="userSelectionChanged($event)"
                                   [selectedUserIds]="selectedUsers"></coding-box-users-selection>

@@ -2,13 +2,27 @@
   height: calc(100% - 35px);
   overflow-y: auto;
 }
-div{
-  min-width:500px;
 
+.users-selection {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .object-list {
   height: calc(100% - 5px);
+}
+
+.users-table {
+  min-width: 420px;
+}
+
+mat-header-cell,
+mat-cell {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .secondary-cell {
@@ -26,5 +40,21 @@ div{
   background-color: #00606415;
   &:hover {
     background-color: #00606415 !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .scroll-area {
+    max-width: 100%;
+  }
+
+  .users-table {
+    min-width: 360px;
+  }
+
+  .fx-flex-row-fix-70 {
+    flex-basis: 56px;
+    max-width: 56px;
+    min-width: 56px;
   }
 }
