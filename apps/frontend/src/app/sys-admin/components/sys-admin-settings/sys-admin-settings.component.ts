@@ -78,6 +78,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
     enabled: false,
     baseUrl: ''
   };
+
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   private readonly exportBaseUrl = `${window.location.origin}/api/admin/database/export/sqlite`;
 

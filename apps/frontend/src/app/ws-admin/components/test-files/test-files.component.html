@@ -24,11 +24,20 @@
       <a
         mat-raised-button
         color="accent"
-        [disabled]="isBusy || !canTransferCodingSchemeToContentPool()"
-        (click)="openContentPoolReplaceDialogForSelectedFile()"
-        matTooltip="Ersetzt ein vorhandenes .vocs-Kodierschema im gewählten Content-Pool-ACP">
+        [disabled]="isBusy || isLoadingContentPoolConfig"
+        (click)="openContentPoolImportDialog()"
+        matTooltip="Importiert alle Dateien eines Content-Pool-ACP in diese Testdateien-Abteilung">
+        <mat-icon>cloud_download</mat-icon>
+        ACP aus Content Pool
+      </a>
+      <a
+        mat-raised-button
+        color="accent"
+        [disabled]="isBusy || !canUploadSelectedFilesToContentPool()"
+        (click)="openContentPoolUploadDialogForSelectedFiles()"
+        matTooltip="Ersetzt gleichnamige Dateien im gewählten Content-Pool-ACP durch die ausgewählten Testdateien">
         <mat-icon>cloud_upload</mat-icon>
-        Kodierschema zu Content Pool
+        Auswahl zu Content Pool
       </a>
     }
     <a mat-raised-button color="primary" [disabled]="isBusy || tableCheckboxSelection.selected.length === 0"

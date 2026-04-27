@@ -1,0 +1,61 @@
+.dialog-content {
+  min-width: 520px;
+  max-width: 720px;
+}
+
+.info-text {
+  margin: 0 0 16px;
+}
+
+.credentials-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.load-acps-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 16px;
+}
+
+.full-width {
+  width: 100%;
+}
+
+.import-progress {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #424242;
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+
+.progress-header span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.error-message {
+  margin-top: 12px;
+  color: #b00020;
+  font-weight: 500;
+}
+
+@media (max-width: 640px) {
+  .dialog-content {
+    min-width: 0;
+  }
+
+  .credentials-grid {
+    grid-template-columns: 1fr;
+  }
+}

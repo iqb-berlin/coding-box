@@ -16,16 +16,24 @@ import {
 import { WorkspaceGuard } from './workspace.guard';
 import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
 
-class ContentPoolCredentialsDto {
+interface ContentPoolCredentialsDto {
   username: string;
 
   password: string;
 }
 
-class ReplaceCodingSchemeDto extends ContentPoolCredentialsDto {
+interface ImportAcpDto extends ContentPoolCredentialsDto {
   acpId: string;
 
-  fileId: number;
+  overwriteExisting?: boolean;
+
+  overwriteFileIds?: string[];
+}
+
+interface UploadFilesToAcpDto extends ContentPoolCredentialsDto {
+  acpId: string;
+
+  fileIds: number[];
 
   changelog?: string;
 }
@@ -53,31 +61,85 @@ export class WorkspaceContentPoolController {
   @ApiOperation({
     summary: 'Authenticate against Content Pool and list accessible ACPs'
   })
-  async listAcps(
-    @Body() body: ContentPoolCredentialsDto
-  ) {
+  async listAcps(@Body() body: ContentPoolCredentialsDto) {
     return this.contentPoolIntegrationService.listAccessibleAcps(
       body.username,
       body.password
     );
   }
 
-  @Post('replace-coding-scheme')
+  @Post('import-acp')
   @RequireAccessLevel(3)
   @ApiOperation({
-    summary: 'Replace one .vocs coding scheme in selected Content-Pool ACP and create snapshot'
+    summary: 'Import all files from selected Content-Pool ACP into workspace test files'
   })
-  async replaceCodingScheme(
-    @Param('workspace_id', ParseIntPipe) workspaceId: number,
-      @Body() body: ReplaceCodingSchemeDto
+  async importAcp(
+  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Body() body: ImportAcpDto
   ) {
-    return this.contentPoolIntegrationService.replaceCodingSchemeInAcp({
+    return this.contentPoolIntegrationService.importAcpFilesToWorkspace({
       workspaceId,
-      fileId: body.fileId,
       acpId: body.acpId,
       username: body.username,
       password: body.password,
+      overwriteExisting: body.overwriteExisting,
+      overwriteFileIds: body.overwriteFileIds
+    });
+  }
+
+  @Post('import-acp/start')
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start importing all files from selected Content-Pool ACP'
+  })
+  async startImportAcp(
+  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Body() body: ImportAcpDto
+  ) {
+    return this.contentPoolIntegrationService.startAcpImportToWorkspace({
+      workspaceId,
+      acpId: body.acpId,
+      username: body.username,
+      password: body.password,
+      overwriteExisting: body.overwriteExisting,
+      overwriteFileIds: body.overwriteFileIds
+    });
+  }
+
+  @Get('import-acp/:job_id/progress')
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Read progress of a Content-Pool ACP import job'
+  })
+  async getImportAcpProgress(@Param('job_id') jobId: string) {
+    return this.contentPoolIntegrationService.getAcpImportProgress(jobId);
+  }
+
+  @Post('upload-files/start')
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start replacing selected ACP files with workspace files'
+  })
+  async startUploadFilesToAcp(
+  @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Body() body: UploadFilesToAcpDto
+  ) {
+    return this.contentPoolIntegrationService.startUploadWorkspaceFilesToAcp({
+      workspaceId,
+      acpId: body.acpId,
+      username: body.username,
+      password: body.password,
+      fileIds: body.fileIds,
       changelog: body.changelog
     });
+  }
+
+  @Get('upload-files/:job_id/progress')
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Read progress of a Content-Pool file upload job'
+  })
+  async getUploadFilesToAcpProgress(@Param('job_id') jobId: string) {
+    return this.contentPoolIntegrationService.getUploadWorkspaceFilesProgress(jobId);
   }
 }
