@@ -98,6 +98,52 @@
     </mat-card-content>
   </mat-card>
 
+  <mat-card class="content-pool-settings-card">
+    <mat-card-header>
+      <mat-card-title>Content-Pool Integration</mat-card-title>
+    </mat-card-header>
+    @if (isLoadingContentPoolSettings) {
+      <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+    }
+    <mat-card-content>
+      <div class="content-pool-settings-container">
+        <p class="content-pool-description">
+          Steuert die Übertragung von Kodierschemata aus der Coding-Box in den Content Pool.
+          Die URL kann flexibel als Domain oder IP hinterlegt werden.
+        </p>
+
+        <div class="content-pool-toggle">
+          <mat-slide-toggle [(ngModel)]="contentPoolSettings.enabled">
+            {{ contentPoolSettings.enabled ? 'Feature aktiv' : 'Feature inaktiv' }}
+          </mat-slide-toggle>
+        </div>
+
+        <mat-form-field class="full-width">
+          <mat-label>Content-Pool URL oder Domain</mat-label>
+          <input
+            matInput
+            [(ngModel)]="contentPoolSettings.baseUrl"
+            [disabled]="isSavingContentPoolSettings"
+            placeholder="z. B. content-pool.example.org oder https://192.168.10.11:4201">
+          <mat-hint>
+            Wenn kein Protokoll gesetzt ist, wird HTTPS verwendet. Der API-Pfad wird automatisch ergänzt.
+          </mat-hint>
+        </mat-form-field>
+
+        <div class="content-pool-actions">
+          <button
+            mat-raised-button
+            color="primary"
+            [disabled]="isSavingContentPoolSettings || isLoadingContentPoolSettings"
+            (click)="saveContentPoolSettings()">
+            <mat-icon>save</mat-icon>
+            {{ isSavingContentPoolSettings ? 'Speichere...' : 'Einstellungen speichern' }}
+          </button>
+        </div>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
   <mat-card class="database-export-card">
     <mat-card-header>
       <mat-card-title>Datenbank-Export</mat-card-title>
