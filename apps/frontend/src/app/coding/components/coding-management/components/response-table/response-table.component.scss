@@ -3,17 +3,30 @@
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     overflow: hidden;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 .card-header {
-    padding: 24px;
+    padding: clamp(12px, 2vw, 24px);
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 16px;
+    flex-wrap: wrap;
 }
 
 .header-actions {
     margin-left: auto;
+
+    button[mat-raised-button] {
+        border-radius: 8px;
+        min-height: 40px;
+        height: auto;
+        line-height: 1.2;
+        padding: 8px 14px;
+        white-space: normal;
+    }
 }
 
 .section-title {
@@ -31,14 +44,40 @@
 
 .table-container {
     overflow-x: auto;
+    width: 100%;
+    min-width: 0;
+    -webkit-overflow-scrolling: touch;
 }
 
 .coding-table {
     width: 100%;
+    min-width: 920px;
 
     th {
         font-weight: 600;
         background-color: #f5f5f5;
+    }
+
+    th,
+    td {
+        padding: 10px 12px;
+        max-width: 240px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mat-column-actions {
+        width: 112px;
+        min-width: 112px;
+        position: sticky;
+        right: 0;
+        background-color: inherit;
+        z-index: 1;
+    }
+
+    th.mat-column-actions {
+        z-index: 3;
     }
 }
 
@@ -62,6 +101,7 @@
 .action-buttons-container {
     display: flex;
     gap: 8px;
+    justify-content: center;
 }
 
 .action-button {
@@ -123,4 +163,40 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+mat-paginator {
+    width: 100%;
+    overflow-x: auto;
+}
+
+:host ::ng-deep .mat-mdc-paginator-container {
+    flex-wrap: wrap;
+    justify-content: center;
+    row-gap: 8px;
+}
+
+@media (max-width: 768px) {
+    .card-header {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .header-actions {
+        margin-left: 0;
+
+        button[mat-raised-button] {
+            width: 100%;
+            justify-content: center;
+        }
+    }
+
+    .coding-table {
+        min-width: 780px;
+
+        th,
+        td {
+            padding: 8px 10px;
+        }
+    }
 }
