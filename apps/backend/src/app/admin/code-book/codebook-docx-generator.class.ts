@@ -49,10 +49,90 @@ export class CodebookDocxGenerator {
         strict: 'ignore'
       });
       const omml = mml2omml(mathml);
-      return ImportedXmlComponent.fromXmlString(omml);
+      return this.unwrapImportedXmlRoot(
+        ImportedXmlComponent.fromXmlString(this.sanitizeOmmlXml(omml))
+      );
     } catch {
       return null;
     }
+  }
+
+  private static unwrapImportedXmlRoot(
+    component: ImportedXmlComponent
+  ): ImportedXmlComponent {
+    const importedComponent = component as ImportedXmlComponent & {
+      root?: Array<ImportedXmlComponent | string>;
+      rootKey?: string;
+    };
+    if (importedComponent.rootKey !== undefined) {
+      return component;
+    }
+
+    const firstChild = importedComponent.root?.[0];
+    return typeof firstChild === 'object' && firstChild !== null ?
+      firstChild as ImportedXmlComponent :
+      component;
+  }
+
+  private static isMathComponent(
+    child: ParagraphChild
+  ): child is ImportedXmlComponent {
+    if (typeof child !== 'object' || child === null) {
+      return false;
+    }
+    const importedChild = child as ImportedXmlComponent & {
+      rootKey?: string;
+    };
+    return importedChild.rootKey === 'm:oMath' ||
+      importedChild.rootKey === 'm:oMathPara';
+  }
+
+  private static createLeftAlignedMathParagraph(
+    mathChildren: ImportedXmlComponent[]
+  ): ImportedXmlComponent {
+    const mathParagraph = new ImportedXmlComponent('m:oMathPara');
+    const mathParagraphProperties = new ImportedXmlComponent('m:oMathParaPr');
+    mathParagraphProperties.push(
+      new ImportedXmlComponent('m:jc', { 'm:val': 'left' })
+    );
+    mathParagraph.push(mathParagraphProperties);
+    mathChildren.forEach(mathChild => mathParagraph.push(mathChild));
+    return mathParagraph;
+  }
+
+  private static normalizeParagraphChildren(
+    children: ParagraphChild[]
+  ): ParagraphChild[] {
+    if (!children.length) {
+      return children;
+    }
+
+    const mathChildren = children.filter(
+      this.isMathComponent
+    ) as ImportedXmlComponent[];
+    if (mathChildren.length === children.length) {
+      return [this.createLeftAlignedMathParagraph(mathChildren)];
+    }
+
+    return children;
+  }
+
+  private static sanitizeOmmlXml(omml: string): string {
+    if (!omml) return omml;
+    return omml.replace(
+      /(<m:t\b[^>]*>)([\s\S]*?)(<\/m:t>)/g,
+      (_, prefix: string, rawText: string, suffix: string) => `${prefix}${this.escapeXmlText(rawText)}${suffix}`
+    );
+  }
+
+  private static escapeXmlText(text: string): string {
+    return text
+      .replace(
+        /&(?!(?:amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);)/g,
+        '&amp;'
+      )
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
   private static normalizeMathTokens(html: string): string {
@@ -602,7 +682,9 @@ export class CodebookDocxGenerator {
           const children: ParagraphChild[] = [];
           this.processInlineElements(element.children, children);
           if (children.length > 0) {
-            paragraphs.push(new Paragraph({ children }));
+            paragraphs.push(new Paragraph({
+              children: this.normalizeParagraphChildren(children)
+            }));
           }
         } else if (tagName === 'ul' || tagName === 'ol') {
           this.processListElements(element.children, paragraphs, tagName === 'ol');
@@ -681,7 +763,7 @@ export class CodebookDocxGenerator {
           this.processInlineElements(element.children, children);
           if (children.length > 0) {
             paragraphs.push(new Paragraph({
-              children,
+              children: this.normalizeParagraphChildren(children),
               bullet: {
                 level: 0
               },
