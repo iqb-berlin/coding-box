@@ -9,24 +9,27 @@
 
 .workspace-gap {
   row-gap: 20px;
-  overflow: auto;
 }
 
 .mat-button {
   line-height: 24px;
 }
 
-.workspace{
-  width:100%;
-  border-radius: 10px;
-  padding:30px;
+.workspace {
+  width: 100%;
+  border-radius: 8px;
+  line-height: 1.35;
+  min-height: 56px;
+  padding: 18px 24px;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-.workspaces{
+.workspaces {
   height: 100%;
 }
 
-p{
+p {
   font-size: 18px;
   line-height: 20pt;
 }
@@ -50,5 +53,26 @@ p{
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.5rem;
+    margin-top: 0;
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .workspace {
+    padding: 14px 16px;
+  }
+
+  .login-button {
+    width: 100%;
+    min-width: 0;
   }
 }
