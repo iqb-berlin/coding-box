@@ -55,9 +55,17 @@ import { WorkspaceTestResultsService } from '../test-results/workspace-test-resu
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
   private readonly resourceTypeLabel = 'Resource';
+  private readonly detailedUnitCacheLogging =
+    process.env.DEBUG_UNIT_CACHE === 'true';
 
   private getCacheKey(workspaceId: number, type: string): string {
     return `workspace_files:${type}:${workspaceId}`;
+  }
+
+  private logUnitCacheDebug(message: string): void {
+    if (this.detailedUnitCacheLogging) {
+      this.logger.debug(message);
+    }
   }
 
   private toRedisMap(map: Map<string, Set<string>>): Record<string, string[]> {
@@ -2210,13 +2218,31 @@ ${bookletRefs}
     );
 
     try {
-      const workspacesWithUnits = await this.fileUploadRepository
-        .createQueryBuilder('file')
-        .select('DISTINCT file.workspace_id', 'workspace_id')
-        .where('file.file_type = :fileType', { fileType: 'Unit' })
-        .getRawMany();
+      const workspacesWithUnits: {
+        workspaceId?: number | string | null;
+        workspace_id?: number | string | null;
+        [key: string]: number | string | null | undefined;
+      }[] =
+        await this.fileUploadRepository
+          .createQueryBuilder('file')
+          .select('DISTINCT file.workspace_id', 'workspaceId')
+          .where('file.file_type = :fileType', { fileType: 'Unit' })
+          .getRawMany();
 
-      for (const { workspaceId } of workspacesWithUnits) {
+      for (const workspace of workspacesWithUnits) {
+        const rawWorkspaceId = workspace.workspaceId ?? workspace.workspace_id;
+        const workspaceId = Number(rawWorkspaceId);
+        if (
+          rawWorkspaceId == null ||
+          !Number.isInteger(workspaceId) ||
+          workspaceId < 1
+        ) {
+          this.logger.error(
+            `Skipping unit variable cache refresh for invalid workspace id: ${rawWorkspaceId}`
+          );
+          continue;
+        }
+
         await this.refreshUnitVariableCache(workspaceId);
       }
       this.logger.log(
@@ -2305,15 +2331,15 @@ ${bookletRefs}
             codingSchemeMap.set(unitId, variableSourceTypes);
             schemeIdToAliasMap.set(unitId, idToAlias);
             if (intendedIncompleteSchemeIds.size > 0) {
-              this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
+              this.logUnitCacheDebug(
+                `Coding scheme for unit "${unitId}" has INTENDED_INCOMPLETE code type for scheme IDs: [${Array.from(intendedIncompleteSchemeIds).join(', ')}]`
               );
               // Store by unitId so we can resolve to aliases during XML parsing
               intendedIncompleteByUnit.set(unitId, intendedIncompleteSchemeIds);
             }
             if (trainingRequiredSchemeIds.size > 0) {
-              this.logger.debug(
-                `[DEBUG] Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
+              this.logUnitCacheDebug(
+                `Coding scheme for unit "${unitId}" has CODER_TRAINING_REQUIRED for scheme IDs: [${Array.from(trainingRequiredSchemeIds).join(', ')}]`
               );
               trainingRequiredByUnit.set(unitId, trainingRequiredSchemeIds);
             }
@@ -2384,8 +2410,8 @@ ${bookletRefs}
                   // Check if this variable's scheme ID has INTENDED_INCOMPLETE code type
                   if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
                     aliasesWithIntendedIncomplete.add(variable.$.alias);
-                    this.logger.debug(
-                      `[DEBUG] Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    this.logUnitCacheDebug(
+                      `Base variable "${variable.$.alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
                   // Check CODER_TRAINING_REQUIRED
@@ -2408,8 +2434,8 @@ ${bookletRefs}
                 parsedXml.Unit.DerivedVariables.Variable :
                 [parsedXml.Unit.DerivedVariables.Variable];
 
-              this.logger.debug(
-                `[DEBUG] Unit "${unitName}" has ${derivedVariables.length} DerivedVariables in XML`
+              this.logUnitCacheDebug(
+                `Unit "${unitName}" has ${derivedVariables.length} DerivedVariables in XML`
               );
 
               for (const variable of derivedVariables) {
@@ -2420,38 +2446,38 @@ ${bookletRefs}
                 const unitSourceTypes = codingSchemeMap.get(unitName);
                 const sourceType = unitSourceTypes?.get(schemeKey);
 
-                this.logger.debug(
-                  `[DEBUG] DerivedVariable id="${id}" alias="${alias}" type="${type}" schemeKey="${schemeKey}" sourceType="${sourceType}" in unit "${unitName}"`
+                this.logUnitCacheDebug(
+                  `DerivedVariable id="${id}" alias="${alias}" type="${type}" schemeKey="${schemeKey}" sourceType="${sourceType}" in unit "${unitName}"`
                 );
 
                 if (!alias) {
-                  this.logger.debug('[DEBUG]  → SKIPPED: no alias');
+                  this.logUnitCacheDebug('Skipped derived variable: no alias');
                   continue;
                 }
                 if (type === 'no-value') {
-                  this.logger.debug('[DEBUG]  → SKIPPED: type is no-value');
+                  this.logUnitCacheDebug('Skipped derived variable: type is no-value');
                   continue;
                 }
                 if (sourceType === 'BASE_NO_VALUE') {
-                  this.logger.debug(
-                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE_NO_VALUE'
+                  this.logUnitCacheDebug(
+                    'Excluded derived variable from cache: sourceType is BASE_NO_VALUE'
                   );
                 } else if (sourceType === 'BASE') {
-                  this.logger.debug(
-                    '[DEBUG]  → EXCLUDED from cache: sourceType is BASE'
+                  this.logUnitCacheDebug(
+                    'Excluded derived variable from cache: sourceType is BASE'
                   );
                 } else {
                   variables.add(alias);
                   derivedAliases.add(alias);
-                  this.logger.debug(
-                    `[DEBUG]  → ADDED to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}"`
+                  this.logUnitCacheDebug(
+                    `Added derived variable to unitVariableMap (sourceType="${sourceType ?? 'undefined/no scheme'}")`
                   );
                 }
                 // Check if this derived variable's scheme ID has INTENDED_INCOMPLETE code type
                 if (schemeIdsWithIntendedIncomplete?.has(schemeKey)) {
                   aliasesWithIntendedIncomplete.add(alias);
-                  this.logger.debug(
-                    `[DEBUG] Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                  this.logUnitCacheDebug(
+                    `Derived variable "${alias}" (schemeId="${schemeKey}") in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                   );
                 }
                 // Check CODER_TRAINING_REQUIRED
@@ -2460,8 +2486,8 @@ ${bookletRefs}
                 }
               }
             } else {
-              this.logger.debug(
-                `[DEBUG] Unit "${unitName}" has NO DerivedVariables in XML`
+              this.logUnitCacheDebug(
+                `Unit "${unitName}" has NO DerivedVariables in XML`
               );
             }
 
@@ -2483,14 +2509,14 @@ ${bookletRefs}
                 ) {
                   variables.add(resolvedAlias);
                   derivedAliases.add(resolvedAlias);
-                  this.logger.debug(
-                    `[DEBUG] Unit "${unitName}": added scheme-only variable alias="${resolvedAlias}" (schemeId="${schemeId}", sourceType="${sourceType}") to unitVariableMap`
+                  this.logUnitCacheDebug(
+                    `Unit "${unitName}": added scheme-only variable alias="${resolvedAlias}" (schemeId="${schemeId}", sourceType="${sourceType}") to unitVariableMap`
                   );
                   // Also check INTENDED_INCOMPLETE for this scheme-only variable
                   if (schemeIdsWithIntendedIncomplete?.has(schemeId)) {
                     aliasesWithIntendedIncomplete.add(resolvedAlias);
-                    this.logger.debug(
-                      `[DEBUG] Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
+                    this.logUnitCacheDebug(
+                      `Scheme-only variable alias="${resolvedAlias}" in unit "${unitName}" has INTENDED_INCOMPLETE in scheme`
                     );
                   }
                   // Also check CODER_TRAINING_REQUIRED for this scheme-only variable
@@ -2546,8 +2572,14 @@ ${bookletRefs}
       this.logger.log(
         `Cached ${unitVariables.size} units with their variables for workspace ${workspaceId} to Redis`
       );
-      this.logger.debug(
-        `[DEBUG] intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
+      this.logger.log(
+        `Unit variable cache summary for workspace ${workspaceId}: ` +
+        `${intendedIncompleteAliasByUnit.size} units with intended-incomplete variables, ` +
+        `${trainingRequiredAliasByUnit.size} units with training-required variables, ` +
+        `${derivedVariablesByUnit.size} units with derived variables`
+      );
+      this.logUnitCacheDebug(
+        `intendedIncompleteSchemeCache (by alias) for workspace ${workspaceId}: ` +
           `${intendedIncompleteAliasByUnit.size} units with INTENDED_INCOMPLETE codes. ${Array.from(
             intendedIncompleteAliasByUnit.entries()
           )
