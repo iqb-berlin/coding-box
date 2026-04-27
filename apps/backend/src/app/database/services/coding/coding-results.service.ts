@@ -110,7 +110,7 @@ export class CodingResultsService {
           } else if (progress.id === -2) {
             skippedReviewCount += 1;
             continue;
-          } else if (progress.id > 0) {
+          } else if (progress.id >= 0) {
             code = progress.id;
           }
 
