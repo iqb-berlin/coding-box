@@ -1,19 +1,22 @@
 .wrapper {
   width: 100%;
   padding: 0;
+  min-width: 0;
 }
 
 .scroll-area {
   max-height: 400px;
-  overflow-y: auto;
+  overflow: auto;
   margin-top: 20px;
   border: 1px solid #e0e0e0;
-  border-radius: 4px;
+  border-radius: 8px;
   background-color: white;
+  -webkit-overflow-scrolling: touch;
 }
 
 .access-rights-table {
   width: 100%;
+  min-width: 520px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -46,6 +49,9 @@
 .user-column {
   width: 70%;
   text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .access-level-column {
@@ -98,22 +104,17 @@ mat-checkbox {
   }
 
   .user-column {
-    width: 60%;
+    width: 55%;
   }
 
   .access-level-column {
-    width: 13.33%;
+    width: 15%;
   }
 }
 
 @media (max-width: 480px) {
   .scroll-area {
     max-height: 250px;
-  }
-
-  .access-rights-table th,
-  .access-rights-table td {
-    padding: 8px 10px;
   }
 
   .access-rights-table {
@@ -124,11 +125,8 @@ mat-checkbox {
     font-size: 16px;
   }
 
-  .user-column {
-    width: 50%;
-  }
-
-  .access-level-column {
-    width: 16.67%;
+  .fx-row-end-end button {
+    width: 100%;
+    justify-content: center;
   }
 }

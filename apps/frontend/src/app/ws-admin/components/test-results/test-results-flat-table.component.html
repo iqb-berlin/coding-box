@@ -7,8 +7,8 @@
     <mat-divider></mat-divider>
 
     <div class="table-section">
-      <div class="fx-row-center-center-stretch fx-gap-10" style="margin: 12px 0; flex-wrap: wrap">
-        <mat-form-field appearance="outline" style="width: 180px">
+      <div class="flat-filter-bar">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Code</mat-label>
           <input matInput [(ngModel)]="flatFilters.code" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="codeAuto" />
@@ -18,7 +18,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 180px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Gruppe</mat-label>
           <input matInput [(ngModel)]="flatFilters.group" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="groupAuto" />
@@ -28,7 +28,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 180px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm">
           <mat-label>Login</mat-label>
           <input matInput [(ngModel)]="flatFilters.login" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="loginAuto" />
@@ -38,7 +38,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Testheft</mat-label>
           <input matInput [(ngModel)]="flatFilters.booklet" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="bookletAuto" />
@@ -48,7 +48,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 200px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Aufgabe</mat-label>
           <input matInput [(ngModel)]="flatFilters.unit" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="unitAuto" />
@@ -58,7 +58,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 200px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Variable</mat-label>
           <input matInput [(ngModel)]="flatFilters.response" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="responseAuto" />
@@ -68,7 +68,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Antwortstatus</mat-label>
           <input matInput [(ngModel)]="flatFilters.responseStatus" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="responseStatusAuto" />
@@ -78,11 +78,11 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 240px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-lg">
           <mat-label>Antwortwert</mat-label>
           <input matInput [(ngModel)]="flatFilters.responseValue" (ngModelChange)="onFlatFilterChanged()" />
         </mat-form-field>
-        <mat-form-field appearance="outline" style="width: 220px">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>Tags</mat-label>
           <input matInput [(ngModel)]="flatFilters.tags" (ngModelChange)="onFlatFilterChanged()"
             [matAutocomplete]="tagsAuto" />
@@ -92,7 +92,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" style="width: 300px">
+        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-xl">
           <mat-label>Spezialfilter</mat-label>
           <mat-select [(ngModel)]="mediaFilters" (ngModelChange)="onMediaFiltersChanged()" multiple>
             <mat-option value="geogebra">GeoGebra</mat-option>

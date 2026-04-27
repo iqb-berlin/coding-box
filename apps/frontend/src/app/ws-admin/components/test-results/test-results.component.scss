@@ -1,6 +1,6 @@
 // Main container styles
 .container {
-  margin: 20px;
+  margin: clamp(10px, 2vw, 20px);
   padding: 0;
   width: auto;
   height: auto;
@@ -8,8 +8,11 @@
   animation: fadeIn 0.3s ease-in-out;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   box-sizing: border-box;
   max-width: 100%;
+  min-width: 0;
+  overflow-x: hidden;
 }
 
 @keyframes fadeIn {
@@ -67,14 +70,15 @@
 
 .overview-card {
   background-color: white;
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
+  padding: clamp(12px, 2vw, 24px);
   margin-bottom: 24px;
   width: 100%;
   box-sizing: border-box;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow: hidden;
+  min-width: 0;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
   @media (max-width: 700px) {
@@ -86,7 +90,7 @@
     font-weight: 500;
     color: #1976d2;
     margin: 0 0 10px 0;
-    letter-spacing: -0.3px;
+    letter-spacing: 0;
   }
 
   .section-description {
@@ -103,19 +107,19 @@
 
   .overview-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr));
     gap: 14px;
     margin-bottom: 18px;
 
     @media (max-width: 420px) {
-      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      grid-template-columns: 1fr;
     }
   }
 
   .overview-metric {
     background-color: #f5f9ff;
     border: 1px solid rgba(25, 118, 210, 0.12);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
@@ -131,7 +135,7 @@
       font-size: 20px;
       color: #1976d2;
       font-weight: 700;
-      letter-spacing: -0.2px;
+      letter-spacing: 0;
     }
 
     &.skeleton-metric {
@@ -282,11 +286,14 @@
 .responses-card,
 .logs-card {
   background-color: white;
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 24px;
+  padding: clamp(12px, 2vw, 24px);
   margin-bottom: 24px;
   width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
   transition: box-shadow 0.3s ease, transform 0.2s ease;
   border: 1px solid rgba(0, 0, 0, 0.03);
 
@@ -295,7 +302,7 @@
     font-weight: 500;
     color: #1976d2;
     margin: 0 0 10px 0;
-    letter-spacing: -0.3px;
+    letter-spacing: 0;
   }
 
   .section-description {
@@ -337,6 +344,100 @@
   }
 }
 
+@media (max-width: 768px) {
+  .container {
+    margin: 10px;
+  }
+
+  .overview-card,
+  .data-card,
+  .booklets-card,
+  .responses-card,
+  .logs-card {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .overview-card .overview-status .status-grid {
+    align-items: stretch;
+  }
+
+  .overview-card .overview-status .status-chip {
+    justify-content: space-between;
+    flex: 1 1 130px;
+  }
+
+  .action-bar {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    margin-top: 0;
+  }
+
+  .persons-table {
+    min-width: 560px;
+
+    mat-header-cell,
+    mat-cell {
+      padding: 10px 12px;
+    }
+  }
+
+  .mat-column-select {
+    flex-basis: 56px;
+    width: 56px;
+  }
+
+  .mat-column-uploaded_at {
+    flex-basis: 140px;
+  }
+
+  .accordion,
+  .responses-card .var-list,
+  .logs-card .log-list,
+  .table-container {
+    max-height: none;
+  }
+
+  .responses-card .var-list .response-item {
+    padding: 10px 12px;
+
+    .response-header {
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .response-content {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .variable-id,
+    .response-status {
+      max-width: 100%;
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .action-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .overview-card .overview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .responses-card .response-actions .action-button,
+  .accordion .booklet-actions .action-button,
+  .empty-state-actions a[mat-raised-button] {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .empty-state-container {
+    padding: 32px 12px;
+  }
+}
+
 // Content container for the main content area
 .content-container {
   display: flex;
@@ -346,6 +447,7 @@
   flex: 1;
   height: 100%;
   min-height: 0;
+  min-width: 0;
 
   @media (min-width: 1200px) {
     flex-direction: row;
@@ -375,6 +477,7 @@
   flex-direction: column;
   gap: 20px;
   flex: 1;
+  min-width: 0;
 
   @media (min-width: 992px) {
     flex-direction: row;
@@ -430,6 +533,14 @@
       }
     }
   }
+
+  @media (max-width: 991px) {
+    .booklets-card,
+    .responses-card,
+    .logs-card {
+      margin-right: 0;
+    }
+  }
 }
 
 // Loading container styles
@@ -457,6 +568,7 @@
   flex-direction: column;
   flex: 1;
   height: 100%;
+  min-width: 0;
 }
 
 // Search container styles
@@ -464,7 +576,7 @@
   display: flex;
   align-items: center;
   background-color: #f5f9ff;
-  border-radius: 28px;
+  border-radius: 8px;
   padding: 6px 16px;
   margin-bottom: 20px;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
@@ -523,6 +635,8 @@
   flex: 1; /* Take remaining space */
   display: flex;
   flex-direction: column;
+  min-width: 0;
+  -webkit-overflow-scrolling: touch;
 
   .search-loading-indicator {
     position: absolute;
@@ -579,18 +693,20 @@
 // Table styles
 .persons-table {
   width: 100%;
+  min-width: 640px;
 
   mat-header-cell,
   mat-cell {
     white-space: nowrap;
-    padding: 14px 18px;
+    padding: 12px 16px;
+    min-width: 0;
   }
 
   mat-header-cell {
     font-weight: 600;
     color: #1976d2;
     background-color: #f5f9ff;
-    letter-spacing: 0.2px;
+    letter-spacing: 0;
     font-size: 14px;
     border-bottom: 2px solid rgba(25, 118, 210, 0.1);
 
@@ -607,7 +723,7 @@
 
   mat-row {
     transition: all 0.25s ease;
-    height: 54px;
+    min-height: 54px;
 
     &:hover {
       background-color: #e8f4ff;
@@ -638,18 +754,45 @@
   }
 }
 
+.mat-column-select {
+  flex: 0 0 64px;
+  width: 64px;
+  justify-content: center;
+}
+
+.mat-column-code,
+.mat-column-group,
+.mat-column-login {
+  flex: 1 1 130px;
+}
+
+.mat-column-uploaded_at {
+  flex: 0 0 160px;
+}
+
 // Paginator styles
 .paginator {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   background-color: #f9fafc;
   border-radius: 0 0 8px 8px;
   padding: 4px 8px;
+  overflow-x: auto;
+  width: 100%;
+  box-sizing: border-box;
 
   ::ng-deep {
+    .mat-mdc-paginator-container {
+      flex-wrap: wrap;
+      justify-content: center;
+      row-gap: 8px;
+    }
+
     .mat-paginator-container {
       min-height: 56px;
       padding: 0 8px;
-      justify-content: space-between;
+      justify-content: center;
+      flex-wrap: wrap;
+      row-gap: 8px;
     }
 
     .mat-paginator-page-size {
@@ -660,8 +803,9 @@
       }
     }
 
-    .mat-paginator-range-label {
-      margin: 0 24px;
+    .mat-paginator-range-label,
+    .mat-mdc-paginator-range-label {
+      margin: 0 12px;
       color: #555;
     }
 
@@ -686,16 +830,14 @@
 
 // Upload buttons styles
 .action-bar {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 16px;
-  justify-content: flex-start;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
   margin: 8px 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   width: 100%;
   max-width: 100%;
-  -webkit-overflow-scrolling: touch;
+  min-width: 0;
 
   .menu-button {
     display: inline-flex;
@@ -715,15 +857,18 @@
 
   button[mat-raised-button],
   a[mat-raised-button] {
-    white-space: nowrap;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    height: auto;
+    line-height: 1.2;
+    white-space: normal;
     overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0 20px;
-    height: 44px;
-    line-height: 44px;
-    border-radius: 22px;
+    text-align: center;
+    padding: 8px 14px;
+    border-radius: 8px;
     font-weight: 500;
-    letter-spacing: 0.3px;
+    letter-spacing: 0;
     box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
     transition: all 0.2s ease;
 
@@ -766,6 +911,7 @@
     }
 
     mat-icon {
+      flex: 0 0 auto;
       margin-right: 10px;
       font-size: 20px;
       height: 20px;
@@ -946,11 +1092,12 @@
 
   .booklet-actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
     margin: 8px 0 20px;
 
     .action-button {
-      border-radius: 18px;
+      border-radius: 8px;
       padding: 4px 16px;
       transition: all 0.2s ease;
 
@@ -1063,6 +1210,7 @@
         align-items: center;
         width: 100%;
         margin-bottom: 4px;
+        min-width: 0;
       }
 
       .unit-icon {
@@ -1080,7 +1228,11 @@
         font-weight: 500;
         color: #444;
         margin-right: 8px;
-        flex-shrink: 0;
+        min-width: 0;
+        flex-shrink: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .geogebra-tag {
@@ -1089,7 +1241,7 @@
         color: white;
         background-color: #4285f4;
         padding: 3px 10px;
-        border-radius: 12px;
+        border-radius: 6px;
         margin-left: 8px;
         margin-right: 4px;
         flex-shrink: 0;
@@ -1187,9 +1339,12 @@
 .responses-card {
   .response-actions {
     margin-bottom: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
 
     .action-button {
-      border-radius: 18px;
+      border-radius: 8px;
       padding: 4px 16px;
       transition: all 0.2s ease;
       position: relative;
@@ -1443,7 +1598,7 @@
         font-weight: 600;
         color: #333;
         font-size: 15px;
-        letter-spacing: 0.2px;
+        letter-spacing: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
@@ -1455,7 +1610,7 @@
         color: #555;
         background-color: #f5f9ff;
         padding: 3px 10px;
-        border-radius: 12px;
+        border-radius: 6px;
         font-weight: 500;
         border: 1px solid rgba(25, 118, 210, 0.1);
         overflow: hidden;
@@ -1533,7 +1688,7 @@
   align-items: center;
   justify-content: center;
   background-color: white;
-  border-radius: 12px;
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   padding: 48px 24px;
   margin: 20px 0;
@@ -1559,7 +1714,7 @@
     font-weight: 500;
     color: #1976d2;
     margin: 0 0 16px 0;
-    letter-spacing: -0.3px;
+    letter-spacing: 0;
   }
 
   .empty-state-description {
@@ -1583,9 +1738,9 @@
       padding: 0 20px;
       height: 44px;
       line-height: 44px;
-      border-radius: 22px;
+      border-radius: 8px;
       font-weight: 500;
-      letter-spacing: 0.3px;
+      letter-spacing: 0;
       box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12);
       transition: all 0.2s ease;
 
