@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, NotFoundException
+  BadRequestException, Injectable, Logger, NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -56,6 +56,15 @@ interface JobCreationWarning {
   message: string;
   casesInJobs: number;
   availableCases: number;
+}
+
+export interface TransferCodingCasesResult {
+  sourceCoderId: number;
+  targetCoderId: number;
+  affectedJobs: number;
+  updatedAssignments: number;
+  removedDuplicateAssignments: number;
+  transferredCases: number;
 }
 
 type VariableReference = { unitName: string; variableId: string };
@@ -459,6 +468,90 @@ export class CodingJobService {
     }));
 
     return repo.save(coders);
+  }
+
+  async transferCodingCases(
+    workspaceId: number,
+    sourceCoderId: number,
+    targetCoderId: number
+  ): Promise<TransferCodingCasesResult> {
+    if (sourceCoderId === targetCoderId) {
+      throw new BadRequestException('Source and target coder must be different');
+    }
+
+    return this.connection.transaction(async manager => {
+      const codingJobCoderRepo = manager.getRepository(CodingJobCoder);
+      const codingJobUnitRepo = manager.getRepository(CodingJobUnit);
+
+      const sourceAssignments = await codingJobCoderRepo
+        .createQueryBuilder('assignment')
+        .innerJoin(CodingJob, 'job', 'job.id = assignment.coding_job_id')
+        .where('assignment.user_id = :sourceCoderId', { sourceCoderId })
+        .andWhere('job.workspace_id = :workspaceId', { workspaceId })
+        .getMany();
+
+      if (sourceAssignments.length === 0) {
+        return {
+          sourceCoderId,
+          targetCoderId,
+          affectedJobs: 0,
+          updatedAssignments: 0,
+          removedDuplicateAssignments: 0,
+          transferredCases: 0
+        };
+      }
+
+      const affectedJobIds = [...new Set(sourceAssignments.map(assignment => assignment.coding_job_id))];
+
+      const existingTargetAssignments = await codingJobCoderRepo.find({
+        where: {
+          coding_job_id: In(affectedJobIds),
+          user_id: targetCoderId
+        },
+        select: ['coding_job_id']
+      });
+
+      const existingTargetJobIds = new Set(
+        existingTargetAssignments.map(assignment => assignment.coding_job_id)
+      );
+
+      const updateAssignmentIds: number[] = [];
+      const deleteAssignmentIds: number[] = [];
+
+      sourceAssignments.forEach(assignment => {
+        if (existingTargetJobIds.has(assignment.coding_job_id)) {
+          deleteAssignmentIds.push(assignment.id);
+          return;
+        }
+        updateAssignmentIds.push(assignment.id);
+      });
+
+      if (updateAssignmentIds.length > 0) {
+        await codingJobCoderRepo
+          .createQueryBuilder()
+          .update(CodingJobCoder)
+          .set({ user_id: targetCoderId })
+          .whereInIds(updateAssignmentIds)
+          .execute();
+      }
+
+      if (deleteAssignmentIds.length > 0) {
+        await codingJobCoderRepo.delete(deleteAssignmentIds);
+      }
+
+      const transferredCases = await codingJobUnitRepo.count({
+        where: { coding_job_id: In(affectedJobIds) }
+      });
+
+      return {
+        sourceCoderId,
+        targetCoderId,
+        affectedJobs: affectedJobIds.length,
+        updatedAssignments: updateAssignmentIds.length,
+        removedDuplicateAssignments: deleteAssignmentIds.length,
+        transferredCases
+      };
+    });
   }
 
   private async assignVariables(
