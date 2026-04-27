@@ -105,8 +105,14 @@
     <mat-card-content>
       <div class="database-export-container">
         <p class="export-description">
-          Exportieren Sie die gesamte PostgreSQL-Datenbank als SQLite-Datei.
-          Diese Funktion unterstützt auch große Datenbanken mit mehreren GB.
+          Beim Datenbank-Download wird eine vollständige SQLite-Kopie der aktuellen
+          PostgreSQL-Datenbank erzeugt. Der Export läuft im Hintergrund als Job, damit
+          auch große Datenmengen stabil verarbeitet werden.
+        </p>
+        <p class="export-description">
+          Enthalten sind unter anderem Benutzer- und Rechteverwaltung, Arbeitsbereiche,
+          Kodierungen, Antworten, Logs und Systemeinstellungen. Die Datei kann sensible
+          Daten enthalten und sollte entsprechend geschützt abgelegt werden.
         </p>
         <div class="export-actions">
           <button
@@ -115,14 +121,20 @@
             (click)="exportDatabase()"
             [disabled]="isExporting">
             <mat-icon>{{isExporting ? 'hourglass_empty' : 'download'}}</mat-icon>
-            {{isExporting ? 'Exportiere Datenbank...' : 'Datenbank als SQLite exportieren'}}
+            {{isExporting ? 'Export läuft...' : 'Datenbank als SQLite exportieren'}}
           </button>
         </div>
         @if (isExporting) {
           <div class="export-progress">
-            <mat-progress-bar mode="indeterminate"></mat-progress-bar>
-            <p class="progress-text">Dies kann bei großen Datenbanken einige Minuten dauern...</p>
+            <mat-progress-bar mode="determinate" [value]="databaseExportProgress"></mat-progress-bar>
+            <p class="progress-text">
+              Status: {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress }}%
+            </p>
+            <p class="progress-text">Dies kann bei großen Datenbanken einige Minuten dauern.</p>
           </div>
+        }
+        @if (databaseExportError) {
+          <p class="export-error">{{ databaseExportError }}</p>
         }
       </div>
     </mat-card-content>

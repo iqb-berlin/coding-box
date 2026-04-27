@@ -11,6 +11,7 @@
 .token-settings-card,
 .access-rights-card,
 .journal-card,
+.database-export-card,
 .missings-profiles-card {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   border-radius: 8px;
@@ -123,6 +124,35 @@ h4 {
   justify-content: flex-start;
 }
 
+.database-export-container {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.database-export-actions {
+  display: flex;
+  margin-top: 20px;
+  justify-content: flex-start;
+}
+
+.export-progress {
+  margin-top: 16px;
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  color: #555;
+  font-size: 14px;
+}
+
+.export-error {
+  color: #c62828;
+  font-weight: 500;
+  margin: 16px 0 0;
+}
+
 button mat-icon {
   margin-right: 5px;
 }
@@ -136,6 +166,7 @@ button mat-icon {
   .token-settings-card,
   .access-rights-card,
   .journal-card,
+  .database-export-card,
   .missings-profiles-card {
     margin-bottom: 20px;
   }
@@ -158,6 +189,7 @@ button mat-icon {
 @media (max-width: 480px) {
   .token-actions,
   .token-copy-action,
+  .database-export-actions,
   .missings-profiles-actions {
     flex-direction: column;
     align-items: stretch;
