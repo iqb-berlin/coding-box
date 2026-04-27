@@ -1,10 +1,12 @@
 .admin-background {
-  box-shadow: 5px 10px 20px black;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   background-color: white;
-  padding: 25px;
+  padding: clamp(10px, 2vw, 25px);
   margin: 0;
   height: 100%;
   box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .communication-error-message {
@@ -17,6 +19,7 @@
 
 .page-body {
   height: 100%;
+  min-width: 0;
 }
 
 a {
@@ -24,6 +27,10 @@ a {
 }
 .navigation {
   margin-bottom: 10px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 .flex-container {
@@ -38,10 +45,21 @@ a {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  min-width: 0;
 }
 
 .no-access-message {
   text-align: center;
   padding: 50px;
   font-size: 18px;
+}
+
+@media (max-width: 768px) {
+  a {
+    font-size: 16px;
+  }
+
+  .no-access-message {
+    padding: 32px 12px;
+  }
 }

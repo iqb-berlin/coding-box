@@ -1,5 +1,7 @@
 .journal-container {
-  padding: 16px;
+  padding: clamp(8px, 2vw, 16px);
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .journal-header {
@@ -7,17 +9,36 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  button {
+    border-radius: 8px;
+    min-height: 40px;
+    height: auto;
+    line-height: 1.2;
+    white-space: normal;
+  }
 }
 
 .journal-table-container {
   background-color: white;
-  border-radius: 4px;
+  border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  padding: 16px;
+  padding: clamp(8px, 2vw, 16px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .journal-table {
   width: 100%;
+  min-width: 980px;
+
+  th,
+  td {
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
 }
 
 .loading-indicator, .no-entries {
@@ -30,30 +51,50 @@
   width: 180px;
 }
 
-.mat-column-user_id {
+.mat-column-userId {
   width: 120px;
 }
 
-.mat-column-action_type {
+.mat-column-actionType {
   width: 100px;
 }
 
-.mat-column-entity_type {
+.mat-column-entityType {
   width: 120px;
 }
 
-.mat-column-entity_id {
+.mat-column-entityId {
   width: 100px;
 }
 
 .mat-column-details {
-  min-width: 200px;
+  min-width: 260px;
+  max-width: 420px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+mat-paginator {
+  width: 100%;
+  overflow-x: auto;
+}
+
+:host ::ng-deep .mat-mdc-paginator-container {
+  flex-wrap: wrap;
+  justify-content: center;
+  row-gap: 8px;
 }
 
 /* Make the table responsive */
 @media (max-width: 768px) {
   .journal-table {
-    display: block;
-    overflow-x: auto;
+    min-width: 860px;
+  }
+}
+
+@media (max-width: 480px) {
+  .journal-header button {
+    width: 100%;
+    justify-content: center;
   }
 }
