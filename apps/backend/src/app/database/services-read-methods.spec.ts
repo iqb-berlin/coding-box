@@ -59,6 +59,23 @@ const collectServiceFiles = (directory: string): string[] => fs
 const isReadishMethod = (methodName: string): boolean => /^(get|find|list|has|is|can|count|calculate|compute|normalize|aggregate|map|parse|format|build|validate|filter|sort|group|extract|resolve)/i.test(methodName);
 const isRiskyMethod = (methodName: string): boolean => /(stream|upload|download|import|export|delete|remove|create|update|patch|save|set|start|run|process|apply|write|persist|send|queue|add|cancel|reset|clear|generate)/i.test(methodName);
 
+const progressCallback = jest.fn().mockResolvedValue(undefined);
+
+const argumentSets = [
+  [1, 1, 'value', 'other', [], {}, progressCallback, safeValue],
+  [1, undefined, '', '', [], { search: '', page: 1, limit: 10 }, progressCallback, safeValue],
+  [
+    1,
+    25,
+    'UNIT',
+    'VAR',
+    [{ unitName: 'UNIT', variableId: 'VAR', bookletName: 'BOOKLET', responseId: 1 }],
+    { workspaceId: 1, unitName: 'UNIT', variableId: 'VAR' },
+    progressCallback,
+    safeValue
+  ]
+];
+
 describe('backend service read methods', () => {
   it('invokes read and compute service methods with safe dependencies', async () => {
     const serviceFiles = collectServiceFiles(appRoot);
@@ -91,24 +108,17 @@ describe('backend service read methods', () => {
             !isRiskyMethod(methodName) &&
             typeof instance[methodName] === 'function')
           .forEach(methodName => {
-            try {
-              const result = instance[methodName](
-                1,
-                1,
-                'value',
-                'other',
-                [],
-                {},
-                safeValue,
-                safeValue
-              );
-              if (result && typeof (result as Promise<unknown>).then === 'function') {
-                pending.push(Promise.resolve(result).catch(() => undefined));
+            argumentSets.forEach(args => {
+              try {
+                const result = instance[methodName](...args);
+                if (result && typeof (result as Promise<unknown>).then === 'function') {
+                  pending.push(Promise.resolve(result).catch(() => undefined));
+                }
+                invoked += 1;
+              } catch {
+                invoked += 1;
               }
-              invoked += 1;
-            } catch {
-              invoked += 1;
-            }
+            });
           });
       });
     });

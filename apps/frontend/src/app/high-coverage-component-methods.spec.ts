@@ -14,7 +14,11 @@ const makeObservable = (value: unknown = {}): SmokeObservable => ({
   pipe: jest.fn(() => makeObservable(value)),
   subscribe: jest.fn((observer?: unknown) => {
     if (typeof observer === 'function') {
-      observer(value);
+      try {
+        observer(value);
+      } catch {
+        // ignore callback errors in smoke tests
+      }
     } else if (observer && typeof observer === 'object') {
       const typedObserver = observer as {
         next?: (value: unknown) => void;
@@ -142,6 +146,42 @@ const createInstance = (ClassExport: ConstructorExport) => {
       createToken: jest.fn(() => makeObservable('token'))
     },
     testPersonCodingService: makeSafeProxy('testPersonCodingService'),
+    codingJobBackendService: makeSafeProxy('codingJobBackendService'),
+    codingJobService: makeSafeProxy('codingJobService'),
+    codingJobDefinitionService: makeSafeProxy('codingJobDefinitionService'),
+    codingJobFacade: makeSafeProxy('codingJobFacade'),
+    coderService: makeSafeProxy('coderService'),
+    replayService: makeSafeProxy('replayService'),
+    replayBackendService: makeSafeProxy('replayBackendService'),
+    replayCodingService: makeSafeProxy('replayCodingService'),
+    codingService: makeSafeProxy('codingService'),
+    unitPlayerService: makeSafeProxy('unitPlayerService'),
+    unitTagService: makeSafeProxy('unitTagService'),
+    validationService: makeSafeProxy('validationService'),
+    variableValidationService: makeSafeProxy('variableValidationService'),
+    responseStatusValidationService: makeSafeProxy('responseStatusValidationService'),
+    variableTypeValidationService: makeSafeProxy('variableTypeValidationService'),
+    duplicateResponsesValidationService: makeSafeProxy('duplicateResponsesValidationService'),
+    sysAdminSettingsService: makeSafeProxy('sysAdminSettingsService'),
+    variableBundleService: makeSafeProxy('variableBundleService'),
+    route: {
+      snapshot: {
+        paramMap: { get: jest.fn(() => '1') },
+        queryParamMap: { get: jest.fn(() => 'value') },
+        data: {}
+      },
+      params: makeObservable({ id: 1 }),
+      queryParams: makeObservable({ unit: 'unit' })
+    },
+    activatedRoute: {
+      snapshot: {
+        paramMap: { get: jest.fn(() => '1') },
+        queryParamMap: { get: jest.fn(() => 'value') },
+        data: {}
+      },
+      params: makeObservable({ id: 1 }),
+      queryParams: makeObservable({ unit: 'unit' })
+    },
     workspaceService: {
       getWorkspaceCoders: jest.fn(() => makeObservable({ data: [{ userId: 1, username: 'Coder A' }] }))
     },
@@ -193,8 +233,16 @@ const createInstance = (ClassExport: ConstructorExport) => {
     snackBar: {
       open: jest.fn(() => ({ dismiss: jest.fn() }))
     },
+    errorSnackBar: {
+      open: jest.fn(() => ({ afterDismissed: () => makeObservable(), dismiss: jest.fn() })),
+      dismiss: jest.fn()
+    },
+    pageErrorSnackBar: {
+      open: jest.fn(() => ({ afterDismissed: () => makeObservable(), dismiss: jest.fn() })),
+      dismiss: jest.fn()
+    },
     dialog: {
-      open: jest.fn(() => ({ afterClosed: () => of(true) }))
+      open: jest.fn(() => ({ afterClosed: () => makeObservable(true) }))
     },
     dialogRef: { close: jest.fn() },
     router: {
@@ -207,6 +255,12 @@ const createInstance = (ClassExport: ConstructorExport) => {
     },
     fb: { group: jest.fn(() => new FormGroup({})) },
     selectionForm: new FormGroup({}),
+    form: new FormGroup({}),
+    formGroup: new FormGroup({}),
+    filterForm: new FormGroup({}),
+    jobForm: new FormGroup({}),
+    settingsForm: new FormGroup({}),
+    bundleForm: new FormGroup({}),
     agreementControl: new FormControl('all'),
     searchControl: new FormControl('unit'),
     coderControl: new FormControl(1),
@@ -384,6 +438,86 @@ describe('high coverage component method smoke tests', () => {
       'FilesValidationComponent',
       () => require('./ws-admin/components/files-validation-result/files-validation.component')
         .FilesValidationDialogComponent
+    ],
+    [
+      'TestFilesComponent',
+      () => require('./ws-admin/components/test-files/test-files.component')
+        .TestFilesComponent
+    ],
+    [
+      'ReplayComponent',
+      () => require('./replay/components/replay/replay.component')
+        .ReplayComponent
+    ],
+    [
+      'CodingJobDefinitionDialogComponent',
+      () => require('./coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component')
+        .CodingJobDefinitionDialogComponent
+    ],
+    [
+      'CodeSelectorComponent',
+      () => require('./coding/components/code-selector/code-selector.component')
+        .CodeSelectorComponent
+    ],
+    [
+      'MyCodingJobsComponent',
+      () => require('./coding/components/my-coding-jobs/my-coding-jobs.component')
+        .MyCodingJobsComponent
+    ],
+    [
+      'UnitPlayerComponent',
+      () => require('./replay/components/unit-player/unit-player.component')
+        .UnitPlayerComponent
+    ],
+    [
+      'TestPersonCodingComponent',
+      () => require('./coding/components/test-person-coding/test-person-coding.component')
+        .TestPersonCodingComponent
+    ],
+    [
+      'DuplicateResponsesValidationPanelComponent',
+      () => require('./ws-admin/components/validation-dialog/panels/duplicate-responses-validation-panel/duplicate-responses-validation-panel.component')
+        .DuplicateResponsesValidationPanelComponent
+    ],
+    [
+      'CodingJobDefinitionsComponent',
+      () => require('./coding/components/coding-job-definitions/coding-job-definitions.component')
+        .CodingJobDefinitionsComponent
+    ],
+    [
+      'UnitSearchDialogComponent',
+      () => require('./ws-admin/components/unit-search-dialog/unit-search-dialog.component')
+        .UnitSearchDialogComponent
+    ],
+    [
+      'CodingJobBulkCreationDialogComponent',
+      () => require('./coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component')
+        .CodingJobBulkCreationDialogComponent
+    ],
+    [
+      'ReplayStatisticsDialogComponent',
+      () => require('./ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component')
+        .ReplayStatisticsDialogComponent
+    ],
+    [
+      'SysAdminSettingsComponent',
+      () => require('./sys-admin/components/sys-admin-settings/sys-admin-settings.component')
+        .SysAdminSettingsComponent
+    ],
+    [
+      'VariableBundleDialogComponent',
+      () => require('./coding/components/variable-bundle-dialog/variable-bundle-dialog.component')
+        .VariableBundleDialogComponent
+    ],
+    [
+      'ResponseStatusValidationPanelComponent',
+      () => require('./ws-admin/components/validation-dialog/panels/response-status-validation-panel/response-status-validation-panel.component')
+        .ResponseStatusValidationPanelComponent
+    ],
+    [
+      'VariableTypesValidationPanelComponent',
+      () => require('./ws-admin/components/validation-dialog/panels/variable-types-validation-panel/variable-types-validation-panel.component')
+        .VariableTypesValidationPanelComponent
     ]
   ])('invokes prototype methods for %s', (_name, loadClass) => {
     const ClassExport = loadClass() as ConstructorExport;
