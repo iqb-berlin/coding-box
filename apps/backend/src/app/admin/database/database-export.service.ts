@@ -15,6 +15,11 @@ type ExportProgressCallback = (
 
 type ExportCancellationCheck = () => Promise<boolean> | boolean;
 
+type WorkspaceExportTable = {
+  name: string;
+  query: string;
+};
+
 @Injectable()
 export class DatabaseExportService {
   private readonly logger = new Logger(DatabaseExportService.name);
@@ -370,236 +375,186 @@ export class DatabaseExportService {
     }
   }
 
+  async exportWorkspaceToSqliteFile(
+    outputFilePath: string,
+    workspaceId: number,
+    onProgress?: ExportProgressCallback,
+    isCancelled?: ExportCancellationCheck
+  ): Promise<void> {
+    const outputDir = path.dirname(outputFilePath);
+
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const db = new sqlite3.Database(outputFilePath);
+    const dbRun = promisify(db.run.bind(db));
+    const dbClose = promisify(db.close.bind(db));
+
+    try {
+      await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
+      await this.throwIfCancelled(isCancelled);
+
+      // Keep the export in a single SQLite file (without .wal sidecar files).
+      await dbRun('PRAGMA journal_mode=DELETE');
+      await dbRun('PRAGMA synchronous=NORMAL');
+      await dbRun('PRAGMA cache_size=10000');
+      await dbRun('PRAGMA temp_store=memory');
+
+      const workspaceTables = this.getWorkspaceExportTables();
+      const rowCounts = new Map<string, number>();
+      let totalRows = 0;
+
+      for (const tableConfig of workspaceTables) {
+        await this.throwIfCancelled(isCancelled);
+        const countResult = await this.dataSource.query(
+          `SELECT COUNT(*) as count FROM (${tableConfig.query}) export_rows`,
+          [workspaceId]
+        );
+        const rowCount = Number(countResult[0]?.count ?? 0);
+        rowCounts.set(tableConfig.name, rowCount);
+        totalRows += rowCount;
+      }
+
+      await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
+
+      let processedRows = 0;
+      let processedTables = 0;
+      const totalTables = workspaceTables.length || 1;
+
+      for (const tableConfig of workspaceTables) {
+        await this.throwIfCancelled(isCancelled);
+        const tableName = tableConfig.name;
+
+        this.logger.log(`Processing workspace table: ${tableName}`);
+
+        const columns = await this.dataSource.query(`
+          SELECT column_name, data_type, is_nullable
+          FROM information_schema.columns
+          WHERE table_name = $1 AND table_schema = 'public'
+          ORDER BY ordinal_position
+        `, [tableName]);
+
+        if (columns.length === 0) {
+          this.logger.warn(`Table ${tableName} not found, skipping...`);
+          processedTables += 1;
+          continue;
+        }
+
+        const columnDefs = columns.map(col => {
+          const colType = this.mapPostgresTypeToSqlite(col.data_type);
+          const nullable = col.is_nullable === 'YES' ? '' : ' NOT NULL';
+          return `"${col.column_name}" ${colType}${nullable}`;
+        }).join(', ');
+
+        await dbRun(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`);
+
+        const totalRowsInTable = rowCounts.get(tableName) ?? 0;
+        if (totalRowsInTable === 0) {
+          processedTables += 1;
+          await this.reportProgress(
+            onProgress,
+            this.calculateProgress(
+              processedRows,
+              totalRows,
+              processedTables,
+              totalTables
+            ),
+            `Tabelle ${tableName} abgeschlossen`
+          );
+          continue;
+        }
+
+        const batchSize = 1000;
+        let offset = 0;
+
+        while (offset < totalRowsInTable) {
+          await this.throwIfCancelled(isCancelled);
+
+          const rows = await this.dataSource.query(
+            `SELECT * FROM (${tableConfig.query}) export_rows
+             ORDER BY (SELECT NULL)
+             LIMIT $2 OFFSET $3`,
+            [workspaceId, batchSize, offset]
+          );
+
+          if (rows.length === 0) {
+            break;
+          }
+
+          const columnNames = columns.map(col => `"${col.column_name}"`).join(', ');
+          const placeholders = columns.map(() => '?').join(', ');
+          const insertSql = `INSERT INTO "${tableName}" (${columnNames}) VALUES (${placeholders})`;
+
+          await dbRun('BEGIN TRANSACTION');
+          try {
+            for (const row of rows) {
+              const values = columns.map(col => this.normalizeSqliteValue(row[col.column_name]));
+              await dbRun(insertSql, values);
+            }
+            await dbRun('COMMIT');
+          } catch (error) {
+            await dbRun('ROLLBACK');
+            throw error;
+          }
+
+          offset += rows.length;
+          processedRows += rows.length;
+
+          await this.reportProgress(
+            onProgress,
+            this.calculateProgress(
+              processedRows,
+              totalRows,
+              processedTables,
+              totalTables
+            ),
+            `Tabelle ${tableName}: ${Math.min(offset, totalRowsInTable)}/${totalRowsInTable}`
+          );
+        }
+
+        processedTables += 1;
+        this.logger.log(`Completed workspace table ${tableName}`);
+      }
+
+      await dbClose();
+      await this.reportProgress(onProgress, 100, 'Export abgeschlossen');
+    } catch (error) {
+      try {
+        await dbClose();
+      } catch (closeError) {
+        this.logger.error(
+          `Error closing SQLite file: ${closeError?.message || closeError}`,
+          closeError?.stack
+        );
+      }
+
+      if (fs.existsSync(outputFilePath)) {
+        try {
+          fs.unlinkSync(outputFilePath);
+        } catch (cleanupError) {
+          this.logger.error(
+            `Error deleting failed workspace export file: ${cleanupError?.message || cleanupError}`,
+            cleanupError?.stack
+          );
+        }
+      }
+
+      throw error;
+    }
+  }
+
   async exportWorkspaceToSqliteStream(response: Response, workspaceId: number): Promise<void> {
     const tempDir = path.join(process.cwd(), 'temp');
     const tempFile = path.join(tempDir, `workspace_export_${workspaceId}_${Date.now()}.sqlite`);
 
     try {
-      // Ensure temp directory exists
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-      // Create SQLite database
-      const db = new sqlite3.Database(tempFile);
-      const dbRun = promisify(db.run.bind(db));
-      const dbClose = promisify(db.close.bind(db));
-
-      // Set SQLite to handle large operations better
-      await dbRun('PRAGMA journal_mode=WAL');
-      await dbRun('PRAGMA synchronous=NORMAL');
-      await dbRun('PRAGMA cache_size=10000');
-      await dbRun('PRAGMA temp_store=memory');
-
-      // Define workspace-specific tables and their filtering queries
-      const workspaceTables = [
-        {
-          name: 'persons',
-          query: 'SELECT * FROM persons WHERE workspace_id = $1'
-        },
-        {
-          name: 'booklet',
-          query: `
-            SELECT b.* FROM booklet b
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'bookletinfo',
-          query: `
-            SELECT bi.* FROM bookletinfo bi
-            INNER JOIN booklet b ON bi.id = b.infoid
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'bookletlog',
-          query: `
-            SELECT bl.* FROM bookletlog bl
-            INNER JOIN booklet b ON bl.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'session',
-          query: `
-            SELECT s.* FROM session s
-            INNER JOIN booklet b ON s.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'unit',
-          query: `
-            SELECT u.* FROM unit u
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'unit_note',
-          query: `
-            SELECT un.* FROM unit_note un
-            INNER JOIN unit u ON un."unitId" = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'unit_tag',
-          query: `
-            SELECT ut.* FROM unit_tag ut
-            INNER JOIN unit u ON ut."unitId" = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'unitlaststate',
-          query: `
-            SELECT uls.* FROM unitlaststate uls
-            INNER JOIN unit u ON uls.unitid = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'unitlog',
-          query: `
-            SELECT ul.* FROM unitlog ul
-            INNER JOIN unit u ON ul.unitid = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'response',
-          query: `
-            SELECT r.* FROM response r
-            INNER JOIN unit u ON r.unitid = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        },
-        {
-          name: 'chunk',
-          query: `
-            SELECT c.* FROM chunk c
-            INNER JOIN unit u ON c.unitid = u.id
-            INNER JOIN booklet b ON u.bookletid = b.id
-            INNER JOIN persons p ON b.personid = p.id
-            WHERE p.workspace_id = $1
-          `
-        }
-      ];
-
-      let processedTables = 0;
-      const totalTables = workspaceTables.length;
-
-      for (const tableConfig of workspaceTables) {
-        const tableName = tableConfig.name;
-
-        try {
-          this.logger.log(`Processing workspace table: ${tableName}`);
-
-          // Get table structure from PostgreSQL
-          const columns = await this.dataSource.query(`
-            SELECT column_name, data_type, is_nullable, column_default
-            FROM information_schema.columns
-            WHERE table_name = $1 AND table_schema = 'public'
-            ORDER BY ordinal_position
-          `, [tableName]);
-
-          if (columns.length === 0) {
-            this.logger.warn(`Table ${tableName} not found, skipping...`);
-            continue;
-          }
-
-          // Create table in SQLite
-          const columnDefs = columns.map(col => {
-            const colType = this.mapPostgresTypeToSqlite(col.data_type);
-            const nullable = col.is_nullable === 'YES' ? '' : ' NOT NULL';
-            return `"${col.column_name}" ${colType}${nullable}`;
-          }).join(', ');
-
-          await dbRun(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`);
-
-          // Get workspace-specific data
-          const rows = await this.dataSource.query(tableConfig.query, [workspaceId]);
-
-          if (rows.length === 0) {
-            this.logger.log(`No data found for table ${tableName} in workspace ${workspaceId}`);
-            continue;
-          }
-
-          // Process data in batches for memory efficiency
-          const batchSize = 1000;
-          let offset = 0;
-
-          while (offset < rows.length) {
-            const batch = rows.slice(offset, offset + batchSize);
-
-            // Prepare batch insert
-            const columnNames = columns.map(col => `"${col.column_name}"`).join(', ');
-            const placeholders = columns.map(() => '?').join(', ');
-            const insertSql = `INSERT INTO "${tableName}" (${columnNames}) VALUES (${placeholders})`;
-
-            // Begin transaction for batch
-            await dbRun('BEGIN TRANSACTION');
-
-            try {
-              for (const row of batch) {
-                const values = columns.map(col => {
-                  const value = row[col.column_name];
-                  // Handle special data types
-                  if (value === null) return null;
-                  if (typeof value === 'boolean') return value ? 1 : 0;
-                  if (value instanceof Date) return value.toISOString();
-                  if (typeof value === 'object') return JSON.stringify(value);
-                  return value;
-                });
-
-                await dbRun(insertSql, values);
-              }
-
-              await dbRun('COMMIT');
-            } catch (error) {
-              await dbRun('ROLLBACK');
-              throw error;
-            }
-
-            offset += batchSize;
-            this.logger.log(`Table ${tableName}: ${Math.min(offset, rows.length)}/${rows.length} rows processed`);
-          }
-
-          processedTables += 1;
-          this.logger.log(`Completed table ${tableName} (${processedTables}/${totalTables})`);
-        } catch (error) {
-          this.logger.error(`Error processing table ${tableName}: ${error?.message || error}`, error?.stack);
-          // Continue with next table instead of failing completely
-        }
-      }
-
-      // Close database connection
-      await dbClose();
-
+      await this.exportWorkspaceToSqliteFile(tempFile, workspaceId);
       this.logger.log(`SQLite workspace export completed for workspace ${workspaceId}, streaming file...`);
 
-      // Stream the file to response
       const fileStats = fs.statSync(tempFile);
       response.setHeader('Content-Length', fileStats.size);
 
-      // Create read stream and pipe to response
       const fileStream = fs.createReadStream(tempFile);
 
       fileStream.on('error', error => {
@@ -611,7 +566,6 @@ export class DatabaseExportService {
 
       fileStream.on('end', () => {
         this.logger.log('File streaming completed');
-        // Clean up temporary file
         setTimeout(() => {
           try {
             fs.unlinkSync(tempFile);
@@ -626,7 +580,6 @@ export class DatabaseExportService {
     } catch (error) {
       this.logger.error(`Export error: ${error?.message || error}`, error?.stack);
 
-      // Clean up temporary file on error
       try {
         if (fs.existsSync(tempFile)) {
           fs.unlinkSync(tempFile);
@@ -695,6 +648,119 @@ export class DatabaseExportService {
     }
 
     return Math.min(99, Math.max(1, (processedTables / totalTables) * 99));
+  }
+
+  private getWorkspaceExportTables(): WorkspaceExportTable[] {
+    return [
+      {
+        name: 'persons',
+        query: 'SELECT * FROM persons WHERE workspace_id = $1'
+      },
+      {
+        name: 'booklet',
+        query: `
+          SELECT b.* FROM booklet b
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'bookletinfo',
+        query: `
+          SELECT bi.* FROM bookletinfo bi
+          INNER JOIN booklet b ON bi.id = b.infoid
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'bookletlog',
+        query: `
+          SELECT bl.* FROM bookletlog bl
+          INNER JOIN booklet b ON bl.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'session',
+        query: `
+          SELECT s.* FROM session s
+          INNER JOIN booklet b ON s.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'unit',
+        query: `
+          SELECT u.* FROM unit u
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'unit_note',
+        query: `
+          SELECT un.* FROM unit_note un
+          INNER JOIN unit u ON un."unitId" = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'unit_tag',
+        query: `
+          SELECT ut.* FROM unit_tag ut
+          INNER JOIN unit u ON ut."unitId" = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'unitlaststate',
+        query: `
+          SELECT uls.* FROM unitlaststate uls
+          INNER JOIN unit u ON uls.unitid = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'unitlog',
+        query: `
+          SELECT ul.* FROM unitlog ul
+          INNER JOIN unit u ON ul.unitid = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'response',
+        query: `
+          SELECT r.* FROM response r
+          INNER JOIN unit u ON r.unitid = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      },
+      {
+        name: 'chunk',
+        query: `
+          SELECT c.* FROM chunk c
+          INNER JOIN unit u ON c.unitid = u.id
+          INNER JOIN booklet b ON u.bookletid = b.id
+          INNER JOIN persons p ON b.personid = p.id
+          WHERE p.workspace_id = $1
+        `
+      }
+    ];
   }
 
   private mapPostgresTypeToSqlite(postgresType: string): string {
