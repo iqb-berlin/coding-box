@@ -2,13 +2,14 @@ const nxPreset = require('@nx/jest/preset').default;
 
 module.exports = {
   ...nxPreset,
+  coverageProvider: 'v8',
   coverageReporters: ['text', 'html', 'lcov', 'json', 'clover'],
   coverageThreshold: {
     global: {
-      branches: 10,
-      functions: 15,
-      lines: 25,
-      statements: 25
+      branches: 50,
+      functions: 50,
+      lines: 50,
+      statements: 50
     }
   },
   collectCoverageFrom: [
