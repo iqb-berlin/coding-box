@@ -79,7 +79,14 @@ import {
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentPoolSettings } from '../../models/content-pool.model';
-import { ContentPoolReplaceDialogComponent } from '../content-pool-replace-dialog/content-pool-replace-dialog.component';
+import {
+  ContentPoolImportDialogComponent,
+  ContentPoolImportDialogResult
+} from '../content-pool-import-dialog/content-pool-import-dialog.component';
+import {
+  ContentPoolUploadDialogComponent,
+  ContentPoolUploadDialogResult
+} from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
 
 @Component({
   selector: 'coding-box-test-files',
@@ -345,30 +352,16 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       });
   }
 
-  isVocsCodingSchemeFile(file: FilesInListDto): boolean {
-    return (
-      file.file_type === 'Resource' &&
-      file.filename.toLowerCase().endsWith('.vocs')
+  canUploadSelectedFilesToContentPool(): boolean {
+    return Boolean(
+      !this.isLoadingContentPoolConfig &&
+      this.contentPoolSettings.enabled &&
+      this.contentPoolSettings.baseUrl &&
+      this.tableCheckboxSelection.selected.length > 0
     );
   }
 
-  canTransferCodingSchemeToContentPool(): boolean {
-    if (this.isLoadingContentPoolConfig || !this.contentPoolSettings.enabled) {
-      return false;
-    }
-
-    if (!this.contentPoolSettings.baseUrl) {
-      return false;
-    }
-
-    if (this.tableCheckboxSelection.selected.length !== 1) {
-      return false;
-    }
-
-    return this.isVocsCodingSchemeFile(this.tableCheckboxSelection.selected[0]);
-  }
-
-  openContentPoolReplaceDialogForSelectedFile(): void {
+  openContentPoolUploadDialogForSelectedFiles(): void {
     if (!this.contentPoolSettings.enabled) {
       this.snackBar.open(
         'Die Content-Pool-Integration ist aktuell deaktiviert.',
@@ -387,33 +380,211 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return;
     }
 
-    if (this.tableCheckboxSelection.selected.length !== 1) {
-      this.snackBar.open('Bitte genau eine Datei auswählen.', 'OK', {
+    if (this.tableCheckboxSelection.selected.length === 0) {
+      this.snackBar.open('Bitte mindestens eine Datei auswählen.', 'OK', {
         duration: 3000
       });
       return;
     }
 
-    const selectedFile = this.tableCheckboxSelection.selected[0];
-    if (!this.isVocsCodingSchemeFile(selectedFile)) {
+    const ref = this.dialog.open(ContentPoolUploadDialogComponent, {
+      width: '760px',
+      maxWidth: '95vw',
+      data: {
+        workspaceId: this.appService.selectedWorkspaceId,
+        files: this.tableCheckboxSelection.selected.map(file => ({
+          id: file.id,
+          filename: file.filename
+        })),
+        settings: this.contentPoolSettings
+      }
+    });
+
+    ref.afterClosed().subscribe(
+      (payload?: ContentPoolUploadDialogResult | { success: false }) => {
+        if (!payload?.success) {
+          return;
+        }
+
+        this.handleContentPoolUploadResult(payload);
+      }
+    );
+  }
+
+  openContentPoolImportDialog(): void {
+    if (!this.contentPoolSettings.enabled) {
       this.snackBar.open(
-        'Nur Resource-Dateien mit Endung .vocs können übertragen werden.',
+        'Die Content-Pool-Integration ist aktuell deaktiviert.',
         'OK',
-        { duration: 3500 }
+        { duration: 3000 }
       );
       return;
     }
 
-    this.dialog.open(ContentPoolReplaceDialogComponent, {
+    if (!this.contentPoolSettings.baseUrl) {
+      this.snackBar.open(
+        'In den Systemeinstellungen ist keine Content-Pool URL hinterlegt.',
+        'OK',
+        { duration: 4000 }
+      );
+      return;
+    }
+
+    const ref = this.dialog.open(ContentPoolImportDialogComponent, {
       width: '700px',
       maxWidth: '95vw',
       data: {
         workspaceId: this.appService.selectedWorkspaceId,
-        fileId: selectedFile.id,
-        fileName: selectedFile.filename,
         settings: this.contentPoolSettings
       }
     });
+
+    ref.afterClosed().subscribe(
+      (payload?: ContentPoolImportDialogResult | { success: false }) => {
+        if (!payload?.success) {
+          return;
+        }
+
+        this.handleContentPoolImportResult(payload);
+      }
+    );
+  }
+
+  private handleContentPoolImportResult(
+    payload: ContentPoolImportDialogResult
+  ): void {
+    const result = payload.result;
+    this.showUploadSummary(result);
+
+    const conflicts = result.conflicts || [];
+    const uploadedFiles = result.uploadedFiles || [];
+    const failedFiles = result.failedFiles || [];
+    const attempted = result.total;
+    if (conflicts.length === 0) {
+      this.openUploadResultDialog({
+        attempted,
+        uploadedFiles,
+        failedFiles,
+        remainingConflicts: []
+      });
+      this.onUploadSuccess();
+      return;
+    }
+
+    const ref = this.dialog.open<
+    TestFilesUploadConflictsDialogComponent,
+    { conflicts: typeof conflicts },
+    TestFilesUploadConflictsDialogResult
+    >(TestFilesUploadConflictsDialogComponent, {
+      width: '800px',
+      maxWidth: '95vw',
+      data: { conflicts }
+    });
+
+    ref.afterClosed().subscribe(resultChoice => {
+      if (resultChoice?.overwrite === true) {
+        this.isLoading = true;
+        this.isUploading = true;
+        const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
+          .length;
+        this.contentPoolIntegrationService
+          .importAcp(this.appService.selectedWorkspaceId, {
+            username: payload.username,
+            password: payload.password,
+            acpId: payload.acpId,
+            overwriteExisting: true,
+            overwriteFileIds: resultChoice.overwriteFileIds
+          })
+          .pipe(
+            finalize(() => {
+              this.isLoading = false;
+              this.isUploading = false;
+            })
+          )
+          .subscribe({
+            next: overwriteResult => {
+              this.showUploadSummary(overwriteResult);
+
+              const finalUploadedFiles = [
+                ...uploadedFiles,
+                ...(overwriteResult.uploadedFiles || [])
+              ];
+              const finalFailedFiles = [
+                ...failedFiles,
+                ...(overwriteResult.failedFiles || [])
+              ];
+              const remainingConflicts = conflicts.filter(
+                c => !(resultChoice.overwriteFileIds || []).includes(c.fileId)
+              );
+
+              this.openUploadResultDialog({
+                attempted,
+                overwriteSelectedCount,
+                uploadedFiles: finalUploadedFiles,
+                failedFiles: finalFailedFiles,
+                remainingConflicts
+              });
+              this.onUploadSuccess();
+            },
+            error: () => {
+              this.snackBar.open(
+                'Fehler beim Überschreiben der Dateien aus dem Content Pool.',
+                this.translate.instant('error'),
+                { duration: 3000 }
+              );
+            }
+          });
+      } else {
+        this.openUploadResultDialog({
+          attempted,
+          uploadedFiles,
+          failedFiles,
+          remainingConflicts: conflicts
+        });
+        this.onUploadSuccess();
+      }
+    });
+  }
+
+  private handleContentPoolUploadResult(
+    payload: ContentPoolUploadDialogResult
+  ): void {
+    const result = payload.result;
+    const versionInfo = result.versionNumber ?
+      `, Version ${result.versionNumber}` :
+      '';
+    const skippedInfo = result.skipped > 0 ?
+      `, übersprungen: ${result.skipped}` :
+      '';
+    const failedInfo = result.failed > 0 ?
+      `, fehlgeschlagen: ${result.failed}` :
+      '';
+
+    this.snackBar.open(
+      `Content-Pool-Upload abgeschlossen: ${result.replaced} ersetzt${skippedInfo}${failedInfo}${versionInfo}`,
+      'OK',
+      { duration: 6000 }
+    );
+
+    if (result.skippedFiles.length > 0 || result.failedFiles.length > 0) {
+      const details = [
+        ...result.skippedFiles.map(file => (
+          `Übersprungen: ${file.filename} (${file.reason || 'kein Treffer'})`
+        )),
+        ...result.failedFiles.map(file => (
+          `Fehlgeschlagen: ${file.filename} (${file.reason || 'Fehler'})`
+        ))
+      ].join('\n');
+
+      this.dialog.open(ContentDialogComponent, {
+        width: '760px',
+        maxWidth: '95vw',
+        data: {
+          title: 'Content-Pool-Upload Ergebnis',
+          content: details
+        }
+      });
+    }
   }
 
   private showUploadSummary(result: TestFilesUploadResultDto): void {

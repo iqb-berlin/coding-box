@@ -1,0 +1,81 @@
+<h2 mat-dialog-title>ACP aus Content Pool importieren</h2>
+
+<mat-dialog-content class="dialog-content">
+  <p class="info-text">
+    Content-Pool: <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
+  </p>
+
+  <div class="credentials-grid">
+    <mat-form-field appearance="outline">
+      <mat-label>Benutzername</mat-label>
+      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isImporting">
+    </mat-form-field>
+
+    <mat-form-field appearance="outline">
+      <mat-label>Passwort</mat-label>
+      <input
+        matInput
+        type="password"
+        [(ngModel)]="password"
+        [disabled]="isLoadingAcps || isImporting">
+    </mat-form-field>
+  </div>
+
+  <div class="load-acps-actions">
+    <button
+      mat-stroked-button
+      color="primary"
+      (click)="loadAcps()"
+      [disabled]="isLoadingAcps || isImporting">
+      <mat-icon>login</mat-icon>
+      {{ isLoadingAcps ? 'Lade ACPs...' : 'Anmelden und ACPs laden' }}
+    </button>
+    @if (isLoadingAcps) {
+      <mat-spinner diameter="20"></mat-spinner>
+    }
+  </div>
+
+  @if (hasAuthenticated) {
+    <mat-form-field appearance="outline" class="full-width">
+      <mat-label>ACP auswählen</mat-label>
+      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isImporting">
+        @for (acp of acps; track acp.id) {
+          <mat-option [value]="acp.id">
+            {{ acp.name || acp.packageId || acp.id }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+  }
+
+  @if (isImporting) {
+    <div class="import-progress">
+      <div class="progress-header">
+        <span>{{ importProgressText }}</span>
+        @if (importProgressMode === 'determinate') {
+          <span>{{ importProgressValue }}%</span>
+        }
+      </div>
+      <mat-progress-bar
+        [mode]="importProgressMode"
+        [value]="importProgressValue">
+      </mat-progress-bar>
+    </div>
+  }
+
+  @if (errorMessage) {
+    <div class="error-message">{{ errorMessage }}</div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="cancel()" [disabled]="isImporting">Abbrechen</button>
+  <button
+    mat-raised-button
+    color="primary"
+    (click)="importAcp()"
+    [disabled]="isImporting || !hasAuthenticated || !selectedAcpId">
+    <mat-icon>download</mat-icon>
+    {{ isImporting ? 'Importiere...' : 'ACP importieren' }}
+  </button>
+</mat-dialog-actions>

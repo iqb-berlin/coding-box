@@ -1,17 +1,29 @@
-<h2 mat-dialog-title>Kodierschema in Content Pool ersetzen</h2>
+<h2 mat-dialog-title>Dateien in Content Pool ersetzen</h2>
 
 <mat-dialog-content class="dialog-content">
-  <p class="info-text">
-    Datei: <strong>{{ data.fileName }}</strong>
-  </p>
   <p class="info-text">
     Content-Pool: <strong>{{ data.settings.baseUrl || 'nicht konfiguriert' }}</strong>
   </p>
 
+  <div class="selected-files">
+    <div class="selected-files-title">
+      Ausgewählte Dateien
+      <span>{{ data.files.length }}</span>
+    </div>
+    <div class="selected-files-list">
+      @for (file of data.files; track file.id) {
+        <div class="selected-file">
+          <mat-icon>description</mat-icon>
+          <span>{{ file.filename }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
   <div class="credentials-grid">
     <mat-form-field appearance="outline">
       <mat-label>Benutzername</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isReplacing">
+      <input matInput [(ngModel)]="username" [disabled]="isLoadingAcps || isUploading">
     </mat-form-field>
 
     <mat-form-field appearance="outline">
@@ -20,7 +32,7 @@
         matInput
         type="password"
         [(ngModel)]="password"
-        [disabled]="isLoadingAcps || isReplacing">
+        [disabled]="isLoadingAcps || isUploading">
     </mat-form-field>
   </div>
 
@@ -29,7 +41,7 @@
       mat-stroked-button
       color="primary"
       (click)="loadAcps()"
-      [disabled]="isLoadingAcps || isReplacing">
+      [disabled]="isLoadingAcps || isUploading">
       <mat-icon>login</mat-icon>
       {{ isLoadingAcps ? 'Lade ACPs...' : 'Anmelden und ACPs laden' }}
     </button>
@@ -41,7 +53,7 @@
   @if (hasAuthenticated) {
     <mat-form-field appearance="outline" class="full-width">
       <mat-label>ACP auswählen</mat-label>
-      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isReplacing">
+      <mat-select [(ngModel)]="selectedAcpId" [disabled]="isUploading">
         @for (acp of acps; track acp.id) {
           <mat-option [value]="acp.id">
             {{ acp.name || acp.packageId || acp.id }}
@@ -56,8 +68,23 @@
         matInput
         rows="3"
         [(ngModel)]="changelog"
-        [disabled]="isReplacing"></textarea>
+        [disabled]="isUploading"></textarea>
     </mat-form-field>
+  }
+
+  @if (isUploading) {
+    <div class="upload-progress">
+      <div class="progress-header">
+        <span>{{ uploadProgressText }}</span>
+        @if (uploadProgressMode === 'determinate') {
+          <span>{{ uploadProgressValue }}%</span>
+        }
+      </div>
+      <mat-progress-bar
+        [mode]="uploadProgressMode"
+        [value]="uploadProgressValue">
+      </mat-progress-bar>
+    </div>
   }
 
   @if (errorMessage) {
@@ -66,13 +93,13 @@
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">
-  <button mat-button (click)="cancel()" [disabled]="isReplacing">Abbrechen</button>
+  <button mat-button (click)="cancel()" [disabled]="isUploading">Abbrechen</button>
   <button
     mat-raised-button
     color="primary"
-    (click)="replaceCodingScheme()"
-    [disabled]="isReplacing || !hasAuthenticated || !selectedAcpId">
+    (click)="uploadFiles()"
+    [disabled]="isUploading || !hasAuthenticated || !selectedAcpId">
     <mat-icon>publish</mat-icon>
-    {{ isReplacing ? 'Übertrage...' : 'Kodierschema ersetzen' }}
+    {{ isUploading ? 'Übertrage...' : 'Dateien ersetzen' }}
   </button>
 </mat-dialog-actions>
