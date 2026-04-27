@@ -150,7 +150,7 @@
             color="primary"
             [disabled]="isExporting"
             (click)="exportWorkspaceDatabase()">
-            <mat-icon>download</mat-icon>
+            <mat-icon>{{isExporting ? 'hourglass_empty' : 'download'}}</mat-icon>
             @if (isExporting) {
               {{ 'ws-settings.exporting' | translate }}
             } @else {
@@ -159,7 +159,17 @@
           </button>
         </div>
         @if (isExporting) {
-          <mat-progress-bar mode="indeterminate" class="export-progress"></mat-progress-bar>
+          <div class="export-progress">
+            <mat-progress-bar mode="determinate" [value]="databaseExportProgress"></mat-progress-bar>
+            <p class="progress-text">
+              {{ 'ws-settings.export-status' | translate }}:
+              {{ getDatabaseExportStatusLabel() }} - {{ databaseExportProgress }}%
+            </p>
+            <p class="progress-text">{{ 'ws-settings.export-may-take-minutes' | translate }}</p>
+          </div>
+        }
+        @if (databaseExportError) {
+          <p class="export-error">{{ databaseExportError }}</p>
         }
       </div>
     </mat-card-content>

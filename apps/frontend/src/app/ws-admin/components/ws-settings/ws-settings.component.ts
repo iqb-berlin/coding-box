@@ -1,4 +1,7 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
+import {
+  Component, inject, OnDestroy, OnInit
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatButtonModule } from '@angular/material/button';
@@ -13,6 +16,8 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkTextareaAutosize } from '@angular/cdk/text-field';
 import { Clipboard } from '@angular/cdk/clipboard';
+import { Subscription, timer } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
 
 import { AppService } from '../../../core/services/app.service';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
@@ -22,6 +27,28 @@ import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/rep
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
+
+type DatabaseExportStatus =
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
+
+interface DatabaseExportJobState {
+  status: DatabaseExportStatus;
+  progress: number;
+  result?: {
+    filePath: string;
+    fileName: string;
+    fileSize: number;
+    createdAt: number;
+    requestedByUserId: number;
+    scope: 'system' | 'workspace';
+    workspaceId?: number;
+  };
+  error?: string;
+}
 
 @Component({
   selector: 'coding-box-ws-settings',
@@ -45,18 +72,23 @@ import { ProcessOverviewComponent } from '../process-overview/process-overview.c
     JournalComponent
   ]
 })
-export class WsSettingsComponent implements OnInit {
+export class WsSettingsComponent implements OnInit, OnDestroy {
   private appService: AppService = inject(AppService);
+  private http = inject(HttpClient);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
+  private exportPollingSubscription: Subscription | null = null;
 
   authToken: string | null = null;
   duration = 60;
   autoFetchCodingStatistics = true;
   isExporting = false;
+  databaseExportProgress = 0;
+  databaseExportStatus: DatabaseExportStatus | null = null;
+  databaseExportError: string | null = null;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -67,6 +99,10 @@ export class WsSettingsComponent implements OnInit {
           this.autoFetchCodingStatistics = enabled;
         });
     }
+  }
+
+  ngOnDestroy(): void {
+    this.stopExportPolling();
   }
 
   openProcessOverview(): void {
@@ -195,69 +231,209 @@ export class WsSettingsComponent implements OnInit {
       return;
     }
 
-    this.isExporting = true;
-    const anchor = document.createElement('a');
-    anchor.style.display = 'none';
-    document.body.appendChild(anchor);
-
-    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
-    const token = localStorage.getItem('id_token');
-
-    if (!token) {
+    const authHeaders = this.getAuthHeaders();
+    if (!authHeaders) {
       this.snackBar.open(
         this.translateService.instant('ws-settings.authentication-required'),
         this.translateService.instant('close'),
         { duration: 5000 }
       );
-      this.isExporting = false;
       return;
     }
 
-    fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/x-sqlite3'
-      }
-    })
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.blob();
-      })
-      .then(blob => {
-        const url = window.URL.createObjectURL(blob);
-        anchor.href = url;
-        anchor.download = `workspace-${workspaceId}-export-${
-          new Date().toISOString().split('T')[0]
-        }.sqlite`;
-        anchor.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(anchor);
+    this.isExporting = true;
+    this.databaseExportProgress = 0;
+    this.databaseExportStatus = 'queued';
+    this.databaseExportError = null;
 
-        this.snackBar.open(
-          this.translateService.instant(
-            'ws-settings.workspace-database-exported-successfully'
-          ),
-          this.translateService.instant('close'),
-          { duration: 3000 }
-        );
-      })
-      .catch(() => {
-        this.snackBar.open(
-          this.translateService.instant(
-            'ws-settings.error-exporting-workspace-database-retry'
-          ),
-          this.translateService.instant('close'),
-          { duration: 5000 }
-        );
-        if (document.body.contains(anchor)) {
-          document.body.removeChild(anchor);
+    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+
+    this.http
+      .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders })
+      .subscribe({
+        next: ({ jobId }) => {
+          this.startExportPolling(workspaceId, jobId, authHeaders);
+        },
+        error: error => {
+          this.isExporting = false;
+          const message = this.extractErrorMessage(
+            error,
+            this.translateService.instant('ws-settings.error-starting-workspace-database-export')
+          );
+          this.databaseExportError = message;
+          this.databaseExportStatus = 'failed';
+          this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
         }
-      })
-      .finally(() => {
-        this.isExporting = false;
       });
+  }
+
+  getDatabaseExportStatusLabel(): string {
+    switch (this.databaseExportStatus) {
+      case 'queued':
+        return this.translateService.instant('ws-settings.export-status-queued');
+      case 'running':
+        return this.translateService.instant('ws-settings.export-status-running');
+      case 'completed':
+        return this.translateService.instant('ws-settings.export-status-completed');
+      case 'failed':
+        return this.translateService.instant('ws-settings.export-status-failed');
+      case 'cancelled':
+        return this.translateService.instant('ws-settings.export-status-cancelled');
+      default:
+        return this.translateService.instant('ws-settings.export-status-unknown');
+    }
+  }
+
+  private startExportPolling(
+    workspaceId: number,
+    jobId: string,
+    headers: HttpHeaders
+  ): void {
+    this.stopExportPolling();
+
+    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+
+    this.exportPollingSubscription = timer(0, 2000)
+      .pipe(
+        switchMap(() => this.http.get<DatabaseExportJobState>(
+          `${apiUrl}/job/${jobId}`,
+          { headers }
+        ))
+      )
+      .subscribe({
+        next: state => {
+          this.databaseExportStatus = state.status;
+          this.databaseExportProgress = Math.max(0, Math.min(100, Math.round(state.progress || 0)));
+
+          if (state.status === 'completed') {
+            this.databaseExportProgress = 100;
+            this.stopExportPolling();
+            this.downloadExportFile(workspaceId, jobId, headers);
+            return;
+          }
+
+          if (state.status === 'failed' || state.status === 'cancelled') {
+            this.stopExportPolling();
+            this.isExporting = false;
+            const message =
+              state.error ||
+              this.translateService.instant('ws-settings.error-exporting-workspace-database-retry');
+            this.databaseExportError = message;
+            this.snackBar.open(
+              message,
+              this.translateService.instant('close'),
+              { duration: 5000 }
+            );
+          }
+        },
+        error: error => {
+          this.stopExportPolling();
+          this.isExporting = false;
+          const message = this.extractErrorMessage(
+            error,
+            this.translateService.instant('ws-settings.error-fetching-workspace-database-export-status')
+          );
+          this.databaseExportStatus = 'failed';
+          this.databaseExportError = message;
+          this.snackBar.open(message, this.translateService.instant('close'), { duration: 5000 });
+        }
+      });
+  }
+
+  private downloadExportFile(
+    workspaceId: number,
+    jobId: string,
+    headers: HttpHeaders
+  ): void {
+    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+
+    this.http
+      .get(`${apiUrl}/job/${jobId}/download`, {
+        headers,
+        responseType: 'blob'
+      })
+      .subscribe({
+        next: blob => {
+          this.saveBlob(
+            blob,
+            `workspace-${workspaceId}-export-${new Date().toISOString().split('T')[0]}.sqlite`
+          );
+          this.isExporting = false;
+          this.databaseExportStatus = 'completed';
+          this.databaseExportError = null;
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.workspace-database-exported-successfully'),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: error => {
+          this.isExporting = false;
+          this.databaseExportStatus = 'failed';
+          this.databaseExportError = this.extractErrorMessage(
+            error,
+            this.translateService.instant('ws-settings.error-downloading-workspace-database-export')
+          );
+          this.snackBar.open(
+            this.databaseExportError,
+            this.translateService.instant('close'),
+            { duration: 5000 }
+          );
+        }
+      });
+  }
+
+  private stopExportPolling(): void {
+    if (this.exportPollingSubscription) {
+      this.exportPollingSubscription.unsubscribe();
+      this.exportPollingSubscription = null;
+    }
+  }
+
+  private getAuthHeaders(): HttpHeaders | null {
+    const token = localStorage.getItem('id_token');
+    if (!token) {
+      return null;
+    }
+
+    return new HttpHeaders({
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/json'
+    });
+  }
+
+  private saveBlob(blob: Blob, filename: string): void {
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.style.display = 'none';
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(anchor);
+  }
+
+  private extractErrorMessage(error: unknown, fallback: string): string {
+    const payload = error as {
+      error?: {
+        message?: string | string[];
+      };
+      message?: string;
+    };
+
+    if (Array.isArray(payload?.error?.message)) {
+      return payload.error.message.join(', ');
+    }
+
+    if (typeof payload?.error?.message === 'string') {
+      return payload.error.message;
+    }
+
+    if (typeof payload?.message === 'string') {
+      return payload.message;
+    }
+
+    return fallback;
   }
 }

@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { BullModule } from '@nestjs/bull';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DatabaseModule } from '../../database/database.module';
@@ -19,6 +20,7 @@ import { ReplayStatisticsController } from '../replay-statistics/replay-statisti
 import { VariableBundleController } from '../variable-bundle/variable-bundle.controller';
 import { CodingJobsController } from '../coding-jobs/coding-jobs.controller';
 import { DatabaseAdminController } from '../database/database-admin.controller';
+import { DatabaseExportProcessor } from '../database/database-export.processor';
 import { DatabaseExportService } from '../database/database-export.service';
 import { Setting } from '../../database/entities/setting.entity';
 
@@ -31,6 +33,9 @@ import { Setting } from '../../database/entities/setting.entity';
     CodingModule,
     HttpModule,
     TypeOrmModule.forFeature([Setting]),
+    BullModule.registerQueue({
+      name: 'database-export'
+    }),
     VariableBundleModule,
     JobQueueModule
   ],
@@ -48,7 +53,8 @@ import { Setting } from '../../database/entities/setting.entity';
     DatabaseAdminController
   ],
   providers: [
-    DatabaseExportService
+    DatabaseExportService,
+    DatabaseExportProcessor
   ]
 })
 export class CoreAdminModule { }

@@ -1,6 +1,6 @@
 /* eslint-disable max-classes-per-file */
 import {
-  ComponentFixture, TestBed
+  ComponentFixture, fakeAsync, TestBed, tick
 } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -10,6 +10,10 @@ import { of, throwError } from 'rxjs';
 import { Clipboard } from '@angular/cdk/clipboard';
 import { Component } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
+import {
+  HttpTestingController,
+  provideHttpClientTesting
+} from '@angular/common/http/testing';
 import { JournalComponent } from '../journal/journal.component';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { WsSettingsComponent } from './ws-settings.component';
@@ -39,6 +43,7 @@ describe('WsSettingsComponent', () => {
   let mockClipboard: jest.Mocked<Clipboard>;
   let mockSnackBar: jest.Mocked<MatSnackBar>;
   let mockDialog: jest.Mocked<MatDialog>;
+  let httpMock: HttpTestingController;
 
   beforeEach(async () => {
     mockAppService = {
@@ -74,6 +79,7 @@ describe('WsSettingsComponent', () => {
       ],
       providers: [
         provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: AppService, useValue: mockAppService },
         { provide: WorkspaceSettingsService, useValue: mockWorkspaceSettingsService },
         { provide: Clipboard, useValue: mockClipboard },
@@ -92,6 +98,12 @@ describe('WsSettingsComponent', () => {
     fixture = TestBed.createComponent(WsSettingsComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+    jest.restoreAllMocks();
   });
 
   it('should create', () => {
@@ -174,7 +186,6 @@ describe('WsSettingsComponent', () => {
 
   describe('exportWorkspaceDatabase', () => {
     beforeEach(() => {
-      // Mock window.URL and localStorage
       if (typeof window.URL.createObjectURL === 'undefined') {
         Object.defineProperty(window.URL, 'createObjectURL', { value: jest.fn(), configurable: true });
       }
@@ -183,16 +194,9 @@ describe('WsSettingsComponent', () => {
       }
 
       jest.spyOn(Storage.prototype, 'getItem').mockReturnValue('test-token');
-
-      // Mock fetch
-      global.fetch = jest.fn().mockImplementation(() => Promise.resolve({
-        ok: true,
-        blob: () => Promise.resolve(new Blob(['test']))
-      })
-      );
     });
 
-    it('should toggle isExporting and call fetch', async () => {
+    it('should start export job, poll status and download file', fakeAsync(() => {
       const anchor = document.createElement('a');
       const clickSpy = jest.spyOn(anchor, 'click').mockImplementation(() => {});
       const createElementSpy = jest.spyOn(document, 'createElement').mockReturnValue(anchor as HTMLAnchorElement);
@@ -202,21 +206,32 @@ describe('WsSettingsComponent', () => {
 
       component.exportWorkspaceDatabase();
 
-      // Wait for fetch and promise chain to finish
-      await new Promise(resolve => { setTimeout(resolve, 0); });
+      const startRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job');
+      expect(startRequest.request.method).toBe('POST');
+      startRequest.flush({ jobId: 'job-1', message: 'started' });
 
-      expect(global.fetch).toHaveBeenCalled();
+      tick(0);
+
+      const statusRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job/job-1');
+      expect(statusRequest.request.method).toBe('GET');
+      statusRequest.flush({ status: 'completed', progress: 100 });
+
+      const downloadRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job/job-1/download');
+      expect(downloadRequest.request.method).toBe('GET');
+      downloadRequest.flush(new Blob(['test']));
+
       expect(clickSpy).toHaveBeenCalled();
       expect(component.isExporting).toBe(false);
+      expect(component.databaseExportStatus).toBe('completed');
 
       appendChildSpy.mockRestore();
       removeChildSpy.mockRestore();
       createElementSpy.mockRestore();
-    });
+    }));
 
-    it('should show error if no token found', async () => {
+    it('should show error if no token found', () => {
       jest.spyOn(localStorage, 'getItem').mockReturnValue(null);
-      await component.exportWorkspaceDatabase();
+      component.exportWorkspaceDatabase();
       expect(mockSnackBar.open).toHaveBeenCalled();
       expect(component.isExporting).toBe(false);
     });
