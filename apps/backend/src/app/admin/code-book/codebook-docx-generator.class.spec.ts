@@ -45,5 +45,22 @@ describe('CodebookDocxGenerator', () => {
         '<m:oMath><m:r><m:t xml:space="preserve">a&lt;b &amp; c</m:t></m:r></m:oMath>'
       );
     });
+
+    it('should unwrap the ImportedXmlComponent wrapper before returning OMML', () => {
+      const fromXmlString = (
+        jest.requireMock('docx') as {
+          ImportedXmlComponent: { fromXmlString: jest.Mock };
+        }
+      ).ImportedXmlComponent.fromXmlString;
+      const ommlRoot = { rootKey: 'm:oMath' };
+      fromXmlString.mockReturnValueOnce({ root: [ommlRoot] });
+
+      const generator = CodebookDocxGenerator as unknown as {
+        latexToOmml: (latex: string) => unknown;
+      };
+      const result = generator.latexToOmml('a<b');
+
+      expect(result).toBe(ommlRoot);
+    });
   });
 });
