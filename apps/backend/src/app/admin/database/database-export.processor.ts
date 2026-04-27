@@ -8,6 +8,8 @@ import { DatabaseExportService } from './database-export.service';
 
 export interface DatabaseExportJobData {
   requestedByUserId: number;
+  scope?: 'system' | 'workspace';
+  workspaceId?: number;
   isCancelled?: boolean;
 }
 
@@ -17,6 +19,8 @@ export interface DatabaseExportJobResult {
   fileSize: number;
   createdAt: number;
   requestedByUserId: number;
+  scope: 'system' | 'workspace';
+  workspaceId?: number;
 }
 
 @Injectable()
@@ -47,16 +51,33 @@ export class DatabaseExportProcessor {
 
       outputFilePath = path.join(
         tempDir,
-        `database-export-${job.id}-${Date.now()}.sqlite`
+        job.data.scope === 'workspace' ?
+          `workspace-${job.data.workspaceId}-database-export-${job.id}-${Date.now()}.sqlite` :
+          `database-export-${job.id}-${Date.now()}.sqlite`
       );
 
-      await this.databaseExportService.exportToSqliteFile(
-        outputFilePath,
-        async progress => {
-          await job.progress(progress);
-        },
-        async () => this.isJobCancelled(job)
-      );
+      if (job.data.scope === 'workspace') {
+        if (!job.data.workspaceId) {
+          throw new Error('Workspace database export job is missing workspaceId.');
+        }
+
+        await this.databaseExportService.exportWorkspaceToSqliteFile(
+          outputFilePath,
+          job.data.workspaceId,
+          async progress => {
+            await job.progress(progress);
+          },
+          async () => this.isJobCancelled(job)
+        );
+      } else {
+        await this.databaseExportService.exportToSqliteFile(
+          outputFilePath,
+          async progress => {
+            await job.progress(progress);
+          },
+          async () => this.isJobCancelled(job)
+        );
+      }
 
       const stats = fs.statSync(outputFilePath);
       const result: DatabaseExportJobResult = {
@@ -64,7 +85,9 @@ export class DatabaseExportProcessor {
         fileName: path.basename(outputFilePath),
         fileSize: stats.size,
         createdAt: Date.now(),
-        requestedByUserId: job.data.requestedByUserId
+        requestedByUserId: job.data.requestedByUserId,
+        scope: job.data.scope || 'system',
+        workspaceId: job.data.workspaceId
       };
 
       await job.progress(100);
