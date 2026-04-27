@@ -8,13 +8,13 @@ $iqb-accent: rgb(0, 96, 100);
 }
 
 .app-info {
-  overflow-y: auto;
-  background: lightgray; /* Keeping the original background color as specified */
-  border-radius: 12px;
-  padding: 40px;
-  font-size: 18px;
+  box-sizing: border-box;
+  background: lightgray;
+  border-radius: 8px;
+  padding: clamp(20px, 4vw, 40px);
+  font-size: clamp(16px, 2vw, 18px);
   line-height: 1.6;
-  height: 100%;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -55,7 +55,7 @@ $iqb-accent: rgb(0, 96, 100);
   .info-card {
     background-color: rgba(255, 255, 255, 0.6);
     border-radius: 8px;
-    padding: 20px;
+    padding: clamp(14px, 3vw, 20px);
     margin-bottom: 30px;
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 
@@ -69,6 +69,7 @@ $iqb-accent: rgb(0, 96, 100);
         border-bottom: 1px solid rgba(0, 0, 0, 0.08);
         display: flex;
         align-items: center;
+        gap: 12px;
 
         &:last-child {
           border-bottom: none;
@@ -105,7 +106,7 @@ $iqb-accent: rgb(0, 96, 100);
 
 .impressum {
   width: 100%;
-  padding: 20px 0;
+  padding: 12px 0 0;
   margin-top: auto;
 
   a {
@@ -126,5 +127,30 @@ $iqb-accent: rgb(0, 96, 100);
     .button-text {
       font-weight: 500;
     }
+  }
+}
+
+@media (max-width: 480px) {
+  .app-info {
+    line-height: 1.5;
+
+    .info-card {
+      margin-bottom: 20px;
+
+      ul li {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .info-label {
+        width: auto;
+      }
+    }
+  }
+
+  .impressum a {
+    width: 100%;
+    min-width: 0;
   }
 }
