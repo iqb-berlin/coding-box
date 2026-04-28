@@ -80,14 +80,18 @@ export class CodingResultsExportService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
-    includeReplayUrls: boolean
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ): Promise<Readable> {
     return this.codingListService.getCodingResultsByVersionCsvStream(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback,
+      includeResponseValues
     );
   }
 
@@ -96,14 +100,18 @@ export class CodingResultsExportService {
     version: 'v1' | 'v2' | 'v3',
     authToken: string,
     serverUrl: string,
-    includeReplayUrls: boolean
+    includeReplayUrls: boolean,
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ): Promise<Buffer> {
     return this.codingListService.getCodingResultsByVersionAsExcel(
       workspaceId,
       version,
       authToken || '',
       serverUrl || '',
-      includeReplayUrls
+      includeReplayUrls,
+      progressCallback,
+      includeResponseValues
     );
   }
 

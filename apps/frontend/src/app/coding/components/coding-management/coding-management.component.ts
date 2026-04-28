@@ -577,8 +577,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(result => {
       if (result) {
-        const { version, format, includeReplayUrls } = result;
-        this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls)
+        const {
+          version, format, includeReplayUrls, includeResponseValues
+        } = result;
+        this.codingManagementService.downloadCodingResults(version, format, includeReplayUrls, includeResponseValues)
           .finally(() => {
             this.isDownloadInProgress = false;
           });

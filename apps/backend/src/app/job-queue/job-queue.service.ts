@@ -110,6 +110,7 @@ export interface ExportJobData {
   format?: 'csv' | 'json' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:

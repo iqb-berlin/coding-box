@@ -123,12 +123,32 @@ export class CodingFacadeService {
     return this.codingExportService.getCodingListAsExcel(workspaceId);
   }
 
-  getCodingResultsByVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
-    return this.codingExportService.getCodingResultsByVersion(workspaceId, version, includeReplayUrls);
+  getCodingResultsByVersion(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
+  ): Observable<Blob> {
+    return this.codingExportService.getCodingResultsByVersion(
+      workspaceId,
+      version,
+      includeReplayUrls,
+      includeResponseValues
+    );
   }
 
-  getCodingResultsByVersionAsExcel(workspaceId: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
-    return this.codingExportService.getCodingResultsByVersionAsExcel(workspaceId, version, includeReplayUrls);
+  getCodingResultsByVersionAsExcel(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
+  ): Observable<Blob> {
+    return this.codingExportService.getCodingResultsByVersionAsExcel(
+      workspaceId,
+      version,
+      includeReplayUrls,
+      includeResponseValues
+    );
   }
 
   getCodingStatistics(workspaceId: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<CodingStatistics> {
