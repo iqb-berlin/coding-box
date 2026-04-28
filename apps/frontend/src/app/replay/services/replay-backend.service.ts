@@ -16,7 +16,10 @@ export type ReplayStatisticsResponse = {
   replayUrl?: string;
   success?: boolean;
   errorMessage?: string;
+  clientTimings?: Record<string, number | null>;
 };
+
+export type ReplayClientTimings = Record<string, number | null>;
 
 @Injectable({
   providedIn: 'root'
@@ -40,6 +43,7 @@ export class ReplayBackendService {
       replayUrl?: string;
       success?: boolean;
       errorMessage?: string;
+      clientTimings?: ReplayClientTimings;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;

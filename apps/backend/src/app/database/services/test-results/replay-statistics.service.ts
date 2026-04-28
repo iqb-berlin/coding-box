@@ -62,6 +62,7 @@ export class ReplayStatisticsService {
     replayUrl?: string;
     success?: boolean;
     errorMessage?: string;
+    clientTimings?: Record<string, number | null>;
   }): Promise<ReplayStatistics> {
     try {
       const mappedData = {
@@ -73,7 +74,8 @@ export class ReplayStatisticsService {
         duration_milliseconds: data.durationMilliseconds,
         replay_url: data.replayUrl,
         success: data.success !== undefined ? data.success : true,
-        error_message: data.errorMessage
+        error_message: data.errorMessage,
+        client_timings: data.clientTimings
       };
 
       const replayStatistics =

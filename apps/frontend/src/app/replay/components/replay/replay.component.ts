@@ -20,7 +20,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { ReplayBackendService } from '../../services/replay-backend.service';
+import { ReplayBackendService, ReplayClientTimings } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -102,6 +102,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private routeStartTime: number = 0;
   private payloadRequestStartTime: number = 0;
   private payloadResponseTime: number = 0;
+  private playerReadyTime: number = 0;
   private successStoredForCurrentReplay: boolean = false;
   protected reloadKey: number = 0;
   workspaceId: number = 0;
@@ -446,6 +447,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     }> {
     this.replayStartTime = performance.now();
     this.payloadRequestStartTime = performance.now();
+    this.payloadResponseTime = 0;
+    this.playerReadyTime = 0;
     this.successStoredForCurrentReplay = false;
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
@@ -507,6 +510,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.storeReplayStatistics(false, duration, errorMessage);
   }
 
+  onPlayerReady(): void {
+    if (!this.playerReadyTime) {
+      this.playerReadyTime = performance.now();
+    }
+  }
+
   onResponseVisible(): void {
     if (this.successStoredForCurrentReplay) {
       return;
@@ -517,13 +526,45 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       Math.round(this.payloadResponseTime - this.payloadRequestStartTime) :
       0;
     const payloadToVisible = this.payloadResponseTime ? Math.round(now - this.payloadResponseTime) : 0;
+    const payloadToPlayerReady = (this.payloadResponseTime && this.playerReadyTime) ?
+      Math.round(this.playerReadyTime - this.payloadResponseTime) :
+      null;
+    const playerReadyToVisible = this.playerReadyTime ?
+      Math.round(now - this.playerReadyTime) :
+      null;
     logger.log(
       `Replay timings unit=${this.unitId} routeToVisible=${routeToVisible}ms ` +
-      `payload=${payloadDuration}ms payloadToVisible=${payloadToVisible}ms`
+      `payload=${payloadDuration}ms payloadToVisible=${payloadToVisible}ms ` +
+      `payloadToPlayerReady=${payloadToPlayerReady ?? 'n/a'}ms ` +
+      `playerReadyToVisible=${playerReadyToVisible ?? 'n/a'}ms`
     );
     const duration = this.replayStartTime ? Math.round(performance.now() - this.replayStartTime) : 0;
     this.storeReplayStatistics(true, duration);
     this.successStoredForCurrentReplay = true;
+  }
+
+  private getClientTimings(visibleTime: number = performance.now()): ReplayClientTimings {
+    const routeToVisible = this.routeStartTime ? Math.round(visibleTime - this.routeStartTime) : null;
+    const payloadMs = (this.payloadRequestStartTime && this.payloadResponseTime) ?
+      Math.round(this.payloadResponseTime - this.payloadRequestStartTime) :
+      null;
+    const payloadToVisibleMs = this.payloadResponseTime ?
+      Math.round(visibleTime - this.payloadResponseTime) :
+      null;
+    const payloadToPlayerReadyMs = (this.payloadResponseTime && this.playerReadyTime) ?
+      Math.round(this.playerReadyTime - this.payloadResponseTime) :
+      null;
+    const playerReadyToVisibleMs = this.playerReadyTime ?
+      Math.round(visibleTime - this.playerReadyTime) :
+      null;
+
+    return {
+      routeToVisibleMs: routeToVisible,
+      payloadMs,
+      payloadToVisibleMs,
+      payloadToPlayerReadyMs,
+      playerReadyToVisibleMs
+    };
   }
 
   private storeReplayStatistics(success: boolean, duration: number, errorMessage?: string): void {
@@ -545,7 +586,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       durationMilliseconds: Math.max(0, duration),
       replayUrl,
       success,
-      errorMessage
+      errorMessage,
+      clientTimings: this.getClientTimings()
     }).subscribe({
       next: () => {
         logger.log(
