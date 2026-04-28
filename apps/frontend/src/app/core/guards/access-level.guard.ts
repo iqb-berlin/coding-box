@@ -1,6 +1,5 @@
 import {
   ActivatedRouteSnapshot,
-  RouterStateSnapshot,
   CanActivateFn,
   UrlTree,
   Router
@@ -24,8 +23,7 @@ import { AppService } from '../services/app.service';
  */
 export function canActivateAccessLevel(minLevel: number): CanActivateFn {
   return async (
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    route: ActivatedRouteSnapshot
   ): Promise<boolean | UrlTree> => {
     const authService = inject(AuthService);
     const userService = inject(UserService);
