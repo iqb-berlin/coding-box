@@ -126,7 +126,8 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               job.data.includeReplayUrl || false,
-              onProgress
+              onProgress,
+              job.data.includeResponseValues !== false
             );
           } else {
             // CSV Stream
@@ -136,7 +137,8 @@ export class ExportJobProcessor {
               job.data.authToken || '',
               job.data.serverUrl || '',
               job.data.includeReplayUrl || false,
-              onProgress
+              onProgress,
+              job.data.includeResponseValues !== false
             );
 
             const writeStream = fs.createWriteStream(filePath);

@@ -118,6 +118,14 @@ export interface DownloadCodingResultsDialogData {
               {{ 'coding-management.download-dialog.replay-urls-description' | translate }}
             </p>
           </div>
+          <div class="option-item">
+            <mat-checkbox [(ngModel)]="includeResponseValues" class="option-checkbox">
+              {{ 'coding-management.download-dialog.include-response-values' | translate }}
+            </mat-checkbox>
+            <p class="option-description">
+              {{ 'coding-management.download-dialog.response-values-description' | translate }}
+            </p>
+          </div>
         </mat-card-content>
       </mat-card>
 
@@ -207,6 +215,10 @@ export interface DownloadCodingResultsDialogData {
       display: flex;
       flex-direction: column;
       gap: 8px;
+
+      & + .option-item {
+        margin-top: 14px;
+      }
 
       .option-checkbox {
         margin: 0;
@@ -323,6 +335,7 @@ export class DownloadCodingResultsDialogComponent {
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   selectedFormat: ExportFormat = 'csv';
   includeReplayUrls: boolean = false;
+  includeResponseValues: boolean = true;
 
   constructor(
     public dialogRef: MatDialogRef<DownloadCodingResultsDialogComponent>,
@@ -335,7 +348,8 @@ export class DownloadCodingResultsDialogComponent {
     this.dialogRef.close({
       version: this.selectedVersion,
       format: this.selectedFormat,
-      includeReplayUrls: this.includeReplayUrls
+      includeReplayUrls: this.includeReplayUrls,
+      includeResponseValues: this.includeResponseValues
     });
   }
 

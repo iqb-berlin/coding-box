@@ -106,8 +106,8 @@ describe('CodingResultsExportService', () => {
     await expect(service.exportCodingResultsByVersionAsCsv(1, 'v2', '', '', true)).resolves.toBeInstanceOf(Readable);
     await expect(service.exportCodingResultsByVersionAsExcel(1, 'v3', '', '', false)).resolves.toEqual(Buffer.from('xlsx'));
 
-    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(1, 'v2', '', '', true);
-    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(1, 'v3', '', '', false);
+    expect(codingListService.getCodingResultsByVersionCsvStream).toHaveBeenCalledWith(1, 'v2', '', '', true, undefined, true);
+    expect(codingListService.getCodingResultsByVersionAsExcel).toHaveBeenCalledWith(1, 'v3', '', '', false, undefined, true);
   });
 
   it('caches variable page maps per workspace and falls back to page zero', async () => {

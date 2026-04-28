@@ -343,11 +343,16 @@ export class CodingManagementService {
     this.performBackgroundCodingListDownload(workspaceId, format, trainingRequired);
   }
 
-  downloadCodingResults(version: StatisticsVersion, format: ExportFormat, includeReplayUrls: boolean): Promise<void> {
+  downloadCodingResults(
+    version: StatisticsVersion,
+    format: ExportFormat,
+    includeReplayUrls: boolean,
+    includeResponseValues: boolean = true
+  ): Promise<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return Promise.resolve();
 
-    return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls);
+    return this.performBackgroundDownload(workspaceId, version, format, includeReplayUrls, includeResponseValues);
   }
 
   downloadProgress$ = new BehaviorSubject<number | null>(null);
@@ -356,7 +361,8 @@ export class CodingManagementService {
     workspaceId: number,
     version: StatisticsVersion,
     format: ExportFormat,
-    includeReplayUrls: boolean
+    includeReplayUrls: boolean,
+    includeResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 
@@ -367,7 +373,9 @@ export class CodingManagementService {
         'results-by-version',
         version,
         format,
-        includeReplayUrls
+        includeReplayUrls,
+        undefined,
+        includeResponseValues
       ).toPromise();
 
       if (!jobStartResult) {

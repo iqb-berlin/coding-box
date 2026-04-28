@@ -66,16 +66,35 @@ describe('CodingExportService', () => {
   });
 
   it('should get coding results by version', () => {
-    service.getCodingResultsByVersion(1, 'v2', true).subscribe(res => {
+    service.getCodingResultsByVersion(1, 'v2', true, false).subscribe(res => {
       expect(res).toBeDefined();
     });
 
     const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/1/coding/results-by-version` &&
       request.params.get('version') === 'v2' &&
-      request.params.get('includeReplayUrls') === 'true'
+      request.params.get('includeReplayUrls') === 'true' &&
+      request.params.get('includeResponseValues') === 'false'
     );
     expect(req.request.method).toBe('GET');
     req.flush(new Blob());
+  });
+
+  it('should pass response value option to export jobs', () => {
+    service.startExportJob(1, 'results-by-version', 'v1', 'csv', false, undefined, false).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toMatchObject({
+      exportType: 'results-by-version',
+      version: 'v1',
+      format: 'csv',
+      includeReplayUrl: false,
+      includeResponseValues: false,
+      authToken: 'auth-token'
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
   });
 
   it('should get coding book', () => {

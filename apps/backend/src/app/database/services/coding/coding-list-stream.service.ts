@@ -409,10 +409,11 @@ export class CodingListStreamService {
     authToken: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ) {
     this.logger.log(
-      `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+      `Memory-efficient CSV export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
     const csvStream = fastCsv.format({ headers: true, delimiter: ';' });
@@ -445,7 +446,8 @@ export class CodingListStreamService {
             authToken,
             serverUrl!,
             workspace_id,
-            includeReplayUrls
+            includeReplayUrls,
+            includeResponseValues
           ));
 
           const results = await Promise.allSettled(processingPromises);
@@ -508,10 +510,11 @@ export class CodingListStreamService {
     authToken?: string,
     serverUrl?: string,
     includeReplayUrls: boolean = false,
-    progressCallback?: (percentage: number) => Promise<void>
+    progressCallback?: (percentage: number) => Promise<void>,
+    includeResponseValues: boolean = true
   ): Promise<Buffer> {
     this.logger.log(
-      `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls})`
+      `Starting streaming Excel export for coding results version ${version}, workspace ${workspace_id} (replay URLs: ${includeReplayUrls}, response values: ${includeResponseValues})`
     );
     this.fileCacheService.clearCaches();
 
@@ -535,7 +538,7 @@ export class CodingListStreamService {
     const worksheet = workbook.addWorksheet('Coding Results');
 
     // Define headers based on version (include lower versions)
-    let headers = this.itemBuilderService.getHeadersForVersion(version);
+    let headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
 
     // Add URL column if replay URLs are included
     if (includeReplayUrls) {
@@ -568,7 +571,8 @@ export class CodingListStreamService {
           authToken || '',
           serverUrl || '',
           workspace_id,
-          includeReplayUrls
+          includeReplayUrls,
+          includeResponseValues
         )
         );
 
