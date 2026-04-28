@@ -52,8 +52,7 @@ function createWorkspaceAccessGuard(
   createDeniedRedirect: (context: WorkspaceAccessGuardContext) => UrlTree | Promise<UrlTree>
 ): CanActivateFn {
   return async (
-    route: ActivatedRouteSnapshot,
-    state: RouterStateSnapshot
+    route: ActivatedRouteSnapshot
   ): Promise<boolean | UrlTree> => {
     const appService = inject(AppService);
     const authService = inject(AuthService);
