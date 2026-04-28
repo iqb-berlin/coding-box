@@ -975,6 +975,8 @@
       "options-title": "Exportoptionen",
       "include-replay-urls": "Replay-URLs einschließen",
       "replay-urls-description": "Fügt eine Spalte mit direkten Links zu den Replay-Ansichten der einzelnen Antworten hinzu",
+      "include-response-values": "Antwortwerte einschließen",
+      "response-values-description": "Fügt die Antwortwerte als Spalte value in den Export ein. Bei sehr großen Antwortinhalten kann diese Option deaktiviert werden.",
       "notice-title": "Hinweis",
       "notice-message": "Die heruntergeladene Datei enthält ALLE Datensätze für die ausgewählte Version, nicht nur die derzeit angezeigten gefilterten Datensätze.",
       "download-button": "Herunterladen",

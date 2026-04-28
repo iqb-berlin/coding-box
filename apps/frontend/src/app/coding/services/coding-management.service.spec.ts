@@ -194,4 +194,28 @@ describe('CodingManagementService', () => {
       expect(exportServiceMock.downloadExportFile).toHaveBeenCalledWith(1, 'job-1');
     });
   });
+
+  describe('downloadCodingResults', () => {
+    it('should pass response value option to background export job', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
+      const mockBlob = new Blob(['csv data'], { type: 'text/csv' });
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
+
+      global.URL.createObjectURL = jest.fn();
+      global.URL.revokeObjectURL = jest.fn();
+
+      await service.downloadCodingResults('v1', 'csv', true, false);
+
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        'results-by-version',
+        'v1',
+        'csv',
+        true,
+        undefined,
+        false
+      );
+    });
+  });
 });

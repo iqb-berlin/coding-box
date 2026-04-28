@@ -238,6 +238,12 @@ export class WorkspaceCodingExportController {
     description: 'Include replay URLs in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeResponseValues',
+    required: false,
+    description: 'Include response values in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as CSV',
     content: {
@@ -256,6 +262,8 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
+      @Query('includeResponseValues', { transform: value => value !== 'false' })
+                   includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
     const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
@@ -263,7 +271,9 @@ export class WorkspaceCodingExportController {
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      undefined,
+      includeResponseValues
     );
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -307,6 +317,12 @@ export class WorkspaceCodingExportController {
     description: 'Include replay URLs in the export',
     type: Boolean
   })
+  @ApiQuery({
+    name: 'includeResponseValues',
+    required: false,
+    description: 'Include response values in the export',
+    type: Boolean
+  })
   @ApiOkResponse({
     description: 'Coding results for specified version exported as Excel',
     content: {
@@ -325,6 +341,8 @@ export class WorkspaceCodingExportController {
       @Query('serverUrl') serverUrl: string,
       @Query('includeReplayUrls', { transform: value => value === 'true' })
                    includeReplayUrls: boolean,
+      @Query('includeResponseValues', { transform: value => value !== 'false' })
+                   includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
     const buffer = await this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
@@ -332,7 +350,9 @@ export class WorkspaceCodingExportController {
       version,
       authToken,
       serverUrl,
-      includeReplayUrls
+      includeReplayUrls,
+      undefined,
+      includeResponseValues
     );
 
     res.setHeader(
@@ -891,6 +911,7 @@ export class WorkspaceCodingExportController {
         },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
+        includeResponseValues: { type: 'boolean' },
         anonymizeCoders: { type: 'boolean' },
         usePseudoCoders: { type: 'boolean' },
         doubleCodingMethod: {

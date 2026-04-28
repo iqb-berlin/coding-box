@@ -142,6 +142,51 @@ describe('CodingListStreamService', () => {
       expect(stream).toBeDefined();
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
     });
+
+    it('should pass response value option to versioned CSV item builder', async () => {
+      const response = createMockResponse(1);
+      mockResponseFilterService.getResponsesBatch
+        .mockResolvedValueOnce([response])
+        .mockResolvedValueOnce([]);
+      mockItemBuilderService.buildCodingItemWithVersions.mockResolvedValue({
+        unit_key: 'unit1',
+        unit_alias: 'Unit 1',
+        person_login: 'user1',
+        person_code: 'code1',
+        person_group: 'group1',
+        booklet_name: 'booklet1',
+        variable_id: 'var1',
+        variable_page: '1',
+        variable_anchor: 'var1',
+        status_v1: 'VALUE_CHANGED',
+        code_v1: '',
+        score_v1: ''
+      } as never);
+
+      const stream = await service.getCodingResultsByVersionCsvStream(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        false,
+        undefined,
+        false
+      );
+      stream.on('data', () => {});
+      await new Promise(resolve => {
+        stream.on('end', resolve);
+      });
+
+      expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
+        response,
+        'v1',
+        'token',
+        'http://server',
+        1,
+        false,
+        false
+      );
+    });
   });
 
   describe('CSV formatting', () => {
@@ -251,6 +296,26 @@ describe('CodingListStreamService', () => {
       );
 
       expect(result).toBeInstanceOf(Buffer);
+    });
+
+    it('should pass response value option to versioned Excel headers', async () => {
+      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
+      mockItemBuilderService.getHeadersForVersion.mockReturnValue([
+        'unit_key',
+        'status_v1'
+      ]);
+
+      await service.getCodingResultsByVersionAsExcel(
+        1,
+        'v1',
+        'token',
+        'http://server',
+        false,
+        undefined,
+        false
+      );
+
+      expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', false);
     });
   });
 

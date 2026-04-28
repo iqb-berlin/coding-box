@@ -10,7 +10,7 @@ import { CodingListStreamService } from './coding-list-stream.service';
 import { CodingItemBuilderService } from './coding-item-builder.service';
 
 type CodingItemBuilderServiceHeaderGetter = {
-  getHeadersForVersion: (version: 'v1' | 'v2' | 'v3') => string[];
+  getHeadersForVersion: (version: 'v1' | 'v2' | 'v3', includeResponseValues?: boolean) => string[];
 };
 
 describe('CodingListService', () => {
@@ -53,9 +53,11 @@ describe('CodingListService', () => {
         'person_login',
         'person_code',
         'person_group',
-        'booklet_name'
+        'booklet_name',
+        'value'
       ])
     );
+    expect(headersV1.indexOf('value')).toBe(headersV1.indexOf('variable_anchor') + 1);
 
     expect(headersV1).not.toEqual(
       expect.arrayContaining([
@@ -65,5 +67,102 @@ describe('CodingListService', () => {
         'booklet_id'
       ])
     );
+  });
+
+  it('should omit value from results-by-version headers when response values are disabled', () => {
+    const fileUploadRepository = {} as unknown as Repository<FileUpload>;
+    const fileCacheService = new CodingFileCacheService(fileUploadRepository);
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+
+    const headersV1 = (
+      itemBuilderService as unknown as CodingItemBuilderServiceHeaderGetter
+    ).getHeadersForVersion('v1', false);
+
+    expect(headersV1).toEqual([
+      'unit_key',
+      'unit_alias',
+      'person_login',
+      'person_code',
+      'person_group',
+      'booklet_name',
+      'variable_id',
+      'variable_page',
+      'variable_anchor',
+      'status_v1',
+      'code_v1',
+      'score_v1'
+    ]);
+  });
+
+  it('should include response value in versioned coding items by default', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map([['VAR1', '2']]))
+    } as unknown as CodingFileCacheService;
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const response = {
+      id: 1,
+      variableid: 'VAR1',
+      value: 'Antworttext',
+      status_v1: null,
+      code_v1: null,
+      score_v1: null,
+      unit: {
+        name: 'UNIT1',
+        alias: 'Unit 1',
+        booklet: {
+          person: { login: 'login', code: 'code', group: 'group' },
+          bookletinfo: { name: 'BOOKLET1' }
+        }
+      }
+    } as unknown as ResponseEntity;
+
+    await expect(
+      itemBuilderService.buildCodingItemWithVersions(
+        response,
+        'v1',
+        'token',
+        'http://server',
+        1
+      )
+    ).resolves.toMatchObject({
+      variable_anchor: 'VAR1',
+      value: 'Antworttext',
+      status_v1: ''
+    });
+  });
+
+  it('should omit response value in versioned coding items when disabled', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map())
+    } as unknown as CodingFileCacheService;
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const response = {
+      id: 1,
+      variableid: 'VAR1',
+      value: 'Antworttext',
+      status_v1: null,
+      code_v1: null,
+      score_v1: null,
+      unit: {
+        name: 'UNIT1',
+        alias: 'Unit 1',
+        booklet: {
+          person: { login: 'login', code: 'code', group: 'group' },
+          bookletinfo: { name: 'BOOKLET1' }
+        }
+      }
+    } as unknown as ResponseEntity;
+
+    const item = await itemBuilderService.buildCodingItemWithVersions(
+      response,
+      'v1',
+      'token',
+      'http://server',
+      1,
+      false,
+      false
+    );
+
+    expect(item).not.toHaveProperty('value');
   });
 });
