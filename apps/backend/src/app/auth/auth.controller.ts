@@ -6,7 +6,6 @@ import {
   ApiTags, ApiOkResponse, ApiBadRequestResponse, ApiUnauthorizedResponse, ApiBody, ApiQuery, ApiOperation
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { ConfigService } from '@nestjs/config';
 import { OAuth2ClientCredentialsService, ClientCredentialsRequest, ClientCredentialsTokenResponse } from './service/oauth2-client-credentials.service';
 import { OidcAuthService, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
@@ -20,8 +19,7 @@ export class AuthController {
   constructor(
     private readonly oauth2ClientCredentialsService: OAuth2ClientCredentialsService,
     private readonly oidcAuthService: OidcAuthService,
-    private readonly authService: AuthService,
-    private readonly configService: ConfigService
+    private readonly authService: AuthService
   ) {}
 
   /**
@@ -35,49 +33,40 @@ export class AuthController {
     return scheme + relativeOAuth2Url;
   }
 
-  private isAllowedRedirect(url: string): boolean {
-    if (!url || typeof url !== 'string') {
-      return false;
+  private getDefaultLoginErrorRedirect(): string {
+    return '/login?error=authentication_failed';
+  }
+
+  private resolveAllowedRedirectUrl(redirectUri?: string): URL | null {
+    if (!redirectUri || typeof redirectUri !== 'string') {
+      return null;
+    }
+
+    const normalizedRedirectUri = redirectUri.trim();
+    if (!normalizedRedirectUri || normalizedRedirectUri.startsWith('//') || normalizedRedirectUri.startsWith('/\\')) {
+      return null;
     }
 
     try {
-      if (url.startsWith('/')) {
-        return true;
-      }
+      const oAuth2Url = new URL(this.getOAuth2Endpoint());
+      const redirectUrl = new URL(normalizedRedirectUri, oAuth2Url.origin);
+      const isHttpUrl = redirectUrl.protocol === 'http:' || redirectUrl.protocol === 'https:';
+      const isSameOrigin = redirectUrl.origin === oAuth2Url.origin;
 
-      if (url.startsWith('http')) {
-        const oAuth2Endpoint = this.getOAuth2Endpoint();
-        const oAuth2Url = new URL(oAuth2Endpoint);
-        const allowedOrigin = oAuth2Url.origin;
-
-        const redirectUrl = new URL(url);
-
-        // Allow redirects to the same origin as the callback URI
-        if (redirectUrl.origin === allowedOrigin) {
-          return true;
-        }
-
-        // Validate against the given OIDC_PROVIDER_URL and prevent redirects to it for security
-        const oidcProviderUrl = this.configService.get<string>('OIDC_PROVIDER_URL');
-        if (oidcProviderUrl) {
-          try {
-            const oidcProviderOrigin = new URL(oidcProviderUrl).origin;
-            if (redirectUrl.origin === oidcProviderOrigin) {
-              return false;
-            }
-          } catch {
-            // @TODO: Implement proper error handling
-          }
-        }
-
-        // Allow other external URLs
-        return true;
-      }
-
-      return false;
+      return isHttpUrl && isSameOrigin ? redirectUrl : null;
     } catch {
-      return false;
+      return null;
     }
+  }
+
+  private buildErrorRedirectUrl(redirectUri?: string): string {
+    const redirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
+    if (!redirectUrl) {
+      return this.getDefaultLoginErrorRedirect();
+    }
+
+    redirectUrl.searchParams.set('error', 'authentication_failed');
+    return redirectUrl.toString();
   }
 
   /**
@@ -212,7 +201,8 @@ export class AuthController {
 
     // Encode redirect URI in state parameter to avoid duplicate redirect_uri parameters
     const baseState = Math.random().toString(36).substring(2, 15);
-    const state = redirectUri ? `${baseState}:${encodeURIComponent(redirectUri)}` : baseState;
+    const allowedRedirectUrl = this.resolveAllowedRedirectUrl(redirectUri);
+    const state = allowedRedirectUrl ? `${baseState}:${encodeURIComponent(allowedRedirectUrl.toString())}` : baseState;
     const oAuth2Endpoint = this.getOAuth2Endpoint();
 
     const { codeVerifier, codeChallenge } = this.oidcAuthService.generatePkcePair();
@@ -261,10 +251,7 @@ export class AuthController {
           }
         }
 
-        const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
-          `${errorRedirectUri}?error=authentication_failed` :
-          '/login?error=authentication_failed';
-        res.redirect(errorUrl);
+        res.redirect(this.buildErrorRedirectUrl(errorRedirectUri));
         return;
       }
 
@@ -280,10 +267,7 @@ export class AuthController {
 
       if (!state) {
         this.logger.error('State parameter is required for PKCE flow');
-        const errorUrl = (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) ?
-          `${finalRedirectUri}?error=authentication_failed` :
-          '/login?error=authentication_failed';
-        res.redirect(errorUrl);
+        res.redirect(this.buildErrorRedirectUrl(finalRedirectUri));
         return;
       }
 
@@ -291,10 +275,7 @@ export class AuthController {
       const codeVerifier = await this.oidcAuthService.consumePkceVerifier(state);
       if (!codeVerifier) {
         this.logger.error('PKCE verifier missing or expired');
-        const errorUrl = (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) ?
-          `${finalRedirectUri}?error=authentication_failed` :
-          '/login?error=authentication_failed';
-        res.redirect(errorUrl);
+        res.redirect(this.buildErrorRedirectUrl(finalRedirectUri));
         return;
       }
 
@@ -316,15 +297,8 @@ export class AuthController {
       await this.authService.storeOidcProviderUser(userData);
 
       // Return OpenID Connect Provider tokens directly instead of creating internal ones
-      if (finalRedirectUri && this.isAllowedRedirect(finalRedirectUri)) {
-        let redirectUrl: URL;
-        if (finalRedirectUri.startsWith('http')) {
-          redirectUrl = new URL(finalRedirectUri);
-        } else {
-          // Relative URL, construct absolute
-          const oAuth2Url = new URL(oAuth2Endpoint);
-          redirectUrl = new URL(finalRedirectUri, oAuth2Url.origin);
-        }
+      const redirectUrl = this.resolveAllowedRedirectUrl(finalRedirectUri);
+      if (redirectUrl) {
         redirectUrl.searchParams.set('token', tokenResponse.access_token);
         if (tokenResponse.id_token) {
           redirectUrl.searchParams.set('id_token', tokenResponse.id_token);
@@ -356,10 +330,7 @@ export class AuthController {
         }
       }
 
-      const errorUrl = (errorRedirectUri && this.isAllowedRedirect(errorRedirectUri)) ?
-        `${errorRedirectUri}?error=authentication_failed` :
-        '/login?error=authentication_failed';
-      res.redirect(errorUrl);
+      res.redirect(this.buildErrorRedirectUrl(errorRedirectUri));
     }
   }
 
