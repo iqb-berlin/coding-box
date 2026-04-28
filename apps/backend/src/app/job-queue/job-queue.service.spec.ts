@@ -64,7 +64,9 @@ describe('JobQueueService', () => {
     await expect(service.getUploadJob('job-1')).resolves.toHaveProperty('id', 'job-1');
     await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).resolves.toHaveProperty('data.version', 'v1');
     await expect(service.getResetCodingVersionJob('job-1')).resolves.toHaveProperty('id', 'job-1');
-    await expect(service.addCodingAnalysisJob({ workspaceId: 1, matchingFlags: [], threshold: 0, cacheKey: 'k' })).resolves.toHaveProperty('data.cacheKey', 'k');
+    await expect(service.addCodingAnalysisJob({
+      workspaceId: 1, matchingFlags: [], threshold: 0, cacheKey: 'k'
+    })).resolves.toHaveProperty('data.cacheKey', 'k');
     await expect(service.getCodingAnalysisJob('job-1')).resolves.toHaveProperty('id', 'job-1');
     await expect(service.addVariableAnalysisJob({ workspaceId: 1, unitId: 2 })).resolves.toHaveProperty('data.unitId', 2);
     await expect(service.getVariableAnalysisJob('job-1')).resolves.toHaveProperty('id', 'job-1');

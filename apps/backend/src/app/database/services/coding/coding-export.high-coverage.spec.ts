@@ -114,6 +114,26 @@ const createService = () => new CodingExportService(
   workspaceExclusionService() as never
 ) as CodingExportService & Record<string, (...args: unknown[]) => unknown>;
 
+type CodingExportServiceInternals = {
+  normalizeCodingIssueOption: (option: number | null) => number | null;
+  getCodingIssueText: (issue: number) => string;
+  getCodingIssueSuffix: (issue: number) => string;
+  formatCodeWithIssueSuffix: (code: number | null, issue: number | null) => string;
+  getVariablePage: (unitName: string, variableId: string, workspaceId: number) => Promise<string | undefined>;
+  generateReplayUrlWithPageLookup: (
+    testPerson: unknown,
+    login: string,
+    code: string,
+    group: string,
+    bookletName: string,
+    unitName: string,
+    variableId: string,
+    workspaceId: number,
+    token: string,
+    baseUrl: string
+  ) => Promise<string>;
+};
+
 const settleQuickly = async (promise: Promise<unknown>) => {
   let timeout: NodeJS.Timeout | undefined;
   try {
@@ -130,15 +150,15 @@ const settleQuickly = async (promise: Promise<unknown>) => {
 
 describe('CodingExportService high coverage paths', () => {
   it('formats coding issue helper values', () => {
-    const service = createService();
+    const service = createService() as unknown as CodingExportServiceInternals;
 
-    expect(service['normalizeCodingIssueOption'](null)).toBeNull();
-    expect(service['normalizeCodingIssueOption'](-2)).toBe(2);
-    expect(service['normalizeCodingIssueOption'](99)).toBeNull();
-    expect(service['getCodingIssueText'](3)).toContain('Ungültig');
-    expect(service['getCodingIssueSuffix'](4)).toContain('technische');
-    expect(service['formatCodeWithIssueSuffix'](7, 1)).toContain('unsicher');
-    expect(service['formatCodeWithIssueSuffix'](null, 1)).toBe('');
+    expect(service.normalizeCodingIssueOption(null)).toBeNull();
+    expect(service.normalizeCodingIssueOption(-2)).toBe(2);
+    expect(service.normalizeCodingIssueOption(99)).toBeNull();
+    expect(service.getCodingIssueText(3)).toContain('Ungültig');
+    expect(service.getCodingIssueSuffix(4)).toContain('technische');
+    expect(service.formatCodeWithIssueSuffix(7, 1)).toContain('unsicher');
+    expect(service.formatCodeWithIssueSuffix(null, 1)).toBe('');
   });
 
   it('exports coding lists through stream and buffer wrappers', async () => {
@@ -159,10 +179,10 @@ describe('CodingExportService high coverage paths', () => {
   });
 
   it('builds replay URLs through the page lookup cache', async () => {
-    const service = createService();
+    const service = createService() as unknown as CodingExportServiceInternals;
 
-    await expect(service['getVariablePage']('UNIT', 'VAR', 1)).resolves.toBe('2');
-    await expect(service['generateReplayUrlWithPageLookup'](
+    await expect(service.getVariablePage('UNIT', 'VAR', 1)).resolves.toBe('2');
+    await expect(service.generateReplayUrlWithPageLookup(
       undefined,
       'login',
       'code',

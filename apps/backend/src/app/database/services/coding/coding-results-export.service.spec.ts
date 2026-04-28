@@ -124,8 +124,12 @@ describe('CodingResultsExportService', () => {
     const { service } = createService({
       codingJobUnits: [
         { ...baseUnit, coding_issue_option: -1 },
-        { ...baseUnit, variable_id: 'VAR2', code: 0, coding_issue_option: 0, notes: 'zero-code note' },
-        { ...baseUnit, variable_id: 'VAR3', code: null, notes: 'skipped' }
+        {
+          ...baseUnit, variable_id: 'VAR2', code: 0, coding_issue_option: 0, notes: 'zero-code note'
+        },
+        {
+          ...baseUnit, variable_id: 'VAR3', code: null, notes: 'skipped'
+        }
       ]
     });
 

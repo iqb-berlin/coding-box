@@ -3,10 +3,16 @@ import * as path from 'path';
 
 const appRoot = path.resolve(__dirname);
 
-const safeValue: any = new Proxy(jest.fn(() => safeValue), {
+type SafeProxy = Record<PropertyKey, unknown> & ((...args: unknown[]) => unknown);
+
+const safeValue = new Proxy(jest.fn((): unknown => safeValue), {
   get: (_target, property) => {
     if (property === 'then') return undefined;
-    if (property === Symbol.iterator) return function* emptyIterator() {};
+    if (property === Symbol.iterator) {
+      return function* emptyIterator() {
+        yield* [];
+      };
+    }
     if (property === Symbol.toPrimitive) return () => 1;
     if (property === 'toString') return () => 'value';
     if (property === 'valueOf') return () => 1;
@@ -20,9 +26,12 @@ const safeValue: any = new Proxy(jest.fn(() => safeValue), {
   },
   apply: () => safeValue,
   construct: () => safeValue
-});
+}) as unknown as SafeProxy;
 
-const safeQueryBuilder: any = new Proxy(jest.fn(() => safeQueryBuilder), {
+let safeQueryBuilder: SafeProxy;
+let safeRepository: Record<PropertyKey, unknown>;
+
+safeQueryBuilder = new Proxy(jest.fn((): unknown => safeQueryBuilder), {
   get: (_target, property) => {
     if (property === 'then') return undefined;
     if (property === 'getMany' || property === 'getRawMany') return jest.fn().mockResolvedValue([]);
@@ -33,9 +42,9 @@ const safeQueryBuilder: any = new Proxy(jest.fn(() => safeQueryBuilder), {
     return jest.fn(() => safeQueryBuilder);
   },
   apply: () => safeQueryBuilder
-});
+}) as unknown as SafeProxy;
 
-const safeRepository: any = new Proxy({}, {
+safeRepository = new Proxy({}, {
   get: (_target, property) => {
     if (property === 'find' || property === 'findBy' || property === 'findAndCount') return jest.fn().mockResolvedValue([]);
     if (property === 'findOne' || property === 'findOneBy') return jest.fn().mockResolvedValue(null);
@@ -46,7 +55,7 @@ const safeRepository: any = new Proxy({}, {
     if (property === 'delete' || property === 'remove' || property === 'update') return jest.fn().mockResolvedValue({ affected: 0 });
     return safeValue;
   }
-});
+}) as Record<PropertyKey, unknown>;
 
 const collectServiceFiles = (directory: string): string[] => fs
   .readdirSync(directory, { withFileTypes: true })
@@ -69,12 +78,36 @@ const argumentSets = [
     25,
     'UNIT',
     'VAR',
-    [{ unitName: 'UNIT', variableId: 'VAR', bookletName: 'BOOKLET', responseId: 1 }],
+    [{
+      unitName: 'UNIT', variableId: 'VAR', bookletName: 'BOOKLET', responseId: 1
+    }],
     { workspaceId: 1, unitName: 'UNIT', variableId: 'VAR' },
     progressCallback,
     safeValue
   ]
 ];
+
+const invokeServiceMethod = (
+  instance: Record<string, (...args: unknown[]) => unknown>,
+  methodName: string,
+  pending: Promise<unknown>[]
+): number => {
+  let invoked = 0;
+
+  argumentSets.forEach(args => {
+    try {
+      const result = instance[methodName](...args);
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        pending.push(Promise.resolve(result).catch(() => undefined));
+      }
+      invoked += 1;
+    } catch {
+      invoked += 1;
+    }
+  });
+
+  return invoked;
+};
 
 describe('backend service read methods', () => {
   it('invokes read and compute service methods with safe dependencies', async () => {
@@ -82,12 +115,12 @@ describe('backend service read methods', () => {
     const pending: Promise<unknown>[] = [];
     let invoked = 0;
 
-    serviceFiles.forEach(file => {
-      const moduleExports = require(file);
+    for (const file of serviceFiles) {
+      const moduleExports = await import(file);
       const serviceClasses = Object.values(moduleExports)
         .filter(value => typeof value === 'function' && `${(value as { name?: string }).name}`.endsWith('Service'));
 
-      serviceClasses.forEach(ServiceClass => {
+      for (const ServiceClass of serviceClasses) {
         const instance = new (ServiceClass as new (...args: unknown[]) => Record<string, (...args: unknown[]) => unknown>)(
           safeRepository,
           safeRepository,
@@ -102,26 +135,17 @@ describe('backend service read methods', () => {
           safeValue,
           safeValue
         );
-        Object.getOwnPropertyNames((ServiceClass as { prototype: object }).prototype)
+        const methodNames = Object.getOwnPropertyNames((ServiceClass as { prototype: object }).prototype)
           .filter(methodName => methodName !== 'constructor' &&
             isReadishMethod(methodName) &&
             !isRiskyMethod(methodName) &&
-            typeof instance[methodName] === 'function')
-          .forEach(methodName => {
-            argumentSets.forEach(args => {
-              try {
-                const result = instance[methodName](...args);
-                if (result && typeof (result as Promise<unknown>).then === 'function') {
-                  pending.push(Promise.resolve(result).catch(() => undefined));
-                }
-                invoked += 1;
-              } catch {
-                invoked += 1;
-              }
-            });
-          });
-      });
-    });
+            typeof instance[methodName] === 'function');
+
+        for (const methodName of methodNames) {
+          invoked += invokeServiceMethod(instance, methodName, pending);
+        }
+      }
+    }
 
     let timeout: NodeJS.Timeout | undefined;
     try {

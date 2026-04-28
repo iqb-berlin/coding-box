@@ -2,9 +2,9 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { CoderListComponent } from './coder-list.component';
 import { CoderService } from '../../services/coder.service';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 describe('CoderListComponent', () => {
   let fixture: ComponentFixture<CoderListComponent>;
@@ -13,8 +13,12 @@ describe('CoderListComponent', () => {
   let snackBar: { open: jest.Mock };
 
   const coders = [
-    { id: 1, name: 'one', displayName: 'One', email: 'one@example.org', assignedJobs: ['A'] },
-    { id: 2, name: 'two', displayName: 'Two', email: 'two@example.org', assignedJobs: [] }
+    {
+      id: 1, name: 'one', displayName: 'One', email: 'one@example.org', assignedJobs: ['A']
+    },
+    {
+      id: 2, name: 'two', displayName: 'Two', email: 'two@example.org', assignedJobs: []
+    }
   ];
 
   beforeEach(async () => {

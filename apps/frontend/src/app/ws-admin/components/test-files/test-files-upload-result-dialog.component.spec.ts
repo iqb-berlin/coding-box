@@ -14,7 +14,9 @@ describe('TestFilesUploadResultDialogComponent', () => {
     uploadedFiles: [{ filename: 'booklet.xml', fileId: 'f1', fileType: 'Booklet' } as never],
     failedFiles: [{ filename: 'bad.xml', reason: 'Invalid XML' } as never],
     remainingConflicts: [{ filename: 'unit.xml', fileId: 'f2', fileType: 'Unit' } as never],
-    issues: [{ level: 'warning', message: 'Missing value', fileName: 'responses.csv', rowIndex: 3 } as never]
+    issues: [{
+      level: 'warning', message: 'Missing value', fileName: 'responses.csv', rowIndex: 3
+    } as never]
   };
 
   beforeEach(async () => {

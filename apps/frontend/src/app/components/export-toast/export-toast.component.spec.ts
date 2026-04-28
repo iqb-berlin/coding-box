@@ -16,11 +16,21 @@ describe('ExportToastComponent', () => {
   };
 
   const jobs = [
-    { jobId: 'waiting', workspaceId: 1, exportType: 'aggregated', status: 'waiting' },
-    { jobId: 'active', workspaceId: 1, exportType: 'by-coder', status: 'active' },
-    { jobId: 'done', workspaceId: 1, exportType: 'detailed', status: 'completed' },
-    { jobId: 'bad', workspaceId: 1, exportType: 'custom', status: 'failed' },
-    { jobId: 'cancelled', workspaceId: 1, exportType: 'coding-times', status: 'cancelled' }
+    {
+      jobId: 'waiting', workspaceId: 1, exportType: 'aggregated', status: 'waiting'
+    },
+    {
+      jobId: 'active', workspaceId: 1, exportType: 'by-coder', status: 'active'
+    },
+    {
+      jobId: 'done', workspaceId: 1, exportType: 'detailed', status: 'completed'
+    },
+    {
+      jobId: 'bad', workspaceId: 1, exportType: 'custom', status: 'failed'
+    },
+    {
+      jobId: 'cancelled', workspaceId: 1, exportType: 'coding-times', status: 'cancelled'
+    }
   ] as ExportJob[];
 
   beforeEach(async () => {
