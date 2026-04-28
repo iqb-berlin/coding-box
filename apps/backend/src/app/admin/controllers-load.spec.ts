@@ -3,13 +3,17 @@ import * as path from 'path';
 
 const appRoot = path.resolve(__dirname, '..');
 
-const safeValue: any = new Proxy(jest.fn(() => safeValue), {
+type SafeProxy = Record<PropertyKey, unknown> & ((...args: unknown[]) => unknown);
+
+const safeValue = new Proxy(jest.fn((): unknown => safeValue), {
   get: (_target, property) => {
     if (property === 'then') {
       return undefined;
     }
     if (property === Symbol.iterator) {
-      return function* emptyIterator() {};
+      return function* emptyIterator() {
+        yield* [];
+      };
     }
     if (property === Symbol.toPrimitive) {
       return () => 1;
@@ -31,7 +35,7 @@ const safeValue: any = new Proxy(jest.fn(() => safeValue), {
   },
   apply: () => safeValue,
   construct: () => safeValue
-});
+}) as unknown as SafeProxy;
 
 const collectControllerFiles = (directory: string): string[] => fs
   .readdirSync(directory, { withFileTypes: true })
@@ -44,26 +48,26 @@ const collectControllerFiles = (directory: string): string[] => fs
   });
 
 describe('backend controllers', () => {
-  it('loads every controller module used by the application', () => {
+  it('loads every controller module used by the application', async () => {
     const controllerFiles = collectControllerFiles(appRoot);
 
     expect(controllerFiles.length).toBeGreaterThan(0);
 
-    controllerFiles.forEach(file => {
-      const moduleExports = require(file);
+    for (const file of controllerFiles) {
+      const moduleExports = await import(file);
       const controllers = Object.values(moduleExports)
         .filter(value => typeof value === 'function' && `${(value as { name?: string }).name}`.endsWith('Controller'));
 
       expect(controllers).not.toHaveLength(0);
-    });
+    }
   });
 
-  it('constructs controller classes with mocked dependencies', () => {
+  it('constructs controller classes with mocked dependencies', async () => {
     const controllerFiles = collectControllerFiles(appRoot);
     let constructedControllers = 0;
 
     for (const file of controllerFiles) {
-      const moduleExports = require(file);
+      const moduleExports = await import(file);
       const controllers = Object.values(moduleExports)
         .filter(value => typeof value === 'function' && `${(value as { name?: string }).name}`.endsWith('Controller'));
 
@@ -85,5 +89,4 @@ describe('backend controllers', () => {
 
     expect(constructedControllers).toBeGreaterThan(0);
   });
-
 });

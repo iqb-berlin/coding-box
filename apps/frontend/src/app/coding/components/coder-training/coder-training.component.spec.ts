@@ -39,7 +39,9 @@ describe('CoderTrainingComponent', () => {
       { id: 2, name: 'Coder 2', username: 'coder2' }
     ]));
     codingJobBackendService.getCodingIncompleteVariables.mockReturnValue(of([
-      { unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8 },
+      {
+        unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
+      },
       { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 }
     ]));
     codingTrainingBackendService.getCoderTrainings.mockReturnValue(of([{ id: 99, label: 'Other' }]));
@@ -79,7 +81,9 @@ describe('CoderTrainingComponent', () => {
     fixture = TestBed.createComponent(CoderTrainingComponent);
     component = fixture.componentInstance;
     component.availableVariables = [
-      { unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8 },
+      {
+        unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
+      },
       { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 }
     ] as never;
     component.availableBundles = [

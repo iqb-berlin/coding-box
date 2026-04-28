@@ -3,6 +3,7 @@ import * as path from 'path';
 import { Readable, Writable } from 'stream';
 
 const appRoot = path.resolve(__dirname);
+type SafeProxy = Record<PropertyKey, unknown> & ((...args: unknown[]) => unknown);
 
 const createQueryBuilder = () => {
   const qb: Record<string, unknown> = {};
@@ -52,10 +53,14 @@ const safeWritable = () => {
   return writable;
 };
 
-const safeValue: any = new Proxy(jest.fn(() => safeValue), {
+const safeValue = new Proxy(jest.fn((): unknown => safeValue), {
   get: (_target, property) => {
     if (property === 'then') return undefined;
-    if (property === Symbol.iterator) return function* emptyIterator() {};
+    if (property === Symbol.iterator) {
+      return function* emptyIterator() {
+        yield* [];
+      };
+    }
     if (property === Symbol.toPrimitive) return () => 1;
     if (property === 'toString') return () => 'value';
     if (property === 'valueOf') return () => 1;
@@ -73,10 +78,12 @@ const safeValue: any = new Proxy(jest.fn(() => safeValue), {
     if (property === 'save') return jest.fn(value => Promise.resolve(value));
     if (property === 'delete' || property === 'remove' || property === 'update') return jest.fn().mockResolvedValue({ affected: 0 });
     if (property === 'pipe') return jest.fn(() => safeWritable());
-    if (property === 'on') return jest.fn((_event, callback) => {
-      if (typeof callback === 'function') callback();
-      return safeValue;
-    });
+    if (property === 'on') {
+      return jest.fn((_event, callback) => {
+        if (typeof callback === 'function') callback();
+        return safeValue;
+      });
+    }
     if (property === 'getCodingListCsvStream' || property === 'getCodingResultsByVersionCsvStream') {
       return jest.fn().mockResolvedValue(Readable.from([]));
     }
@@ -97,7 +104,7 @@ const safeValue: any = new Proxy(jest.fn(() => safeValue), {
   },
   apply: () => safeValue,
   construct: () => safeValue
-});
+}) as unknown as SafeProxy;
 
 const collectFiles = (directory: string): string[] => fs
   .readdirSync(directory, { withFileTypes: true })
@@ -129,6 +136,30 @@ const methodArgSets = [
   [0, '0', 'true', ['x'], [{ id: 1 }], { ...requestLike, query: { mode: 'booklet-view' } }, safeWritable(), safeValue, safeValue]
 ];
 
+const invokeControllerMethod = (
+  prototype: Record<string, unknown>,
+  methodName: string,
+  pending: Promise<unknown>[]
+): number => {
+  let invoked = 0;
+
+  methodArgSets.forEach(args => {
+    try {
+      const result = (prototype[methodName] as (...args: unknown[]) => unknown)
+        .apply(safeValue, args);
+      if (result && typeof (result as Promise<unknown>).then === 'function') {
+        pending.push(Promise.resolve(result).catch(() => undefined));
+      }
+    } catch {
+      // Smoke coverage intentionally stops when defensive doubles are insufficient.
+    } finally {
+      invoked += 1;
+    }
+  });
+
+  return invoked;
+};
+
 describe('backend controller prototype method smoke coverage', () => {
   beforeEach(() => {
     jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -144,33 +175,22 @@ describe('backend controller prototype method smoke coverage', () => {
     const pending: Promise<unknown>[] = [];
     let invoked = 0;
 
-    collectFiles(appRoot).forEach(file => {
-      const moduleExports = require(file);
+    for (const file of collectFiles(appRoot)) {
+      const moduleExports = await import(file);
       const classes = Object.values(moduleExports)
         .filter(value => typeof value === 'function' &&
           `${(value as { name?: string }).name}`.endsWith('Controller'));
 
-      classes.forEach(ClassExport => {
+      for (const ClassExport of classes) {
         const prototype = (ClassExport as { prototype: Record<string, unknown> }).prototype;
-        Object.getOwnPropertyNames(prototype)
-          .filter(methodName => methodName !== 'constructor' && typeof prototype[methodName] === 'function')
-          .forEach(methodName => {
-            methodArgSets.forEach(args => {
-              try {
-                const result = (prototype[methodName] as (...args: unknown[]) => unknown)
-                  .apply(safeValue, args);
-                if (result && typeof (result as Promise<unknown>).then === 'function') {
-                  pending.push(Promise.resolve(result).catch(() => undefined));
-                }
-              } catch {
-                // Smoke coverage intentionally stops when defensive doubles are insufficient.
-              } finally {
-                invoked += 1;
-              }
-            });
-          });
-      });
-    });
+        const methodNames = Object.getOwnPropertyNames(prototype)
+          .filter(methodName => methodName !== 'constructor' && typeof prototype[methodName] === 'function');
+
+        for (const methodName of methodNames) {
+          invoked += invokeControllerMethod(prototype, methodName, pending);
+        }
+      }
+    }
 
     let timeout: NodeJS.Timeout | undefined;
     try {
