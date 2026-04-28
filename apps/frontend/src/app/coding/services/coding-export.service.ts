@@ -59,7 +59,12 @@ export class CodingExportService {
     );
   }
 
-  getCodingResultsByVersion(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
+  getCodingResultsByVersion(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
+  ): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
@@ -68,7 +73,8 @@ export class CodingExportService {
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
-          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false');
+          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false')
+          .set('includeResponseValues', includeResponseValues ? 'true' : 'false');
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version`,
           {
@@ -80,7 +86,12 @@ export class CodingExportService {
     );
   }
 
-  getCodingResultsByVersionAsExcel(workspace_id: number, version: 'v1' | 'v2' | 'v3', includeReplayUrls: boolean = false): Observable<Blob> {
+  getCodingResultsByVersionAsExcel(
+    workspace_id: number,
+    version: 'v1' | 'v2' | 'v3',
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
+  ): Observable<Blob> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspace_id, identity, 60).pipe(
       catchError(() => of('')),
@@ -89,7 +100,8 @@ export class CodingExportService {
           .set('authToken', token)
           .set('serverUrl', window.location.origin)
           .set('version', version)
-          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false');
+          .set('includeReplayUrls', includeReplayUrls ? 'true' : 'false')
+          .set('includeResponseValues', includeResponseValues ? 'true' : 'false');
         return this.http.get(
           `${this.serverUrl}admin/workspace/${workspace_id}/coding/results-by-version/excel`,
           {
@@ -194,7 +206,8 @@ export class CodingExportService {
     version?: 'v1' | 'v2' | 'v3',
     format?: 'csv' | 'json' | 'excel',
     includeReplayUrls: boolean = false,
-    trainingRequired?: boolean
+    trainingRequired?: boolean,
+    includeResponseValues: boolean = true
   ): Observable<{ jobId: string; message: string }> {
     const identity = this.appService.loggedUser?.sub || '';
     return this.appService.createToken(workspaceId, identity, 60).pipe(
@@ -205,6 +218,7 @@ export class CodingExportService {
           version,
           format,
           includeReplayUrl: includeReplayUrls,
+          includeResponseValues,
           trainingRequired,
           authToken: token,
           serverUrl: window.location.origin

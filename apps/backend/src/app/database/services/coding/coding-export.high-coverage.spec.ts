@@ -174,8 +174,8 @@ describe('CodingExportService high coverage paths', () => {
     const jsonStream = await service.exportCodingListForJobAsJson(1, '', '', jest.fn());
     jsonStream.resume();
 
-    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v1', '', '', true, jest.fn())).resolves.toBeDefined();
-    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v2', '', '', false, jest.fn())).resolves.toBeInstanceOf(Buffer);
+    await expect(service.exportCodingResultsByVersionAsCsv(1, 'v1', '', '', true, jest.fn(), true)).resolves.toBeDefined();
+    await expect(service.exportCodingResultsByVersionAsExcel(1, 'v2', '', '', false, jest.fn(), true)).resolves.toBeInstanceOf(Buffer);
   });
 
   it('builds replay URLs through the page lookup cache', async () => {

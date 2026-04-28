@@ -14,6 +14,7 @@ export interface CodingItem {
   variable_id: string;
   variable_page: string;
   variable_anchor: string;
+  value?: string;
   url?: string;
 }
 
@@ -101,7 +102,8 @@ export class CodingItemBuilderService {
     authToken: string,
     serverUrl: string,
     workspaceId: number,
-    includeReplayUrls: boolean = false
+    includeReplayUrls: boolean = false,
+    includeResponseValues: boolean = true
   ): Promise<CodingItem | null> {
     try {
       const unit = response.unit;
@@ -143,6 +145,10 @@ export class CodingItemBuilderService {
         variable_page: variablePage,
         variable_anchor: variableAnchor
       };
+
+      if (includeResponseValues) {
+        baseItem.value = response.value ?? '';
+      }
 
       // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
@@ -204,7 +210,10 @@ export class CodingItemBuilderService {
   /**
    * Get headers for version-specific exports.
    */
-  getHeadersForVersion(version: 'v1' | 'v2' | 'v3'): string[] {
+  getHeadersForVersion(
+    version: 'v1' | 'v2' | 'v3',
+    includeResponseValues: boolean = true
+  ): string[] {
     const baseHeaders = [
       'unit_key',
       'unit_alias',
@@ -216,14 +225,15 @@ export class CodingItemBuilderService {
       'variable_page',
       'variable_anchor'
     ];
+    const headers = includeResponseValues ? [...baseHeaders, 'value'] : baseHeaders;
 
     // Add version-specific columns for comparison
     if (version === 'v1') {
-      return [...baseHeaders, 'status_v1', 'code_v1', 'score_v1'];
+      return [...headers, 'status_v1', 'code_v1', 'score_v1'];
     }
     if (version === 'v2') {
       return [
-        ...baseHeaders,
+        ...headers,
         'status_v1',
         'code_v1',
         'score_v1',
@@ -234,7 +244,7 @@ export class CodingItemBuilderService {
     }
     // v3
     return [
-      ...baseHeaders,
+      ...headers,
       'status_v1',
       'code_v1',
       'score_v1',
