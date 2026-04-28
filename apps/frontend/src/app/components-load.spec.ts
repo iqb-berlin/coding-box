@@ -37,14 +37,14 @@ describe('frontend components', () => {
     jest.restoreAllMocks();
   });
 
-  it('loads every component module used by the application', () => {
+  it('loads every component module used by the application', async () => {
     const componentFiles = collectRuntimeFiles(appRoot)
       .filter(file => file.endsWith('.component.ts'));
 
     expect(componentFiles.length).toBeGreaterThan(0);
 
-    componentFiles.forEach(file => {
-      const moduleExports = require(file);
+    for (const file of componentFiles) {
+      const moduleExports = await import(file);
       const components = Object.values(moduleExports)
         .filter(value => typeof value === 'function' && (
           `${(value as { name?: string }).name}`.endsWith('Component') ||
@@ -54,7 +54,6 @@ describe('frontend components', () => {
       if (components.length === 0) {
         throw new Error(`No component export found in ${file}`);
       }
-    });
+    }
   });
-
 });

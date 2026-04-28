@@ -17,8 +17,12 @@ describe('TestResultsUploadResultDialogComponent', () => {
       delta: 1,
       responseStatusCounts: { COMPLETE: 2, OPEN: 1 },
       issues: [
-        { level: 'warning', category: 'unit_not_found', message: 'Unit missing', fileName: 'a.csv', rowIndex: 2 },
-        { level: 'error', category: 'other', message: 'Other problem', fileName: 'b.csv' }
+        {
+          level: 'warning', category: 'unit_not_found', message: 'Unit missing', fileName: 'a.csv', rowIndex: 2
+        },
+        {
+          level: 'error', category: 'other', message: 'Other problem', fileName: 'b.csv'
+        }
       ],
       logMetrics: {
         bookletDetails: [{ name: 'B2', hasLog: false }, { name: 'B1', hasLog: true }],

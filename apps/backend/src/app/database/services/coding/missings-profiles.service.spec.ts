@@ -51,7 +51,9 @@ describe('MissingsProfilesService', () => {
   it('creates, updates and deletes profiles', async () => {
     const profile = new MissingsProfilesDto();
     profile.label = 'Profile';
-    profile.setMissings([{ id: 'x', label: 'X', description: 'X', code: -1 }]);
+    profile.setMissings([{
+      id: 'x', label: 'X', description: 'X', code: -1
+    }]);
 
     repo.findOne
       .mockResolvedValueOnce(null)
