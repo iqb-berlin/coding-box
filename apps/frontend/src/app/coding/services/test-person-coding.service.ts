@@ -78,6 +78,11 @@ export interface WorkspaceGroupCodingStats {
   responsesToCode: number;
 }
 
+export interface AutocoderVariableFilter {
+  unitName: string;
+  variableId: string;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -95,10 +100,22 @@ export class TestPersonCodingService {
     this.autoCodingCompletedSubject.next();
   }
 
-  codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
-    const params = new HttpParams()
+  codeTestPersons(
+    workspaceId: number,
+    testPersonIds: string,
+    autoCoderRun: number = 1,
+    variableFilters: AutocoderVariableFilter[] = []
+  ): Observable<CodingStatisticsWithJob> {
+    let params = new HttpParams()
       .set('testPersons', testPersonIds)
       .set('autoCoderRun', autoCoderRun.toString());
+
+    if (variableFilters.length > 0) {
+      params = params.set(
+        'variables',
+        variableFilters.map(filter => `${filter.unitName}::${filter.variableId}`).join(',')
+      );
+    }
 
     return this.http
       .get<CodingStatisticsWithJob>(

@@ -1146,6 +1146,22 @@
         }
       }
     },
+    "changed-variables": {
+      "limit-label": "Nur geänderte Variablen erneut kodieren",
+      "input-label": "Geänderte Variablen",
+      "placeholder": "UNIT_ID::VARIABLE_ID",
+      "hint": "Mehrere Einträge mit Komma, Semikolon oder Zeilenumbruch trennen.",
+      "required": "Bitte mindestens eine geänderte Variable im Format UNIT::VARIABLE angeben.",
+      "invalid": "Ungültiger Variablen-Eintrag: {{entry}}. Erwartet wird UNIT::VARIABLE."
+    },
+    "obsolete-units": {
+      "title": "Nicht mehr relevante Fälle entfernen?",
+      "message": "Der Autocoder-Lauf hat {{total}} Fälle in {{jobs}} laufenden Kodierjob(s) gefunden, die nicht mehr manuell kodiert werden müssen.<br><br>{{jobList}}<br><br>Sollen diese Fälle aus den laufenden Kodierjobs gelöscht werden?",
+      "more-jobs": "... und {{count}} weitere",
+      "confirm": "Fälle löschen",
+      "cancel": "Behalten",
+      "deleted": "{{total}} nicht mehr relevante Fälle wurden aus laufenden Kodierjobs gelöscht."
+    },
     "select-groups-label": "Testpersonengruppen auswählen",
     "select-groups-hint": "Wählen Sie eine oder mehrere Gruppen zum Kodieren aus",
     "select-all-groups": "Alle auswählen",

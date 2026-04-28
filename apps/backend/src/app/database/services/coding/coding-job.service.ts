@@ -58,6 +58,16 @@ interface JobCreationWarning {
   availableCases: number;
 }
 
+export interface ObsoleteCodingJobUnitsSummary {
+  totalUnits: number;
+  affectedJobs: number;
+  jobs: {
+    jobId: number;
+    jobName: string;
+    obsoleteUnits: number;
+  }[];
+}
+
 export interface TransferCodingCasesResult {
   sourceCoderId: number;
   targetCoderId: number;
@@ -552,6 +562,80 @@ export class CodingJobService {
         transferredCases
       };
     });
+  }
+
+  async getObsoleteCodingJobUnits(
+    workspaceId: number
+  ): Promise<ObsoleteCodingJobUnitsSummary> {
+    const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const activeStatuses = ['pending', 'active', 'open'];
+
+    const rows = await this.codingJobUnitRepository
+      .createQueryBuilder('unit')
+      .innerJoin(CodingJob, 'job', 'job.id = unit.coding_job_id')
+      .innerJoin(ResponseEntity, 'response', 'response.id = unit.response_id')
+      .select('job.id', 'jobId')
+      .addSelect('job.name', 'jobName')
+      .addSelect('COUNT(unit.id)', 'obsoleteUnits')
+      .where('job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('job.status IN (:...activeStatuses)', { activeStatuses })
+      .andWhere('(response.status_v1 IS NULL OR response.status_v1 != :incompleteStatus)', {
+        incompleteStatus
+      })
+      .groupBy('job.id')
+      .addGroupBy('job.name')
+      .orderBy('job.name', 'ASC')
+      .getRawMany<{
+      jobId: string;
+      jobName: string;
+      obsoleteUnits: string;
+    }>();
+
+    const jobs = rows.map(row => ({
+      jobId: Number(row.jobId),
+      jobName: row.jobName,
+      obsoleteUnits: Number(row.obsoleteUnits)
+    }));
+
+    return {
+      totalUnits: jobs.reduce((sum, job) => sum + job.obsoleteUnits, 0),
+      affectedJobs: jobs.length,
+      jobs
+    };
+  }
+
+  async deleteObsoleteCodingJobUnits(
+    workspaceId: number
+  ): Promise<ObsoleteCodingJobUnitsSummary> {
+    const summary = await this.getObsoleteCodingJobUnits(workspaceId);
+
+    if (summary.totalUnits === 0) {
+      return summary;
+    }
+
+    const incompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
+    const activeStatuses = ['pending', 'active', 'open'];
+
+    const obsoleteRows = await this.codingJobUnitRepository
+      .createQueryBuilder('unit')
+      .innerJoin(CodingJob, 'job', 'job.id = unit.coding_job_id')
+      .innerJoin(ResponseEntity, 'response', 'response.id = unit.response_id')
+      .select('unit.id', 'id')
+      .where('job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('job.status IN (:...activeStatuses)', { activeStatuses })
+      .andWhere('(response.status_v1 IS NULL OR response.status_v1 != :incompleteStatus)', {
+        incompleteStatus
+      })
+      .getRawMany<{ id: string }>();
+
+    const ids = obsoleteRows.map(row => Number(row.id));
+    const batchSize = 500;
+    for (let i = 0; i < ids.length; i += batchSize) {
+      await this.codingJobUnitRepository.delete(ids.slice(i, i + batchSize));
+    }
+
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+    return summary;
   }
 
   private async assignVariables(

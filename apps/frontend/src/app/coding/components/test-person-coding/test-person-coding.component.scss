@@ -45,6 +45,17 @@
       margin-top: 8px;
     }
 
+    .changed-variables-container {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 12px;
+
+      .full-width {
+        width: 100%;
+      }
+    }
+
     .autocoder-hint-box {
       margin-top: 8px;
       padding: 12px;

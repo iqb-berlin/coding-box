@@ -305,7 +305,8 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        []
       );
 
       expect(
@@ -315,7 +316,8 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        []
       );
       expect(result).toEqual(expectedResult);
     });
@@ -340,7 +342,8 @@ describe('WorkspaceCodingService', () => {
       expect(mockCodingProcessService.codeTestPersons).toHaveBeenCalledWith(
         workspaceId,
         '1,2',
-        1
+        1,
+        []
       );
       expect(result).toEqual(expectedResult);
     });

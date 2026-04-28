@@ -28,6 +28,7 @@ export interface TestPersonCodingJobData {
   groupNames?: string;
   isPaused?: boolean;
   autoCoderRun?: number;
+  variableFilters?: { unitName: string; variableId: string }[];
 }
 
 export interface FlatResponseFilterOptionsJobData {

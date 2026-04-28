@@ -28,6 +28,7 @@ import {
   tap
 } from 'rxjs';
 import {
+  AutocoderVariableFilter,
   CodingStatistics,
   JobInfo,
   JobStatus,
@@ -39,6 +40,8 @@ import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
+import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 
 @Component({
   selector: 'coding-box-test-person-coding',
@@ -76,6 +79,7 @@ export class TestPersonCodingComponent implements OnInit {
   private translateService = inject(TranslateService);
   private backendMessageTranslator = inject(BackendMessageTranslatorService);
   private dialog = inject(MatDialog);
+  private codingJobBackendService = inject(CodingJobBackendService);
   Math = Math;
   get workspaceId(): number {
     return this.appService.selectedWorkspaceId;
@@ -117,6 +121,8 @@ export class TestPersonCodingComponent implements OnInit {
   groupsLoading = false;
 
   autoCoderRun: number = 1;
+  limitToChangedVariables = false;
+  changedVariablesText = '';
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
@@ -230,9 +236,14 @@ export class TestPersonCodingComponent implements OnInit {
     }
 
     this.isLoading = true;
+    const variableFilters = this.getChangedVariableFilters();
+    if (variableFilters === null) {
+      this.isLoading = false;
+      return;
+    }
 
     this.testPersonCodingService
-      .codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
+      .codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun, variableFilters)
       .pipe(
         tap(result => {
           if (result && result.jobId) {
@@ -374,6 +385,97 @@ export class TestPersonCodingComponent implements OnInit {
     this.loadCodingList(this.currentPage, this.pageSize);
     this.loadWorkspaceGroups();
     this.testPersonCodingService.notifyAutoCodingCompleted();
+    this.checkObsoleteCodingJobUnits();
+  }
+
+  private getChangedVariableFilters(): AutocoderVariableFilter[] | null {
+    if (!this.limitToChangedVariables) {
+      return [];
+    }
+
+    const entries = this.changedVariablesText
+      .split(/[\n,;]+/)
+      .map(entry => entry.trim())
+      .filter(Boolean);
+
+    if (entries.length === 0) {
+      this.snackBar.open(
+        this.translateService.instant('test-person-coding.changed-variables.required'),
+        this.translateService.instant('close'),
+        { duration: 4000 }
+      );
+      return null;
+    }
+
+    const filters: AutocoderVariableFilter[] = [];
+    for (const entry of entries) {
+      const [unitName, variableId, extra] = entry.split('::').map(part => part.trim());
+      if (!unitName || !variableId || extra) {
+        this.snackBar.open(
+          this.translateService.instant('test-person-coding.changed-variables.invalid', { entry }),
+          this.translateService.instant('close'),
+          { duration: 5000 }
+        );
+        return null;
+      }
+      filters.push({ unitName, variableId });
+    }
+
+    return filters;
+  }
+
+  private checkObsoleteCodingJobUnits(): void {
+    this.codingJobBackendService.getObsoleteCodingJobUnits(this.workspaceId)
+      .pipe(catchError(() => of({
+        totalUnits: 0,
+        affectedJobs: 0,
+        jobs: []
+      })))
+      .subscribe(summary => {
+        if (summary.totalUnits === 0) {
+          return;
+        }
+
+        const jobList = summary.jobs
+          .slice(0, 5)
+          .map(job => `${job.jobName}: ${job.obsoleteUnits}`)
+          .join('<br>');
+        const moreJobs = summary.jobs.length > 5 ?
+          `<br>${this.translateService.instant('test-person-coding.obsolete-units.more-jobs', { count: summary.jobs.length - 5 })}` :
+          '';
+
+        const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+          width: '520px',
+          data: {
+            title: this.translateService.instant('test-person-coding.obsolete-units.title'),
+            message: this.translateService.instant('test-person-coding.obsolete-units.message', {
+              total: summary.totalUnits,
+              jobs: summary.affectedJobs,
+              jobList: `${jobList}${moreJobs}`
+            }),
+            confirmButtonText: this.translateService.instant('test-person-coding.obsolete-units.confirm'),
+            cancelButtonText: this.translateService.instant('test-person-coding.obsolete-units.cancel')
+          }
+        });
+
+        dialogRef.afterClosed().subscribe(confirmed => {
+          if (!confirmed) {
+            return;
+          }
+
+          this.codingJobBackendService.deleteObsoleteCodingJobUnits(this.workspaceId)
+            .subscribe(result => {
+              this.snackBar.open(
+                this.translateService.instant('test-person-coding.obsolete-units.deleted', {
+                  total: result.totalUnits
+                }),
+                this.translateService.instant('close'),
+                { duration: 5000 }
+              );
+              this.loadAllJobs();
+            });
+        });
+      });
   }
 
   cancelJob(jobId?: string): void {

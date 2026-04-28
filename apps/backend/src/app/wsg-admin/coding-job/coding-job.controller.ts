@@ -137,6 +137,42 @@ export class WsgCodingJobController {
     };
   }
 
+  @Get('obsolete-units')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Preview obsolete coding job units',
+    description: 'Finds units in active coding jobs that are no longer relevant because the latest autocoder result no longer requires manual coding.'
+  })
+  async getObsoleteCodingJobUnits(
+    @WorkspaceId() workspaceId: number
+  ): Promise<{
+        totalUnits: number;
+        affectedJobs: number;
+        jobs: { jobId: number; jobName: string; obsoleteUnits: number }[];
+      }> {
+    return this.codingJobService.getObsoleteCodingJobUnits(workspaceId);
+  }
+
+  @Delete('obsolete-units')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Delete obsolete coding job units',
+    description: 'Deletes units from active coding jobs after the user confirms that they are no longer relevant.'
+  })
+  async deleteObsoleteCodingJobUnits(
+    @WorkspaceId() workspaceId: number
+  ): Promise<{
+        totalUnits: number;
+        affectedJobs: number;
+        jobs: { jobId: number; jobName: string; obsoleteUnits: number }[];
+      }> {
+    return this.codingJobService.deleteObsoleteCodingJobUnits(workspaceId);
+  }
+
   @Get(':id')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()

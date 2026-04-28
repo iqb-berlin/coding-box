@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Get,
   Param,
@@ -45,6 +46,13 @@ export class WorkspaceCodingController {
     enum: [1, 2],
     example: 1
   })
+  @ApiQuery({
+    name: 'variables',
+    required: false,
+    description:
+      'Optional comma-separated list of changed variables in the form UNIT::VARIABLE. When set, only these variables are re-coded.',
+    example: 'UNIT_A::VAR_1,UNIT_B::VAR_2'
+  })
   @ApiOkResponse({
     description: 'Coding statistics retrieved successfully.'
   })
@@ -54,16 +62,37 @@ export class WorkspaceCodingController {
   async codeTestPersons(
     @Query('testPersons') testPersons: string,
       @WorkspaceId() workspace_id: number,
-      @Query('autoCoderRun') autoCoderRun: string
+      @Query('autoCoderRun') autoCoderRun: string,
+      @Query('variables') variables: string
   ): Promise<CodingStatistics> {
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
 
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
+    const variableFilters = this.parseVariableFilters(variables);
     return this.codingProcessService.codeTestPersons(
       workspace_id,
       testPersons,
-      autoCoderRunNumber
+      autoCoderRunNumber,
+      variableFilters
     );
+  }
+
+  private parseVariableFilters(variables?: string): { unitName: string; variableId: string }[] {
+    if (!variables) {
+      return [];
+    }
+
+    return variables
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+      .map(item => {
+        const [unitName, variableId, extra] = item.split('::').map(part => part.trim());
+        if (!unitName || !variableId || extra) {
+          throw new BadRequestException(`Invalid variable filter "${item}". Expected UNIT::VARIABLE.`);
+        }
+        return { unitName, variableId };
+      });
   }
 
   @Get(':workspace_id/coding/manual')

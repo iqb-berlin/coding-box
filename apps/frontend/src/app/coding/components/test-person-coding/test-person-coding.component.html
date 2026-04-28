@@ -47,6 +47,22 @@
             <h4><mat-icon>info</mat-icon> {{ 'test-person-coding.autocoder-run-selection.hint.v2.title' | translate }}</h4>
             <p [innerHTML]="'test-person-coding.autocoder-run-selection.hint.v2.text' | translate"></p>
           </div>
+
+          <div class="changed-variables-container">
+            <mat-checkbox [(ngModel)]="limitToChangedVariables">
+              {{ 'test-person-coding.changed-variables.limit-label' | translate }}
+            </mat-checkbox>
+
+            <mat-form-field appearance="outline" class="full-width" *ngIf="limitToChangedVariables">
+              <mat-label>{{ 'test-person-coding.changed-variables.input-label' | translate }}</mat-label>
+              <textarea
+                matInput
+                rows="4"
+                [(ngModel)]="changedVariablesText"
+                [placeholder]="'test-person-coding.changed-variables.placeholder' | translate"></textarea>
+              <mat-hint>{{ 'test-person-coding.changed-variables.hint' | translate }}</mat-hint>
+            </mat-form-field>
+          </div>
         </div>
 
         <div class="button-container">

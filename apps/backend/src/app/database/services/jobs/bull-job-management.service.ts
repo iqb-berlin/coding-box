@@ -86,7 +86,9 @@ export class BullJobManagementService {
       const newJob = await this.jobQueueService.addTestPersonCodingJob({
         workspaceId: bullJob.data.workspaceId,
         personIds: bullJob.data.personIds,
-        groupNames: bullJob.data.groupNames
+        groupNames: bullJob.data.groupNames,
+        autoCoderRun: bullJob.data.autoCoderRun,
+        variableFilters: bullJob.data.variableFilters
       });
 
       await this.jobQueueService.deleteTestPersonCodingJob(jobId);

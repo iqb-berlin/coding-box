@@ -84,6 +84,16 @@ export interface TransferCodingCasesResponse {
   transferredCases: number;
 }
 
+export interface ObsoleteCodingJobUnitsSummary {
+  totalUnits: number;
+  affectedJobs: number;
+  jobs: {
+    jobId: number;
+    jobName: string;
+    obsoleteUnits: number;
+  }[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -211,6 +221,20 @@ export class CodingJobBackendService {
   ): Observable<{ success: boolean }> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
     return this.http.delete<{ success: boolean }>(url, { headers: this.authHeader });
+  }
+
+  getObsoleteCodingJobUnits(
+    workspaceId: number
+  ): Observable<ObsoleteCodingJobUnitsSummary> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/obsolete-units`;
+    return this.http.get<ObsoleteCodingJobUnitsSummary>(url, { headers: this.authHeader });
+  }
+
+  deleteObsoleteCodingJobUnits(
+    workspaceId: number
+  ): Observable<ObsoleteCodingJobUnitsSummary> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/obsolete-units`;
+    return this.http.delete<ObsoleteCodingJobUnitsSummary>(url, { headers: this.authHeader });
   }
 
   transferCodingCases(

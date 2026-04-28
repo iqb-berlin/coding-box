@@ -49,14 +49,16 @@ export class WorkspaceCodingService {
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    variableFilters: { unitName: string; variableId: string }[] = []
   ): Promise<CodingStatistics> {
     const statistics = await this.codingProcessService.processTestPersonsBatch(
       workspace_id,
       personIds,
       autoCoderRun,
       progressCallback,
-      jobId
+      jobId,
+      variableFilters
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
@@ -69,12 +71,14 @@ export class WorkspaceCodingService {
   async codeTestPersons(
     workspace_id: number,
     testPersonIdsOrGroups: string,
-    autoCoderRun: number = 1
+    autoCoderRun: number = 1,
+    variableFilters: { unitName: string; variableId: string }[] = []
   ): Promise<CodingStatisticsWithJob> {
     return this.codingProcessService.codeTestPersons(
       workspace_id,
       testPersonIdsOrGroups,
-      autoCoderRun
+      autoCoderRun,
+      variableFilters
     );
   }
 

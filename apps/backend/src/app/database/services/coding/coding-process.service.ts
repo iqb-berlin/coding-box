@@ -27,6 +27,8 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
+type AutocoderVariableFilter = { unitName: string; variableId: string };
+
 @Injectable()
 export class CodingProcessService {
   private readonly logger = new Logger(CodingProcessService.name);
@@ -66,7 +68,8 @@ export class CodingProcessService {
   async codeTestPersons(
     workspace_id: number,
     testPersonIdsOrGroups: string,
-    autoCoderRun: number = 1
+    autoCoderRun: number = 1,
+    variableFilters: AutocoderVariableFilter[] = []
   ): Promise<CodingStatisticsWithJob> {
     if (
       !workspace_id ||
@@ -147,7 +150,8 @@ export class CodingProcessService {
       workspaceId: workspace_id,
       personIds,
       groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
-      autoCoderRun
+      autoCoderRun,
+      variableFilters
     });
 
     this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
@@ -165,7 +169,8 @@ export class CodingProcessService {
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    variableFilters: AutocoderVariableFilter[] = []
   ): Promise<CodingStatistics> {
     this.cleanupCaches();
 
@@ -335,11 +340,22 @@ export class CodingProcessService {
         units
       );
 
+      const scopedResponses = this.filterResponsesByVariables(
+        filteredResponses,
+        units,
+        variableFilters
+      );
+
       this.logger.log(
         `Filtered responses: ${allResponses.length} -> ${filteredResponses.length
-        } (removed ${allResponses.length - filteredResponses.length
-        } invalid variable responses)`
+        } valid -> ${scopedResponses.length} scoped (removed ${allResponses.length - filteredResponses.length
+        } invalid and ${filteredResponses.length - scopedResponses.length} outside variable scope)`
       );
+
+      if (scopedResponses.length === 0) {
+        this.logger.log('Keine Antworten für die gewählte Variablen-Einschränkung gefunden.');
+        return statistics;
+      }
 
       if (jobId && (await this.isJobCancelled(jobId))) {
         this.logger.log(
@@ -351,7 +367,7 @@ export class CodingProcessService {
 
       // Step 7: Process responses and build maps - 60% progress
       const unitToResponsesMap = new Map<number, ResponseEntity[]>();
-      for (const response of filteredResponses) {
+      for (const response of scopedResponses) {
         if (!unitToResponsesMap.has(response.unitid)) {
           unitToResponsesMap.set(response.unitid, []);
         }
@@ -461,7 +477,7 @@ export class CodingProcessService {
         unitToResponsesMap,
         unitToCodingSchemeRefMap,
         fileIdToCodingSchemeMap,
-        filteredResponses,
+        scopedResponses,
         statistics,
         autoCoderRun,
         jobId,
@@ -625,6 +641,30 @@ export class CodingProcessService {
       const unitName = unitIdToNameMap.get(response.unitid)?.toUpperCase();
       const validVars = validVariableSets.get(unitName || '');
       return validVars?.has(response.variableid);
+    });
+  }
+
+  private filterResponsesByVariables(
+    responses: ResponseEntity[],
+    units: Unit[],
+    variableFilters: AutocoderVariableFilter[]
+  ): ResponseEntity[] {
+    if (variableFilters.length === 0) {
+      return responses;
+    }
+
+    const unitIdToNameMap = new Map<number, string>();
+    units.forEach(unit => {
+      unitIdToNameMap.set(unit.id, unit.name.toUpperCase());
+    });
+
+    const filterKeys = new Set(
+      variableFilters.map(filter => `${filter.unitName.toUpperCase()}::${filter.variableId}`)
+    );
+
+    return responses.filter(response => {
+      const unitName = unitIdToNameMap.get(response.unitid);
+      return filterKeys.has(`${unitName}::${response.variableid}`);
     });
   }
 
