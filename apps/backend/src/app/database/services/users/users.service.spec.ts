@@ -105,7 +105,9 @@ describe('UsersService', () => {
     usersRepository.findOne
       .mockResolvedValueOnce({ isAdmin: true })
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: false })
+      .mockResolvedValueOnce({
+        id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: false
+      })
       .mockResolvedValueOnce(null);
 
     await expect(service.getUserIsAdmin(1)).resolves.toBe(true);

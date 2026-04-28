@@ -2,7 +2,8 @@ import { FormControl, FormGroup } from '@angular/forms';
 import { MatTableDataSource } from '@angular/material/table';
 import { Subject, of } from 'rxjs';
 
-type ConstructorExport = { name?: string; prototype?: Record<string, unknown> };
+type ConstructorExport = { name?: string; prototype?: object };
+type ConstructorLoader = () => Promise<ConstructorExport>;
 type SmokeObservable = {
   pipe: jest.Mock<SmokeObservable, unknown[]>;
   subscribe: jest.Mock<{ unsubscribe: jest.Mock }, [unknown?]>;
@@ -14,7 +15,11 @@ const makeObservable = (value: unknown = {}): SmokeObservable => ({
   pipe: jest.fn(() => makeObservable(value)),
   subscribe: jest.fn((observer?: unknown) => {
     if (typeof observer === 'function') {
-      observer(value);
+      try {
+        observer(value);
+      } catch {
+        // ignore callback errors in smoke tests
+      }
     } else if (observer && typeof observer === 'object') {
       const typedObserver = observer as {
         next?: (value: unknown) => void;
@@ -53,10 +58,12 @@ const makeSafeProxy = (label = 'safe'): unknown => {
       if (property === 'pipe') return () => makeObservable();
       if (property === 'subscribe') return makeObservable().subscribe;
       if (property === 'afterClosed') return () => of(true);
-      if (property === 'open') return jest.fn(() => ({
-        afterClosed: () => of(true),
-        dismiss: jest.fn()
-      }));
+      if (property === 'open') {
+        return jest.fn(() => ({
+          afterClosed: () => of(true),
+          dismiss: jest.fn()
+        }));
+      }
       if (property === 'dismiss') return jest.fn();
       if (property === 'emit') return jest.fn();
       if (property === 'next') return jest.fn();
@@ -92,7 +99,9 @@ const sampleReviewItem = {
   isResolved: false,
   coderResults: [
     sampleCoderResult,
-    { ...sampleCoderResult, coderId: 2, coderName: 'Coder B', jobId: 11, code: 2 }
+    {
+      ...sampleCoderResult, coderId: 2, coderName: 'Coder B', jobId: 11, code: 2
+    }
   ]
 };
 
@@ -142,6 +151,42 @@ const createInstance = (ClassExport: ConstructorExport) => {
       createToken: jest.fn(() => makeObservable('token'))
     },
     testPersonCodingService: makeSafeProxy('testPersonCodingService'),
+    codingJobBackendService: makeSafeProxy('codingJobBackendService'),
+    codingJobService: makeSafeProxy('codingJobService'),
+    codingJobDefinitionService: makeSafeProxy('codingJobDefinitionService'),
+    codingJobFacade: makeSafeProxy('codingJobFacade'),
+    coderService: makeSafeProxy('coderService'),
+    replayService: makeSafeProxy('replayService'),
+    replayBackendService: makeSafeProxy('replayBackendService'),
+    replayCodingService: makeSafeProxy('replayCodingService'),
+    codingService: makeSafeProxy('codingService'),
+    unitPlayerService: makeSafeProxy('unitPlayerService'),
+    unitTagService: makeSafeProxy('unitTagService'),
+    validationService: makeSafeProxy('validationService'),
+    variableValidationService: makeSafeProxy('variableValidationService'),
+    responseStatusValidationService: makeSafeProxy('responseStatusValidationService'),
+    variableTypeValidationService: makeSafeProxy('variableTypeValidationService'),
+    duplicateResponsesValidationService: makeSafeProxy('duplicateResponsesValidationService'),
+    sysAdminSettingsService: makeSafeProxy('sysAdminSettingsService'),
+    variableBundleService: makeSafeProxy('variableBundleService'),
+    route: {
+      snapshot: {
+        paramMap: { get: jest.fn(() => '1') },
+        queryParamMap: { get: jest.fn(() => 'value') },
+        data: {}
+      },
+      params: makeObservable({ id: 1 }),
+      queryParams: makeObservable({ unit: 'unit' })
+    },
+    activatedRoute: {
+      snapshot: {
+        paramMap: { get: jest.fn(() => '1') },
+        queryParamMap: { get: jest.fn(() => 'value') },
+        data: {}
+      },
+      params: makeObservable({ id: 1 }),
+      queryParams: makeObservable({ unit: 'unit' })
+    },
     workspaceService: {
       getWorkspaceCoders: jest.fn(() => makeObservable({ data: [{ userId: 1, username: 'Coder A' }] }))
     },
@@ -193,8 +238,16 @@ const createInstance = (ClassExport: ConstructorExport) => {
     snackBar: {
       open: jest.fn(() => ({ dismiss: jest.fn() }))
     },
+    errorSnackBar: {
+      open: jest.fn(() => ({ afterDismissed: () => makeObservable(), dismiss: jest.fn() })),
+      dismiss: jest.fn()
+    },
+    pageErrorSnackBar: {
+      open: jest.fn(() => ({ afterDismissed: () => makeObservable(), dismiss: jest.fn() })),
+      dismiss: jest.fn()
+    },
     dialog: {
-      open: jest.fn(() => ({ afterClosed: () => of(true) }))
+      open: jest.fn(() => ({ afterClosed: () => makeObservable(true) }))
     },
     dialogRef: { close: jest.fn() },
     router: {
@@ -207,6 +260,12 @@ const createInstance = (ClassExport: ConstructorExport) => {
     },
     fb: { group: jest.fn(() => new FormGroup({})) },
     selectionForm: new FormGroup({}),
+    form: new FormGroup({}),
+    formGroup: new FormGroup({}),
+    filterForm: new FormGroup({}),
+    jobForm: new FormGroup({}),
+    settingsForm: new FormGroup({}),
+    bundleForm: new FormGroup({}),
     agreementControl: new FormControl('all'),
     searchControl: new FormControl('unit'),
     coderControl: new FormControl(1),
@@ -352,41 +411,124 @@ describe('high coverage component method smoke tests', () => {
   it.each([
     [
       'DoubleCodedReviewComponent',
-      () => require('./coding/components/double-coded-review/double-coded-review.component')
-        .DoubleCodedReviewComponent
+      async () => (await import('./coding/components/double-coded-review/double-coded-review.component'))
+        .DoubleCodedReviewComponent as ConstructorExport
     ],
     [
       'TestResultsFlatTableComponent',
-      () => require('./ws-admin/components/test-results/test-results-flat-table.component')
-        .TestResultsFlatTableComponent
+      async () => (await import('./ws-admin/components/test-results/test-results-flat-table.component'))
+        .TestResultsFlatTableComponent as ConstructorExport
     ],
     [
       'TestResultsSearchComponent',
-      () => require('./ws-admin/components/test-results-search/test-results-search.component')
-        .TestResultsSearchComponent
+      async () => (await import('./ws-admin/components/test-results-search/test-results-search.component'))
+        .TestResultsSearchComponent as ConstructorExport
     ],
     [
       'TestResultsComponent',
-      () => require('./ws-admin/components/test-results/test-results.component')
-        .TestResultsComponent
+      async () => (await import('./ws-admin/components/test-results/test-results.component'))
+        .TestResultsComponent as ConstructorExport
     ],
     [
       'CodingManagementManualComponent',
-      () => require('./coding/components/coding-management-manual/coding-management-manual.component')
-        .CodingManagementManualComponent
+      async () => (await import('./coding/components/coding-management-manual/coding-management-manual.component'))
+        .CodingManagementManualComponent as ConstructorExport
     ],
     [
       'CodingResultsComparisonComponent',
-      () => require('./coding/components/coding-results-comparison/coding-results-comparison.component')
-        .CodingResultsComparisonComponent
+      async () => (await import('./coding/components/coding-results-comparison/coding-results-comparison.component'))
+        .CodingResultsComparisonComponent as ConstructorExport
     ],
     [
       'FilesValidationComponent',
-      () => require('./ws-admin/components/files-validation-result/files-validation.component')
-        .FilesValidationDialogComponent
+      async () => (await import('./ws-admin/components/files-validation-result/files-validation.component'))
+        .FilesValidationDialogComponent as ConstructorExport
+    ],
+    [
+      'TestFilesComponent',
+      async () => (await import('./ws-admin/components/test-files/test-files.component'))
+        .TestFilesComponent as ConstructorExport
+    ],
+    [
+      'ReplayComponent',
+      async () => (await import('./replay/components/replay/replay.component'))
+        .ReplayComponent as ConstructorExport
+    ],
+    [
+      'CodingJobDefinitionDialogComponent',
+      async () => (await import('./coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component'))
+        .CodingJobDefinitionDialogComponent as ConstructorExport
+    ],
+    [
+      'CodeSelectorComponent',
+      async () => (await import('./coding/components/code-selector/code-selector.component'))
+        .CodeSelectorComponent as ConstructorExport
+    ],
+    [
+      'MyCodingJobsComponent',
+      async () => (await import('./coding/components/my-coding-jobs/my-coding-jobs.component'))
+        .MyCodingJobsComponent as ConstructorExport
+    ],
+    [
+      'UnitPlayerComponent',
+      async () => (await import('./replay/components/unit-player/unit-player.component'))
+        .UnitPlayerComponent as ConstructorExport
+    ],
+    [
+      'TestPersonCodingComponent',
+      async () => (await import('./coding/components/test-person-coding/test-person-coding.component'))
+        .TestPersonCodingComponent as ConstructorExport
+    ],
+    [
+      'DuplicateResponsesValidationPanelComponent',
+      async () => (
+        await import('./ws-admin/components/validation-dialog/panels/duplicate-responses-validation-panel/duplicate-responses-validation-panel.component')
+      ).DuplicateResponsesValidationPanelComponent as ConstructorExport
+    ],
+    [
+      'CodingJobDefinitionsComponent',
+      async () => (await import('./coding/components/coding-job-definitions/coding-job-definitions.component'))
+        .CodingJobDefinitionsComponent as ConstructorExport
+    ],
+    [
+      'UnitSearchDialogComponent',
+      async () => (await import('./ws-admin/components/unit-search-dialog/unit-search-dialog.component'))
+        .UnitSearchDialogComponent as ConstructorExport
+    ],
+    [
+      'CodingJobBulkCreationDialogComponent',
+      async () => (await import('./coding/components/coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component'))
+        .CodingJobBulkCreationDialogComponent as ConstructorExport
+    ],
+    [
+      'ReplayStatisticsDialogComponent',
+      async () => (await import('./ws-admin/components/replay-statistics-dialog/replay-statistics-dialog.component'))
+        .ReplayStatisticsDialogComponent as ConstructorExport
+    ],
+    [
+      'SysAdminSettingsComponent',
+      async () => (await import('./sys-admin/components/sys-admin-settings/sys-admin-settings.component'))
+        .SysAdminSettingsComponent as ConstructorExport
+    ],
+    [
+      'VariableBundleDialogComponent',
+      async () => (await import('./coding/components/variable-bundle-dialog/variable-bundle-dialog.component'))
+        .VariableBundleDialogComponent as ConstructorExport
+    ],
+    [
+      'ResponseStatusValidationPanelComponent',
+      async () => (
+        await import('./ws-admin/components/validation-dialog/panels/response-status-validation-panel/response-status-validation-panel.component')
+      ).ResponseStatusValidationPanelComponent as ConstructorExport
+    ],
+    [
+      'VariableTypesValidationPanelComponent',
+      async () => (
+        await import('./ws-admin/components/validation-dialog/panels/variable-types-validation-panel/variable-types-validation-panel.component')
+      ).VariableTypesValidationPanelComponent as ConstructorExport
     ]
-  ])('invokes prototype methods for %s', (_name, loadClass) => {
-    const ClassExport = loadClass() as ConstructorExport;
+  ] as [string, ConstructorLoader][])('invokes prototype methods for %s', async (_name, loadClass) => {
+    const ClassExport = await loadClass();
 
     expect(ClassExport).toBeDefined();
     invokePrototype(ClassExport);
