@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
@@ -24,6 +24,7 @@ describe('CodingManagementComponent', () => {
   let mockDialog: jest.Mocked<Partial<MatDialog>>;
   let mockAppService: jest.Mocked<Partial<AppService>>;
   let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
+  let mockRouter: jest.Mocked<Partial<Router>>;
 
   const fakeActivatedRoute = {
     snapshot: { data: {} }
@@ -80,6 +81,10 @@ describe('CodingManagementComponent', () => {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false))
     };
 
+    mockRouter = {
+      navigate: jest.fn()
+    };
+
     await TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -114,6 +119,10 @@ describe('CodingManagementComponent', () => {
         {
           provide: WorkspaceSettingsService,
           useValue: mockWorkspaceSettingsService
+        },
+        {
+          provide: Router,
+          useValue: mockRouter
         }
       ],
       imports: [
@@ -267,14 +276,12 @@ describe('CodingManagementComponent', () => {
   });
 
   describe('Dialog Methods', () => {
-    it('should toggle manual coding view', () => {
-      expect(component.showManualCoding).toBe(false);
+    it('should navigate to manual coding route', () => {
+      component.openManualCoding();
 
-      component.toggleManualCoding();
-      expect(component.showManualCoding).toBe(true);
-
-      component.toggleManualCoding();
-      expect(component.showManualCoding).toBe(false);
+      expect(mockRouter.navigate).toHaveBeenCalledWith([
+        '/workspace-admin/1/coding/manual'
+      ]);
     });
   });
 

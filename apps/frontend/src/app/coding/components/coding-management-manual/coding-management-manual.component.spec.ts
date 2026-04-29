@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -31,6 +31,10 @@ describe('CodingManagementManualComponent', () => {
         {
           provide: MatSnackBar,
           useValue: { open: jest.fn() }
+        },
+        {
+          provide: Router,
+          useValue: { navigate: jest.fn() }
         },
         provideHttpClient()
       ],
