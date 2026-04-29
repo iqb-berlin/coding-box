@@ -955,6 +955,15 @@
       "title": "Kodierversion zurücksetzen",
       "warning-message": "Sie sind dabei, eine Kodierversion zurückzusetzen. Dies löscht alle kodierten Daten dieser Version.",
       "version-to-reset": "Zu resettierende Version",
+      "result-impact-title": "Welche Ergebnisse werden zurückgesetzt?",
+      "result-impact": {
+        "v1": "Der erste Autocoder-Lauf wird zurückgesetzt. Weil die manuellen Ergebnisse und der zweite Autocoder-Lauf fachlich darauf aufbauen, werden auch diese nachgelagerten Ergebnisse geleert.",
+        "v2": "Die manuelle Kodierung wird zurückgesetzt. Weil der zweite Autocoder-Lauf auf diesen manuellen Ergebnissen aufbauen kann, wird auch der zweite Autocoder-Lauf geleert.",
+        "v3": "Nur der zweite Autocoder-Lauf wird zurückgesetzt. Der erste Autocoder-Lauf und die manuellen Kodierergebnisse bleiben erhalten."
+      },
+      "technical-fields": "Technisch geleert werden die Ergebnisfelder",
+      "jobs-preserved-title": "Was bleibt erhalten?",
+      "jobs-preserved-text": "Bestehende Kodierjobs, Zuweisungen und Joblisten werden dadurch nicht gelöscht. Zurückgesetzt werden die gespeicherten Kodierergebnisse an den Antworten.",
       "cascade-warning": "Diese Version und alle später im Prozess folgenden Versionen werden zurückgesetzt",
       "cascade-versions": "Folgende Versionen werden ebenfalls gelöscht",
       "cascade-explanation": "Alle nachfolgenden Kodierversionen (später im Prozess) werden ebenfalls vollständig gelöscht. Dies ist notwendig, um die Konsistenz des Kodierungsprozesses zu gewährleisten",

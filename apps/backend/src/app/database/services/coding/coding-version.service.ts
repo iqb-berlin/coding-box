@@ -53,13 +53,13 @@ export class CodingVersionService {
 
       if (version === 'v1') {
         versionsToReset.push('v2', 'v3'); // Cascade: resetting v1 also resets v2 and v3
-        baseQueryBuilder.andWhere('(response.status_v3 IS NOT NULL OR response.status_v2 IS NOT NULL OR response.status_v1 IS NOT NULL)');
+        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v1', 'v2', 'v3']));
       } else if (version === 'v2') {
         versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
-        baseQueryBuilder.andWhere('(response.status_v3 IS NOT NULL OR response.status_v2 IS NOT NULL)');
+        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v2', 'v3']));
         baseQueryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
       } else {
-        baseQueryBuilder.andWhere('response.status_v3 IS NOT NULL');
+        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v3']));
       }
 
       if (unitFilters && unitFilters.length > 0) {
@@ -94,6 +94,7 @@ export class CodingVersionService {
 
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
+        await this.invalidateStatisticsCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
           affectedResponseCount: 0,
@@ -152,19 +153,7 @@ export class CodingVersionService {
       );
 
       // Invalidate statistics cache for all affected versions
-      this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version ${version}`);
-      await this.codingStatisticsService.invalidateCache(workspaceId, version);
-
-      if (version === 'v1') {
-        // Invalidate v2 and v3 cache when v1 is reset (cascade)
-        this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v2 and v3 (cascade)`);
-        await this.codingStatisticsService.invalidateCache(workspaceId, 'v2');
-        await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
-      } else if (version === 'v2') {
-        // Also invalidate v3 cache when v2 is reset (cascade)
-        this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
-        await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
-      }
+      await this.invalidateStatisticsCaches(workspaceId, version);
 
       if (progressCallback) await progressCallback(100);
 
@@ -179,6 +168,34 @@ export class CodingVersionService {
         error.stack
       );
       throw new Error(`Failed to reset coding version: ${error.message}`);
+    }
+  }
+
+  private buildResetTargetCondition(versions: ('v1' | 'v2' | 'v3')[]): string {
+    const fields = ['status', 'code', 'score'];
+    const conditions = versions.flatMap(version => fields.map(
+      field => `response.${field}_${version} IS NOT NULL`
+    ));
+
+    return `(${conditions.join(' OR ')})`;
+  }
+
+  private async invalidateStatisticsCaches(
+    workspaceId: number,
+    version: 'v1' | 'v2' | 'v3'
+  ): Promise<void> {
+    this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version ${version}`);
+    await this.codingStatisticsService.invalidateCache(workspaceId, version);
+
+    if (version === 'v1') {
+      // Invalidate v2 and v3 cache when v1 is reset (cascade)
+      this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v2 and v3 (cascade)`);
+      await this.codingStatisticsService.invalidateCache(workspaceId, 'v2');
+      await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
+    } else if (version === 'v2') {
+      // Also invalidate v3 cache when v2 is reset (cascade)
+      this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
+      await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
     }
   }
 }
