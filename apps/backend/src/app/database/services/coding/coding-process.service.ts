@@ -489,7 +489,8 @@ export class CodingProcessService {
           jobId,
           this.isJobCancelled.bind(this),
           progressCallback,
-          metrics
+          metrics,
+          { unitIds: unitIdsArray, autoCoderRun }
         );
 
       if (!updateSuccess) {
@@ -585,12 +586,17 @@ export class CodingProcessService {
         'ResponseEntity.variableid',
         'ResponseEntity.value',
         'ResponseEntity.status',
+        'ResponseEntity.is_autocoder_generated',
         'ResponseEntity.status_v1',
         'ResponseEntity.status_v2'
       ])
       .where('ResponseEntity.unitid = ANY(:unitIds)', {
         unitIds
       })
+      .andWhere(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      )
       .andWhere(
         new Brackets(qb => {
           qb.where('ResponseEntity.status IN (:...statuses)', {
@@ -878,20 +884,19 @@ export class CodingProcessService {
               String(codedResult.value ?? '');
             codedResponse.status = statusStringToNumber('VALUE_CHANGED');
             codedResponse.subform = codedResult.subform;
+            codedResponse.isAutocoderGenerated = true;
           }
 
           if (autoCoderRun === 1) {
             codedResponse.code_v1 = codedResult.code ?? null;
             codedResponse.status_v1 = codedStatus;
             codedResponse.score_v1 = codedResult.score ?? null;
-            if (!codedResponse.isNew) {
-              codedResponse.code_v2 = null;
-              codedResponse.status_v2 = null;
-              codedResponse.score_v2 = null;
-              codedResponse.code_v3 = null;
-              codedResponse.status_v3 = null;
-              codedResponse.score_v3 = null;
-            }
+            codedResponse.code_v2 = null;
+            codedResponse.status_v2 = null;
+            codedResponse.score_v2 = null;
+            codedResponse.code_v3 = null;
+            codedResponse.status_v3 = null;
+            codedResponse.score_v3 = null;
           } else if (autoCoderRun === 2) {
             codedResponse.code_v3 = codedResult.code ?? null;
             codedResponse.status_v3 = codedStatus;

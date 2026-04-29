@@ -61,7 +61,10 @@ export class WorkspaceCodingService {
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
     this.codingAnalysisService.invalidateCache(workspace_id);
-    await this.codingStatisticsService.refreshStatistics(workspace_id);
+    await this.codingStatisticsService.refreshStatistics(
+      workspace_id,
+      autoCoderRun === 2 ? 'v3' : 'v1'
+    );
 
     return statistics;
   }
@@ -635,6 +638,7 @@ export class WorkspaceCodingService {
     variableFilters?: string[]
   ): Promise<{
       affectedResponseCount: number;
+      deletedGeneratedResponseCount: number;
       cascadeResetVersions: ('v2' | 'v3')[];
       message: string;
     }> {

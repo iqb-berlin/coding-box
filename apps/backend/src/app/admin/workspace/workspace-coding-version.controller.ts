@@ -155,6 +155,7 @@ export class WorkspaceCodingVersionController {
           type: 'object',
           properties: {
             affectedResponseCount: { type: 'number' },
+            deletedGeneratedResponseCount: { type: 'number' },
             cascadeResetVersions: { type: 'array', items: { type: 'string' } },
             message: { type: 'string' }
           }
@@ -170,6 +171,7 @@ export class WorkspaceCodingVersionController {
         progress: number;
         result?: {
           affectedResponseCount: number;
+          deletedGeneratedResponseCount: number;
           cascadeResetVersions: ('v2' | 'v3')[];
           message: string;
         };
@@ -196,6 +198,7 @@ export class WorkspaceCodingVersionController {
       progress: number;
       result?: {
         affectedResponseCount: number;
+        deletedGeneratedResponseCount: number;
         cascadeResetVersions: ('v2' | 'v3')[];
         message: string;
       };

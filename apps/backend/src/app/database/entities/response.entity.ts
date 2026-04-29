@@ -10,6 +10,7 @@ import { Unit } from './unit.entity';
 @Index(['unitid', 'status']) // Composite index for filtering by status
 @Index(['status']) // Index for filtering by status distribution
 @Index(['status_v1']) // Index for filtering by coded status
+@Index(['is_autocoder_generated'])
 export class ResponseEntity {
   @PrimaryGeneratedColumn()
     id: number;
@@ -30,6 +31,9 @@ export class ResponseEntity {
 
   @Column({ type: 'text', nullable: true })
     subform: string;
+
+  @Column({ type: 'boolean', default: false })
+    is_autocoder_generated?: boolean;
 
   @Column({ type: 'smallint', nullable: true })
     status_v1: number | null;

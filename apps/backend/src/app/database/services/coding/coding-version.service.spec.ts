@@ -22,7 +22,8 @@ describe('CodingVersionService', () => {
 
   const mockResponseRepository = {
     createQueryBuilder: jest.fn(() => mockQueryBuilder),
-    update: jest.fn()
+    update: jest.fn(),
+    delete: jest.fn()
   };
 
   const mockCodingStatisticsService = {
@@ -58,6 +59,14 @@ describe('CodingVersionService', () => {
 
     // Reset mocks before each test
     jest.clearAllMocks();
+    mockQueryBuilder.getMany.mockReset();
+    mockQueryBuilder.getCount.mockReset();
+    mockQueryBuilder.getMany.mockResolvedValue([]);
+    mockQueryBuilder.getCount.mockResolvedValue(0);
+    mockResponseRepository.update.mockReset();
+    mockResponseRepository.delete.mockReset();
+    mockResponseRepository.update.mockResolvedValue({ affected: 0 });
+    mockResponseRepository.delete.mockResolvedValue({ affected: 0 });
   });
 
   it('should be defined', () => {
@@ -78,6 +87,7 @@ describe('CodingVersionService', () => {
 
       expect(result).toEqual({
         affectedResponseCount: 3,
+        deletedGeneratedResponseCount: 0,
         cascadeResetVersions: ['v2', 'v3'],
         message: 'Successfully reset 3 responses for version v1 and v2, v3 (cascade)'
       });
@@ -114,13 +124,17 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }, { id: 2 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(2);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 2 });
 
       const result = await service.resetCodingVersion(workspaceId, version);
 
       expect(result).toEqual({
         affectedResponseCount: 2,
+        deletedGeneratedResponseCount: 0,
         cascadeResetVersions: ['v3'],
         message: 'Successfully reset 2 responses for version v2 and v3 (cascade)'
       });
@@ -149,13 +163,17 @@ describe('CodingVersionService', () => {
       const mockResponses = [{ id: 1 }];
 
       mockQueryBuilder.getCount.mockResolvedValue(1);
-      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
       mockResponseRepository.update.mockResolvedValue({ affected: 1 });
 
       const result = await service.resetCodingVersion(workspaceId, version);
 
       expect(result).toEqual({
         affectedResponseCount: 1,
+        deletedGeneratedResponseCount: 0,
         cascadeResetVersions: [],
         message: 'Successfully reset 1 responses for version v3'
       });
@@ -249,6 +267,7 @@ describe('CodingVersionService', () => {
 
       expect(result).toEqual({
         affectedResponseCount: 0,
+        deletedGeneratedResponseCount: 0,
         cascadeResetVersions: ['v2', 'v3'],
         message: 'No responses found matching the filters for version v1'
       });
@@ -309,6 +328,92 @@ describe('CodingVersionService', () => {
 
       expect(progressCallback).toHaveBeenCalledWith(0);
       expect(progressCallback).toHaveBeenCalledWith(100);
+    });
+
+    it('should delete empty autocoder-generated responses after resetting v1', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const resetResponses = [{ id: 1 }, { id: 2 }];
+      const generatedResponses = [{ id: 100 }, { id: 101 }];
+
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(resetResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce(generatedResponses)
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 2 });
+      mockResponseRepository.delete.mockResolvedValue({ affected: 2 });
+
+      const result = await service.resetCodingVersion(workspaceId, version);
+
+      expect(result).toEqual({
+        affectedResponseCount: 2,
+        deletedGeneratedResponseCount: 2,
+        cascadeResetVersions: ['v2', 'v3'],
+        message: 'Successfully reset 2 responses for version v1 and v2, v3 (cascade) and removed 2 generated response rows'
+      });
+      expect(mockResponseRepository.delete).toHaveBeenCalledWith({
+        id: expect.anything()
+      });
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated = :generated',
+        { generated: true }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 IS NULL AND response.code_v1 IS NULL AND response.score_v1 IS NULL AND response.status_v2 IS NULL AND response.code_v2 IS NULL AND response.score_v2 IS NULL AND response.status_v3 IS NULL AND response.code_v3 IS NULL AND response.score_v3 IS NULL'
+      );
+    });
+
+    it('should cleanup already-empty generated responses even when no reset targets match', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const generatedResponses = [{ id: 200 }];
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(generatedResponses)
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.delete.mockResolvedValue({ affected: 1 });
+
+      const result = await service.resetCodingVersion(workspaceId, version);
+
+      expect(result).toEqual({
+        affectedResponseCount: 0,
+        deletedGeneratedResponseCount: 1,
+        cascadeResetVersions: ['v2', 'v3'],
+        message: 'No responses found matching the filters for version v1; removed 1 generated response rows'
+      });
+      expect(mockResponseRepository.update).not.toHaveBeenCalled();
+      expect(mockResponseRepository.delete).toHaveBeenCalledWith({
+        id: expect.anything()
+      });
+    });
+
+    it('should apply unit and variable filters when deleting empty generated responses', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const unitFilters = ['UNIT_A'];
+      const variableFilters = ['derived_var'];
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+      mockQueryBuilder.getMany.mockResolvedValueOnce([]);
+
+      await service.resetCodingVersion(
+        workspaceId,
+        version,
+        unitFilters,
+        variableFilters
+      );
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'unit.name IN (:...unitNames)',
+        { unitNames: unitFilters }
+      );
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'response.variableid IN (:...variableIds)',
+        { variableIds: variableFilters }
+      );
     });
 
     it('should throw error on database failure', async () => {
