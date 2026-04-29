@@ -16,6 +16,7 @@ import {
 } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
+import { Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
@@ -30,7 +31,6 @@ import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
-import { CodingManagementManualComponent } from '../coding-management-manual/coding-management-manual.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
 import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
@@ -54,7 +54,6 @@ import { ReviewListDialogComponent } from './components/review-list-dialog/revie
     MatIcon,
     MatAnchor,
     MatButton,
-    CodingManagementManualComponent,
     TranslateModule,
     StatisticsCardComponent,
     ResponseFiltersComponent,
@@ -73,6 +72,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private codingManagementService = inject(CodingManagementService);
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
+  private router = inject(Router);
 
   // State
   data: Success[] = [];
@@ -93,7 +93,6 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   isLoading = false;
   isLoadingStatistics = false;
   isDownloadInProgress = false;
-  showManualCoding = false;
   resetProgress: number | null = null;
   downloadProgress: number | null = null;
   codingListDownloadProgress: number | null = null;
@@ -483,8 +482,13 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     });
   }
 
-  toggleManualCoding(): void {
-    this.showManualCoding = !this.showManualCoding;
+  openManualCoding(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`]);
   }
 
   fetchVariableAnalysis(): void {

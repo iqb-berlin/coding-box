@@ -2,19 +2,15 @@
   @if (!hideActionButtons) {
   <div>
     <div class="action-buttons-toolbar">
-      @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="onAutoCode()">
         <mat-icon>auto_fix_high</mat-icon>
         {{ 'coding-management.buttons.auto-code' | translate }}
       </a>
-      }
-      <a mat-raised-button [color]="showManualCoding ? 'accent' : 'primary'" (click)="toggleManualCoding()">
-        <mat-icon>{{ showManualCoding ? 'arrow_back' : 'keyboard' }}</mat-icon>
-        {{ showManualCoding ? ('coding-management.buttons.back-to-overview' | translate) :
-        ('coding-management.buttons.manual-code' | translate) }}
+      <a mat-raised-button color="primary" (click)="openManualCoding()">
+        <mat-icon>keyboard</mat-icon>
+        {{ 'coding-management.buttons.manual-code' | translate }}
       </a>
 
-      @if (!showManualCoding) {
       @if (codingListDownloadProgress !== null) {
       <button mat-raised-button disabled class="progress-button">
         <mat-spinner diameter="20" class="inline-spinner"></mat-spinner>
@@ -26,36 +22,26 @@
         {{ 'coding-management.buttons.coding-list' | translate }}
       </a>
       }
-      }
-      @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="openExportCodingBook()">
         <mat-icon>book</mat-icon>
         {{ 'coding-management.buttons.codebook' | translate }}
       </a>
-      }
-      @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="openItemListDialog()">
         <mat-icon>list_alt</mat-icon>
         {{ 'Itemliste' }}
       </a>
-      }
-      @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="fetchVariableAnalysis()">
         <mat-icon>analytics</mat-icon>
         {{ 'coding-management.buttons.item-variable-analysis' | translate }}
       </a>
-      }
-      @if (!showManualCoding) {
       <a mat-raised-button color="primary" (click)="fetchUnitVariables()">
         <mat-icon>list_alt</mat-icon>
         {{ 'coding-management.buttons.coding-variables' | translate }}
       </a>
-      }
     </div>
   </div>
   }
 
-  @if (!showManualCoding) {
   <div class="coding-content-area">
     <div class="content-row-container">
       <!-- Statistics Section -->
@@ -91,10 +77,4 @@
       </div>
     </div>
   </div>
-  }
-
-  <!-- Manual Coding Management Content -->
-  @if (showManualCoding) {
-  <coding-box-coding-management-manual></coding-box-coding-management-manual>
-  }
 </div>

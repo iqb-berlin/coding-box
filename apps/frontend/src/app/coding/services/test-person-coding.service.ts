@@ -78,6 +78,47 @@ export interface WorkspaceGroupCodingStats {
   responsesToCode: number;
 }
 
+export interface CaseCoverageOverview {
+  totalCasesToCode: number;
+  effectiveTotalCasesToCode: number;
+  casesInJobs: number;
+  effectiveCasesInJobs: number;
+  doubleCodedCases: number;
+  singleCodedCases: number;
+  unassignedCases: number;
+  effectiveUnassignedCases: number;
+  coveragePercentage: number;
+  rawCoveragePercentage: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+}
+
+export interface CodingProgressOverview {
+  totalCasesToCode: number;
+  completedCases: number;
+  completionPercentage: number;
+  rawTotalCasesToCode: number;
+  rawCompletedCases: number;
+  rawCompletionPercentage: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+}
+
+export interface AppliedResultsOverview {
+  totalIncompleteResponses: number;
+  appliedResponses: number;
+  remainingResponses: number;
+  completionPercentage: number;
+  rawTotalIncompleteResponses: number;
+  rawAppliedResponses: number;
+  rawCompletionPercentage: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -447,17 +488,9 @@ export class TestPersonCodingService {
     );
   }
 
-  getCodingProgressOverview(workspaceId: number): Observable<{
-    totalCasesToCode: number;
-    completedCases: number;
-    completionPercentage: number;
-  }> {
+  getCodingProgressOverview(workspaceId: number): Observable<CodingProgressOverview> {
     return this.http
-      .get<{
-      totalCasesToCode: number;
-      completedCases: number;
-      completionPercentage: number;
-    }>(
+      .get<CodingProgressOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
       { headers: this.authHeader }
     )
@@ -465,7 +498,35 @@ export class TestPersonCodingService {
         catchError(() => of({
           totalCasesToCode: 0,
           completedCases: 0,
-          completionPercentage: 0
+          completionPercentage: 0,
+          rawTotalCasesToCode: 0,
+          rawCompletedCases: 0,
+          rawCompletionPercentage: 0,
+          aggregationActive: false,
+          aggregationThreshold: null,
+          aggregatedDuplicateCases: 0
+        }))
+      );
+  }
+
+  getAppliedResultsOverview(workspaceId: number): Observable<AppliedResultsOverview> {
+    return this.http
+      .get<AppliedResultsOverview>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalIncompleteResponses: 0,
+          appliedResponses: 0,
+          remainingResponses: 0,
+          completionPercentage: 0,
+          rawTotalIncompleteResponses: 0,
+          rawAppliedResponses: 0,
+          rawCompletionPercentage: 0,
+          aggregationActive: false,
+          aggregationThreshold: null,
+          aggregatedDuplicateCases: 0
         }))
       );
   }
@@ -598,34 +659,27 @@ export class TestPersonCodingService {
       );
   }
 
-  getCaseCoverageOverview(workspaceId: number): Observable<{
-    totalCasesToCode: number;
-    casesInJobs: number;
-    doubleCodedCases: number;
-    singleCodedCases: number;
-    unassignedCases: number;
-    coveragePercentage: number;
-  }> {
+  getCaseCoverageOverview(workspaceId: number): Observable<CaseCoverageOverview> {
     return this.http
-      .get<{
-      totalCasesToCode: number;
-      casesInJobs: number;
-      doubleCodedCases: number;
-      singleCodedCases: number;
-      unassignedCases: number;
-      coveragePercentage: number;
-    }>(
+      .get<CaseCoverageOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/case-coverage-overview`,
       { headers: this.authHeader }
     )
       .pipe(
         catchError(() => of({
           totalCasesToCode: 0,
+          effectiveTotalCasesToCode: 0,
           casesInJobs: 0,
+          effectiveCasesInJobs: 0,
           doubleCodedCases: 0,
           singleCodedCases: 0,
           unassignedCases: 0,
-          coveragePercentage: 0
+          effectiveUnassignedCases: 0,
+          coveragePercentage: 0,
+          rawCoveragePercentage: 0,
+          aggregationActive: false,
+          aggregationThreshold: null,
+          aggregatedDuplicateCases: 0
         }))
       );
   }

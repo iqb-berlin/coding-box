@@ -42,6 +42,10 @@
           <p class="section-description">Verwalten Sie Kodierjobs für die manuelle Kodierung von Antworten.</p>
         </div>
         <div class="header-actions">
+          <button mat-stroked-button color="primary" (click)="navigateToCodingManagementOverview()">
+            <mat-icon>arrow_back</mat-icon>
+            Zurück zur Übersicht
+          </button>
           <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading"
             matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
             <mat-icon>link</mat-icon>
@@ -227,7 +231,7 @@
                   <div class="analysis-title-content">
                     <span class="analysis-title">
                       {{ 'coding-management-manual.response-analysis.duplicate-values' | translate }}
-                      <span *ngIf="responseAnalysis.duplicateValues.isAggregationApplied"
+                      <span *ngIf="isDuplicateAggregationActive"
                         class="aggregation-applied-badge">
                         <mat-icon>layers</mat-icon>
                         {{ 'coding-management-manual.duplicate-aggregation.is-applied' | translate }}
@@ -239,6 +243,9 @@
                       | translate }}
                       ({{ responseAnalysis.duplicateValues.totalResponses }} {{
                       'coding-management-manual.response-analysis.responses' | translate }})
+                      <span *ngIf="responseAnalysisAggregationSavings > 0">
+                        - {{ responseAnalysisAggregationSavings }} zusammengefasst
+                      </span>
                     </span>
                   </div>
                 </div>
@@ -357,13 +364,24 @@
                   <tr *ngFor="let variable of codingIncompleteVariables" style="border-bottom: 1px solid #eee;">
                     <td style="padding: 6px;">{{variable.unitName}}</td>
                     <td style="padding: 6px;">{{variable.variableId}}</td>
-                    <td style="padding: 6px; text-align: right; font-weight: bold;">{{variable.responseCount}}</td>
+                    <td style="padding: 6px; text-align: right; font-weight: bold;">
+                      {{getVariableEffectiveCaseCount(variable)}}
+                    </td>
                   </tr>
                   <tr *ngIf="codingIncompleteVariables.length === 0">
                     <td colspan="3" style="padding: 10px; text-align: center; color: #888;">Keine offenen Variablen gefunden.</td>
                   </tr>
                 </tbody>
               </table>
+            </div>
+
+            <div *ngIf="codingProgressOverview.aggregationActive" class="aggregation-note">
+              <mat-icon>filter_alt</mat-icon>
+              <span>
+                Aggregation ist aktiv: {{codingProgressOverview.aggregatedDuplicateCases}} Antworten wurden bei
+                Schwelle {{codingProgressOverview.aggregationThreshold}} zusammengefasst. Der Fortschritt bezieht sich
+                auf {{codingProgressOverview.totalCasesToCode}} Kodierfälle.
+              </span>
             </div>
 
             <div class="coverage-bar" style="margin-top: 15px;">
@@ -562,11 +580,11 @@
             <div class="coverage-stats">
               <div class="stat-item">
                 <span class="stat-label">Gesamt zu kodierende Fälle:</span>
-                <span class="stat-value">{{caseCoverageOverview.totalCasesToCode}}</span>
+                <span class="stat-value">{{caseCoverageOverview.effectiveTotalCasesToCode}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Fälle in Jobs:</span>
-                <span class="stat-value covered">{{caseCoverageOverview.casesInJobs}}</span>
+                <span class="stat-value covered">{{caseCoverageOverview.effectiveCasesInJobs}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Doppelt kodierte Fälle:</span>
@@ -574,17 +592,25 @@
               </div>
               <div class="stat-item">
                 <span class="stat-label">Einfach kodierte Fälle:</span>
-                <span class="stat-value">{{caseCoverageOverview.singleCodedCases}}</span>
+                <span class="stat-value">{{effectiveSingleCodedCases}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Nicht zugewiesene Fälle:</span>
-                <span class="stat-value missing">{{caseCoverageOverview.unassignedCases}}</span>
+                <span class="stat-value missing">{{caseCoverageOverview.effectiveUnassignedCases}}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Abdeckungsrate:</span>
                 <span class="stat-value percentage">{{caseCoverageOverview.coveragePercentage |
                   number:'1.1-1'}}%</span>
               </div>
+            </div>
+            <div *ngIf="caseCoverageOverview.aggregationActive" class="aggregation-note">
+              <mat-icon>filter_alt</mat-icon>
+              <span>
+                Aggregation ist aktiv: {{caseCoverageOverview.aggregatedDuplicateCases}} Antworten wurden bei
+                Schwelle {{caseCoverageOverview.aggregationThreshold}} zusammengefasst. Die Abdeckungsrate bezieht sich
+                auf die daraus resultierenden {{caseCoverageOverview.effectiveTotalCasesToCode}} Kodierfälle.
+              </span>
             </div>
             <div class="coverage-bar">
               <div class="coverage-fill" [style.width.%]="caseCoverageOverview.coveragePercentage"></div>
@@ -644,6 +670,14 @@
                 <span class="stat-value percentage">{{appliedResultsOverview.completionPercentage |
                   number:'1.1-1'}}%</span>
               </div>
+            </div>
+            <div *ngIf="appliedResultsOverview.aggregationActive" class="aggregation-note">
+              <mat-icon>filter_alt</mat-icon>
+              <span>
+                Aggregation ist aktiv: {{appliedResultsOverview.aggregatedDuplicateCases}} Antworten wurden bei
+                Schwelle {{appliedResultsOverview.aggregationThreshold}} zusammengefasst. Der Fortschritt bezieht sich
+                auf {{appliedResultsOverview.totalIncompleteResponses}} Kodierfälle.
+              </span>
             </div>
             <div class="coverage-bar">
               <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>

@@ -289,6 +289,28 @@
           }
         }
 
+        .aggregation-note {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+          margin: 0 0 14px 0;
+          padding: 10px 12px;
+          background-color: rgba(255, 243, 224, 0.9);
+          border: 1px solid rgba(245, 124, 0, 0.25);
+          border-radius: 6px;
+          color: #5f4217;
+          font-size: 13px;
+          line-height: 1.4;
+
+          mat-icon {
+            color: #f57c00;
+            font-size: 18px;
+            height: 18px;
+            width: 18px;
+            flex: 0 0 auto;
+          }
+        }
+
         .coverage-stats {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
