@@ -45,6 +45,7 @@ import { WorkspaceXmlSchemaValidationService } from './workspace-xml-schema-vali
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+// eslint-disable-next-line import/no-cycle
 import { WorkspaceTestFilesValidationService } from '../validation/workspace-test-files-validation.service';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';

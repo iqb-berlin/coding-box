@@ -62,6 +62,11 @@ export class StatisticsCardComponent {
     responseStatesNumericMap.map(entry => [entry.key, entry.value])
   );
 
+  private readonly ignoredStatuses = [
+    '0', '1', '2', '3', '10',
+    'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
+  ];
+
   readonly codingRunOptions = [
     { value: 'v1' as const, label: 'coding-management.statistics.first-autocode-run' },
     { value: 'v2' as const, label: 'coding-management.statistics.manual-coding-run' },
@@ -74,42 +79,55 @@ export class StatisticsCardComponent {
 
   get effectiveTotalResponses(): number {
     if (!this.codingStatistics) return 0;
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    let total = this.codingStatistics.totalResponses;
-    for (const status of ignoredStatuses) {
-      if (this.codingStatistics.statusCounts && this.codingStatistics.statusCounts[status]) {
-        total -= this.codingStatistics.statusCounts[status];
+    return this.getIgnoredAdjustedTotal(this.codingStatistics);
+  }
+
+  private getIgnoredAdjustedTotal(statistics: CodingStatistics): number {
+    let total = statistics.totalResponses;
+    for (const status of this.ignoredStatuses) {
+      if (statistics.statusCounts && statistics.statusCounts[status]) {
+        total -= statistics.statusCounts[status];
       }
     }
     return total;
+  }
+
+  get effectiveDerivedResponses(): number {
+    if (!this.codingStatistics?.derivedStatusCounts) {
+      return this.codingStatistics?.derivedResponseCount || 0;
+    }
+
+    let total = this.codingStatistics.derivedResponseCount || 0;
+    for (const status of this.ignoredStatuses) {
+      if (this.codingStatistics.derivedStatusCounts[status]) {
+        total -= this.codingStatistics.derivedStatusCounts[status];
+      }
+    }
+    return total;
+  }
+
+  get derivedAnswerCount(): number {
+    if (!this.codingStatistics) return 0;
+    return this.effectiveDerivedResponses;
+  }
+
+  get derivedVariableCount(): number {
+    return this.codingStatistics?.derivedVariableCount || 0;
+  }
+
+  get hasDerivedStatistics(): boolean {
+    return this.derivedAnswerCount > 0;
   }
 
   get effectiveReferenceTotalResponses(): number {
     if (!this.referenceStatistics) return 0;
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    let total = this.referenceStatistics.totalResponses;
-    for (const status of ignoredStatuses) {
-      if (this.referenceStatistics.statusCounts && this.referenceStatistics.statusCounts[status]) {
-        total -= this.referenceStatistics.statusCounts[status];
-      }
-    }
-    return total;
+    return this.getIgnoredAdjustedTotal(this.referenceStatistics);
   }
 
   getStatuses(): string[] {
-    const ignoredStatuses = [
-      '0', '1', '2', '3', '10',
-      'UNSET', 'NOT_REACHED', 'DISPLAYED', 'VALUE_CHANGED', 'PARTLY_DISPLAYED'
-    ];
-    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
+    const currentStatuses = Object.keys(this.codingStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
     if (this.referenceStatistics) {
-      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !ignoredStatuses.includes(s));
+      const referenceStatuses = Object.keys(this.referenceStatistics.statusCounts).filter(s => !this.ignoredStatuses.includes(s));
       const allStatuses = new Set([...currentStatuses, ...referenceStatuses]);
       return Array.from(allStatuses);
     }

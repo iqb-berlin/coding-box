@@ -81,6 +81,14 @@
         }
       </span>
     </div>
+    @if (hasDerivedStatistics) {
+    <div class="statistic-item">
+      <span class="statistic-label">{{ 'coding-management.statistics.derived-answers' | translate }}</span>
+      <span class="statistic-value" [matTooltip]="'coding-management.statistics.derived-answers-tooltip' | translate:{count: derivedVariableCount}">
+        {{ derivedAnswerCount }}
+      </span>
+    </div>
+    }
     @for (status of getStatuses(); track status) {
     <div class="statistic-item clickable" (click)="onStatusClick(status)">
       <span class="statistic-label">
