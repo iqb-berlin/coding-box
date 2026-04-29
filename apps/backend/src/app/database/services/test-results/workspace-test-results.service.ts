@@ -2341,26 +2341,36 @@ export class WorkspaceTestResultsService {
     const code = parts[1];
     const group = parts.length >= 4 ? parts[2] : undefined;
     const bookletId = parts[parts.length - 1];
-    const queryBuilder = this.unitRepository
-      .createQueryBuilder('unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .select('unit.id', 'unitId')
-      .where('person.login = :login', { login })
-      .andWhere('person.code = :code', { code });
+    const createUnitLookupQuery = () => {
+      const queryBuilder = this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .select('unit.id', 'unitId')
+        .where('person.login = :login', { login })
+        .andWhere('person.code = :code', { code });
 
-    if (group) {
-      queryBuilder.andWhere('person.group = :group', { group });
+      if (group) {
+        queryBuilder.andWhere('person.group = :group', { group });
+      }
+
+      return queryBuilder
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('bookletinfo.name = :bookletId', { bookletId });
+    };
+
+    let unitRow = await createUnitLookupQuery()
+      .andWhere('unit.alias = :unitId', { unitId })
+      .getRawOne<{ unitId: number }>();
+
+    if (!unitRow) {
+      unitRow = await createUnitLookupQuery()
+        .andWhere('unit.name = :unitId', { unitId })
+        .getRawOne<{ unitId: number }>();
     }
 
-    queryBuilder
-      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('bookletinfo.name = :bookletId', { bookletId })
-      .andWhere('unit.alias = :unitId', { unitId });
-
-    const unitRow = await queryBuilder.getRawOne<{ unitId: number }>();
     const unitDbId = unitRow?.unitId;
 
     if (!unitDbId) {

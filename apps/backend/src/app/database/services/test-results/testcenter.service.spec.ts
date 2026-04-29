@@ -341,6 +341,12 @@ describe('TestCenterService', () => {
       );
       expect(result.success).toBe(true);
       expect(result.logs).toBe(1);
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenCalledWith(
+        mockPersons[0].booklets[0],
+        [mockLogs[1]],
+        expect.any(Array),
+        'Testcenter:ws-456:group1'
+      );
     });
   });
 

@@ -458,7 +458,7 @@ export class CoderTrainingService {
         })
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
-        .andWhere('unit.alias = :unitId', { unitId })
+        .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
         .orderBy('response.id', 'ASC')
         .getMany();
 

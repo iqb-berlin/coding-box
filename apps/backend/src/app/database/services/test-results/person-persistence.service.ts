@@ -829,13 +829,23 @@ export class PersonPersistenceService {
         continue;
       }
 
-      const existingUnit = await this.unitRepository.findOne({
+      let existingUnit = await this.unitRepository.findOne({
         where: {
-          alias: unit.id,
+          alias: unit.alias,
           name: unit.id,
           bookletid: existingBooklet.id
         }
       });
+
+      if (!existingUnit && unit.alias !== unit.id) {
+        existingUnit = await this.unitRepository.findOne({
+          where: {
+            alias: unit.id,
+            name: unit.id,
+            bookletid: existingBooklet.id
+          }
+        });
+      }
 
       if (!existingUnit) {
         this.logger.warn(

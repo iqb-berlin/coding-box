@@ -11,6 +11,7 @@ import { FileIo } from '../../../admin/workspace/file-io.interface';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
+  let personService: PersonService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -40,6 +41,7 @@ describe('UploadResultsService', () => {
     }).compile();
 
     service = module.get<UploadResultsService>(UploadResultsService);
+    personService = module.get<PersonService>(PersonService);
   });
 
   it('should be defined', () => {
@@ -78,6 +80,62 @@ test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
 
       // Assert
       expect(result.expected.uniqueUnits).toBe(1);
+    });
+
+    it('should pass only unit log rows into unit log assignment', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+test-group;test-user;code;booklet1;; ;123456788;BOOKLET : value
+test-group;test-user;code;booklet1;unit1;id1;123456789;KEY=VALUE`;
+
+      const filePath = path.join(os.tmpdir(), 'test-separated-logs.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const booklet = {
+        id: 'booklet1',
+        logs: [],
+        units: [],
+        sessions: []
+      };
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: [booklet]
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletLogsToPerson').mockReturnValue(person);
+      jest.spyOn(personService, 'assignUnitLogsToBooklet').mockReturnValue(booklet);
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        issues: []
+      } as never);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenCalledWith(
+        booklet,
+        [expect.objectContaining({ unitname: 'unit1', originalUnitId: 'id1' })],
+        expect.any(Array),
+        'test.csv'
+      );
     });
 
     it('should ignore originalUnitId when counting expected unique units for responses', async () => {
