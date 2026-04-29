@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -7,11 +7,15 @@ import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 export interface ResponseFilterOptions {
   status?: string;
   version?: 'v1' | 'v2' | 'v3';
   considerOnly?: boolean;
+  validCodingVariablesOnly?: boolean;
+  givenResponsesOnly?: boolean;
 }
 
 /**
@@ -30,7 +34,9 @@ export class CodingResponseFilterService {
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly fileCacheService: CodingFileCacheService,
     private readonly workspaceCoreService: WorkspaceCoreService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
   /**
@@ -136,6 +142,15 @@ export class CodingResponseFilterService {
       queryBuilder.andWhere('person.consider = :consider', { consider: true });
     }
 
+    if (options.givenResponsesOnly) {
+      const givenStatuses = [
+        statusStringToNumber('NOT_REACHED') || 1,
+        statusStringToNumber('DISPLAYED') || 2,
+        statusStringToNumber('VALUE_CHANGED') || 3
+      ];
+      queryBuilder.andWhere('response.status IN (:...givenStatuses)', { givenStatuses });
+    }
+
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     if (globalIgnoredUnits.length > 0) {
       queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
@@ -153,7 +168,31 @@ export class CodingResponseFilterService {
       queryBuilder.andWhere(`NOT (${condition})`, params);
     }
 
+    if (options.validCodingVariablesOnly) {
+      const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+      const validVariablePairKeys = Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+        Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+      ));
+
+      if (validVariablePairKeys.length === 0) {
+        queryBuilder.andWhere('1 = 0');
+      } else {
+        queryBuilder.andWhere(
+          '(CONCAT(unit.name, :variablePairSeparator, response.variableid) IN (:...validVariablePairKeys) OR response.is_autocoder_generated = :isAutocoderGenerated)',
+          {
+            variablePairSeparator: '\u001F',
+            validVariablePairKeys,
+            isAutocoderGenerated: true
+          }
+        );
+      }
+    }
+
     return queryBuilder;
+  }
+
+  private toVariablePairKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
   }
 
   /**

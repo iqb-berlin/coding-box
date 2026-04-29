@@ -177,6 +177,18 @@ describe('CodingListStreamService', () => {
         stream.on('end', resolve);
       });
 
+      const versionExportOptions = {
+        version: 'v1',
+        validCodingVariablesOnly: true,
+        givenResponsesOnly: true
+      };
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(1, versionExportOptions);
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
+        1,
+        0,
+        5000,
+        versionExportOptions
+      );
       expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
         response,
         'v1',
@@ -316,6 +328,11 @@ describe('CodingListStreamService', () => {
       );
 
       expect(mockItemBuilderService.getHeadersForVersion).toHaveBeenCalledWith('v1', false);
+      expect(mockResponseFilterService.countResponses).toHaveBeenCalledWith(1, {
+        version: 'v1',
+        validCodingVariablesOnly: true,
+        givenResponsesOnly: true
+      });
     });
   });
 
