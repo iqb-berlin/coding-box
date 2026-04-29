@@ -124,13 +124,14 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       let statusColumn = 'response.status_v1';
       let whereCondition = 'response.status_v1 IS NOT NULL';
+      const statusV3Column = "CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END";
 
       if (version === 'v2') {
         statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
         whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
       } else if (version === 'v3') {
-        statusColumn = 'COALESCE(response.status_v3, response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v3, response.status_v2, response.status_v1)) IS NOT NULL';
+        statusColumn = `COALESCE(${statusV3Column}, response.status_v2, response.status_v1)`;
+        whereCondition = `(COALESCE(${statusV3Column}, response.status_v2, response.status_v1)) IS NOT NULL`;
       }
 
       const variablePairExpression = "(unit.name || E'\\u001F' || response.variableid)";

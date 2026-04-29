@@ -138,6 +138,8 @@ describe('CodingProcessService', () => {
   let mockUnitQueryBuilder: Partial<MockQueryBuilder>;
 
   beforeEach(async () => {
+    jest.clearAllMocks();
+
     mockQueryBuilder = {
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
@@ -396,6 +398,33 @@ describe('CodingProcessService', () => {
       const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
 
       expect(result.totalResponses).toBe(2);
+    });
+
+    it('should pass v2 code and score to the second autocoder run', async () => {
+      const responsesWithV2 = [
+        createMockResponse(1, 1, 'var1')
+      ];
+      responsesWithV2[0].status_v1 = 8;
+      responsesWithV2[0].code_v1 = 1;
+      responsesWithV2[0].score_v1 = 1;
+      responsesWithV2[0].status_v2 = 5;
+      responsesWithV2[0].code_v2 = 0;
+      responsesWithV2[0].score_v2 = 0;
+
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce(responsesWithV2);
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalled();
+      const [inputResponses] = (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0];
+      expect(inputResponses[0]).toEqual(expect.objectContaining({
+        id: 'var1',
+        status: 'CODING_COMPLETE',
+        code: 0,
+        score: 0
+      }));
     });
 
     it('should mark generated autocoder outputs and exclude generated rows from the next input query', async () => {
