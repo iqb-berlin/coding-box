@@ -2651,6 +2651,11 @@ export class WorkspaceTestResultsService {
 
       await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
+    }).then(async result => {
+      if (result.success) {
+        await this.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 
@@ -2724,6 +2729,11 @@ export class WorkspaceTestResultsService {
 
       await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
+    }).then(async result => {
+      if (result.success) {
+        await this.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 
@@ -2819,6 +2829,11 @@ export class WorkspaceTestResultsService {
 
       await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
+    }).then(async result => {
+      if (result.success) {
+        await this.invalidateWorkspaceStatsCache(workspaceId);
+      }
+      return result;
     });
   }
 

@@ -2192,10 +2192,16 @@ ${bookletRefs}
     workspaceId: number,
     responseIds: number[]
   ): Promise<number> {
-    return this.workspaceResponseValidationService.deleteInvalidResponses(
+    const deletedCount = await this.workspaceResponseValidationService.deleteInvalidResponses(
       workspaceId,
       responseIds
     );
+    if (deletedCount > 0) {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        workspaceId
+      );
+    }
+    return deletedCount;
   }
 
   async deleteAllInvalidResponses(
@@ -2206,10 +2212,16 @@ ${bookletRefs}
     | 'responseStatus'
     | 'duplicateResponses'
   ): Promise<number> {
-    return this.workspaceResponseValidationService.deleteAllInvalidResponses(
+    const deletedCount = await this.workspaceResponseValidationService.deleteAllInvalidResponses(
       workspaceId,
       validationType
     );
+    if (deletedCount > 0) {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        workspaceId
+      );
+    }
+    return deletedCount;
   }
 
   async onModuleInit(): Promise<void> {

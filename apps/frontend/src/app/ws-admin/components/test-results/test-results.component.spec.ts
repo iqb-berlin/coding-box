@@ -76,11 +76,23 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: ResponseService,
-          useValue: { getResponses: jest.fn().mockReturnValue(of([])) }
+          useValue: {
+            getResponses: jest.fn().mockReturnValue(of([])),
+            deleteResponse: jest.fn().mockReturnValue(of({
+              success: true,
+              report: { deletedResponse: 1, warnings: [] }
+            }))
+          }
         },
         {
           provide: UnitService,
-          useValue: { getUnits: jest.fn().mockReturnValue(of([])) }
+          useValue: {
+            getUnits: jest.fn().mockReturnValue(of([])),
+            deleteUnit: jest.fn().mockReturnValue(of({
+              success: true,
+              report: { deletedUnit: 1, warnings: [] }
+            }))
+          }
         },
         {
           provide: CodingStatisticsService,
@@ -125,5 +137,51 @@ describe('TestResultsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should reload workspace overview after deleting a unit', () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const unitService = TestBed.inject(UnitService) as unknown as {
+      deleteUnit: jest.Mock;
+    };
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+    };
+    const unit = { id: 7, alias: 'Unit 7', name: 'Unit 7' };
+    const booklet = { units: [unit] };
+
+    testResultService.getWorkspaceOverview.mockClear();
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+    unitService.deleteUnit.mockReturnValue(of({
+      success: true,
+      report: { deletedUnit: 7, warnings: [] }
+    }));
+
+    component.deleteUnit(unit as never, booklet as never);
+
+    expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+  });
+
+  it('should reload workspace overview after deleting a response', () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const responseService = TestBed.inject(ResponseService) as unknown as {
+      deleteResponse: jest.Mock;
+    };
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+    };
+    const response = { id: 13, variableid: 'VAR_1' };
+
+    component.responses = [response] as never;
+    testResultService.getWorkspaceOverview.mockClear();
+    dialog.open.mockReturnValue({ afterClosed: () => of(true) });
+    responseService.deleteResponse.mockReturnValue(of({
+      success: true,
+      report: { deletedResponse: 13, warnings: [] }
+    }));
+
+    component.deleteResponse(response as never);
+
+    expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
   });
 });
