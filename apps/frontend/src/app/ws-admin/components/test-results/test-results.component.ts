@@ -1672,6 +1672,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   'Erfolg',
                   { duration: 3000 }
                 );
+                this.loadWorkspaceOverview();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Unit: ${result.report.warnings.join(
@@ -1736,6 +1737,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                   'Erfolg',
                   { duration: 3000 }
                 );
+                this.loadWorkspaceOverview();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Antwort: ${result.report.warnings.join(

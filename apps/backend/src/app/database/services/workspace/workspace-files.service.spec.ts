@@ -284,6 +284,70 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   });
 });
 
+describe('WorkspaceFilesService response deletion cache invalidation', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const mockWorkspaceResponseValidationService = {
+    deleteInvalidResponses: jest.fn(),
+    deleteAllInvalidResponses: jest.fn()
+  };
+
+  const mockWorkspaceTestResultsService = {
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      {} as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      mockWorkspaceResponseValidationService as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      mockWorkspaceTestResultsService as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('should invalidate workspace stats after deleting invalid responses', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockResolvedValue(2);
+
+    const deletedCount = await service.deleteInvalidResponses(1, [10, 11]);
+
+    expect(deletedCount).toBe(2);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+  });
+
+  it('should not invalidate workspace stats when no invalid responses were deleted', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteInvalidResponses.mockResolvedValue(0);
+
+    const deletedCount = await service.deleteInvalidResponses(1, [10]);
+
+    expect(deletedCount).toBe(0);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
+  });
+
+  it('should invalidate workspace stats after deleting all invalid responses', async () => {
+    const service = makeService();
+    mockWorkspaceResponseValidationService.deleteAllInvalidResponses.mockResolvedValue(3);
+
+    const deletedCount = await service.deleteAllInvalidResponses(1, 'variables');
+
+    expect(deletedCount).toBe(3);
+    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+  });
+});
+
 describe('WorkspaceFilesService.findAllFileTypes', () => {
   type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
 
