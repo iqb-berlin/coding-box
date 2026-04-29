@@ -420,7 +420,11 @@ export class CodingListStreamService {
 
     (async () => {
       try {
-        const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
+        const totalRows = await this.responseFilterService.countResponses(workspace_id, {
+          version,
+          validCodingVariablesOnly: true,
+          givenResponsesOnly: true
+        });
         const batchSize = 5000;
         let lastId = 0;
         let totalWritten = 0;
@@ -434,7 +438,11 @@ export class CodingListStreamService {
             workspace_id,
             lastId,
             batchSize,
-            { version, considerOnly: false }
+            {
+              version,
+              validCodingVariablesOnly: true,
+              givenResponsesOnly: true
+            }
           );
 
           if (!responses.length) break;
@@ -552,14 +560,22 @@ export class CodingListStreamService {
     let totalWritten = 0;
 
     try {
-      const totalRows = await this.responseFilterService.countResponses(workspace_id, { version });
+      const totalRows = await this.responseFilterService.countResponses(workspace_id, {
+        version,
+        validCodingVariablesOnly: true,
+        givenResponsesOnly: true
+      });
 
       for (; ;) {
         const responses = await this.responseFilterService.getResponsesBatch(
           workspace_id,
           lastId,
           batchSize,
-          { version, considerOnly: false }
+          {
+            version,
+            validCodingVariablesOnly: true,
+            givenResponsesOnly: true
+          }
         );
 
         if (!responses.length) break;
