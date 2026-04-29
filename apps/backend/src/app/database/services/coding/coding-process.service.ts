@@ -816,9 +816,13 @@ export class CodingProcessService {
 
         const inputResponses = responses.map(response => {
           let inputStatus = response.status;
+          let inputCode: number | undefined;
+          let inputScore: number | undefined;
           if (autoCoderRun === 2) {
             inputStatus =
-              response.status_v2 || response.status_v1 || response.status;
+              response.status_v2 ?? response.status_v1 ?? response.status;
+            inputCode = response.code_v2 ?? response.code_v1 ?? undefined;
+            inputScore = response.score_v2 ?? response.score_v1 ?? undefined;
           }
           let responseValue = response.value as import('@iqbspecs/response/response.interface').ResponseValueType;
           const isArrayString = /^\[.*]$/.test(response.value);
@@ -833,7 +837,9 @@ export class CodingProcessService {
             id: String(response.variableid),
             value: responseValue,
             status: statusNumberToString(inputStatus) as import('@iqbspecs/response/response.interface').ResponseStatusType,
-            subform: response.subform
+            subform: response.subform,
+            code: inputCode,
+            score: inputScore
           };
         });
 

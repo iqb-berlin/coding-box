@@ -88,7 +88,7 @@ export class CodingResponseQueryService {
           });
           break;
         case 'v3':
-          queryBuilder.andWhere('response.status_v3 = :status', {
+          queryBuilder.andWhere("CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END = :status", {
             status: statusNumber
           });
           break;

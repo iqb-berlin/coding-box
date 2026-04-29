@@ -135,7 +135,7 @@ describe('CodingResponseQueryService', () => {
         limit: 100
       });
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'response.status_v3 = :status',
+        "CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END = :status",
         { status: 3 }
       );
     });
