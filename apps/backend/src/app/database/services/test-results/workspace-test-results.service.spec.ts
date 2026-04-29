@@ -129,7 +129,8 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<BookletLog>;
 
     chunkRepository = {
-      createQueryBuilder: jest.fn(() => mockQueryBuilder())
+      createQueryBuilder: jest.fn(() => mockQueryBuilder()),
+      find: jest.fn().mockResolvedValue([])
     } as unknown as Repository<ChunkEntity>;
 
     dataSource = {
@@ -152,7 +153,11 @@ describe('WorkspaceTestResultsService', () => {
       dataSource,
       unitTagService,
       journalService,
-      { get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
+      {
+        generateUnitResponseCacheKey: jest.fn((workspaceId: number, connector: string, unitId: string) => `${workspaceId}:${connector}:${unitId}`),
+        get: jest.fn().mockResolvedValue(null),
+        set: jest.fn().mockResolvedValue(undefined)
+      } as unknown as CacheService,
       {} as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
@@ -356,6 +361,58 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
+    });
+  });
+
+  describe('findUnitResponse', () => {
+    it('should look up replay units by alias first', async () => {
+      const unitQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@booklet-a',
+        'unit-original-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(unitQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
+        unitId: 'unit-original-id'
+      });
+      expect(unitRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+    });
+
+    it('should fall back to visible unit name when alias lookup misses', async () => {
+      const aliasQb = mockQueryBuilder();
+      const nameQb = mockQueryBuilder();
+      (unitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(aliasQb)
+        .mockReturnValueOnce(nameQb);
+      aliasQb.getRawOne.mockResolvedValue(null);
+      nameQb.getRawOne.mockResolvedValue({ unitId: 77 });
+
+      const responseQb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getRawMany.mockResolvedValue([]);
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@booklet-a',
+        'unit-visible-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(aliasQb.andWhere).toHaveBeenCalledWith('unit.alias = :unitId', {
+        unitId: 'unit-visible-id'
+      });
+      expect(nameQb.andWhere).toHaveBeenCalledWith('unit.name = :unitId', {
+        unitId: 'unit-visible-id'
+      });
     });
   });
 

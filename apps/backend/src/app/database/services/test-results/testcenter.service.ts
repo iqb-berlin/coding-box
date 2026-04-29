@@ -305,7 +305,7 @@ export class TestcenterService {
           Number(workspace_id)
         )).map(async p => {
           const personWithBooklets = this.personService.assignBookletLogsToPerson(p, allLogData, importIssues, filename);
-          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, allLogData, importIssues, filename)
+          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, unitLogs, importIssues, filename)
           );
           return personWithBooklets;
         })

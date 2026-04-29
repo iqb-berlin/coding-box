@@ -289,7 +289,7 @@ export class PersonDataProcessingService {
         } else {
           const newUnit: TcMergeUnit = {
             id: row.unitname,
-            alias: '',
+            alias: row.originalUnitId || row.unitname,
             laststate: [],
             subforms: [],
             chunks: [],
@@ -483,7 +483,7 @@ export class PersonDataProcessingService {
 
     return {
       id: row.unitname,
-      alias: row.unitname,
+      alias: row.originalUnitId || row.unitname,
       laststate,
       subforms,
       chunks,

@@ -215,6 +215,41 @@ describe('CoderTrainingService', () => {
     });
   });
 
+  describe('generateCoderTrainingPackages', () => {
+    it('should match configured units by alias or visible unit name', async () => {
+      const responseQb = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([])
+      };
+      const responseRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue(responseQb)
+      };
+
+      (service as unknown as { responseRepository: typeof responseRepository }).responseRepository = responseRepository;
+
+      const result = await service.generateCoderTrainingPackages(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ unitId: 'unit-visible-id', variableId: 'var1', sampleCount: 5 }]
+      );
+
+      expect(responseQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias = :unitId OR unit.name = :unitId)',
+        { unitId: 'unit-visible-id' }
+      );
+      expect(result).toEqual([
+        {
+          coderId: 10,
+          coderName: 'Coder 1',
+          responses: []
+        }
+      ]);
+    });
+  });
+
   describe('sampleResponses', () => {
     type SampleResponse = {
       responseId: number;

@@ -19,6 +19,7 @@ describe('PersonPersistenceService', () => {
   let service: PersonPersistenceService;
   let personsRepository: Repository<Persons>;
   let bookletRepository: Repository<Booklet>;
+  let unitRepository: Repository<Unit>;
   let bookletInfoRepository: Repository<BookletInfo>;
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
@@ -43,6 +44,7 @@ describe('PersonPersistenceService', () => {
     service = module.get<PersonPersistenceService>(PersonPersistenceService);
     personsRepository = module.get(getRepositoryToken(Persons));
     bookletRepository = module.get(getRepositoryToken(Booklet));
+    unitRepository = module.get(getRepositoryToken(Unit));
     bookletInfoRepository = module.get(getRepositoryToken(BookletInfo));
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
     chunkRepository = module.get(getRepositoryToken(ChunkEntity));
@@ -137,6 +139,127 @@ describe('PersonPersistenceService', () => {
     expect(result.success).toBe(true);
     expect(result.totalLogsSaved).toBe(2);
     expect(bookletLogRepository.save).toHaveBeenCalled();
+  });
+
+  it('should match imported unit logs by original unit alias and visible unit name', async () => {
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue({
+      id: 123,
+      alias: 'unit-original-id',
+      name: 'unit-visible-id',
+      bookletid: 30
+    } as Unit);
+    const saveUnitLogsSpy = jest.spyOn(service, 'saveUnitLogs').mockResolvedValue({
+      success: true,
+      saved: 1,
+      skipped: 0
+    });
+
+    await service.processUnits(
+      {
+        id: 'booklet-a',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'unit-visible-id',
+            alias: 'unit-original-id',
+            laststate: [],
+            subforms: [],
+            chunks: [],
+            logs: [{ ts: '222', key: 'UNIT', parameter: 'shown' }]
+          }
+        ]
+      },
+      { id: 30 } as Booklet,
+      {
+        group: 'group-a',
+        login: 'login-a',
+        code: 'code-a',
+        workspace_id: 1,
+        booklets: []
+      }
+    );
+
+    expect(unitRepository.findOne).toHaveBeenCalledWith({
+      where: {
+        alias: 'unit-original-id',
+        name: 'unit-visible-id',
+        bookletid: 30
+      }
+    });
+    expect(saveUnitLogsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'unit-visible-id',
+        alias: 'unit-original-id'
+      }),
+      expect.objectContaining({ id: 123 }),
+      true
+    );
+  });
+
+  it('should fall back to the visible unit name alias for legacy imported unit logs', async () => {
+    jest.spyOn(unitRepository, 'findOne')
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 123,
+        alias: 'unit-visible-id',
+        name: 'unit-visible-id',
+        bookletid: 30
+      } as Unit);
+    const saveUnitLogsSpy = jest.spyOn(service, 'saveUnitLogs').mockResolvedValue({
+      success: true,
+      saved: 1,
+      skipped: 0
+    });
+
+    await service.processUnits(
+      {
+        id: 'booklet-a',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'unit-visible-id',
+            alias: 'unit-original-id',
+            laststate: [],
+            subforms: [],
+            chunks: [],
+            logs: [{ ts: '222', key: 'UNIT', parameter: 'shown' }]
+          }
+        ]
+      },
+      { id: 30 } as Booklet,
+      {
+        group: 'group-a',
+        login: 'login-a',
+        code: 'code-a',
+        workspace_id: 1,
+        booklets: []
+      }
+    );
+
+    expect(unitRepository.findOne).toHaveBeenNthCalledWith(1, {
+      where: {
+        alias: 'unit-original-id',
+        name: 'unit-visible-id',
+        bookletid: 30
+      }
+    });
+    expect(unitRepository.findOne).toHaveBeenNthCalledWith(2, {
+      where: {
+        alias: 'unit-visible-id',
+        name: 'unit-visible-id',
+        bookletid: 30
+      }
+    });
+    expect(saveUnitLogsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'unit-visible-id',
+        alias: 'unit-original-id'
+      }),
+      expect.objectContaining({ id: 123 }),
+      true
+    );
   });
 
   it('should replace chunk rows per unit and deduplicate chunk entries', async () => {
