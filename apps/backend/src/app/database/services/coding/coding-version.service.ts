@@ -25,6 +25,7 @@ export class CodingVersionService {
     progressCallback?: (progress: number) => Promise<void>
   ): Promise<{
       affectedResponseCount: number;
+      deletedGeneratedResponseCount: number;
       cascadeResetVersions: ('v2' | 'v3')[];
       message: string;
     }> {
@@ -94,12 +95,21 @@ export class CodingVersionService {
 
       if (affectedResponseCount === 0) {
         this.logger.log(`No responses found to reset for version ${version}`);
+        const deletedGeneratedResponseCount =
+          await this.deleteEmptyAutocoderGeneratedResponses(
+            workspaceId,
+            unitFilters,
+            variableFilters
+          );
         await this.invalidateStatisticsCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
           affectedResponseCount: 0,
+          deletedGeneratedResponseCount,
           cascadeResetVersions,
-          message: `No responses found matching the filters for version ${version}`
+          message: deletedGeneratedResponseCount > 0 ?
+            `No responses found matching the filters for version ${version}; removed ${deletedGeneratedResponseCount} generated response rows` :
+            `No responses found matching the filters for version ${version}`
         };
       }
 
@@ -152,6 +162,19 @@ export class CodingVersionService {
         )}`
       );
 
+      const deletedGeneratedResponseCount =
+        await this.deleteEmptyAutocoderGeneratedResponses(
+          workspaceId,
+          unitFilters,
+          variableFilters
+        );
+
+      if (deletedGeneratedResponseCount > 0) {
+        this.logger.log(
+          `Deleted ${deletedGeneratedResponseCount} empty autocoder-generated responses after reset`
+        );
+      }
+
       // Invalidate statistics cache for all affected versions
       await this.invalidateStatisticsCaches(workspaceId, version);
 
@@ -159,8 +182,11 @@ export class CodingVersionService {
 
       return {
         affectedResponseCount,
+        deletedGeneratedResponseCount,
         cascadeResetVersions,
-        message: `Successfully reset ${affectedResponseCount} responses for version ${version}${messageSuffix}`
+        message: deletedGeneratedResponseCount > 0 ?
+          `Successfully reset ${affectedResponseCount} responses for version ${version}${messageSuffix} and removed ${deletedGeneratedResponseCount} generated response rows` :
+          `Successfully reset ${affectedResponseCount} responses for version ${version}${messageSuffix}`
       };
     } catch (error) {
       this.logger.error(
@@ -178,6 +204,70 @@ export class CodingVersionService {
     ));
 
     return `(${conditions.join(' OR ')})`;
+  }
+
+  private async deleteEmptyAutocoderGeneratedResponses(
+    workspaceId: number,
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<number> {
+    let deletedCount = 0;
+    const batchSize = 5000;
+
+    for (; ;) {
+      const queryBuilder = this.responseRepository
+        .createQueryBuilder('response')
+        .leftJoin('response.unit', 'unit')
+        .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.person', 'person')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status IN (:...codedStatuses)', { codedStatuses: [1, 2, 3] })
+        .andWhere('response.is_autocoder_generated = :generated', { generated: true })
+        .andWhere(this.buildEmptyCodingColumnsCondition())
+        .select(['response.id'])
+        .orderBy('response.id', 'ASC')
+        .take(batchSize);
+
+      if (unitFilters && unitFilters.length > 0) {
+        queryBuilder.andWhere('unit.name IN (:...unitNames)', {
+          unitNames: unitFilters
+        });
+      }
+
+      if (variableFilters && variableFilters.length > 0) {
+        queryBuilder.andWhere('response.variableid IN (:...variableIds)', {
+          variableIds: variableFilters
+        });
+      }
+
+      const responses = await queryBuilder.getMany();
+      if (responses.length === 0) {
+        break;
+      }
+
+      const responseIds = responses.map(response => response.id);
+      const deleteResult = await this.responseRepository.delete({
+        id: In(responseIds)
+      });
+      deletedCount += deleteResult.affected || 0;
+    }
+
+    return deletedCount;
+  }
+
+  private buildEmptyCodingColumnsCondition(): string {
+    return [
+      'response.status_v1 IS NULL',
+      'response.code_v1 IS NULL',
+      'response.score_v1 IS NULL',
+      'response.status_v2 IS NULL',
+      'response.code_v2 IS NULL',
+      'response.score_v2 IS NULL',
+      'response.status_v3 IS NULL',
+      'response.code_v3 IS NULL',
+      'response.score_v3 IS NULL'
+    ].join(' AND ');
   }
 
   private async invalidateStatisticsCaches(

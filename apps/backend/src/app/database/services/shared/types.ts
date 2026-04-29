@@ -126,6 +126,7 @@ export interface CodedResponse {
   value?: string;
   status?: number;
   subform?: string | null;
+  isAutocoderGenerated?: boolean;
 
   code_v1?: number | null;
   status_v1?: string | null;

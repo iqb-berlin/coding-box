@@ -12,6 +12,7 @@ import { CodingVersionService } from '../../database/services/coding/coding-vers
 
 export interface ResetCodingVersionResult {
   affectedResponseCount: number;
+  deletedGeneratedResponseCount: number;
   cascadeResetVersions: ('v2' | 'v3')[];
   message: string;
 }

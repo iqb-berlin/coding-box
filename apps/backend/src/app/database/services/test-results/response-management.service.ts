@@ -26,19 +26,29 @@ export class ResponseManagementService {
     jobId?: string,
     isJobCancelled?: (jobId: string) => Promise<boolean>,
     progressCallback?: (progress: number) => void,
-    metrics?: { [key: string]: number }
+    metrics?: { [key: string]: number },
+    autocoderCleanup?: { unitIds: number[]; autoCoderRun: number }
   ): Promise<boolean> {
-    if (allCodedResponses.length === 0) {
-      await queryRunner.release();
-
-      if (workspaceId) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      }
-
-      return true;
-    }
     const updateStart = Date.now();
     try {
+      if (autocoderCleanup) {
+        await this.cleanupStaleAutocoderGeneratedResponses(
+          queryRunner,
+          autocoderCleanup,
+          allCodedResponses
+        );
+      }
+
+      if (allCodedResponses.length === 0) {
+        await queryRunner.release();
+
+        if (workspaceId) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        }
+
+        return true;
+      }
+
       const updateBatchSize = 500;
       const batches: CodedResponse[][] = [];
       for (let i = 0; i < allCodedResponses.length; i += updateBatchSize) {
@@ -69,20 +79,7 @@ export class ResponseManagementService {
         try {
           if (batch.length > 0) {
             const updatePromises = batch.map(response => {
-              const updateData: Partial<
-              Pick<
-              ResponseEntity,
-              | 'code_v1'
-              | 'status_v1'
-              | 'score_v1'
-              | 'code_v2'
-              | 'status_v2'
-              | 'score_v2'
-              | 'code_v3'
-              | 'status_v3'
-              | 'score_v3'
-              >
-              > = {};
+              const updateData: Partial<ResponseEntity> = {};
 
               if (response.code_v1 !== undefined) {
                 updateData.code_v1 = response.code_v1;
@@ -130,7 +127,8 @@ export class ResponseManagementService {
                   variableid: response.variableid,
                   value: response.value,
                   status: response.status,
-                  subform: response.subform || null
+                  subform: response.subform || null,
+                  is_autocoder_generated: response.isAutocoderGenerated === true
                 };
 
                 if (response.code_v1 !== undefined) newEntity.code_v1 = response.code_v1;
@@ -148,6 +146,15 @@ export class ResponseManagementService {
                   newEntity.status_v3 = response.status_v3 === null ? null : statusStringToNumber(response.status_v3);
                 }
                 if (response.score_v3 !== undefined) newEntity.score_v3 = response.score_v3;
+
+                if (response.isAutocoderGenerated) {
+                  return this.upsertAutocoderGeneratedResponse(
+                    queryRunner,
+                    response,
+                    newEntity,
+                    updateData
+                  );
+                }
 
                 return queryRunner.manager.insert(ResponseEntity, newEntity);
               }
@@ -218,6 +225,140 @@ export class ResponseManagementService {
       await queryRunner.release();
       return false;
     }
+  }
+
+  private async upsertAutocoderGeneratedResponse(
+    queryRunner: QueryRunner,
+    response: CodedResponse,
+    newEntity: Partial<ResponseEntity>,
+    updateData: Partial<ResponseEntity>
+  ): Promise<void> {
+    const generatedUpdateData: Partial<ResponseEntity> = {
+      ...updateData,
+      value: response.value,
+      status: response.status,
+      is_autocoder_generated: true
+    };
+
+    const updateResult = await queryRunner.manager
+      .createQueryBuilder()
+      .update(ResponseEntity)
+      .set(generatedUpdateData)
+      .where('unitid = :unitid', { unitid: response.unitid })
+      .andWhere('variableid = :variableid', { variableid: response.variableid })
+      .andWhere("COALESCE(subform, '') = :subform", {
+        subform: response.subform || ''
+      })
+      .andWhere('is_autocoder_generated = :generated', { generated: true })
+      .execute();
+
+    if ((updateResult.affected || 0) === 0) {
+      await queryRunner.manager.insert(ResponseEntity, {
+        ...newEntity,
+        is_autocoder_generated: true
+      });
+    }
+  }
+
+  private async cleanupStaleAutocoderGeneratedResponses(
+    queryRunner: QueryRunner,
+    cleanup: { unitIds: number[]; autoCoderRun: number },
+    allCodedResponses: CodedResponse[]
+  ): Promise<void> {
+    const unitIds = Array.from(new Set(cleanup.unitIds)).filter(Number.isFinite);
+    if (unitIds.length === 0) {
+      return;
+    }
+
+    const emittedGeneratedKeys = new Set(
+      allCodedResponses
+        .filter(response => response.isAutocoderGenerated)
+        .map(response => this.autocoderGeneratedKey(
+          response.unitid,
+          response.variableid,
+          response.subform
+        ))
+    );
+
+    const existingGenerated = await queryRunner.manager
+      .getRepository(ResponseEntity)
+      .createQueryBuilder('response')
+      .select([
+        'response.id',
+        'response.unitid',
+        'response.variableid',
+        'response.subform'
+      ])
+      .where('response.unitid IN (:...unitIds)', { unitIds })
+      .andWhere('response.is_autocoder_generated = :generated', {
+        generated: true
+      })
+      .getMany();
+
+    const staleIds = existingGenerated
+      .filter(response => !emittedGeneratedKeys.has(
+        this.autocoderGeneratedKey(
+          response.unitid,
+          response.variableid,
+          response.subform
+        )
+      ))
+      .map(response => response.id);
+
+    if (staleIds.length === 0) {
+      return;
+    }
+
+    const clearData: Partial<ResponseEntity> = cleanup.autoCoderRun === 1 ?
+      {
+        code_v1: null,
+        status_v1: null,
+        score_v1: null,
+        code_v2: null,
+        status_v2: null,
+        score_v2: null,
+        code_v3: null,
+        status_v3: null,
+        score_v3: null
+      } :
+      {
+        code_v3: null,
+        status_v3: null,
+        score_v3: null
+      };
+
+    await queryRunner.manager
+      .createQueryBuilder()
+      .update(ResponseEntity)
+      .set(clearData)
+      .where('id IN (:...staleIds)', { staleIds })
+      .execute();
+
+    await queryRunner.manager.query(
+      `
+        DELETE FROM response
+        WHERE id = ANY($1)
+          AND is_autocoder_generated = TRUE
+          AND code_v1 IS NULL
+          AND status_v1 IS NULL
+          AND score_v1 IS NULL
+          AND code_v2 IS NULL
+          AND status_v2 IS NULL
+          AND score_v2 IS NULL
+          AND code_v3 IS NULL
+          AND status_v3 IS NULL
+          AND score_v3 IS NULL
+      `,
+      [staleIds]
+    );
+  }
+
+  private autocoderGeneratedKey(
+    unitid?: number,
+    variableid?: string,
+    subform?: string | null
+  ): string {
+    return `${unitid ?? ''}|${variableid ?? ''}|${subform || ''}`;
   }
 
   async resolveDuplicateResponses(

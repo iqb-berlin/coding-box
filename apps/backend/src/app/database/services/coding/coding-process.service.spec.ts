@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import * as Autocoder from '@iqb/responses';
 import { Repository } from 'typeorm';
 import { CodingProcessService } from './coding-process.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
@@ -102,6 +103,7 @@ describe('CodingProcessService', () => {
     score_v1: null,
     score_v2: null,
     score_v3: null,
+    is_autocoder_generated: false,
     subform: '',
     unit: undefined
   });
@@ -394,6 +396,62 @@ describe('CodingProcessService', () => {
       const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
 
       expect(result.totalResponses).toBe(2);
+    });
+
+    it('should mark generated autocoder outputs and exclude generated rows from the next input query', async () => {
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: 'derived_var',
+          value: 'derived value',
+          status: 'VALUE_CHANGED',
+          code: 1,
+          score: 1,
+          subform: ''
+        }
+      ]);
+
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([mockResponses[0]]);
+
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['var1'])]
+        ])
+      );
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 1);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      );
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              isNew: true,
+              isAutocoderGenerated: true,
+              variableid: 'derived_var',
+              code_v1: 1,
+              status_v1: 'VALUE_CHANGED',
+              code_v2: null,
+              status_v2: null,
+              code_v3: null,
+              status_v3: null
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 1
+          })
+        );
     });
 
     it('should call progress callback at appropriate intervals', async () => {
