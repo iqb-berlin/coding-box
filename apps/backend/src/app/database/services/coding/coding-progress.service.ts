@@ -8,6 +8,39 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { Setting } from '../../entities/setting.entity';
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+
+type ResponseMatchingFlag =
+  | 'NO_AGGREGATION'
+  | 'IGNORE_CASE'
+  | 'IGNORE_WHITESPACE';
+
+interface CoverageResponse {
+  responseId: number;
+  unitName: string;
+  variableId: string;
+  value: string | null;
+  codeV2: number | null;
+  statusV2: number | null;
+}
+
+interface EffectiveCaseCoverage {
+  effectiveTotalCasesToCode: number;
+  effectiveCasesInJobs: number;
+  effectiveUnassignedCases: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+}
+
+interface EffectiveCaseProgress {
+  effectiveTotalCasesToCode: number;
+  effectiveCompletedCases: number;
+  aggregationActive: boolean;
+  aggregationThreshold: number | null;
+  aggregatedDuplicateCases: number;
+}
 
 @Injectable()
 export class CodingProgressService {
@@ -21,15 +54,24 @@ export class CodingProgressService {
     @InjectRepository(JobDefinition)
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
-    private variableBundleRepository: Repository<VariableBundle>
+    private variableBundleRepository: Repository<VariableBundle>,
+    @InjectRepository(Setting)
+    private settingRepository: Repository<Setting>,
+    private workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async getCodingProgressOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
     completedCases: number;
     completionPercentage: number;
+    rawTotalCasesToCode: number;
+    rawCompletedCases: number;
+    rawCompletionPercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
-    const totalCasesToCode = await this.responseRepository
+    const rawTotalCasesToCode = await this.responseRepository
       .createQueryBuilder('response')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
@@ -56,45 +98,93 @@ export class CodingProgressService {
       }))
       .getCount();
 
-    const completedCasesResult = await this.codingJobUnitRepository
-      .createQueryBuilder('cju')
-      .innerJoin('cju.coding_job', 'coding_job')
-      .innerJoin('cju.response', 'response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.person', 'person')
-      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('coding_job.training_id IS NULL')
-      .andWhere('cju.code IS NOT NULL')
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: [
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE')
-        ]
-      })
-      .select('COUNT(DISTINCT cju.response_id)', 'count')
-      .getRawOne();
-
-    const completedCases = parseInt(completedCasesResult?.count || '0', 10);
-
+    const completedResponseIds = await this.getCompletedCoverageResponseIds(workspaceId);
+    const completedCases = completedResponseIds.size;
+    const rawCompletionPercentage =
+      rawTotalCasesToCode > 0 ? (completedCases / rawTotalCasesToCode) * 100 : 0;
+    const effectiveProgress = await this.getEffectiveCaseProgress(
+      workspaceId,
+      completedResponseIds
+    );
     const completionPercentage =
-      totalCasesToCode > 0 ? (completedCases / totalCasesToCode) * 100 : 0;
+      effectiveProgress.effectiveTotalCasesToCode > 0 ?
+        (effectiveProgress.effectiveCompletedCases / effectiveProgress.effectiveTotalCasesToCode) * 100 :
+        0;
 
     return {
-      totalCasesToCode,
-      completedCases,
-      completionPercentage
+      totalCasesToCode: effectiveProgress.effectiveTotalCasesToCode,
+      completedCases: effectiveProgress.effectiveCompletedCases,
+      completionPercentage,
+      rawTotalCasesToCode,
+      rawCompletedCases: completedCases,
+      rawCompletionPercentage,
+      aggregationActive: effectiveProgress.aggregationActive,
+      aggregationThreshold: effectiveProgress.aggregationThreshold,
+      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
+    };
+  }
+
+  async getAppliedResultsOverview(workspaceId: number): Promise<{
+    totalIncompleteResponses: number;
+    appliedResponses: number;
+    remainingResponses: number;
+    completionPercentage: number;
+    rawTotalIncompleteResponses: number;
+    rawAppliedResponses: number;
+    rawCompletionPercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
+  }> {
+    const responses = await this.getCoverageResponses(workspaceId);
+    const appliedResponseIds = new Set(
+      responses
+        .filter(response => this.isAppliedResultResponse(response))
+        .map(response => response.responseId)
+    );
+    const effectiveProgress = await this.getEffectiveCaseProgress(
+      workspaceId,
+      appliedResponseIds,
+      responses
+    );
+    const completionPercentage =
+      effectiveProgress.effectiveTotalCasesToCode > 0 ?
+        (effectiveProgress.effectiveCompletedCases / effectiveProgress.effectiveTotalCasesToCode) * 100 :
+        0;
+    const rawCompletionPercentage =
+      responses.length > 0 ? (appliedResponseIds.size / responses.length) * 100 : 0;
+
+    return {
+      totalIncompleteResponses: effectiveProgress.effectiveTotalCasesToCode,
+      appliedResponses: effectiveProgress.effectiveCompletedCases,
+      remainingResponses: Math.max(
+        0,
+        effectiveProgress.effectiveTotalCasesToCode - effectiveProgress.effectiveCompletedCases
+      ),
+      completionPercentage,
+      rawTotalIncompleteResponses: responses.length,
+      rawAppliedResponses: appliedResponseIds.size,
+      rawCompletionPercentage,
+      aggregationActive: effectiveProgress.aggregationActive,
+      aggregationThreshold: effectiveProgress.aggregationThreshold,
+      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
     };
   }
 
   async getCaseCoverageOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
+    effectiveTotalCasesToCode: number;
     casesInJobs: number;
+    effectiveCasesInJobs: number;
     doubleCodedCases: number;
     singleCodedCases: number;
     unassignedCases: number;
+    effectiveUnassignedCases: number;
     coveragePercentage: number;
+    rawCoveragePercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     const totalCasesToCode = await this.responseRepository
       .createQueryBuilder('response')
@@ -196,17 +286,281 @@ export class CodingProgressService {
 
     const singleCodedCases = uniqueCasesInJobs;
     const unassignedCases = totalCasesToCode - uniqueCasesInJobs;
-    const coveragePercentage =
+    const rawCoveragePercentage =
       totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
+    const effectiveCoverage = await this.getEffectiveCaseCoverage(workspaceId);
+    const coveragePercentage =
+      effectiveCoverage.effectiveTotalCasesToCode > 0 ?
+        (effectiveCoverage.effectiveCasesInJobs / effectiveCoverage.effectiveTotalCasesToCode) * 100 :
+        0;
 
     return {
       totalCasesToCode,
+      effectiveTotalCasesToCode: effectiveCoverage.effectiveTotalCasesToCode,
       casesInJobs,
+      effectiveCasesInJobs: effectiveCoverage.effectiveCasesInJobs,
       doubleCodedCases,
       singleCodedCases,
       unassignedCases,
-      coveragePercentage
+      effectiveUnassignedCases: effectiveCoverage.effectiveUnassignedCases,
+      coveragePercentage,
+      rawCoveragePercentage,
+      aggregationActive: effectiveCoverage.aggregationActive,
+      aggregationThreshold: effectiveCoverage.aggregationThreshold,
+      aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases
     };
+  }
+
+  private async getEffectiveCaseCoverage(workspaceId: number): Promise<EffectiveCaseCoverage> {
+    const responses = await this.getCoverageResponses(workspaceId);
+    const assignedResponseIds = await this.getAssignedCoverageResponseIds(workspaceId);
+    const effectiveProgress = await this.getEffectiveCaseProgress(
+      workspaceId,
+      assignedResponseIds,
+      responses
+    );
+
+    return {
+      effectiveTotalCasesToCode: effectiveProgress.effectiveTotalCasesToCode,
+      effectiveCasesInJobs: effectiveProgress.effectiveCompletedCases,
+      effectiveUnassignedCases:
+        effectiveProgress.effectiveTotalCasesToCode - effectiveProgress.effectiveCompletedCases,
+      aggregationActive: effectiveProgress.aggregationActive,
+      aggregationThreshold: effectiveProgress.aggregationThreshold,
+      aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases
+    };
+  }
+
+  private async getEffectiveCaseProgress(
+    workspaceId: number,
+    completedResponseIds: Set<number>,
+    providedResponses?: CoverageResponse[]
+  ): Promise<EffectiveCaseProgress> {
+    const responses = providedResponses || await this.getCoverageResponses(workspaceId);
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+    const aggregationActive =
+      aggregationThreshold !== null && !matchingFlags.includes('NO_AGGREGATION');
+
+    if (!aggregationActive) {
+      const effectiveCompletedCases = responses
+        .filter(response => completedResponseIds.has(response.responseId))
+        .length;
+
+      return {
+        effectiveTotalCasesToCode: responses.length,
+        effectiveCompletedCases,
+        aggregationActive,
+        aggregationThreshold,
+        aggregatedDuplicateCases: 0
+      };
+    }
+
+    const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
+    const groupedResponses = new Map<string, CoverageResponse[]>();
+
+    for (const response of responses) {
+      const variableKey = `${response.unitName.toUpperCase()}::${response.variableId}`;
+      const isDerivedVariable = derivedVariableMap.get(response.unitName.toUpperCase())?.has(response.variableId) ?? false;
+      const groupKey = isDerivedVariable ?
+        `${variableKey}::${response.responseId}` :
+        `${variableKey}::${this.normalizeValue(response.value, matchingFlags)}`;
+      const group = groupedResponses.get(groupKey) || [];
+      group.push(response);
+      groupedResponses.set(groupKey, group);
+    }
+
+    let effectiveTotalCasesToCode = 0;
+    let effectiveCasesInJobs = 0;
+    let aggregatedDuplicateCases = 0;
+
+    groupedResponses.forEach(group => {
+      if (aggregationThreshold !== null && group.length >= aggregationThreshold) {
+        effectiveTotalCasesToCode += 1;
+        if (group.some(response => completedResponseIds.has(response.responseId))) {
+          effectiveCasesInJobs += 1;
+        }
+        aggregatedDuplicateCases += group.length - 1;
+      } else {
+        effectiveTotalCasesToCode += group.length;
+        effectiveCasesInJobs += group
+          .filter(response => completedResponseIds.has(response.responseId))
+          .length;
+      }
+    });
+
+    return {
+      effectiveTotalCasesToCode,
+      effectiveCompletedCases: effectiveCasesInJobs,
+      aggregationActive,
+      aggregationThreshold,
+      aggregatedDuplicateCases
+    };
+  }
+
+  private async getCoverageResponses(workspaceId: number): Promise<CoverageResponse[]> {
+    const raw = await this.responseRepository
+      .createQueryBuilder('response')
+      .select('response.id', 'responseId')
+      .addSelect('response.value', 'value')
+      .addSelect('response.code_v2', 'codeV2')
+      .addSelect('response.status_v2', 'statusV2')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('unit.name', 'unitName')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))')
+      .orderBy('response.id', 'ASC')
+      .getRawMany();
+
+    return raw.map(row => ({
+      responseId: Number(row.responseId),
+      value: row.value ?? null,
+      codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
+      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
+      variableId: row.variableId,
+      unitName: row.unitName
+    }));
+  }
+
+  private async getCompletedCoverageResponseIds(workspaceId: number): Promise<Set<number>> {
+    const raw = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('cju.response', 'response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('cju.code IS NOT NULL')
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .select('DISTINCT cju.response_id', 'responseId')
+      .getRawMany();
+
+    return new Set(raw.map(row => Number(row.responseId)));
+  }
+
+  private isAppliedResultResponse(response: CoverageResponse): boolean {
+    const appliedStatuses = [
+      statusStringToNumber('CODING_COMPLETE'),
+      statusStringToNumber('INVALID'),
+      statusStringToNumber('CODING_ERROR')
+    ];
+
+    return (
+      response.statusV2 !== null &&
+      appliedStatuses.includes(response.statusV2) &&
+      (response.codeV2 === null || response.codeV2 >= 0)
+    );
+  }
+
+  private async getAssignedCoverageResponseIds(workspaceId: number): Promise<Set<number>> {
+    const raw = await this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('DISTINCT cju.response_id', 'responseId')
+      .innerJoin('cju.response', 'response')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .leftJoin('response.unit', 'unit')
+      .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.person', 'person')
+      .where('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere(new Brackets(qb => {
+        qb.where('response.code_v2 IS NULL')
+          .orWhere(subQuery => {
+            const exists = subQuery
+              .subQuery()
+              .select('1')
+              .from('coding_job_unit', 'cju')
+              .where('cju.response_id = response.id')
+              .getQuery();
+            return `EXISTS (${exists})`;
+          });
+      }))
+      .getRawMany();
+
+    return new Set(raw.map(row => Number(row.responseId)));
+  }
+
+  private async getAggregationThreshold(workspaceId: number): Promise<number | null> {
+    const setting = await this.settingRepository.findOne({
+      where: { key: `workspace-${workspaceId}-duplicate-aggregation-threshold` }
+    });
+
+    if (!setting) {
+      return 2;
+    }
+
+    if (setting.content === 'disabled' || setting.content === '0') {
+      return null;
+    }
+
+    const parsedThreshold = parseInt(setting.content, 10);
+    return Number.isNaN(parsedThreshold) ? 2 : parsedThreshold;
+  }
+
+  private async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
+    const setting = await this.settingRepository.findOne({
+      where: { key: `workspace-${workspaceId}-response-matching-mode` }
+    });
+
+    if (!setting) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(setting.content);
+      return Array.isArray(parsed.flags) ? parsed.flags : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private normalizeValue(value: string | null, flags: ResponseMatchingFlag[]): string {
+    let normalized = value ?? '';
+
+    if (flags.includes('IGNORE_CASE')) {
+      normalized = normalized.toLowerCase();
+    }
+
+    if (flags.includes('IGNORE_WHITESPACE')) {
+      normalized = normalized.replace(/\s+/g, '');
+    }
+
+    return normalized;
+  }
+
+  private async getDerivedVariableMap(workspaceId: number): Promise<Map<string, Set<string>>> {
+    try {
+      return await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn(`Could not load derived variable map for workspace ${workspaceId}: ${message}`);
+      return new Map<string, Set<string>>();
+    }
   }
 
   async getVariableCoverageOverview(workspaceId: number): Promise<{

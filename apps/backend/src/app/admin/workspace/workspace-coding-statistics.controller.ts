@@ -162,7 +162,32 @@ export class WorkspaceCodingStatisticsController {
         },
         completionPercentage: {
           type: 'number',
-          description: 'Percentage of coding completion'
+          description: 'Percentage of coding completion after duplicate aggregation'
+        },
+        rawTotalCasesToCode: {
+          type: 'number',
+          description: 'Raw total number of cases before duplicate aggregation'
+        },
+        rawCompletedCases: {
+          type: 'number',
+          description: 'Raw number of completed cases before duplicate aggregation'
+        },
+        rawCompletionPercentage: {
+          type: 'number',
+          description: 'Raw percentage of coding completion before duplicate aggregation'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Current duplicate aggregation threshold'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw responses collapsed by duplicate aggregation'
         }
       }
     }
@@ -173,8 +198,84 @@ export class WorkspaceCodingStatisticsController {
         totalCasesToCode: number;
         completedCases: number;
         completionPercentage: number;
+        rawTotalCasesToCode: number;
+        rawCompletedCases: number;
+        rawCompletionPercentage: number;
+        aggregationActive: boolean;
+        aggregationThreshold: number | null;
+        aggregatedDuplicateCases: number;
       }> {
     return this.codingProgressService.getCodingProgressOverview(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/applied-results-overview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Applied results overview retrieved successfully.',
+    schema: {
+      type: 'object',
+      properties: {
+        totalIncompleteResponses: {
+          type: 'number',
+          description: 'Total cases after duplicate aggregation'
+        },
+        appliedResponses: {
+          type: 'number',
+          description: 'Applied result cases after duplicate aggregation'
+        },
+        remainingResponses: {
+          type: 'number',
+          description: 'Remaining result cases after duplicate aggregation'
+        },
+        completionPercentage: {
+          type: 'number',
+          description: 'Applied results completion percentage after duplicate aggregation'
+        },
+        rawTotalIncompleteResponses: {
+          type: 'number',
+          description: 'Raw total responses before duplicate aggregation'
+        },
+        rawAppliedResponses: {
+          type: 'number',
+          description: 'Raw applied responses before duplicate aggregation'
+        },
+        rawCompletionPercentage: {
+          type: 'number',
+          description: 'Raw applied results completion percentage before duplicate aggregation'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Current duplicate aggregation threshold'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw responses collapsed by duplicate aggregation'
+        }
+      }
+    }
+  })
+  async getAppliedResultsOverview(
+    @WorkspaceId() workspace_id: number
+  ): Promise<{
+        totalIncompleteResponses: number;
+        appliedResponses: number;
+        remainingResponses: number;
+        completionPercentage: number;
+        rawTotalIncompleteResponses: number;
+        rawAppliedResponses: number;
+        rawCompletionPercentage: number;
+        aggregationActive: boolean;
+        aggregationThreshold: number | null;
+        aggregatedDuplicateCases: number;
+      }> {
+    return this.codingProgressService.getAppliedResultsOverview(workspace_id);
   }
 
   @Get(':workspace_id/coding/case-coverage-overview')
@@ -188,11 +289,19 @@ export class WorkspaceCodingStatisticsController {
       properties: {
         totalCasesToCode: {
           type: 'number',
-          description: 'Total number of cases that need to be coded'
+          description: 'Raw total number of cases that need to be coded'
+        },
+        effectiveTotalCasesToCode: {
+          type: 'number',
+          description: 'Total number of cases after duplicate aggregation is applied'
         },
         casesInJobs: {
           type: 'number',
           description: 'Number of cases assigned to coding jobs'
+        },
+        effectiveCasesInJobs: {
+          type: 'number',
+          description: 'Number of aggregation-adjusted cases covered by coding jobs'
         },
         doubleCodedCases: {
           type: 'number',
@@ -204,22 +313,50 @@ export class WorkspaceCodingStatisticsController {
         },
         unassignedCases: {
           type: 'number',
-          description: 'Number of cases not assigned to any coding job'
+          description: 'Raw number of cases not assigned to any coding job'
+        },
+        effectiveUnassignedCases: {
+          type: 'number',
+          description: 'Number of aggregation-adjusted cases not assigned to any coding job'
         },
         coveragePercentage: {
           type: 'number',
-          description: 'Percentage of cases covered by coding jobs'
+          description: 'Percentage of aggregation-adjusted cases covered by coding jobs'
+        },
+        rawCoveragePercentage: {
+          type: 'number',
+          description: 'Percentage of raw cases covered by coding jobs'
+        },
+        aggregationActive: {
+          type: 'boolean',
+          description: 'Whether duplicate aggregation is active for this workspace'
+        },
+        aggregationThreshold: {
+          type: 'number',
+          nullable: true,
+          description: 'Duplicate aggregation threshold, or null when disabled'
+        },
+        aggregatedDuplicateCases: {
+          type: 'number',
+          description: 'Number of raw cases collapsed by duplicate aggregation'
         }
       }
     }
   })
   async getCaseCoverageOverview(@WorkspaceId() workspace_id: number): Promise<{
     totalCasesToCode: number;
+    effectiveTotalCasesToCode: number;
     casesInJobs: number;
+    effectiveCasesInJobs: number;
     doubleCodedCases: number;
     singleCodedCases: number;
     unassignedCases: number;
+    effectiveUnassignedCases: number;
     coveragePercentage: number;
+    rawCoveragePercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     return this.codingProgressService.getCaseCoverageOverview(workspace_id);
   }

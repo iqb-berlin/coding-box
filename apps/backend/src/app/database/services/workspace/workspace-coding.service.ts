@@ -494,11 +494,18 @@ export class WorkspaceCodingService {
 
   async getCaseCoverageOverview(workspaceId: number): Promise<{
     totalCasesToCode: number;
+    effectiveTotalCasesToCode: number;
     casesInJobs: number;
+    effectiveCasesInJobs: number;
     doubleCodedCases: number;
     singleCodedCases: number;
     unassignedCases: number;
+    effectiveUnassignedCases: number;
     coveragePercentage: number;
+    rawCoveragePercentage: number;
+    aggregationActive: boolean;
+    aggregationThreshold: number | null;
+    aggregatedDuplicateCases: number;
   }> {
     return this.codingProgressService.getCaseCoverageOverview(workspaceId);
   }
