@@ -100,7 +100,7 @@ describe('CodingVersionService', () => {
         { codedStatuses: [1, 2, 3] }
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        '(response.status_v3 IS NOT NULL OR response.status_v2 IS NOT NULL OR response.status_v1 IS NOT NULL)'
+        '(response.status_v1 IS NOT NULL OR response.code_v1 IS NOT NULL OR response.score_v1 IS NOT NULL OR response.status_v2 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.score_v2 IS NOT NULL OR response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL)'
       );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
@@ -136,7 +136,7 @@ describe('CodingVersionService', () => {
         }
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        '(response.status_v3 IS NOT NULL OR response.status_v2 IS NOT NULL)'
+        '(response.status_v2 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.score_v2 IS NOT NULL OR response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL)'
       );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
@@ -168,10 +168,34 @@ describe('CodingVersionService', () => {
         }
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'response.status_v3 IS NOT NULL'
+        '(response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL)'
       );
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
+    });
+
+    it('should target v1 rows when only code or score values remain', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const mockResponses = [{ id: 1 }, { id: 2 }];
+
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+      mockQueryBuilder.getMany.mockResolvedValueOnce(mockResponses).mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 2 });
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        '(response.status_v1 IS NOT NULL OR response.code_v1 IS NOT NULL OR response.score_v1 IS NOT NULL OR response.status_v2 IS NOT NULL OR response.code_v2 IS NOT NULL OR response.score_v2 IS NOT NULL OR response.status_v3 IS NOT NULL OR response.code_v3 IS NOT NULL OR response.score_v3 IS NOT NULL)'
+      );
+      expect(mockResponseRepository.update).toHaveBeenCalledWith(
+        { id: expect.anything() },
+        expect.objectContaining({
+          status_v1: null,
+          code_v1: null,
+          score_v1: null
+        })
+      );
     });
 
     it('should apply unit filters when provided', async () => {
@@ -229,6 +253,9 @@ describe('CodingVersionService', () => {
         message: 'No responses found matching the filters for version v1'
       });
       expect(mockResponseRepository.update).not.toHaveBeenCalled();
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
+      expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
     });
 
     it('should handle large batches correctly', async () => {
