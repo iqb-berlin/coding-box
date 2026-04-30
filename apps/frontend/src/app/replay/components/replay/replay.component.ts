@@ -20,7 +20,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { logger } from 'nx/src/utils/logger';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
-import { ReplayBackendService, ReplayClientTimings } from '../../services/replay-backend.service';
+import {
+  ReplayBackendService,
+  ReplayClientTimings,
+  ReplayServerTimings
+} from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -100,9 +104,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private replayStartTime: number = 0; // Track when replay viewing starts
   private routeStartTime: number = 0;
+  private loadStartTime: number = 0;
   private payloadRequestStartTime: number = 0;
   private payloadResponseTime: number = 0;
   private playerReadyTime: number = 0;
+  private serverTimings: ReplayServerTimings | null = null;
   private successStoredForCurrentReplay: boolean = false;
   protected reloadKey: number = 0;
   workspaceId: number = 0;
@@ -377,6 +383,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       const { unitIdInput } = changes;
       try {
+        this.routeStartTime = 0;
         this.unitId = unitIdInput.currentValue;
         this.setTestPerson(this.testPersonInput() || '');
         const unitData = await this.getUnitData(this.appService.selectedWorkspaceId, this.authToken);
@@ -400,13 +407,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }[];
       },
       player: FilesDto[],
-      vocs: FilesDto[]
+      vocs: FilesDto[],
+      serverTimings?: ReplayServerTimings
     }
   ) {
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
     this.responses = unitData.response;
+    this.serverTimings = unitData.serverTimings ?? null;
 
     if (this.isCodingMode && unitData.vocs && unitData.vocs[0] && unitData.vocs[0].data) {
       this.codingService.setCodingSchemeFromVocsData(unitData.vocs[0].data);
@@ -443,12 +452,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }[];
       },
       player: FilesDto[],
-      vocs: FilesDto[]
+      vocs: FilesDto[],
+      serverTimings?: ReplayServerTimings
     }> {
     this.replayStartTime = performance.now();
-    this.payloadRequestStartTime = performance.now();
+    this.loadStartTime = this.replayStartTime;
+    this.payloadRequestStartTime = this.replayStartTime;
     this.payloadResponseTime = 0;
     this.playerReadyTime = 0;
+    this.serverTimings = null;
     this.successStoredForCurrentReplay = false;
     this.isLoaded.next(false);
     const unitData = await firstValueFrom(
@@ -467,7 +479,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       unitDef: unitData.unitDef,
       response: unitData.response,
       vocs: unitData.vocs,
-      player: unitData.player
+      player: unitData.player,
+      serverTimings: unitData.serverTimings
     };
   }
 
@@ -521,7 +534,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return;
     }
     const now = performance.now();
-    const routeToVisible = this.routeStartTime ? Math.round(now - this.routeStartTime) : 0;
+    const routeToVisible = this.routeStartTime ? Math.round(now - this.routeStartTime) : null;
+    const loadToVisible = this.loadStartTime ? Math.round(now - this.loadStartTime) : null;
+    const routeToPayloadRequest = (this.routeStartTime && this.payloadRequestStartTime) ?
+      Math.round(this.payloadRequestStartTime - this.routeStartTime) :
+      null;
     const payloadDuration = (this.payloadRequestStartTime && this.payloadResponseTime) ?
       Math.round(this.payloadResponseTime - this.payloadRequestStartTime) :
       0;
@@ -533,7 +550,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       Math.round(now - this.playerReadyTime) :
       null;
     logger.log(
-      `Replay timings unit=${this.unitId} routeToVisible=${routeToVisible}ms ` +
+      `Replay timings unit=${this.unitId} routeToVisible=${routeToVisible ?? 'n/a'}ms ` +
+      `loadToVisible=${loadToVisible ?? 'n/a'}ms ` +
+      `routeToPayloadRequest=${routeToPayloadRequest ?? 'n/a'}ms ` +
       `payload=${payloadDuration}ms payloadToVisible=${payloadToVisible}ms ` +
       `payloadToPlayerReady=${payloadToPlayerReady ?? 'n/a'}ms ` +
       `playerReadyToVisible=${playerReadyToVisible ?? 'n/a'}ms`
@@ -545,6 +564,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private getClientTimings(visibleTime: number = performance.now()): ReplayClientTimings {
     const routeToVisible = this.routeStartTime ? Math.round(visibleTime - this.routeStartTime) : null;
+    const loadToVisibleMs = this.loadStartTime ? Math.round(visibleTime - this.loadStartTime) : null;
+    const routeToPayloadRequestMs = (this.routeStartTime && this.payloadRequestStartTime) ?
+      Math.round(this.payloadRequestStartTime - this.routeStartTime) :
+      null;
     const payloadMs = (this.payloadRequestStartTime && this.payloadResponseTime) ?
       Math.round(this.payloadResponseTime - this.payloadRequestStartTime) :
       null;
@@ -560,6 +583,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
     return {
       routeToVisibleMs: routeToVisible,
+      loadToVisibleMs,
+      routeToPayloadRequestMs,
       payloadMs,
       payloadToVisibleMs,
       payloadToPlayerReadyMs,
@@ -587,7 +612,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       replayUrl,
       success,
       errorMessage,
-      clientTimings: this.getClientTimings()
+      clientTimings: this.getClientTimings(),
+      serverTimings: this.serverTimings ?? undefined
     }).subscribe({
       next: () => {
         logger.log(
@@ -638,6 +664,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (!unit) return;
+    this.routeStartTime = 0;
     const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
     const incomingTestPerson = unitAny.testPerson;
 
@@ -710,6 +737,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitDef = '';
     this.page = undefined;
     this.responses = undefined;
+    this.serverTimings = null;
     this.codingService.resetCodingData();
   }
 

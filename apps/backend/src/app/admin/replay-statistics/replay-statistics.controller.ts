@@ -55,6 +55,7 @@ export class ReplayStatisticsController {
                              success?: boolean;
                              errorMessage?: string;
                              clientTimings?: Record<string, number | null>;
+                             serverTimings?: Record<string, number | null>;
                            }
   ): Promise<ReplayStatistics> {
     return this.replayStatisticsService.storeReplayStatistics({

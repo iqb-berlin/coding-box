@@ -46,4 +46,7 @@ export class ReplayStatistics {
 
   @Column({ type: 'jsonb', nullable: true })
     client_timings: Record<string, number | null>;
+
+  @Column({ type: 'jsonb', nullable: true })
+    server_timings: Record<string, number | null>;
 }

@@ -39,7 +39,8 @@ class ReplayBackendServiceMock {
     unitDef: [{ data: 'unitDef data', file_id: 'UNIT-123.VOUD' }],
     response: { responses: [{ id: '1', content: 'response data' }] },
     vocs: [],
-    player: [{ data: 'player data', file_id: 'PLAYER-1.0' }]
+    player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
+    serverTimings: { totalMs: 111, findPlayerMs: 99 }
   }));
 
   storeReplayStatistics = jest.fn().mockReturnValue(of({ success: true }));
@@ -70,6 +71,7 @@ describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
   let snackBar: MatSnackBarMock;
+  let replayBackendService: ReplayBackendServiceMock;
 
   beforeEach(async () => {
     // Spy on token validation
@@ -97,6 +99,7 @@ describe('ReplayComponent', () => {
     fixture = TestBed.createComponent(ReplayComponent);
     component = fixture.componentInstance;
     snackBar = TestBed.inject(MatSnackBar) as unknown as MatSnackBarMock;
+    replayBackendService = TestBed.inject(ReplayBackendService) as unknown as ReplayBackendServiceMock;
     fixture.detectChanges();
     await fixture.whenStable();
   });
@@ -114,6 +117,11 @@ describe('ReplayComponent', () => {
     expect(component.player).toBe('player data');
     expect(component.unitDef).toBe('unitDef data');
     expect(component.responses).toBeDefined();
+  });
+
+  it('should keep server timings from replay payload', () => {
+    expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
+      .toEqual({ totalMs: 111, findPlayerMs: 99 });
   });
 
   it('should handle invalid testPerson in setTestPerson', () => {
@@ -232,6 +240,99 @@ describe('ReplayComponent', () => {
     expect(resetSpy).toHaveBeenCalled();
     expect(component.unitId).toBe('');
     expect(component.player).toBe('');
+  });
+
+  it('should calculate route and load timings for route-driven loads', () => {
+    const privateComponent = component as unknown as {
+      routeStartTime: number;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      getClientTimings: (visibleTime: number) => Record<string, number | null>;
+    };
+
+    privateComponent.routeStartTime = 100;
+    privateComponent.loadStartTime = 300;
+    privateComponent.payloadRequestStartTime = 300;
+    privateComponent.payloadResponseTime = 500;
+    privateComponent.playerReadyTime = 650;
+
+    expect(privateComponent.getClientTimings(900)).toEqual({
+      routeToVisibleMs: 800,
+      loadToVisibleMs: 600,
+      routeToPayloadRequestMs: 200,
+      payloadMs: 200,
+      payloadToVisibleMs: 400,
+      payloadToPlayerReadyMs: 150,
+      playerReadyToVisibleMs: 250
+    });
+  });
+
+  it('should omit route timings for non-route unit changes', () => {
+    const privateComponent = component as unknown as {
+      routeStartTime: number;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      getClientTimings: (visibleTime: number) => Record<string, number | null>;
+    };
+
+    privateComponent.routeStartTime = 0;
+    privateComponent.loadStartTime = 200;
+    privateComponent.payloadRequestStartTime = 200;
+    privateComponent.payloadResponseTime = 450;
+    privateComponent.playerReadyTime = 600;
+
+    expect(privateComponent.getClientTimings(900)).toEqual({
+      routeToVisibleMs: null,
+      loadToVisibleMs: 700,
+      routeToPayloadRequestMs: null,
+      payloadMs: 250,
+      payloadToVisibleMs: 450,
+      payloadToPlayerReadyMs: 150,
+      playerReadyToVisibleMs: 300
+    });
+  });
+
+  it('should store server timings together with replay statistics', () => {
+    const privateComponent = component as unknown as {
+      routeStartTime: number;
+      loadStartTime: number;
+      payloadRequestStartTime: number;
+      payloadResponseTime: number;
+      playerReadyTime: number;
+      serverTimings: Record<string, number> | null;
+      storeReplayStatistics: (success: boolean, duration: number, errorMessage?: string) => void;
+    };
+
+    replayBackendService.storeReplayStatistics.mockClear();
+    privateComponent.routeStartTime = 100;
+    privateComponent.loadStartTime = 300;
+    privateComponent.payloadRequestStartTime = 300;
+    privateComponent.payloadResponseTime = 500;
+    privateComponent.playerReadyTime = 650;
+    privateComponent.serverTimings = { totalMs: 111, findPlayerMs: 99 };
+
+    privateComponent.storeReplayStatistics(true, 800);
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        durationMilliseconds: 800,
+        success: true,
+        serverTimings: { totalMs: 111, findPlayerMs: 99 },
+        clientTimings: expect.objectContaining({
+          routeToVisibleMs: expect.any(Number),
+          loadToVisibleMs: expect.any(Number),
+          routeToPayloadRequestMs: 200,
+          payloadMs: 200,
+          payloadToPlayerReadyMs: 150,
+          playerReadyToVisibleMs: expect.any(Number)
+        })
+      })
+    );
   });
   describe('onKeyDown', () => {
     it('should ignore shortcuts when an input is focused', () => {

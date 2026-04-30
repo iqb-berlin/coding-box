@@ -113,6 +113,7 @@ export class WorkspaceCodingReplayController {
         };
         player: FilesDto[];
         vocs: FilesDto[];
+        serverTimings: Record<string, number>;
       }> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};
@@ -167,18 +168,20 @@ export class WorkspaceCodingReplayController {
       }
 
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      const serverTimings = {
+        ...timings,
+        totalMs
+      };
       this.logger.debug(
-        `Replay payload timings ws=${workspaceId} unit=${normalizedUnitId}: ${JSON.stringify({
-          ...timings,
-          totalMs
-        })}`
+        `Replay payload timings ws=${workspaceId} unit=${normalizedUnitId}: ${JSON.stringify(serverTimings)}`
       );
 
       return {
         unitDef,
         response,
         player,
-        vocs
+        vocs,
+        serverTimings
       };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));

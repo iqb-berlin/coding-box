@@ -17,9 +17,11 @@ export type ReplayStatisticsResponse = {
   success?: boolean;
   errorMessage?: string;
   clientTimings?: Record<string, number | null>;
+  serverTimings?: Record<string, number | null>;
 };
 
 export type ReplayClientTimings = Record<string, number | null>;
+export type ReplayServerTimings = Record<string, number | null>;
 
 @Injectable({
   providedIn: 'root'
@@ -44,6 +46,7 @@ export class ReplayBackendService {
       success?: boolean;
       errorMessage?: string;
       clientTimings?: ReplayClientTimings;
+      serverTimings?: ReplayServerTimings;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
@@ -65,6 +68,7 @@ export class ReplayBackendService {
       };
       player: FilesDto[];
       vocs: FilesDto[];
+      serverTimings?: ReplayServerTimings;
     }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-payload/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
     const headers = authToken ?
@@ -80,6 +84,7 @@ export class ReplayBackendService {
       };
       player: FilesDto[];
       vocs: FilesDto[];
+      serverTimings?: ReplayServerTimings;
     }>(url, { headers });
   }
 

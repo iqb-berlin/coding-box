@@ -8,6 +8,7 @@ import { CodingJobBackendService, CodingExportConfig, JobDefinition } from '../.
 import {
   ReplayBackendService,
   ReplayClientTimings,
+  ReplayServerTimings,
   ReplayStatisticsResponse
 } from '../../replay/services/replay-backend.service';
 import {
@@ -317,6 +318,7 @@ export class CodingFacadeService {
     success?: boolean;
     errorMessage?: string;
     clientTimings?: ReplayClientTimings;
+    serverTimings?: ReplayServerTimings;
   }): Observable<ReplayStatisticsResponse> {
     return this.replayBackendService.storeReplayStatistics(workspaceId, data);
   }
