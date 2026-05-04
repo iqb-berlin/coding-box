@@ -85,6 +85,8 @@ button[mat-raised-button] {
 }
 
 .coding-jobs-table {
+  --coding-jobs-table-min-width: 1340px;
+
   display: block;
   width: 100%;
   max-width: 100%;
@@ -100,8 +102,8 @@ button[mat-raised-button] {
 mat-header-row {
   background-color: #f5f5f5;
   min-height: 56px;
-  width: fit-content;
-  min-width: 1340px;
+  width: 100%;
+  min-width: var(--coding-jobs-table-min-width);
 }
 
 mat-header-cell {
@@ -114,8 +116,8 @@ mat-row {
   min-height: 52px;
   border-bottom: 1px solid #e0e0e0;
   transition: background-color 0.2s ease;
-  width: fit-content;
-  min-width: 1340px;
+  width: 100%;
+  min-width: var(--coding-jobs-table-min-width);
 
   &:hover {
     background-color: #e3f2fd;
@@ -338,7 +340,11 @@ mat-cell {
 
   mat-header-row,
   mat-row {
-    min-width: 1120px;
+    min-width: var(--coding-jobs-table-min-width);
+  }
+
+  .coding-jobs-table {
+    --coding-jobs-table-min-width: 1120px;
   }
 }
 
@@ -360,6 +366,8 @@ mat-cell {
   }
 
   .coding-jobs-table {
+    --coding-jobs-table-min-width: 980px;
+
     max-height: 60vh;
   }
 
@@ -369,6 +377,6 @@ mat-cell {
 
   mat-header-row,
   mat-row {
-    min-width: 980px;
+    min-width: var(--coding-jobs-table-min-width);
   }
 }
