@@ -153,24 +153,24 @@ export class CodingItemBuilderService {
       // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
         baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+            response.status_v1 != null ?
+              statusNumberToString(response.status_v1) || '' :
+              '';
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.score_v1 = response.score_v1 ?? '';
       } else if (targetVersion === 'v2') {
         baseItem.status_v1 =
           response.status_v1 != null ?
             statusNumberToString(response.status_v1) || '' :
             '';
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.score_v1 = response.score_v1 ?? '';
         baseItem.status_v2 =
           response.status_v2 != null ?
             statusNumberToString(response.status_v2) || '' :
             '';
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
-        baseItem.score_v2 = response.score_v2 || '';
+        baseItem.score_v2 = response.score_v2 ?? '';
       } else {
         // v3
         baseItem.status_v1 =
@@ -178,19 +178,19 @@ export class CodingItemBuilderService {
             statusNumberToString(response.status_v1) || '' :
             '';
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
-        baseItem.score_v1 = response.score_v1 || '';
+        baseItem.score_v1 = response.score_v1 ?? '';
         baseItem.status_v2 =
           response.status_v2 != null ?
             statusNumberToString(response.status_v2) || '' :
             '';
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
-        baseItem.score_v2 = response.score_v2 || '';
+        baseItem.score_v2 = response.score_v2 ?? '';
         baseItem.status_v3 =
           response.status_v3 != null ?
             statusNumberToString(response.status_v3) || '' :
             '';
         baseItem.code_v3 = mapCodeForExport(response.code_v3) ?? '';
-        baseItem.score_v3 = response.score_v3 || '';
+        baseItem.score_v3 = response.score_v3 ?? '';
       }
 
       // Append replay URL as the last field if requested

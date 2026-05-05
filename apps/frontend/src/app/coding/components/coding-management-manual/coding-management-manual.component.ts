@@ -17,8 +17,10 @@ import { MatInputModule } from '@angular/material/input';
 import {
   Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap,
   forkJoin,
-  distinctUntilChanged
+  distinctUntilChanged,
+  firstValueFrom
 } from 'rxjs';
+import * as ExcelJS from 'exceljs';
 import { Router } from '@angular/router';
 import { PageEvent, MatPaginatorModule } from '@angular/material/paginator';
 import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
@@ -34,6 +36,12 @@ import {
   ImportComparisonDialogComponent,
   ImportComparisonData
 } from '../import-comparison-dialog/import-comparison-dialog.component';
+import {
+  CodingImportDetectedFormat,
+  CodingImportFormatDialogComponent,
+  CodingImportFormatDialogData,
+  CodingImportFormatDialogResult
+} from './coding-import-format-dialog.component';
 import { ApplyEmptyCodingDialogComponent } from './apply-empty-coding-dialog.component';
 import {
   ApplyDuplicateAggregationDialogComponent,
@@ -353,7 +361,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.processExternalCodingFile(file);
+    this.processExternalCodingFile(file).finally(() => {
+      input.value = '';
+    });
   }
 
   private isExcelOrCsvFile(file: File): boolean {
@@ -366,7 +376,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private async processExternalCodingFile(file: File): Promise<void> {
     this.isLoading = true;
-    this.validationStateService.startValidation();
 
     try {
       const workspaceId = this.appService.selectedWorkspaceId;
@@ -376,10 +385,29 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           'coding-management-manual.errors.no-workspace-selected'
         );
         this.showError(errorMsg);
-        this.validationStateService.setValidationError(errorMsg);
+        this.isLoading = false;
         return;
       }
 
+      const detection = await this.detectCodingImportFormat(file);
+      const dialogResult = await firstValueFrom(
+        this.dialog.open<
+        CodingImportFormatDialogComponent,
+        CodingImportFormatDialogData,
+        CodingImportFormatDialogResult | undefined
+        >(CodingImportFormatDialogComponent, {
+          width: '720px',
+          maxWidth: '95vw',
+          data: detection
+        }).afterClosed()
+      );
+
+      if (!dialogResult) {
+        this.isLoading = false;
+        return;
+      }
+
+      this.validationStateService.startValidation();
       this.validationStateService.updateProgress(
         10,
         this.translateService.instant(
@@ -393,7 +421,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         {
           file: fileData,
           fileName: file.name,
-          previewOnly: true
+          previewOnly: true,
+          sourceFormat: dialogResult.sourceFormat,
+          sourceVersion: dialogResult.sourceVersion,
+          scoreMode: dialogResult.scoreMode,
+          existingCodingMode: dialogResult.existingCodingMode
         },
         (progress: number, message: string) => {
           this.validationStateService.updateProgress(progress, message);
@@ -416,7 +448,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               isPreview: true,
               workspaceId: workspaceId,
               fileData: fileData,
-              fileName: file.name
+              fileName: file.name,
+              sourceFormat: dialogResult.sourceFormat,
+              sourceVersion: dialogResult.sourceVersion,
+              scoreMode: dialogResult.scoreMode,
+              existingCodingMode: dialogResult.existingCodingMode
             } as ImportComparisonData
           });
 
@@ -466,6 +502,279 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       );
       this.isLoading = false;
     }
+  }
+
+  private async detectCodingImportFormat(file: File): Promise<CodingImportFormatDialogData> {
+    let headers: string[] = [];
+    const fileName = file.name;
+
+    try {
+      headers = await this.readImportHeaders(file);
+    } catch {
+      return this.buildFormatDialogData(
+        fileName,
+        'unknown',
+        [],
+        [
+          'Die Datei konnte nicht gelesen werden. Bitte prüfen Sie, ob die Datei beschädigt ist oder von einem anderen Programm gesperrt wird.',
+          'Unterstützt werden CSV-Dateien sowie Excel-Dateien im Format .xlsx oder .xls.'
+        ]
+      );
+    }
+
+    const detectedFormat = this.detectFormatFromHeaders(headers);
+    return this.buildFormatDialogData(fileName, detectedFormat, headers);
+  }
+
+  private async readImportHeaders(file: File): Promise<string[]> {
+    if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+      const workbook = new ExcelJS.Workbook();
+      const buffer = await file.arrayBuffer();
+      await workbook.xlsx.load(buffer);
+      const worksheet = workbook.getWorksheet(1);
+      if (!worksheet) {
+        return [];
+      }
+
+      const headers: string[] = [];
+      worksheet.getRow(1).eachCell(cell => {
+        headers.push(this.normalizeImportHeader(cell.text || cell.value?.toString() || ''));
+      });
+      return headers.filter(Boolean);
+    }
+
+    const sample = await file.slice(0, 65536).text();
+    const firstLine = sample.split(/\r?\n/).find(line => line.trim().length > 0) || '';
+    const delimiter = this.detectCsvDelimiter(firstLine);
+    return this.splitCsvHeaderLine(firstLine, delimiter)
+      .map(header => this.normalizeImportHeader(header))
+      .filter(Boolean);
+  }
+
+  private detectFormatFromHeaders(headers: string[]): CodingImportDetectedFormat {
+    const has = (header: string): boolean => headers.includes(header);
+    const hasAny = (candidates: string[]): boolean => candidates.some(candidate => has(candidate));
+
+    if (
+      has('groupname') &&
+        has('loginname') &&
+        has('code') &&
+        has('bookletname') &&
+        has('unitname') &&
+        has('timestamp') &&
+        has('logentry')
+    ) {
+      return 'test-logs';
+    }
+
+    if (
+      has('groupname') &&
+        has('loginname') &&
+        has('code') &&
+        has('bookletname') &&
+        has('unitname') &&
+        has('responses')
+    ) {
+      return 'test-results';
+    }
+
+    if (
+      has('variable_id') &&
+        hasAny([
+          'status_v1', 'code_v1', 'score_v1',
+          'status_v2', 'code_v2', 'score_v2',
+          'status_v3', 'code_v3', 'score_v3'
+        ])
+    ) {
+      return 'coding-results';
+    }
+
+    if (has('variable_id') && (has('unit_key') || has('unit_alias'))) {
+      if (hasAny(['status', 'code', 'score', 'variable_page', 'variable_anchor'])) {
+        return hasAny(['variable_page', 'variable_anchor']) ? 'coding-list' : 'external-coding';
+      }
+    }
+
+    return 'unknown';
+  }
+
+  private buildFormatDialogData(
+    fileName: string,
+    detectedFormat: CodingImportDetectedFormat,
+    headers: string[],
+    fallbackHelpItems?: string[]
+  ): CodingImportFormatDialogData {
+    const availableVersions = this.getAvailableCodingVersions(headers);
+    const sharedDescription =
+        'Für Testfälle, die außerhalb der Kodierbox bereits mit Code und Score kodiert wurden.';
+
+    if (detectedFormat === 'external-coding') {
+      return {
+        fileName,
+        detectedFormat,
+        title: 'Kodierungen aus Datei importieren',
+        description: sharedDescription,
+        canImport: true,
+        headers,
+        helpItems: [
+          'Erwartet werden unit_key oder unit_alias, variable_id und mindestens eine Spalte code, score oder status.',
+          'Optionale Zuordnungsspalten wie person_code, person_login, person_group und booklet_name machen den Import eindeutiger.'
+        ]
+      };
+    }
+
+    if (detectedFormat === 'coding-list') {
+      const hasCodingValues = ['status', 'code', 'score'].some(header => headers.includes(header));
+      return {
+        fileName,
+        detectedFormat,
+        title: 'Kodierungen aus Datei importieren',
+        description: sharedDescription,
+        canImport: hasCodingValues,
+        headers,
+        helpItems: hasCodingValues ?
+          [
+            'Die Datei sieht nach einer Kodierliste aus dem Coding Management aus.',
+            'Die ergänzten Spalten code, score und status werden als manuelle Kodierung importiert.'
+          ] :
+          [
+            'Die Datei sieht nach einer Kodierliste aus, enthält aber noch keine Kodierungsspalten.',
+            'Bitte ergänzen Sie mindestens code und score, optional auch status, und wählen Sie die Datei erneut aus.'
+          ]
+      };
+    }
+
+    if (detectedFormat === 'coding-results') {
+      return {
+        fileName,
+        detectedFormat,
+        title: 'Kodierungen aus Datei importieren',
+        description: 'Die Datei sieht nach einem Kodierergebnis-Export aus dem Coding Management aus.',
+        canImport: availableVersions.length > 0,
+        headers,
+        availableVersions,
+        selectedVersion: availableVersions.includes('v2') ? 'v2' : availableVersions[0],
+        helpItems: [
+          'Wählen Sie aus, welche Version aus der Datei übernommen werden soll.',
+          'Die ausgewählten Werte werden als manuelle Kodierung (v2) importiert.'
+        ]
+      };
+    }
+
+    if (detectedFormat === 'test-results') {
+      return {
+        fileName,
+        detectedFormat,
+        title: 'Testergebnisse-Export erkannt',
+        description: 'Diese Datei enthält vollständige Testergebnisse mit Antworten und Zuständen, nicht nur Code-/Score-Kodierungen.',
+        canImport: false,
+        headers,
+        helpItems: [
+          'Bitte wechseln Sie zu Testergebnisse > Import > Antworten hochladen.',
+          'Für den Kodierungsimport wird eine flache Datei mit unit_key oder unit_alias, variable_id, code und score benötigt.'
+        ]
+      };
+    }
+
+    if (detectedFormat === 'test-logs') {
+      return {
+        fileName,
+        detectedFormat,
+        title: 'Testlogs-Export erkannt',
+        description: 'Diese Datei enthält Testlogs und kann nicht als Code-/Score-Kodierung übernommen werden.',
+        canImport: false,
+        headers,
+        helpItems: [
+          'Bitte wechseln Sie zu Testergebnisse > Import > Logs hochladen.',
+          'Für den Kodierungsimport wird eine flache Datei mit unit_key oder unit_alias, variable_id, code und score benötigt.'
+        ]
+      };
+    }
+
+    return {
+      fileName,
+      detectedFormat,
+      title: 'Datei konnte nicht erkannt werden',
+      description: 'Die Datei passt zu keinem unterstützten Kodierungsimport.',
+      canImport: false,
+      headers,
+      helpItems: fallbackHelpItems || [
+        'Prüfen Sie, ob die erste Zeile Spaltenüberschriften enthält.',
+        'Für Kodierungen aus anderer Quelle werden unit_key oder unit_alias, variable_id, code und score erwartet.',
+        'Kodierergebnis-Exporte müssen Spalten wie status_v2, code_v2 und score_v2 enthalten.',
+        'Testergebnisse- und Log-Exporte bitte über den Bereich Testergebnisse importieren.'
+      ]
+    };
+  }
+
+  private getAvailableCodingVersions(headers: string[]): Array<'v1' | 'v2' | 'v3'> {
+    return (['v1', 'v2', 'v3'] as Array<'v1' | 'v2' | 'v3'>)
+      .filter(version => (
+        headers.includes(`status_${version}`) ||
+          headers.includes(`code_${version}`) ||
+          headers.includes(`score_${version}`)
+      ));
+  }
+
+  private normalizeImportHeader(header: string): string {
+    return header
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+  }
+
+  private detectCsvDelimiter(line: string): ';' | ',' | '\t' {
+    const candidates: Array<';' | ',' | '\t'> = [';', ',', '\t'];
+    let selected: ';' | ',' | '\t' = ',';
+    let bestCount = -1;
+
+    candidates.forEach(candidate => {
+      const count = this.countDelimiterOutsideQuotes(line, candidate);
+      if (count > bestCount) {
+        bestCount = count;
+        selected = candidate;
+      }
+    });
+
+    return selected;
+  }
+
+  private countDelimiterOutsideQuotes(line: string, delimiter: string): number {
+    let count = 0;
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes && char === delimiter) {
+        count += 1;
+      }
+    }
+
+    return count;
+  }
+
+  private splitCsvHeaderLine(line: string, delimiter: string): string[] {
+    const values: string[] = [];
+    let current = '';
+    let inQuotes = false;
+
+    for (let index = 0; index < line.length; index += 1) {
+      const char = line[index];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (!inQuotes && char === delimiter) {
+        values.push(current.replace(/^"|"$/g, ''));
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+
+    values.push(current.replace(/^"|"$/g, ''));
+    return values;
   }
 
   private fileToBase64(file: File): Promise<string> {

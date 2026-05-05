@@ -327,7 +327,7 @@
       "delete-job-definitions": "Job-Definitionen löschen",
       "manage-missings-profiles": "Missings-Profile verwalten",
       "export-coding-data": "Kodierdaten exportieren",
-      "import-external-codings": "Externe Kodierungen importieren",
+      "import-external-codings": "Kodierungen importieren",
       "validate-coding-completeness": "Kodier-Vollständigkeit prüfen",
       "apply-job-results": "Job-Ergebnisse anwenden",
       "view-workspace-users": "Arbeitsbereichsnutzer ansehen",
@@ -1282,7 +1282,7 @@
       "no-file-selected": "Keine Datei ausgewählt",
       "invalid-file-type": "Bitte wählen Sie eine CSV- oder Excel-Datei aus (.csv, .xlsx, .xls)",
       "no-workspace-selected": "Kein Arbeitsbereich ausgewählt",
-      "import-failed": "Fehler beim Importieren der externen Kodierung",
+      "import-failed": "Fehler beim Importieren der Kodierungen",
       "excel-parse-error": "Fehler beim Parsen der Excel-Datei",
       "file-read-error": "Fehler beim Lesen der Datei",
       "no-valid-data": "Die Datei enthält keine gültigen Daten",
@@ -1299,7 +1299,8 @@
     "success": {
       "validation-completed": "Validierung abgeschlossen. {{missing}} von {{total}} Kombinationen fehlen.",
       "excel-downloaded": "Excel-Datei wurde erfolgreich heruntergeladen",
-      "import-completed": "Externe Kodierung erfolgreich importiert: {{updatedRows}} von {{processedRows}} Zeilen aktualisiert.",
+      "import-completed": "Kodierungen erfolgreich importiert: {{updatedRows}} von {{processedRows}} Zeilen aktualisiert.",
+      "preview-completed": "Importvorschau abgeschlossen: {{updatedRows}} von {{processedRows}} Zeilen werden aktualisiert.",
       "comparison-excel-downloaded": "Vergleichstabelle wurde erfolgreich als Excel-Datei heruntergeladen",
       "training-generated": "Schulung erfolgreich generiert: {{packages}} Kodierer-Pakete mit insgesamt {{totalResponses}} Antworten erstellt"
     },
@@ -1371,8 +1372,9 @@
     },
     "import": {
       "errors-and-warnings": "Fehler und Warnungen",
-      "tooltip": "Importieren Sie externe Kodierungen aus CSV oder Excel Dateien.",
-      "format-info": "Format: CSV oder Excel (.xlsx). Erforderliche Spalten: 'unit_alias' (oder 'unit_key') und 'variable_id'. Optionale Spalten für die Zuordnung: 'person_code', 'person_login', 'person_group', 'booklet_name'. Weitere optionale Spalten: 'status' (Text), 'code' (Ganzzahl), 'score' (Ganzzahl)."
+      "button": "Kodierungen importieren",
+      "tooltip": "Kodierungen aus Datei importieren",
+      "format-info": "Für Testfälle, die außerhalb der Kodierbox bereits mit Code und Score kodiert wurden. Format: CSV oder Excel (.xlsx). Erforderliche Spalten: 'unit_alias' (oder 'unit_key') und 'variable_id'. Optionale Spalten für die Zuordnung: 'person_code', 'person_login', 'person_group', 'booklet_name'. Weitere optionale Spalten: 'status' (Text), 'code' (Ganzzahl), 'score' (Ganzzahl)."
     },
     "response-matching": {
       "title": "Antwort-Matching",

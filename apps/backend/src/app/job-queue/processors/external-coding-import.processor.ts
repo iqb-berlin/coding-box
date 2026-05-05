@@ -27,7 +27,9 @@ export class ExternalCodingImportProcessor {
     errorCount: number;
     affectedRowCount: number;
   }> {
-    const { workspaceId, tempFilePath, fileName } = job.data;
+    const {
+      workspaceId, tempFilePath, fileName, sourceFormat, sourceVersion, scoreMode, existingCodingMode
+    } = job.data;
     this.logger.log(
       `Processing external coding import job ${job.id} for workspace ${workspaceId}, file: ${fileName}`
     );
@@ -40,7 +42,15 @@ export class ExternalCodingImportProcessor {
 
       const result = await this.externalCodingImportService.importExternalCoding(
         workspaceId,
-        { file: fileBase64, fileName, previewOnly: false },
+        {
+          file: fileBase64,
+          fileName,
+          previewOnly: false,
+          sourceFormat,
+          sourceVersion,
+          scoreMode,
+          existingCodingMode
+        },
         async (progress: number, message: string) => {
           this.logger.debug(`Job ${job.id} progress: ${progress}% - ${message}`);
           await job.progress(progress);

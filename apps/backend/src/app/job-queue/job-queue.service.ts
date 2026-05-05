@@ -91,6 +91,10 @@ export interface ExternalCodingImportJobData {
   workspaceId: number;
   tempFilePath: string;
   fileName: string;
+  sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
+  sourceVersion?: 'v1' | 'v2' | 'v3';
+  scoreMode?: 'import' | 'derive';
+  existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
 
 export interface ExportJobData {
