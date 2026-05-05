@@ -166,7 +166,7 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v3');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain("response.status_v3::smallint");
+      expect(queryCall[0]).toContain('response.status_v3::smallint');
       expect(queryCall[0]).toContain('COALESCE(CASE WHEN response.status_v3');
       expect(queryCall[0]).toContain('response.status_v2, response.status_v1');
     });

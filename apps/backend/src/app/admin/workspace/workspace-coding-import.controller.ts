@@ -153,7 +153,11 @@ export class WorkspaceCodingImportController {
     const job = await this.jobQueueService.addExternalCodingImportJob({
       workspaceId: workspace_id,
       tempFilePath,
-      fileName: body.fileName || 'external-coding.csv'
+      fileName: body.fileName || 'external-coding.csv',
+      sourceFormat: body.sourceFormat,
+      sourceVersion: body.sourceVersion,
+      scoreMode: body.scoreMode,
+      existingCodingMode: body.existingCodingMode
     });
 
     this.logger.log(
@@ -292,6 +296,10 @@ export class WorkspaceCodingImportController {
           updatedCodedStatus: string | null;
           updatedCode: number | null;
           updatedScore: number | null;
+          importAction?: 'update' | 'skip' | 'unchanged';
+          actionReason?: string;
+          hasExistingCoding?: boolean;
+          hasConflict?: boolean;
         }>;
       }> {
     return this.externalCodingImportService.importExternalCoding(workspace_id, body);

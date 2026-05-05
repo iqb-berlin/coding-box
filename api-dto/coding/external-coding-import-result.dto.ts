@@ -16,5 +16,9 @@ export interface ExternalCodingImportResultDto {
     updatedCodedStatus: string | null;
     updatedCode: number | null;
     updatedScore: number | null;
+    importAction?: 'update' | 'skip' | 'unchanged';
+    actionReason?: string;
+    hasExistingCoding?: boolean;
+    hasConflict?: boolean;
   }>;
 }

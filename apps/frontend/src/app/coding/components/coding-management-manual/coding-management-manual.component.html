@@ -46,11 +46,11 @@
             <mat-icon>arrow_back</mat-icon>
             Zurück zur Übersicht
           </button>
-          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading"
-            matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
-            <mat-icon>link</mat-icon>
-            Externe Kodierung einbinden
-          </button>
+	          <button mat-stroked-button color="primary" (click)="externalCodingFileInput.click()" [disabled]="isLoading"
+	            matTooltip="{{ 'coding-management-manual.import.tooltip' | translate }}">
+	            <mat-icon>upload</mat-icon>
+	            {{ 'coding-management-manual.import.button' | translate }}
+	          </button>
         </div>
       </div>
       <hr>

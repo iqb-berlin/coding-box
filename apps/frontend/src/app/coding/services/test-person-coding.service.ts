@@ -21,6 +21,10 @@ interface ExternalCodingImportWithPreviewDto {
   file: string;
   fileName?: string;
   previewOnly?: boolean;
+  sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
+  sourceVersion?: 'v1' | 'v2' | 'v3';
+  scoreMode?: 'import' | 'derive';
+  existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
 }
 
 export interface CodingStatistics {
@@ -434,12 +438,26 @@ export class TestPersonCodingService {
 
   startExternalCodingImportJob(
     workspaceId: number,
-    data: { file: string; fileName?: string }
+    data: {
+      file: string;
+      fileName?: string;
+      sourceFormat?: 'external-coding' | 'coding-list' | 'coding-results';
+      sourceVersion?: 'v1' | 'v2' | 'v3';
+      scoreMode?: 'import' | 'derive';
+      existingCodingMode?: 'skip-conflicts' | 'fill-empty' | 'overwrite';
+    }
   ): Observable<{ jobId: string }> {
     return this.http
       .post<{ jobId: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/external-coding-import/apply`,
-      { file: data.file, fileName: data.fileName },
+      {
+        file: data.file,
+        fileName: data.fileName,
+        sourceFormat: data.sourceFormat,
+        sourceVersion: data.sourceVersion,
+        scoreMode: data.scoreMode,
+        existingCodingMode: data.existingCodingMode
+      },
       { headers: this.authHeader }
     );
   }
