@@ -197,6 +197,7 @@ export class WorkspaceTestResultsResponseController {
   async getResponsesByStatus(
     @WorkspaceId() workspace_id: number,
       @Param('status') status: string,
+                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
                    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
                    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
   ): Promise<{
@@ -209,6 +210,7 @@ export class WorkspaceTestResultsResponseController {
       await this.workspaceTestResultsService.getResponsesByStatus(
         workspace_id,
         status,
+        version,
         { page, limit }
       );
     return {

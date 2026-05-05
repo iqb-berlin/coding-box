@@ -235,6 +235,49 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('getResponsesByStatus', () => {
+    it('should include all raw response statuses used by coding statistics', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 2180]);
+
+      const result = await service.getResponsesByStatus(
+        1,
+        '5',
+        'v1',
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.where).toHaveBeenCalledWith(
+        'response.status IN (:...codingResponseStatuses)',
+        { codingResponseStatuses: [1, 2, 3] }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 = :statusParam',
+        { statusParam: 5 }
+      );
+      expect(result).toEqual([[], 2180]);
+    });
+
+    it('should use the selected coding version for status filtering', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+
+      await service.getResponsesByStatus(
+        1,
+        'CODING_COMPLETE',
+        'v3',
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(CASE WHEN response.status_v3'),
+        { statusParam: 5 }
+      );
+    });
+  });
+
   describe('getWorkspaceTestResultsOverview', () => {
     it('should return correct statistics', async () => {
       const workspaceId = 1;
