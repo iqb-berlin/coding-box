@@ -21,6 +21,11 @@
             </h3>
         </div>
         }
+        @if (isDerivedFilterActive) {
+        <div class="current-status">
+            <h3>{{ 'coding-management.statistics.derived-answers-title' | translate }}</h3>
+        </div>
+        }
         @if (isGeogebraFilterActive) {
         <div class="header-actions">
             <button mat-raised-button color="primary" (click)="onReviewClick()">

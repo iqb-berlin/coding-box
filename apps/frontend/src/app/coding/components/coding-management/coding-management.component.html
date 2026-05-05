@@ -53,7 +53,7 @@
           [hideResetButton]="hideActionButtons"
           (versionChange)="onVersionChange($event)" (loadStatistics)="fetchCodingStatistics()"
           (downloadResults)="onDownloadResults()" (resetVersion)="onResetVersion()"
-          (statusClick)="onStatusClick($event)">
+          (statusClick)="onStatusClick($event)" (derivedClick)="onDerivedClick()">
         </app-statistics-card>
       </div>
 
@@ -70,7 +70,8 @@
         <app-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords"
           [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
           [currentStatusFilter]="currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
-          [isGeogebraFilterActive]="filterParams.geogebra" (pageChange)="onPageChange($event)"
+          [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.derivedOnly"
+          (pageChange)="onPageChange($event)"
           (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
           (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()">
         </app-response-table>

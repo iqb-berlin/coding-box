@@ -68,6 +68,10 @@
     </mat-checkbox>
     }
 
+    <mat-checkbox [(ngModel)]="filterParams.derivedOnly" (change)="onFilterChange()" class="filter-checkbox">
+        {{ 'coding-management.filters.derived-only' | translate }}
+    </mat-checkbox>
+
     <button mat-button (click)="onClearFilters()" [disabled]="isLoading">
         <mat-icon>clear</mat-icon>
         {{ 'coding-management.filters.clear' | translate }}

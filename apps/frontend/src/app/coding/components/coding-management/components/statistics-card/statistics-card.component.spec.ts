@@ -159,4 +159,10 @@ describe('StatisticsCardComponent', () => {
     component.onStatusClick('200');
     expect(component.statusClick.emit).toHaveBeenCalledWith('200');
   });
+
+  it('should emit derivedClick when derived answers are clicked', () => {
+    jest.spyOn(component.derivedClick, 'emit');
+    component.onDerivedClick();
+    expect(component.derivedClick.emit).toHaveBeenCalled();
+  });
 });

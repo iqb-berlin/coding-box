@@ -82,7 +82,7 @@
       </span>
     </div>
     @if (hasDerivedStatistics) {
-    <div class="statistic-item">
+    <div class="statistic-item clickable" (click)="onDerivedClick()">
       <span class="statistic-label">{{ 'coding-management.statistics.derived-answers' | translate }}</span>
       <span class="statistic-value" [matTooltip]="'coding-management.statistics.derived-answers-tooltip' | translate:{count: derivedVariableCount}">
         {{ derivedAnswerCount }}

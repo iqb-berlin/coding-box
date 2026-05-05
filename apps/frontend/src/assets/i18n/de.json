@@ -912,6 +912,7 @@
       "missing-schemas": "Kodierschemata fehlen",
       "uncoded-responses-title": "Unkodierte Antworten",
       "responses-with-status-title": "Antworten mit Status: {{status}}",
+      "derived-answers-title": "Abgeleitete Variablen",
       "coding-version-selector": "Kodierversion auswählen:",
       "first-autocode-run": "1 Autocoder Lauf",
       "manual-coding-run": "manuelle Kodierung",
@@ -951,6 +952,7 @@
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
       "geogebra": "Spezialfilter: Geogebra",
+      "derived-only": "Nur abgeleitete Variablen",
       "clear": "Filter löschen"
     },
     "reset-dialog": {

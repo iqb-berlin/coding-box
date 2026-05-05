@@ -19,6 +19,7 @@ export interface SearchResponsesParams {
   group?: string;
   code?: string;
   version?: 'v1' | 'v2' | 'v3';
+  derivedOnly?: boolean;
 }
 
 export interface SearchResponseItem {
