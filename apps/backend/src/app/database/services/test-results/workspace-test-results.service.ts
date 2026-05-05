@@ -66,6 +66,12 @@ string,
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+  private static readonly codingResponseStatuses = [
+    statusStringToNumber('NOT_REACHED') || 1,
+    statusStringToNumber('DISPLAYED') || 2,
+    statusStringToNumber('VALUE_CHANGED') || 3
+  ];
+
   private static readonly ignoredDerivedCodingStatuses = [0, 1, 2, 3, 10];
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
@@ -2530,32 +2536,41 @@ export class WorkspaceTestResultsService {
   async getResponsesByStatus(
     workspace_id: number,
     status: string,
+    version: 'v1' | 'v2' | 'v3' = 'v1',
     options?: { page: number; limit: number }
   ): Promise<[ResponseEntity[], number]> {
     this.logger.log(
-      `Getting responses with status ${status} for workspace ${workspace_id}`
+      `Getting responses with status ${status} for workspace ${workspace_id} (version: ${version})`
     );
 
     try {
+      const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(version);
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status = :constStatus', {
-          constStatus: statusStringToNumber('VALUE_CHANGED')
+        .where('response.status IN (:...codingResponseStatuses)', {
+          codingResponseStatuses: WorkspaceTestResultsService.codingResponseStatuses
         })
         .andWhere('person.workspace_id = :workspace_id_param', {
           workspace_id_param: workspace_id
         })
+        .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
 
       if (status === 'null') {
-        queryBuilder.andWhere('response.status_v1 IS NULL');
+        queryBuilder.andWhere(`${effectiveStatusExpression} IS NULL`);
       } else {
-        queryBuilder.andWhere('response.status_v1 = :statusParam', {
-          statusParam: status
+        const statusNumber = statusStringToNumber(status);
+        if (statusNumber === null) {
+          this.logger.warn(`Invalid coding status filter: ${status}`);
+          return [[], 0];
+        }
+
+        queryBuilder.andWhere(`${effectiveStatusExpression} = :statusParam`, {
+          statusParam: statusNumber
         });
       }
 
