@@ -46,6 +46,7 @@ export class ResponseFiltersComponent implements OnDestroy {
     bookletName: '',
     variableId: '',
     geogebra: false,
+    derivedOnly: false,
     personLogin: ''
   };
 

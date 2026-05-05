@@ -46,6 +46,16 @@ describe('ResponseFiltersComponent', () => {
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
   });
 
+  it('should emit filterChange when derived-only filter changes', () => {
+    jest.spyOn(component.filterChange, 'emit');
+
+    component.filterParams.codedStatus = '';
+    component.filterParams.derivedOnly = true;
+    component.onFilterChange();
+
+    expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
+  });
+
   it('should emit clearFilters when clear button is clicked', () => {
     jest.spyOn(component.clearFilters, 'emit');
     component.onClearFilters();

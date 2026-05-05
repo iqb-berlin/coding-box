@@ -190,6 +190,51 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('searchResponses', () => {
+    it('should filter by autocoder-generated responses when derivedOnly is set', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      const result = await service.searchResponses(
+        1,
+        { derivedOnly: true },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated = :derivedOnly',
+        { derivedOnly: true }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+      expect(result).toEqual({ data: [], total: 0 });
+    });
+
+    it('should apply the v3 fallback status expression for derived-only searches', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { derivedOnly: true, version: 'v3' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(CASE WHEN response.status_v3')
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('NOT IN (:...ignoredDerivedCodingStatuses)'),
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+    });
+  });
+
   describe('getWorkspaceTestResultsOverview', () => {
     it('should return correct statistics', async () => {
       const workspaceId = 1;

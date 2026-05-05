@@ -31,6 +31,7 @@ export interface FilterParams {
   bookletName: string;
   variableId: string;
   geogebra: boolean;
+  derivedOnly: boolean;
   personLogin: string;
 }
 
@@ -241,6 +242,7 @@ export class CodingManagementService {
       bookletName: filterParams.bookletName,
       variableId: filterParams.variableId,
       geogebra: filterParams.geogebra,
+      derivedOnly: filterParams.derivedOnly,
       personLogin: filterParams.personLogin
     };
 

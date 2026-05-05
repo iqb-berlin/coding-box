@@ -75,6 +75,7 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
   @Input() currentStatusFilter: string | null = null;
   @Input() selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   @Input() isGeogebraFilterActive = false;
+  @Input() isDerivedFilterActive = false;
 
   @Output() pageChange = new EventEmitter<PageEvent>();
   @Output() replayClick = new EventEmitter<Success>();

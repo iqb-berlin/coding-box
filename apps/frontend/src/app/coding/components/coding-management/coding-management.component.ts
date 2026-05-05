@@ -121,6 +121,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     bookletName: '',
     variableId: '',
     geogebra: false,
+    derivedOnly: false,
     personLogin: ''
   };
 
@@ -232,11 +233,21 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.fetchResponsesByStatus(status);
   }
 
+  onDerivedClick(): void {
+    this.filterParams = {
+      ...this.createDefaultFilterParams(this.selectedStatisticsVersion),
+      derivedOnly: true
+    };
+    this.currentStatusFilter = null;
+    this.pageIndex = 0;
+    this.fetchResponsesWithFilters();
+  }
+
   // Filter Event Handlers
   onFilterChange(filterParams: FilterParams): void {
     this.filterParams = filterParams;
 
-    if (!filterParams.codedStatus && !filterParams.personLogin && !filterParams.unitName && !filterParams.bookletName && !filterParams.variableId && !filterParams.code && !filterParams.group) {
+    if (!this.hasActiveFilters(filterParams)) {
       this.data = [];
       this.totalRecords = 0;
       this.currentStatusFilter = null;
@@ -250,17 +261,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   onClearFilters(): void {
-    this.filterParams = {
-      unitName: '',
-      codedStatus: '',
-      version: 'v1',
-      code: '',
-      group: '',
-      bookletName: '',
-      variableId: '',
-      geogebra: false,
-      personLogin: ''
-    };
+    this.filterParams = this.createDefaultFilterParams();
     this.data = [];
     this.totalRecords = 0;
     this.currentStatusFilter = null;
@@ -278,14 +279,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.pageIndex + 1,
         this.pageSize
       );
-    } else {
-      const hasActiveFilters = Object.values(this.filterParams).some(
-        value => (typeof value === 'string' ? value.trim() !== '' : !!value)
-      );
-
-      if (hasActiveFilters) {
-        this.fetchResponsesWithFilters();
-      }
+    } else if (this.hasActiveFilters()) {
+      this.fetchResponsesWithFilters();
     }
   }
 
@@ -390,11 +385,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private fetchResponsesWithFilters(): void {
     this.isLoading = true;
 
-    const hasActiveFilters = Object.values(this.filterParams).some(
-      value => (typeof value === 'string' ? value.trim() !== '' : !!value)
-    );
-
-    if (!hasActiveFilters) {
+    if (!this.hasActiveFilters()) {
       this.data = [];
       this.totalRecords = 0;
       this.isLoading = false;
@@ -605,15 +596,31 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
     if (this.currentStatusFilter) {
       this.fetchResponsesByStatus(this.currentStatusFilter);
-    } else {
-      const hasActiveFilters = Object.values(this.filterParams).some(
-        value => value && value.trim() !== ''
-      );
-
-      if (hasActiveFilters) {
-        this.fetchResponsesWithFilters();
-      }
+    } else if (this.hasActiveFilters()) {
+      this.fetchResponsesWithFilters();
     }
+  }
+
+  private createDefaultFilterParams(version: StatisticsVersion = 'v1'): FilterParams {
+    return {
+      unitName: '',
+      codedStatus: '',
+      version,
+      code: '',
+      group: '',
+      bookletName: '',
+      variableId: '',
+      geogebra: false,
+      derivedOnly: false,
+      personLogin: ''
+    };
+  }
+
+  private hasActiveFilters(filterParams: FilterParams = this.filterParams): boolean {
+    return Object.entries(filterParams).some(
+      ([key, value]) => key !== 'version' &&
+        (typeof value === 'string' ? value.trim() !== '' : value === true)
+    );
   }
 
   openItemListDialog(): void {

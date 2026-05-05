@@ -194,6 +194,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
+        derivedOnly: false,
         personLogin: ''
       };
 
@@ -215,6 +216,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
+        derivedOnly: false,
         personLogin: ''
       };
 
@@ -223,6 +225,32 @@ describe('CodingManagementComponent', () => {
       expect(component.data).toEqual([]);
       expect(component.totalRecords).toBe(0);
       expect(component.currentStatusFilter).toBeNull();
+    });
+
+    it('should apply derived-only filter when derived statistics are clicked', () => {
+      component.selectedStatisticsVersion = 'v2';
+
+      component.onDerivedClick();
+
+      expect(component.filterParams).toEqual({
+        unitName: '',
+        codedStatus: '',
+        version: 'v2',
+        code: '',
+        group: '',
+        bookletName: '',
+        variableId: '',
+        geogebra: false,
+        derivedOnly: true,
+        personLogin: ''
+      });
+      expect(component.currentStatusFilter).toBeNull();
+      expect(component.pageIndex).toBe(0);
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        component.filterParams,
+        1,
+        100
+      );
     });
 
     it('should handle clear filters event', () => {

@@ -66,6 +66,7 @@ string,
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
+  private static readonly ignoredDerivedCodingStatuses = [0, 1, 2, 3, 10];
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
     const normalizedVariableId = String(variableId || '').trim();
@@ -126,6 +127,18 @@ export class WorkspaceTestResultsService {
     } catch {
       return [];
     }
+  }
+
+  private static getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3' = 'v1'): string {
+    if (version === 'v2') {
+      return 'COALESCE(response.status_v2, response.status_v1)';
+    }
+
+    if (version === 'v3') {
+      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
+    }
+
+    return 'response.status_v1';
   }
 
   constructor(
@@ -2850,6 +2863,7 @@ export class WorkspaceTestResultsService {
       code?: string;
       version?: 'v1' | 'v2' | 'v3';
       geogebra?: boolean;
+      derivedOnly?: boolean;
       personLogin?: string;
     },
     options: { page?: number; limit?: number } = {}
@@ -2962,6 +2976,19 @@ export class WorkspaceTestResultsService {
         const version = searchParams.version || 'v1';
         query.addOrderBy(`response.code_${version}`, 'ASC');
         query.addOrderBy('person.code', 'ASC');
+      }
+
+      if (searchParams.derivedOnly) {
+        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
+        query.andWhere('response.is_autocoder_generated = :derivedOnly', {
+          derivedOnly: true
+        });
+        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+        });
       }
 
       const total = await query.getCount();

@@ -57,6 +57,7 @@ export class StatisticsCardComponent {
   @Output() downloadResults = new EventEmitter<void>();
   @Output() resetVersion = new EventEmitter<void>();
   @Output() statusClick = new EventEmitter<string>();
+  @Output() derivedClick = new EventEmitter<void>();
 
   private responseStatusMap = new Map(
     responseStatesNumericMap.map(entry => [entry.key, entry.value])
@@ -209,6 +210,10 @@ export class StatisticsCardComponent {
 
   onStatusClick(status: string): void {
     this.statusClick.emit(status);
+  }
+
+  onDerivedClick(): void {
+    this.derivedClick.emit();
   }
 
   get isManualCodingComplete(): boolean {
