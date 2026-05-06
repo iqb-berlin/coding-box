@@ -1976,15 +1976,23 @@ export class CodingExportService {
       const worksheet = workbook.addWorksheet(worksheetName);
 
       // Get all coders for this variable
-      const personIdsRaw = await this.responseRepository.createQueryBuilder('resp')
+      const personIdsQuery = this.responseRepository.createQueryBuilder('resp')
         .innerJoin('resp.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .select('person.id', 'pId')
         .where('unit.name = :unitName', { unitName })
         .andWhere('resp.variableid = :variableId', { variableId })
-        .groupBy('person.id')
-        .getRawMany();
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .groupBy('person.id');
+      applyResolvedExclusionsToQuery(personIdsQuery, exclusions, {
+        unitAlias: 'unit',
+        bookletInfoAlias: 'bookletinfo',
+        parameterPrefix: 'variableExportPersons'
+      });
+      const personIdsRaw = await personIdsQuery.getRawMany();
 
       const pIds = personIdsRaw.map(r => r.pId);
       if (pIds.length === 0) {
@@ -2016,9 +2024,10 @@ export class CodingExportService {
       const coderNames = coderQuery.map(c => c.username).sort();
       let discussionResultMap = new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
       if (normalizedCoderTrainingIds.length > 0) {
-        const managerCases = await this.responseRepository.createQueryBuilder('resp')
+        const managerCasesQuery = this.responseRepository.createQueryBuilder('resp')
           .innerJoin('resp.unit', 'unit')
           .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
           .innerJoin('booklet.person', 'person')
           .innerJoin('coder_training_discussion_result', 'ctdr', 'ctdr.response_id = resp.id')
           .select('ctdr.training_id', 'trainingId')
@@ -2026,9 +2035,16 @@ export class CodingExportService {
           .where('person.id IN (:...pIds)', { pIds })
           .andWhere('unit.name = :unitName', { unitName })
           .andWhere('resp.variableid = :variableId', { variableId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
           .andWhere('ctdr.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('ctdr.training_id IN (:...coderTrainingIds)', { coderTrainingIds: normalizedCoderTrainingIds })
-          .getRawMany();
+          .andWhere('ctdr.training_id IN (:...coderTrainingIds)', { coderTrainingIds: normalizedCoderTrainingIds });
+        applyResolvedExclusionsToQuery(managerCasesQuery, exclusions, {
+          unitAlias: 'unit',
+          bookletInfoAlias: 'bookletinfo',
+          parameterPrefix: 'variableExportManagerCases'
+        });
+        const managerCases = await managerCasesQuery.getRawMany();
 
         discussionResultMap = await this.getTrainingDiscussionResultsMap(
           workspaceId,
@@ -2091,7 +2107,10 @@ export class CodingExportService {
           .addSelect('cju.response_id', 'responseId')
           .where('person.id IN (:...batchIds)', { batchIds })
           .andWhere('unit.name = :unitName', { unitName })
-          .andWhere('resp.variableid = :variableId', { variableId });
+          .andWhere('resp.variableid = :variableId', { variableId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
+          .andWhere('cj.workspace_id = :workspaceId', { workspaceId });
         applyResolvedExclusionsToQuery(dataQueryBuilder, exclusions, {
           unitAlias: 'unit',
           bookletInfoAlias: 'bookletinfo'
