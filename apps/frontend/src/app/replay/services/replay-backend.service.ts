@@ -1,8 +1,27 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, forkJoin, map } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+
+export type ReplayUnitResponse = {
+  responses: {
+    id: string;
+    content: string;
+  }[];
+};
+
+export type ReplayAssetsPayload = {
+  unitDef: FilesDto[];
+  player: FilesDto[];
+  vocs: FilesDto[];
+};
+
+export type ReplayResponsePayload = {
+  response: ReplayUnitResponse;
+};
+
+export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload;
 
 export type ReplayStatisticsResponse = {
   id: number;
@@ -51,32 +70,41 @@ export class ReplayBackendService {
     testPerson: string,
     unitId: string,
     authToken?: string
-  ): Observable<{
-      unitDef: FilesDto[];
-      response: {
-        responses: {
-          id: string;
-          content: string;
-        }[];
-      };
-      player: FilesDto[];
-      vocs: FilesDto[];
-    }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-payload/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
+  ): Observable<ReplayPayload> {
+    return forkJoin({
+      assets: this.getReplayAssets(workspaceId, unitId, authToken),
+      responsePayload: this.getReplayResponse(workspaceId, testPerson, unitId, authToken)
+    }).pipe(
+      map(({ assets, responsePayload }) => ({
+        ...assets,
+        response: responsePayload.response
+      }))
+    );
+  }
+
+  getReplayAssets(
+    workspaceId: number,
+    unitId: string,
+    authToken?: string
+  ): Observable<ReplayAssetsPayload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-assets/${encodeURIComponent(unitId)}`;
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
-    return this.http.get<{
-      unitDef: FilesDto[];
-      response: {
-        responses: {
-          id: string;
-          content: string;
-        }[];
-      };
-      player: FilesDto[];
-      vocs: FilesDto[];
-    }>(url, { headers });
+    return this.http.get<ReplayAssetsPayload>(url, { headers });
+  }
+
+  getReplayResponse(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string,
+    authToken?: string
+  ): Observable<ReplayResponsePayload> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-response/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
+    const headers = authToken ?
+      { Authorization: `Bearer ${authToken}` } :
+      this.authHeader;
+    return this.http.get<ReplayResponsePayload>(url, { headers });
   }
 
   getReplayFrequencyByUnit(
