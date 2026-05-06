@@ -64,8 +64,14 @@ describe('ReplayBackendService', () => {
           done();
         });
 
-      const assetsReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-assets/unit%201`);
+      const assetsReq = httpMock.expectOne(req => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-assets/unit%201`;
+        return req.url === expectedUrl && req.params.get('replayPart') === 'assets';
+      });
       expect(assetsReq.request.method).toBe('GET');
+      expect(assetsReq.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-assets/unit%201?replayPart=assets`
+      );
       expect(assetsReq.request.headers.get('Authorization')).toBe('Bearer url-token');
       assetsReq.flush({
         unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
@@ -73,8 +79,14 @@ describe('ReplayBackendService', () => {
         vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }]
       });
 
-      const responseReq = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-response/person%40code%40booklet/unit%201`);
+      const responseReq = httpMock.expectOne(req => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-response/person%40code%40booklet/unit%201`;
+        return req.url === expectedUrl && req.params.get('replayPart') === 'response';
+      });
       expect(responseReq.request.method).toBe('GET');
+      expect(responseReq.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-response/person%40code%40booklet/unit%201?replayPart=response`
+      );
       expect(responseReq.request.headers.get('Authorization')).toBe('Bearer url-token');
       responseReq.flush({
         response: { responses: [{ id: 'var1', content: '[]' }] }
@@ -86,8 +98,14 @@ describe('ReplayBackendService', () => {
     it('should fetch assets with the stored auth token when no URL token is supplied', () => {
       service.getReplayAssets(1, 'unit-1').subscribe();
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-assets/unit-1`);
+      const req = httpMock.expectOne(request => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-assets/unit-1`;
+        return request.url === expectedUrl && request.params.get('replayPart') === 'assets';
+      });
       expect(req.request.method).toBe('GET');
+      expect(req.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`
+      );
       expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
       req.flush({ unitDef: [], player: [], vocs: [] });
     });

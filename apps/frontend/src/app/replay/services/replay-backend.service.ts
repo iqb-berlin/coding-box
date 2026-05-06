@@ -91,7 +91,8 @@ export class ReplayBackendService {
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
-    return this.http.get<ReplayAssetsPayload>(url, { headers });
+    const params = new HttpParams().set('replayPart', 'assets');
+    return this.http.get<ReplayAssetsPayload>(url, { headers, params });
   }
 
   getReplayResponse(
@@ -104,7 +105,8 @@ export class ReplayBackendService {
     const headers = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
-    return this.http.get<ReplayResponsePayload>(url, { headers });
+    const params = new HttpParams().set('replayPart', 'response');
+    return this.http.get<ReplayResponsePayload>(url, { headers, params });
   }
 
   getReplayFrequencyByUnit(
