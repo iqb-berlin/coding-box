@@ -10,7 +10,7 @@ import { WorkspaceTestResultsService } from '../database/services/test-results';
 @Injectable()
 export class ResponseCacheSchedulerService {
   private readonly logger = new Logger(ResponseCacheSchedulerService.name);
-  private readonly responseCacheVersionSuffix = ':v4';
+  private readonly responseCacheVersionSuffix = ':v6';
 
   constructor(
     private readonly cacheService: CacheService,

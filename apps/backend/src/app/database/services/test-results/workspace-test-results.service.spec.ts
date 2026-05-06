@@ -388,8 +388,8 @@ describe('WorkspaceTestResultsService', () => {
       await service.getWorkspaceTestResultsOverview(workspaceId);
 
       expect(unitQb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining("UPPER(REPLACE(UPPER(unit.name), '.XML', '')) NOT IN"),
-        expect.objectContaining({ ignoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['UNIT1'] }) // .XML stripped and uppercase
       );
     });
   });
@@ -485,7 +485,49 @@ describe('WorkspaceTestResultsService', () => {
     });
   });
 
+  describe('findWorkspaceResponses', () => {
+    it('scopes response list to the workspace and applies exclusions', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getManyAndCount.mockResolvedValue([[], 0]);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['UNIT1'],
+        ignoredBooklets: ['BOOKLET1'],
+        testletIgnoredUnits: []
+      });
+
+      await service.findWorkspaceResponses(1, { page: 1, limit: 10 });
+
+      expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspace_id', { workspace_id: 1 });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['UNIT1'] })
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('UPPER(bookletinfo.name) NOT IN'),
+        expect.objectContaining({ workspaceExclusionIgnoredBooklets: ['BOOKLET1'] })
+      );
+    });
+  });
+
   describe('findUnitResponse', () => {
+    it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: ['BOOKLET-A'],
+        testletIgnoredUnits: []
+      });
+
+      const result = await service.findUnitResponse(
+        1,
+        'login-a@code-a@group-a@BOOKLET-A',
+        'unit-original-id'
+      );
+
+      expect(result).toEqual({ responses: [] });
+      expect(unitRepository.createQueryBuilder).not.toHaveBeenCalled();
+    });
+
     it('should look up replay units by alias first', async () => {
       const unitQb = mockQueryBuilder();
       (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);

@@ -96,6 +96,9 @@ export class WorkspaceCoreService {
       if (workspaceData.settings) workspaceGroupToUpdate.settings = workspaceData.settings;
       await this.workspaceRepository.save(workspaceGroupToUpdate);
       await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceData.id}`);
+      if (workspaceData.settings) {
+        await this.invalidateCachesAffectedByExclusions(workspaceData.id);
+      }
     }
   }
 
@@ -155,6 +158,7 @@ export class WorkspaceCoreService {
     await this.workspaceRepository.save(workspace);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.invalidateCachesAffectedByExclusions(workspaceId);
   }
 
   async getWorkspaceSettings(workspaceId: number): Promise<WorkspaceSettingsDto> {
@@ -170,5 +174,19 @@ export class WorkspaceCoreService {
     await this.workspaceRepository.save(workspace);
     await this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`);
     await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+    await this.invalidateCachesAffectedByExclusions(workspaceId);
+  }
+
+  private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.cacheService.delete(`coding-statistics:${workspaceId}:v1`),
+      this.cacheService.delete(`coding-statistics:${workspaceId}:v2`),
+      this.cacheService.delete(`coding-statistics:${workspaceId}:v3`),
+      this.cacheService.delete(`coding_incomplete_variables_v2:${workspaceId}`),
+      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),
+      this.cacheService.deleteByPattern(`responses:${workspaceId}:*`),
+      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
+    ]);
   }
 }

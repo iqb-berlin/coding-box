@@ -30,6 +30,7 @@ type FileStatus = {
 
 type TestletDto = {
   id: string;
+  bookletId?: string;
   label?: string;
   ignored?: boolean;
 };
@@ -539,12 +540,13 @@ export class WorkspaceTestFilesValidationService {
           }
 
           const testlets: TestletDto[] = [];
-          $('testlet').each((_, element) => {
+          $('Testlet, testlet').each((_, element) => {
             const id = $(element).attr('id');
             const label = $(element).attr('label');
             if (id) {
               testlets.push({
                 id,
+                bookletId,
                 label,
                 ignored: this.workspaceExclusionService.isExcluded(
                   { bookletId, testletId: id },
@@ -555,12 +557,15 @@ export class WorkspaceTestFilesValidationService {
           });
 
           const unitIds: string[] = [];
-          $('Unit').each((_, element) => {
+          $('Unit, unit').each((_, element) => {
             const unitId = $(element).attr('id');
             if (unitId) {
               let ignoredByTestlet = false;
               let current = $(element).parent();
-              while (current.length && current[0].tagName === 'testlet') {
+              while (
+                current.length &&
+                current[0].tagName?.toLowerCase() === 'testlet'
+              ) {
                 const testletId = current.attr('id');
                 if (
                   testletId &&
@@ -856,7 +861,11 @@ export class WorkspaceTestFilesValidationService {
         const data = bookletMap.get(bookletId);
         const units = data?.unitIds || [];
         (data?.testlets || []).forEach(t => {
-          if (!allTestlets.some(existing => existing.id === t.id)) {
+          if (
+            !allTestlets.some(
+              existing => existing.bookletId === t.bookletId && existing.id === t.id
+            )
+          ) {
             allTestlets.push(t);
           }
         });

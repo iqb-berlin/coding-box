@@ -27,12 +27,19 @@ import { JournalService, Chunk, TcMergeResponse } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
+// eslint-disable-next-line import/no-cycle
 import { CodingValidationService } from '../coding/coding-validation.service';
 // eslint-disable-next-line import/no-cycle
 import { ResponseManagementService } from './response-management.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  normalizeExclusionBookletId,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
 
 interface PersonWhere {
@@ -195,23 +202,14 @@ export class WorkspaceTestResultsService {
   ) { }
 
   private applyExclusionsToQuery(qb: SelectQueryBuilder<unknown>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
-    const u = options.unitAlias || 'unit';
-    const b = options.bookletInfoAlias || 'bookletinfo';
-    if (exclusions.globalIgnoredUnits.length > 0) {
-      const normalizedIgnoredUnits = exclusions.globalIgnoredUnits.map(gu => gu.toUpperCase().replace(/\.XML$/i, ''));
-      qb.andWhere(`UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) NOT IN (:...ignoredUnits)`, { ignoredUnits: normalizedIgnoredUnits });
-    }
-    if (exclusions.ignoredBooklets.length > 0) {
-      qb.andWhere(`UPPER(${b}.name) NOT IN (:...ignoredBooklets)`, { ignoredBooklets: exclusions.ignoredBooklets });
-    }
-    if (exclusions.testletIgnoredUnits.length > 0) {
-      const condition = exclusions.testletIgnoredUnits.map((_, i: number) => `(UPPER(${b}.name) = :bId${i} AND UPPER(REPLACE(UPPER(${u}.name), '.XML', '')) = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      exclusions.testletIgnoredUnits.forEach((t, i: number) => {
-        params[`bId${i}`] = t.bookletId.toUpperCase();
-        params[`uId${i}`] = t.unitId.toUpperCase().replace(/\.XML$/i, '');
+    applyResolvedExclusionsToQuery(qb, exclusions, options);
+  }
+
+  private applyIgnoredBookletsToQuery(qb: SelectQueryBuilder<unknown>, ignoredBooklets: string[], bookletInfoAlias = 'bookletinfo'): void {
+    if (ignoredBooklets.length > 0) {
+      qb.andWhere(`UPPER(${bookletInfoAlias}.name) NOT IN (:...ignoredBookletsOnly)`, {
+        ignoredBookletsOnly: ignoredBooklets.map(normalizeExclusionBookletId)
       });
-      qb.andWhere(`NOT (${condition})`, params);
     }
   }
 
@@ -247,13 +245,15 @@ export class WorkspaceTestResultsService {
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
-    const uniqueBookletsPromise = this.bookletRepository
+    const uniqueBookletsQuery = this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('COUNT(DISTINCT bookletinfo.name)', 'count')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyIgnoredBookletsToQuery(uniqueBookletsQuery, exclusions.ignoredBooklets);
+    const uniqueBookletsPromise = uniqueBookletsQuery
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
@@ -321,9 +321,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsBrowser)' : '1=1', {
+          overviewIgnoredBookletsBrowser: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.browser', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.browser')
@@ -331,9 +335,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsOs)' : '1=1', {
+          overviewIgnoredBookletsOs: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.os', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.os')
@@ -341,9 +349,13 @@ export class WorkspaceTestResultsService {
       this.sessionRepository
         .createQueryBuilder('session')
         .innerJoin('session.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
+        .andWhere(exclusions.ignoredBooklets.length > 0 ? 'UPPER(bookletinfo.name) NOT IN (:...overviewIgnoredBookletsScreen)' : '1=1', {
+          overviewIgnoredBookletsScreen: exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+        })
         .select('session.screen', 'value')
         .addSelect('COUNT(session.id)', 'count')
         .groupBy('session.screen')
@@ -444,11 +456,13 @@ export class WorkspaceTestResultsService {
       const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits.map(u => u.toUpperCase().replace(/\.XML$/i, '')));
       const ignoredBookletsSet = new Set(exclusions.ignoredBooklets.map(b => b.toUpperCase()));
 
-      const booklets = await this.bookletRepository
+      const bookletsQuery = this.bookletRepository
         .createQueryBuilder('booklet')
         .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .where('booklet.personid = :personId', { personId })
-        .select(['booklet.id', 'bookletinfo.name'])
+        .select(['booklet.id', 'bookletinfo.name']);
+      this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+      const booklets = await bookletsQuery
         .getMany();
 
       if (!booklets || booklets.length === 0) {
@@ -679,7 +693,19 @@ export class WorkspaceTestResultsService {
   ): Promise<[ResponseEntity[], number]> {
     this.logger.log('Returning responses for workspace', workspace_id);
 
-    let result: [ResponseEntity[], number];
+    const queryBuilder = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoinAndSelect('response.unit', 'unit')
+      .innerJoinAndSelect('unit.booklet', 'booklet')
+      .innerJoinAndSelect('booklet.person', 'person')
+      .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspace_id', { workspace_id })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('response.id', 'ASC');
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+    this.applyExclusionsToQuery(queryBuilder, exclusions);
+    this.excludeAutocoderGeneratedResponses(queryBuilder);
 
     if (options) {
       const { page, limit } = options;
@@ -687,26 +713,19 @@ export class WorkspaceTestResultsService {
       const validPage = Math.max(1, page);
       const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
 
-      const [responses, total] = await this.responseRepository.findAndCount({
-        skip: (validPage - 1) * validLimit,
-        take: validLimit,
-        order: { id: 'ASC' }
-      });
+      queryBuilder.skip((validPage - 1) * validLimit).take(validLimit);
+      const result = await queryBuilder.getManyAndCount();
 
       this.logger.log(
-        `Found ${responses.length} responses (page ${validPage}, limit ${validLimit}, total ${total}) for workspace ${workspace_id}`
+        `Found ${result[0].length} responses (page ${validPage}, limit ${validLimit}, total ${result[1]}) for workspace ${workspace_id}`
       );
-      result = [responses, total];
-    } else {
-      const responses = await this.responseRepository.find({
-        order: { id: 'ASC' }
-      });
-
-      this.logger.log(
-        `Found ${responses.length} responses for workspace ${workspace_id}`
-      );
-      result = [responses, responses.length];
+      return result;
     }
+
+    const result = await queryBuilder.getManyAndCount();
+    this.logger.log(
+      `Found ${result[0].length} responses for workspace ${workspace_id}`
+    );
 
     return result;
   }
@@ -1175,6 +1194,9 @@ export class WorkspaceTestResultsService {
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
 
+    this.applyExclusionsToQuery(countQb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
     this.excludeAutocoderGeneratedResponses(countQb);
 
     if (code) {
@@ -1508,9 +1530,14 @@ export class WorkspaceTestResultsService {
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
       .innerJoin('bookletEntity.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    this.applyExclusionsToQuery(qb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
     this.excludeAutocoderGeneratedResponses(qb);
 
     const params: Record<string, unknown> = {};
@@ -1759,6 +1786,10 @@ export class WorkspaceTestResultsService {
       .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    this.applyExclusionsToQuery(baseQb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
     this.excludeAutocoderGeneratedResponses(baseQb);
 
     if (code) {
@@ -2198,10 +2229,12 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid unitId provided');
     }
 
-    const raw = await this.unitLogRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.unitLogRepository
       .createQueryBuilder('unitLog')
       .innerJoin('unitLog.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('unit.id = :unitId', { unitId })
@@ -2212,7 +2245,9 @@ export class WorkspaceTestResultsService {
         'unitLog.key AS "key"',
         'unitLog.parameter AS "parameter"'
       ])
-      .orderBy('unitLog.id', 'ASC')
+      .orderBy('unitLog.id', 'ASC');
+    this.applyExclusionsToQuery(query, exclusions);
+    const raw = await query
       .getRawMany<{
       id: number;
       unitid: number;
@@ -2273,13 +2308,17 @@ export class WorkspaceTestResultsService {
       throw new Error('Invalid unitId provided');
     }
 
-    const unitRow = await this.unitRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const unitQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('unit.id = :unitId', { unitId })
-      .select(['unit.id', 'unit.bookletid'])
+      .select(['unit.id', 'unit.bookletid']);
+    this.applyExclusionsToQuery(unitQuery, exclusions);
+    const unitRow = await unitQuery
       .getOne();
 
     if (!unitRow) {
@@ -2287,6 +2326,14 @@ export class WorkspaceTestResultsService {
     }
 
     const bookletId = Number(unitRow.bookletid);
+    const unitsInBookletQuery = this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('unit.bookletid = :bookletId', { bookletId })
+      .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+      .orderBy('unit.id', 'ASC');
+    this.applyExclusionsToQuery(unitsInBookletQuery, exclusions);
 
     const [bookletLogs, sessions, units] = await Promise.all([
       this.bookletLogRepository
@@ -2316,12 +2363,7 @@ export class WorkspaceTestResultsService {
         ])
         .orderBy('session.id', 'ASC')
         .getMany(),
-      this.unitRepository
-        .createQueryBuilder('unit')
-        .where('unit.bookletid = :bookletId', { bookletId })
-        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
-        .orderBy('unit.id', 'ASC')
-        .getMany()
+      unitsInBookletQuery.getMany()
     ]);
 
     return {
@@ -2364,7 +2406,7 @@ export class WorkspaceTestResultsService {
       workspaceId,
       connector,
       unitId
-    )}:v4`;
+    )}:v6`;
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;
@@ -2388,6 +2430,11 @@ export class WorkspaceTestResultsService {
     const code = parts[1];
     const group = parts.length >= 4 ? parts[2] : undefined;
     const bookletId = parts[parts.length - 1];
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    if (isExcludedByResolvedExclusions(exclusions, bookletId, unitId)) {
+      return { responses: [] };
+    }
+
     const createUnitLookupQuery = () => {
       const queryBuilder = this.unitRepository
         .createQueryBuilder('unit')
@@ -2402,10 +2449,12 @@ export class WorkspaceTestResultsService {
         queryBuilder.andWhere('person.group = :group', { group });
       }
 
-      return queryBuilder
+      queryBuilder
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('bookletinfo.name = :bookletId', { bookletId });
+      this.applyExclusionsToQuery(queryBuilder, exclusions);
+      return queryBuilder;
     };
 
     let unitRow = await createUnitLookupQuery()
@@ -2592,6 +2641,8 @@ export class WorkspaceTestResultsService {
         })
         .andWhere('person.consider = :consider', { consider: true })
         .orderBy('response.id', 'ASC');
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
+      this.applyExclusionsToQuery(queryBuilder, exclusions);
 
       if (status === 'null') {
         queryBuilder.andWhere(`${effectiveStatusExpression} IS NULL`);
@@ -2963,6 +3014,9 @@ export class WorkspaceTestResultsService {
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
 
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyExclusionsToQuery(query, exclusions);
+
       if (searchParams.value) {
         query.andWhere('response.value ILIKE :value', {
           value: `%${searchParams.value}%`
@@ -3182,6 +3236,8 @@ export class WorkspaceTestResultsService {
         .where('unit.name = :unitName', { unitName })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyExclusionsToQuery(query, exclusions);
 
       const total = await query.getCount();
 
@@ -3310,6 +3366,8 @@ export class WorkspaceTestResultsService {
         })
         .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      this.applyIgnoredBookletsToQuery(query, exclusions.ignoredBooklets);
 
       const total = await query.getCount();
 
@@ -3336,7 +3394,11 @@ export class WorkspaceTestResultsService {
         personCode: booklet.person.code,
         personGroup: booklet.person.group,
         units: booklet.units ?
-          booklet.units.map(unit => ({
+          booklet.units.filter(unit => !isExcludedByResolvedExclusions(
+            exclusions,
+            booklet.bookletinfo.name,
+            unit.name
+          )).map(unit => ({
             unitId: unit.id,
             unitName: unit.name,
             unitAlias: unit.alias
@@ -3423,6 +3485,7 @@ export class WorkspaceTestResultsService {
 
     const BATCH_SIZE = 100;
     let processedCount = 0;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     const createBaseQuery = () => {
       const qb = this.unitRepository
@@ -3442,6 +3505,7 @@ export class WorkspaceTestResultsService {
         ])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(qb, exclusions);
 
       if (filters?.groupNames?.length) {
         qb.andWhere('person.group IN (:...groupNames)', {
@@ -3708,6 +3772,7 @@ export class WorkspaceTestResultsService {
 
     const BATCH_SIZE = 2000;
     let processedCount = 0;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     const hasUnitFilters = Boolean(filters?.unitNames?.length);
 
@@ -3732,6 +3797,7 @@ export class WorkspaceTestResultsService {
           .addSelect('bookletinfo.name', 'bookletname')
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true });
+        this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets);
 
         if (filters?.groupNames?.length) {
           qb.andWhere('person.group IN (:...groupNames)', {
@@ -3830,6 +3896,7 @@ export class WorkspaceTestResultsService {
         .addSelect('bookletinfo.name', 'bookletname')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      this.applyExclusionsToQuery(qb, exclusions);
 
       if (filters?.groupNames?.length) {
         qb.andWhere('person.group IN (:...groupNames)', {
@@ -3931,6 +3998,7 @@ export class WorkspaceTestResultsService {
     booklets: string[];
     units: string[];
   }> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const testPersons = await this.personsRepository
       .createQueryBuilder('person')
       .select(['person.id', 'person.group', 'person.code', 'person.login'])
@@ -3949,21 +4017,28 @@ export class WorkspaceTestResultsService {
       .orderBy('person.group', 'ASC')
       .getRawMany();
 
-    const booklets = await this.bookletRepository
+    const bookletsQuery = this.bookletRepository
       .createQueryBuilder('booklet')
       .innerJoin('booklet.person', 'person')
       .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('DISTINCT bookletinfo.name', 'name')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+    const booklets = await bookletsQuery
       .orderBy('bookletinfo.name', 'ASC')
       .getRawMany();
 
-    const units = await this.unitRepository
+    const unitsQuery = this.unitRepository
       .createQueryBuilder('unit')
       .innerJoin('unit.booklet', 'booklet')
       .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .select('DISTINCT unit.name', 'name')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    this.applyExclusionsToQuery(unitsQuery, exclusions);
+    const units = await unitsQuery
       .orderBy('unit.name', 'ASC')
       .getRawMany();
 
@@ -3981,14 +4056,18 @@ export class WorkspaceTestResultsService {
   }
 
   async hasGeogebraResponses(workspaceId: number): Promise<boolean> {
-    const count = await this.responseRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' })
+      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' });
+    this.applyExclusionsToQuery(query, exclusions);
+    const count = await query
       .getCount();
 
     return count > 0;
