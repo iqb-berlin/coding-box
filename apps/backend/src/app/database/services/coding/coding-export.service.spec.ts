@@ -200,6 +200,111 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     );
   });
 
+  it('scopes variable export helper queries to the current workspace', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        innerJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const combinationsQuery = createQueryBuilder([{
+      unitName: 'UNIT',
+      variableId: 'VAR',
+      bookletName: 'BOOKLET-A'
+    }]);
+    const personIdsQuery = createQueryBuilder([{ pId: 10 }]);
+    const managerCasesQuery = createQueryBuilder([]);
+    const dataQuery = createQueryBuilder([{
+      login: 'login-a',
+      code: 'code-a',
+      group: 'group-a',
+      bookletName: 'BOOKLET-A',
+      cju_code: '1',
+      coding_issue_option: null,
+      code_v1: '1',
+      code_v2: null,
+      code_v3: null,
+      status_v1: 8,
+      username: 'Coder A',
+      notes: null,
+      pId: '10',
+      trainingId: '5',
+      responseId: '100'
+    }]);
+    const responseRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(combinationsQuery)
+        .mockReturnValueOnce(personIdsQuery)
+        .mockReturnValueOnce(managerCasesQuery)
+        .mockReturnValueOnce(dataQuery)
+    };
+    const coderQuery = createQueryBuilder([{ username: 'Coder A' }]);
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(coderQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    await service.exportCodingResultsByVariable(
+      7,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      [5]
+    );
+
+    expect(personIdsQuery.innerJoin).toHaveBeenCalledWith('booklet.bookletinfo', 'bookletinfo');
+    expect(personIdsQuery.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 7 });
+    expect(personIdsQuery.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+
+    expect(managerCasesQuery.innerJoin).toHaveBeenCalledWith('booklet.bookletinfo', 'bookletinfo');
+    expect(managerCasesQuery.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 7 });
+    expect(managerCasesQuery.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+
+    expect(dataQuery.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 7 });
+    expect(dataQuery.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
+    expect(dataQuery.andWhere).toHaveBeenCalledWith('cj.workspace_id = :workspaceId', { workspaceId: 7 });
+  });
+
   it('combines job/training scope with coder filter when all are selected', () => {
     const { service } = createServiceWithDetailedMocks(1);
     const queryBuilder = {

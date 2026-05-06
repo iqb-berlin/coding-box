@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
 import * as cheerio from 'cheerio';
@@ -122,6 +122,8 @@ export function applyResolvedExclusionsToQuery<T>(
 
 @Injectable()
 export class WorkspaceExclusionService {
+  private readonly logger = new Logger(WorkspaceExclusionService.name);
+
   constructor(
     private readonly workspaceCoreService: WorkspaceCoreService,
     @InjectRepository(FileUpload)
@@ -217,8 +219,11 @@ export class WorkspaceExclusionService {
                 }
               }
             });
-          } catch (e) {
-            // Error parsing booklet, safe to skip
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.warn(
+              `Could not parse booklet ${fileId} while resolving ignored testlets for workspace ${workspaceId}: ${message}`
+            );
           }
         }
       }
