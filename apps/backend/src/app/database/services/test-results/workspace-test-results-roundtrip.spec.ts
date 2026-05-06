@@ -127,7 +127,20 @@ describe('test results export/import roundtrip', () => {
       status: 3,
       value: JSON.stringify(['answer-a']),
       subform: 'subform-a',
+      is_autocoder_generated: false,
       code_v1: 99,
+      score_v1: 1,
+      status_v1: 5
+    };
+    const generatedResponse = {
+      id: 41,
+      unitid: 30,
+      variableid: 'derived-var',
+      status: 3,
+      value: 'generated',
+      subform: '',
+      is_autocoder_generated: true,
+      code_v1: 1,
       score_v1: 1,
       status_v1: 5
     };
@@ -182,11 +195,17 @@ describe('test results export/import roundtrip', () => {
     } as unknown as Repository<Unit>;
 
     const responseRepository = {
-      createQueryBuilder: jest.fn(() => queryBuilder<ResponseEntity>({
-        getMany: jest.fn().mockResolvedValue([
-          sourceResponse as unknown as ResponseEntity
-        ])
-      }))
+      createQueryBuilder: jest.fn(() => {
+        const qb = queryBuilder<ResponseEntity>();
+        qb.getMany.mockImplementation(async () => {
+          const excludesGenerated = qb.andWhere.mock.calls.some(([condition]) => (
+            String(condition).includes('is_autocoder_generated IS NOT TRUE')
+          ));
+          const rows = [sourceResponse, generatedResponse];
+          return (excludesGenerated ? rows.filter(r => !r.is_autocoder_generated) : rows) as unknown as ResponseEntity[];
+        });
+        return qb;
+      })
     } as unknown as Repository<ResponseEntity>;
 
     const chunkRepository = {
@@ -310,6 +329,11 @@ describe('test results export/import roundtrip', () => {
     const responsesCsv = await collectStream(stream => (
       exportService.exportTestResultsToStream(workspaceId, stream)
     ));
+    expect(responsesCsv).not.toContain('"code":');
+    expect(responsesCsv).not.toContain('"score":');
+    expect(responsesCsv).not.toContain('derived-var');
+    expect(responsesCsv).not.toContain('generated');
+
     await processCsv(uploadService, responsesCsv, 'responses');
 
     const responseUnit = capturedResponsePersons[0].booklets[0].units[0];
@@ -320,6 +344,8 @@ describe('test results export/import roundtrip', () => {
       value: ['answer-a'],
       status: 'VALUE_CHANGED'
     });
+    expect(responseUnit.subforms[0].responses[0]).not.toHaveProperty('code');
+    expect(responseUnit.subforms[0].responses[0]).not.toHaveProperty('score');
     expect(responseUnit.laststate).toEqual([
       { key: 'unitState', value: 'done' }
     ]);

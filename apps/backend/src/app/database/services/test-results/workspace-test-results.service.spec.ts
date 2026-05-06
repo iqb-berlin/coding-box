@@ -214,6 +214,22 @@ describe('WorkspaceTestResultsService', () => {
       expect(result).toEqual({ data: [], total: 0 });
     });
 
+    it('should exclude autocoder-generated responses from default response searches', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        {},
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
     it('should apply the v3 fallback status expression for derived-only searches', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
@@ -331,6 +347,12 @@ describe('WorkspaceTestResultsService', () => {
       expect(result.uniqueResponses).toBe(100);
       expect(result.responseStatusCounts).toEqual({ UNSET: 5, NOT_REACHED: 10 });
       expect(result.sessionBrowserCounts).toEqual({ Chrome: 20 });
+      expect(responseCountQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+      expect(responseStatusQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
     });
 
     it('should handle ignored units correctly', async () => {
@@ -547,6 +569,9 @@ describe('WorkspaceTestResultsService', () => {
       await service.exportTestResultsToStream(workspaceId, resStream, {});
 
       expect(qb.getMany).toHaveBeenCalled();
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
     });
   });
 

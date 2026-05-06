@@ -147,6 +147,21 @@ export class WorkspaceTestResultsService {
     return 'response.status_v1';
   }
 
+  private static nonAutocoderGeneratedResponseCondition(responseAlias = 'response'): string {
+    return `${responseAlias}.is_autocoder_generated IS NOT TRUE`;
+  }
+
+  private excludeAutocoderGeneratedResponses(
+    qb: SelectQueryBuilder<unknown>,
+    responseAlias = 'response'
+  ): void {
+    qb.andWhere(
+      WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+        responseAlias
+      )
+    );
+  }
+
   constructor(
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
@@ -267,6 +282,7 @@ export class WorkspaceTestResultsService {
       .andWhere('person.consider = :consider', { consider: true });
 
     this.applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(uniqueResponsesQuery);
     const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
 
     const statusRowsQuery = this.responseRepository
@@ -282,6 +298,7 @@ export class WorkspaceTestResultsService {
       .groupBy('response.status');
 
     this.applyExclusionsToQuery(statusRowsQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(statusRowsQuery);
     const statusRowsPromise = statusRowsQuery.getRawMany<{ status: string | number; count: string | number }>();
 
     const [
@@ -443,7 +460,13 @@ export class WorkspaceTestResultsService {
 
       const units = await this.unitRepository
         .createQueryBuilder('unit')
-        .leftJoinAndSelect('unit.responses', 'response')
+        .leftJoinAndSelect(
+          'unit.responses',
+          'response',
+          WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+            'response'
+          )
+        )
         .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
         .select([
           'unit.id',
@@ -917,6 +940,7 @@ export class WorkspaceTestResultsService {
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     this.applyExclusionsToQuery(qb, exclusions);
+    this.excludeAutocoderGeneratedResponses(qb);
 
     if (code) {
       qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -1150,6 +1174,8 @@ export class WorkspaceTestResultsService {
       .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+
+    this.excludeAutocoderGeneratedResponses(countQb);
 
     if (code) {
       countQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -1485,6 +1511,7 @@ export class WorkspaceTestResultsService {
       .innerJoin('bookletEntity.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    this.excludeAutocoderGeneratedResponses(qb);
 
     const params: Record<string, unknown> = {};
     const orParts = uniqueCombos.map((c, idx) => {
@@ -1732,6 +1759,7 @@ export class WorkspaceTestResultsService {
       .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
+    this.excludeAutocoderGeneratedResponses(baseQb);
 
     if (code) {
       baseQb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
@@ -2464,6 +2492,11 @@ export class WorkspaceTestResultsService {
         'response.subform AS subform'
       ])
       .where('response.unitid = :unitDbId', { unitDbId })
+      .andWhere(
+        WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+          'response'
+        )
+      )
       .getRawMany<{
       variableid: string;
       value: string | null;
@@ -3004,6 +3037,8 @@ export class WorkspaceTestResultsService {
         query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
         });
+      } else {
+        this.excludeAutocoderGeneratedResponses(query);
       }
 
       const total = await query.getCount();
@@ -3460,12 +3495,14 @@ export class WorkspaceTestResultsService {
           'response.variableid',
           'response.status',
           'response.value',
-          'response.subform',
-          'response.code_v1',
-          'response.score_v1',
-          'response.status_v1'
+          'response.subform'
         ])
         .where('response.unitid IN (:...unitIds)', { unitIds })
+        .andWhere(
+          WorkspaceTestResultsService.nonAutocoderGeneratedResponseCondition(
+            'response'
+          )
+        )
         .getMany();
 
       const chunks = await this.chunkRepository
@@ -3560,9 +3597,7 @@ export class WorkspaceTestResultsService {
             id: r.variableid,
             value: value,
             status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform,
-            code: r.code_v1,
-            score: r.score_v1
+            subform: r.subform
           });
         });
 
