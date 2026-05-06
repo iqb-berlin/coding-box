@@ -2,7 +2,7 @@ import {
   Injectable, Logger, forwardRef, Inject
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -13,6 +13,10 @@ import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 
 @Injectable()
@@ -26,6 +30,7 @@ export class CodingValidationService {
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private cacheService: CacheService,
     private workspaceFilesService: WorkspaceFilesService,
+    private workspaceExclusionService: WorkspaceExclusionService,
     @Inject(forwardRef(() => CodingJobService))
     private codingJobService: CodingJobService
   ) { }
@@ -393,6 +398,7 @@ export class CodingValidationService {
   ): Promise<
     { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
     > {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     // Helper to build the base query for a given status
     const buildQuery = (status: number) => {
       const qb = this.responseRepository
@@ -402,6 +408,7 @@ export class CodingValidationService {
         .addSelect('COUNT(response.id)', 'responseCount')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('response.status_v1 = :status', { status })
         .andWhere('person.workspace_id = :workspace_id', { workspace_id: workspaceId })
@@ -414,6 +421,7 @@ export class CodingValidationService {
       if (unitName) {
         qb.andWhere('unit.name = :unitName', { unitName });
       }
+      applyResolvedExclusionsToQuery(qb, exclusions);
       return qb;
     };
 
@@ -566,7 +574,8 @@ export class CodingValidationService {
   async getVariableCasesInJobs(
     workspaceId: number
   ): Promise<Map<string, number>> {
-    const rawResults = await this.codingJobUnitRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
@@ -575,8 +584,13 @@ export class CodingValidationService {
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.unit_name')
-      .addGroupBy('cju.variable_id')
-      .getRawMany();
+      .addGroupBy('cju.variable_id');
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'codingValidationCasesInJobs'
+    });
+    const rawResults = await query.getRawMany();
 
     const casesInJobsMap = new Map<string, number>();
 
@@ -606,46 +620,51 @@ export class CodingValidationService {
       }
 
       let totalAppliedCount = 0;
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       const batchSize = 50;
       for (let i = 0; i < incompleteVariables.length; i += batchSize) {
         const batch = incompleteVariables.slice(i, i + batchSize);
 
-        const conditions = batch
-          .map(
-            variable => `(unit.name = '${variable.unitName.replace(
-              /'/g,
-              "''"
-            )}' AND response.variableid = '${variable.variableId.replace(
-              /'/g,
-              "''"
-            )}')`
-          )
-          .join(' OR ');
+        const query = this.responseRepository
+          .createQueryBuilder('response')
+          .innerJoin('response.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .innerJoin('booklet.person', 'person')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true })
+          .andWhere('response.status_v1 IN (:...sourceStatuses)', {
+            sourceStatuses: [
+              statusStringToNumber('CODING_INCOMPLETE'),
+              statusStringToNumber('INTENDED_INCOMPLETE')
+            ]
+          })
+          .andWhere('response.status_v2 IN (:...targetStatuses)', {
+            targetStatuses: [
+              statusStringToNumber('CODING_COMPLETE'),
+              statusStringToNumber('INVALID'),
+              statusStringToNumber('CODING_ERROR')
+            ]
+          })
+          .andWhere('(response.code_v2 IS NULL OR response.code_v2 >= 0)')
+          .andWhere(new Brackets(qb => {
+            batch.forEach((variable, index) => {
+              const parameters = {
+                [`appliedUnitName${index}`]: variable.unitName,
+                [`appliedVariableId${index}`]: variable.variableId
+              };
+              const condition = `(unit.name = :appliedUnitName${index} AND response.variableid = :appliedVariableId${index})`;
+              if (index === 0) {
+                qb.where(condition, parameters);
+              } else {
+                qb.orWhere(condition, parameters);
+              }
+            });
+          }));
 
-        const query = `
-          SELECT COUNT(response.id) as applied_count
-          FROM response
-          INNER JOIN unit ON response.unitid = unit.id
-          INNER JOIN booklet ON unit.bookletid = booklet.id
-          INNER JOIN persons person ON booklet.personid = person.id
-          WHERE person.workspace_id = $1
-            AND person.consider = true
-            AND response.status_v1 IN ($2, $3)
-            AND (${conditions})
-            AND response.status_v2 IN ($4, $5, $6)
-            AND (response.code_v2 IS NULL OR response.code_v2 >= 0)
-        `;
+        applyResolvedExclusionsToQuery(query, exclusions, { parameterPrefix: `appliedResults${i}` });
 
-        const result = await this.responseRepository.query(query, [
-          workspaceId,
-          statusStringToNumber('CODING_INCOMPLETE'),
-          statusStringToNumber('INTENDED_INCOMPLETE'),
-          statusStringToNumber('CODING_COMPLETE'),
-          statusStringToNumber('INVALID'),
-          statusStringToNumber('CODING_ERROR') // status_v2 = CODING_ERROR
-        ]);
-
-        const batchCount = parseInt(result[0]?.applied_count || '0', 10);
+        const batchCount = await query.getCount();
         totalAppliedCount += batchCount;
 
         this.logger.debug(

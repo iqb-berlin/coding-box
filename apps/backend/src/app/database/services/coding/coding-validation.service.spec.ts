@@ -7,6 +7,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 
 describe('CodingValidationService', () => {
@@ -21,6 +22,7 @@ describe('CodingValidationService', () => {
     leftJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    orWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn(),
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
@@ -81,6 +83,16 @@ describe('CodingValidationService', () => {
         {
           provide: WorkspaceFilesService,
           useValue: mockWorkspaceFilesService
+        },
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+              globalIgnoredUnits: [],
+              ignoredBooklets: [],
+              testletIgnoredUnits: []
+            })
+          }
         },
         {
           provide: CodingJobService,
@@ -521,7 +533,7 @@ describe('CodingValidationService', () => {
         { unitName: 'unit2', variableId: 'var2' }
       ];
 
-      mockResponseRepository.query.mockResolvedValue([{ applied_count: '10' }]);
+      mockQueryBuilder.getCount.mockResolvedValueOnce(10);
 
       const result = await service.getAppliedResultsCount(
         1,
@@ -529,7 +541,10 @@ describe('CodingValidationService', () => {
       );
 
       expect(result).toBe(10);
-      expect(mockResponseRepository.query).toHaveBeenCalled();
+      expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledWith(
+        'response'
+      );
+      expect(mockQueryBuilder.getCount).toHaveBeenCalled();
     });
 
     it('should process variables in batches', async () => {
@@ -538,17 +553,18 @@ describe('CodingValidationService', () => {
         variableId: `var${i}`
       }));
 
-      mockResponseRepository.query.mockResolvedValue([{ applied_count: '1' }]);
+      mockQueryBuilder.getCount.mockResolvedValue(1);
 
       await service.getAppliedResultsCount(1, incompleteVariables);
 
-      expect(mockResponseRepository.query).toHaveBeenCalledTimes(2);
+      expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(2);
     });
 
     it('should handle database errors', async () => {
       const incompleteVariables = [{ unitName: 'unit1', variableId: 'var1' }];
 
-      mockResponseRepository.query.mockRejectedValue(new Error('Query failed'));
+      mockQueryBuilder.getCount.mockRejectedValue(new Error('Query failed'));
 
       await expect(
         service.getAppliedResultsCount(1, incompleteVariables)
