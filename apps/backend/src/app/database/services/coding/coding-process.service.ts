@@ -25,7 +25,10 @@ import { ResponseManagementService } from '../test-results/response-management.s
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingProcessService {
@@ -552,23 +555,7 @@ export class CodingProcessService {
       .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
       .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
 
-    if (globalIgnoredUnits.length > 0) {
-      query.andWhere('UPPER(unit.name) NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-
-    if (ignoredBooklets.length > 0) {
-      query.andWhere('UPPER(bookletinfo.name) NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(UPPER(bookletinfo.name) = :bId${i} AND UPPER(unit.name) = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId.toUpperCase();
-        params[`uId${i}`] = t.unitId.toUpperCase();
-      });
-      query.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(query, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     return query.getMany();
   }

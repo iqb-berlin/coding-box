@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Not, IsNull, Connection, EntityManager
+  Repository, In, Not, Connection, EntityManager, SelectQueryBuilder
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
@@ -23,6 +23,11 @@ import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -111,13 +116,55 @@ export class CodingJobService {
     private discussionResultRepository: Repository<CoderTrainingDiscussionResult>,
     private connection: Connection,
     private cacheService: CacheService,
-    private workspaceFilesService: WorkspaceFilesService
+    private workspaceFilesService: WorkspaceFilesService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
-  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
-    const totalUnits = await this.codingJobUnitRepository.count({
-      where: { coding_job_id: jobId }
+  private async applyCodingJobUnitExclusions<T>(
+    queryBuilder: SelectQueryBuilder<T>,
+    workspaceId: number,
+    parameterPrefix: string
+  ): Promise<void> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(queryBuilder, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix
     });
+  }
+
+  private async getVisibleCodingJobUnits(
+    codingJobId: number,
+    workspaceId: number
+  ): Promise<CodingJobUnit[]> {
+    const codingJobUnits = await this.codingJobUnitRepository.find({
+      where: { coding_job_id: codingJobId }
+    });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    return codingJobUnits.filter(unit => !isExcludedByResolvedExclusions(
+      exclusions,
+      unit.booklet_name,
+      unit.unit_name
+    ));
+  }
+
+  async getCodingJobProgress(jobId: number): Promise<{ progress: number; coded: number; total: number; open: number }> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: jobId },
+      select: ['id', 'workspace_id']
+    });
+
+    if (!codingJob) {
+      return {
+        progress: 0, coded: 0, total: 0, open: 0
+      };
+    }
+
+    const totalUnitsQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .where('cju.coding_job_id = :jobId', { jobId });
+    await this.applyCodingJobUnitExclusions(totalUnitsQuery, codingJob.workspace_id, 'codingJobProgressTotal');
+    const totalUnits = await totalUnitsQuery.getCount();
 
     if (totalUnits === 0) {
       return {
@@ -125,19 +172,21 @@ export class CodingJobService {
       };
     }
 
+    const codedUnitsQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .where('cju.coding_job_id = :jobId', { jobId })
+      .andWhere('cju.code IS NOT NULL');
+    await this.applyCodingJobUnitExclusions(codedUnitsQuery, codingJob.workspace_id, 'codingJobProgressCoded');
+
+    const openUnitsQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .where('cju.coding_job_id = :jobId', { jobId })
+      .andWhere('cju.is_open = :isOpen', { isOpen: true });
+    await this.applyCodingJobUnitExclusions(openUnitsQuery, codingJob.workspace_id, 'codingJobProgressOpen');
+
     const [codedUnits, openUnits] = await Promise.all([
-      this.codingJobUnitRepository.count({
-        where: {
-          coding_job_id: jobId,
-          code: Not(IsNull())
-        }
-      }),
-      this.codingJobUnitRepository.count({
-        where: {
-          coding_job_id: jobId,
-          is_open: true
-        }
-      })
+      codedUnitsQuery.getCount(),
+      openUnitsQuery.getCount()
     ]);
 
     const accessibleUnits = totalUnits;
@@ -239,13 +288,13 @@ export class CodingJobService {
       openUnits: progressData[index]?.open || 0
     }));
 
-    const totalOpenUnits = await this.codingJobUnitRepository.count({
-      relations: ['coding_job'],
-      where: {
-        coding_job: { workspace_id: workspaceId },
-        is_open: true
-      }
-    });
+    const totalOpenUnitsQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('cju.is_open = :isOpen', { isOpen: true });
+    await this.applyCodingJobUnitExclusions(totalOpenUnitsQuery, workspaceId, 'codingJobsOpenUnits');
+    const totalOpenUnits = await totalOpenUnitsQuery.getCount();
 
     return {
       data,
@@ -539,9 +588,16 @@ export class CodingJobService {
         await codingJobCoderRepo.delete(deleteAssignmentIds);
       }
 
-      const transferredCases = await codingJobUnitRepo.count({
-        where: { coding_job_id: In(affectedJobIds) }
+      const transferredCasesQuery = codingJobUnitRepo
+        .createQueryBuilder('cju')
+        .where('cju.coding_job_id IN (:...affectedJobIds)', { affectedJobIds });
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+      applyResolvedExclusionsToQuery(transferredCasesQuery, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: 'transferCases'
       });
+      const transferredCases = await transferredCasesQuery.getCount();
 
       return {
         sourceCoderId,
@@ -650,9 +706,15 @@ export class CodingJobService {
   }
 
   async getResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<ResponseEntity[]> {
+    const jobRepo = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
     const variableRepo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
     const bundleRepo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
     const responseRepo = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+
+    const codingJob = await jobRepo.findOne({ where: { id: codingJobId } });
+    if (!codingJob) {
+      return [];
+    }
 
     const codingJobVariables = await variableRepo.find({
       where: { coding_job_id: codingJobId }
@@ -686,7 +748,9 @@ export class CodingJobService {
       .leftJoinAndSelect('response.unit', 'unit')
       .leftJoinAndSelect('unit.booklet', 'booklet')
       .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-      .leftJoinAndSelect('booklet.person', 'person');
+      .leftJoinAndSelect('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId: codingJob.workspace_id })
+      .andWhere('person.consider = :consider', { consider: true });
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -700,11 +764,13 @@ export class CodingJobService {
     });
 
     if (conditions.length > 0) {
-      queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
+      queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
     }
 
     // Exclude aggregated duplicates (marked with code_v2 = -111)
     queryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(codingJob.workspace_id);
+    applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     return queryBuilder
       .orderBy('response.id', 'ASC')
@@ -752,6 +818,11 @@ export class CodingJobService {
     });
 
     if (!codingJobUnit) {
+      throw new NotFoundException('Coding job unit not found for progress entry');
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(codingJob.workspace_id);
+    if (isExcludedByResolvedExclusions(exclusions, codingJobUnit.booklet_name, codingJobUnit.unit_name)) {
       throw new NotFoundException('Coding job unit not found for progress entry');
     }
 
@@ -835,9 +906,7 @@ export class CodingJobService {
       throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: { coding_job_id: codingJobId }
-    });
+    const codingJobUnits = await this.getVisibleCodingJobUnits(codingJobId, codingJob.workspace_id);
 
     if (codingJobUnits.length === 0) {
       return {};
@@ -905,10 +974,7 @@ export class CodingJobService {
       throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
     }
 
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: { coding_job_id: codingJobId },
-      select: ['person_login', 'person_code', 'booklet_name', 'unit_name', 'variable_id', 'notes']
-    });
+    const codingJobUnits = await this.getVisibleCodingJobUnits(codingJobId, codingJob.workspace_id);
 
     if (codingJobUnits.length === 0) {
       return {};
@@ -966,8 +1032,11 @@ export class CodingJobService {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId }
     });
+    if (!codingJob) {
+      return [];
+    }
 
-    const globalMode = codingJob?.case_ordering_mode || 'continuous';
+    const globalMode = codingJob.case_ordering_mode || 'continuous';
 
     const bundles = await this.codingJobVariableBundleRepository.find({
       where: { coding_job_id: codingJobId },
@@ -995,9 +1064,15 @@ export class CodingJobService {
         'variable_bundle_id'
       ]
     });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(codingJob.workspace_id);
+    const visibleCodingJobUnits = codingJobUnits.filter(unit => !isExcludedByResolvedExclusions(
+      exclusions,
+      unit.booklet_name,
+      unit.unit_name
+    ));
 
     // Detect double coding and other coders
-    const responseIds = codingJobUnits.map(unit => unit.response_id);
+    const responseIds = visibleCodingJobUnits.map(unit => unit.response_id);
     const otherCodersMap = new Map<number, Set<string>>();
 
     if (responseIds.length > 0) {
@@ -1028,7 +1103,7 @@ export class CodingJobService {
     }
     buckets.set('unbundled', []);
 
-    for (const unit of codingJobUnits) {
+    for (const unit of visibleCodingJobUnits) {
       const key = unit.variable_bundle_id || 'unbundled';
       if (!buckets.has(key)) {
         buckets.set(key, []);
@@ -1064,8 +1139,15 @@ export class CodingJobService {
   }
 
   private async getSlimResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<SlimResponse[]> {
+    const jobRepo = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
     const variableRepo = manager ? manager.getRepository(CodingJobVariable) : this.codingJobVariableRepository;
     const bundleRepo = manager ? manager.getRepository(CodingJobVariableBundle) : this.codingJobVariableBundleRepository;
+
+    const codingJob = await jobRepo.findOne({ where: { id: codingJobId } });
+    if (!codingJob) {
+      return [];
+    }
+    const workspaceId = codingJob.workspace_id;
 
     const codingJobVariables = await variableRepo.find({
       where: { coding_job_id: codingJobId }
@@ -1111,7 +1193,9 @@ export class CodingJobService {
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person');
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -1124,8 +1208,10 @@ export class CodingJobService {
       parameters[variableParam] = variable.variable_id;
     });
 
-    queryBuilder.where(`(${conditions.join(' OR ')})`, parameters);
+    queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
     queryBuilder.andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     const raw = await queryBuilder.orderBy('response.id', 'ASC').getRawMany();
 
@@ -1540,6 +1626,8 @@ export class CodingJobService {
         ]
       })
       .andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -1589,6 +1677,8 @@ export class CodingJobService {
         ]
       })
       .andWhere('(response.code_v2 IS NULL OR (response.code_v2 != -111 AND response.code_v2 != -98))');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -2234,10 +2324,20 @@ export class CodingJobService {
   }
 
   async hasCodingIssues(codingJobId: number): Promise<boolean> {
-    const codingJobUnits = await this.codingJobUnitRepository.find({
-      where: { coding_job_id: codingJobId },
-      select: ['code', 'coding_issue_option']
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId },
+      select: ['id', 'workspace_id']
     });
+    if (!codingJob) {
+      return false;
+    }
+
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select(['cju.code', 'cju.coding_issue_option'])
+      .where('cju.coding_job_id = :codingJobId', { codingJobId });
+    await this.applyCodingJobUnitExclusions(query, codingJob.workspace_id, 'codingIssues');
+    const codingJobUnits = await query.getMany();
 
     return codingJobUnits.some(unit => unit.coding_issue_option === -1 ||
       unit.coding_issue_option === -2 ||
@@ -2249,7 +2349,7 @@ export class CodingJobService {
   private async getVariableCasesInJobs(
     workspaceId: number
   ): Promise<Map<string, number>> {
-    const rawResults = await this.codingJobUnitRepository.createQueryBuilder('cju')
+    const query = this.codingJobUnitRepository.createQueryBuilder('cju')
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('COUNT(DISTINCT cju.response_id)', 'casesInJobs')
@@ -2257,8 +2357,9 @@ export class CodingJobService {
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL')
       .groupBy('cju.unit_name')
-      .addGroupBy('cju.variable_id')
-      .getRawMany();
+      .addGroupBy('cju.variable_id');
+    await this.applyCodingJobUnitExclusions(query, workspaceId, 'codingJobVariableCasesInJobs');
+    const rawResults = await query.getRawMany();
 
     const casesInJobsMap = new Map<string, number>();
 

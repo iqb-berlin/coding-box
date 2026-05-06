@@ -16,6 +16,7 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { MissingsProfilesService } from './missings-profiles.service';
@@ -67,7 +68,17 @@ describe('CoderTrainingService', () => {
         { provide: getRepositoryToken(ChunkEntity), useValue: mockRepository },
         { provide: CodingJobService, useValue: mockCodingJobService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
-        { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } }
+        { provide: MissingsProfilesService, useValue: { getMissingsProfileDetails: jest.fn() } },
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+              globalIgnoredUnits: [],
+              ignoredBooklets: [],
+              testletIgnoredUnits: []
+            })
+          }
+        }
       ]
     }).compile();
 

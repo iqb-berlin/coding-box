@@ -7,6 +7,7 @@ import * as statusConverter from '../../utils/response-status-converter';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Persons from '../../entities/persons.entity';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 jest.mock('../../utils/response-status-converter');
 
@@ -61,6 +62,16 @@ describe('CodingResponseQueryService', () => {
         {
           provide: getRepositoryToken(Persons),
           useValue: mockPersonsRepository
+        },
+        {
+          provide: WorkspaceExclusionService,
+          useValue: {
+            resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+              globalIgnoredUnits: [],
+              ignoredBooklets: [],
+              testletIgnoredUnits: []
+            })
+          }
         }
       ]
     }).compile();
