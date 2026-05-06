@@ -51,6 +51,16 @@ import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+import {
+  isExcludedByResolvedExclusions,
+  normalizeExclusionUnitId,
+  WorkspaceExclusionService
+} from './workspace-exclusion.service';
+
+type WorkspaceUnitVisibility = {
+  globalIgnoredUnits: Set<string>;
+  visibleUnitIds: Set<string> | null;
+};
 
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
@@ -99,8 +109,82 @@ export class WorkspaceFilesService implements OnModuleInit {
     private workspaceTestFilesValidationService: WorkspaceTestFilesValidationService,
     private cacheService: CacheService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly workspaceExclusionService?: WorkspaceExclusionService
   ) {}
+
+  private normalizeFileUnitId(value: string | null | undefined): string {
+    return normalizeExclusionUnitId(value).replace(/\.VOCS$/i, '');
+  }
+
+  private async getWorkspaceUnitVisibility(
+    workspaceId: number
+  ): Promise<WorkspaceUnitVisibility> {
+    if (!this.workspaceExclusionService) {
+      return { globalIgnoredUnits: new Set(), visibleUnitIds: null };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const globalIgnoredUnits = new Set(
+      exclusions.globalIgnoredUnits.map(unitId => this.normalizeFileUnitId(unitId))
+    );
+    const hasContextualExclusions =
+      exclusions.ignoredBooklets.length > 0 ||
+      exclusions.testletIgnoredUnits.length > 0;
+
+    if (!hasContextualExclusions) {
+      return { globalIgnoredUnits, visibleUnitIds: null };
+    }
+
+    const bookletFiles = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Booklet' }
+    });
+
+    if (!bookletFiles || bookletFiles.length === 0) {
+      return { globalIgnoredUnits, visibleUnitIds: null };
+    }
+
+    const visibleUnitIds = new Set<string>();
+    for (const bookletFile of bookletFiles) {
+      try {
+        const bookletId = String(bookletFile.file_id || '');
+        const $ = cheerio.load(bookletFile.data, { xmlMode: true });
+        $('Unit, unit').each((_, element) => {
+          const unitId = $(element).attr('id');
+          const normalizedUnitId = this.normalizeFileUnitId(unitId);
+          if (!normalizedUnitId || globalIgnoredUnits.has(normalizedUnitId)) {
+            return;
+          }
+          if (!isExcludedByResolvedExclusions(exclusions, bookletId, unitId)) {
+            visibleUnitIds.add(normalizedUnitId);
+          }
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Could not parse booklet ${bookletFile.file_id} for unit visibility in workspace ${workspaceId}: ${error.message}`
+        );
+      }
+    }
+
+    return { globalIgnoredUnits, visibleUnitIds };
+  }
+
+  private isUnitVisibleInWorkspace(
+    unitId: string | null | undefined,
+    visibility: WorkspaceUnitVisibility
+  ): boolean {
+    const normalizedUnitId = this.normalizeFileUnitId(unitId);
+    if (!normalizedUnitId) {
+      return false;
+    }
+    if (visibility.globalIgnoredUnits.has(normalizedUnitId)) {
+      return false;
+    }
+    if (visibility.visibleUnitIds !== null) {
+      return visibility.visibleUnitIds.has(normalizedUnitId);
+    }
+    return true;
+  }
 
   private getResourceSubtypeExtension(fileType: string): string | null {
     const match = fileType.match(/^Resource\s*\((\.[^)]+)\)$/i);
@@ -425,12 +509,15 @@ ${bookletRefs}
         return [];
       }
 
-      return units.map(unit => ({
-        id: unit.id,
-        unitId: unit.file_id,
-        fileName: unit.filename,
-        data: unit.data
-      }));
+      const visibility = await this.getWorkspaceUnitVisibility(workspaceId);
+      return units
+        .filter(unit => this.isUnitVisibleInWorkspace(unit.file_id, visibility))
+        .map(unit => ({
+          id: unit.id,
+          unitId: unit.file_id,
+          fileName: unit.filename,
+          data: unit.data
+        }));
     } catch (error) {
       this.logger.error(
         `Error getting units with file IDs for workspace ${workspaceId}: ${error.message}`,
@@ -2817,6 +2904,7 @@ ${bookletRefs}
       }
 
       const unitVariableDetails: UnitVariableDetailsDto[] = [];
+      const visibility = await this.getWorkspaceUnitVisibility(workspaceId);
 
       for (const unitFile of unitFiles) {
         try {
@@ -2831,6 +2919,9 @@ ${bookletRefs}
             parsedXml.Unit.Metadata.Id
           ) {
             const unitName = parsedXml.Unit.Metadata.Id;
+            if (!this.isUnitVisibleInWorkspace(unitName, visibility)) {
+              continue;
+            }
             const variables: Array<{
               id: string;
               alias: string;

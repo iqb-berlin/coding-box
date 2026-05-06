@@ -7,6 +7,10 @@ import { ResponseEntity } from '../../database/entities/response.entity';
 import { VariableAnalysisJobData } from '../job-queue.service';
 import { VariableAnalysisResultDto } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../../database/services/workspace/workspace-exclusion.service';
 
 @Processor('variable-analysis')
 export class VariableAnalysisProcessor {
@@ -14,7 +18,8 @@ export class VariableAnalysisProcessor {
 
   constructor(
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
+    private responseRepository: Repository<ResponseEntity>,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   @Process()
@@ -27,6 +32,7 @@ export class VariableAnalysisProcessor {
       const workspaceId = job.data.workspaceId;
       const unitId = job.data.unitId;
       const variableId = job.data.variableId;
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
       // Build the query
       const query = this.responseRepository
@@ -37,6 +43,7 @@ export class VariableAnalysisProcessor {
         .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
+      applyResolvedExclusionsToQuery(query, exclusions);
 
       // Add filters
       if (unitId) {

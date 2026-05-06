@@ -16,6 +16,10 @@ import {
 import { CacheService } from '../../cache/cache.service';
 import { statusStringToNumber } from '../../database/utils/response-status-converter';
 import { CodingAnalysisJobData } from '../job-queue.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../../database/services/workspace/workspace-exclusion.service';
 
 @Processor('response-analysis')
 export class CodingAnalysisProcessor {
@@ -25,7 +29,8 @@ export class CodingAnalysisProcessor {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     private codingJobService: CodingJobService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   @Process()
@@ -55,20 +60,24 @@ export class CodingAnalysisProcessor {
   ): Promise<ResponseAnalysisDto> {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     // 1. Identify relevant Unit+Variable combinations
     this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
-    const relevantVariables = await this.responseRepository
+    const relevantVariablesQuery = this.responseRepository
       .createQueryBuilder('response')
       .select('response.unitid', 'unitId')
       .addSelect('response.variableid', 'variableId')
       .distinct(true)
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
+      .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] });
+    applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
+    const relevantVariables = await relevantVariablesQuery
       .getRawMany();
 
     if (relevantVariables.length === 0) {
@@ -83,13 +92,16 @@ export class CodingAnalysisProcessor {
     let totalProcessed = 0;
 
     // Check if aggregation is already applied (marked by code_v2 = -111)
-    const isAggregationApplied = await this.responseRepository
+    const aggregationAppliedQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
+      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 });
+    applyResolvedExclusionsToQuery(aggregationAppliedQuery, exclusions);
+    const isAggregationApplied = await aggregationAppliedQuery
       .getCount() > 0;
 
     // 2. Process in chunks
@@ -107,6 +119,7 @@ export class CodingAnalysisProcessor {
         .andWhere('response.status_v1 IN (:...statuses)', { statuses: [codingIncompleteStatus, intendedIncompleteStatus] })
         // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
         .andWhere('(response.code_v2 != :aggregatedCode OR response.code_v2 IS NULL)', { aggregatedCode: -111 });
+      applyResolvedExclusionsToQuery(qb, exclusions);
 
       qb.andWhere(new Brackets(qbInside => {
         chunk.forEach((item, index) => {

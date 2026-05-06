@@ -11,7 +11,7 @@ const createRepo = () => ({
 
 describe('WorkspaceCoreService', () => {
   let repo: ReturnType<typeof createRepo>;
-  let cacheService: { delete: jest.Mock };
+  let cacheService: { delete: jest.Mock; deleteByPattern: jest.Mock };
   let workspaceTestResultsService: { invalidateWorkspaceStatsCache: jest.Mock };
   let queryRunner: {
     connect: jest.Mock;
@@ -25,7 +25,7 @@ describe('WorkspaceCoreService', () => {
 
   beforeEach(() => {
     repo = createRepo();
-    cacheService = { delete: jest.fn() };
+    cacheService = { delete: jest.fn(), deleteByPattern: jest.fn() };
     workspaceTestResultsService = { invalidateWorkspaceStatsCache: jest.fn() };
     queryRunner = {
       connect: jest.fn(),
@@ -97,5 +97,9 @@ describe('WorkspaceCoreService', () => {
     await expect(service.setWorkspaceSettings(1, { b: true } as never)).resolves.toBeUndefined();
     await expect(service.setWorkspaceSettings(99, { b: true } as never)).rejects.toBeInstanceOf(AdminWorkspaceNotFoundException);
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(cacheService.delete).toHaveBeenCalledWith('flat_response_filter_options:version:1');
+    expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
+    expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');
+    expect(cacheService.deleteByPattern).toHaveBeenCalledWith('flat_response_filter_options:1:*');
   });
 });
