@@ -44,8 +44,8 @@ export class WorkspacesComponent {
       name: (<UntypedFormGroup>result).get('name')?.value,
       settings: {}
     }).subscribe(
-      respOk => {
-        if (respOk) {
+      workspaceId => {
+        if (workspaceId) {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-created'),
             '',

@@ -138,7 +138,6 @@ export class UsersService {
       const savedEntries = await this.workspaceUserRepository.save(entries);
 
       this.logger.log(`Workspaces successfully set for user with ID: ${userId}`);
-      // Return true if at least one entry was saved
       return savedEntries.length > 0;
     } catch (error) {
       this.logger.error(
@@ -216,10 +215,10 @@ export class UsersService {
     await this.usersRepository.delete(ids);
   }
 
-  async createKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
+  async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
     const {
       username, identity, issuer, isAdmin
-    } = keycloakUser;
+    } = oidcPdUser;
     const existingUser = await this.usersRepository.findOne({
       where: [
         { username },
@@ -243,8 +242,8 @@ export class UsersService {
 
       return existingUser.id;
     }
-    this.logger.log(`Creating new Keycloak user: ${JSON.stringify(keycloakUser)}`);
-    const newUser = this.usersRepository.create(keycloakUser);
+    this.logger.log(`Creating new OIDC Provider user: ${JSON.stringify(oidcPdUser)}`);
+    const newUser = this.usersRepository.create(oidcPdUser);
     await this.usersRepository.save(newUser);
 
     return newUser.id;

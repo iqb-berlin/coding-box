@@ -48,6 +48,9 @@ docker.env
 .DS_Store
 Thumbs.db
 
+# Keycloak files
+config/keycloak/realm/coding-box-realm.config
+
 # Backend files
 auth.constants.ts
 database.constants.ts

@@ -3,19 +3,19 @@ import { HttpClient } from '@angular/common/http';
 import {
   BehaviorSubject,
   Observable,
-  Subject,
-  catchError,
-  map,
-  of,
-  switchMap
+  Subject
 } from 'rxjs';
-import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
+import { DecodedToken } from './auth.service';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { AppHttpError } from '../interceptors/app-http-error.class';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
+
+export interface AuthIdentity {
+  identity: string;
+}
 
 @Injectable({
   providedIn: 'root'
@@ -34,20 +34,18 @@ export class AppService {
     workspaces: []
   };
 
-  kcUser !: CreateUserDto;
-  userProfile: KeycloakProfile = {};
-  isLoggedInKeycloak = false;
+  user!: CreateUserDto;
+  isLoggedIn = false;
   errorMessagesDisabled = false;
   selectedWorkspaceId = 0;
   dataLoading: boolean | number = false;
   appLogo: AppLogoDto = standardLogo;
   postMessage$ = new Subject<MessageEvent>();
-  loggedUser: KeycloakTokenParsed | undefined;
+  loggedUser: DecodedToken | undefined;
   errorMessages: AppHttpError[] = [];
   errorMessageCounter = 0;
   backendUnavailable = false;
   needsReAuthentication = false;
-
   constructor() {
     this.loadLogoSettings();
   }
@@ -58,42 +56,15 @@ export class AppService {
     );
   }
 
-  keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
-    return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
-      .pipe(
-        catchError(() => of(false)),
-        map(loginToken => {
-          if (typeof loginToken === 'string') {
-            localStorage.setItem('id_token', loginToken);
-            return this.getAuthData(user.identity || '')
-              .pipe(
-                map(authData => {
-                  this.updateAuthData(authData);
-                  return true;
-                }),
-                catchError(() => of(false))
-              );
-          }
-          return of(false);
-        }),
-        switchMap(result => {
-          if (result instanceof Observable) {
-            return result;
-          }
-          return of(result);
-        })
-      );
-  }
-
-  getAuthData(id: string): Observable<AuthDataDto> {
+  getAuthData(authObj: AuthIdentity): Observable<AuthDataDto> {
     return this.http.get<AuthDataDto>(
-      `${this.serverUrl}auth-data?identity=${id}`
+      `${this.serverUrl}auth-data?identity=${authObj.identity}`
     );
   }
 
   refreshAuthData(): void {
     if (this.loggedUser?.sub) {
-      this.getAuthData(this.loggedUser.sub).subscribe(authData => {
+      this.getAuthData({ identity: this.loggedUser.sub }).subscribe(authData => {
         this.updateAuthData(authData);
       });
     }
@@ -120,6 +91,10 @@ export class AppService {
 
   get authData(): AuthDataDto {
     return this.authDataSubject.value;
+  }
+
+  set authData(newAuthData: AuthDataDto) {
+    this.authDataSubject.next(newAuthData);
   }
 
   get userId(): number {

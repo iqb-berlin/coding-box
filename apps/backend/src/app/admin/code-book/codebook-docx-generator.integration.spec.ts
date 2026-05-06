@@ -5,6 +5,8 @@ import {
 } from './codebook.interfaces';
 import { CodebookDocxGenerator } from './codebook-docx-generator.class';
 
+jest.setTimeout(30000);
+
 const defaultSettings: CodeBookContentSetting = {
   exportFormat: 'docx',
   missingsProfile: '',

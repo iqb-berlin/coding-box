@@ -1,4 +1,53 @@
 services:
+  keycloak-db:
+    image: postgres:14
+    restart: always
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-q", "-d", "${KEYCLOAK_DB_NAME}", "-U", "${KEYCLOAK_DB_USER}" ]
+      interval: 10s
+      timeout: 3s
+      start_period: 60s
+      start_interval: 1s
+      retries: 5
+    environment:
+      POSTGRES_HOST: keycloak-db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${KEYCLOAK_DB_USER}
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      POSTGRES_DB: ${KEYCLOAK_DB_NAME}
+    volumes:
+      - "keycloak_db_vol:/var/lib/postgresql/data"
+    networks:
+      - application-network
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:22.0
+    restart: always
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    command: [ 'start', '--import-realm' ]
+    ports:
+      - "8080:8080"
+    environment:
+      KC_HOSTNAME: ${SERVER_NAME}
+      KC_HTTP_ENABLED: 'true'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db/${KEYCLOAK_DB_NAME}
+      KC_DB_USERNAME: ${KEYCLOAK_DB_USER}
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      KEYCLOAK_ADMIN: ${ADMIN_NAME}
+      KEYCLOAK_ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      KEYCLOAK_LOGLEVEL: DEBUG
+    env_file:
+      - ./config/keycloak/realm/coding-box-realm.config
+    volumes:
+      - "./config/keycloak/realm/coding-box-realm.json:/opt/keycloak/data/import/coding-box-realm.json"
+      - "./config/keycloak/themes/iqb:/opt/keycloak/themes/iqb"
+    networks:
+      - application-network
+
   redis:
     ports:
       - "${REDIS_PORT:-6379}:6379"
@@ -11,7 +60,6 @@ services:
         REGISTRY_PATH: ${REGISTRY_PATH}
     ports:
       - "${POSTGRES_PORT}:5432"
-
 
   liquibase:
     build:
@@ -39,6 +87,8 @@ services:
       args:
         REGISTRY_PATH: ${REGISTRY_PATH}
         PROJECT: backend
+    depends_on:
+      - keycloak
     ports:
       - "${API_PORT}:3333"  # backend
       - "9229:9229"         # default debug port
@@ -76,3 +126,6 @@ services:
       - "frontend"
       - "--host=frontend"
       - "--port=8080"
+
+volumes:
+  keycloak_db_vol:

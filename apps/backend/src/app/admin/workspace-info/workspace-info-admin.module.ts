@@ -3,6 +3,7 @@ import { DatabaseModule } from '../../database/database.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
 import { AuthModule } from '../../auth/auth.module';
 import { CodingModule } from '../../coding/coding.module';
+import { UserModule } from '../../user/user.module';
 import { WorkspaceController } from '../workspace/workspace.controller';
 import { JournalController } from '../workspace/journal.controller';
 import { ValidationTaskController } from '../workspace/validation-task.controller';
@@ -19,6 +20,7 @@ import { JobQueueModule } from '../../job-queue/job-queue.module';
     WorkspaceModule,
     AuthModule,
     CodingModule,
+    UserModule,
     JobQueueModule
   ],
   controllers: [
