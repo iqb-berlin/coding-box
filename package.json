@@ -151,7 +151,9 @@
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "vite": "7.3.2",
-    "path-to-regexp": "8.4.2"
+    "@nestjs/swagger@^11.2.3": {
+      "path-to-regexp": "8.4.2"
+    }
   },
   "eslintConfig": {
     "extends": "@iqb/eslint-config",
