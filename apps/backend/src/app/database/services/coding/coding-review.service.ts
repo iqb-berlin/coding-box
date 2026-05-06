@@ -5,6 +5,11 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingReviewService {
@@ -15,7 +20,8 @@ export class CodingReviewService {
     private responseRepository: Repository<ResponseEntity>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   async getDoubleCodedVariablesForReview(
@@ -62,6 +68,7 @@ export class CodingReviewService {
       this.logger.log(
         `Getting double-coded variables for review in workspace ${workspaceId} (onlyConflicts=${onlyConflicts}, agreementFilter=${agreementFilter}, resolvedFilter=${resolvedFilter}, jobDefinitionFilters=${jobDefinitionIds?.length || 0}, trainingFilters=${coderTrainingIds?.length || 0})`
       );
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       const query = this.codingJobUnitRepository
         .createQueryBuilder('cju')
         .leftJoin('cju.coding_job', 'cj')
@@ -76,6 +83,11 @@ export class CodingReviewService {
         .groupBy('cju.response_id')
         .addGroupBy('resp.status_v2')
         .having('COUNT(DISTINCT cju.coding_job_id) > 1'); // Multiple jobs assigned to this response
+      applyResolvedExclusionsToQuery(query, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name',
+        parameterPrefix: 'doubleCodedReview'
+      });
 
       if (agreementFilter === 'differ') {
         // Conflict: at least two codes available and they differ.
@@ -214,6 +226,10 @@ export class CodingReviewService {
         }
 
         if (!this.isIncludedByScope(unit.coding_job.job_definition_id, unit.coding_job.training_id, jobDefinitionIds, coderTrainingIds)) {
+          return false;
+        }
+
+        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
           return false;
         }
 
@@ -370,6 +386,19 @@ export class CodingReviewService {
             if (selectedCodingJobUnit.coding_job?.workspace_id !== workspaceId) {
               this.logger.warn(
                 `Workspace mismatch for responseId ${decision.responseId}`
+              );
+              skippedCount += 1;
+              continue;
+            }
+
+            const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+            if (isExcludedByResolvedExclusions(
+              exclusions,
+              selectedCodingJobUnit.booklet_name,
+              selectedCodingJobUnit.unit_name
+            )) {
+              this.logger.warn(
+                `Skipped ignored responseId ${decision.responseId} for jobId ${decision.selectedJobId}`
               );
               skippedCount += 1;
               continue;

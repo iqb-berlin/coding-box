@@ -11,7 +11,11 @@ import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  normalizeExclusionBookletId,
+  normalizeExclusionUnitId,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
@@ -136,6 +140,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       const variablePairExpression = "(unit.name || E'\\u001F' || response.variableid)";
       const derivedExpression = 'CASE WHEN response.is_autocoder_generated = TRUE THEN true ELSE false END';
+      const normalizedUnitExpression = "REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i')";
 
       let paramIndex = 5;
       const queryParams: (number | string | number[] | string[] | boolean)[] = [
@@ -145,16 +150,22 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         validVariablePairKeys
       ];
 
+      if (globalIgnoredUnits.length > 0) {
+        whereCondition += ` AND ${normalizedUnitExpression} != ALL($${paramIndex})`;
+        queryParams.push(globalIgnoredUnits.map(normalizeExclusionUnitId));
+        paramIndex += 1;
+      }
+
       if (ignoredBooklets.length > 0) {
-        whereCondition += ` AND bookletinfo.name != ALL($${paramIndex})`;
-        queryParams.push(ignoredBooklets);
+        whereCondition += ` AND UPPER(bookletinfo.name) != ALL($${paramIndex})`;
+        queryParams.push(ignoredBooklets.map(normalizeExclusionBookletId));
         paramIndex += 1;
       }
 
       if (testletIgnoredUnits.length > 0) {
         const conditions = testletIgnoredUnits.map(t => {
-          const condition = `NOT (bookletinfo.name = $${paramIndex} AND unit.name = $${paramIndex + 1})`;
-          queryParams.push(t.bookletId, t.unitId);
+          const condition = `NOT (UPPER(bookletinfo.name) = $${paramIndex} AND ${normalizedUnitExpression} = $${paramIndex + 1})`;
+          queryParams.push(normalizeExclusionBookletId(t.bookletId), normalizeExclusionUnitId(t.unitId));
           paramIndex += 2;
           return condition;
         }).join(' AND ');
