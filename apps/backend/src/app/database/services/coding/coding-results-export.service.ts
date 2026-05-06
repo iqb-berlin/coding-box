@@ -16,7 +16,11 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingResultsExportService {
@@ -41,19 +45,7 @@ export class CodingResultsExportService {
 
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits);
-    const ignoredBookletsSet = new Set(exclusions.ignoredBooklets);
-    const testletIgnoredUnits = exclusions.testletIgnoredUnits;
-
-    return (bookletName: string, unitName: string) => {
-      if (!unitName) return true;
-      if (globalIgnoredSet.has(unitName.toUpperCase())) return true;
-      if (bookletName && ignoredBookletsSet.has(bookletName.toUpperCase())) return true;
-      if (bookletName) {
-        return testletIgnoredUnits.some(t => t.bookletId === bookletName.toUpperCase() && t.unitId === unitName.toUpperCase());
-      }
-      return false;
-    };
+    return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
   }
 
   clearPageMapsCache(): void {
@@ -521,6 +513,7 @@ export class CodingResultsExportService {
         'response',
         'response.unit',
         'response.unit.booklet',
+        'response.unit.booklet.bookletinfo',
         'response.unit.booklet.person'
       ]
     });
@@ -834,6 +827,7 @@ export class CodingResultsExportService {
         'response',
         'response.unit',
         'response.unit.booklet',
+        'response.unit.booklet.bookletinfo',
         'response.unit.booklet.person'
       ]
     });
@@ -1385,15 +1379,20 @@ export class CodingResultsExportService {
     const isExcluded = await this.getExclusionChecker(workspaceId);
 
     // Get distinct unit-variable combinations for CODING_INCOMPLETE responses only
-    const unitVariableResults = await this.responseRepository
+    const unitVariableQuery = this.responseRepository
       .createQueryBuilder('response')
       .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(unitVariableQuery, exclusions);
+    const unitVariableResults = await unitVariableQuery
       .groupBy('unit.name')
       .addGroupBy('response.variableid')
       .orderBy('unit.name', 'ASC')
@@ -1401,7 +1400,7 @@ export class CodingResultsExportService {
       .getRawMany();
 
     // Filter to only include variables that are in the incomplete set AND not ignored
-    const filteredUnitVariableResults = unitVariableResults.filter(result => incompleteVariableSet.has(`${result.unitName}|${result.variableId}`) &&
+    const filteredUnitVariableResults = unitVariableResults.filter(result => (!excludeAutoCoded || incompleteVariableSet.has(`${result.unitName}|${result.variableId}`)) &&
       result.unitName && !isExcluded(result.bookletName || '', result.unitName)
     );
 
@@ -1449,12 +1448,17 @@ export class CodingResultsExportService {
                 'response',
                 'response.unit',
                 'response.unit.booklet',
+                'response.unit.booklet.bookletinfo',
                 'response.unit.booklet.person'
               ],
               take: MAX_RESPONSES_PER_WORKSHEET * 10
             });
 
             if (codingJobUnits.length === 0) continue;
+            const visibleCodingJobUnits = codingJobUnits.filter(unit => (
+              unit.unit_name && !isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)
+            ));
+            if (visibleCodingJobUnits.length === 0) continue;
 
             const worksheetName = generateUniqueWorksheetName(workbook, `${unitName}_${variableId}`);
             const worksheet = workbook.addWorksheet(worksheetName);
@@ -1464,7 +1468,7 @@ export class CodingResultsExportService {
             const coderSet = new Set<string>();
             const testPersonData = new Map<string, { login: string; code: string; group: string; booklet: string }>();
 
-            for (const unit of codingJobUnits) {
+            for (const unit of visibleCodingJobUnits) {
               if (unit.code === null || unit.code === undefined) {
                 continue;
               }
@@ -1727,6 +1731,7 @@ export class CodingResultsExportService {
         'response',
         'response.unit',
         'response.unit.booklet',
+        'response.unit.booklet.bookletinfo',
         'response.unit.booklet.person'
       ],
       order: {

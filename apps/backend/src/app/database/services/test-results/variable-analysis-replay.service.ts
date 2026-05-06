@@ -1,11 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Like, Repository } from 'typeorm';
+import { Brackets, Like, Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { VariableAnalysisItemDto } from '../../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { CodingListService } from '../coding/coding-list.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class VariableAnalysisReplayService {
@@ -17,7 +21,8 @@ export class VariableAnalysisReplayService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     private workspaceFilesService: WorkspaceFilesService,
-    private codingListService: CodingListService
+    private codingListService: CodingListService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) {}
 
   async getVariableAnalysis(
@@ -38,6 +43,7 @@ export class VariableAnalysisReplayService {
     try {
       this.logger.log(`Getting variable analysis for workspace ${workspace_id} (page ${page}, limit ${limit})`);
       const startTime = Date.now();
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
 
       this.logger.log('Getting unit variables mapping...');
       const unitVariablesMap = await this.workspaceFilesService.getUnitVariableMap(workspace_id);
@@ -78,8 +84,10 @@ export class VariableAnalysisReplayService {
         .select('COUNT(DISTINCT CONCAT(unit.name, response.variableid, response.code_v1))', 'count')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(countQuery, exclusions);
 
       if (unitIdFilter) {
         countQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -104,6 +112,7 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(aggregationQuery, exclusions);
 
       if (unitIdFilter) {
         aggregationQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -148,8 +157,10 @@ export class VariableAnalysisReplayService {
         .addSelect('COUNT(response.id)', 'totalCount')
         .leftJoin('response.unit', 'unit')
         .leftJoin('unit.booklet', 'booklet')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .leftJoin('booklet.person', 'person')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(totalCountsQuery, exclusions, { parameterPrefix: 'variableAnalysisTotals' });
 
       if (unitIdFilter) {
         totalCountsQuery.andWhere('unit.name LIKE :unitId', { unitId: `%${unitIdFilter}%` });
@@ -160,15 +171,20 @@ export class VariableAnalysisReplayService {
       }
 
       if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          totalCountsQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
+        totalCountsQuery.andWhere(new Brackets(qb => {
+          unitVariableCombinations.forEach((combo, index) => {
+            const condition = `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`;
+            const parameters = {
               [`unitId${index}`]: combo.unitId,
               [`variableId${index}`]: combo.variableId
+            };
+            if (index === 0) {
+              qb.where(condition, parameters);
+            } else {
+              qb.orWhere(condition, parameters);
             }
-          );
-        });
+          });
+        }));
       }
 
       totalCountsQuery.groupBy('unit.name')
@@ -195,17 +211,23 @@ export class VariableAnalysisReplayService {
         .leftJoin('booklet.person', 'person')
         .leftJoin('booklet.bookletinfo', 'bookletinfo')
         .where('person.workspace_id = :workspace_id', { workspace_id });
+      applyResolvedExclusionsToQuery(sampleInfoQuery, exclusions, { parameterPrefix: 'variableAnalysisSample' });
 
       if (unitVariableCombinations.length > 0) {
-        unitVariableCombinations.forEach((combo, index) => {
-          sampleInfoQuery.orWhere(
-            `(unit.name = :unitId${index} AND response.variableid = :variableId${index})`,
-            {
-              [`unitId${index}`]: combo.unitId,
-              [`variableId${index}`]: combo.variableId
+        sampleInfoQuery.andWhere(new Brackets(qb => {
+          unitVariableCombinations.forEach((combo, index) => {
+            const condition = `(unit.name = :sampleUnitId${index} AND response.variableid = :sampleVariableId${index})`;
+            const parameters = {
+              [`sampleUnitId${index}`]: combo.unitId,
+              [`sampleVariableId${index}`]: combo.variableId
+            };
+            if (index === 0) {
+              qb.where(condition, parameters);
+            } else {
+              qb.orWhere(condition, parameters);
             }
-          );
-        });
+          });
+        }));
       }
 
       sampleInfoQuery.groupBy('unit.name')

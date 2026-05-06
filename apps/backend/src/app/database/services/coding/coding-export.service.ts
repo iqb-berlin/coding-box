@@ -20,7 +20,11 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 
 @Injectable()
 export class CodingExportService {
@@ -46,19 +50,7 @@ export class CodingExportService {
 
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const globalIgnoredSet = new Set(exclusions.globalIgnoredUnits);
-    const ignoredBookletsSet = new Set(exclusions.ignoredBooklets);
-    const testletIgnoredUnits = exclusions.testletIgnoredUnits;
-
-    return (bookletName: string, unitName: string) => {
-      if (!unitName) return true;
-      if (globalIgnoredSet.has(unitName.toUpperCase())) return true;
-      if (bookletName && ignoredBookletsSet.has(bookletName.toUpperCase())) return true;
-      if (bookletName) {
-        return testletIgnoredUnits.some(t => t.bookletId === bookletName.toUpperCase() && t.unitId === unitName.toUpperCase());
-      }
-      return false;
-    };
+    return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
   }
 
   private normalizeCodingIssueOption(issueOption: number | null | undefined): number | null {
@@ -458,6 +450,7 @@ export class CodingExportService {
     if (checkCancellation) await checkCancellation();
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const hasScopedJobFilters = !!(
       normalizedJobDefinitionIds.length ||
       normalizedCoderTrainingIds.length ||
@@ -479,6 +472,10 @@ export class CodingExportService {
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .where('cj.workspace_id = :workspaceId', { workspaceId });
+    applyResolvedExclusionsToQuery(variableRecordsQuery, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name'
+    });
 
     this.applyJobFilters(
       variableRecordsQuery,
@@ -508,16 +505,20 @@ export class CodingExportService {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .select('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.code_v1 IS NOT NULL')
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.code_v1 IS NOT NULL');
+      applyResolvedExclusionsToQuery(autoVariables, exclusions);
+      const autoVariableRows = await autoVariables
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
         .getRawMany();
 
-      autoVariables.forEach(v => {
+      autoVariableRows.forEach(v => {
         if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           const compositeKey = `${v.unitName}_${v.variableId}`;
           variableSet.add(compositeKey);
@@ -782,6 +783,7 @@ export class CodingExportService {
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     let manualCodingVariableSet: Set<string> | null = null;
     if (excludeAutoCoded) {
@@ -794,6 +796,10 @@ export class CodingExportService {
       .select('cju.unit_name', 'unitName')
       .addSelect('cju.variable_id', 'variableId')
       .where('cj.workspace_id = :workspaceId', { workspaceId });
+    applyResolvedExclusionsToQuery(variableRecordsQuery, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name'
+    });
 
     this.applyJobFilters(variableRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
 
@@ -818,16 +824,20 @@ export class CodingExportService {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .select('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.code_v1 IS NOT NULL')
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.code_v1 IS NOT NULL');
+      applyResolvedExclusionsToQuery(autoVariables, exclusions);
+      const autoVariableRows = await autoVariables
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
         .getRawMany();
 
-      autoVariables.forEach(v => {
+      autoVariableRows.forEach(v => {
         if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           const compositeKey = `${v.unitName}_${v.variableId}`;
           variableSet.add(compositeKey);
@@ -1151,6 +1161,7 @@ export class CodingExportService {
     const COMMENTS_HEADER = 'Kommentare';
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const hasScopedJobFilters = !!(jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length);
 
     let manualCodingVariableSet: Set<string> | null = null;
@@ -1197,6 +1208,10 @@ export class CodingExportService {
       .addSelect('cju.variable_id', 'variableId')
       .addSelect('user.username', 'userName')
       .where('cj.workspace_id = :workspaceId', { workspaceId });
+    applyResolvedExclusionsToQuery(variableCoderPairsQuery, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name'
+    });
 
     this.applyJobFilters(variableCoderPairsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
 
@@ -1228,20 +1243,25 @@ export class CodingExportService {
         .addSelect('ctdr.training_id', 'trainingId')
         .addSelect('ctdr.response_id', 'responseId')
         .where('ctdr.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('ctdr.training_id IN (:...coderTrainingIds)', { coderTrainingIds })
+        .andWhere('ctdr.training_id IN (:...coderTrainingIds)', { coderTrainingIds });
+      applyResolvedExclusionsToQuery(managerVariablePairs, exclusions, {
+        unitAlias: 'unit',
+        bookletInfoAlias: 'bookletinfo'
+      });
+      const managerVariablePairRows = await managerVariablePairs
         .getRawMany();
 
       const managerDiscussionMap = await this.getTrainingDiscussionResultsMap(
         workspaceId,
         coderTrainingIds,
         Array.from(new Set(
-          managerVariablePairs
+          managerVariablePairRows
             .map(pair => parseInt(pair.responseId, 10))
             .filter(responseId => !Number.isNaN(responseId))
         ))
       );
 
-      managerVariablePairs.forEach(pair => {
+      managerVariablePairRows.forEach(pair => {
         if (!pair.unitName || isExcluded(pair.bookletName || '', pair.unitName)) return;
         if (manualCodingVariableSet && !manualCodingVariableSet.has(`${pair.unitName}|${pair.variableId}`)) return;
 
@@ -1260,16 +1280,20 @@ export class CodingExportService {
       const autoVariables = await this.responseRepository.createQueryBuilder('response')
         .innerJoin('response.unit', 'unit')
         .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
         .innerJoin('booklet.person', 'person')
         .select('unit.name', 'unitName')
         .addSelect('response.variableid', 'variableId')
         .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.code_v1 IS NOT NULL')
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.code_v1 IS NOT NULL');
+      applyResolvedExclusionsToQuery(autoVariables, exclusions);
+      const autoVariableRows = await autoVariables
         .groupBy('unit.name')
         .addGroupBy('response.variableid')
         .getRawMany();
 
-      autoVariables.forEach(v => {
+      autoVariableRows.forEach(v => {
         if (v.unitName && !isExcluded(v.bookletName || '', v.unitName)) {
           colSet.add(`${v.unitName}_${v.variableId}_Autocoder`);
         }
@@ -1577,6 +1601,15 @@ export class CodingExportService {
     const coderNameMapping = anonymizeCoders ?
       buildCoderNameMapping(Array.from(allCoderNames), usePseudoCoders) :
       null;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const isExcluded = await this.getExclusionChecker(workspaceId);
+    let manualCodingVariableSet: Set<string> | null = null;
+    if (excludeAutoCoded) {
+      const codingListVariables = await this.codingListService.getCodingListVariables(workspaceId);
+      manualCodingVariableSet = new Set<string>(
+        codingListVariables.map(item => `${item.unitName}|${item.variableId}`)
+      );
+    }
 
     const chunks: Buffer[] = [];
     const stream = new PassThrough();
@@ -1594,16 +1627,28 @@ export class CodingExportService {
       const worksheet = workbook.addWorksheet(worksheetName);
 
       const jobIds = jobs.map(j => j.id);
-      const variablePairs = await this.codingJobUnitRepository.createQueryBuilder('cju')
+      const variablePairsQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
         .select('cju.unit_name', 'unitName')
         .addSelect('cju.variable_id', 'variableId')
+        .addSelect('cju.booklet_name', 'bookletName')
         .where('cju.coding_job_id IN (:...jobIds)', { jobIds })
         .andWhere('cju.unit_name IS NOT NULL')
         .andWhere('cju.variable_id IS NOT NULL')
-        .distinct(true)
-        .getRawMany();
+        .distinct(true);
+      applyResolvedExclusionsToQuery(variablePairsQuery, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name'
+      });
+      const visibleVariablePairs = (await variablePairsQuery.getRawMany())
+        .filter(item => (
+          (!manualCodingVariableSet || manualCodingVariableSet.has(`${item.unitName}|${item.variableId}`)) &&
+          !isExcluded(item.bookletName || '', item.unitName)
+        ));
+      const uniqueVariablePairs = Array.from(
+        new Map(visibleVariablePairs.map(item => [`${item.unitName}|${item.variableId}`, item])).values()
+      );
 
-      const variableColumns = variablePairs
+      const variableColumns = uniqueVariablePairs
         .map(item => ({
           unitName: item.unitName,
           variableId: item.variableId,
@@ -1615,6 +1660,11 @@ export class CodingExportService {
           if (unitCmp !== 0) return unitCmp;
           return a.variableId.localeCompare(b.variableId);
         });
+
+      if (variableColumns.length === 0) {
+        await worksheet.commit();
+        continue;
+      }
 
       const baseHeaders = ['Test Person Login', 'Test Person Code', 'Test Person Group'];
       if (includeReplayUrl) baseHeaders.push('Replay URL');
@@ -1636,12 +1686,16 @@ export class CodingExportService {
         .addSelect('MAX(person.group)', 'group')
         .where('cju.coding_job_id IN (:...jobIds)', { jobIds })
         .groupBy('person.id')
-        .orderBy('MAX(person.login)', 'ASC')
-        .getRawMany();
+        .orderBy('MAX(person.login)', 'ASC');
+      applyResolvedExclusionsToQuery(personResults, exclusions, {
+        unitNameExpression: 'cju.unit_name',
+        bookletNameExpression: 'cju.booklet_name'
+      });
+      const personResultsRows = await personResults.getRawMany();
 
       const batchSize = 100;
-      for (let j = 0; j < personResults.length; j += batchSize) {
-        const batch = personResults.slice(j, j + batchSize);
+      for (let j = 0; j < personResultsRows.length; j += batchSize) {
+        const batch = personResultsRows.slice(j, j + batchSize);
         const batchIds = batch.map(p => p.id);
 
         const personDataMap = new Map<number, Record<string, unknown>>();
@@ -1670,20 +1724,24 @@ export class CodingExportService {
               .addSelect('ctdr.response_id', 'responseId')
               .where('person.id IN (:...ids)', { ids: batchIds })
               .andWhere('ctdr.workspace_id = :workspaceId', { workspaceId })
-              .andWhere('ctdr.training_id IN (:...trainingIds)', { trainingIds: trainingIdsForJobs })
-              .getRawMany();
+              .andWhere('ctdr.training_id IN (:...trainingIds)', { trainingIds: trainingIdsForJobs });
+            applyResolvedExclusionsToQuery(managerCases, exclusions, {
+              unitNameExpression: 'unit.name',
+              bookletNameExpression: 'bookletinfo.name'
+            });
+            const managerCaseRows = await managerCases.getRawMany();
 
             const managerDiscussionMap = await this.getTrainingDiscussionResultsMap(
               workspaceId,
               trainingIdsForJobs,
               Array.from(new Set(
-                managerCases
+                managerCaseRows
                   .map(item => parseInt(item.responseId, 10))
                   .filter(responseId => !Number.isNaN(responseId))
               ))
             );
 
-            for (const managerCase of managerCases) {
+            for (const managerCase of managerCaseRows) {
               const trainingId = parseInt(managerCase.trainingId, 10);
               const responseId = parseInt(managerCase.responseId, 10);
               if (Number.isNaN(trainingId) || Number.isNaN(responseId)) continue;
@@ -1697,6 +1755,10 @@ export class CodingExportService {
               }
 
               if (!managerCase.unitName || !managerCase.variableId) {
+                continue;
+              }
+
+              if (manualCodingVariableSet && !manualCodingVariableSet.has(`${managerCase.unitName}|${managerCase.variableId}`)) {
                 continue;
               }
 
@@ -1728,10 +1790,14 @@ export class CodingExportService {
             .addSelect('person.id', 'pId')
             .addSelect('bookletinfo.name', 'bookletName')
             .where('person.id IN (:...ids)', { ids: batchIds })
-            .andWhere('cju.coding_job_id IN (:...jobIds)', { jobIds })
-            .getRawMany();
+            .andWhere('cju.coding_job_id IN (:...jobIds)', { jobIds });
+          applyResolvedExclusionsToQuery(responses, exclusions, {
+            unitNameExpression: 'unit.name',
+            bookletNameExpression: 'bookletinfo.name'
+          });
+          const responseRows = await responses.getRawMany();
 
-          for (const resp of responses) {
+          for (const resp of responseRows) {
             const pid = parseInt(resp.pId, 10);
             if (!personDataMap.has(pid)) {
               personDataMap.set(pid, {});
@@ -1742,6 +1808,10 @@ export class CodingExportService {
             const code = mapCodeForExport(rawCode !== null && rawCode !== undefined ? parseInt(rawCode, 10) : null);
 
             if (!resp.unitName || !resp.variableId) {
+              continue;
+            }
+
+            if (manualCodingVariableSet && !manualCodingVariableSet.has(`${resp.unitName}|${resp.variableId}`)) {
               continue;
             }
 
@@ -1763,6 +1833,9 @@ export class CodingExportService {
             'Test Person Code': p.code,
             'Test Person Group': p.group || ''
           };
+          if (!variableColumns.some(variableColumn => pData[variableColumn.key] !== undefined)) {
+            continue;
+          }
 
           if (includeReplayUrl && (req || serverUrl)) {
             const firstVar = variableColumns.find(v => pData[`_metadata_${v.key}`]);
@@ -1845,10 +1918,17 @@ export class CodingExportService {
     const unitVariableResultsQuery = this.responseRepository.createQueryBuilder('resp')
       .innerJoin('resp.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .select('unit.name', 'unitName')
       .addSelect('resp.variableid', 'variableId')
-      .where('person.workspace_id = :workspaceId', { workspaceId });
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(unitVariableResultsQuery, exclusions, {
+      unitAlias: 'unit',
+      bookletInfoAlias: 'bookletinfo'
+    });
 
     if (excludeAutoCoded) {
       unitVariableResultsQuery.andWhere('resp.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
@@ -2012,6 +2092,10 @@ export class CodingExportService {
           .where('person.id IN (:...batchIds)', { batchIds })
           .andWhere('unit.name = :unitName', { unitName })
           .andWhere('resp.variableid = :variableId', { variableId });
+        applyResolvedExclusionsToQuery(dataQueryBuilder, exclusions, {
+          unitAlias: 'unit',
+          bookletInfoAlias: 'bookletinfo'
+        });
 
         this.applyJobFilters(
           dataQueryBuilder,
@@ -2444,9 +2528,16 @@ export class CodingExportService {
       .leftJoinAndSelect('cjc.user', 'user')
       .leftJoinAndSelect('cju.response', 'resp')
       .leftJoinAndSelect('resp.unit', 'unit')
+      .leftJoinAndSelect('unit.booklet', 'booklet')
+      .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
       .andWhere('cju.code IS NOT NULL')
       .orderBy('cju.updated_at', 'ASC');
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(codingJobUnitsQuery, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name'
+    });
 
     this.applyJobFilters(
       codingJobUnitsQuery,
