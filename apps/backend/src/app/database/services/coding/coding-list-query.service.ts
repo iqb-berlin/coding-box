@@ -8,7 +8,10 @@ import { extractVariableLocation } from '../../../utils/voud/extractVariableLoca
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import { CodingItem } from './coding-item-builder.service';
 
 /**
@@ -103,21 +106,7 @@ export class CodingListQueryService {
         .orderBy('response.id', 'ASC');
 
       const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
-      if (globalIgnoredUnits.length > 0) {
-        queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-      }
-      if (ignoredBooklets.length > 0) {
-        queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-      }
-      if (testletIgnoredUnits.length > 0) {
-        const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-        const params: Record<string, string> = {};
-        testletIgnoredUnits.forEach((t, i) => {
-          params[`bId${i}`] = t.bookletId;
-          params[`uId${i}`] = t.unitId;
-        });
-        queryBuilder.andWhere(`NOT (${condition})`, params);
-      }
+      applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
       const [responses, total] = await queryBuilder.getManyAndCount();
 
@@ -272,21 +261,7 @@ export class CodingListQueryService {
     );
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     const rawResults = await queryBuilder.getRawMany();
 

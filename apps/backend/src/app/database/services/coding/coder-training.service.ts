@@ -21,6 +21,11 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobService } from './coding-job.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { MissingsProfilesService } from './missings-profiles.service';
+import {
+  applyResolvedExclusionsToQuery,
+  isExcludedByResolvedExclusions,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 import type { CaseSelectionMode, ReferenceMode } from '../../entities/coder-training.entity';
 
 interface CoderTrainingResponse {
@@ -104,7 +109,8 @@ export class CoderTrainingService {
     private chunkRepository: Repository<ChunkEntity>,
     private codingJobService: CodingJobService,
     private workspaceFilesService: WorkspaceFilesService,
-    private missingsProfilesService: MissingsProfilesService
+    private missingsProfilesService: MissingsProfilesService,
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   private async buildMissingCodesByJobId(
@@ -160,7 +166,8 @@ export class CoderTrainingService {
 
     this.logger.log(`Getting response IDs for trainings ${trainingIds.join(', ')} in workspace ${workspaceId}`);
 
-    const rows = await this.codingJobUnitRepository
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .innerJoin('cju.coding_job', 'cj')
       .select('COALESCE(cju.unit_alias, cju.unit_name)', 'unitKey')
@@ -168,8 +175,13 @@ export class CoderTrainingService {
       .addSelect('cju.response_id', 'responseId')
       .where('cj.workspace_id = :workspaceId', { workspaceId })
       .andWhere('cj.training_id IN (:...trainingIds)', { trainingIds })
-      .distinct(true)
-      .getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
+      .distinct(true);
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'trainingResponseIds'
+    });
+    const rows = await query.getRawMany<{ unitKey: string; variableId: string; responseId: number }>();
 
     const result: TrainingResponseIdsMap = {};
     for (const row of rows) {
@@ -237,7 +249,11 @@ export class CoderTrainingService {
       throw new Error(`Training ${trainingId} not found in workspace ${workspaceId}`);
     }
 
-    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => unit.response_id === responseId)
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const hasResponseInTraining = (training.codingJobs || []).some(job => (job.codingJobUnits || []).some(unit => (
+      unit.response_id === responseId &&
+      !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+    ))
     );
 
     if (!hasResponseInTraining) {
@@ -418,6 +434,7 @@ export class CoderTrainingService {
       referenceMode && referenceTrainingIds.length > 0 ?
         await this.getTrainingResponseIds(workspaceId, referenceTrainingIds) :
         null;
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
     // Load aggregation settings once for this workspace
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
@@ -444,13 +461,15 @@ export class CoderTrainingService {
       this.logger.log(`Querying incomplete responses for unit ${unitId}, variable ${variableId}`);
 
       // Fetch all eligible responses (no DB-level limit — we need the full set to apply aggregation grouping)
-      const unitResponses = await this.responseRepository
+      const unitResponsesQuery = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('response.status_v1 IN (:...statuses)', {
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('response.status_v1 IN (:...statuses)', {
           statuses: [
             statusStringToNumber('CODING_INCOMPLETE'),
             statusStringToNumber('INTENDED_INCOMPLETE')
@@ -459,8 +478,9 @@ export class CoderTrainingService {
         .andWhere('response.variableid = :variableId', { variableId })
         .andWhere('response.status_v2 IS NULL')
         .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
-        .orderBy('response.id', 'ASC')
-        .getMany();
+        .orderBy('response.id', 'ASC');
+      applyResolvedExclusionsToQuery(unitResponsesQuery, exclusions, { parameterPrefix: `trainingPackage${configKey.replace(/[^a-zA-Z0-9]/g, '')}` });
+      const unitResponses = await unitResponsesQuery.getMany();
 
       this.logger.log(`Found ${unitResponses.length} incomplete responses for unit ${unitId}, variable ${variableId}`);
 
@@ -947,6 +967,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const allTrainingJobs = trainings.flatMap(training => training.codingJobs || []);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, allTrainingJobs);
 
@@ -963,6 +984,9 @@ export class CoderTrainingService {
     trainings.forEach(training => {
       training.codingJobs?.forEach(job => {
         job.codingJobUnits?.forEach(unit => {
+          if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
+            return;
+          }
           if (unit.response_id && !responseMap.has(unit.response_id)) {
             const personGroup = unit.person_group || '';
             const testPerson = `${unit.person_login} (${personGroup}) - ${unit.booklet_name}`;
@@ -1017,7 +1041,10 @@ export class CoderTrainingService {
         if (training.codingJobs) {
           for (const job of training.codingJobs) {
             // Find if this job (coder) has a unit for this response
-            const unit = job.codingJobUnits?.find(u => u.response_id === responseId);
+            const unit = job.codingJobUnits?.find(u => (
+              u.response_id === responseId &&
+              !isExcludedByResolvedExclusions(exclusions, u.booklet_name, u.unit_name)
+            ));
 
             // Determine coder info
             // Assuming one coder per job for now, which is standard in this system
@@ -1118,6 +1145,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const missingCodesByJobId = await this.buildMissingCodesByJobId(workspaceId, training.codingJobs);
 
     const unitVariableMap = new Map<string, {
@@ -1135,6 +1163,9 @@ export class CoderTrainingService {
 
     training.codingJobs.forEach(job => {
       job.codingJobUnits?.forEach(unit => {
+        if (isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)) {
+          return;
+        }
         const unitVariableKey = unit.response_id.toString();
         if (!unitVariableMap.has(unitVariableKey)) {
           const givenAnswer = unit.response?.value || '';
@@ -1207,7 +1238,10 @@ export class CoderTrainingService {
           `Coder ${job.name}`;
 
         job.codingJobUnits?.forEach(unit => {
-          if (unit.response_id === unitVar.responseId) {
+          if (
+            unit.response_id === unitVar.responseId &&
+            !isExcludedByResolvedExclusions(exclusions, unit.booklet_name, unit.unit_name)
+          ) {
             code = unit.code;
             if (unit.score !== null) {
               score = unit.score;
@@ -1593,6 +1627,7 @@ export class CoderTrainingService {
       return [];
     }
 
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return training.codingJobs.map(job => ({
       id: job.id,
       name: job.name,
@@ -1606,7 +1641,11 @@ export class CoderTrainingService {
         userId: 0,
         username: 'Unknown'
       },
-      unitsCount: job.codingJobUnits?.length || 0
+      unitsCount: job.codingJobUnits?.filter(unit => !isExcludedByResolvedExclusions(
+        exclusions,
+        unit.booklet_name,
+        unit.unit_name
+      )).length || 0
     }));
   }
 

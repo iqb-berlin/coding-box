@@ -41,6 +41,7 @@ const createQueryBuilder = (result: unknown = []) => {
   });
   qb.getMany = jest.fn().mockResolvedValue(result);
   qb.getRawMany = jest.fn().mockResolvedValue(result);
+  qb.getCount = jest.fn().mockResolvedValue(typeof result === 'number' ? result : 0);
   qb.execute = jest.fn().mockResolvedValue(result);
   return qb;
 };
@@ -85,6 +86,13 @@ describe('CodingJobService', () => {
       }))
     };
     cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -99,17 +107,19 @@ describe('CodingJobService', () => {
       discussionResultRepository as never,
       connection as never,
       cacheService as never,
-      {} as never
+      {} as never,
+      workspaceExclusionService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
   });
 
   it('reports coding job progress with totals and open units', async () => {
-    codingJobUnitRepository.count
-      .mockResolvedValueOnce(10)
-      .mockResolvedValueOnce(6)
-      .mockResolvedValueOnce(2);
+    codingJobRepository.findOne.mockResolvedValue({ id: 7, workspace_id: 3 });
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder(10))
+      .mockReturnValueOnce(createQueryBuilder(6))
+      .mockReturnValueOnce(createQueryBuilder(2));
 
     await expect(service.getCodingJobProgress(7)).resolves.toEqual({
       progress: 60,
@@ -120,7 +130,8 @@ describe('CodingJobService', () => {
   });
 
   it('returns empty progress when the job has no units', async () => {
-    codingJobUnitRepository.count.mockResolvedValueOnce(0);
+    codingJobRepository.findOne.mockResolvedValue({ id: 7, workspace_id: 3 });
+    codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder(0));
 
     await expect(service.getCodingJobProgress(7)).resolves.toEqual({
       progress: 0,
@@ -143,11 +154,12 @@ describe('CodingJobService', () => {
         variables: [{ unitName: 'UNIT', variableId: 'VAR2' }]
       }
     }]);
-    codingJobUnitRepository.count
-      .mockResolvedValueOnce(4)
-      .mockResolvedValueOnce(2)
-      .mockResolvedValueOnce(1)
-      .mockResolvedValueOnce(9);
+    codingJobRepository.findOne.mockResolvedValue({ id: 11, workspace_id: 3 });
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder(4))
+      .mockReturnValueOnce(createQueryBuilder(2))
+      .mockReturnValueOnce(createQueryBuilder(1))
+      .mockReturnValueOnce(createQueryBuilder(9));
 
     const result = await service.getCodingJobs(3, 0, 25);
 
@@ -219,7 +231,7 @@ describe('CodingJobService', () => {
       })
       .mockReturnValueOnce(createQueryBuilder());
     codingJobCoderRepository.find.mockResolvedValue([{ coding_job_id: 20 }]);
-    codingJobUnitRepository.count.mockResolvedValue(8);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(8));
 
     const result = await service.transferCodingCases(3, 1, 2);
 
@@ -266,6 +278,7 @@ describe('CodingJobService', () => {
   it('builds response queries for coding job variables and bundles', async () => {
     const qb = createQueryBuilder([{ id: 1 }]);
     responseRepository.createQueryBuilder.mockReturnValue(qb);
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
     codingJobVariableRepository.find.mockResolvedValue([{ unit_name: 'UNIT', variable_id: 'VAR' }]);
     codingJobVariableBundleRepository.find.mockResolvedValue([{
       variable_bundle: { variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }] }
@@ -446,7 +459,8 @@ describe('CodingJobService', () => {
   });
 
   it('detects coding issues and builds bulk progress', async () => {
-    codingJobUnitRepository.find.mockResolvedValueOnce([{ code: 1 }, { code: -2 }]);
+    codingJobRepository.findOne.mockResolvedValueOnce({ id: 1, workspace_id: 3 });
+    codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder([{ code: 1 }, { code: -2 }]));
     await expect(service.hasCodingIssues(1)).resolves.toBe(true);
 
     codingJobRepository.find.mockResolvedValue([{ id: 1, workspace_id: 3 }, { id: 2, workspace_id: 3 }]);

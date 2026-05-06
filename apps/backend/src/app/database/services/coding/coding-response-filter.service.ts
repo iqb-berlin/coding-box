@@ -6,7 +6,10 @@ import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-st
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
-import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import {
+  applyResolvedExclusionsToQuery,
+  WorkspaceExclusionService
+} from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
@@ -68,22 +71,7 @@ export class CodingResponseFilterService {
     queryBuilder.orderBy('response.id', 'ASC');
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     const responses = await queryBuilder.getMany();
 
@@ -152,21 +140,7 @@ export class CodingResponseFilterService {
     }
 
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    if (globalIgnoredUnits.length > 0) {
-      queryBuilder.andWhere('unit.name NOT IN (:...ignoredUnits)', { ignoredUnits: globalIgnoredUnits });
-    }
-    if (ignoredBooklets.length > 0) {
-      queryBuilder.andWhere('bookletinfo.name NOT IN (:...ignoredBooklets)', { ignoredBooklets });
-    }
-    if (testletIgnoredUnits.length > 0) {
-      const condition = testletIgnoredUnits.map((_, i) => `(bookletinfo.name = :bId${i} AND unit.name = :uId${i})`).join(' OR ');
-      const params: Record<string, string> = {};
-      testletIgnoredUnits.forEach((t, i) => {
-        params[`bId${i}`] = t.bookletId;
-        params[`uId${i}`] = t.unitId;
-      });
-      queryBuilder.andWhere(`NOT (${condition})`, params);
-    }
+    applyResolvedExclusionsToQuery(queryBuilder, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
     if (options.validCodingVariablesOnly) {
       const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
@@ -178,9 +152,8 @@ export class CodingResponseFilterService {
         queryBuilder.andWhere('1 = 0');
       } else {
         queryBuilder.andWhere(
-          '(CONCAT(unit.name, :variablePairSeparator, response.variableid) IN (:...validVariablePairKeys) OR response.is_autocoder_generated = :isAutocoderGenerated)',
+          '(CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys) OR response.is_autocoder_generated = :isAutocoderGenerated)',
           {
-            variablePairSeparator: '\u001F',
             validVariablePairKeys,
             isAutocoderGenerated: true
           }
