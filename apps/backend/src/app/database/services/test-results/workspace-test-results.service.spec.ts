@@ -11,7 +11,12 @@ import { BookletInfo } from '../../entities/bookletInfo.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
+import { UnitLastState } from '../../entities/unitLastState.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
+import { UnitTag } from '../../entities/unitTag.entity';
+import { UnitNote } from '../../entities/unitNote.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
@@ -46,7 +51,9 @@ const mockQueryBuilder = () => ({
   addOrderBy: jest.fn().mockReturnThis(),
   offset: jest.fn().mockReturnThis(),
   limit: jest.fn().mockReturnThis(),
-  distinct: jest.fn().mockReturnThis()
+  distinct: jest.fn().mockReturnThis(),
+  delete: jest.fn().mockReturnThis(),
+  execute: jest.fn().mockResolvedValue({ affected: 0 })
 });
 
 describe('WorkspaceTestResultsService', () => {
@@ -242,6 +249,95 @@ describe('WorkspaceTestResultsService', () => {
       expect(responsesCountQb.andWhere).toHaveBeenCalledWith(
         'response.is_autocoder_generated IS NOT TRUE'
       );
+    });
+  });
+
+  describe('bulk deletion safety', () => {
+    it('explicitly deletes known unit dependents before removing unit targets', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 1 });
+          return qb;
+        })
+      };
+      const privateService = service as unknown as {
+        deleteKnownDeleteDependents: (
+          managerArg: unknown,
+          kind: 'units',
+          snapshot: {
+            bookletIds: number[];
+            unitIds: number[];
+            responseIds: number[];
+            bookletInfoIds: number[];
+          }
+        ) => Promise<void>;
+      };
+
+      await privateService.deleteKnownDeleteDependents(manager, 'units', {
+        bookletIds: [],
+        unitIds: [100],
+        responseIds: [500],
+        bookletInfoIds: []
+      });
+
+      expect(deletedFrom).toEqual([
+        CodingJobUnit,
+        CoderTrainingDiscussionResult,
+        ResponseEntity,
+        UnitNote,
+        UnitTag,
+        UnitLog,
+        UnitLastState,
+        ChunkEntity
+      ]);
+      expect(deletedFrom).not.toContain(Unit);
+    });
+
+    it('does not complete when a known dependent row remains', async () => {
+      (dataSource.createQueryBuilder as jest.Mock).mockImplementation(() => {
+        const qb = mockQueryBuilder();
+        let selectedEntity: unknown;
+        qb.from.mockImplementation((entity: unknown) => {
+          selectedEntity = entity;
+          return qb;
+        });
+        qb.getRawOne.mockImplementation(() => Promise.resolve({
+          count: selectedEntity === UnitNote ? '1' : '0'
+        }));
+        return qb;
+      });
+      const privateService = service as unknown as {
+        assertDeleteCompleted: (
+          kind: 'units',
+          targetIds: number[],
+          snapshot: {
+            bookletIds: number[];
+            unitIds: number[];
+            responseIds: number[];
+            bookletInfoIds: number[];
+          }
+        ) => Promise<void>;
+      };
+
+      await expect(privateService.assertDeleteCompleted('units', [100], {
+        bookletIds: [],
+        unitIds: [100],
+        responseIds: [],
+        bookletInfoIds: []
+      })).rejects.toThrow('Unit-Notiz');
     });
   });
 

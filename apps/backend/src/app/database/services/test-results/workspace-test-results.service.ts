@@ -2,7 +2,14 @@ import {
   Injectable, Logger, Inject, forwardRef
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  EntityTarget,
+  ObjectLiteral,
+  Repository,
+  SelectQueryBuilder
+} from 'typeorm';
 import { Response } from 'express';
 import * as csv from 'fast-csv';
 import * as fs from 'fs';
@@ -21,6 +28,10 @@ import { BookletLog } from '../../entities/bookletLog.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import { Session } from '../../entities/session.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
+import { UnitTag } from '../../entities/unitTag.entity';
+import { UnitNote } from '../../entities/unitNote.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
@@ -82,6 +93,13 @@ interface TestResultsDeleteTargets {
   kind: TestResultsDeleteTargetKind;
   ids: number[];
   preview: TestResultsDeletePreviewDto;
+}
+
+interface DeleteDependencySnapshot {
+  bookletIds: number[];
+  unitIds: number[];
+  responseIds: number[];
+  bookletInfoIds: number[];
 }
 
 @Injectable()
@@ -2814,10 +2832,31 @@ export class WorkspaceTestResultsService {
     );
 
     const chunks = WorkspaceTestResultsService.chunkArray(targets.ids, 250);
+    const dependencySnapshot: DeleteDependencySnapshot = {
+      bookletIds: [],
+      unitIds: [],
+      responseIds: [],
+      bookletInfoIds: []
+    };
     let deletedTargetCount = 0;
 
     for (const [index, ids] of chunks.entries()) {
+      const chunkSnapshot = await this.collectDeleteDependencySnapshot(
+        targets.kind,
+        ids
+      );
+      WorkspaceTestResultsService.mergeDeleteDependencySnapshot(
+        dependencySnapshot,
+        chunkSnapshot
+      );
+
       const deleteResult = await this.connection.transaction(async manager => {
+        await this.deleteKnownDeleteDependents(
+          manager,
+          targets.kind,
+          chunkSnapshot
+        );
+
         switch (targets.kind) {
           case 'persons':
             return manager
@@ -2857,7 +2896,22 @@ export class WorkspaceTestResultsService {
       );
     }
 
-    await onProgress?.(95, 'Caches und Statistiken werden aktualisiert...');
+    const finalSnapshot =
+      WorkspaceTestResultsService.dedupeDeleteDependencySnapshot(
+        dependencySnapshot
+      );
+
+    await onProgress?.(92, 'Verwaiste Testheft-Metadaten werden bereinigt...');
+    await this.deleteOrphanedBookletInfos(finalSnapshot.bookletInfoIds);
+
+    await onProgress?.(95, 'Löschung wird abschließend geprüft...');
+    await this.assertDeleteCompleted(
+      targets.kind,
+      targets.ids,
+      finalSnapshot
+    );
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
     await this.codingValidationService.invalidateIncompleteVariablesCache(
       workspaceId
     );
@@ -2891,6 +2945,398 @@ export class WorkspaceTestResultsService {
       ...targets.preview,
       deletedTargetCount
     };
+  }
+
+  private async collectDeleteDependencySnapshot(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<DeleteDependencySnapshot> {
+    if (ids.length === 0) {
+      return {
+        bookletIds: [],
+        unitIds: [],
+        responseIds: [],
+        bookletInfoIds: []
+      };
+    }
+
+    const [bookletIds, unitIds, bookletInfoIds] = await Promise.all([
+      this.collectAffectedBookletIds(kind, ids),
+      this.collectAffectedUnitIds(kind, ids),
+      this.collectAffectedBookletInfoIds(kind, ids)
+    ]);
+    const responseIds = await this.collectIdsFromChunks(
+      unitIds,
+      async chunk => {
+        const rows = await this.connection
+          .createQueryBuilder()
+          .select('response.id', 'id')
+          .from(ResponseEntity, 'response')
+          .where('response.unitid IN (:...ids)', { ids: chunk })
+          .getRawMany<{ id: number | string }>();
+
+        return WorkspaceTestResultsService.rawRowsToIds(rows);
+      }
+    );
+
+    return {
+      bookletIds,
+      unitIds,
+      responseIds,
+      bookletInfoIds
+    };
+  }
+
+  private async collectAffectedBookletIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    if (kind === 'booklets') {
+      return ids;
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT booklet.id', 'id')
+      .from(Booklet, 'booklet');
+
+    if (kind === 'persons') {
+      query.where('booklet.personid IN (:...ids)', { ids });
+    } else {
+      query
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async collectAffectedUnitIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    if (kind === 'units') {
+      return ids;
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT unit.id', 'id')
+      .from(Unit, 'unit');
+
+    if (kind === 'persons') {
+      query
+        .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+        .where('booklet.personid IN (:...ids)', { ids });
+    } else {
+      query.where('unit.bookletid IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async collectAffectedBookletInfoIds(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<number[]> {
+    const query = this.connection
+      .createQueryBuilder()
+      .select('DISTINCT booklet.infoid', 'id')
+      .from(Booklet, 'booklet');
+
+    if (kind === 'persons') {
+      query.where('booklet.personid IN (:...ids)', { ids });
+    } else if (kind === 'booklets') {
+      query.where('booklet.id IN (:...ids)', { ids });
+    } else {
+      query
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const rows = await query.getRawMany<{ id: number | string }>();
+    return WorkspaceTestResultsService.rawRowsToIds(rows);
+  }
+
+  private async deleteKnownDeleteDependents(
+    manager: EntityManager,
+    kind: TestResultsDeleteTargetKind,
+    snapshot: DeleteDependencySnapshot
+  ): Promise<void> {
+    await this.deleteRowsByIds(
+      manager,
+      CodingJobUnit,
+      'response_id',
+      snapshot.responseIds
+    );
+    await this.deleteRowsByIds(
+      manager,
+      CoderTrainingDiscussionResult,
+      'response_id',
+      snapshot.responseIds
+    );
+    await this.deleteRowsByIds(
+      manager,
+      ResponseEntity,
+      'unitid',
+      snapshot.unitIds
+    );
+    await this.deleteRowsByIds(manager, UnitNote, '"unitId"', snapshot.unitIds);
+    await this.deleteRowsByIds(manager, UnitTag, '"unitId"', snapshot.unitIds);
+    await this.deleteRowsByIds(manager, UnitLog, 'unitid', snapshot.unitIds);
+    await this.deleteRowsByIds(
+      manager,
+      UnitLastState,
+      'unitid',
+      snapshot.unitIds
+    );
+    await this.deleteRowsByIds(manager, ChunkEntity, 'unitid', snapshot.unitIds);
+
+    if (kind !== 'units') {
+      await this.deleteRowsByIds(manager, Unit, 'id', snapshot.unitIds);
+      await this.deleteRowsByIds(
+        manager,
+        Session,
+        'bookletid',
+        snapshot.bookletIds
+      );
+      await this.deleteRowsByIds(
+        manager,
+        BookletLog,
+        'bookletid',
+        snapshot.bookletIds
+      );
+
+      if (kind === 'persons') {
+        await this.deleteRowsByIds(manager, Booklet, 'id', snapshot.bookletIds);
+      }
+    }
+  }
+
+  private async deleteRowsByIds(
+    manager: EntityManager,
+    entity: EntityTarget<ObjectLiteral>,
+    columnExpression: string,
+    ids: number[]
+  ): Promise<number> {
+    let affected = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      const result = await manager
+        .createQueryBuilder()
+        .delete()
+        .from(entity)
+        .where(`${columnExpression} IN (:...ids)`, { ids: chunk })
+        .execute();
+      affected += result.affected || 0;
+    }
+    return affected;
+  }
+
+  private async deleteOrphanedBookletInfos(infoIds: number[]): Promise<number> {
+    let affected = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(infoIds),
+      1000
+    )) {
+      const result = await this.connection
+        .createQueryBuilder()
+        .delete()
+        .from(BookletInfo)
+        .where('id IN (:...ids)', { ids: chunk })
+        .andWhere(
+          'NOT EXISTS (SELECT 1 FROM booklet WHERE booklet.infoid = bookletinfo.id)'
+        )
+        .execute();
+      affected += result.affected || 0;
+    }
+    return affected;
+  }
+
+  private async assertDeleteCompleted(
+    kind: TestResultsDeleteTargetKind,
+    targetIds: number[],
+    snapshot: DeleteDependencySnapshot
+  ): Promise<void> {
+    const failures: string[] = [];
+    const addFailure = async (
+      label: string,
+      countPromise: Promise<number>
+    ): Promise<void> => {
+      const count = await countPromise;
+      if (count > 0) {
+        failures.push(`${count} ${label}`);
+      }
+    };
+
+    if (kind === 'persons') {
+      await addFailure(
+        'Testperson(en)',
+        this.countRowsByIds(Persons, 'id', targetIds)
+      );
+    }
+
+    if (kind !== 'units') {
+      await addFailure(
+        'Testheft(e)',
+        this.countRowsByIds(Booklet, 'id', snapshot.bookletIds)
+      );
+      await addFailure(
+        'Sitzung(en)',
+        this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+      );
+      await addFailure(
+        'Testheft-Logeintrag/-einträge',
+        this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds)
+      );
+      await addFailure(
+        'verwaiste Testheft-Metadaten',
+        this.countOrphanedBookletInfos(snapshot.bookletInfoIds)
+      );
+    }
+
+    await addFailure(
+      'Aufgabe(n)',
+      this.countRowsByIds(Unit, 'id', snapshot.unitIds)
+    );
+    await addFailure(
+      'Antwort(en)',
+      this.countRowsByIds(ResponseEntity, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Notiz(en)',
+      this.countRowsByIds(UnitNote, '"unitId"', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Tag(s)',
+      this.countRowsByIds(UnitTag, '"unitId"', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Logeintrag/-einträge',
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Unit-Zustand/Zustände',
+      this.countRowsByIds(UnitLastState, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Chunk(s)',
+      this.countRowsByIds(ChunkEntity, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Kodierjob-Antwortreferenz(en)',
+      this.countRowsByIds(CodingJobUnit, 'response_id', snapshot.responseIds)
+    );
+    await addFailure(
+      'Training-Diskussionsergebnis(se)',
+      this.countRowsByIds(
+        CoderTrainingDiscussionResult,
+        'response_id',
+        snapshot.responseIds
+      )
+    );
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Die Löschung wurde nicht vollständig bestätigt. Verblieben: ${failures.join(', ')}.`
+      );
+    }
+  }
+
+  private async countRowsByIds(
+    entity: EntityTarget<ObjectLiteral>,
+    columnExpression: string,
+    ids: number[]
+  ): Promise<number> {
+    let count = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select('COUNT(*)', 'count')
+        .from(entity, 'row')
+        .where(`row.${columnExpression} IN (:...ids)`, { ids: chunk })
+        .getRawOne<{ count: string }>();
+      count += Number(raw?.count || 0);
+    }
+    return count;
+  }
+
+  private async countOrphanedBookletInfos(infoIds: number[]): Promise<number> {
+    let count = 0;
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(infoIds),
+      1000
+    )) {
+      const raw = await this.connection
+        .createQueryBuilder()
+        .select('COUNT(*)', 'count')
+        .from(BookletInfo, 'bookletinfo')
+        .where('bookletinfo.id IN (:...ids)', { ids: chunk })
+        .andWhere(
+          'NOT EXISTS (SELECT 1 FROM booklet WHERE booklet.infoid = bookletinfo.id)'
+        )
+        .getRawOne<{ count: string }>();
+      count += Number(raw?.count || 0);
+    }
+    return count;
+  }
+
+  private async collectIdsFromChunks(
+    ids: number[],
+    collect: (chunk: number[]) => Promise<number[]>
+  ): Promise<number[]> {
+    const result: number[] = [];
+    for (const chunk of WorkspaceTestResultsService.chunkArray(
+      WorkspaceTestResultsService.uniqueIds(ids),
+      1000
+    )) {
+      result.push(...await collect(chunk));
+    }
+    return WorkspaceTestResultsService.uniqueIds(result);
+  }
+
+  private static mergeDeleteDependencySnapshot(
+    target: DeleteDependencySnapshot,
+    source: DeleteDependencySnapshot
+  ): void {
+    target.bookletIds.push(...source.bookletIds);
+    target.unitIds.push(...source.unitIds);
+    target.responseIds.push(...source.responseIds);
+    target.bookletInfoIds.push(...source.bookletInfoIds);
+  }
+
+  private static dedupeDeleteDependencySnapshot(
+    snapshot: DeleteDependencySnapshot
+  ): DeleteDependencySnapshot {
+    return {
+      bookletIds: WorkspaceTestResultsService.uniqueIds(snapshot.bookletIds),
+      unitIds: WorkspaceTestResultsService.uniqueIds(snapshot.unitIds),
+      responseIds: WorkspaceTestResultsService.uniqueIds(snapshot.responseIds),
+      bookletInfoIds: WorkspaceTestResultsService.uniqueIds(
+        snapshot.bookletInfoIds
+      )
+    };
+  }
+
+  private static rawRowsToIds(
+    rows: Array<{ id: number | string | null | undefined }>
+  ): number[] {
+    return WorkspaceTestResultsService.uniqueIds(
+      rows
+        .map(row => Number(row.id))
+        .filter(id => Number.isInteger(id) && id > 0)
+    );
+  }
+
+  private static uniqueIds(ids: number[]): number[] {
+    return Array.from(new Set(ids));
   }
 
   private async resolveDeleteTargets(
