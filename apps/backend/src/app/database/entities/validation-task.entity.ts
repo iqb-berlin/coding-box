@@ -4,6 +4,17 @@ import {
 } from 'typeorm';
 import { Job } from './job.entity';
 
+export type ValidationType =
+  | 'variables'
+  | 'variableTypes'
+  | 'responseStatus'
+  | 'testTakers'
+  | 'testFiles'
+  | 'groupResponses'
+  | 'deleteResponses'
+  | 'deleteAllResponses'
+  | 'duplicateResponses';
+
 /**
  * Entity for validation tasks
  */
@@ -15,12 +26,24 @@ export class ValidationTask extends Job {
    * - 'variableTypes': Validate if variable values match their defined types
    * - 'responseStatus': Validate if response status is valid
    * - 'testTakers': Validate if test takers exist in TestTakers XML files
+   * - 'testFiles': Validate TestTakers/Booklet/Unit/resource graph completeness
    * - 'groupResponses': Validate if responses exist for all test person groups
    * - 'deleteResponses': Delete specific invalid responses
    * - 'deleteAllResponses': Delete all invalid responses of a specific type
    */
   @Column()
-    validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses';
+    validation_type: ValidationType;
+
+  /**
+   * Fingerprint used to reuse completed validation results when inputs are unchanged.
+   */
+  @Column({
+    name: 'cache_key',
+    type: 'varchar',
+    length: 64,
+    nullable: true
+  })
+    cache_key?: string;
 
   /**
    * Pagination parameters for paginated results

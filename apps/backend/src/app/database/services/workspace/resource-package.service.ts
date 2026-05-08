@@ -15,6 +15,7 @@ import * as path from 'path';
 import * as util from 'util';
 import ResourcePackage from '../../entities/resource-package.entity';
 import { ResourcePackageDto } from '../../../../../../../api-dto/resource-package/resource-package-dto';
+import { GeoGebraPackageStatus } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResourcePackageNotFoundException } from '../../../exceptions/resource-package-not-found.exception';
 
 @Injectable()
@@ -57,7 +58,7 @@ export class ResourcePackageService {
           { id: id, workspaceId: workspaceId },
           { id: id, scope: 'global' }
         ]
-    });
+      });
     if (resourcePackage) {
       if (resourcePackage.scope === 'global') {
         await this.deleteGlobalPackageReferences(resourcePackage.name);
@@ -189,6 +190,52 @@ export class ResourcePackageService {
       .orderBy('resourcePackage.createdAt', 'DESC')
       .getOne();
     return resourcePackage || null;
+  }
+
+  async getGeoGebraPackageStatus(
+    workspaceId: number
+  ): Promise<GeoGebraPackageStatus> {
+    const packages = await this.resourcePackageRepository
+      .createQueryBuilder('resourcePackage')
+      .where('LOWER(resourcePackage.name) = LOWER(:name)', {
+        name: ResourcePackageService.geogebraPackageName
+      })
+      .andWhere(
+        '(resourcePackage.workspaceId = :workspaceId OR resourcePackage.scope = :scope)',
+        { workspaceId, scope: 'global' }
+      )
+      .orderBy(
+        "CASE WHEN resourcePackage.scope = 'global' THEN 0 ELSE 1 END",
+        'ASC'
+      )
+      .addOrderBy('resourcePackage.createdAt', 'DESC')
+      .getMany();
+
+    if (packages.length === 0) {
+      return {
+        exists: false,
+        valid: false,
+        errors: ['GeoGebra Math Apps Bundle ist nicht installiert.']
+      };
+    }
+
+    const evaluatedPackages = packages.map(resourcePackage => {
+      const errors = this.validateGeoGebraPackageReference(resourcePackage);
+      return { resourcePackage, errors };
+    });
+
+    const validPackage = evaluatedPackages.find(pkg => pkg.errors.length === 0);
+    const selected = validPackage || evaluatedPackages[0];
+
+    return {
+      exists: true,
+      valid: selected.errors.length === 0,
+      name: selected.resourcePackage.name,
+      scope: selected.resourcePackage.scope,
+      detectedVersion: selected.resourcePackage.detectedVersion,
+      errors:
+        selected.errors.length > 0 ? selected.errors : undefined
+    };
   }
 
   private async createOrReturnExistingReference(
@@ -351,6 +398,39 @@ export class ResourcePackageService {
 
   private isGeoGebraPackage(packageFiles: string[]): boolean {
     return packageFiles.includes('GeoGebra/deployggb.js');
+  }
+
+  private validateGeoGebraPackageReference(
+    resourcePackage: ResourcePackage
+  ): string[] {
+    const errors: string[] = [];
+    const requiredFiles = [
+      'GeoGebra/deployggb.js',
+      'GeoGebra/HTML5/5.0/GeoGebra.html'
+    ];
+
+    if (resourcePackage.packageType !== 'geogebra') {
+      errors.push('Das Ressourcenpaket ist nicht als GeoGebra-Paket registriert.');
+    }
+
+    const packageFiles = resourcePackage.elements || [];
+    requiredFiles.forEach(requiredFile => {
+      if (!packageFiles.includes(requiredFile)) {
+        errors.push(`Im Ressourcenpaket fehlt ${requiredFile}.`);
+      }
+    });
+
+    const packageDirectoryPath = this.getExistingPackageDirectoryPath(
+      resourcePackage.name
+    );
+    requiredFiles.forEach(requiredFile => {
+      const absolutePath = path.join(packageDirectoryPath, requiredFile);
+      if (!fs.existsSync(absolutePath)) {
+        errors.push(`Im entpackten GeoGebra-Paket fehlt ${requiredFile}.`);
+      }
+    });
+
+    return Array.from(new Set(errors));
   }
 
   private isGlobalGeoGebraPackage(packageName: string): boolean {

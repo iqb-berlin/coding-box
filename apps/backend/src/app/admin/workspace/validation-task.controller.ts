@@ -16,6 +16,7 @@ import {
 import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { WorkspaceId } from './workspace.decorator';
+import { ValidationType } from '../../database/entities/validation-task.entity';
 
 @ApiTags('Validation Tasks')
 @Controller('admin/workspace/:workspace_id/validation-tasks')
@@ -32,7 +33,7 @@ export class ValidationTaskController {
   @ApiQuery({ name: 'limit', description: 'Page size', required: false })
   async createValidationTask(
     @WorkspaceId() workspaceId: number,
-      @Query('type') type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses',
+      @Query('type') type: ValidationType,
       @Query('page') page?: number,
       @Query('limit') limit?: number,
       @Query() allQueryParams?: Record<string, string | number | boolean | undefined>
