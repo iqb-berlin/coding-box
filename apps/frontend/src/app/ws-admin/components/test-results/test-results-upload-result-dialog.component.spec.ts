@@ -11,10 +11,34 @@ describe('TestResultsUploadResultDialogComponent', () => {
   const data: TestResultsUploadResultDialogData = {
     resultType: 'responses',
     result: {
-      expected: 3,
-      before: 1,
-      after: 2,
-      delta: 1,
+      expected: {
+        testPersons: 1,
+        testGroups: 1,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 3
+      },
+      before: {
+        testPersons: 1,
+        testGroups: 1,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 1
+      },
+      after: {
+        testPersons: 2,
+        testGroups: 1,
+        uniqueBooklets: 2,
+        uniqueUnits: 2,
+        uniqueResponses: 4
+      },
+      delta: {
+        testPersons: 1,
+        testGroups: 0,
+        uniqueBooklets: 1,
+        uniqueUnits: 1,
+        uniqueResponses: 3
+      },
       responseStatusCounts: { COMPLETE: 2, OPEN: 1 },
       issues: [
         {

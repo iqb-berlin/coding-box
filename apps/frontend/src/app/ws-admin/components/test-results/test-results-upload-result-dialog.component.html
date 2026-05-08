@@ -1,12 +1,13 @@
-<h2 mat-dialog-title>
-  Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon>{{ data.resultType === 'logs' ? 'article' : 'upload_file' }}</mat-icon>
+  <span>Upload-Ergebnis ({{ data.resultType === 'logs' ? 'Logs' : 'Antworten' }})</span>
 </h2>
 
-<div mat-dialog-content>
+<div mat-dialog-content class="upload-result-content">
   <div class="summary-container">
     @if (result.importedResponses) {
     <div class="section db-changes-section">
-      <div class="section-title">Datenbank Änderungen</div>
+      <div class="section-title">Datenbankänderungen</div>
       <table class="db-changes-table">
         <thead>
           <tr>
@@ -19,7 +20,7 @@
         </thead>
         <tbody>
           <tr>
-            <td class="row-label">Test Personen</td>
+            <td class="row-label">Testpersonen</td>
             <td class="num">{{ result.expected.testPersons }}</td>
             <td class="num">{{ result.before.testPersons }}</td>
             <td class="num">{{ result.after.testPersons }}</td>
@@ -29,7 +30,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Test Gruppen</td>
+            <td class="row-label">Testgruppen</td>
             <td class="num">{{ result.expected.testGroups }}</td>
             <td class="num">{{ result.before.testGroups }}</td>
             <td class="num">{{ result.after.testGroups }}</td>
@@ -39,7 +40,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Testhefte</td>
+            <td class="row-label">Testhefte (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueBooklets }}</td>
             <td class="num">{{ result.before.uniqueBooklets }}</td>
             <td class="num">{{ result.after.uniqueBooklets }}</td>
@@ -49,7 +50,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Aufgaben</td>
+            <td class="row-label">Aufgaben (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueUnits }}</td>
             <td class="num">{{ result.before.uniqueUnits }}</td>
             <td class="num">{{ result.after.uniqueUnits }}</td>
@@ -59,7 +60,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Antworten</td>
+            <td class="row-label">Antworten (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueResponses }}</td>
             <td class="num">{{ result.before.uniqueResponses }}</td>
             <td class="num">{{ result.after.uniqueResponses }}</td>
@@ -75,7 +76,7 @@
 
     @if (result.importedLogs && result.logMetrics) {
     <div class="section log-coverage-section">
-      <div class="section-title">Log Abdeckung</div>
+      <div class="section-title">Log-Abdeckung</div>
       <div class="kv">
         <div class="k">Testhefte mit Logs</div>
         <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
@@ -92,19 +93,19 @@
     }
   </div>
 
-  <mat-tab-group>
+  <mat-tab-group dynamicHeight>
     @if (result.importedLogs) {
     <mat-tab
       label="Details ({{ detailView === 'booklets' ? filteredBookletDetails.length : filteredUnitDetails.length }})">
       <div class="tab-pad">
-        <div class="filter-row" style="display: flex; gap: 10px; margin-bottom: 10px;">
-          <div class="toggle-group" style="display: flex; gap: 0;">
+        <div class="filter-row">
+          <div class="toggle-group">
             <button mat-stroked-button [class.active]="detailView === 'booklets'" (click)="detailView = 'booklets'"
-              style="border-top-right-radius: 0; border-bottom-right-radius: 0;">Booklets</button>
+              class="left-toggle">Booklets</button>
             <button mat-stroked-button [class.active]="detailView === 'units'" (click)="detailView = 'units'"
-              style="border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none;">Units</button>
+              class="right-toggle">Units</button>
           </div>
-          <mat-form-field appearance="outline" style="flex: 1; font-size: 14px;">
+          <mat-form-field appearance="outline" class="search-field">
             <mat-label>Suche</mat-label>
             <input matInput [(ngModel)]="detailFilterText" placeholder="Name..." />
             <mat-icon matSuffix>search</mat-icon>
@@ -115,8 +116,7 @@
         @if (filteredBookletDetails.length === 0) {
         <div class="empty">Keine Booklets gefunden.</div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport"
-          style="min-height: 300px; height: 100%;">
+        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let b of filteredBookletDetails; trackBy: trackByBookletDetail" class="detail-row">
             <div class="detail-icon" [class.success]="b.hasLog" [class.missing]="!b.hasLog">
               <mat-icon>{{ b.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
@@ -129,8 +129,7 @@
         @if (filteredUnitDetails.length === 0) {
         <div class="empty">Keine Units gefunden.</div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport"
-          style="min-height: 300px; height: 100%;">
+        <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let u of filteredUnitDetails; trackBy: trackByUnitDetail" class="detail-row">
             <div class="detail-icon" [class.success]="u.hasLog" [class.missing]="!u.hasLog">
               <mat-icon>{{ u.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
@@ -168,13 +167,15 @@
 
     <mat-tab label="Probleme ({{ issues.length }})">
       <div class="tab-pad">
-        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 8px;">
+        @if (issues.length > 0) {
+        <div class="issue-filters">
+        <mat-form-field appearance="outline">
           <mat-label>Suche</mat-label>
           <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
           <mat-icon matSuffix>search</mat-icon>
         </mat-form-field>
 
-        <mat-form-field appearance="outline" style="width: 100%; margin-bottom: 12px;">
+        <mat-form-field appearance="outline">
           <mat-label>Kategorie</mat-label>
           <mat-select [(ngModel)]="selectedCategory">
             <mat-option [value]="null">Alle Kategorien</mat-option>
@@ -188,9 +189,14 @@
             <mat-option value="other">Sonstiges</mat-option>
           </mat-select>
         </mat-form-field>
+        </div>
+        }
 
         @if (filteredIssues.length === 0) {
-        <div class="empty">Keine Probleme gefunden.</div>
+        <div class="empty success">
+          <mat-icon>check_circle</mat-icon>
+          <span>Keine Probleme gefunden.</span>
+        </div>
         } @else {
         <cdk-virtual-scroll-viewport itemSize="60" class="viewport">
           <div *cdkVirtualFor="let i of filteredIssues; trackBy: trackByIssue" class="issue-row"
