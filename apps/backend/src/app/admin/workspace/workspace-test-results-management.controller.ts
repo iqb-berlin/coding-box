@@ -1,7 +1,9 @@
 import {
   Controller,
+  Body,
   Delete,
   Get,
+  Post,
   Param,
   Query,
   Req,
@@ -28,6 +30,12 @@ import {
 } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+import { ValidationTaskService } from '../../database/services/validation';
+import { ValidationTaskDto } from './dto/validation-task.dto';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto
+} from '../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -35,7 +43,8 @@ export class WorkspaceTestResultsManagementController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private validationTaskService: ValidationTaskService
   ) { }
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -139,6 +148,50 @@ export class WorkspaceTestResultsManagementController {
       testPersonIds,
       req.user.id
     );
+  }
+
+  @Post(':workspace_id/test-results/delete-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Preview bulk test result deletion',
+    description:
+            'Calculates affected persons, booklets, units and responses before starting a long-running deletion.'
+  })
+  async previewDeleteTestResults(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return this.workspaceTestResultsService.previewDeleteTestResults(
+      workspaceId,
+      request
+    );
+  }
+
+  @Post(':workspace_id/test-results/delete-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start bulk test result deletion',
+    description:
+            'Starts an asynchronous deletion task for selected test result data.'
+  })
+  async createDeleteTestResultsJob(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto,
+      @Req() req: RequestWithUser
+  ): Promise<ValidationTaskDto> {
+    const task = await this.validationTaskService.createValidationTask(
+      workspaceId,
+      'deleteTestResults',
+      undefined,
+      undefined,
+      {
+        ...request,
+        userId: req.user.id
+      }
+    );
+    return ValidationTaskDto.fromEntity(task);
   }
 
   @Delete(':workspace_id/units/:unitId')

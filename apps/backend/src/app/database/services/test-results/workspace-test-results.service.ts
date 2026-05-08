@@ -41,6 +41,12 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto,
+  TestResultsDeleteResultDto,
+  TestResultsDeleteScope
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 interface PersonWhere {
   code: string;
@@ -69,6 +75,14 @@ string,
   values: Array<{ value: string; count: number; p: number }>;
 }
 >;
+
+type TestResultsDeleteTargetKind = 'persons' | 'booklets' | 'units';
+
+interface TestResultsDeleteTargets {
+  kind: TestResultsDeleteTargetKind;
+  ids: number[];
+  preview: TestResultsDeletePreviewDto;
+}
 
 @Injectable()
 export class WorkspaceTestResultsService {
@@ -2769,6 +2783,491 @@ export class WorkspaceTestResultsService {
       }
       return result;
     });
+  }
+
+  async previewDeleteTestResults(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return (await this.resolveDeleteTargets(workspaceId, request)).preview;
+  }
+
+  async deleteTestResultsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    const totalTargets = targets.ids.length;
+
+    if (totalTargets === 0) {
+      return {
+        ...targets.preview,
+        deletedTargetCount: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalTargets} Datensätze aus dem Ergebnisbrowser...`
+    );
+
+    const chunks = WorkspaceTestResultsService.chunkArray(targets.ids, 250);
+    let deletedTargetCount = 0;
+
+    for (const [index, ids] of chunks.entries()) {
+      const deleteResult = await this.connection.transaction(async manager => {
+        switch (targets.kind) {
+          case 'persons':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Persons)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          case 'booklets':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Booklet)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          case 'units':
+            return manager
+              .createQueryBuilder()
+              .delete()
+              .from(Unit)
+              .where('id IN (:...ids)', { ids })
+              .execute();
+          default:
+            throw new Error('Unknown test result deletion target');
+        }
+      });
+
+      deletedTargetCount += deleteResult.affected || ids.length;
+
+      const progress = Math.min(
+        90,
+        10 + Math.round((deletedTargetCount / totalTargets) * 80)
+      );
+      await onProgress?.(
+        progress,
+        `Löschung läuft: ${deletedTargetCount}/${totalTargets} Datensätze verarbeitet (${index + 1}/${chunks.length} Stapel).`
+      );
+    }
+
+    await onProgress?.(95, 'Caches und Statistiken werden aktualisiert...');
+    await this.codingValidationService.invalidateIncompleteVariablesCache(
+      workspaceId
+    );
+    await this.invalidateWorkspaceStatsCache(workspaceId);
+
+    if (userId) {
+      try {
+        await this.journalService.createEntry(
+          userId,
+          workspaceId,
+          'delete',
+          'test-results',
+          0,
+          {
+            scope: request.scope,
+            deletedTargetKind: targets.kind,
+            deletedTargetCount,
+            preview: targets.preview,
+            message: 'Test results deleted by bulk job'
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to create journal entry for bulk test result deletion: ${error.message}`,
+          error.stack
+        );
+      }
+    }
+
+    return {
+      ...targets.preview,
+      deletedTargetCount
+    };
+  }
+
+  private async resolveDeleteTargets(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeleteTargets> {
+    const normalizedRequest =
+      WorkspaceTestResultsService.normalizeDeleteRequest(request);
+    const warnings: string[] = [];
+    let kind: TestResultsDeleteTargetKind = 'persons';
+    let ids: number[] = [];
+
+    switch (normalizedRequest.scope) {
+      case 'persons':
+        kind = 'persons';
+        if (normalizedRequest.personIds.length > 0) {
+          const rows = await this.personsRepository
+            .createQueryBuilder('person')
+            .select(['person.id'])
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.id IN (:...personIds)', {
+              personIds: normalizedRequest.personIds
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'filteredPersons': {
+        kind = 'persons';
+        const query = this.personsRepository
+          .createQueryBuilder('person')
+          .select(['person.id'])
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+
+        if (normalizedRequest.searchText) {
+          query.andWhere(
+            '(person.code ILIKE :searchText OR person.group ILIKE :searchText OR person.login ILIKE :searchText)',
+            { searchText: `%${normalizedRequest.searchText}%` }
+          );
+        }
+
+        const rows = await query.getMany();
+        ids = rows.map(row => row.id);
+        break;
+      }
+      case 'groups':
+        kind = 'persons';
+        if (normalizedRequest.groups.length > 0) {
+          const rows = await this.personsRepository
+            .createQueryBuilder('person')
+            .select(['person.id'])
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('person.group IN (:...groups)', {
+              groups: normalizedRequest.groups
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'booklets':
+        kind = 'booklets';
+        if (normalizedRequest.bookletNames.length > 0) {
+          const rows = await this.bookletRepository
+            .createQueryBuilder('booklet')
+            .select(['booklet.id'])
+            .innerJoin('booklet.person', 'person')
+            .innerJoin('booklet.bookletinfo', 'bookletinfo')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('UPPER(bookletinfo.name) IN (:...bookletNames)', {
+              bookletNames: normalizedRequest.bookletNames.map(name => name.toUpperCase())
+            })
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      case 'units':
+        kind = 'units';
+        if (normalizedRequest.unitNames.length > 0) {
+          const unitNames = normalizedRequest.unitNames.map(
+            WorkspaceTestResultsService.normalizeUnitKey
+          );
+          const rows = await this.unitRepository
+            .createQueryBuilder('unit')
+            .select(['unit.id'])
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere(
+              `(REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') IN (:...unitNames)
+                OR REGEXP_REPLACE(UPPER(COALESCE(unit.alias, '')), '\\.XML$', '', 'i') IN (:...unitNames))`,
+              { unitNames }
+            )
+            .getMany();
+          ids = rows.map(row => row.id);
+        }
+        break;
+      default:
+        warnings.push('Unbekannter Löschbereich.');
+    }
+
+    ids = Array.from(new Set(ids));
+    if (ids.length === 0) {
+      warnings.push('Keine passenden Testergebnisdaten gefunden.');
+    }
+
+    const preview = await this.buildDeletePreview(
+      workspaceId,
+      normalizedRequest,
+      kind,
+      ids,
+      warnings
+    );
+
+    return { kind, ids, preview };
+  }
+
+  private async buildDeletePreview(
+    workspaceId: number,
+    request: Required<TestResultsDeleteRequestDto>,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[],
+    warnings: string[]
+  ): Promise<TestResultsDeletePreviewDto> {
+    const counts = await this.getDeleteCounts(workspaceId, kind, ids);
+    const metadata = await this.getDeleteMetadata(kind, ids);
+
+    return {
+      scope: request.scope,
+      label: WorkspaceTestResultsService.getDeleteLabel(request),
+      persons: counts.persons,
+      booklets: counts.booklets,
+      units: counts.units,
+      responses: counts.responses,
+      groups: metadata.groups,
+      bookletNames: metadata.bookletNames,
+      unitNames: metadata.unitNames,
+      warnings
+    };
+  }
+
+  private async getDeleteCounts(
+    workspaceId: number,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<Pick<TestResultsDeletePreviewDto, 'persons' | 'booklets' | 'units' | 'responses'>> {
+    if (ids.length === 0) {
+      return {
+        persons: 0,
+        booklets: 0,
+        units: 0,
+        responses: 0
+      };
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+
+    const personsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT person.id)', 'count')
+      .from(Persons, 'person');
+
+    if (kind === 'booklets') {
+      personsQuery.innerJoin(Booklet, 'booklet', 'booklet.personid = person.id');
+    } else if (kind === 'units') {
+      personsQuery
+        .innerJoin(Booklet, 'booklet', 'booklet.personid = person.id')
+        .innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id');
+    }
+    WorkspaceTestResultsService.applyDeleteTargetFilter(personsQuery, kind, ids);
+
+    const bookletsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT bookletinfo.name)', 'count')
+      .from(Booklet, 'booklet')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid');
+    if (kind === 'units') {
+      bookletsQuery.innerJoin(Unit, 'unit', 'unit.bookletid = booklet.id');
+    }
+    WorkspaceTestResultsService.applyDeleteTargetFilter(bookletsQuery, kind, ids);
+    this.applyIgnoredBookletsToQuery(bookletsQuery, exclusions.ignoredBooklets);
+
+    const unitsQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT COALESCE(unit.alias, unit.name))', 'count')
+      .from(Unit, 'unit')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid');
+    WorkspaceTestResultsService.applyDeleteTargetFilter(unitsQuery, kind, ids);
+    this.applyExclusionsToQuery(unitsQuery, exclusions);
+
+    const responsesQuery = this.connection
+      .createQueryBuilder()
+      .select('COUNT(DISTINCT response.id)', 'count')
+      .from(ResponseEntity, 'response')
+      .innerJoin(Unit, 'unit', 'unit.id = response.unitid')
+      .innerJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+      .innerJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+      .innerJoin(Persons, 'person', 'person.id = booklet.personid');
+    WorkspaceTestResultsService.applyDeleteTargetFilter(responsesQuery, kind, ids);
+    this.applyExclusionsToQuery(responsesQuery, exclusions);
+    this.excludeAutocoderGeneratedResponses(responsesQuery);
+
+    const [personsRaw, bookletsRaw, unitsRaw, responsesRaw] = await Promise.all([
+      personsQuery.getRawOne<{ count: string }>(),
+      bookletsQuery.getRawOne<{ count: string }>(),
+      unitsQuery.getRawOne<{ count: string }>(),
+      responsesQuery.getRawOne<{ count: string }>()
+    ]);
+
+    return {
+      persons: Number(personsRaw?.count || 0),
+      booklets: Number(bookletsRaw?.count || 0),
+      units: Number(unitsRaw?.count || 0),
+      responses: Number(responsesRaw?.count || 0)
+    };
+  }
+
+  private static applyDeleteTargetFilter(
+    query: SelectQueryBuilder<unknown>,
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): void {
+    switch (kind) {
+      case 'persons':
+        query.where('person.id IN (:...ids)', { ids });
+        break;
+      case 'booklets':
+        query.where('booklet.id IN (:...ids)', { ids });
+        break;
+      case 'units':
+        query.where('unit.id IN (:...ids)', { ids });
+        break;
+      default:
+        query.where('1 = 0');
+    }
+  }
+
+  private async getDeleteMetadata(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<Pick<TestResultsDeletePreviewDto, 'groups' | 'bookletNames' | 'unitNames'>> {
+    if (ids.length === 0) {
+      return {
+        groups: [],
+        bookletNames: [],
+        unitNames: []
+      };
+    }
+
+    const query = this.connection
+      .createQueryBuilder()
+      .select("COALESCE(array_remove(array_agg(DISTINCT person.group), NULL), '{}')", 'groups')
+      .addSelect("COALESCE(array_remove(array_agg(DISTINCT bookletinfo.name), NULL), '{}')", 'bookletNames')
+      .addSelect("COALESCE(array_remove(array_agg(DISTINCT COALESCE(unit.alias, unit.name)), NULL), '{}')", 'unitNames');
+
+    if (kind === 'persons') {
+      query
+        .from(Persons, 'person')
+        .leftJoin(Booklet, 'booklet', 'booklet.personid = person.id')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .leftJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('person.id IN (:...ids)', { ids });
+    } else if (kind === 'booklets') {
+      query
+        .from(Booklet, 'booklet')
+        .leftJoin(Persons, 'person', 'person.id = booklet.personid')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .leftJoin(Unit, 'unit', 'unit.bookletid = booklet.id')
+        .where('booklet.id IN (:...ids)', { ids });
+    } else {
+      query
+        .from(Unit, 'unit')
+        .leftJoin(Booklet, 'booklet', 'booklet.id = unit.bookletid')
+        .leftJoin(Persons, 'person', 'person.id = booklet.personid')
+        .leftJoin(BookletInfo, 'bookletinfo', 'bookletinfo.id = booklet.infoid')
+        .where('unit.id IN (:...ids)', { ids });
+    }
+
+    const raw = await query.getRawOne<{
+      groups: string[] | string | null;
+      bookletNames: string[] | string | null;
+      unitNames: string[] | string | null;
+    }>();
+
+    return {
+      groups: WorkspaceTestResultsService.toPreviewList(raw?.groups),
+      bookletNames: WorkspaceTestResultsService.toPreviewList(raw?.bookletNames),
+      unitNames: WorkspaceTestResultsService.toPreviewList(raw?.unitNames)
+    };
+  }
+
+  private static normalizeDeleteRequest(
+    request: TestResultsDeleteRequestDto
+  ): Required<TestResultsDeleteRequestDto> {
+    return {
+      scope: request.scope,
+      personIds: WorkspaceTestResultsService.normalizeNumberList(request.personIds),
+      searchText: String(request.searchText || '').trim(),
+      groups: WorkspaceTestResultsService.normalizeStringList(request.groups),
+      bookletNames: WorkspaceTestResultsService.normalizeStringList(request.bookletNames),
+      unitNames: WorkspaceTestResultsService.normalizeStringList(request.unitNames)
+    };
+  }
+
+  private static normalizeNumberList(value?: number[] | string): number[] {
+    if (!value) return [];
+    const values = Array.isArray(value) ? value : String(value).split(',');
+    return values
+      .map(v => Number(v))
+      .filter(v => Number.isInteger(v) && v > 0);
+  }
+
+  private static normalizeStringList(value?: string[] | string): string[] {
+    if (!value) return [];
+    const values = Array.isArray(value) ? value : String(value).split(',');
+    return Array.from(
+      new Set(
+        values
+          .map(v => String(v || '').trim())
+          .filter(v => v.length > 0)
+      )
+    );
+  }
+
+  private static normalizeUnitKey(value: string): string {
+    return String(value || '')
+      .trim()
+      .toUpperCase()
+      .replace(/\.XML$/i, '');
+  }
+
+  private static toPreviewList(value?: string[] | string | null): string[] {
+    if (!value) return [];
+    if (Array.isArray(value)) {
+      return value.map(v => String(v)).filter(v => v.length > 0).slice(0, 30);
+    }
+    return String(value)
+      .replace(/^{|}$/g, '')
+      .split(',')
+      .map(v => v.replace(/^"|"$/g, '').trim())
+      .filter(v => v.length > 0)
+      .slice(0, 30);
+  }
+
+  private static getDeleteLabel(
+    request: Required<TestResultsDeleteRequestDto>
+  ): string {
+    switch (request.scope as TestResultsDeleteScope) {
+      case 'persons':
+        return `${request.personIds.length} ausgewählte Testperson(en)`;
+      case 'filteredPersons':
+        return request.searchText ?
+          `alle Testpersonen mit Filter "${request.searchText}"` :
+          'alle sichtbaren Testpersonen';
+      case 'groups':
+        return `Testgruppe(n): ${request.groups.join(', ')}`;
+      case 'booklets':
+        return `Testheft(e): ${request.bookletNames.join(', ')}`;
+      case 'units':
+        return `Aufgabe(n): ${request.unitNames.join(', ')}`;
+      default:
+        return 'Testergebnisdaten';
+    }
+  }
+
+  private static chunkArray<T>(values: T[], size: number): T[][] {
+    const chunks: T[][] = [];
+    for (let index = 0; index < values.length; index += size) {
+      chunks.push(values.slice(index, index + size));
+    }
+    return chunks;
   }
 
   async deleteUnit(

@@ -13,6 +13,7 @@ export type ValidationType =
   | 'groupResponses'
   | 'deleteResponses'
   | 'deleteAllResponses'
+  | 'deleteTestResults'
   | 'duplicateResponses';
 
 /**
@@ -30,6 +31,7 @@ export class ValidationTask extends Job {
    * - 'groupResponses': Validate if responses exist for all test person groups
    * - 'deleteResponses': Delete specific invalid responses
    * - 'deleteAllResponses': Delete all invalid responses of a specific type
+   * - 'deleteTestResults': Delete test result data by selected scope
    */
   @Column()
     validation_type: ValidationType;

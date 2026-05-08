@@ -23,6 +23,7 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
   addSelect: jest.fn().mockReturnThis(),
+  from: jest.fn().mockReturnThis(),
   where: jest.fn().mockReturnThis(),
   andWhere: jest.fn().mockReturnThis(),
   groupBy: jest.fn().mockReturnThis(),
@@ -149,6 +150,7 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<ChunkEntity>;
 
     dataSource = {
+      createQueryBuilder: jest.fn(() => mockQueryBuilder()),
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
       }),
@@ -175,6 +177,72 @@ describe('WorkspaceTestResultsService', () => {
       workspaceCoreService,
       workspaceExclusionService
     );
+  });
+
+  describe('previewDeleteTestResults', () => {
+    it('uses overview-compatible counts for bulk deletion previews', async () => {
+      const workspaceId = 1;
+      const targetQb = mockQueryBuilder();
+      const personsCountQb = mockQueryBuilder();
+      const bookletsCountQb = mockQueryBuilder();
+      const unitsCountQb = mockQueryBuilder();
+      const responsesCountQb = mockQueryBuilder();
+      const metadataQb = mockQueryBuilder();
+
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(targetQb);
+      targetQb.getMany.mockResolvedValue([{ id: 10 }, { id: 11 }]);
+      (dataSource.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(personsCountQb)
+        .mockReturnValueOnce(bookletsCountQb)
+        .mockReturnValueOnce(unitsCountQb)
+        .mockReturnValueOnce(responsesCountQb)
+        .mockReturnValueOnce(metadataQb);
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['IGNORED_UNIT.XML'],
+        ignoredBooklets: ['IGNORED_BOOKLET'],
+        testletIgnoredUnits: []
+      });
+
+      personsCountQb.getRawOne.mockResolvedValue({ count: '2' });
+      bookletsCountQb.getRawOne.mockResolvedValue({ count: '4' });
+      unitsCountQb.getRawOne.mockResolvedValue({ count: '33' });
+      responsesCountQb.getRawOne.mockResolvedValue({ count: '10725' });
+      metadataQb.getRawOne.mockResolvedValue({
+        groups: ['G1'],
+        bookletNames: ['BOOKLET_1'],
+        unitNames: ['UNIT_1']
+      });
+
+      const result = await service.previewDeleteTestResults(workspaceId, {
+        scope: 'filteredPersons'
+      });
+
+      expect(result).toMatchObject({
+        persons: 2,
+        booklets: 4,
+        units: 33,
+        responses: 10725
+      });
+      expect(bookletsCountQb.select).toHaveBeenCalledWith(
+        'COUNT(DISTINCT bookletinfo.name)',
+        'count'
+      );
+      expect(unitsCountQb.select).toHaveBeenCalledWith(
+        'COUNT(DISTINCT COALESCE(unit.alias, unit.name))',
+        'count'
+      );
+      expect(bookletsCountQb.andWhere).toHaveBeenCalledWith(
+        'UPPER(bookletinfo.name) NOT IN (:...ignoredBookletsOnly)',
+        { ignoredBookletsOnly: ['IGNORED_BOOKLET'] }
+      );
+      expect(unitsCountQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['IGNORED_UNIT'] })
+      );
+      expect(responsesCountQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
   });
 
   describe('resolveDuplicateResponses', () => {
