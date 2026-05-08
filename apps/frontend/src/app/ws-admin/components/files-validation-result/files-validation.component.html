@@ -32,6 +32,80 @@
       </mat-expansion-panel>
     </div>
 
+    @if (isRefreshingValidation) {
+    <div class="validation-refresh-panel" aria-live="polite">
+      <div class="validation-refresh-header">
+        <mat-spinner diameter="24"></mat-spinner>
+        <div class="validation-refresh-text">
+          <strong>Validierung wird aktualisiert</strong>
+          <p>{{ refreshValidationProgressMessage }}</p>
+        </div>
+        <span class="validation-refresh-percent">{{ refreshValidationProgress }}%</span>
+      </div>
+      <mat-progress-bar mode="determinate" [value]="refreshValidationProgress"></mat-progress-bar>
+    </div>
+    }
+
+    @if (geogebra?.hasTasks) {
+    <div class="geogebra-status-panel" [class.geogebra-status-ok]="geogebra?.packageStatus?.valid"
+      [class.geogebra-status-warning]="!geogebra?.packageStatus?.valid">
+      <mat-expansion-panel [expanded]="!geogebra?.packageStatus?.valid">
+        <mat-expansion-panel-header>
+          <mat-panel-title>
+            <mat-icon class="geogebra-status-icon">{{ geogebra?.packageStatus?.valid ? 'check_circle' : 'warning'
+              }}</mat-icon>
+            <span class="geogebra-status-title">GeoGebra-Aufgaben gefunden</span>
+          </mat-panel-title>
+          <mat-panel-description>
+            {{ geogebra?.units?.length || 0 }} Aufgabe(n)
+          </mat-panel-description>
+        </mat-expansion-panel-header>
+
+        <div class="geogebra-status-content">
+          @if (geogebra?.packageStatus?.valid) {
+          @if (geogebra?.packageStatus?.detectedVersion) {
+          <p class="geogebra-status-message">
+            Das GeoGebra Math Apps Bundle ist installiert ({{ geogebra?.packageStatus?.detectedVersion }}).
+          </p>
+          } @else {
+          <p class="geogebra-status-message">
+            Das GeoGebra Math Apps Bundle ist installiert.
+          </p>
+          }
+          <p class="geogebra-support-note">
+            <mat-icon>check_circle</mat-icon>
+            Die benötigte GeoGebra-Unterstützung ist verfügbar.
+          </p>
+          } @else {
+          <p class="geogebra-status-message">
+            Für diese Testdateien werden GeoGebra-Aufgaben erkannt, aber es ist kein gültiges GeoGebra Math Apps Bundle
+            verfügbar.
+          </p>
+          @if (geogebra?.packageStatus?.errors?.length) {
+          <ul class="geogebra-error-list">
+            @for (error of geogebra?.packageStatus?.errors || []; track error) {
+            <li>{{ error }}</li>
+            }
+          </ul>
+          }
+          }
+
+          <div class="geogebra-unit-section">
+            <div class="geogebra-unit-header">
+              <span>Betroffene Aufgaben (Unit-IDs)</span>
+              <span class="geogebra-unit-count">{{ geogebra?.units?.length || 0 }}</span>
+            </div>
+            <div class="geogebra-unit-list" aria-label="Betroffene GeoGebra Unit-IDs">
+              @for (unit of geogebra?.units || []; track unit) {
+              <span class="geogebra-unit-chip">{{ unit }}</span>
+              }
+            </div>
+          </div>
+        </div>
+      </mat-expansion-panel>
+    </div>
+    }
+
     @if (duplicateTestTakers && duplicateTestTakers.length > 0) {
     <div class="missing-units-warning duplicate-testtakers-warning">
       <mat-expansion-panel>

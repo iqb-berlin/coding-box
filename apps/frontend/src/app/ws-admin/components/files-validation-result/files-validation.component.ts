@@ -5,7 +5,14 @@ import {
   inject,
   OnInit
 } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of, timer } from 'rxjs';
+import {
+  filter,
+  finalize,
+  switchMap,
+  take,
+  tap
+} from 'rxjs/operators';
 import { MetadataResolver } from '@iqb/metadata-resolver';
 import {
   MAT_DIALOG_DATA,
@@ -23,8 +30,9 @@ import { FormsModule } from '@angular/forms';
 import { SelectionModel } from '@angular/cdk/collections';
 import { ScrollingModule } from '@angular/cdk/scrolling';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -35,6 +43,7 @@ import { UnitDefinitionPlayerDialogComponent } from '../unit-definition-player-d
 import {
   DuplicateTestTaker,
   FileValidationResultDto,
+  GeoGebraValidationResult,
   UnusedTestFile
 } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
@@ -47,6 +56,10 @@ import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { BookletInfoDto } from '../../../../../../../api-dto/booklet-info/booklet-info.dto';
 import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/booklet-testlet.dto';
 import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+
+const VALIDATION_REFRESH_POLL_INTERVAL_MS = 300;
 
 type FileStatus = {
   filename: string;
@@ -157,7 +170,8 @@ type FilesValidationView = Omit<FilesValidation, ValidationSectionKey> & {
     FormsModule,
     ScrollingModule,
     MatExpansionModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatProgressBarModule
   ],
   styleUrls: ['./files-validation.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush
@@ -172,6 +186,7 @@ export class FilesValidationDialogComponent implements OnInit {
     filteredTestTakers?: FilteredTestTaker[];
     duplicateTestTakers?: DuplicateTestTaker[];
     unusedTestFiles?: UnusedTestFile[];
+    geogebra?: GeoGebraValidationResult;
     workspaceId?: number;
   }>(MAT_DIALOG_DATA);
 
@@ -180,6 +195,7 @@ export class FilesValidationDialogComponent implements OnInit {
   filteredTestTakers: FilteredTestTaker[] = [];
   duplicateTestTakers: DuplicateTestTaker[] = [];
   unusedTestFiles: UnusedTestFile[] = [];
+  geogebra?: GeoGebraValidationResult;
   validationResults: FilesValidationView[] = [];
 
   selection = new SelectionModel<FilteredTestTaker>(true, []);
@@ -208,12 +224,16 @@ export class FilesValidationDialogComponent implements OnInit {
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
   private snackBar = inject(MatSnackBar);
+  private validationService = inject(ValidationService);
 
   isExcluding = false;
   excludingProgress = 0;
 
   isConsidering = false;
   consideringProgress = 0;
+  isRefreshingValidation = false;
+  refreshValidationProgress = 0;
+  refreshValidationProgressMessage = '';
 
   summary: ValidationSummary = {
     totalTestTakers: 0,
@@ -410,6 +430,7 @@ export class FilesValidationDialogComponent implements OnInit {
     this.filteredTestTakers = resultDto.filteredTestTakers || [];
     this.duplicateTestTakers = resultDto.duplicateTestTakers || [];
     this.unusedTestFiles = resultDto.unusedTestFiles || [];
+    this.geogebra = resultDto.geogebra;
 
     this.selection.clear();
     this.allSelected = false;
@@ -429,31 +450,78 @@ export class FilesValidationDialogComponent implements OnInit {
   }
 
   private refreshValidationData(successMessage?: string): void {
-    if (!this.data.workspaceId) {
+    if (!this.data.workspaceId || this.isRefreshingValidation) {
       return;
     }
 
-    const refreshInProgressRef: MatSnackBarRef<TextOnlySnackBar> = this.snackBar.open(
-      'Validierungsergebnisse werden aktualisiert...'
-    );
+    const workspaceId = this.data.workspaceId;
+    this.isRefreshingValidation = true;
+    this.refreshValidationProgress = 0;
+    this.refreshValidationProgressMessage = 'Testdateien werden auf Änderungen geprüft...';
+    this.cdr.markForCheck();
 
-    this.fileService.validateFiles(this.data.workspaceId).subscribe({
+    this.validationService.createValidationTask(workspaceId, 'testFiles').pipe(
+      switchMap(task => this.waitForValidationTask(workspaceId, task)),
+      switchMap(task => {
+        if (task.status === 'failed') {
+          throw new Error(task.error || 'Validierung fehlgeschlagen');
+        }
+        this.refreshValidationProgress = 100;
+        this.refreshValidationProgressMessage = task.progress_message || 'Validierungsergebnis wird geladen...';
+        this.cdr.markForCheck();
+        return this.validationService.getValidationResults(workspaceId, task.id);
+      }),
+      finalize(() => {
+        this.isRefreshingValidation = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
       next: response => {
-        refreshInProgressRef.dismiss();
         if (typeof response === 'boolean') {
           this.snackBar.open('Validierungsergebnisse konnten nicht aktualisiert werden', 'OK', { duration: 3000 });
           return;
         }
-        this.applyValidationResultData(response);
+
+        this.applyValidationResultData(response as FileValidationResultDto);
         if (successMessage) {
           this.snackBar.open(successMessage, 'OK', { duration: 2500 });
         }
       },
       error: () => {
-        refreshInProgressRef.dismiss();
         this.snackBar.open('Fehler beim Aktualisieren der Validierungsergebnisse', 'OK', { duration: 3000 });
       }
     });
+  }
+
+  private waitForValidationTask(
+    workspaceId: number,
+    task: ValidationTaskDto
+  ) {
+    this.updateRefreshValidationProgress(task);
+    if (task.status === 'completed' || task.status === 'failed') {
+      return of(task);
+    }
+
+    return timer(0, VALIDATION_REFRESH_POLL_INTERVAL_MS).pipe(
+      switchMap(() => this.validationService.getValidationTask(workspaceId, task.id)),
+      tap(nextTask => this.updateRefreshValidationProgress(nextTask)),
+      filter(nextTask => nextTask.status !== 'pending' && nextTask.status !== 'processing'),
+      take(1)
+    );
+  }
+
+  private updateRefreshValidationProgress(task: ValidationTaskDto): void {
+    const progress = task.progress ?? 0;
+    this.refreshValidationProgress = Math.max(this.refreshValidationProgress, progress);
+    if (task.progress_message) {
+      this.refreshValidationProgressMessage = `${this.refreshValidationProgress}% - ${task.progress_message}`;
+    } else {
+      this.refreshValidationProgressMessage =
+        this.refreshValidationProgress >= 100 ?
+          'Validierungsergebnis wird geladen...' :
+          `Validierung wird durchgeführt (${this.refreshValidationProgress}%)...`;
+    }
+    this.cdr.markForCheck();
   }
 
   private createValidationView(result: FilesValidation): FilesValidationView {
@@ -615,6 +683,10 @@ export class FilesValidationDialogComponent implements OnInit {
 
       if (this.data.unusedTestFiles) {
         this.unusedTestFiles = this.data.unusedTestFiles;
+      }
+
+      if (this.data.geogebra) {
+        this.geogebra = this.data.geogebra;
       }
     }
   }

@@ -250,6 +250,7 @@ export class ValidationService {
     | 'variableTypes'
     | 'responseStatus'
     | 'testTakers'
+    | 'testFiles'
     | 'groupResponses'
     | 'deleteResponses'
     | 'deleteAllResponses'

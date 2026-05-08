@@ -1,12 +1,40 @@
 <div class="fx-column-start-start fx-gap-10 container">
   @if (isBusy) {
-  <div class="busy-overlay" aria-busy="true" aria-live="polite">
+  <div class="busy-overlay" [class.is-validation-overlay]="isValidating" aria-busy="true" aria-live="polite">
+    @if (isValidating) {
+    <div class="validation-busy-card">
+      <div class="validation-busy-header">
+        <mat-spinner diameter="36"></mat-spinner>
+        <div class="validation-busy-text">
+          <strong>Testdateien werden validiert</strong>
+          <p>{{ validationProgressMessage }}</p>
+        </div>
+        <span class="validation-busy-percent">{{ validationProgress }}%</span>
+      </div>
+      <mat-progress-bar class="validation-progress-bar" mode="determinate" [value]="validationProgress">
+      </mat-progress-bar>
+      <div class="validation-progress-summary">
+        <span>{{ completedValidationStepCount }} / {{ validationProgressSteps.length }} Schritte</span>
+      </div>
+      <div class="validation-progress-steps" aria-label="Fortschritt der Testdatei-Validierung">
+        @for (step of validationProgressSteps; track step.label; let index = $index) {
+        <div class="validation-progress-step" [class.is-complete]="isValidationStepComplete(step)"
+          [class.is-active]="isValidationStepActive(index)">
+          <mat-icon>{{ isValidationStepComplete(step) ? 'check_circle' : isValidationStepActive(index) ?
+            'radio_button_checked' : 'radio_button_unchecked' }}</mat-icon>
+          <span>{{ step.label }}</span>
+        </div>
+        }
+      </div>
+    </div>
+    } @else {
     <mat-spinner class="mat-spinner"></mat-spinner>
     <p class="loading-text">{{ busyText }}</p>
     @if (isDownloadingAllFiles) {
-    <mat-progress-bar class="download-progress-bar" [mode]="isDownloadProgressIndeterminate ? 'indeterminate' : 'determinate'"
-      [value]="downloadProgressValue">
+    <mat-progress-bar class="download-progress-bar" [mode]="isBusyProgressIndeterminate ? 'indeterminate' : 'determinate'"
+      [value]="busyProgressValue">
     </mat-progress-bar>
+    }
     }
   </div>
   }

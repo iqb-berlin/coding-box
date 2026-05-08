@@ -30,8 +30,20 @@ import { HttpEventType, HttpResponse } from '@angular/common/http';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
-import { Subject, Subscription } from 'rxjs';
-import { debounceTime, finalize } from 'rxjs/operators';
+import {
+  of,
+  Subject,
+  Subscription,
+  timer
+} from 'rxjs';
+import {
+  debounceTime,
+  filter,
+  finalize,
+  switchMap,
+  take,
+  tap
+} from 'rxjs/operators';
 import {
   MatPaginator,
   MatPaginatorIntl,
@@ -79,6 +91,8 @@ import {
 import { base64ToUtf8 } from '../../../shared/utils/common-utils';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentPoolSettings } from '../../models/content-pool.model';
+import { ValidationService } from '../../../shared/services/validation/validation.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import {
   ContentPoolImportDialogComponent,
   ContentPoolImportDialogResult
@@ -87,6 +101,13 @@ import {
   ContentPoolUploadDialogComponent,
   ContentPoolUploadDialogResult
 } from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
+
+const VALIDATION_TASK_POLL_INTERVAL_MS = 300;
+
+type ValidationProgressStep = {
+  threshold: number;
+  label: string;
+};
 
 @Component({
   selector: 'coding-box-test-files',
@@ -135,6 +156,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private translate = inject(TranslateService);
   private contentPoolIntegrationService = inject(ContentPoolIntegrationService);
+  private validationService = inject(ValidationService);
 
   displayedColumns: string[] = [
     'selectCheckbox',
@@ -157,6 +179,27 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   downloadProgressLoadedBytes = 0;
   downloadProgressTotalBytes = 0;
   downloadProgressStatus: 'preparing' | 'downloading' = 'preparing';
+  validationProgress = 0;
+  validationProgressMessage = '';
+  readonly validationProgressSteps: ValidationProgressStep[] = [
+    { threshold: 0, label: 'Änderungen prüfen' },
+    { threshold: 3, label: 'Vorbereiten' },
+    { threshold: 8, label: 'Ausschlüsse laden' },
+    { threshold: 12, label: 'Booklets analysieren' },
+    { threshold: 22, label: 'Aufgabenreferenzen' },
+    { threshold: 30, label: 'Ressourcen laden' },
+    { threshold: 38, label: 'XML-Schemata' },
+    { threshold: 48, label: 'Kodierschemata' },
+    { threshold: 55, label: 'TestTakers verarbeiten' },
+    { threshold: 84, label: 'Unbenutzte Dateien' },
+    { threshold: 88, label: 'Doppelte TestTaker' },
+    { threshold: 90, label: 'Personenstatus' },
+    { threshold: 92, label: 'GeoGebra-Aufgaben' },
+    { threshold: 94, label: 'GeoGebra-Paket' },
+    { threshold: 98, label: 'Ergebnis vorbereiten' },
+    { threshold: 100, label: 'Abgeschlossen' }
+  ];
+
   selectedFileType: string = '';
   selectedFileSize: string = '';
   fileTypes: string[] = [];
@@ -243,7 +286,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return `ZIP-Download: ${this.downloadProgressPercent}% (${this.formatBytes(this.downloadProgressLoadedBytes)}${totalText})`;
     }
     if (this.isValidating) {
-      return 'Validierung wird durchgeführt...';
+      return this.validationProgressMessage ||
+        'Validierung wird durchgeführt...';
     }
     if (this.isUploading) {
       return 'Datei(en) werden hochgeladen...';
@@ -955,6 +999,36 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     );
   }
 
+  get busyProgressValue(): number {
+    return this.isValidating ?
+      this.validationProgress :
+      this.downloadProgressValue;
+  }
+
+  get isBusyProgressIndeterminate(): boolean {
+    return this.isValidating ? false : this.isDownloadProgressIndeterminate;
+  }
+
+  get completedValidationStepCount(): number {
+    return this.validationProgressSteps.filter(
+      step => this.isValidationStepComplete(step)
+    ).length;
+  }
+
+  isValidationStepComplete(step: ValidationProgressStep): boolean {
+    if (this.validationProgress >= 100) {
+      return true;
+    }
+    return this.validationProgress > step.threshold;
+  }
+
+  isValidationStepActive(index: number): boolean {
+    const step = this.validationProgressSteps[index];
+    const nextStep = this.validationProgressSteps[index + 1];
+    return this.validationProgress >= step.threshold &&
+      (!nextStep || this.validationProgress < nextStep.threshold);
+  }
+
   private formatBytes(bytes: number): string {
     if (!bytes || bytes < 0) {
       return '0 B';
@@ -976,17 +1050,38 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   validateFiles(): void {
-    this.isLoading = true;
     this.isValidating = true;
-    this.fileService
-      .validateFiles(this.appService.selectedWorkspaceId)
+    this.validationProgress = 0;
+    this.validationProgressMessage =
+      'Testdateien werden auf Änderungen geprüft...';
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+
+    this.validationService
+      .createValidationTask(workspaceId, 'testFiles')
+      .pipe(
+        switchMap(task => this.waitForValidationTask(workspaceId, task)),
+        switchMap(task => {
+          if (task.status === 'failed') {
+            throw new Error(task.error || 'Validierung fehlgeschlagen');
+          }
+          this.validationProgress = 100;
+          this.validationProgressMessage =
+            task.progress_message || 'Validierungsergebnis wird geladen...';
+          return this.validationService.getValidationResults(
+            workspaceId,
+            task.id
+          );
+        }),
+        finalize(() => {
+          this.isValidating = false;
+        })
+      )
       .subscribe({
-        next: respOk => {
-          this.handleValidationResponse(respOk);
+        next: result => {
+          this.handleValidationResponse(result as FileValidationResultDto);
         },
         error: () => {
-          this.isLoading = false;
-          this.isValidating = false;
           this.snackBar.open(
             this.translate.instant('ws-admin.validation-failed'),
             this.translate.instant('error'),
@@ -994,6 +1089,36 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           );
         }
       });
+  }
+
+  private waitForValidationTask(
+    workspaceId: number,
+    task: ValidationTaskDto
+  ) {
+    this.updateValidationProgress(task);
+    if (task.status === 'completed' || task.status === 'failed') {
+      return of(task);
+    }
+
+    return timer(0, VALIDATION_TASK_POLL_INTERVAL_MS).pipe(
+      switchMap(() => this.validationService.getValidationTask(workspaceId, task.id)),
+      tap(nextTask => this.updateValidationProgress(nextTask)),
+      filter(nextTask => nextTask.status !== 'pending' && nextTask.status !== 'processing'),
+      take(1)
+    );
+  }
+
+  private updateValidationProgress(task: ValidationTaskDto): void {
+    const progress = task.progress ?? 0;
+    this.validationProgress = Math.max(this.validationProgress, progress);
+    if (task.progress_message) {
+      this.validationProgressMessage = `${this.validationProgress}% - ${task.progress_message}`;
+      return;
+    }
+    this.validationProgressMessage =
+      this.validationProgress >= 100 ?
+        'Validierungsergebnis wird geladen...' :
+        `Validierung wird durchgeführt (${this.validationProgress}%)...`;
   }
 
   private handleDeleteResponse(success: boolean): void {
@@ -1086,7 +1211,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
                 data: {
                   validationResults,
                   filteredTestTakers: res.filteredTestTakers,
+                  duplicateTestTakers: res.duplicateTestTakers,
                   unusedTestFiles: res.unusedTestFiles,
+                  geogebra: res.geogebra,
                   workspaceId: this.appService.selectedWorkspaceId
                 }
               });
@@ -1110,7 +1237,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
               v => !!v?.testTaker
             ),
             filteredTestTakers: res.filteredTestTakers,
+            duplicateTestTakers: res.duplicateTestTakers,
             unusedTestFiles: res.unusedTestFiles,
+            geogebra: res.geogebra,
             workspaceId: this.appService.selectedWorkspaceId
           }
         });
