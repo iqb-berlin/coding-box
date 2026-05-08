@@ -1126,8 +1126,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
   openResourcePackagesDialog(): void {
     const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
-      width: '90%',
-      maxWidth: '1200px',
+      width: '94vw',
+      maxWidth: '1440px',
+      maxHeight: '94vh',
       data: {
         workspaceId: this.appService.selectedWorkspaceId
       }
