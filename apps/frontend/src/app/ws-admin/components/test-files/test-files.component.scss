@@ -140,6 +140,11 @@
   pointer-events: all;
 }
 
+.busy-overlay.is-validation-overlay {
+  position: fixed;
+  padding: 20px;
+}
+
 .busy-overlay .loading-text {
   font-size: 16px;
   color: #666;
@@ -147,6 +152,109 @@
 
 .busy-overlay .download-progress-bar {
   width: min(420px, 70vw);
+}
+
+.busy-overlay .validation-busy-card {
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 40px);
+  border-radius: 8px;
+  border: 1px solid rgba(25, 118, 210, 0.18);
+  background-color: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.busy-overlay .validation-busy-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.busy-overlay .validation-busy-text {
+  flex: 1;
+  min-width: 0;
+
+  strong {
+    display: block;
+    color: #1565c0;
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+
+  p {
+    color: #455a64;
+    font-size: 14px;
+    line-height: 1.4;
+    margin: 3px 0 0 0;
+    overflow-wrap: anywhere;
+  }
+}
+
+.busy-overlay .validation-busy-percent {
+  color: #1565c0;
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 700;
+  min-width: 52px;
+  text-align: right;
+}
+
+.busy-overlay .validation-progress-bar {
+  margin-bottom: 12px;
+}
+
+.busy-overlay .validation-progress-summary {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 10px;
+  color: #1976d2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.busy-overlay .validation-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px;
+}
+
+.busy-overlay .validation-progress-step {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background-color: rgba(0, 0, 0, 0.03);
+  color: #666;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.busy-overlay .validation-progress-step mat-icon {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.busy-overlay .validation-progress-step.is-active {
+  border-color: rgba(25, 118, 210, 0.3);
+  background-color: rgba(25, 118, 210, 0.1);
+  color: #0d47a1;
+  font-weight: 600;
+}
+
+.busy-overlay .validation-progress-step.is-complete {
+  border-color: rgba(46, 125, 50, 0.22);
+  background-color: rgba(46, 125, 50, 0.1);
+  color: #2e7d32;
 }
 
 .busy-overlay .mat-spinner {
@@ -578,6 +686,10 @@ mat-paginator {
   .busy-overlay {
     padding: 16px;
     text-align: center;
+  }
+
+  .busy-overlay .validation-busy-header {
+    align-items: flex-start;
   }
 
   .empty-state {
