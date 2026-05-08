@@ -36,7 +36,6 @@ export class ResourcePackageController {
   @Get(':workspace_id/resource-packages')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
-  @RequireAccessLevel(3)
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Get all resource packages for a workspace',
@@ -170,5 +169,22 @@ export class ResourcePackageController {
       @UploadedFile(ParseFile) zippedResourcePackage: Express.Multer.File
   ): Promise<number> {
     return this.resourcePackageService.create(workspaceId, zippedResourcePackage);
+  }
+
+  @Post(':workspace_id/resource-packages/geogebra/install')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Install GeoGebra Math Apps Bundle',
+    description: 'Downloads the GeoGebra Math Apps Bundle, validates it and registers it as a global resource package.'
+  })
+  @ApiCreatedResponse({
+    description: 'GeoGebra resource package installed or already present.',
+    type: ResourcePackageDto
+  })
+  @ApiTags('admin resource-packages')
+  async installGeoGebra(): Promise<ResourcePackageDto> {
+    return this.resourcePackageService.installGeoGebraBundle();
   }
 }
