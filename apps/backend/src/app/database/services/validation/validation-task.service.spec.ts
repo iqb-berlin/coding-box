@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ValidationTask } from '../../entities/validation-task.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspaceTestResultsService } from '../test-results';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { ValidationTaskService } from './validation-task.service';
 
@@ -15,6 +16,9 @@ describe('ValidationTaskService', () => {
   };
   let jobQueueService: {
     addValidationTaskJob: jest.Mock;
+  };
+  let workspaceTestResultsService: {
+    deleteTestResultsByRequest: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -31,6 +35,9 @@ describe('ValidationTaskService', () => {
     jobQueueService = {
       addValidationTaskJob: jest.fn()
     };
+    workspaceTestResultsService = {
+      deleteTestResultsByRequest: jest.fn()
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -42,6 +49,10 @@ describe('ValidationTaskService', () => {
         {
           provide: WorkspaceFilesService,
           useValue: workspaceFilesService
+        },
+        {
+          provide: WorkspaceTestResultsService,
+          useValue: workspaceTestResultsService
         },
         {
           provide: JobQueueService,

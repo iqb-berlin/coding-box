@@ -14,6 +14,8 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   JobQueueService
 } from '../../../job-queue/job-queue.service';
+import { WorkspaceTestResultsService } from '../test-results';
+import { TestResultsDeleteRequestDto } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 @Injectable()
 export class ValidationTaskService {
@@ -23,6 +25,7 @@ export class ValidationTaskService {
     @InjectRepository(ValidationTask)
     private taskRepository: Repository<ValidationTask>,
     private validationService: WorkspaceFilesService,
+    private testResultsService: WorkspaceTestResultsService,
     @Inject(forwardRef(() => JobQueueService))
     private readonly jobQueueService: JobQueueService
   ) { }
@@ -68,6 +71,13 @@ export class ValidationTaskService {
       }
     }
 
+    let progressMessage: string | undefined;
+    if (validationType === 'testFiles') {
+      progressMessage = 'Testdateien werden auf Änderungen geprüft...';
+    } else if (validationType === 'deleteTestResults') {
+      progressMessage = 'Löschung wird vorbereitet...';
+    }
+
     const task = this.taskRepository.create({
       workspace_id: workspaceId,
       validation_type: validationType,
@@ -75,10 +85,7 @@ export class ValidationTaskService {
       limit: limit,
       status: 'pending',
       progress: 0,
-      progress_message:
-        validationType === 'testFiles' ?
-          'Testdateien werden auf Änderungen geprüft...' :
-          undefined,
+      progress_message: progressMessage,
       cache_key: cacheKey,
       result: additionalData ? JSON.stringify(additionalData) : undefined
     });
@@ -353,6 +360,18 @@ export class ValidationTaskService {
             throw new Error('No validation type provided for deletion');
           }
           break;
+        case 'deleteTestResults':
+          if (taskData && typeof taskData.scope === 'string') {
+            result = await this.testResultsService.deleteTestResultsByRequest(
+              task.workspace_id,
+              taskData as unknown as TestResultsDeleteRequestDto,
+              typeof taskData.userId === 'string' ? taskData.userId : '',
+              onProgress
+            );
+          } else {
+            throw new Error('No test result deletion scope provided');
+          }
+          break;
         default:
           throw new Error(`Unknown validation type: ${task.validation_type}`);
       }
@@ -360,7 +379,9 @@ export class ValidationTaskService {
       task.result = JSON.stringify(result);
       task.status = 'completed';
       task.progress = 100;
-      task.progress_message = 'Validierung abgeschlossen.';
+      task.progress_message = task.validation_type === 'deleteTestResults' ?
+        'Löschung abgeschlossen.' :
+        'Validierung abgeschlossen.';
       await this.taskRepository.save(task);
 
       this.logger.log(`Completed validation task with ID ${taskId}`);
@@ -370,7 +391,9 @@ export class ValidationTaskService {
         task.error = error.message;
         task.status = 'failed';
         task.progress = 100;
-        task.progress_message = 'Validierung fehlgeschlagen.';
+        task.progress_message = task.validation_type === 'deleteTestResults' ?
+          'Löschung fehlgeschlagen.' :
+          'Validierung fehlgeschlagen.';
         await this.taskRepository.save(task);
       } catch (innerError) {
         this.logger.error(`Failed to update task ${taskId} with error: ${innerError.message}`, innerError.stack);
