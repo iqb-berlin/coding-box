@@ -22,7 +22,7 @@ import {
 
 import { MatSort, MatSortHeader } from '@angular/material/sort';
 import { FormsModule, UntypedFormGroup } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   MatPaginator,
   MatPaginatorModule,
@@ -34,7 +34,10 @@ import {
   Subscription,
   debounceTime,
   distinctUntilChanged,
-  firstValueFrom
+  firstValueFrom,
+  switchMap,
+  takeWhile,
+  timer as rxjsTimer
 } from 'rxjs';
 import { SelectionModel } from '@angular/cdk/collections';
 import {
@@ -49,6 +52,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { MatIcon } from '@angular/material/icon';
 import { Router } from '@angular/router';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { MatProgressBar } from '@angular/material/progress-bar';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -112,6 +116,7 @@ import {
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
+import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
 import {
   PendingUploadBatch,
   TestResultsUploadStateService
@@ -123,6 +128,12 @@ import {
   TestResultsUploadOptionsDialogData,
   TestResultsUploadOptionsDialogResult
 } from './test-results-upload-options-dialog.component';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto,
+  TestResultsDeleteResultDto
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
 interface BookletLog {
   id: number;
@@ -308,6 +319,7 @@ string,
     MatInput,
     MatIcon,
     MatProgressSpinner,
+    MatProgressBar,
     MatCheckbox,
     MatAnchor,
     MatButton,
@@ -332,11 +344,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private testResultService = inject(TestResultService);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
-  private translateService = inject(TranslateService);
   private validationTaskStateService = inject(ValidationTaskStateService);
   private unitsReplayService = inject(UnitsReplayService);
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
+  private deleteTaskSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
   selection = new SelectionModel<P>(true, []);
   dataSource!: MatTableDataSource<P>;
@@ -366,6 +378,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isSearching: boolean = false;
   isLoadingBooklets: boolean = false;
   isDeletingTestPersons: boolean = false;
+  activeDeleteTask: ValidationTaskDto | null = null;
+  deleteProgress: number = 0;
+  deleteProgressMessage: string = '';
   unitTags: UnitTagDto[] = [];
   unitTagsMap: Map<number, UnitTagDto[]> = new Map();
   unitNotes: UnitNoteDto[] = [];
@@ -441,6 +456,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (this.searchSubscription) {
       this.searchSubscription.unsubscribe();
       this.searchSubscription = null;
+    }
+    if (this.deleteTaskSubscription) {
+      this.deleteTaskSubscription.unsubscribe();
+      this.deleteTaskSubscription = null;
     }
 
     this.stopValidationStatusCheck();
@@ -1435,7 +1454,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           };
 
           this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '90vw',
+            width: '1040px',
             maxWidth: '95vw',
             data: {
               resultType: payload.resultType || 'responses',
@@ -1574,27 +1593,212 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   deleteSelectedPersons(): void {
-    this.booklets = [];
-    this.responses = [];
-    this.logs = [];
-    this.bookletLogs = [];
-    this.selectedUnit = undefined;
-    this.unitTagsMap.clear();
-    this.unitNotesMap.clear();
+    const selectedTestPersons = this.selection.selected;
+    if (selectedTestPersons.length === 0) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'persons',
+      personIds: selectedTestPersons.map(person => person.id)
+    });
+  }
+
+  deleteFilteredPersons(): void {
+    this.confirmAndStartDelete({
+      scope: 'filteredPersons',
+      searchText: this.getCurrentSearchText()
+    });
+  }
+
+  deleteSelectedGroups(): void {
+    const groups = Array.from(
+      new Set(
+        this.selection.selected
+          .map(person => person.group)
+          .filter(group => group && group.trim().length > 0)
+      )
+    );
+
+    if (groups.length === 0) {
+      this.snackBar.open('Keine Testgruppe ausgewählt.', 'Info', {
+        duration: 3000
+      });
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'groups',
+      groups
+    });
+  }
+
+  deleteBookletsByName(bookletName: string): void {
+    if (!bookletName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'booklets',
+      bookletNames: [bookletName]
+    });
+  }
+
+  deleteUnitsByName(unit: Unit): void {
+    const unitName = unit.alias || unit.name;
+    if (!unitName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'units',
+      unitNames: [unitName]
+    });
+  }
+
+  isDeleteJobRunning(): boolean {
+    return this.activeDeleteTask?.status === 'pending' ||
+      this.activeDeleteTask?.status === 'processing' ||
+      this.isDeletingTestPersons;
+  }
+
+  private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void {
+    if (this.isDeleteJobRunning()) {
+      return;
+    }
 
     this.isDeletingTestPersons = true;
-    const selectedTestPersons = this.selection.selected;
-    this.responseService
-      .deleteTestPersons(
-        this.appService.selectedWorkspaceId,
-        selectedTestPersons.map(person => person.id)
-      )
-      .subscribe((respOk: boolean) => {
-        if (respOk) {
+    this.testResultService
+      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: preview => {
+          this.isDeletingTestPersons = false;
+          if (!preview) {
+            this.snackBar.open(
+              'Die Löschvorschau konnte nicht berechnet werden.',
+              'Fehler',
+              { duration: 4000 }
+            );
+            return;
+          }
+
+          this.openDeletePreviewDialog(request, preview);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
           this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-deleted'),
-            '',
-            { duration: 1000 }
+            'Die Löschvorschau konnte nicht berechnet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
+  private openDeletePreviewDialog(
+    request: TestResultsDeleteRequestDto,
+    preview: TestResultsDeletePreviewDto
+  ): void {
+    const dialogRef = this.dialog.open(TestResultsDeletePreviewDialogComponent, {
+      width: '680px',
+      maxWidth: '95vw',
+      data: {
+        preview
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.startDeleteJob(request);
+      }
+    });
+  }
+
+  private startDeleteJob(request: TestResultsDeleteRequestDto): void {
+    this.resetSelectedResultDetails();
+    this.isDeletingTestPersons = true;
+    this.deleteProgress = 0;
+    this.deleteProgressMessage = 'Löschung wird gestartet...';
+
+    this.testResultService
+      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+      .subscribe({
+        next: task => {
+          this.activeDeleteTask = task;
+          this.pollDeleteTask(task.id);
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Die Löschung konnte nicht gestartet werden.',
+            'Fehler',
+            { duration: 4000 }
+          );
+        }
+      });
+  }
+
+  private pollDeleteTask(taskId: number): void {
+    if (this.deleteTaskSubscription) {
+      this.deleteTaskSubscription.unsubscribe();
+    }
+
+    this.deleteTaskSubscription = rxjsTimer(0, 1000)
+      .pipe(
+        switchMap(() => this.validationService.getValidationTask(
+          this.appService.selectedWorkspaceId,
+          taskId
+        )),
+        takeWhile(
+          task => task.status === 'pending' || task.status === 'processing',
+          true
+        )
+      )
+      .subscribe({
+        next: task => {
+          this.activeDeleteTask = task;
+          this.deleteProgress = task.progress || 0;
+          this.deleteProgressMessage =
+            task.progress_message || 'Löschung läuft...';
+
+          if (task.status === 'completed') {
+            this.finishDeleteTask(task.id);
+          } else if (task.status === 'failed') {
+            this.isDeletingTestPersons = false;
+            this.snackBar.open(
+              task.error || 'Die Löschung ist fehlgeschlagen.',
+              'Fehler',
+              { duration: 5000 }
+            );
+          }
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.snackBar.open(
+            'Der Fortschritt der Löschung konnte nicht gelesen werden.',
+            'Fehler',
+            { duration: 5000 }
+          );
+        }
+      });
+  }
+
+  private finishDeleteTask(taskId: number): void {
+    this.validationService
+      .getValidationResults(this.appService.selectedWorkspaceId, taskId)
+      .subscribe({
+        next: result => {
+          const deleteResult = result as TestResultsDeleteResultDto;
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.deleteProgress = 100;
+          this.selection.clear();
+          this.testResultService.invalidateCache(
+            this.appService.selectedWorkspaceId
+          );
+          this.validationTaskStateService.invalidateWorkspace(
+            this.appService.selectedWorkspaceId
           );
           this.loadWorkspaceOverview();
           this.createTestResultsList(
@@ -1602,16 +1806,39 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.pageSize,
             this.getCurrentSearchText()
           );
-        } else {
           this.snackBar.open(
-            this.translateService.instant('ws-admin.test-group-not-deleted'),
-            this.translateService.instant('error'),
-            { duration: 1000 }
+            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
+            'OK',
+            { duration: 4000 }
+          );
+        },
+        error: () => {
+          this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.snackBar.open(
+            'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
+            'Info',
+            { duration: 5000 }
+          );
+          this.loadWorkspaceOverview();
+          this.createTestResultsList(
+            this.pageIndex,
+            this.pageSize,
+            this.getCurrentSearchText()
           );
         }
-        this.isDeletingTestPersons = false;
-        this.selection.clear();
       });
+  }
+
+  private resetSelectedResultDetails(): void {
+    this.booklets = [];
+    this.responses = [];
+    this.logs = [];
+    this.bookletLogs = [];
+    this.selectedUnit = undefined;
+    this.selectedBooklet = '';
+    this.unitTagsMap.clear();
+    this.unitNotesMap.clear();
   }
 
   openTestResultsSearchDialog(): void {

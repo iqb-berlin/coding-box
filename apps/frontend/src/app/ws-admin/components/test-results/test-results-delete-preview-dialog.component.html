@@ -1,0 +1,113 @@
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon color="warn">warning</mat-icon>
+  <span>Testergebnisse unwiderruflich löschen</span>
+</h2>
+
+<div mat-dialog-content class="delete-dialog-content">
+  <section class="warning-panel">
+    <div class="target-label">Betroffener Bereich</div>
+    <div class="target-value">{{ preview.label }}</div>
+    <p>
+      Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist
+      danach nicht möglich.
+    </p>
+  </section>
+
+  <section class="metrics-grid" aria-label="Betroffene Testergebnisse">
+    @for (metric of metrics; track metric.label) {
+    <div class="metric">
+      <div class="metric-value">{{ metric.value }}</div>
+      <div class="metric-label">{{ metric.label }}</div>
+      @if (metric.hint) {
+      <div class="metric-hint">{{ metric.hint }}</div>
+      }
+    </div>
+    }
+  </section>
+
+  <p class="count-note">
+    Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben
+    und Antworten werden eindeutig gezählt.
+  </p>
+
+  @if (hasDetails) {
+  <section class="detail-section">
+    @if (preview.groups.length > 0) {
+    <div class="detail-block">
+      <div class="detail-label">Testgruppen</div>
+      <div class="chip-row">
+        @for (group of visibleGroups; track group) {
+        <span class="chip">{{ group }}</span>
+        }
+        @if (preview.groups.length > visibleGroups.length) {
+        <span class="chip muted">+{{ preview.groups.length - visibleGroups.length }}</span>
+        }
+      </div>
+    </div>
+    }
+
+    @if (preview.bookletNames.length > 0) {
+    <div class="detail-block">
+      <div class="detail-label">Testhefte</div>
+      <div class="chip-row">
+        @for (bookletName of visibleBooklets; track bookletName) {
+        <span class="chip">{{ bookletName }}</span>
+        }
+        @if (preview.bookletNames.length > visibleBooklets.length) {
+        <span class="chip muted">+{{ preview.bookletNames.length - visibleBooklets.length }}</span>
+        }
+      </div>
+    </div>
+    }
+
+    @if (preview.unitNames.length > 0) {
+    <div class="detail-block">
+      <div class="detail-label">Aufgaben</div>
+      <div class="chip-row">
+        @for (unitName of visibleUnits; track unitName) {
+        <span class="chip">{{ unitName }}</span>
+        }
+        @if (preview.unitNames.length > visibleUnits.length) {
+        <span class="chip muted">+{{ preview.unitNames.length - visibleUnits.length }}</span>
+        }
+      </div>
+    </div>
+    }
+  </section>
+  }
+
+  @if (preview.warnings.length > 0) {
+  <section class="warning-list">
+    @for (warning of preview.warnings; track warning) {
+    <div class="warning-item">
+      <mat-icon>error_outline</mat-icon>
+      <span>{{ warning }}</span>
+    </div>
+    }
+  </section>
+  }
+
+  @if (requiresAcknowledgement) {
+  <mat-checkbox
+    class="acknowledgement"
+    [checked]="acknowledged"
+    (change)="onAcknowledgementChange($event)"
+  >
+    Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.
+  </mat-checkbox>
+  }
+</div>
+
+<div mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">Abbrechen</button>
+  <button
+    mat-flat-button
+    color="warn"
+    type="button"
+    [disabled]="!canConfirm"
+    (click)="confirm()"
+  >
+    <mat-icon>delete_forever</mat-icon>
+    Löschung starten
+  </button>
+</div>

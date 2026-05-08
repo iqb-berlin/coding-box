@@ -66,7 +66,7 @@
         @if (!isTableView) {
         <span>Tabellenansicht</span>
         } @else {
-        <span>Detailansicht</span>
+        <span>Ergebnisbrowser</span>
         }
       </button>
     </div>
@@ -175,25 +175,54 @@
         <div class="section-info">
           <h2 class="section-title">Testpersonen</h2>
           <p class="section-description">
-            Wählen Sie eine Testperson aus, um deren Ergebnisse anzuzeigen
+            Wählen Sie eine Testperson aus, um deren Testhefte, Aufgaben und Antworten zu durchsuchen
           </p>
         </div>
         <button
           mat-stroked-button
-          [disabled]="selection.selected.length === 0"
+          [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
           (click)="deleteSelectedPersons()"
           class="delete-button"
         >
           <mat-icon>delete</mat-icon>
-          Testperson(en) löschen
+          Ausgewählte löschen
+        </button>
+        <button
+          mat-stroked-button
+          [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
+          (click)="deleteSelectedGroups()"
+          class="delete-button"
+        >
+          <mat-icon>group_remove</mat-icon>
+          Testgruppe(n) löschen
+        </button>
+        <button
+          mat-stroked-button
+          [disabled]="totalRecords === 0 || isDeleteJobRunning()"
+          (click)="deleteFilteredPersons()"
+          class="delete-button"
+        >
+          <mat-icon>filter_alt_off</mat-icon>
+          Gefilterte löschen
         </button>
       </div>
       <mat-divider></mat-divider>
 
+      @if (isDeleteJobRunning()) {
+      <div class="delete-progress-container">
+        <div class="delete-progress-header">
+          <mat-icon>delete_sweep</mat-icon>
+          <span>{{ deleteProgressMessage || 'Löschung läuft...' }}</span>
+          <span class="delete-progress-value">{{ deleteProgress }}%</span>
+        </div>
+        <mat-progress-bar mode="determinate" [value]="deleteProgress"></mat-progress-bar>
+      </div>
+      }
+
       @if (isDeletingTestPersons) {
       <div class="loading-container">
         <mat-spinner class="mat-spinner"></mat-spinner>
-        <p class="loading-text">Testpersonen werden gelöscht...</p>
+        <p class="loading-text">{{ deleteProgressMessage || 'Löschung wird vorbereitet...' }}</p>
       </div>
       } @if (isLoading && !isSearching && !isDeletingTestPersons) {
       <div class="loading-container">
@@ -398,6 +427,16 @@
                 <mat-icon>info</mat-icon>
                 Info
               </button>
+              <button
+                mat-stroked-button
+                color="warn"
+                [disabled]="isDeleteJobRunning()"
+                (click)="deleteBookletsByName(booklet.name)"
+                class="action-button"
+              >
+                <mat-icon>delete_sweep</mat-icon>
+                Alle gleichen löschen
+              </button>
             </div>
             @if (hasShortProcessingTime(booklet) || !isBookletComplete(booklet))
             {
@@ -452,6 +491,16 @@
                   matTooltip="Unit löschen"
                 >
                   <mat-icon>delete</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  color="warn"
+                  [disabled]="isDeleteJobRunning()"
+                  (click)="$event.stopPropagation(); deleteUnitsByName(unit)"
+                  class="delete-unit-button bulk-delete-unit-button"
+                  matTooltip="Alle Aufgaben dieses Namens löschen"
+                >
+                  <mat-icon>delete_sweep</mat-icon>
                 </button>
                 }
               </mat-list-item>
@@ -555,6 +604,16 @@
           >
             <mat-icon>info</mat-icon>
             Info
+          </button>
+          <button
+            mat-stroked-button
+            color="warn"
+            [disabled]="isDeleteJobRunning() || !selectedUnit"
+            (click)="selectedUnit ? deleteUnitsByName(selectedUnit) : null"
+            class="action-button"
+          >
+            <mat-icon>delete_sweep</mat-icon>
+            Alle gleichen Aufgaben löschen
           </button>
           <button
             mat-stroked-button
