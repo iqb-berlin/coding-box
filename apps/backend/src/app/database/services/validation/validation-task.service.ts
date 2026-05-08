@@ -6,7 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { ValidationTask } from '../../entities/validation-task.entity';
+import {
+  ValidationTask,
+  ValidationType
+} from '../../entities/validation-task.entity';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import {
   JobQueueService
@@ -26,11 +29,45 @@ export class ValidationTaskService {
 
   async createValidationTask(
     workspaceId: number,
-    validationType: 'variables' | 'variableTypes' | 'responseStatus' | 'duplicateResponses' | 'testTakers' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses',
+    validationType: ValidationType,
     page?: number,
     limit?: number,
     additionalData?: Record<string, unknown>
   ): Promise<ValidationTask> {
+    let cacheKey: string | undefined;
+
+    if (validationType === 'testFiles') {
+      cacheKey =
+        await this.validationService.getTestFilesValidationCacheKey(
+          workspaceId
+        );
+
+      const runningTask = await this.findRunningTestFilesValidationTask(
+        workspaceId,
+        cacheKey
+      );
+      if (runningTask) {
+        this.logger.log(
+          `Reusing running test files validation task ${runningTask.id} for workspace ${workspaceId}`
+        );
+        return runningTask;
+      }
+
+      const cachedTask = await this.findCachedTestFilesValidationTask(
+        workspaceId,
+        cacheKey
+      );
+      if (cachedTask) {
+        this.logger.log(
+          `Returning cached test files validation task ${cachedTask.id} for workspace ${workspaceId}`
+        );
+        cachedTask.progress = 100;
+        cachedTask.progress_message =
+          'Testdateien unverändert - letztes Validierungsergebnis wird verwendet.';
+        return cachedTask;
+      }
+    }
+
     const task = this.taskRepository.create({
       workspace_id: workspaceId,
       validation_type: validationType,
@@ -38,6 +75,11 @@ export class ValidationTaskService {
       limit: limit,
       status: 'pending',
       progress: 0,
+      progress_message:
+        validationType === 'testFiles' ?
+          'Testdateien werden auf Änderungen geprüft...' :
+          undefined,
+      cache_key: cacheKey,
       result: additionalData ? JSON.stringify(additionalData) : undefined
     });
 
@@ -54,6 +96,41 @@ export class ValidationTaskService {
     }
 
     return savedTask;
+  }
+
+  private async findRunningTestFilesValidationTask(
+    workspaceId: number,
+    cacheKey: string
+  ): Promise<ValidationTask | null> {
+    const tasks = await this.taskRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        validation_type: 'testFiles',
+        cache_key: cacheKey,
+        status: In(['pending', 'processing'])
+      },
+      order: { created_at: 'DESC' }
+    });
+
+    return tasks[0] || null;
+  }
+
+  private async findCachedTestFilesValidationTask(
+    workspaceId: number,
+    cacheKey: string,
+    excludeTaskId?: number
+  ): Promise<ValidationTask | null> {
+    const tasks = await this.taskRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        validation_type: 'testFiles',
+        cache_key: cacheKey,
+        status: 'completed'
+      },
+      order: { created_at: 'DESC' }
+    });
+
+    return tasks.find(task => task.id !== excludeTaskId && !!task.result) || null;
   }
 
   async getValidationTask(taskId: number, workspaceId?: number): Promise<ValidationTask> {
@@ -101,12 +178,30 @@ export class ValidationTaskService {
       throw new Error(`Task with ID ${taskId} has no results`);
     }
 
+    let result: unknown;
     try {
-      return JSON.parse(task.result);
+      result = JSON.parse(task.result);
     } catch (error) {
       this.logger.error(`Error parsing results for task ${taskId}: ${error.message}`, error.stack);
       throw new Error(`Error parsing results for task ${taskId}`);
     }
+
+    if (task.validation_type !== 'testFiles') {
+      return result;
+    }
+
+    const refreshedResult =
+      await this.validationService.refreshTestFilesValidationResult(
+        task.workspace_id,
+        result
+      );
+    const serializedRefreshedResult = JSON.stringify(refreshedResult);
+    if (serializedRefreshedResult !== task.result) {
+      task.result = serializedRefreshedResult;
+      await this.taskRepository.save(task);
+    }
+
+    return refreshedResult;
   }
 
   async processValidationTask(taskId: number): Promise<void> {
@@ -115,17 +210,22 @@ export class ValidationTaskService {
 
       task.status = 'processing';
       task.progress = 10;
+      task.progress_message = 'Validierung wird vorbereitet...';
       await this.taskRepository.save(task);
 
-      const onProgress = async (progress: number) => {
+      const onProgress = async (progress: number, message?: string) => {
         // Update progress in database if it changed significantly (at least 5%)
         // or if it's nearing completion.
         if (
           !task.progress ||
           progress - task.progress >= 5 ||
-          (progress > 90 && progress !== task.progress)
+          (progress > 90 && progress !== task.progress) ||
+          (message && message !== task.progress_message)
         ) {
           task.progress = progress;
+          if (message) {
+            task.progress_message = message;
+          }
           await this.taskRepository.save(task);
         }
       };
@@ -183,6 +283,38 @@ export class ValidationTaskService {
             onProgress
           );
           break;
+        case 'testFiles': {
+          const cacheKey =
+            task.cache_key ||
+            await this.validationService.getTestFilesValidationCacheKey(
+              task.workspace_id
+            );
+          task.cache_key = cacheKey;
+
+          const cachedTask = await this.findCachedTestFilesValidationTask(
+            task.workspace_id,
+            cacheKey,
+            task.id
+          );
+          if (cachedTask?.result) {
+            task.result = cachedTask.result;
+            task.status = 'completed';
+            task.progress = 100;
+            task.progress_message =
+              'Letztes Validierungsergebnis wurde wiederverwendet.';
+            await this.taskRepository.save(task);
+            this.logger.log(
+              `Completed validation task ${taskId} from cached task ${cachedTask.id}`
+            );
+            return;
+          }
+
+          result = await this.validationService.validateTestFiles(
+            task.workspace_id,
+            onProgress
+          );
+          break;
+        }
         case 'groupResponses':
           result = await this.validationService.validateGroupResponses(
             task.workspace_id,
@@ -228,6 +360,7 @@ export class ValidationTaskService {
       task.result = JSON.stringify(result);
       task.status = 'completed';
       task.progress = 100;
+      task.progress_message = 'Validierung abgeschlossen.';
       await this.taskRepository.save(task);
 
       this.logger.log(`Completed validation task with ID ${taskId}`);
@@ -237,6 +370,7 @@ export class ValidationTaskService {
         task.error = error.message;
         task.status = 'failed';
         task.progress = 100;
+        task.progress_message = 'Validierung fehlgeschlagen.';
         await this.taskRepository.save(task);
       } catch (innerError) {
         this.logger.error(`Failed to update task ${taskId} with error: ${innerError.message}`, innerError.stack);

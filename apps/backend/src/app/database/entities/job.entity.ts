@@ -31,6 +31,9 @@ export class Job {
   @Column({ nullable: true })
     progress?: number;
 
+  @Column({ name: 'progress_message', type: 'text', nullable: true })
+    progress_message?: string;
+
   @Column({ nullable: true })
     error?: string;
 

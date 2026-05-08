@@ -366,10 +366,28 @@ export class WorkspaceFilesService implements OnModuleInit {
   }
 
   async validateTestFiles(
-    workspaceId: number
+    workspaceId: number,
+    onProgress?: (progress: number, message?: string) => void | Promise<void>
   ): Promise<FileValidationResultDto> {
     return this.workspaceTestFilesValidationService.validateTestFiles(
+      workspaceId,
+      onProgress
+    );
+  }
+
+  async getTestFilesValidationCacheKey(workspaceId: number): Promise<string> {
+    return this.workspaceTestFilesValidationService.getTestFilesFingerprint(
       workspaceId
+    );
+  }
+
+  async refreshTestFilesValidationResult(
+    workspaceId: number,
+    result: unknown
+  ): Promise<unknown> {
+    return this.workspaceTestFilesValidationService.refreshGeoGebraPackageStatus(
+      workspaceId,
+      result
     );
   }
 

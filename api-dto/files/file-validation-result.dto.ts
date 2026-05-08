@@ -47,6 +47,21 @@ export type UnusedTestFile = {
   fileType: string;
 };
 
+export type GeoGebraPackageStatus = {
+  exists: boolean;
+  valid: boolean;
+  name?: string;
+  scope?: 'workspace' | 'global';
+  detectedVersion?: string | null;
+  errors?: string[];
+};
+
+export type GeoGebraValidationResult = {
+  hasTasks: boolean;
+  units: string[];
+  packageStatus: GeoGebraPackageStatus;
+};
+
 export class FileValidationResultDto {
   @ApiProperty({ type: Boolean, description: 'Indicates whether test takers were found' })
     testTakersFound!: boolean;
@@ -59,6 +74,9 @@ export class FileValidationResultDto {
 
   @ApiProperty({ type: [Object], description: 'Array of files not reachable from TestTakers -> Booklets -> Units -> referenced resources' })
     unusedTestFiles?: UnusedTestFile[];
+
+  @ApiProperty({ type: Object, description: 'GeoGebra usage and package availability' })
+    geogebra?: GeoGebraValidationResult;
 
   @ApiProperty({ type: [Object], description: 'Array of validation results for each test taker' })
     validationResults!: {
