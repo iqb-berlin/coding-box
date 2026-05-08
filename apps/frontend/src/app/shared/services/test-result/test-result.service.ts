@@ -7,6 +7,11 @@ import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import {
+  TestResultsDeletePreviewDto,
+  TestResultsDeleteRequestDto
+} from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 
 export interface TestResultsResponse {
   data: TestResultItem[];
@@ -181,6 +186,42 @@ export class TestResultService {
       {}
     )
       .pipe(catchError(() => of(null)));
+  }
+
+  previewDeleteTestResults(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Observable<TestResultsDeletePreviewDto | null> {
+    return this.http
+      .post<TestResultsDeletePreviewDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-preview`,
+      request,
+      {}
+    )
+      .pipe(
+        catchError(() => {
+          logger.error('Error previewing test result deletion');
+          return of(null);
+        })
+      );
+  }
+
+  createDeleteTestResultsJob(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Observable<ValidationTaskDto> {
+    return this.http
+      .post<ValidationTaskDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/delete-jobs`,
+      request,
+      {}
+    )
+      .pipe(
+        tap(() => {
+          this.invalidateCache(workspaceId);
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        })
+      );
   }
 
   getFlatResponseFrequencies(

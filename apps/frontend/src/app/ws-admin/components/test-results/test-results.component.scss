@@ -342,6 +342,32 @@
       flex-shrink: 0;
     }
   }
+
+  .delete-progress-container {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 16px;
+
+    .delete-progress-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      color: #7c2d12;
+      font-size: 14px;
+
+      mat-icon {
+        color: #c2410c;
+      }
+
+      .delete-progress-value {
+        margin-left: auto;
+        font-weight: 600;
+      }
+    }
+  }
 }
 
 @media (max-width: 768px) {
@@ -1203,6 +1229,10 @@
           height: 18px;
           width: 18px;
         }
+      }
+
+      .bulk-delete-unit-button {
+        right: 44px;
       }
 
       .unit-header {

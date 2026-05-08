@@ -1,7 +1,7 @@
 export interface ValidationTaskDto {
   id: number;
   workspace_id: number;
-  validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'testFiles' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'duplicateResponses';
+  validation_type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'testFiles' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'deleteTestResults' | 'duplicateResponses';
   status: 'pending' | 'processing' | 'completed' | 'failed';
   progress?: number;
   progress_message?: string;
