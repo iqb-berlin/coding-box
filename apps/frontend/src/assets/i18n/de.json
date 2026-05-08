@@ -354,8 +354,8 @@
     "no-files": "Keine Dateien gefunden",
     "upload-test-files": "Testdateien hochladen",
     "upload-test-files-tooltip": "Hochladen von Testinhalten (xml, html, Voud, vomd, vocs, zip, etc.)",
-    "upload-packages-tooltip": "Hochladen von externen Ressourcen-Paketen (.itcr.zip, z.B. GeoGebra)",
-    "resource-package-hint": "Bitte laden Sie nur Ressourcen-Pakete mit der Endung .itcr.zip hoch. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch."
+    "upload-packages-tooltip": "Ressourcenpakete verwalten (.itcr.zip, z.B. GeoGebra Math Apps Bundle)",
+    "resource-package-hint": "Bitte laden Sie nur Ressourcenpakete mit der Endung .itcr.zip hoch. Für GeoGebra-Aufgaben wird das GeoGebra Math Apps Bundle als Geogebra.itcr.zip empfohlen; alternativ kann es hier automatisch installiert werden. ZIP-Dateien aus dem IQB-Studio laden Sie bitte über 'Testdateien hochladen' hoch. Beachten Sie die Lizenzbedingungen des jeweiligen Ressourcenpakets."
   },
   "test_group": {
     "test_group": "Testgruppe",

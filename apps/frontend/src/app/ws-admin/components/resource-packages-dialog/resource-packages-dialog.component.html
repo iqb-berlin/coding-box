@@ -1,16 +1,26 @@
 <div class="dialog-container">
-  <h2 mat-dialog-title>Pakete</h2>
+  <h2 mat-dialog-title>Ressourcenpakete</h2>
 
   <div mat-dialog-content>
     <div class="fx-row-center-center-stretch fx-gap-20 upload-buttons">
-      <a mat-raised-button color="primary" (click)="resourcePackageInput.click()">
+      <a mat-raised-button color="primary" [disabled]="isResourcePackageOperationActive"
+        (click)="resourcePackageInput.click()">
         <mat-icon>upload</mat-icon>
-        Paket(e) hochladen
+        Ressourcenpaket hochladen
       </a>
-      <a mat-raised-button color="primary" [disabled]="resourcePackageSelection.selected.length === 0"
+      @if (!hasGeoGebraPackage) {
+      <a mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive"
+        (click)="installGeoGebraPackage()"
+        matTooltip="Lädt das GeoGebra Math Apps Bundle herunter und installiert es global">
+        <mat-icon>add_circle</mat-icon>
+        GeoGebra installieren
+      </a>
+      }
+      <a mat-raised-button color="primary"
+        [disabled]="isResourcePackageOperationActive || resourcePackageSelection.selected.length === 0"
         (click)="deleteResourcePackages()">
         <mat-icon>delete</mat-icon>
-        Paket(e) löschen
+        Ressourcenpaket(e) löschen
       </a>
     </div>
 
@@ -18,13 +28,33 @@
       {{ 'file-upload.resource-package-hint' | translate }}
     </div>
 
+    @if (isResourcePackageOperationActive) {
+    <div class="operation-progress" aria-live="polite">
+      <div class="operation-progress-header">
+        <span>{{ resourcePackageOperationText }}</span>
+        @if (resourcePackageProgressMode === 'determinate') {
+        <span>{{ resourcePackageProgressPercent }}%</span>
+        }
+      </div>
+      <mat-progress-bar [mode]="resourcePackageProgressMode" [value]="resourcePackageProgressPercent"></mat-progress-bar>
+      @if (resourcePackageProgressLoadedBytes > 0) {
+      <p class="operation-progress-details">
+        {{ formatBytes(resourcePackageProgressLoadedBytes) }}
+        @if (resourcePackageProgressTotalBytes > 0) {
+        / {{ formatBytes(resourcePackageProgressTotalBytes) }}
+        }
+      </p>
+      }
+    </div>
+    }
+
     <input #resourcePackageInput type="file" name="resourcePackage" accept=".itcr.zip" [hidden]="true"
       (change)="onResourcePackageSelected($event.currentTarget)" />
 
     @if (isLoadingResourcePackages) {
     <div class="loading-container">
       <mat-spinner class="mat-spinner"></mat-spinner>
-      <p class="loading-text">Resource Packages werden geladen...</p>
+      <p class="loading-text">Ressourcenpakete werden geladen...</p>
     </div>
     }
 
@@ -33,7 +63,7 @@
     <div class="data-card resource-packages-card">
       <div class="search-section">
         <div class="filter-container">
-          <coding-box-search-filter [title]="'Filtere Pakete'"
+          <coding-box-search-filter [title]="'Filtere Ressourcenpakete'"
             (valueChange)="onResourcePackageTextFilterChange($event)">
           </coding-box-search-filter>
 
@@ -48,10 +78,9 @@
       </div>
 
       <div class="table-container">
-        <mat-table [dataSource]="resourcePackageDataSource" class="resource-packages-table">
+          <mat-table [dataSource]="resourcePackageDataSource" class="resource-packages-table">
           <mat-header-row *matHeaderRowDef="resourcePackageColumns;sticky: true"></mat-header-row>
-          <mat-row *matRowDef="let row; columns: resourcePackageColumns;" (click)="downloadResourcePackage(row)"
-            class="clickable-row">
+          <mat-row *matRowDef="let row; columns: resourcePackageColumns;">
           </mat-row>
 
           <ng-container matColumnDef="selectCheckbox">
@@ -75,6 +104,29 @@
                 <mat-icon class="file-icon">folder_zip</mat-icon>
                 <span>{{element.name}}</span>
               </div>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="packageType">
+            <mat-header-cell *matHeaderCellDef>Typ</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span>{{ getPackageTypeLabel(element) }}</span>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="scope">
+            <mat-header-cell *matHeaderCellDef>Geltung</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span class="scope-badge" [class.global]="element.scope === 'global'">
+                {{ getPackageScopeLabel(element) }}
+              </span>
+            </mat-cell>
+          </ng-container>
+
+          <ng-container matColumnDef="detectedVersion">
+            <mat-header-cell *matHeaderCellDef>Version</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <span>{{ element.detectedVersion || '-' }}</span>
             </mat-cell>
           </ng-container>
 
@@ -102,13 +154,30 @@
               <span class="date-time">{{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}</span>
             </mat-cell>
           </ng-container>
+
+          <ng-container matColumnDef="actions">
+            <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+            <mat-cell *matCellDef="let element">
+              <button mat-icon-button type="button" class="download-action-button"
+                aria-label="Ressourcenpaket herunterladen"
+                [disabled]="isResourcePackageOperationActive"
+                (click)="downloadResourcePackage(element); $event.stopPropagation()"
+                matTooltip="Ressourcenpaket herunterladen">
+                @if (isResourcePackageDownloading(element)) {
+                <mat-spinner diameter="20" class="button-spinner"></mat-spinner>
+                } @else {
+                <mat-icon>download</mat-icon>
+                }
+              </button>
+            </mat-cell>
+          </ng-container>
         </mat-table>
       </div>
 
       @if (resourcePackageDataSource.data.length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">folder_zip</mat-icon>
-        <p class="empty-text">Keine Pakete vorhanden.</p>
+        <p class="empty-text">Keine Ressourcenpakete vorhanden.</p>
       </div>
       }
     </div>
