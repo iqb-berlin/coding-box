@@ -1,7 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { TestResultsUploadResultDialogComponent, TestResultsUploadResultDialogData } from './test-results-upload-result-dialog.component';
+import {
+  TestResultsUploadResultDialogComponent,
+  TestResultsUploadResultDialogData
+} from './test-results-upload-result-dialog.component';
 
 describe('TestResultsUploadResultDialogComponent', () => {
   let fixture: ComponentFixture<TestResultsUploadResultDialogComponent>;
@@ -48,6 +51,14 @@ describe('TestResultsUploadResultDialogComponent', () => {
           level: 'error', category: 'other', message: 'Other problem', fileName: 'b.csv'
         }
       ],
+      importSummary: {
+        totalRows: 4,
+        responseRows: 4,
+        issueCounts: {
+          unit_not_found: 1,
+          other: 1
+        }
+      },
       logMetrics: {
         bookletDetails: [{ name: 'B2', hasLog: false }, { name: 'B1', hasLog: true }],
         unitDetails: [
@@ -81,10 +92,24 @@ describe('TestResultsUploadResultDialogComponent', () => {
       { status: 'OPEN', count: 1 }
     ]);
     expect(component.getCategoryLabel('unit_not_found')).toBe('Unit nicht gefunden');
+    expect(component.getCategoryLabel('csv_columns')).toBe('CSV-Spalten fehlen');
+    expect(component.getCategoryLabel('no_logs_saved')).toBe('Keine Logs gespeichert');
     expect(component.getCategoryLabel('custom')).toBe('custom');
+    expect(component.issueSummaryEntries).toEqual([
+      { category: 'other', label: 'Sonstiges', count: 1 },
+      { category: 'unit_not_found', label: 'Unit nicht gefunden', count: 1 }
+    ]);
+    expect(component.filteredIssues).toBe(component.filteredIssues);
+    expect(component.issueExportButtonLabel).toBe('Probleme exportieren (2)');
+    expect(component.buildIssueExportCsv()).toContain(
+      '"Nr.";"Importart";"Typ";"Kategorie";"Kategorie (Text)";"Meldung";"Datei";"Zeile"\n' +
+      '"1";"Antworten";"warning";"unit_not_found";"Unit nicht gefunden";"Unit missing";"a.csv";"2"'
+    );
 
     component.selectedCategory = 'unit_not_found';
     expect(component.filteredIssues).toHaveLength(1);
+    expect(component.issueExportButtonLabel).toBe('Gefilterte exportieren (1)');
+    expect(component.buildIssueExportCsv()).not.toContain('"Other problem"');
     component.filterText = 'missing';
     expect(component.filteredIssues).toHaveLength(1);
     component.filterText = 'nomatch';

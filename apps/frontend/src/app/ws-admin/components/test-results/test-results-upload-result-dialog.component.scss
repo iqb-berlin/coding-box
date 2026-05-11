@@ -54,6 +54,17 @@
   line-height: 1.45;
 }
 
+.log-import-note-section {
+  background: rgba(25, 118, 210, 0.06);
+  border-color: rgba(25, 118, 210, 0.16);
+}
+
+.note-text {
+  color: rgba(0, 0, 0, 0.72);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .db-changes-table {
   border-collapse: collapse;
   font-size: 13px;
@@ -121,6 +132,24 @@
   grid-template-columns: 1fr auto;
 }
 
+.issue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.issue-count-chip {
+  background: rgba(245, 124, 0, 0.12);
+  border: 1px solid rgba(245, 124, 0, 0.2);
+  border-radius: 999px;
+  color: rgba(0, 0, 0, 0.74);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 4px 8px;
+}
+
 .k {
   color: rgba(0, 0, 0, 0.7);
 }
@@ -156,13 +185,23 @@ mat-tab-group {
 }
 
 .issue-filters {
-  grid-template-columns: minmax(240px, 1fr) minmax(220px, 320px);
+  grid-template-columns: minmax(240px, 1fr) minmax(220px, 320px) auto;
 }
 
 .search-field,
 .issue-filters mat-form-field {
   font-size: 14px;
   width: 100%;
+}
+
+.issue-export-button {
+  align-self: stretch;
+  min-height: 56px;
+  white-space: nowrap;
+
+  mat-icon {
+    margin-right: 6px;
+  }
 }
 
 .toggle-group {
@@ -255,17 +294,24 @@ mat-tab-group {
   height: min(360px, 48vh);
 }
 
+.issues-viewport {
+  height: min(320px, 44vh);
+}
+
 .issue-row {
   align-items: center;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
   display: flex;
+  height: 60px;
   min-width: 0;
   padding: 8px 12px;
 }
 
 .issue-main {
   min-width: 0;
+  overflow: hidden;
+  width: 100%;
 }
 
 .issue-title {
