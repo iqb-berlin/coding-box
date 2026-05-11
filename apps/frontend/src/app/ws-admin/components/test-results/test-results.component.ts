@@ -2434,7 +2434,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             width: '900px',
             data: {
               unitId: this.selectedUnit?.id,
-              title: 'Item/Variablen Analyse',
+              title: 'Antwortwertanalyse',
               workspaceId: this.appService.selectedWorkspaceId,
               jobs: variableAnalysisJobs
             }
