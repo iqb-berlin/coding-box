@@ -144,7 +144,7 @@ export class VariableAnalysisDialogComponent implements OnInit {
         },
         error: () => {
           this.isLoadingVariableAnalysis = false;
-          this.snackBar.open('Fehler beim Abrufen der Variablenanalyse', 'Schließen', {
+          this.snackBar.open('Fehler beim Abrufen der Code-/Score-Verteilung', 'Schließen', {
             duration: 5000,
             panelClass: ['error-snackbar']
           });
