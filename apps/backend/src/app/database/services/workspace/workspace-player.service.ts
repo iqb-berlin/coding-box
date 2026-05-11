@@ -19,19 +19,23 @@ interface IndexTracker {
 }
 
 interface XmlElementWithAttributes {
+  '#name'?: string;
   $?: {
     id?: string;
     alias?: string;
     label?: string;
   };
+  $$?: BookletElement[];
 }
 
 interface BookletElement {
+  '#name'?: string;
   Unit?: XmlElementWithAttributes[];
   Testlet?: TestletElement[];
   $?: {
     id?: string;
   };
+  $$?: BookletElement[];
 }
 
 interface TestletElement extends BookletElement {
@@ -236,7 +240,11 @@ export class WorkspacePlayerService {
     let parsedBookletId = 0;
 
     try {
-      const result = await parseStringPromise(bookletData);
+      const result = await parseStringPromise(bookletData, {
+        explicitChildren: true,
+        preserveChildrenOrder: true,
+        childkey: '$$'
+      });
 
       if (result.Booklet && result.Booklet.$) {
         parsedBookletId = parseInt(result.Booklet.$.id || '0', 10) || 0;
@@ -274,6 +282,21 @@ export class WorkspacePlayerService {
     bookletId: number,
     indexTracker: IndexTracker
   ): void {
+    const orderedChildren = element.$$?.filter(child => child['#name'] === 'Unit' || child['#name'] === 'Testlet');
+    if (orderedChildren?.length) {
+      orderedChildren.forEach(child => {
+        if (child['#name'] === 'Unit') {
+          this.addUnitToList(child, units, bookletId, indexTracker);
+        } else {
+          if (child.$) {
+            this.logger.log(`Processing Testlet with ID: ${child.$.id || 'unknown'}`);
+          }
+          this.processUnitsAndTestlets(child, units, bookletId, indexTracker);
+        }
+      });
+      return;
+    }
+
     // Process direct Unit elements if they exist
     if (element.Unit && Array.isArray(element.Unit)) {
       this.logger.log(`Processing ${element.Unit.length} direct Unit elements`);

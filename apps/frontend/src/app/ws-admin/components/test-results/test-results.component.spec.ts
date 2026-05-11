@@ -10,6 +10,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { provideHttpClient } from '@angular/common/http';
 import { of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
+import { provideRouter } from '@angular/router';
 import { environment } from '../../../../environments/environment';
 import { TestResultsComponent } from './test-results.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
@@ -32,6 +33,8 @@ import { UnitsReplayService } from '../../../replay/services/units-replay.servic
 describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
+  let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
+  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createToken: jest.Mock };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -45,13 +48,14 @@ describe('TestResultsComponent', () => {
       ],
       providers: [
         provideHttpClient(),
+        provideRouter([]),
         {
           provide: SERVER_URL,
           useValue: environment.backendUrl
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: { open: jest.fn().mockReturnValue({ dismiss: jest.fn() }) }
         },
         {
           provide: MatDialog,
@@ -111,7 +115,11 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: AppService,
-          useValue: { selectedWorkspaceId: 1, loggedUser: { sub: 'user' } }
+          useValue: {
+            selectedWorkspaceId: 1,
+            loggedUser: { sub: 'user' },
+            createToken: jest.fn().mockReturnValue(of('token'))
+          }
         },
         {
           provide: TestResultService,
@@ -147,6 +155,8 @@ describe('TestResultsComponent', () => {
 
     fixture = TestBed.createComponent(TestResultsComponent);
     component = fixture.componentInstance;
+    unitsReplayService = TestBed.inject(UnitsReplayService) as unknown as { getUnitsFromFileUpload: jest.Mock };
+    appService = TestBed.inject(AppService) as unknown as { selectedWorkspaceId: number; loggedUser: { sub: string }; createToken: jest.Mock };
     fixture.detectChanges();
   });
 
@@ -224,6 +234,42 @@ describe('TestResultsComponent', () => {
 
     expect(component.overview).toBe(previousOverview);
     expect(component.isLoadingOverview).toBe(false);
+  });
+
+  it('should open booklet replay in booklet-view mode with a clean hash URL', () => {
+    const windowOpenSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const bookletReplay = {
+      id: 0,
+      name: 'BOOKLET_Ä',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'UNIT_1',
+          alias: 'Unit 1',
+          bookletId: 0
+        }
+      ]
+    };
+
+    unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
+    appService.createToken.mockReturnValue(of('token'));
+    component.testPerson = {
+      login: 'login',
+      code: 'code',
+      group: 'group'
+    } as never;
+
+    component.replayBooklet({ name: 'BOOKLET_Ä' } as never);
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(expect.any(String), '_blank');
+    const openedUrl = windowOpenSpy.mock.calls[0][0] as string;
+    expect(openedUrl).toContain('/#/replay/');
+    expect(openedUrl).toContain('mode=booklet-view');
+    expect(openedUrl).toContain('unitsData=');
+    expect(openedUrl).not.toContain('#//replay');
+
+    windowOpenSpy.mockRestore();
   });
 
   it('should show Testcenter import results when overview loads with zero delta', async () => {

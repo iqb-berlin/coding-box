@@ -177,9 +177,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
         const queryParams = await firstValueFrom(this.route.queryParams);
         this.isCodingMode = queryParams.mode === 'coding';
-        this.isBookletReplayMode = queryParams.mode === 'booklet-view';
+        this.isBookletReplayMode = queryParams.mode === 'booklet-view' || queryParams.mode === 'booklet';
         this.originResponseId = queryParams.originResponseId ? Number(queryParams.originResponseId) : null;
-        if (this.isCodingMode) {
+        if (this.isCodingMode || this.isBookletReplayMode) {
           let deserializedUnits = null as UnitsReplay | null;
 
           if (queryParams.unitsData) {
@@ -226,7 +226,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             this.unitsData = deserializedUnits;
             // Check if this is a review session (contains " - Review: " in name)
             this.isReviewMode = this.unitsData.name.includes(' - Review: ');
-            this.codingService.codingJobId = deserializedUnits.id || null;
             this.currentUnitIndex = deserializedUnits.currentUnitIndex;
             this.totalUnits = deserializedUnits.units.length;
             const unitAny = (this.unitsData.units[this.currentUnitIndex] || {}) as unknown as { variableAnchor?: string; variableId?: string };
@@ -236,13 +235,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             if (unitAny.variableId) {
               this.codingService.currentVariableId = unitAny.variableId || '';
             }
-            if (this.codingService.codingJobId && this.workspaceId) {
-              const jobId = this.codingService.codingJobId;
-              if (!this.isReviewMode) {
-                this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+
+            if (this.isCodingMode) {
+              this.codingService.codingJobId = deserializedUnits.id || null;
+              if (this.codingService.codingJobId && this.workspaceId) {
+                const jobId = this.codingService.codingJobId;
+                if (!this.isReviewMode) {
+                  this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
+                }
+                await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                this.codingService.checkCodingJobCompletion(this.unitsData);
               }
-              await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
-              this.codingService.checkCodingJobCompletion(this.unitsData);
             }
           }
         }
