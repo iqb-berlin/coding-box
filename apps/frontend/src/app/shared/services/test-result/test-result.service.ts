@@ -224,6 +224,42 @@ export class TestResultService {
       );
   }
 
+  previewDeleteTestLogs(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Observable<TestResultsDeletePreviewDto | null> {
+    return this.http
+      .post<TestResultsDeletePreviewDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-preview`,
+      request,
+      {}
+    )
+      .pipe(
+        catchError(() => {
+          logger.error('Error previewing test log deletion');
+          return of(null);
+        })
+      );
+  }
+
+  createDeleteTestLogsJob(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Observable<ValidationTaskDto> {
+    return this.http
+      .post<ValidationTaskDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/logs/delete-jobs`,
+      request,
+      {}
+    )
+      .pipe(
+        tap(() => {
+          this.invalidateCache(workspaceId);
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        })
+      );
+  }
+
   getFlatResponseFrequencies(
     workspaceId: number,
     combos: FlatResponseFrequencyRequestCombo[]

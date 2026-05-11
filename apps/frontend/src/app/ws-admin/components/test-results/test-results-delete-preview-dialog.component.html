@@ -1,19 +1,16 @@
 <h2 mat-dialog-title class="dialog-title">
   <mat-icon color="warn">warning</mat-icon>
-  <span>Testergebnisse unwiderruflich löschen</span>
+  <span>{{ dialogTitle }}</span>
 </h2>
 
 <div mat-dialog-content class="delete-dialog-content">
   <section class="warning-panel">
     <div class="target-label">Betroffener Bereich</div>
     <div class="target-value">{{ preview.label }}</div>
-    <p>
-      Diese Aktion entfernt die Daten dauerhaft. Eine Wiederherstellung ist
-      danach nicht möglich.
-    </p>
+    <p>{{ warningText }}</p>
   </section>
 
-  <section class="metrics-grid" aria-label="Betroffene Testergebnisse">
+  <section class="metrics-grid" [attr.aria-label]="metricAriaLabel">
     @for (metric of metrics; track metric.label) {
     <div class="metric">
       <div class="metric-value">{{ metric.value }}</div>
@@ -26,8 +23,7 @@
   </section>
 
   <p class="count-note">
-    Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben
-    und Antworten werden eindeutig gezählt.
+    {{ countNote }}
   </p>
 
   @if (hasDetails) {
@@ -93,7 +89,7 @@
     [checked]="acknowledged"
     (change)="onAcknowledgementChange($event)"
   >
-    Ich verstehe, dass diese Testergebnisse endgültig gelöscht werden.
+    {{ acknowledgementLabel }}
   </mat-checkbox>
   }
 </div>
@@ -107,7 +103,7 @@
     [disabled]="!canConfirm"
     (click)="confirm()"
   >
-    <mat-icon>delete_forever</mat-icon>
-    Löschung starten
+    <mat-icon>{{ confirmButtonIcon }}</mat-icon>
+    {{ confirmButtonLabel }}
   </button>
 </div>

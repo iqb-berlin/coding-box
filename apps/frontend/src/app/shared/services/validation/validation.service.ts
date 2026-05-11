@@ -255,6 +255,7 @@ export class ValidationService {
     | 'deleteResponses'
     | 'deleteAllResponses'
     | 'deleteTestResults'
+    | 'deleteTestLogs'
     | 'duplicateResponses',
     page?: number,
     limit?: number,

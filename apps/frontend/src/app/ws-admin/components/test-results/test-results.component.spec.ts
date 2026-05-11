@@ -67,7 +67,11 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: ValidationService,
-          useValue: { getValidationStatus: jest.fn().mockReturnValue(of({})) }
+          useValue: {
+            getValidationStatus: jest.fn().mockReturnValue(of({})),
+            getValidationTask: jest.fn(),
+            getValidationResults: jest.fn()
+          }
         },
         {
           provide: UnitNoteService,
@@ -112,9 +116,16 @@ describe('TestResultsComponent', () => {
         {
           provide: TestResultService,
           useValue: {
-            getTestResults: jest.fn().mockReturnValue(of([])),
+            getTestResults: jest.fn().mockReturnValue(of({
+              data: [],
+              total: 0
+            })),
             getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
-            invalidateCache: jest.fn()
+            invalidateCache: jest.fn(),
+            previewDeleteTestResults: jest.fn().mockReturnValue(of(null)),
+            createDeleteTestResultsJob: jest.fn(),
+            previewDeleteTestLogs: jest.fn().mockReturnValue(of(null)),
+            createDeleteTestLogsJob: jest.fn()
           }
         },
         {

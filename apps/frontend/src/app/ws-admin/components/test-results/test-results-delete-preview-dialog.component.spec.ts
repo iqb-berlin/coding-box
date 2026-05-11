@@ -57,4 +57,36 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     component.confirm();
     expect(dialogRef.close).toHaveBeenCalledWith(true);
   });
+
+  it('shows log-specific metrics and confirmation text', () => {
+    component.data.preview = {
+      targetType: 'logs',
+      scope: 'filteredPersons',
+      label: 'alle sichtbaren Testpersonen',
+      persons: 3,
+      booklets: 2,
+      units: 12,
+      responses: 120,
+      bookletLogs: 5,
+      unitLogs: 42,
+      sessions: 3,
+      groups: [],
+      bookletNames: [],
+      unitNames: [],
+      warnings: []
+    };
+
+    expect(component.dialogTitle).toBe('Logs unwiderruflich entfernen');
+    expect(component.metrics).toEqual([
+      { label: 'Booklet-Logs', value: 5 },
+      { label: 'Aufgaben-Logs', value: 42 },
+      { label: 'Sitzungen', value: 3 },
+      { label: 'Testpersonen', value: 3, hint: 'betroffen' }
+    ]);
+    expect(component.canConfirm).toBe(false);
+
+    component.onAcknowledgementChange({ checked: true } as never);
+    expect(component.canConfirm).toBe(true);
+    expect(component.confirmButtonLabel).toBe('Logs entfernen');
+  });
 });

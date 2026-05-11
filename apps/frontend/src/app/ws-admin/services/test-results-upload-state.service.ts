@@ -43,6 +43,15 @@ type UploadJobStatus = {
   error?: unknown;
 };
 
+type ImportSummaryNumberKey =
+  | 'responseRows'
+  | 'logRows'
+  | 'bookletLogRows'
+  | 'unitLogRows'
+  | 'savedLogs'
+  | 'skippedRows'
+  | 'skippedLogs';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -321,6 +330,7 @@ export class TestResultsUploadStateService {
             lastCompletedResult?.responseStatusCounts ||
             this.mergeStatusCounts(completedResults),
           issues: issues,
+          importSummary: this.mergeImportSummaries(completedResults),
           logMetrics: this.mergeLogMetrics(completedResults),
           importedLogs: importedLogs || batch.resultType === 'logs',
           importedResponses: importedResponses || batch.resultType === 'responses',
@@ -673,6 +683,49 @@ export class TestResultsUploadStateService {
       });
       return acc;
     }, {});
+  }
+
+  private mergeImportSummaries(
+    results: TestResultsUploadResultDto[]
+  ): TestResultsUploadResultDto['importSummary'] | undefined {
+    const summaries = results
+      .map(result => result.importSummary)
+      .filter((summary): summary is NonNullable<TestResultsUploadResultDto['importSummary']> => !!summary);
+
+    if (summaries.length === 0) return undefined;
+
+    const issueCounts = summaries.reduce<Record<string, number>>(
+      (acc, summary) => {
+        Object.entries(summary.issueCounts || {}).forEach(([category, count]) => {
+          acc[category] = (acc[category] || 0) + Number(count || 0);
+        });
+        return acc;
+      },
+      {}
+    );
+
+    return {
+      totalRows: summaries.reduce((sum, summary) => sum + Number(summary.totalRows || 0), 0),
+      responseRows: this.sumOptional(summaries, 'responseRows'),
+      logRows: this.sumOptional(summaries, 'logRows'),
+      bookletLogRows: this.sumOptional(summaries, 'bookletLogRows'),
+      unitLogRows: this.sumOptional(summaries, 'unitLogRows'),
+      savedLogs: this.sumOptional(summaries, 'savedLogs'),
+      skippedRows: this.sumOptional(summaries, 'skippedRows'),
+      skippedLogs: this.sumOptional(summaries, 'skippedLogs'),
+      issueCounts: Object.keys(issueCounts).length ?
+        issueCounts as NonNullable<TestResultsUploadResultDto['importSummary']>['issueCounts'] :
+        undefined
+    };
+  }
+
+  private sumOptional(
+    summaries: NonNullable<TestResultsUploadResultDto['importSummary']>[],
+    key: ImportSummaryNumberKey
+  ): number | undefined {
+    const hasValue = summaries.some(summary => summary[key] !== undefined);
+    if (!hasValue) return undefined;
+    return summaries.reduce((sum, summary) => sum + Number(summary[key] || 0), 0);
   }
 
   private mergeLogMetrics(

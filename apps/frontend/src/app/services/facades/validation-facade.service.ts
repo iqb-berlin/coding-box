@@ -17,7 +17,7 @@ export class ValidationFacadeService {
     return this.validationService.createDeleteResponsesTask(workspaceId, responseIds);
   }
 
-  createValidationTask(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'testFiles' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'deleteTestResults' | 'duplicateResponses', page?: number, limit?: number, additionalData?: Record<string, unknown>): Observable<ValidationTaskDto> {
+  createValidationTask(workspaceId: number, type: 'variables' | 'variableTypes' | 'responseStatus' | 'testTakers' | 'testFiles' | 'groupResponses' | 'deleteResponses' | 'deleteAllResponses' | 'deleteTestResults' | 'deleteTestLogs' | 'duplicateResponses', page?: number, limit?: number, additionalData?: Record<string, unknown>): Observable<ValidationTaskDto> {
     return this.validationService.createValidationTask(workspaceId, type, page, limit, additionalData);
   }
 
