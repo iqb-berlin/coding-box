@@ -147,7 +147,7 @@ test-group;test-user;code;booklet1;unit1;123456789`;
 
     it('should summarize log rows and warn about suspicious log data', async () => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
-test-group;test-user;;booklet1;unit1;id1;0;KEY=VALUE
+;test-user;code1;booklet1;unit1;id1;0;KEY=VALUE
 test-group;test-user;code2;;unit2;id2;;KEY=VALUE
 test-group;test-user;code3;booklet3;;id3;123456789;`;
 
@@ -199,11 +199,55 @@ test-group;test-user;code3;booklet3;;id3;123456789;`;
       }));
       expect(result.issues).toEqual(expect.arrayContaining([
         expect.objectContaining({ category: 'missing_identity', rowIndex: 0 }),
-        expect.objectContaining({ category: 'timestamp', rowIndex: 0 }),
+        expect.objectContaining({ category: 'timestamp', rowIndex: 1 }),
+        expect.objectContaining({
+          category: 'timestamp',
+          message: expect.stringContaining('1 log entry has timestamp 0')
+        }),
         expect.objectContaining({ category: 'missing_booklet', rowIndex: 1 }),
         expect.objectContaining({ category: 'log_format', rowIndex: 2 }),
         expect.objectContaining({ category: 'missing_booklet_log', rowIndex: 0 })
       ]));
+    });
+
+    it('should not warn about missing code when group and login identify the imported person', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+test-group;test-user;;booklet1;;id1;123456789;KEY=VALUE`;
+
+      const filePath = path.join(os.tmpdir(), 'test-empty-code-log.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        success: true,
+        totalBooklets: 1,
+        totalLogsSaved: 1,
+        totalLogsSkipped: 0,
+        issues: []
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(result.issues || []).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ category: 'missing_identity' })
+      ]));
+      expect(result.importSummary?.issueCounts?.missing_identity).toBeUndefined();
     });
 
     it('should add a clear warning when log rows were read but no logs were saved', async () => {
