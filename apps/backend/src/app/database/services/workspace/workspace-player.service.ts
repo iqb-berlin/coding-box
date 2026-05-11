@@ -1,17 +1,36 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
 import FileUpload from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import { Unit } from '../../entities/unit.entity';
+import { Booklet } from '../../entities/booklet.entity';
+import { BookletInfo } from '../../entities/bookletInfo.entity';
+
+type BookletUnitReplaySkipReason = 'NO_UNIT_XML' | 'NO_VOUD' | 'NO_RESULT_UNIT';
 
 export interface BookletUnit {
   id: number;
   name: string;
   alias: string | null;
   bookletId: number;
+  isReplayable?: boolean;
+  skipReason?: BookletUnitReplaySkipReason;
+}
+
+interface GetBookletUnitsOptions {
+  testPerson?: string;
+  includeReplayStatus?: boolean;
+}
+
+interface ReplayTestPersonRef {
+  login: string;
+  code: string;
+  group?: string;
+  bookletName?: string;
 }
 
 interface IndexTracker {
@@ -52,8 +71,13 @@ export class WorkspacePlayerService {
     @InjectRepository(Persons)
     private personsRepository: Repository<Persons>,
     @InjectRepository(ResponseEntity)
-    private responseRepository: Repository<ResponseEntity>
-
+    private responseRepository: Repository<ResponseEntity>,
+    @InjectRepository(Unit)
+    private unitRepository: Repository<Unit>,
+    @InjectRepository(Booklet)
+    private bookletRepository: Repository<Booklet>,
+    @InjectRepository(BookletInfo)
+    private bookletInfoRepository: Repository<BookletInfo>
   ) {}
 
   async findPlayer(workspaceId: number, playerName: string): Promise<FilesDto[]> {
@@ -218,7 +242,11 @@ export class WorkspacePlayerService {
     return [];
   }
 
-  async getBookletUnits(workspaceId: number, bookletId: string): Promise<BookletUnit[]> {
+  async getBookletUnits(
+    workspaceId: number,
+    bookletId: string,
+    options: GetBookletUnitsOptions = {}
+  ): Promise<BookletUnit[]> {
     this.logger.log(`Getting units for booklet ${bookletId} in workspace ${workspaceId}`);
 
     const bookletFiles = await this.fileUploadRepository.find({
@@ -273,7 +301,190 @@ export class WorkspacePlayerService {
       this.logger.warn(`No units found in booklet ${bookletId}`);
     }
 
+    if (options.includeReplayStatus || options.testPerson) {
+      return this.addReplayStatusToBookletUnits(
+        workspaceId,
+        bookletId,
+        units,
+        options.testPerson
+      );
+    }
+
     return units;
+  }
+
+  private async addReplayStatusToBookletUnits(
+    workspaceId: number,
+    bookletId: string,
+    units: BookletUnit[],
+    testPerson?: string
+  ): Promise<BookletUnit[]> {
+    if (units.length === 0) {
+      return units;
+    }
+
+    const normalizedUnitIds = units.map(unit => this.normalizeUnitKey(unit.name));
+    const uniqueUnitIds = [...new Set(normalizedUnitIds)].filter(Boolean);
+
+    const [unitFiles, unitDefinitionFiles, resultUnitKeys] = await Promise.all([
+      this.fileUploadRepository.find({
+        select: ['file_id'],
+        where: {
+          workspace_id: workspaceId,
+          file_id: In(uniqueUnitIds)
+        }
+      }),
+      this.fileUploadRepository.find({
+        select: ['file_id'],
+        where: {
+          workspace_id: workspaceId,
+          file_id: In(uniqueUnitIds.map(unitId => `${unitId}.VOUD`))
+        }
+      }),
+      testPerson ?
+        this.findReplayResultUnitKeys(workspaceId, bookletId, testPerson) :
+        Promise.resolve(null)
+    ]);
+
+    const availableUnitFiles = new Set(
+      unitFiles.map(file => this.normalizeUnitKey(file.file_id))
+    );
+    const availableUnitDefinitions = new Set(
+      unitDefinitionFiles.map(file => this.normalizeUnitKey(file.file_id))
+    );
+
+    return units.map(unit => {
+      const unitKey = this.normalizeUnitKey(unit.name);
+      const unitDefinitionKey = `${unitKey}.VOUD`;
+      let skipReason: BookletUnitReplaySkipReason | undefined;
+
+      if (!availableUnitFiles.has(unitKey)) {
+        skipReason = 'NO_UNIT_XML';
+      } else if (!availableUnitDefinitions.has(unitDefinitionKey)) {
+        skipReason = 'NO_VOUD';
+      } else if (
+        resultUnitKeys &&
+        !this.bookletUnitHasResultUnit(unit, resultUnitKeys)
+      ) {
+        skipReason = 'NO_RESULT_UNIT';
+      }
+
+      return {
+        ...unit,
+        isReplayable: !skipReason,
+        skipReason
+      };
+    });
+  }
+
+  private async findReplayResultUnitKeys(
+    workspaceId: number,
+    bookletId: string,
+    testPerson: string
+  ): Promise<Set<string> | null> {
+    const parsedTestPerson = this.parseReplayTestPerson(testPerson);
+
+    if (!parsedTestPerson) {
+      this.logger.warn(`Cannot parse replay test person reference: ${testPerson}`);
+      return null;
+    }
+
+    const personWhere: Partial<Persons> = {
+      login: parsedTestPerson.login,
+      code: parsedTestPerson.code,
+      workspace_id: workspaceId,
+      consider: true
+    };
+
+    if (parsedTestPerson.group !== undefined) {
+      personWhere.group = parsedTestPerson.group;
+    }
+
+    const person = await this.personsRepository.findOne({ where: personWhere });
+
+    if (!person) {
+      this.logger.warn(`No test person found for replay reference: ${testPerson}`);
+      return new Set();
+    }
+
+    const bookletName = parsedTestPerson.bookletName || bookletId;
+    const bookletInfo = await this.bookletInfoRepository.findOne({
+      where: [
+        { name: bookletName },
+        { name: bookletName.toUpperCase() }
+      ]
+    });
+
+    if (!bookletInfo) {
+      this.logger.warn(`No booklet info found for replay booklet: ${bookletName}`);
+      return new Set();
+    }
+
+    const booklet = await this.bookletRepository.findOne({
+      where: {
+        personid: person.id,
+        infoid: bookletInfo.id
+      }
+    });
+
+    if (!booklet) {
+      this.logger.warn(`No booklet result found for replay booklet: ${bookletName}`);
+      return new Set();
+    }
+
+    const resultUnits = await this.unitRepository.find({
+      select: ['name', 'alias'],
+      where: { bookletid: booklet.id }
+    });
+
+    const resultUnitKeys = new Set<string>();
+    resultUnits.forEach(unit => {
+      [unit.name, unit.alias].forEach(unitIdentifier => {
+        if (unitIdentifier) {
+          resultUnitKeys.add(this.normalizeUnitKey(unitIdentifier));
+        }
+      });
+    });
+
+    return resultUnitKeys;
+  }
+
+  private parseReplayTestPerson(testPerson: string): ReplayTestPersonRef | null {
+    const parts = testPerson.split('@');
+
+    if (parts.length < 2 || !parts[0] || !parts[1]) {
+      return null;
+    }
+
+    if (parts.length >= 4) {
+      return {
+        login: parts[0],
+        code: parts[1],
+        group: parts[2],
+        bookletName: parts.slice(3).join('@')
+      };
+    }
+
+    return {
+      login: parts[0],
+      code: parts[1],
+      bookletName: parts[2]
+    };
+  }
+
+  private bookletUnitHasResultUnit(
+    bookletUnit: BookletUnit,
+    resultUnitKeys: Set<string>
+  ): boolean {
+    return [bookletUnit.name, bookletUnit.alias].some(unitIdentifier => (
+      unitIdentifier ?
+        resultUnitKeys.has(this.normalizeUnitKey(unitIdentifier)) :
+        false
+    ));
+  }
+
+  private normalizeUnitKey(unitIdentifier: string): string {
+    return unitIdentifier.toUpperCase();
   }
 
   private processUnitsAndTestlets(

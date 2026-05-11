@@ -242,6 +242,8 @@ describe('TestResultsComponent', () => {
       id: 0,
       name: 'BOOKLET_Ä',
       currentUnitIndex: 0,
+      skippedUnits: 0,
+      totalBookletUnits: 1,
       units: [
         {
           id: 1,
@@ -262,6 +264,11 @@ describe('TestResultsComponent', () => {
 
     component.replayBooklet({ name: 'BOOKLET_Ä' } as never);
 
+    expect(unitsReplayService.getUnitsFromFileUpload).toHaveBeenCalledWith(
+      1,
+      'BOOKLET_Ä',
+      'login@code@group@BOOKLET_Ä'
+    );
     expect(windowOpenSpy).toHaveBeenCalledWith(expect.any(String), '_blank');
     const openedUrl = windowOpenSpy.mock.calls[0][0] as string;
     expect(openedUrl).toContain('/#/replay/');
