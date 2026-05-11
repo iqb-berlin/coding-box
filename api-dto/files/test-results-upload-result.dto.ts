@@ -18,12 +18,39 @@ export class TestResultsUploadStatsDto {
     uniqueResponses!: number;
 }
 
+export type TestResultsUploadIssueCategory =
+  'log_format' |
+  'unit_not_found' |
+  'invalid_unit' |
+  'laststate' |
+  'missing_booklet' |
+  'missing_status' |
+  'invalid_status' |
+  'csv_columns' |
+  'missing_identity' |
+  'timestamp' |
+  'missing_booklet_log' |
+  'no_logs_saved' |
+  'other';
+
 export type TestResultsUploadIssueDto = {
   level: 'error' | 'warning';
-  category?: 'log_format' | 'unit_not_found' | 'invalid_unit' | 'laststate' | 'missing_booklet' | 'missing_status' | 'invalid_status' | 'other';
+  category?: TestResultsUploadIssueCategory;
   message: string;
   fileName?: string;
   rowIndex?: number;
+};
+
+export type TestResultsUploadSummaryDto = {
+  totalRows: number;
+  responseRows?: number;
+  logRows?: number;
+  bookletLogRows?: number;
+  unitLogRows?: number;
+  savedLogs?: number;
+  skippedRows?: number;
+  skippedLogs?: number;
+  issueCounts?: Partial<Record<TestResultsUploadIssueCategory | 'uncategorized', number>>;
 };
 
 export class TestResultsUploadResultDto {
@@ -44,6 +71,9 @@ export class TestResultsUploadResultDto {
 
   @ApiProperty({ type: [Object], required: false })
     issues?: TestResultsUploadIssueDto[];
+
+  @ApiProperty({ type: Object, required: false })
+    importSummary?: TestResultsUploadSummaryDto;
 
   @ApiProperty({ type: Object, required: false })
     logMetrics?: {

@@ -91,9 +91,165 @@ test-group;test-user;code;booklet1;unit1;id2;123456789;KEY:VALUE`;
 
       // Assert
       expect(result.expected.uniqueUnits).toBe(1);
+      expect(result.importSummary).toMatchObject({
+        totalRows: 2,
+        logRows: 2,
+        unitLogRows: 2
+      });
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(1);
+    });
+
+    it('should report missing CSV columns before importing rows', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;timestamp
+test-group;test-user;code;booklet1;unit1;123456789`;
+
+      const filePath = path.join(os.tmpdir(), 'test-missing-log-columns.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(personService.createPersonList).not.toHaveBeenCalled();
+      expect(result.issues).toEqual([
+        expect.objectContaining({
+          level: 'error',
+          category: 'csv_columns',
+          message: expect.stringContaining('logentry')
+        })
+      ]);
+      expect(result.importSummary).toMatchObject({
+        totalRows: 0,
+        issueCounts: { csv_columns: 1 }
+      });
+    });
+
+    it('should summarize log rows and warn about suspicious log data', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+test-group;test-user;;booklet1;unit1;id1;0;KEY=VALUE
+test-group;test-user;code2;;unit2;id2;;KEY=VALUE
+test-group;test-user;code3;booklet3;;id3;123456789;`;
+
+      const filePath = path.join(os.tmpdir(), 'test-log-warnings.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        success: true,
+        totalBooklets: 0,
+        totalLogsSaved: 4,
+        totalLogsSkipped: 2,
+        issues: []
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(result.importSummary).toMatchObject({
+        totalRows: 3,
+        logRows: 3,
+        bookletLogRows: 1,
+        unitLogRows: 2,
+        savedLogs: 4,
+        skippedRows: 2,
+        skippedLogs: 2
+      });
+      expect(result.importSummary?.issueCounts).toEqual(expect.objectContaining({
+        missing_identity: 1,
+        missing_booklet: 1,
+        timestamp: 2,
+        log_format: 1,
+        missing_booklet_log: 1
+      }));
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ category: 'missing_identity', rowIndex: 0 }),
+        expect.objectContaining({ category: 'timestamp', rowIndex: 0 }),
+        expect.objectContaining({ category: 'missing_booklet', rowIndex: 1 }),
+        expect.objectContaining({ category: 'log_format', rowIndex: 2 }),
+        expect.objectContaining({ category: 'missing_booklet_log', rowIndex: 0 })
+      ]));
+    });
+
+    it('should add a clear warning when log rows were read but no logs were saved', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+test-group;test-user;code;booklet1;;id1;123456789;KEY=VALUE`;
+
+      const filePath = path.join(os.tmpdir(), 'test-no-logs-saved.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        success: true,
+        totalBooklets: 0,
+        totalLogsSaved: 0,
+        totalLogsSkipped: 1,
+        issues: []
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(result.issues).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          category: 'no_logs_saved',
+          message: expect.stringContaining('keine Logs gespeichert')
+        })
+      ]));
+      expect(result.importSummary).toMatchObject({
+        totalRows: 1,
+        logRows: 1,
+        skippedLogs: 1,
+        issueCounts: expect.objectContaining({
+          no_logs_saved: 1
+        })
+      });
     });
 
     it('should pass only unit log rows into unit log assignment', async () => {
@@ -149,6 +305,129 @@ test-group;test-user;code;booklet1;unit1;id1;123456789;KEY=VALUE`;
         [expect.objectContaining({ unitname: 'unit1', originalUnitId: 'id1' })],
         expect.any(Array),
         'test.csv'
+      );
+      expect(personService.assignBookletLogsToPerson).toHaveBeenCalledWith(
+        person,
+        [expect.objectContaining({ unitname: '' })],
+        expect.any(Array),
+        'test.csv'
+      );
+    });
+
+    it('should process log CSV files once instead of persisting per 500-row batch', async () => {
+      const rows = Array.from({ length: 501 }, (_, index) => (
+        `test-group;test-user;code;booklet1;unit1;id1;${index + 1};PLAYER=RUNNING`
+      ));
+      const fileContent = [
+        'groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry',
+        ...rows
+      ].join('\n');
+
+      const filePath = path.join(os.tmpdir(), 'test-large-logs.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const booklet = {
+        id: 'booklet1',
+        logs: [],
+        units: [],
+        sessions: []
+      };
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: [booklet]
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletLogsToPerson').mockReturnValue(person);
+      jest.spyOn(personService, 'assignUnitLogsToBooklet').mockReturnValue(booklet);
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        issues: []
+      } as never);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(personService.processPersonLogs).toHaveBeenCalledTimes(1);
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenCalledWith(
+        booklet,
+        expect.arrayContaining([
+          expect.objectContaining({ timestamp: '1' }),
+          expect.objectContaining({ timestamp: '501' })
+        ]),
+        expect.any(Array),
+        'test.csv'
+      );
+    });
+
+    it('should normalize quoted log CSV fields without stripping quotes from logentry payloads', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+"test-group";"test-user";"code";"booklet1";"";"";"123456788";TESTLETS_TIMELEFT : "{""BM"":40}"`;
+
+      const filePath = path.join(os.tmpdir(), 'test-quoted-logs.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: []
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletLogsToPerson').mockReturnValue(person);
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        issues: []
+      } as never);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(personService.createPersonList).toHaveBeenCalledWith(
+        [
+          expect.objectContaining({
+            groupname: 'test-group',
+            loginname: 'test-user',
+            code: 'code',
+            logentry: 'TESTLETS_TIMELEFT : "{""BM"":40}"'
+          })
+        ],
+        1
       );
     });
 
