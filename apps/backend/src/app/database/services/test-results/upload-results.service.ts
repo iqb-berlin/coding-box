@@ -517,8 +517,9 @@ export class UploadResultsService {
             );
             const personList = (await this.personService.createPersonList(rowData, workspaceId)).map(p => {
               const pWithBooklets = this.personService.assignBookletLogsToPerson(p, bookletLogs, issues, file.originalname);
-              this.personService.ensureBookletsForUnitLogs(pWithBooklets, unitLogs);
-              pWithBooklets.booklets = pWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, unitLogs, issues, file.originalname)
+              const personUnitLogs = this.personService.filterLogRowsForPerson(unitLogs, p);
+              this.personService.ensureBookletsForUnitLogs(pWithBooklets, personUnitLogs);
+              pWithBooklets.booklets = pWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, personUnitLogs, issues, file.originalname)
               );
               return pWithBooklets;
             });

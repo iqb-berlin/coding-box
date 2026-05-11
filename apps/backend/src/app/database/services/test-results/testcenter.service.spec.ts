@@ -59,6 +59,11 @@ describe('TestCenterService', () => {
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
+    personService.filterLogRowsForPerson.mockImplementation((rows, person) => (
+      (rows || []).filter(row => row.groupname === person.group &&
+        row.loginname === person.login &&
+        row.code === person.code)
+    ));
   });
 
   afterEach(() => {

@@ -311,8 +311,9 @@ export class TestcenterService {
           Number(workspace_id)
         )).map(async p => {
           const personWithBooklets = this.personService.assignBookletLogsToPerson(p, bookletLogs, importIssues, filename);
-          this.personService.ensureBookletsForUnitLogs(personWithBooklets, unitLogs);
-          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, unitLogs, importIssues, filename)
+          const personUnitLogs = this.personService.filterLogRowsForPerson(unitLogs, p);
+          this.personService.ensureBookletsForUnitLogs(personWithBooklets, personUnitLogs);
+          personWithBooklets.booklets = personWithBooklets.booklets.map(b => this.personService.assignUnitLogsToBooklet(b, personUnitLogs, importIssues, filename)
           );
           return personWithBooklets;
         })

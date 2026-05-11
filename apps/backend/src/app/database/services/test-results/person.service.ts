@@ -112,6 +112,16 @@ export class PersonService {
     return Array.from(personMap.values());
   }
 
+  filterLogRowsForPerson(rows: Log[], person: Pick<Person, 'group' | 'login' | 'code'>): Log[] {
+    if (!Array.isArray(rows)) {
+      return [];
+    }
+
+    return rows.filter(row => row.groupname === person.group &&
+      row.loginname === person.login &&
+      row.code === person.code);
+  }
+
   async assignBookletsToPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = []): Promise<Person> {
     const logger = new Logger('assignBookletsToPerson');
     const bookletIds = new Set<string>();
