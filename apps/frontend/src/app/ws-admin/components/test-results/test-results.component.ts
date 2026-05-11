@@ -140,6 +140,7 @@ import {
   TestResultsDeleteResultDto
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 interface BookletLog {
   id: number;
@@ -747,7 +748,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             .subscribe(token => {
               const queryParams = {
                 auth: token,
-                mode: 'booklet',
+                mode: 'booklet-view',
                 unitsData: serializedBooklet
               };
 
@@ -760,7 +761,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 )
               );
 
-              window.open(`#/${url}`, '_blank');
+              window.open(`${window.location.origin}/#${url}`, '_blank');
             });
         },
         error: () => {
@@ -2261,8 +2262,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private serializeUnitsData(booklet: UnitsReplay): string {
     try {
       const jsonString = JSON.stringify(booklet);
-
-      return btoa(jsonString);
+      return utf8ToBase64(jsonString);
     } catch (error) {
       return '';
     }

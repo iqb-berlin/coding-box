@@ -1,4 +1,4 @@
-<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode"
+<div class="replay-container" [class.print-mode]="isPrintMode" [class.booklet-mode]="isCodingMode || isBookletReplayMode"
   [class.resizing]="isResizing" (window:keydown)="onKeyDown($any($event))">
   <cb-spinner [isLoaded]="isLoaded"></cb-spinner>
 

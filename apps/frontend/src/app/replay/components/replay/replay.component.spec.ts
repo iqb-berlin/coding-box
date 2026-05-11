@@ -16,6 +16,7 @@ import { AppService } from '../../../core/services/app.service';
 import * as tokenUtils from '../../utils/token-utils';
 import * as domUtils from '../../utils/dom-utils';
 import { CodingJob } from '../../../coding/models/coding-job.model';
+import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
 class FileServiceMock {
@@ -57,13 +58,20 @@ class MatSnackBarMock {
   dismiss = jest.fn();
 }
 
+let routeParams = {
+  page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
+};
+let routeQueryParams: Record<string, string> = { auth: 'valid-token' };
+
 // Konfiguration der Aktivierten Route, inklusive Parameter und Query Params
 const fakeActivatedRoute = {
   snapshot: { data: {}, url: [{ path: '' }] },
-  params: of({
-    page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
-  }),
-  queryParams: of({ auth: 'valid-token' })
+  get params() {
+    return of(routeParams);
+  },
+  get queryParams() {
+    return of(routeQueryParams);
+  }
 } as unknown as ActivatedRoute;
 
 describe('ReplayComponent', () => {
@@ -72,6 +80,11 @@ describe('ReplayComponent', () => {
   let snackBar: MatSnackBarMock;
 
   beforeEach(async () => {
+    routeParams = {
+      page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
+    };
+    routeQueryParams = { auth: 'valid-token' };
+
     // Spy on token validation
     jest.spyOn(tokenUtils, 'validateToken').mockReturnValue({ isValid: true });
     jest.spyOn(tokenUtils, 'isTestperson').mockImplementation(testperson => testperson === 'valid@test@person');
@@ -162,6 +175,47 @@ describe('ReplayComponent', () => {
     expect(component.anchor).toBe('test-anchor');
     expect(component.unitId).toBe('test-unit');
     expect(component.testPerson).toBe('valid@test@person');
+  });
+
+  it('should load units data for booklet-view mode without coding job side effects', async () => {
+    const unitsData = {
+      id: 0,
+      name: 'BOOKLET',
+      currentUnitIndex: 0,
+      units: [
+        {
+          id: 1,
+          name: 'unit-123',
+          alias: 'Unit 123',
+          bookletId: 0
+        },
+        {
+          id: 2,
+          name: 'unit-456',
+          alias: 'Unit 456',
+          bookletId: 0
+        }
+      ]
+    };
+    const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus');
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'booklet-view',
+      unitsData: utf8ToBase64(JSON.stringify(unitsData))
+    };
+
+    component.subscribeRouter();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    const replayComponent = component as unknown as { unitsData: typeof unitsData | null };
+    expect(component.isBookletReplayMode).toBe(true);
+    expect(component.isCodingMode).toBe(false);
+    expect(replayComponent.unitsData?.units).toHaveLength(2);
+    expect(component.totalUnits).toBe(2);
+    expect(updateStatusSpy).not.toHaveBeenCalled();
   });
 
   it('should normalize player ID correctly', () => {

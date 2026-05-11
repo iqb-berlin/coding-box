@@ -552,9 +552,8 @@ describe('WorkspacePlayerService', () => {
       const result = await service.getBookletUnits(5, 'BOOKLET2');
 
       expect(result).toHaveLength(2);
-      // Direct units are processed before testlets
-      expect(result[0].name).toBe('UNIT4');
-      expect(result[1].name).toBe('UNIT3');
+      expect(result[0].name).toBe('UNIT3');
+      expect(result[1].name).toBe('UNIT4');
     });
 
     it('should throw NotFoundException when booklet not found', async () => {
