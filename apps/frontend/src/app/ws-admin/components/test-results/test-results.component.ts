@@ -219,6 +219,8 @@ interface P {
   uploaded_at: Date;
 }
 
+type DeleteJobMode = 'test-results' | 'logs';
+
 const RESPONSE_STATUS_INFO: Record<
 string,
 { numeric: number; description: string }
@@ -385,6 +387,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isLoadingBooklets: boolean = false;
   isDeletingTestPersons: boolean = false;
   activeDeleteTask: ValidationTaskDto | null = null;
+  activeDeleteMode: DeleteJobMode = 'test-results';
   deleteProgress: number = 0;
   deleteProgressMessage: string = '';
   unitTags: UnitTagDto[] = [];
@@ -1765,6 +1768,25 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  deleteLogsForSelectedPersons(): void {
+    const selectedTestPersons = this.selection.selected;
+    if (selectedTestPersons.length === 0) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'persons',
+      personIds: selectedTestPersons.map(person => person.id)
+    }, 'logs');
+  }
+
+  deleteLogsForFilteredPersons(): void {
+    this.confirmAndStartDelete({
+      scope: 'filteredPersons',
+      searchText: this.getCurrentSearchText()
+    }, 'logs');
+  }
+
   deleteSelectedGroups(): void {
     const groups = Array.from(
       new Set(
@@ -1798,6 +1820,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  deleteLogsForBookletsByName(bookletName: string): void {
+    if (!bookletName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'booklets',
+      bookletNames: [bookletName]
+    }, 'logs');
+  }
+
   deleteUnitsByName(unit: Unit): void {
     const unitName = unit.alias || unit.name;
     if (!unitName) {
@@ -1810,38 +1843,66 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
+  deleteLogsForUnitsByName(unit: Unit): void {
+    const unitName = unit.alias || unit.name;
+    if (!unitName) {
+      return;
+    }
+
+    this.confirmAndStartDelete({
+      scope: 'units',
+      unitNames: [unitName]
+    }, 'logs');
+  }
+
   isDeleteJobRunning(): boolean {
     return this.activeDeleteTask?.status === 'pending' ||
       this.activeDeleteTask?.status === 'processing' ||
       this.isDeletingTestPersons;
   }
 
-  private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void {
+  private confirmAndStartDelete(
+    request: TestResultsDeleteRequestDto,
+    mode: DeleteJobMode = 'test-results'
+  ): void {
     if (this.isDeleteJobRunning()) {
       return;
     }
 
     this.isDeletingTestPersons = true;
-    this.testResultService
-      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
+    const previewRequest = mode === 'logs' ?
+      this.testResultService.previewDeleteTestLogs(
+        this.appService.selectedWorkspaceId,
+        request
+      ) :
+      this.testResultService.previewDeleteTestResults(
+        this.appService.selectedWorkspaceId,
+        request
+      );
+
+    previewRequest
       .subscribe({
         next: preview => {
           this.isDeletingTestPersons = false;
           if (!preview) {
             this.snackBar.open(
-              'Die Löschvorschau konnte nicht berechnet werden.',
+              mode === 'logs' ?
+                'Die Log-Löschvorschau konnte nicht berechnet werden.' :
+                'Die Löschvorschau konnte nicht berechnet werden.',
               'Fehler',
               { duration: 4000 }
             );
             return;
           }
 
-          this.openDeletePreviewDialog(request, preview);
+          this.openDeletePreviewDialog(request, preview, mode);
         },
         error: () => {
           this.isDeletingTestPersons = false;
           this.snackBar.open(
-            'Die Löschvorschau konnte nicht berechnet werden.',
+            mode === 'logs' ?
+              'Die Log-Löschvorschau konnte nicht berechnet werden.' :
+              'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
             { duration: 4000 }
           );
@@ -1851,7 +1912,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private openDeletePreviewDialog(
     request: TestResultsDeleteRequestDto,
-    preview: TestResultsDeletePreviewDto
+    preview: TestResultsDeletePreviewDto,
+    mode: DeleteJobMode = 'test-results'
   ): void {
     const dialogRef = this.dialog.open(TestResultsDeletePreviewDialogComponent, {
       width: '680px',
@@ -1863,19 +1925,34 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.startDeleteJob(request);
+        this.startDeleteJob(request, mode);
       }
     });
   }
 
-  private startDeleteJob(request: TestResultsDeleteRequestDto): void {
+  private startDeleteJob(
+    request: TestResultsDeleteRequestDto,
+    mode: DeleteJobMode = 'test-results'
+  ): void {
     this.resetSelectedResultDetails();
     this.isDeletingTestPersons = true;
+    this.activeDeleteMode = mode;
     this.deleteProgress = 0;
-    this.deleteProgressMessage = 'Löschung wird gestartet...';
+    this.deleteProgressMessage = mode === 'logs' ?
+      'Log-Löschung wird gestartet...' :
+      'Löschung wird gestartet...';
 
-    this.testResultService
-      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
+    const deleteRequest = mode === 'logs' ?
+      this.testResultService.createDeleteTestLogsJob(
+        this.appService.selectedWorkspaceId,
+        request
+      ) :
+      this.testResultService.createDeleteTestResultsJob(
+        this.appService.selectedWorkspaceId,
+        request
+      );
+
+    deleteRequest
       .subscribe({
         next: task => {
           this.activeDeleteTask = task;
@@ -1884,8 +1961,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
+          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
-            'Die Löschung konnte nicht gestartet werden.',
+            mode === 'logs' ?
+              'Die Log-Löschung konnte nicht gestartet werden.' :
+              'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
             { duration: 4000 }
           );
@@ -1920,6 +2000,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.finishDeleteTask(task.id);
           } else if (task.status === 'failed') {
             this.isDeletingTestPersons = false;
+            this.activeDeleteTask = null;
+            this.activeDeleteMode = 'test-results';
             this.snackBar.open(
               task.error || 'Die Löschung ist fehlgeschlagen.',
               'Fehler',
@@ -1929,6 +2011,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.isDeletingTestPersons = false;
+          this.activeDeleteTask = null;
+          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
             'Der Fortschritt der Löschung konnte nicht gelesen werden.',
             'Fehler',
@@ -1939,6 +2023,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private finishDeleteTask(taskId: number): void {
+    const mode = this.activeDeleteMode;
     this.validationService
       .getValidationResults(this.appService.selectedWorkspaceId, taskId)
       .subscribe({
@@ -1946,6 +2031,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const deleteResult = result as TestResultsDeleteResultDto;
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
+          this.activeDeleteMode = 'test-results';
           this.deleteProgress = 100;
           this.selection.clear();
           this.testResultService.invalidateCache(
@@ -1961,7 +2047,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.getCurrentSearchText()
           );
           this.snackBar.open(
-            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
+            mode === 'logs' ?
+              `Log-Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Log-/Sitzungsdatensätze entfernt.` :
+              `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
             'OK',
             { duration: 4000 }
           );
@@ -1969,6 +2057,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
+          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
             'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
             'Info',
