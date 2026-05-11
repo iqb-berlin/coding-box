@@ -13,6 +13,54 @@
       </div>
     </div>
     }
+    @if (result.importedLogs) {
+    <div class="section log-import-note-section">
+      <div class="section-title">Hinweis zum Log-Import</div>
+      <div class="note-text">
+        Logs werden bestehenden Testpersonen, Booklets und Units zugeordnet. Fehlende Testergebnisse werden nicht automatisch angelegt.
+      </div>
+    </div>
+    }
+    @if (result.importSummary) {
+    <div class="section import-summary-section">
+      <div class="section-title">Import-Zusammenfassung</div>
+      <div class="kv">
+        <div class="k">Zeilen gelesen</div>
+        <div class="v">{{ result.importSummary.totalRows }}</div>
+        @if (result.importSummary.responseRows !== undefined) {
+        <div class="k">Antwort-Zeilen</div>
+        <div class="v">{{ result.importSummary.responseRows }}</div>
+        }
+        @if (result.importSummary.bookletLogRows !== undefined) {
+        <div class="k">Booklet-Log-Zeilen</div>
+        <div class="v">{{ result.importSummary.bookletLogRows }}</div>
+        }
+        @if (result.importSummary.unitLogRows !== undefined) {
+        <div class="k">Unit-Log-Zeilen</div>
+        <div class="v">{{ result.importSummary.unitLogRows }}</div>
+        }
+        @if (result.importSummary.savedLogs !== undefined) {
+        <div class="k">Gespeicherte Logs</div>
+        <div class="v">{{ result.importSummary.savedLogs }}</div>
+        }
+        @if (result.importSummary.skippedRows !== undefined) {
+        <div class="k">Übersprungene Zeilen</div>
+        <div class="v">{{ result.importSummary.skippedRows }}</div>
+        }
+        @if (result.importSummary.skippedLogs !== undefined) {
+        <div class="k">Übersprungene Logs</div>
+        <div class="v">{{ result.importSummary.skippedLogs }}</div>
+        }
+      </div>
+      @if (issueSummaryEntries.length > 0) {
+      <div class="issue-summary">
+        @for (entry of issueSummaryEntries; track entry.category) {
+        <span class="issue-count-chip">{{ entry.label }}: {{ entry.count }}</span>
+        }
+      </div>
+      }
+    </div>
+    }
     @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
       <div class="section-title">Datenbankänderungen</div>
@@ -106,7 +154,7 @@
     }
   </div>
 
-  <mat-tab-group dynamicHeight>
+  <mat-tab-group dynamicHeight (selectedTabChange)="onTabChange()">
     @if (result.importedLogs) {
     <mat-tab
       label="Details ({{ detailView === 'booklets' ? filteredBookletDetails.length : filteredUnitDetails.length }})">
@@ -182,26 +230,42 @@
       <div class="tab-pad">
         @if (issues.length > 0) {
         <div class="issue-filters">
-        <mat-form-field appearance="outline">
-          <mat-label>Suche</mat-label>
-          <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
-          <mat-icon matSuffix>search</mat-icon>
-        </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Suche</mat-label>
+            <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
+            <mat-icon matSuffix>search</mat-icon>
+          </mat-form-field>
 
-        <mat-form-field appearance="outline">
-          <mat-label>Kategorie</mat-label>
-          <mat-select [(ngModel)]="selectedCategory">
-            <mat-option [value]="null">Alle Kategorien</mat-option>
-            <mat-option value="log_format">Log-Format ungültig</mat-option>
-            <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
-            <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
-            <mat-option value="laststate">Letzter Status Fehler</mat-option>
-            <mat-option value="missing_booklet">Testheft fehlt</mat-option>
-            <mat-option value="missing_status">Status fehlt</mat-option>
-            <mat-option value="invalid_status">Status ungültig</mat-option>
-            <mat-option value="other">Sonstiges</mat-option>
-          </mat-select>
-        </mat-form-field>
+          <mat-form-field appearance="outline">
+            <mat-label>Kategorie</mat-label>
+            <mat-select [(ngModel)]="selectedCategory">
+              <mat-option [value]="null">Alle Kategorien</mat-option>
+              <mat-option value="log_format">Log-Format ungültig</mat-option>
+              <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
+              <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
+              <mat-option value="laststate">Letzter Status Fehler</mat-option>
+              <mat-option value="missing_booklet">Testheft fehlt</mat-option>
+              <mat-option value="missing_status">Status fehlt</mat-option>
+              <mat-option value="invalid_status">Status ungültig</mat-option>
+              <mat-option value="csv_columns">CSV-Spalten fehlen</mat-option>
+              <mat-option value="missing_identity">Zuordnung unvollständig</mat-option>
+              <mat-option value="timestamp">Zeitstempel auffällig</mat-option>
+              <mat-option value="missing_booklet_log">Booklet-Log fehlt</mat-option>
+              <mat-option value="no_logs_saved">Keine Logs gespeichert</mat-option>
+              <mat-option value="other">Sonstiges</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <button
+            mat-stroked-button
+            type="button"
+            class="issue-export-button"
+            [disabled]="filteredIssues.length === 0"
+            (click)="exportIssues()"
+          >
+            <mat-icon>download</mat-icon>
+            {{ issueExportButtonLabel }}
+          </button>
         </div>
         }
 
@@ -211,7 +275,11 @@
           <span>Keine Probleme gefunden.</span>
         </div>
         } @else {
-        <cdk-virtual-scroll-viewport itemSize="60" class="viewport">
+        <cdk-virtual-scroll-viewport
+          #issuesViewport
+          itemSize="60"
+          class="viewport issues-viewport"
+        >
           <div *cdkVirtualFor="let i of filteredIssues; trackBy: trackByIssue" class="issue-row"
             [class.error]="i.level === 'error'" [class.warning]="i.level === 'warning'">
             <div class="issue-main">
