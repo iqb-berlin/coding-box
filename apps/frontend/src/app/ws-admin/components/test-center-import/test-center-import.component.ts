@@ -172,6 +172,8 @@ export class TestCenterImportComponent {
   importFilesForm: UntypedFormGroup;
   authenticationError: boolean = false;
   filesSelectionError: boolean = false;
+  testGroupsLoadError: string | null = null;
+  uploadError: string | null = null;
   authenticated: boolean = false;
   isUploadingTestFiles: boolean = false;
   isUploadingTestResults: boolean = false;
@@ -294,7 +296,8 @@ export class TestCenterImportComponent {
   }
 
   isAllSelected(): boolean {
-    return this.selectedRows.length === this.testGroups.length;
+    return this.testGroups.length > 0 &&
+      this.selectedRows.length === this.testGroups.length;
   }
 
   toggleAllRows(event: { checked: boolean }): void {
@@ -379,6 +382,8 @@ export class TestCenterImportComponent {
 
     this.isUploadingTestResults = true;
     this.importProgressPercent = 0;
+    this.testGroupsLoadError = null;
+    this.uploadError = null;
     this.importService
       .importTestcenterGroups(
         this.appService.selectedWorkspaceId,
@@ -387,11 +392,24 @@ export class TestCenterImportComponent {
         url,
         this.authToken
       )
-      .subscribe((response: TestGroupsInfoDto[]) => {
-        this.isUploadingTestResults = false;
-        this.workspaceAdminService.setTestGroups(response);
-        this.testGroups = response;
-        this.showTestGroups = true;
+      .subscribe({
+        next: (response: TestGroupsInfoDto[]) => {
+          this.isUploadingTestResults = false;
+          this.workspaceAdminService.setTestGroups(response);
+          this.testGroups = response;
+          this.selectedRows = [];
+          this.showTestGroups = true;
+        },
+        error: error => {
+          this.isUploadingTestResults = false;
+          this.testGroups = [];
+          this.selectedRows = [];
+          this.showTestGroups = false;
+          this.testGroupsLoadError = this.getErrorMessage(
+            error,
+            'Testgruppen konnten nicht abgerufen werden. Bitte Verbindung und Testcenter-Sitzung prüfen.'
+          );
+        }
       });
   }
 
@@ -449,6 +467,7 @@ export class TestCenterImportComponent {
 
     this.uploadData = null;
     this.firstTestFilesImportData = null;
+    this.uploadError = null;
     this.isUploadingTestFiles = true;
     this.isUploadingTestResults = this.data.importType === 'testResults';
     this.importProgressPercent = 0;
@@ -667,24 +686,11 @@ export class TestCenterImportComponent {
 
           this.selectedRows = [];
         },
-        error: () => {
-          this.uploadData = {
-            success: false,
-            testFiles: 0,
-            responses: 0,
-            logs: 0,
-            booklets: 0,
-            units: 0,
-            persons: 0,
-            importedGroups: selectedGroupNames,
-            filesPlayer: 0,
-            filesUnits: 0,
-            filesDefinitions: 0,
-            filesCodings: 0,
-            filesBooklets: 0,
-            filesTestTakers: 0,
-            filesMetadata: 0
-          };
+        error: error => {
+          this.uploadError = this.getErrorMessage(
+            error,
+            'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
+          );
           this.isUploadingTestFiles = false;
           this.isUploadingTestResults = false;
           this.stopUploadProgressPolling();
@@ -735,6 +741,12 @@ export class TestCenterImportComponent {
           )
         );
 
+        if (currentResult.success === false) {
+          throw new Error(
+            `Import der Testgruppe "${groupName}" wurde vom Server nicht erfolgreich abgeschlossen.`
+          );
+        }
+
         mergedResult = this.mergeImportResults(mergedResult, currentResult);
         this.incrementCompletedUploads();
       }
@@ -757,11 +769,34 @@ export class TestCenterImportComponent {
         uploadResult: mergedResult
       });
     } catch (error) {
+      this.uploadError = this.getErrorMessage(
+        error,
+        'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
+      );
       this.isUploadingTestFiles = false;
       this.isUploadingTestResults = false;
       this.importProgressPercent = 0;
       this.resetUploadProgress();
     }
+  }
+
+  private getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+      return `${fallback} (${error.message})`;
+    }
+
+    const maybeHttpError = error as {
+      error?: { message?: string } | string;
+      message?: string;
+      status?: number;
+    };
+    const detail =
+      (typeof maybeHttpError.error === 'string' && maybeHttpError.error) ||
+      (typeof maybeHttpError.error === 'object' && maybeHttpError.error?.message) ||
+      maybeHttpError.message ||
+      (maybeHttpError.status ? `HTTP ${maybeHttpError.status}` : '');
+
+    return detail ? `${fallback} (${detail})` : fallback;
   }
 
   get uploadProgressPercent(): number {

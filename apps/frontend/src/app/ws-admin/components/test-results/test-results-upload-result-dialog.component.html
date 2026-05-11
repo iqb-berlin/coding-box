@@ -5,7 +5,15 @@
 
 <div mat-dialog-content class="upload-result-content">
   <div class="summary-container">
-    @if (result.importedResponses) {
+    @if (result.overviewPending) {
+    <div class="section warning-section">
+      <div class="section-title">Übersicht wird aktualisiert</div>
+      <div class="warning-text">
+        {{ result.overviewMessage || 'Die aktualisierten Datenbankzahlen konnten noch nicht zuverlässig geladen werden.' }}
+      </div>
+    </div>
+    }
+    @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
       <div class="section-title">Datenbankänderungen</div>
       <table class="db-changes-table">
@@ -71,6 +79,11 @@
           </tr>
         </tbody>
       </table>
+      @if (hasZeroDelta) {
+      <div class="no-change-note">
+        Import abgeschlossen. Die Übersicht wurde geladen; es wurden keine neuen Datenbankeinträge angelegt.
+      </div>
+      }
     </div>
     }
 

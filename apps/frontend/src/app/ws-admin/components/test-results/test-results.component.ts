@@ -30,6 +30,7 @@ import {
   PageEvent
 } from '@angular/material/paginator';
 import {
+  BehaviorSubject,
   Subject,
   Subscription,
   debounceTime,
@@ -116,6 +117,11 @@ import {
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
+import {
+  TestResultsImportProgressDialogComponent,
+  TestResultsImportProgressHandle,
+  TestResultsImportProgressState
+} from './test-results-import-progress-dialog.component';
 import { TestResultsDeletePreviewDialogComponent } from './test-results-delete-preview-dialog.component';
 import {
   PendingUploadBatch,
@@ -1156,13 +1162,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private loadWorkspaceOverview(): void {
-    this.overview = null;
     this.isLoadingOverview = true;
     this.testResultService
       .getWorkspaceOverview(this.appService.selectedWorkspaceId)
       .subscribe({
         next: result => {
-          this.overview = result;
+          if (result) {
+            this.overview = result;
+          }
           this.isLoadingOverview = false;
         },
         error: () => {
@@ -1323,11 +1330,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     };
 
     const workspaceId = this.appService.selectedWorkspaceId;
-    const beforeOverview = workspaceId ?
-      (await firstValueFrom(
-        this.testResultService.getWorkspaceOverview(workspaceId)
-      )) || fallbackOverview :
-      this.overview || fallbackOverview;
+    let loadedBeforeOverview: TestResultsOverviewResponse | null = null;
+    if (workspaceId) {
+      try {
+        loadedBeforeOverview = await firstValueFrom(
+          this.testResultService.getWorkspaceOverview(workspaceId)
+        );
+      } catch {
+        loadedBeforeOverview = null;
+      }
+    }
+    const beforeOverview =
+      loadedBeforeOverview || this.overview || fallbackOverview;
 
     const dialogRef = this.dialog.open(TestCenterImportComponent, {
       width: '1200px',
@@ -1343,33 +1357,68 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       window.setTimeout(() => resolve(), ms);
     });
 
+    const hasOverviewChanged = (current: TestResultsOverviewResponse) => (
+      current.testPersons !== beforeOverview.testPersons ||
+      current.testGroups !== beforeOverview.testGroups ||
+      current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
+      current.uniqueUnits !== beforeOverview.uniqueUnits ||
+      current.uniqueResponses !== beforeOverview.uniqueResponses
+    );
+
     const pollOverviewAfterImport =
-      async (): Promise<TestResultsOverviewResponse> => {
+      async (progressState$?: BehaviorSubject<TestResultsImportProgressState>): Promise<{
+        overview: TestResultsOverviewResponse;
+        loaded: boolean;
+        changed: boolean;
+      }> => {
         if (!workspaceId) {
-          return fallbackOverview;
+          return {
+            overview: this.overview || fallbackOverview,
+            loaded: false,
+            changed: false
+          };
         }
-        // Poll a bit because the import may finish before overview aggregates are updated.
-        for (let i = 0; i < 10; i += 1) {
-          const current =
-            (await firstValueFrom(
+
+        // A loaded overview is the reliable result. It may legitimately be unchanged
+        // when an import only confirms already existing data.
+        for (let i = 0; i < 12; i += 1) {
+          progressState$?.next({
+            title: 'Testcenter-Import',
+            icon: 'upload_file',
+            phase: 'refreshingOverview',
+            phaseLabel: 'Übersicht wird aktualisiert',
+            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            percent: Math.min(95, Math.round(((i + 1) / 12) * 100)),
+            mode: 'determinate'
+          });
+
+          let current: TestResultsOverviewResponse | null = null;
+          try {
+            current = await firstValueFrom(
               this.testResultService.getWorkspaceOverview(workspaceId)
-            )) || fallbackOverview;
-          const changed =
-            current.testPersons !== beforeOverview.testPersons ||
-            current.testGroups !== beforeOverview.testGroups ||
-            current.uniqueBooklets !== beforeOverview.uniqueBooklets ||
-            current.uniqueUnits !== beforeOverview.uniqueUnits ||
-            current.uniqueResponses !== beforeOverview.uniqueResponses;
-          if (changed) {
-            return current;
+            );
+          } catch {
+            current = null;
           }
-          await sleep(300);
+          if (!current) {
+            await sleep(1000);
+            continue;
+          }
+          return { overview: current, loaded: true, changed: hasOverviewChanged(current) };
         }
-        return (
-          (await firstValueFrom(
+        let finalOverview: TestResultsOverviewResponse | null = null;
+        try {
+          finalOverview = await firstValueFrom(
             this.testResultService.getWorkspaceOverview(workspaceId)
-          )) || fallbackOverview
-        );
+          );
+        } catch {
+          finalOverview = null;
+        }
+        return {
+          overview: finalOverview || this.overview || beforeOverview,
+          loaded: !!finalOverview,
+          changed: !!finalOverview && hasOverviewChanged(finalOverview)
+        };
       };
 
     dialogRef.afterClosed().subscribe(result => {
@@ -1389,11 +1438,56 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         (maybePayload as { didImport?: boolean }).didImport
       ) {
         (async () => {
-          if (workspaceId) {
-            this.testResultService.invalidateCache(workspaceId);
+          const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
+            title: 'Testcenter-Import',
+            icon: 'upload_file',
+            phase: 'refreshingOverview',
+            phaseLabel: 'Übersicht wird aktualisiert',
+            message: 'Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+            mode: 'indeterminate'
+          });
+          const progressDialogRef = this.dialog.open(
+            TestResultsImportProgressDialogComponent,
+            {
+              width: '560px',
+              maxWidth: '95vw',
+              disableClose: true,
+              data: { state$: progressState$ }
+            }
+          );
+
+          let overviewResult: {
+            overview: TestResultsOverviewResponse;
+            loaded: boolean;
+            changed: boolean;
+          } = {
+            overview: this.overview || beforeOverview,
+            loaded: false,
+            changed: false
+          };
+
+          try {
+            if (workspaceId) {
+              this.testResultService.invalidateCache(workspaceId);
+            }
+
+            overviewResult = await pollOverviewAfterImport(progressState$);
+
+            progressState$.next({
+              title: 'Testcenter-Import',
+              icon: 'upload_file',
+              phase: 'completed',
+              phaseLabel: 'Ergebnis bereit',
+              message: 'Die Ergebnisübersicht wurde geladen.',
+              percent: 100,
+              mode: 'determinate'
+            });
+          } finally {
+            progressDialogRef.close();
+            progressState$.complete();
           }
 
-          const afterOverview = await pollOverviewAfterImport();
+          const afterOverview = overviewResult.overview;
 
           const delta = {
             testPersons: afterOverview.testPersons - beforeOverview.testPersons,
@@ -1429,6 +1523,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             } :
             payload.logMetrics;
 
+          const overviewPending = !overviewResult.loaded;
+
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
             before: {
@@ -1450,7 +1546,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             issues: payload.uploadResult?.issues || payload.issues || [],
             logMetrics: logMetrics,
             importedLogs: payload.importedLogs,
-            importedResponses: payload.importedResponses
+            importedResponses: payload.importedResponses,
+            overviewPending,
+            overviewMessage: overviewPending ?
+              'Der Import wurde vom Server angenommen, aber die aktualisierte Übersicht konnte noch nicht zuverlässig gelesen werden. Bitte diese Ansicht in Kürze aktualisieren.' :
+              undefined
           };
 
           this.dialog.open(TestResultsUploadResultDialogComponent, {
@@ -1517,6 +1617,35 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               };
 
               const overwriteExisting = overwriteMode !== 'skip';
+              const uploadTitle =
+                resultType === 'logs' ?
+                  'Upload-Ergebnis (Logs)' :
+                  'Upload-Ergebnis (Antworten)';
+              const uploadIcon = resultType === 'logs' ? 'article' : 'upload_file';
+              const progressState$ = new BehaviorSubject<TestResultsImportProgressState>({
+                title: uploadTitle,
+                icon: uploadIcon,
+                phase: 'uploading',
+                phaseLabel: 'Datei wird hochgeladen',
+                message: resultType === 'logs' ?
+                  'Die Log-Datei wird in Teilen übertragen.' :
+                  'Die Antwortdatei wird in Teilen übertragen.',
+                percent: 0,
+                mode: 'determinate'
+              });
+              const progressDialogRef = this.dialog.open(
+                TestResultsImportProgressDialogComponent,
+                {
+                  width: '560px',
+                  maxWidth: '95vw',
+                  disableClose: true,
+                  data: { state$: progressState$ }
+                }
+              );
+              const progressHandle: TestResultsImportProgressHandle = {
+                dialogRef: progressDialogRef,
+                state$: progressState$
+              };
 
               this.isLoading = true;
               this.isUploadingResults = true;
@@ -1549,10 +1678,33 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                     } else {
                       this.uploadingMessage = `Ergebnisse werden hochgeladen... (${percent}%)`;
                     }
+                    progressState$.next({
+                      title: uploadTitle,
+                      icon: uploadIcon,
+                      phase: 'uploading',
+                      phaseLabel: 'Datei wird hochgeladen',
+                      message: resultType === 'logs' ?
+                        'Die Log-Datei wird in Teilen übertragen.' :
+                        'Die Antwortdatei wird in Teilen übertragen.',
+                      percent,
+                      mode: 'determinate'
+                    });
                   }
                 )
                 .subscribe({
                   next: (jobs: TestResultsUploadJobDto[]) => {
+                    progressState$.next({
+                      title: uploadTitle,
+                      icon: uploadIcon,
+                      phase: 'processing',
+                      phaseLabel: 'Verarbeitung läuft',
+                      message: 'Upload abgeschlossen. Der Server verarbeitet die Datei.',
+                      percent: 0,
+                      completed: 0,
+                      total: jobs.length,
+                      mode: 'determinate'
+                    });
+
                     const beforeOverview = this.overview || {
                       testPersons: 0,
                       testGroups: 0,
@@ -1574,9 +1726,11 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                       progress: 0,
                       completedCount: 0,
                       totalJobs: jobs.length
-                    });
+                    }, progressHandle);
                   },
                   error: err => {
+                    progressDialogRef.close();
+                    progressState$.complete();
                     this.isLoading = false;
                     this.isUploadingResults = false;
                     this.snackBar.open(
