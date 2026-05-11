@@ -5,6 +5,8 @@ export type TestResultsDeleteScope =
   | 'booklets'
   | 'units';
 
+export type TestResultsDeleteTargetType = 'test-results' | 'logs';
+
 export interface TestResultsDeleteRequestDto {
   scope: TestResultsDeleteScope;
   personIds?: number[];
@@ -15,12 +17,16 @@ export interface TestResultsDeleteRequestDto {
 }
 
 export interface TestResultsDeletePreviewDto {
+  targetType?: TestResultsDeleteTargetType;
   scope: TestResultsDeleteScope;
   label: string;
   persons: number;
   booklets: number;
   units: number;
   responses: number;
+  bookletLogs?: number;
+  unitLogs?: number;
+  sessions?: number;
   groups: string[];
   bookletNames: string[];
   unitNames: string[];
@@ -29,4 +35,7 @@ export interface TestResultsDeletePreviewDto {
 
 export interface TestResultsDeleteResultDto extends TestResultsDeletePreviewDto {
   deletedTargetCount: number;
+  deletedBookletLogs?: number;
+  deletedUnitLogs?: number;
+  deletedSessions?: number;
 }

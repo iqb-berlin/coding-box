@@ -14,6 +14,7 @@ export type ValidationType =
   | 'deleteResponses'
   | 'deleteAllResponses'
   | 'deleteTestResults'
+  | 'deleteTestLogs'
   | 'duplicateResponses';
 
 /**
@@ -32,6 +33,7 @@ export class ValidationTask extends Job {
    * - 'deleteResponses': Delete specific invalid responses
    * - 'deleteAllResponses': Delete all invalid responses of a specific type
    * - 'deleteTestResults': Delete test result data by selected scope
+   * - 'deleteTestLogs': Delete test log data by selected scope
    */
   @Column()
     validation_type: ValidationType;

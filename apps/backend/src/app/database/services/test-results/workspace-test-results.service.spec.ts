@@ -253,6 +253,172 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('bulk deletion safety', () => {
+    it('previews log deletion with log-specific counts', async () => {
+      const privateService = service as unknown as {
+        resolveDeleteTargets: jest.Mock;
+        collectLogDeleteSnapshot: jest.Mock;
+        getLogDeleteCounts: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveDeleteTargets')
+        .mockResolvedValue({
+          kind: 'booklets',
+          ids: [20],
+          preview: {
+            scope: 'booklets',
+            label: 'Testheft(e): BOOKLET_1',
+            persons: 1,
+            booklets: 1,
+            units: 3,
+            responses: 9,
+            groups: ['G1'],
+            bookletNames: ['BOOKLET_1'],
+            unitNames: ['UNIT_1'],
+            warnings: []
+          }
+        });
+      const snapshotSpy = jest
+        .spyOn(privateService, 'collectLogDeleteSnapshot')
+        .mockResolvedValue({
+          bookletIds: [20],
+          unitIds: [30, 31, 32]
+        });
+      const countsSpy = jest
+        .spyOn(privateService, 'getLogDeleteCounts')
+        .mockResolvedValue({
+          bookletLogs: 4,
+          unitLogs: 12,
+          sessions: 1
+        });
+
+      const result = await service.previewDeleteTestLogs(1, {
+        scope: 'booklets',
+        bookletNames: ['BOOKLET_1']
+      });
+
+      expect(result).toMatchObject({
+        targetType: 'logs',
+        bookletLogs: 4,
+        unitLogs: 12,
+        sessions: 1,
+        responses: 9
+      });
+
+      resolveSpy.mockRestore();
+      snapshotSpy.mockRestore();
+      countsSpy.mockRestore();
+    });
+
+    it('deletes only log and session tables for log deletion jobs', async () => {
+      const deletedFrom: unknown[] = [];
+      const manager = {
+        createQueryBuilder: jest.fn(() => {
+          const qb = {} as {
+            delete: jest.Mock;
+            from: jest.Mock;
+            where: jest.Mock;
+            execute: jest.Mock;
+          };
+          qb.delete = jest.fn(() => qb);
+          qb.from = jest.fn((entity: unknown) => {
+            deletedFrom.push(entity);
+            return qb;
+          });
+          qb.where = jest.fn(() => qb);
+          qb.execute = jest.fn().mockResolvedValue({ affected: 1 });
+          return qb;
+        })
+      };
+      const privateService = service as unknown as {
+        resolveDeleteTargets: jest.Mock;
+        buildLogDeletePreview: jest.Mock;
+        collectLogDeleteSnapshot: jest.Mock;
+        assertLogDeleteCompleted: jest.Mock;
+      };
+      const resolveSpy = jest
+        .spyOn(privateService, 'resolveDeleteTargets')
+        .mockResolvedValue({
+          kind: 'persons',
+          ids: [10],
+          preview: {
+            scope: 'persons',
+            label: '1 ausgewählte Testperson(en)',
+            persons: 1,
+            booklets: 1,
+            units: 2,
+            responses: 8,
+            groups: [],
+            bookletNames: [],
+            unitNames: [],
+            warnings: []
+          }
+        });
+      const previewSpy = jest
+        .spyOn(privateService, 'buildLogDeletePreview')
+        .mockResolvedValue({
+          targetType: 'logs',
+          scope: 'persons',
+          label: '1 ausgewählte Testperson(en)',
+          persons: 1,
+          booklets: 1,
+          units: 2,
+          responses: 8,
+          bookletLogs: 2,
+          unitLogs: 3,
+          sessions: 1,
+          groups: [],
+          bookletNames: [],
+          unitNames: [],
+          warnings: []
+        });
+      const snapshotSpy = jest
+        .spyOn(privateService, 'collectLogDeleteSnapshot')
+        .mockResolvedValue({
+          bookletIds: [20],
+          unitIds: [30, 31]
+        });
+      const assertSpy = jest
+        .spyOn(privateService, 'assertLogDeleteCompleted')
+        .mockResolvedValue(undefined);
+
+      (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
+
+      const result = await service.deleteTestLogsByRequest(
+        1,
+        { scope: 'persons', personIds: [10] },
+        'user-1'
+      );
+
+      expect(deletedFrom).toEqual([UnitLog, BookletLog, Session]);
+      expect(deletedFrom).not.toContain(ResponseEntity);
+      expect(deletedFrom).not.toContain(Booklet);
+      expect(result).toMatchObject({
+        targetType: 'logs',
+        deletedBookletLogs: 1,
+        deletedUnitLogs: 1,
+        deletedSessions: 1,
+        deletedTargetCount: 3
+      });
+      expect(cacheService.delete).toHaveBeenCalledWith(
+        'workspace-overview-stats-1'
+      );
+      expect(journalService.createEntry).toHaveBeenCalledWith(
+        'user-1',
+        1,
+        'delete',
+        'test-logs',
+        0,
+        expect.objectContaining({
+          deletedTargetCount: 3
+        })
+      );
+
+      resolveSpy.mockRestore();
+      previewSpy.mockRestore();
+      snapshotSpy.mockRestore();
+      assertSpy.mockRestore();
+    });
+
     it('explicitly deletes known unit dependents before removing unit targets', async () => {
       const deletedFrom: unknown[] = [];
       const manager = {

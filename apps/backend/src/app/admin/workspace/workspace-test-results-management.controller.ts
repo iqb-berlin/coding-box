@@ -194,6 +194,50 @@ export class WorkspaceTestResultsManagementController {
     return ValidationTaskDto.fromEntity(task);
   }
 
+  @Post(':workspace_id/test-results/logs/delete-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Preview test log deletion',
+    description:
+            'Calculates affected booklet logs, unit logs and sessions before starting a long-running log deletion.'
+  })
+  async previewDeleteTestLogs(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    return this.workspaceTestResultsService.previewDeleteTestLogs(
+      workspaceId,
+      request
+    );
+  }
+
+  @Post(':workspace_id/test-results/logs/delete-jobs')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({
+    summary: 'Start test log deletion',
+    description:
+            'Starts an asynchronous deletion task for selected test log data.'
+  })
+  async createDeleteTestLogsJob(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Body() request: TestResultsDeleteRequestDto,
+      @Req() req: RequestWithUser
+  ): Promise<ValidationTaskDto> {
+    const task = await this.validationTaskService.createValidationTask(
+      workspaceId,
+      'deleteTestLogs',
+      undefined,
+      undefined,
+      {
+        ...request,
+        userId: req.user.id
+      }
+    );
+    return ValidationTaskDto.fromEntity(task);
+  }
+
   @Delete(':workspace_id/units/:unitId')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(3)
