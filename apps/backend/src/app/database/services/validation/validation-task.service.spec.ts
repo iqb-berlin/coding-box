@@ -19,6 +19,7 @@ describe('ValidationTaskService', () => {
   };
   let workspaceTestResultsService: {
     deleteTestResultsByRequest: jest.Mock;
+    deleteTestLogsByRequest: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -36,7 +37,8 @@ describe('ValidationTaskService', () => {
       addValidationTaskJob: jest.fn()
     };
     workspaceTestResultsService = {
-      deleteTestResultsByRequest: jest.fn()
+      deleteTestResultsByRequest: jest.fn(),
+      deleteTestLogsByRequest: jest.fn()
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -143,5 +145,53 @@ describe('ValidationTaskService', () => {
       'Testdateien unverändert - letztes Validierungsergebnis wird verwendet.'
     );
     expect(jobQueueService.addValidationTaskJob).not.toHaveBeenCalled();
+  });
+
+  it('should process test log deletion tasks', async () => {
+    const task = {
+      id: 3,
+      workspace_id: 7,
+      validation_type: 'deleteTestLogs',
+      status: 'pending',
+      result: JSON.stringify({
+        scope: 'filteredPersons',
+        userId: 'user-1'
+      })
+    } as ValidationTask;
+
+    taskRepository.findOne?.mockResolvedValue(task);
+    taskRepository.save?.mockImplementation(
+      savedTask => Promise.resolve(savedTask)
+    );
+    workspaceTestResultsService.deleteTestLogsByRequest.mockResolvedValue({
+      targetType: 'logs',
+      scope: 'filteredPersons',
+      label: 'alle sichtbaren Testpersonen',
+      persons: 1,
+      booklets: 1,
+      units: 1,
+      responses: 1,
+      bookletLogs: 2,
+      unitLogs: 3,
+      sessions: 1,
+      groups: [],
+      bookletNames: [],
+      unitNames: [],
+      warnings: [],
+      deletedTargetCount: 6
+    });
+
+    await service.processValidationTask(3);
+
+    expect(
+      workspaceTestResultsService.deleteTestLogsByRequest
+    ).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ scope: 'filteredPersons' }),
+      'user-1',
+      expect.any(Function)
+    );
+    expect(task.progress_message).toBe('Löschung abgeschlossen.');
+    expect(task.status).toBe('completed');
   });
 });

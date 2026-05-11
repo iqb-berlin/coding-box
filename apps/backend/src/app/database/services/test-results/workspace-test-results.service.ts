@@ -102,6 +102,17 @@ interface DeleteDependencySnapshot {
   bookletInfoIds: number[];
 }
 
+interface LogDeleteSnapshot {
+  bookletIds: number[];
+  unitIds: number[];
+}
+
+interface LogDeleteCounts {
+  bookletLogs: number;
+  unitLogs: number;
+  sessions: number;
+}
+
 @Injectable()
 export class WorkspaceTestResultsService {
   private readonly logger = new Logger(WorkspaceTestResultsService.name);
@@ -248,7 +259,9 @@ export class WorkspaceTestResultsService {
   async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
     await Promise.all([
       this.cacheService.delete(`${OVERVIEW_STATS_CACHE_PREFIX}${workspaceId}`),
-      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`)
+      this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
+      this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
+      this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
     ]);
   }
 
@@ -2810,6 +2823,14 @@ export class WorkspaceTestResultsService {
     return (await this.resolveDeleteTargets(workspaceId, request)).preview;
   }
 
+  async previewDeleteTestLogs(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto
+  ): Promise<TestResultsDeletePreviewDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    return this.buildLogDeletePreview(targets);
+  }
+
   async deleteTestResultsByRequest(
     workspaceId: number,
     request: TestResultsDeleteRequestDto,
@@ -2945,6 +2966,213 @@ export class WorkspaceTestResultsService {
       ...targets.preview,
       deletedTargetCount
     };
+  }
+
+  async deleteTestLogsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    const targets = await this.resolveDeleteTargets(workspaceId, request);
+    const preview = await this.buildLogDeletePreview(targets);
+    const totalLogRows =
+      (preview.bookletLogs || 0) +
+      (preview.unitLogs || 0) +
+      (preview.sessions || 0);
+
+    if (totalLogRows === 0) {
+      return {
+        ...preview,
+        deletedTargetCount: 0,
+        deletedBookletLogs: 0,
+        deletedUnitLogs: 0,
+        deletedSessions: 0
+      };
+    }
+
+    await onProgress?.(
+      5,
+      `Lösche ${totalLogRows} Log- und Sitzungsdatensätze...`
+    );
+
+    const snapshot = await this.collectLogDeleteSnapshot(
+      targets.kind,
+      targets.ids
+    );
+
+    const deletedCounts = await this.connection.transaction(async manager => {
+      const deletedUnitLogs = await this.deleteRowsByIds(
+        manager,
+        UnitLog,
+        'unitid',
+        snapshot.unitIds
+      );
+      const deletedBookletLogs = await this.deleteRowsByIds(
+        manager,
+        BookletLog,
+        'bookletid',
+        snapshot.bookletIds
+      );
+      const deletedSessions = await this.deleteRowsByIds(
+        manager,
+        Session,
+        'bookletid',
+        snapshot.bookletIds
+      );
+
+      return {
+        deletedBookletLogs,
+        deletedUnitLogs,
+        deletedSessions
+      };
+    });
+
+    await onProgress?.(90, 'Log-Löschung wird abschließend geprüft...');
+    await this.assertLogDeleteCompleted(snapshot);
+
+    await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
+    await this.invalidateWorkspaceStatsCache(workspaceId);
+
+    const deletedTargetCount =
+      deletedCounts.deletedBookletLogs +
+      deletedCounts.deletedUnitLogs +
+      deletedCounts.deletedSessions;
+
+    if (userId) {
+      try {
+        await this.journalService.createEntry(
+          userId,
+          workspaceId,
+          'delete',
+          'test-logs',
+          0,
+          {
+            scope: request.scope,
+            deletedTargetKind: targets.kind,
+            deletedTargetCount,
+            ...deletedCounts,
+            preview,
+            message: 'Test logs deleted by bulk job'
+          }
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to create journal entry for bulk test log deletion: ${error.message}`,
+          error.stack
+        );
+      }
+    }
+
+    return {
+      ...preview,
+      deletedTargetCount,
+      ...deletedCounts
+    };
+  }
+
+  private async buildLogDeletePreview(
+    targets: TestResultsDeleteTargets
+  ): Promise<TestResultsDeletePreviewDto> {
+    const snapshot = await this.collectLogDeleteSnapshot(
+      targets.kind,
+      targets.ids
+    );
+    const counts = await this.getLogDeleteCounts(snapshot);
+    const warnings = [...targets.preview.warnings];
+    const totalLogRows = counts.bookletLogs + counts.unitLogs + counts.sessions;
+
+    if (targets.kind === 'units') {
+      warnings.push(
+        'Bei Aufgaben-Auswahl werden nur Aufgaben-Logs entfernt. Booklet-Logs und Sitzungen bleiben erhalten.'
+      );
+    }
+
+    if (targets.ids.length > 0 && totalLogRows === 0) {
+      warnings.push('Für den ausgewählten Bereich wurden keine Logs gefunden.');
+    }
+
+    return {
+      ...targets.preview,
+      targetType: 'logs',
+      bookletLogs: counts.bookletLogs,
+      unitLogs: counts.unitLogs,
+      sessions: counts.sessions,
+      warnings
+    };
+  }
+
+  private async collectLogDeleteSnapshot(
+    kind: TestResultsDeleteTargetKind,
+    ids: number[]
+  ): Promise<LogDeleteSnapshot> {
+    if (ids.length === 0) {
+      return {
+        bookletIds: [],
+        unitIds: []
+      };
+    }
+
+    const [bookletIds, unitIds] = await Promise.all([
+      kind === 'units' ? Promise.resolve([]) :
+        this.collectAffectedBookletIds(kind, ids),
+      this.collectAffectedUnitIds(kind, ids)
+    ]);
+
+    return {
+      bookletIds: WorkspaceTestResultsService.uniqueIds(bookletIds),
+      unitIds: WorkspaceTestResultsService.uniqueIds(unitIds)
+    };
+  }
+
+  private async getLogDeleteCounts(
+    snapshot: LogDeleteSnapshot
+  ): Promise<LogDeleteCounts> {
+    const [bookletLogs, unitLogs, sessions] = await Promise.all([
+      this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds),
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds),
+      this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+    ]);
+
+    return {
+      bookletLogs,
+      unitLogs,
+      sessions
+    };
+  }
+
+  private async assertLogDeleteCompleted(
+    snapshot: LogDeleteSnapshot
+  ): Promise<void> {
+    const failures: string[] = [];
+    const addFailure = async (
+      label: string,
+      countPromise: Promise<number>
+    ): Promise<void> => {
+      const count = await countPromise;
+      if (count > 0) {
+        failures.push(`${count} ${label}`);
+      }
+    };
+
+    await addFailure(
+      'Booklet-Logeintrag/-einträge',
+      this.countRowsByIds(BookletLog, 'bookletid', snapshot.bookletIds)
+    );
+    await addFailure(
+      'Unit-Logeintrag/-einträge',
+      this.countRowsByIds(UnitLog, 'unitid', snapshot.unitIds)
+    );
+    await addFailure(
+      'Sitzung(en)',
+      this.countRowsByIds(Session, 'bookletid', snapshot.bookletIds)
+    );
+
+    if (failures.length > 0) {
+      throw new Error(
+        `Die Log-Löschung wurde nicht vollständig bestätigt. Verblieben: ${failures.join(', ')}.`
+      );
+    }
   }
 
   private async collectDeleteDependencySnapshot(

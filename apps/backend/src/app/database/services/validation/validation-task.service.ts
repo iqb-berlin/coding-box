@@ -74,7 +74,7 @@ export class ValidationTaskService {
     let progressMessage: string | undefined;
     if (validationType === 'testFiles') {
       progressMessage = 'Testdateien werden auf Änderungen geprüft...';
-    } else if (validationType === 'deleteTestResults') {
+    } else if (ValidationTaskService.isDeletionTask(validationType)) {
       progressMessage = 'Löschung wird vorbereitet...';
     }
 
@@ -372,6 +372,18 @@ export class ValidationTaskService {
             throw new Error('No test result deletion scope provided');
           }
           break;
+        case 'deleteTestLogs':
+          if (taskData && typeof taskData.scope === 'string') {
+            result = await this.testResultsService.deleteTestLogsByRequest(
+              task.workspace_id,
+              taskData as unknown as TestResultsDeleteRequestDto,
+              typeof taskData.userId === 'string' ? taskData.userId : '',
+              onProgress
+            );
+          } else {
+            throw new Error('No test log deletion scope provided');
+          }
+          break;
         default:
           throw new Error(`Unknown validation type: ${task.validation_type}`);
       }
@@ -379,7 +391,7 @@ export class ValidationTaskService {
       task.result = JSON.stringify(result);
       task.status = 'completed';
       task.progress = 100;
-      task.progress_message = task.validation_type === 'deleteTestResults' ?
+      task.progress_message = ValidationTaskService.isDeletionTask(task.validation_type) ?
         'Löschung abgeschlossen.' :
         'Validierung abgeschlossen.';
       await this.taskRepository.save(task);
@@ -391,7 +403,7 @@ export class ValidationTaskService {
         task.error = error.message;
         task.status = 'failed';
         task.progress = 100;
-        task.progress_message = task.validation_type === 'deleteTestResults' ?
+        task.progress_message = ValidationTaskService.isDeletionTask(task.validation_type) ?
           'Löschung fehlgeschlagen.' :
           'Validierung fehlgeschlagen.';
         await this.taskRepository.save(task);
@@ -400,5 +412,10 @@ export class ValidationTaskService {
       }
       this.logger.error(`Failed to process task ${taskId}: ${error.message}`, error.stack);
     }
+  }
+
+  private static isDeletionTask(validationType: ValidationType): boolean {
+    return validationType === 'deleteTestResults' ||
+      validationType === 'deleteTestLogs';
   }
 }
