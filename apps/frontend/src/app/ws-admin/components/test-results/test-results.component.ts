@@ -78,14 +78,18 @@ import { AppService } from '../../../core/services/app.service';
 import {
   TestResultService,
   TestResultsOverviewResponse,
-  PersonTestResult
+  PersonTestResult,
+  QuickSearchResultItem
 } from '../../../shared/services/test-result/test-result.service';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
 import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
 import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
 import { TagDialogComponent } from '../tag-dialog/tag-dialog.component';
 import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
-import { TestResultsSearchComponent } from '../test-results-search/test-results-search.component';
+import {
+  QuickSearchDialogResult,
+  TestResultsSearchComponent
+} from '../test-results-search/test-results-search.component';
 import {
   ConfirmDialogComponent,
   ConfirmDialogData
@@ -127,7 +131,10 @@ import {
   PendingUploadBatch,
   TestResultsUploadStateService
 } from '../../services/test-results-upload-state.service';
-import { TestResultsFlatTableComponent } from './test-results-flat-table.component';
+import {
+  FlatResponseFilters,
+  TestResultsFlatTableComponent
+} from './test-results-flat-table.component';
 import {
   OverwriteMode,
   TestResultsUploadOptionsDialogComponent,
@@ -370,6 +377,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   ];
 
   isTableView: boolean = false;
+  quickSearchTableFilters: Partial<FlatResponseFilters> | null = null;
   data: P[] = [];
   booklets!: Booklet[];
   results: { [key: string]: unknown }[] = [];
@@ -2086,11 +2094,121 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   openTestResultsSearchDialog(): void {
-    this.dialog.open(TestResultsSearchComponent, {
+    const dialogRef = this.dialog.open(TestResultsSearchComponent, {
       width: '1200px',
       data: {
-        title: 'Testergebnisse suchen'
+        title: 'Testergebnisse schnell finden'
       }
+    });
+
+    dialogRef.afterClosed().subscribe((result?: QuickSearchDialogResult) => {
+      if (!result) {
+        return;
+      }
+
+      if (result.action === 'table') {
+        this.quickSearchTableFilters = result.filters || null;
+        this.isTableView = true;
+        return;
+      }
+
+      this.openQuickSearchBrowserTarget(result.item);
+    });
+  }
+
+  private openQuickSearchBrowserTarget(item: QuickSearchResultItem): void {
+    if (!item.personId || !this.appService.selectedWorkspaceId) {
+      this.snackBar.open(
+        'Dieser Treffer kann nicht im Ergebnisbrowser geöffnet werden.',
+        'Info',
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    this.isTableView = false;
+    this.testPerson = {
+      id: item.personId,
+      code: item.personCode || '',
+      group: item.personGroup || '',
+      login: item.personLogin || '',
+      uploaded_at: new Date()
+    };
+    this.resetSelectedResultDetails();
+    this.isLoadingBooklets = true;
+
+    this.testResultService
+      .getPersonTestResults(this.appService.selectedWorkspaceId, item.personId)
+      .subscribe({
+        next: (booklets: PersonTestResult[]) => {
+          this.booklets = booklets as unknown as Booklet[];
+          this.sortBooklets();
+          this.sortBookletUnits();
+          this.loadAllUnitTags();
+          this.loadAllUnitNotes();
+          this.isLoadingBooklets = false;
+
+          const targetBooklet = this.findQuickSearchBooklet(item);
+          if (!targetBooklet) {
+            return;
+          }
+          this.setSelectedBooklet(targetBooklet);
+
+          const targetUnit = this.findQuickSearchUnit(targetBooklet, item);
+          if (!targetUnit) {
+            return;
+          }
+          this.onUnitClick(targetUnit, targetBooklet);
+
+          if (item.kind === 'response' && item.variableId) {
+            this.responses = this.responses.map(response => ({
+              ...response,
+              expanded: response.variableid === item.variableId
+            }));
+          }
+        },
+        error: () => {
+          this.isLoadingBooklets = false;
+          this.snackBar.open(
+            'Fehler beim Öffnen des Treffers im Ergebnisbrowser',
+            'Fehler',
+            { duration: 3000 }
+          );
+        }
+      });
+  }
+
+  private findQuickSearchBooklet(
+    item: QuickSearchResultItem
+  ): Booklet | undefined {
+    if (!this.booklets || (!item.bookletId && !item.bookletName)) {
+      return undefined;
+    }
+
+    return this.booklets.find(booklet => {
+      if (item.bookletId && booklet.id === item.bookletId) {
+        return true;
+      }
+      return item.bookletName ? booklet.name === item.bookletName : false;
+    });
+  }
+
+  private findQuickSearchUnit(
+    booklet: Booklet,
+    item: QuickSearchResultItem
+  ): Unit | undefined {
+    if (!booklet.units || (!item.unitId && !item.unitName && !item.unitAlias)) {
+      return undefined;
+    }
+
+    return booklet.units.find(unit => {
+      if (item.unitId && unit.id === item.unitId) {
+        return true;
+      }
+      return (
+        (!!item.unitName && unit.name === item.unitName) ||
+        (!!item.unitAlias && unit.alias === item.unitAlias)
+      );
     });
   }
 

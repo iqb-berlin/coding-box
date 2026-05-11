@@ -136,6 +136,38 @@ export interface TestResultsOverviewResponse {
   sessionScreenCounts: Record<string, number>;
 }
 
+export type QuickSearchResultKind = 'person' | 'booklet' | 'unit' | 'response';
+
+export interface QuickSearchResultItem {
+  kind: QuickSearchResultKind;
+  id: number;
+  label: string;
+  secondaryLabel?: string;
+  personId?: number;
+  personLogin?: string;
+  personCode?: string;
+  personGroup?: string;
+  bookletId?: number;
+  bookletName?: string;
+  unitId?: number;
+  unitName?: string;
+  unitAlias?: string | null;
+  responseId?: number;
+  variableId?: string;
+  responseValue?: string;
+  responseStatus?: string;
+}
+
+export interface QuickSearchResult {
+  query: string;
+  limit: number;
+  persons: QuickSearchResultItem[];
+  booklets: QuickSearchResultItem[];
+  units: QuickSearchResultItem[];
+  responses: QuickSearchResultItem[];
+  totals: Record<QuickSearchResultKind, number>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -186,6 +218,39 @@ export class TestResultService {
       {}
     )
       .pipe(catchError(() => of(null)));
+  }
+
+  quickSearch(
+    workspaceId: number,
+    query: string,
+    limit: number = 8
+  ): Observable<QuickSearchResult> {
+    const trimmedQuery = String(query || '').trim();
+    const params = new HttpParams()
+      .set('q', trimmedQuery)
+      .set('limit', String(limit));
+
+    return this.http
+      .get<QuickSearchResult>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`,
+      { params }
+    )
+      .pipe(
+        catchError(() => of({
+          query: trimmedQuery,
+          limit,
+          persons: [],
+          booklets: [],
+          units: [],
+          responses: [],
+          totals: {
+            person: 0,
+            booklet: 0,
+            unit: 0,
+            response: 0
+          }
+        }))
+      );
   }
 
   previewDeleteTestResults(

@@ -202,6 +202,40 @@ const createInstance = (ClassExport: ConstructorExport) => {
     },
     testResultService: {
       workspaceCacheInvalidated$: new Subject<number>(),
+      quickSearch: jest.fn(() => makeObservable({
+        query: 'unit',
+        limit: 8,
+        persons: [
+          {
+            ...sampleSearchItem, kind: 'person', id: 5, label: 'code'
+          }
+        ],
+        booklets: [
+          {
+            ...sampleSearchItem, kind: 'booklet', id: 2, label: 'booklet'
+          }
+        ],
+        units: [
+          {
+            ...sampleSearchItem, kind: 'unit', id: 4, label: 'unit'
+          }
+        ],
+        responses: [
+          {
+            ...sampleSearchItem,
+            kind: 'response',
+            id: 3,
+            label: 'VAR',
+            responseValue: '42'
+          }
+        ],
+        totals: {
+          person: 1,
+          booklet: 1,
+          unit: 1,
+          response: 1
+        }
+      })),
       searchUnitsByName: jest.fn(() => makeObservable({ data: [sampleSearchItem], total: 1 })),
       searchBookletsByName: jest.fn(() => makeObservable({ data: [sampleSearchItem], total: 1 })),
       getFlatResponseFrequencies: jest.fn(() => makeObservable({
