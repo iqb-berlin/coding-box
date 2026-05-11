@@ -1,5 +1,7 @@
 import { CommonModule } from '@angular/common';
-import { Component, OnDestroy, inject } from '@angular/core';
+import {
+  Component, Input, OnChanges, OnDestroy, SimpleChanges, inject
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -66,6 +68,24 @@ interface FlatResponseRow {
   tags: string[];
 }
 
+export interface FlatResponseFilters {
+  code: string;
+  group: string;
+  login: string;
+  booklet: string;
+  unit: string;
+  response: string;
+  responseStatus: string;
+  responseValue: string;
+  tags: string;
+  geogebra: boolean;
+  audioLow: boolean;
+  nonEmptyResponse: boolean;
+  sessionFilter: boolean;
+  shortProcessing: boolean;
+  longLoading: boolean;
+}
+
 interface BookletLog {
   id: number;
   bookletid: number;
@@ -127,7 +147,7 @@ interface BookletFromPersonTestResults {
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
 })
-export class TestResultsFlatTableComponent implements OnDestroy {
+export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private fileService = inject(FileService);
   private unitNoteService = inject(UnitNoteService);
   private statisticsService = inject(CodingStatisticsService);
@@ -197,39 +217,23 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   flatPageIndex: number = 0;
   isLoadingFlat: boolean = false;
 
-  flatFilters: {
-    code: string;
-    group: string;
-    login: string;
-    booklet: string;
-    unit: string;
-    response: string;
-    responseStatus: string;
-    responseValue: string;
-    tags: string;
-    geogebra: boolean;
-    audioLow: boolean;
-    nonEmptyResponse: boolean;
-    sessionFilter: boolean;
-    shortProcessing: boolean;
-    longLoading: boolean;
-  } = {
-      code: '',
-      group: '',
-      login: '',
-      booklet: '',
-      unit: '',
-      response: '',
-      responseStatus: '',
-      responseValue: '',
-      tags: '',
-      geogebra: false,
-      audioLow: false,
-      nonEmptyResponse: false,
-      sessionFilter: false,
-      shortProcessing: false,
-      longLoading: false
-    };
+  flatFilters: FlatResponseFilters = {
+    code: '',
+    group: '',
+    login: '',
+    booklet: '',
+    unit: '',
+    response: '',
+    responseStatus: '',
+    responseValue: '',
+    tags: '',
+    geogebra: false,
+    audioLow: false,
+    nonEmptyResponse: false,
+    sessionFilter: false,
+    shortProcessing: false,
+    longLoading: false
+  };
 
   mediaFilters: Array<
   | 'geogebra'
@@ -285,6 +289,8 @@ export class TestResultsFlatTableComponent implements OnDestroy {
   private refreshFilterOptionsTimeoutIds: number[] = [];
 
   private suppressNextFlatFilterChange = false;
+
+  @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
 
   constructor() {
     try {
@@ -396,6 +402,31 @@ export class TestResultsFlatTableComponent implements OnDestroy {
     this.fetchFlatResponseFilterOptions();
 
     this.syncMediaFiltersFromFlatFilters();
+  }
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!changes.initialFilters || !this.initialFilters) {
+      return;
+    }
+
+    const hasFilterValues = Object.values(this.initialFilters).some(value => {
+      if (typeof value === 'boolean') {
+        return value;
+      }
+      return String(value || '').trim() !== '';
+    });
+
+    if (!hasFilterValues) {
+      return;
+    }
+
+    this.flatFilters = {
+      ...this.flatFilters,
+      ...this.initialFilters
+    };
+    this.flatPageIndex = 0;
+    this.syncMediaFiltersFromFlatFilters();
+    this.fetchFlatResponses(0, this.flatPageSize);
   }
 
   private syncMediaFiltersFromFlatFilters(): void {

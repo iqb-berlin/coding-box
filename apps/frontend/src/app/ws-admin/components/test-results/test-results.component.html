@@ -49,7 +49,7 @@
         (click)="openTestResultsSearchDialog()"
       >
         <mat-icon>search</mat-icon>
-        Suchen
+        Schnellsuche
       </button>
 
       <button
@@ -167,7 +167,9 @@
     <p class="loading-text">{{ uploadingMessage }}</p>
   </div>
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
-  <coding-box-test-results-flat-table></coding-box-test-results-flat-table>
+  <coding-box-test-results-flat-table
+    [initialFilters]="quickSearchTableFilters"
+  ></coding-box-test-results-flat-table>
   } @else {
   <div class="content-container">
     <div class="data-card">
