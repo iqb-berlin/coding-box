@@ -82,6 +82,15 @@ export class TestResultsUploadResultDialogComponent {
       .sort((a, b) => a.status.localeCompare(b.status));
   }
 
+  get hasZeroDelta(): boolean {
+    const delta = this.result.delta;
+    return (delta.testPersons || 0) === 0 &&
+      (delta.testGroups || 0) === 0 &&
+      (delta.uniqueBooklets || 0) === 0 &&
+      (delta.uniqueUnits || 0) === 0 &&
+      (delta.uniqueResponses || 0) === 0;
+  }
+
   getCategoryLabel(category: string): string {
     const labels: Record<string, string> = {
       log_format: 'Log-Format ungültig',

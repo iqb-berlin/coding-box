@@ -2,12 +2,16 @@ import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  BehaviorSubject, interval, Subscription, forkJoin, of
+  BehaviorSubject, interval, Subscription, forkJoin, of, Observable
 } from 'rxjs';
 import {
   filter, startWith, switchMap, takeWhile, map, catchError
 } from 'rxjs/operators';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
+import {
+  TestResultsImportProgressHandle,
+  TestResultsImportProgressState
+} from '../components/test-results/test-results-import-progress-dialog.component';
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
@@ -24,6 +28,21 @@ export interface PendingUploadBatch {
   totalJobs: number;
 }
 
+type UploadJobStatus = {
+  id?: string;
+  status:
+  | 'completed'
+  | 'waiting'
+  | 'active'
+  | 'delayed'
+  | 'failed'
+  | 'paused'
+  | 'poll-error';
+  progress: number;
+  result?: TestResultsUploadResultDto;
+  error?: unknown;
+};
+
 @Injectable({
   providedIn: 'root'
 })
@@ -36,6 +55,10 @@ export class TestResultsUploadStateService {
 
   private batches$ = new BehaviorSubject<PendingUploadBatch[]>([]);
   private pollingSubscriptions = new Map<string, Subscription>();
+  private pollingErrorCounts = new Map<string, number>();
+  private pollingErrorNotifications = new Set<string>();
+  private progressHandles = new Map<string, TestResultsImportProgressHandle>();
+  private readonly maxSilentPollingErrors = 5;
 
   readonly uploadingBatches$ = this.batches$.asObservable();
   private uploadsFinishedSubject = new BehaviorSubject<number | null>(null);
@@ -49,7 +72,23 @@ export class TestResultsUploadStateService {
     return `pendingUploadJobs_${workspaceId}`;
   }
 
-  registerBatch(batch: PendingUploadBatch) {
+  registerBatch(
+    batch: PendingUploadBatch,
+    progressHandle?: TestResultsImportProgressHandle
+  ) {
+    if (progressHandle) {
+      this.progressHandles.set(this.getBatchKey(batch), progressHandle);
+      this.updateProgressDialog(batch, {
+        phase: 'processing',
+        phaseLabel: 'Verarbeitung läuft',
+        message: 'Die Datei wurde angenommen. Der Server verarbeitet die Upload-Jobs.',
+        percent: batch.progress,
+        completed: batch.completedCount,
+        total: batch.totalJobs,
+        mode: 'determinate'
+      });
+    }
+
     const currentBatches = this.batches$.value;
     this.batches$.next([...currentBatches, batch]);
     this.saveToLocalStorage(batch);
@@ -57,7 +96,7 @@ export class TestResultsUploadStateService {
   }
 
   private startPolling(batch: PendingUploadBatch) {
-    const batchKey = `${batch.workspaceId}_${batch.resultType}_${batch.jobIds.join(',')}`;
+    const batchKey = this.getBatchKey(batch);
     if (this.pollingSubscriptions.has(batchKey)) return;
 
     const sub = interval(1000)
@@ -65,7 +104,12 @@ export class TestResultsUploadStateService {
         startWith(0),
         switchMap(() => forkJoin(
           batch.jobIds.map(id => this.fileService.getUploadJobStatus(batch.workspaceId, id).pipe(
-            catchError(() => of({ status: 'failed', progress: 0 }))
+            catchError(error => of({
+              id,
+              status: 'poll-error' as const,
+              progress: 0,
+              error
+            }))
           )
           )
         )
@@ -74,8 +118,46 @@ export class TestResultsUploadStateService {
           let totalProgress = 0;
           let completedCount = 0;
           const totalJobs = statuses.length;
+          const currentBatch = this.batches$.value.find(b => this.isSameBatch(b, batch));
+          const fallbackProgress = currentBatch?.progress || batch.progress || 0;
+          const normalizedStatuses = statuses.map((status, index): UploadJobStatus => {
+            const jobId = batch.jobIds[index];
+            const errorKey = `${batchKey}:${jobId}`;
 
-          statuses.forEach(status => {
+            if (status.status === 'poll-error') {
+              const errorCount = (this.pollingErrorCounts.get(errorKey) || 0) + 1;
+              this.pollingErrorCounts.set(errorKey, errorCount);
+
+              if (
+                errorCount >= this.maxSilentPollingErrors &&
+                !this.pollingErrorNotifications.has(errorKey)
+              ) {
+                this.pollingErrorNotifications.add(errorKey);
+                this.snackBar.open(
+                  'Upload läuft möglicherweise weiter, aber der Status konnte gerade nicht gelesen werden.',
+                  'OK',
+                  { duration: 6000 }
+                );
+              }
+
+              return {
+                ...status,
+                id: jobId,
+                progress: fallbackProgress
+              };
+            }
+
+            this.pollingErrorCounts.delete(errorKey);
+            this.pollingErrorNotifications.delete(errorKey);
+
+            return {
+              ...status,
+              id: String(status.id ?? jobId),
+              progress: Number(status.progress || 0)
+            };
+          });
+
+          normalizedStatuses.forEach(status => {
             if (status.status === 'completed' || status.status === 'failed') {
               completedCount += 1;
               totalProgress += 100;
@@ -85,9 +167,10 @@ export class TestResultsUploadStateService {
           });
 
           return {
-            avgProgress: Math.floor(totalProgress / totalJobs),
+            avgProgress: totalJobs > 0 ? Math.floor(totalProgress / totalJobs) : 0,
             completedCount,
-            totalJobs
+            totalJobs,
+            jobStatuses: normalizedStatuses
           };
         }),
         takeWhile(res => res.completedCount < res.totalJobs, true)
@@ -101,9 +184,18 @@ export class TestResultsUploadStateService {
             return b;
           });
           this.batches$.next(currentBatches);
+          this.updateProgressDialog(batch, {
+            phase: 'processing',
+            phaseLabel: 'Verarbeitung läuft',
+            message: 'Der Server verarbeitet die Upload-Jobs.',
+            percent: res.avgProgress,
+            completed: res.completedCount,
+            total: res.totalJobs,
+            mode: 'determinate'
+          });
 
           if (res.completedCount === res.totalJobs) {
-            this.finishBatch(batch);
+            this.finishBatch(batch, res.jobStatuses);
             this.pollingSubscriptions.delete(batchKey);
           }
         }
@@ -112,86 +204,494 @@ export class TestResultsUploadStateService {
     this.pollingSubscriptions.set(batchKey, sub);
   }
 
-  private finishBatch(batch: PendingUploadBatch) {
+  private finishBatch(
+    batch: PendingUploadBatch,
+    finalJobStatuses?: UploadJobStatus[]
+  ) {
+    this.updateProgressDialog(batch, {
+      phase: 'refreshingOverview',
+      phaseLabel: 'Übersicht wird aktualisiert',
+      message: 'Die Jobs sind abgeschlossen. Lade die aktualisierten Ergebniszahlen.',
+      percent: 100,
+      completed: batch.totalJobs,
+      total: batch.totalJobs,
+      mode: 'indeterminate'
+    });
     this.testResultService.invalidateCache(batch.workspaceId);
     this.validationTaskStateService.invalidateWorkspace(batch.workspaceId);
 
-    const workspaceOverview$ = this.testResultService.getWorkspaceOverview(batch.workspaceId).pipe(
-      catchError(() => of(batch.beforeOverview))
-    );
+    const jobStatuses$ = this.waitForCompletedJobResults(batch, finalJobStatuses);
 
-    const jobStatuses$ = forkJoin(
-      batch.jobIds.map(id => this.fileService.getUploadJobStatus(batch.workspaceId, id).pipe(
-        catchError(() => of({ status: 'failed' as const, id, progress: 0 }))
-      ))
-    );
-
-    forkJoin({
-      afterOverview: workspaceOverview$,
-      jobStatuses: jobStatuses$
-    }).subscribe(({ afterOverview, jobStatuses }) => {
-      const currentAfterOverview = afterOverview || batch.beforeOverview;
-      const delta = {
-        testPersons: (currentAfterOverview.testPersons || 0) - (batch.beforeOverview.testPersons || 0),
-        testGroups: (currentAfterOverview.testGroups || 0) - (batch.beforeOverview.testGroups || 0),
-        uniqueBooklets: (currentAfterOverview.uniqueBooklets || 0) - (batch.beforeOverview.uniqueBooklets || 0),
-        uniqueUnits: (currentAfterOverview.uniqueUnits || 0) - (batch.beforeOverview.uniqueUnits || 0),
-        uniqueResponses: (currentAfterOverview.uniqueResponses || 0) - (batch.beforeOverview.uniqueResponses || 0)
-      };
-
+    jobStatuses$.subscribe(jobStatuses => {
       const issues = [...batch.initialIssues];
       let importedLogs = false;
       let importedResponses = false;
+      const completedResults: TestResultsUploadResultDto[] = [];
+      const hasMissingCompletedResult =
+        this.hasCompletedJobsWithoutResult(jobStatuses);
 
       jobStatuses.forEach(jobStatus => {
         if (jobStatus.status === 'completed' && 'result' in jobStatus && jobStatus.result) {
+          completedResults.push(jobStatus.result);
           if (jobStatus.result.issues) {
             jobStatus.result.issues.forEach(issue => issues.push(issue));
           }
           if (jobStatus.result.importedLogs) importedLogs = true;
           if (jobStatus.result.importedResponses) importedResponses = true;
+        } else if (jobStatus.status === 'failed') {
+          issues.push({
+            level: 'error',
+            category: 'other',
+            message: `Upload-Job ${jobStatus.id || ''} ist fehlgeschlagen.`
+          });
         }
       });
+      if (hasMissingCompletedResult) {
+        issues.push({
+          level: 'warning',
+          category: 'other',
+          message:
+            'Mindestens ein Upload-Job wurde als abgeschlossen gemeldet, aber die Ergebniszahlen waren noch nicht vollständig abrufbar. Die Anzeige verwendet deshalb die geladene Arbeitsbereichsübersicht.'
+        });
+      }
 
-      const uploadResult: TestResultsUploadResultDto = {
-        expected: delta,
-        before: batch.beforeOverview,
-        after: currentAfterOverview,
-        delta: delta,
-        responseStatusCounts: currentAfterOverview.responseStatusCounts || {},
-        issues: issues,
-        importedLogs: importedLogs || batch.resultType === 'logs',
-        importedResponses: importedResponses || batch.resultType === 'responses'
+      const lastCompletedResult = completedResults[completedResults.length - 1];
+      const expected = completedResults.length > 0 ?
+        completedResults.reduce(
+          (sum, result) => this.addStats(sum, result.expected),
+          this.emptyStats()
+        ) :
+        this.emptyStats();
+      const jobDelta = completedResults.reduce(
+        (sum, result) => this.addStats(sum, result.delta),
+        this.emptyStats()
+      );
+      this.pollWorkspaceOverviewAfterUpload(
+        batch,
+        expected,
+        jobDelta,
+        completedResults,
+        hasMissingCompletedResult
+      ).subscribe(overviewResult => {
+        const overviewPending =
+          !overviewResult.loaded ||
+          this.shouldTreatOverviewAsPending(
+            batch,
+            overviewResult.changed,
+            expected,
+            jobDelta,
+            completedResults,
+            hasMissingCompletedResult
+          );
+        const currentAfterOverview =
+          overviewPending && lastCompletedResult?.after ?
+            lastCompletedResult.after :
+            overviewResult.overview ||
+            lastCompletedResult?.after ||
+            batch.beforeOverview;
+
+        if (overviewPending) {
+          issues.push({
+            level: 'warning',
+            category: 'other',
+            message:
+              'Die aktualisierte Arbeitsbereichsübersicht konnte noch nicht geladen werden. Die Zahlen stammen aus dem Upload-Job oder werden nach Aktualisierung sichtbar.'
+          });
+        }
+
+        const effectiveExpected = completedResults.length > 0 ?
+          expected :
+          this.statsDelta(currentAfterOverview, batch.beforeOverview);
+
+        const overviewDelta = overviewResult.overview ?
+          this.statsDelta(currentAfterOverview, batch.beforeOverview) :
+          this.emptyStats();
+        const delta =
+          overviewPending && this.hasNonZeroStats(jobDelta) ?
+            jobDelta :
+            overviewDelta;
+
+        const uploadResult: TestResultsUploadResultDto = {
+          expected: effectiveExpected,
+          before: batch.beforeOverview,
+          after: currentAfterOverview,
+          delta,
+          responseStatusCounts:
+            overviewResult.overview?.responseStatusCounts ||
+            lastCompletedResult?.responseStatusCounts ||
+            this.mergeStatusCounts(completedResults),
+          issues: issues,
+          logMetrics: this.mergeLogMetrics(completedResults),
+          importedLogs: importedLogs || batch.resultType === 'logs',
+          importedResponses: importedResponses || batch.resultType === 'responses',
+          overviewPending,
+          overviewMessage: overviewPending ?
+            'Der Upload-Job ist abgeschlossen, aber die aggregierte Arbeitsbereichsübersicht konnte noch nicht zuverlässig gelesen werden. Bitte die Ansicht gleich noch einmal aktualisieren.' :
+            undefined
+        };
+
+        this.snackBar.open(
+          overviewPending ?
+            'Upload abgeschlossen; die Übersicht wird noch aktualisiert.' :
+            `Upload abgeschlossen: Δ Testpersonen ${delta.testPersons}, Δ Responses ${delta.uniqueResponses}`,
+          'OK',
+          { duration: 5000 }
+        );
+
+        this.closeProgressDialog(batch);
+
+        this.dialog.open(TestResultsUploadResultDialogComponent, {
+          width: '90vw',
+          maxWidth: '95vw',
+          data: {
+            resultType: batch.resultType,
+            result: uploadResult
+          }
+        });
+
+        this.uploadsFinishedSubject.next(batch.workspaceId);
+
+        const batchKey = this.getBatchKey(batch);
+        const remainingBatches = this.batches$.value.filter(b => this.getBatchKey(b) !== batchKey);
+        this.batches$.next(remainingBatches);
+
+        localStorage.removeItem(this.getStorageKey(batch.workspaceId));
+      });
+    });
+  }
+
+  private fetchJobStatuses(batch: PendingUploadBatch): Observable<UploadJobStatus[]> {
+    return forkJoin(
+      batch.jobIds.map(id => this.fileService.getUploadJobStatus(batch.workspaceId, id).pipe(
+        catchError(error => of({
+          id,
+          status: 'poll-error' as const,
+          progress: 0,
+          error
+        }))
+      ))
+    ).pipe(
+      map(statuses => statuses.map((status, index): UploadJobStatus => ({
+        ...status,
+        id: String(status.id ?? batch.jobIds[index]),
+        status: status.status as UploadJobStatus['status'],
+        progress: Number(status.progress || 0)
+      })))
+    );
+  }
+
+  private waitForCompletedJobResults(
+    batch: PendingUploadBatch,
+    initialStatuses?: UploadJobStatus[]
+  ): Observable<UploadJobStatus[]> {
+    const maxAttempts = 8;
+    const retryDelayMs = 500;
+
+    return new Observable(subscriber => {
+      let attempts = 0;
+      let timeoutId: number | undefined;
+      let innerSubscription: Subscription | undefined;
+      let fetchLatestStatuses!: () => void;
+
+      const finishOrRetry = (statuses: UploadJobStatus[]) => {
+        if (
+          !this.hasCompletedJobsWithoutResult(statuses) ||
+          attempts >= maxAttempts
+        ) {
+          subscriber.next(statuses);
+          subscriber.complete();
+          return;
+        }
+
+        attempts += 1;
+        this.updateProgressDialog(batch, {
+          phase: 'refreshingOverview',
+          phaseLabel: 'Ergebnis wird gelesen',
+          message:
+            'Die Jobs sind abgeschlossen. Warte auf die vollständigen Ergebnisdaten.',
+          percent: 100,
+          completed: batch.totalJobs,
+          total: batch.totalJobs,
+          mode: 'indeterminate'
+        });
+        timeoutId = window.setTimeout(fetchLatestStatuses, retryDelayMs);
       };
 
-      this.snackBar.open(
-        `Upload abgeschlossen: Δ Testpersonen ${delta.testPersons}, Δ Responses ${delta.uniqueResponses}`,
-        'OK',
-        { duration: 5000 }
-      );
+      fetchLatestStatuses = () => {
+        innerSubscription = this.fetchJobStatuses(batch).subscribe({
+          next: finishOrRetry,
+          error: error => subscriber.error(error)
+        });
+      };
 
-      this.dialog.open(TestResultsUploadResultDialogComponent, {
-        width: '90vw',
-        maxWidth: '95vw',
-        data: {
-          resultType: batch.resultType,
-          result: uploadResult
+      if (initialStatuses) {
+        finishOrRetry(initialStatuses);
+      } else {
+        fetchLatestStatuses();
+      }
+
+      return () => {
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
         }
-      });
-
-      this.uploadsFinishedSubject.next(batch.workspaceId);
-
-      const batchKey = `${batch.workspaceId}_${batch.jobIds.join(',')}`;
-      const remainingBatches = this.batches$.value.filter(b => `${b.workspaceId}_${b.jobIds.join(',')}` !== batchKey
-      );
-      this.batches$.next(remainingBatches);
-
-      localStorage.removeItem(this.getStorageKey(batch.workspaceId));
+        innerSubscription?.unsubscribe();
+      };
     });
   }
 
   private saveToLocalStorage(batch: PendingUploadBatch) {
     localStorage.setItem(this.getStorageKey(batch.workspaceId), JSON.stringify(batch));
+  }
+
+  private getBatchKey(batch: Pick<PendingUploadBatch, 'workspaceId' | 'resultType' | 'jobIds'>): string {
+    return `${batch.workspaceId}_${batch.resultType}_${batch.jobIds.join(',')}`;
+  }
+
+  private updateProgressDialog(
+    batch: PendingUploadBatch,
+    patch: Omit<TestResultsImportProgressState, 'title' | 'icon'> & Partial<Pick<TestResultsImportProgressState, 'title' | 'icon'>>
+  ): void {
+    const handle = this.progressHandles.get(this.getBatchKey(batch));
+    if (!handle) return;
+
+    handle.state$.next({
+      title: patch.title || this.getProgressTitle(batch.resultType),
+      icon: patch.icon || this.getProgressIcon(batch.resultType),
+      ...patch
+    });
+  }
+
+  private closeProgressDialog(batch: PendingUploadBatch): void {
+    const batchKey = this.getBatchKey(batch);
+    const handle = this.progressHandles.get(batchKey);
+    if (!handle) return;
+
+    handle.dialogRef.close();
+    handle.state$.complete();
+    this.progressHandles.delete(batchKey);
+  }
+
+  private getProgressTitle(resultType: 'logs' | 'responses'): string {
+    return resultType === 'logs' ? 'Upload-Ergebnis (Logs)' : 'Upload-Ergebnis (Antworten)';
+  }
+
+  private getProgressIcon(resultType: 'logs' | 'responses'): string {
+    return resultType === 'logs' ? 'article' : 'upload_file';
+  }
+
+  private pollWorkspaceOverviewAfterUpload(
+    batch: PendingUploadBatch,
+    expected: TestResultsUploadResultDto['expected'],
+    jobDelta: TestResultsUploadResultDto['delta'],
+    completedResults: TestResultsUploadResultDto[],
+    hasMissingCompletedResult: boolean = false
+  ): Observable<{
+      overview: TestResultsOverviewResponse | null;
+      loaded: boolean;
+      changed: boolean;
+    }> {
+    const shouldWaitForOverviewChange =
+      batch.resultType === 'responses' &&
+      (
+        this.hasNonZeroStats(jobDelta) ||
+        this.hasSuspiciousZeroJobStats(completedResults) ||
+        (
+          this.isEmptyStats(batch.beforeOverview) &&
+          (expected.uniqueResponses || 0) > 0
+        ) ||
+        (
+          hasMissingCompletedResult &&
+          this.isEmptyStats(batch.beforeOverview)
+        )
+      );
+    const attempts = shouldWaitForOverviewChange ? 12 : 1;
+    return new Observable(subscriber => {
+      let attempt = 0;
+      let lastOverview: TestResultsOverviewResponse | null = null;
+      let timeoutId: number | undefined;
+      let innerSubscription: Subscription | undefined;
+
+      const emitFinal = () => {
+        subscriber.next({
+          overview: lastOverview,
+          loaded: !!lastOverview,
+          changed: lastOverview ?
+            this.hasOverviewChanged(lastOverview, batch.beforeOverview) :
+            false
+        });
+        subscriber.complete();
+      };
+
+      const poll = () => {
+        innerSubscription = this.testResultService
+          .getWorkspaceOverview(batch.workspaceId)
+          .subscribe({
+            next: overview => {
+              if (overview) {
+                lastOverview = overview;
+                const changed = this.hasOverviewChanged(overview, batch.beforeOverview);
+
+                if (!shouldWaitForOverviewChange || changed) {
+                  subscriber.next({ overview, loaded: true, changed });
+                  subscriber.complete();
+                  return;
+                }
+              }
+
+              attempt += 1;
+              if (attempt >= attempts) {
+                emitFinal();
+                return;
+              }
+
+              timeoutId = window.setTimeout(poll, 1000);
+            },
+            error: () => {
+              attempt += 1;
+              if (attempt >= attempts) {
+                emitFinal();
+                return;
+              }
+
+              timeoutId = window.setTimeout(poll, 1000);
+            }
+          });
+      };
+
+      poll();
+
+      return () => {
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+        innerSubscription?.unsubscribe();
+      };
+    });
+  }
+
+  private shouldTreatOverviewAsPending(
+    batch: PendingUploadBatch,
+    overviewChanged: boolean,
+    expected: TestResultsUploadResultDto['expected'],
+    jobDelta: TestResultsUploadResultDto['delta'],
+    completedResults: TestResultsUploadResultDto[],
+    hasMissingCompletedResult: boolean = false
+  ): boolean {
+    if (batch.resultType !== 'responses' || overviewChanged) return false;
+
+    return this.hasNonZeroStats(jobDelta) ||
+      this.hasSuspiciousZeroJobStats(completedResults) ||
+      (
+        this.isEmptyStats(batch.beforeOverview) &&
+        (expected.uniqueResponses || 0) > 0
+      ) ||
+      (
+        hasMissingCompletedResult &&
+        this.isEmptyStats(batch.beforeOverview)
+      );
+  }
+
+  private isSameBatch(a: PendingUploadBatch, b: PendingUploadBatch): boolean {
+    return a.workspaceId === b.workspaceId &&
+      JSON.stringify(a.jobIds) === JSON.stringify(b.jobIds);
+  }
+
+  private emptyStats(): TestResultsUploadResultDto['expected'] {
+    return {
+      testPersons: 0,
+      testGroups: 0,
+      uniqueBooklets: 0,
+      uniqueUnits: 0,
+      uniqueResponses: 0
+    };
+  }
+
+  private addStats(
+    a: TestResultsUploadResultDto['expected'],
+    b: Partial<TestResultsUploadResultDto['expected']> | undefined
+  ): TestResultsUploadResultDto['expected'] {
+    return {
+      testPersons: (a.testPersons || 0) + (b?.testPersons || 0),
+      testGroups: (a.testGroups || 0) + (b?.testGroups || 0),
+      uniqueBooklets: (a.uniqueBooklets || 0) + (b?.uniqueBooklets || 0),
+      uniqueUnits: (a.uniqueUnits || 0) + (b?.uniqueUnits || 0),
+      uniqueResponses: (a.uniqueResponses || 0) + (b?.uniqueResponses || 0)
+    };
+  }
+
+  private statsDelta(
+    after: Partial<TestResultsOverviewResponse>,
+    before: Partial<TestResultsOverviewResponse>
+  ): TestResultsUploadResultDto['expected'] {
+    return {
+      testPersons: (after.testPersons || 0) - (before.testPersons || 0),
+      testGroups: (after.testGroups || 0) - (before.testGroups || 0),
+      uniqueBooklets: (after.uniqueBooklets || 0) - (before.uniqueBooklets || 0),
+      uniqueUnits: (after.uniqueUnits || 0) - (before.uniqueUnits || 0),
+      uniqueResponses: (after.uniqueResponses || 0) - (before.uniqueResponses || 0)
+    };
+  }
+
+  private hasOverviewChanged(
+    after: Partial<TestResultsOverviewResponse>,
+    before: Partial<TestResultsOverviewResponse>
+  ): boolean {
+    return this.hasNonZeroStats(this.statsDelta(after, before));
+  }
+
+  private hasNonZeroStats(stats?: Partial<TestResultsUploadResultDto['expected']>): boolean {
+    return (stats?.testPersons || 0) !== 0 ||
+      (stats?.testGroups || 0) !== 0 ||
+      (stats?.uniqueBooklets || 0) !== 0 ||
+      (stats?.uniqueUnits || 0) !== 0 ||
+      (stats?.uniqueResponses || 0) !== 0;
+  }
+
+  private isEmptyStats(stats?: Partial<TestResultsUploadResultDto['expected']>): boolean {
+    return !this.hasNonZeroStats(stats);
+  }
+
+  private hasSuspiciousZeroJobStats(
+    results: TestResultsUploadResultDto[]
+  ): boolean {
+    return results.some(result => this.hasNonZeroStats(result.expected) &&
+      this.isEmptyStats(result.before) &&
+      this.isEmptyStats(result.after)
+    );
+  }
+
+  private hasCompletedJobsWithoutResult(statuses: UploadJobStatus[]): boolean {
+    return statuses.some(status => status.status === 'completed' && !status.result);
+  }
+
+  private mergeStatusCounts(
+    results: TestResultsUploadResultDto[]
+  ): Record<string, number> {
+    return results.reduce<Record<string, number>>((acc, result) => {
+      Object.entries(result.responseStatusCounts || {}).forEach(([status, count]) => {
+        acc[status] = (acc[status] || 0) + Number(count || 0);
+      });
+      return acc;
+    }, {});
+  }
+
+  private mergeLogMetrics(
+    results: TestResultsUploadResultDto[]
+  ): TestResultsUploadResultDto['logMetrics'] | undefined {
+    const metrics = results
+      .map(result => result.logMetrics)
+      .filter((metric): metric is NonNullable<TestResultsUploadResultDto['logMetrics']> => !!metric);
+
+    if (metrics.length === 0) return undefined;
+
+    return {
+      bookletsWithLogs: metrics.reduce((sum, metric) => sum + metric.bookletsWithLogs, 0),
+      totalBooklets: metrics.reduce((sum, metric) => sum + metric.totalBooklets, 0),
+      unitsWithLogs: metrics.reduce((sum, metric) => sum + metric.unitsWithLogs, 0),
+      totalUnits: metrics.reduce((sum, metric) => sum + metric.totalUnits, 0),
+      bookletDetails: metrics.flatMap(metric => metric.bookletDetails || []),
+      unitDetails: metrics.flatMap(metric => metric.unitDetails || [])
+    };
   }
 
   private resumeFromLocalStorage() {

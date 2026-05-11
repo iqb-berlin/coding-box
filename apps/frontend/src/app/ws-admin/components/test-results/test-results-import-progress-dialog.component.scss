@@ -1,0 +1,63 @@
+:host {
+  display: block;
+}
+
+.dialog-title {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 0;
+
+  mat-icon {
+    color: #0f5c62;
+  }
+}
+
+.progress-content {
+  display: grid;
+  gap: 18px;
+  min-width: min(520px, 80vw);
+  padding-top: 4px;
+}
+
+.phase-row {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  min-width: 0;
+}
+
+.phase-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.phase-label {
+  color: rgba(0, 0, 0, 0.78);
+  font-weight: 700;
+}
+
+.message,
+.current-item,
+.progress-meta {
+  color: rgba(0, 0, 0, 0.68);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.current-item {
+  background: #f7f9fa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  overflow: hidden;
+  padding: 8px 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  min-height: 18px;
+}

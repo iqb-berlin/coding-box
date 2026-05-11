@@ -12,6 +12,9 @@ import { of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { environment } from '../../../../environments/environment';
 import { TestResultsComponent } from './test-results.component';
+import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
+import { TestResultsImportProgressDialogComponent } from './test-results-import-progress-dialog.component';
+import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
@@ -110,7 +113,8 @@ describe('TestResultsComponent', () => {
           provide: TestResultService,
           useValue: {
             getTestResults: jest.fn().mockReturnValue(of([])),
-            getWorkspaceOverview: jest.fn().mockReturnValue(of({}))
+            getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
+            invalidateCache: jest.fn()
           }
         },
         {
@@ -183,5 +187,106 @@ describe('TestResultsComponent', () => {
     component.deleteResponse(response as never);
 
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+  });
+
+  it('should keep the last workspace overview while a reload has no result yet', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+    };
+    const previousOverview = {
+      testPersons: 47,
+      testGroups: 2,
+      uniqueBooklets: 47,
+      uniqueUnits: 320,
+      uniqueResponses: 10249,
+      responseStatusCounts: {},
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+
+    component.overview = previousOverview;
+    testResultService.getWorkspaceOverview.mockReturnValue(of(null));
+
+    (component as unknown as { loadWorkspaceOverview: () => void })
+      .loadWorkspaceOverview();
+
+    expect(component.overview).toBe(previousOverview);
+    expect(component.isLoadingOverview).toBe(false);
+  });
+
+  it('should show Testcenter import results when overview loads with zero delta', async () => {
+    const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+      invalidateCache: jest.Mock;
+    };
+    const progressClose = jest.fn();
+    const overview = {
+      testPersons: 45,
+      testGroups: 2,
+      uniqueBooklets: 47,
+      uniqueUnits: 320,
+      uniqueResponses: 10219,
+      responseStatusCounts: {
+        DISPLAYED: 7414,
+        NOT_REACHED: 289,
+        VALUE_CHANGED: 2298,
+        UNSET: 218
+      },
+      sessionBrowserCounts: {},
+      sessionOsCounts: {},
+      sessionScreenCounts: {}
+    };
+
+    testResultService.getWorkspaceOverview.mockReturnValue(of(overview));
+    dialog.open.mockImplementation((componentType: unknown) => {
+      if (componentType === TestCenterImportComponent) {
+        return {
+          afterClosed: () => of({
+            didImport: true,
+            resultType: 'responses',
+            importedResponses: true,
+            importedLogs: false,
+            uploadResult: {
+              success: true,
+              issues: []
+            }
+          })
+        };
+      }
+
+      if (componentType === TestResultsImportProgressDialogComponent) {
+        return { close: progressClose };
+      }
+
+      return { close: jest.fn(), afterClosed: () => of(undefined) };
+    });
+
+    await component.testCenterImport();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const resultCall = dialog.open.mock.calls.find(
+      ([componentType]) => componentType === TestResultsUploadResultDialogComponent
+    );
+
+    expect(progressClose).toHaveBeenCalled();
+    expect(resultCall).toBeTruthy();
+    expect(resultCall?.[1]).toEqual(expect.objectContaining({
+      data: expect.objectContaining({
+        result: expect.objectContaining({
+          overviewPending: false,
+          delta: expect.objectContaining({
+            testPersons: 0,
+            testGroups: 0,
+            uniqueBooklets: 0,
+            uniqueUnits: 0,
+            uniqueResponses: 0
+          }),
+          responseStatusCounts: overview.responseStatusCounts
+        })
+      })
+    }));
   });
 });
