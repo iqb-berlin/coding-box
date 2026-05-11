@@ -4,7 +4,11 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { UserBackendService } from '../../shared/services/user/user-backend.service';
 import { ServerResponse } from '../../core/services/authentication.service';
 import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
-import { FileService, BookletUnit } from '../../shared/services/file/file.service';
+import {
+  FileService,
+  BookletUnit,
+  GetBookletUnitsOptions
+} from '../../shared/services/file/file.service';
 import { FileBackendService } from '../../shared/services/file/file-backend.service';
 import { ImportService, ImportOptions, Result } from '../../shared/services/file/import.service';
 import { UnitTagService } from '../../shared/services/unit/unit-tag.service';
@@ -180,8 +184,13 @@ export class WorkspaceFacadeService {
     return this.fileBackendService.getVocs(workspaceId, vocs);
   }
 
-  getBookletUnits(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletUnit[]> {
-    return this.fileService.getBookletUnits(workspaceId, bookletId, authToken);
+  getBookletUnits(
+    workspaceId: number,
+    bookletId: string,
+    authToken?: string,
+    options?: GetBookletUnitsOptions
+  ): Observable<BookletUnit[]> {
+    return this.fileService.getBookletUnits(workspaceId, bookletId, authToken, options);
   }
 
   getBookletInfo(workspaceId: number, bookletId: string, authToken?: string): Observable<BookletInfoDto> {

@@ -724,12 +724,30 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.testPerson || !this.testPerson.login || !this.testPerson.code) {
+      this.snackBar.open('Keine gültige Testperson ausgewählt', 'Info', {
+        duration: 3000
+      });
+      return;
+    }
+
+    const testPerson = [
+      this.testPerson.login,
+      this.testPerson.code,
+      this.testPerson.group,
+      booklet.name
+    ].join('@');
+
     const loadingSnackBar = this.snackBar.open('Lade Testheft...', '', {
       duration: 3000
     });
 
     this.unitsReplayService
-      .getUnitsFromFileUpload(this.appService.selectedWorkspaceId, booklet.name)
+      .getUnitsFromFileUpload(
+        this.appService.selectedWorkspaceId,
+        booklet.name,
+        testPerson
+      )
       .subscribe({
         next: bookletReplay => {
           loadingSnackBar.dismiss();
@@ -763,13 +781,24 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               const url = this.router.serializeUrl(
                 this.router.createUrlTree(
                   [
-                    `replay/${this.testPerson.login}@${this.testPerson.code}@${this.testPerson.group}@${booklet.name}/${firstUnit.name}/0/0`
+                    `replay/${testPerson}/${firstUnit.name}/0/0`
                   ],
                   { queryParams: queryParams }
                 )
               );
 
               window.open(`${window.location.origin}/#${url}`, '_blank');
+
+              if (
+                bookletReplay.skippedUnits &&
+                bookletReplay.skippedUnits > 0
+              ) {
+                this.snackBar.open(
+                  `${bookletReplay.skippedUnits} nicht replaybare Booklet-Units wurden übersprungen.`,
+                  'Info',
+                  { duration: 5000 }
+                );
+              }
             });
         },
         error: () => {
