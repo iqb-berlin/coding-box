@@ -4892,6 +4892,44 @@ export class WorkspaceTestResultsService {
     });
   }
 
+  private sessionScreenToDimensions(screen: string | null): { width: number; height: number } {
+    const match = (screen || '').match(/^\s*(\d+)\s*x\s*(\d+)\s*$/i);
+
+    return {
+      width: match ? Number(match[1]) : 0,
+      height: match ? Number(match[2]) : 0
+    };
+  }
+
+  private splitSessionBrowser(browser: string | null): { browserName: string; browserVersion: string } {
+    const trimmedBrowser = (browser || '').trim();
+    const match = trimmedBrowser.match(/^(.*\S)\s+([0-9][^\s]*)$/);
+
+    if (!match) {
+      return {
+        browserName: trimmedBrowser,
+        browserVersion: ''
+      };
+    }
+
+    return {
+      browserName: match[1],
+      browserVersion: match[2]
+    };
+  }
+
+  private createLoadCompleteLogEntry(session: {
+    browser: string | null;
+    os: string | null;
+    screen: string | null;
+    loadcompletems: string | number | null;
+  }): string {
+    const { width, height } = this.sessionScreenToDimensions(session.screen);
+    const { browserName, browserVersion } = this.splitSessionBrowser(session.browser);
+
+    return `LOADCOMPLETE : {browserVersion:${browserVersion},browserName:${browserName},osName:${session.os || ''},device:,screenSizeWidth:${width},screenSizeHeight:${height},loadTime:${Number(session.loadcompletems) || 0}}`;
+  }
+
   async exportTestLogsToFile(
     workspaceId: number,
     filePath: string,
@@ -5042,6 +5080,95 @@ export class WorkspaceTestResultsService {
               Math.round((processedCount / totalBookletLogs) * 100)
             );
           }
+        }
+      }
+
+      let lastSessionId = 0;
+      let hasMoreSessions = true;
+
+      const createSessionsBaseQuery = () => {
+        const qb = this.sessionRepository
+          .createQueryBuilder('session')
+          .innerJoin('session.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select('session.id', 'id')
+          .addSelect('session.ts', 'ts')
+          .addSelect('session.browser', 'browser')
+          .addSelect('session.os', 'os')
+          .addSelect('session.screen', 'screen')
+          .addSelect('session.loadcompletems', 'loadcompletems')
+          .addSelect('person.group', 'groupname')
+          .addSelect('person.login', 'loginname')
+          .addSelect('person.code', 'code')
+          .addSelect('bookletinfo.name', 'bookletname')
+          .where('person.workspace_id = :workspaceId', { workspaceId })
+          .andWhere('person.consider = :consider', { consider: true });
+        this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets);
+
+        if (filters?.groupNames?.length) {
+          qb.andWhere('person.group IN (:...groupNames)', {
+            groupNames: filters.groupNames
+          });
+        }
+        if (filters?.bookletNames?.length) {
+          qb.andWhere('bookletinfo.name IN (:...bookletNames)', {
+            bookletNames: filters.bookletNames
+          });
+        }
+        if (filters?.personIds?.length) {
+          qb.andWhere('person.id IN (:...personIds)', {
+            personIds: filters.personIds
+          });
+        }
+
+        return qb;
+      };
+
+      while (hasMoreSessions) {
+        const sessions = await createSessionsBaseQuery()
+          .andWhere('session.id > :lastSessionId', { lastSessionId })
+          .orderBy('session.id', 'ASC')
+          .take(BATCH_SIZE)
+          .getRawMany<{
+          id: number;
+          ts: string | number | null;
+          browser: string | null;
+          os: string | null;
+          screen: string | null;
+          loadcompletems: string | number | null;
+          groupname: string;
+          loginname: string;
+          code: string;
+          bookletname: string;
+        }>();
+
+        if (sessions.length === 0) {
+          hasMoreSessions = false;
+          break;
+        }
+
+        lastSessionId = Number(sessions[sessions.length - 1].id);
+
+        for (const session of sessions) {
+          const canContinue = csvStream.write({
+            groupname: session.groupname,
+            loginname: session.loginname,
+            code: session.code,
+            bookletname: session.bookletname,
+            unitname: '',
+            originalUnitId: '',
+            timestamp: (session.ts ?? '').toString(),
+            logentry: this.createLoadCompleteLogEntry(session)
+          });
+
+          if (!canContinue) {
+            await new Promise(resolve => {
+              csvStream.once('drain', resolve);
+            });
+          }
+
+          processedCount += 1;
         }
       }
     }

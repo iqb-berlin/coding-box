@@ -178,9 +178,22 @@ describe('test results export/import roundtrip', () => {
       code: 'code-a',
       bookletname: 'booklet-a'
     };
+    const sourceSession = {
+      id: 70,
+      ts: 333,
+      browser: 'Firefox 149.0',
+      os: 'Windows 10',
+      screen: '1280 x 720',
+      loadcompletems: 4685,
+      groupname: 'group-a',
+      loginname: 'login-a',
+      code: 'code-a',
+      bookletname: 'booklet-a'
+    };
 
     let unitBatch = 0;
     let bookletLogBatch = 0;
+    let sessionBatch = 0;
     let unitLogBatch = 0;
 
     const unitRepository = {
@@ -238,6 +251,16 @@ describe('test results export/import roundtrip', () => {
       }))
     } as unknown as Repository<UnitLog>;
 
+    const sessionRepository = {
+      createQueryBuilder: jest.fn(() => queryBuilder<typeof sourceSession>({
+        getRawMany: jest.fn().mockImplementation(async () => {
+          const result = sessionBatch === 0 ? [sourceSession] : [];
+          sessionBatch += 1;
+          return result;
+        })
+      }))
+    } as unknown as Repository<Session>;
+
     const dataSource = {
       getRepository: jest.fn(() => ({
         createQueryBuilder: jest.fn(() => queryBuilder<UnitLastState>({
@@ -255,7 +278,7 @@ describe('test results export/import roundtrip', () => {
       responseRepository,
       createMock<Repository<BookletInfo>>(),
       bookletLogRepository,
-      createMock<Repository<Session>>(),
+      sessionRepository,
       unitLogRepository,
       chunkRepository,
       dataSource,
@@ -364,6 +387,7 @@ describe('test results export/import roundtrip', () => {
     const logsCsv = await collectStream(stream => (
       exportService.exportTestLogsToStream(workspaceId, stream)
     ));
+    expect(logsCsv).toContain('LOADCOMPLETE : {browserVersion:149.0,browserName:Firefox');
     await processCsv(uploadService, logsCsv, 'logs');
 
     const logBooklet = capturedLogPersons[0].booklets[0];
@@ -379,6 +403,13 @@ describe('test results export/import roundtrip', () => {
       key: 'UNIT',
       parameter: 'shown',
       ts: '222'
+    });
+    expect(logBooklet.sessions[0]).toMatchObject({
+      browser: 'Firefox 149.0',
+      os: 'Windows 10',
+      screen: '1280 x 720',
+      loadCompleteMS: 4685,
+      ts: '333'
     });
   });
 });
