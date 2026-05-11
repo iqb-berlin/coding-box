@@ -79,6 +79,38 @@ export type WorkspaceOverviewStats = {
   sessionScreenCounts: Record<string, number>;
 };
 
+type QuickSearchResultKind = 'person' | 'booklet' | 'unit' | 'response';
+
+type QuickSearchResultItem = {
+  kind: QuickSearchResultKind;
+  id: number;
+  label: string;
+  secondaryLabel?: string;
+  personId?: number;
+  personLogin?: string;
+  personCode?: string;
+  personGroup?: string;
+  bookletId?: number;
+  bookletName?: string;
+  unitId?: number;
+  unitName?: string;
+  unitAlias?: string | null;
+  responseId?: number;
+  variableId?: string;
+  responseValue?: string;
+  responseStatus?: string;
+};
+
+type QuickSearchResult = {
+  query: string;
+  limit: number;
+  persons: QuickSearchResultItem[];
+  booklets: QuickSearchResultItem[];
+  units: QuickSearchResultItem[];
+  responses: QuickSearchResultItem[];
+  totals: Record<QuickSearchResultKind, number>;
+};
+
 export type FlatFrequenciesResult = Record<
 string,
 {
@@ -730,6 +762,263 @@ export class WorkspaceTestResultsService {
       );
       throw new Error('An error occurred while fetching test results');
     }
+  }
+
+  async quickSearchTestResults(
+    workspaceId: number,
+    query: string,
+    limit = 8
+  ): Promise<QuickSearchResult> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const normalizedQuery = String(query || '').trim();
+    const validLimit = Math.min(Math.max(1, Number(limit || 8)), 20);
+    const emptyResult: QuickSearchResult = {
+      query: normalizedQuery,
+      limit: validLimit,
+      persons: [],
+      booklets: [],
+      units: [],
+      responses: [],
+      totals: {
+        person: 0,
+        booklet: 0,
+        unit: 0,
+        response: 0
+      }
+    };
+
+    if (normalizedQuery.length < 2) {
+      return emptyResult;
+    }
+
+    const likeQuery = `%${normalizedQuery}%`;
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+
+    const personQb = this.personsRepository
+      .createQueryBuilder('person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        '(person.code ILIKE :query OR person.group ILIKE :query OR person.login ILIKE :query)',
+        { query: likeQuery }
+      );
+
+    const bookletQb = this.bookletRepository
+      .createQueryBuilder('booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('bookletinfo.name ILIKE :query', { query: likeQuery });
+    this.applyIgnoredBookletsToQuery(bookletQb, exclusions.ignoredBooklets);
+
+    const unitQb = this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('(unit.name ILIKE :query OR unit.alias ILIKE :query)', {
+        query: likeQuery
+      });
+    this.applyExclusionsToQuery(unitQb, exclusions);
+
+    const responseQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere(
+        '(response.variableid ILIKE :query OR response.value ILIKE :query)',
+        { query: likeQuery }
+      );
+    this.applyExclusionsToQuery(responseQb, exclusions);
+    this.excludeAutocoderGeneratedResponses(responseQb);
+
+    const [
+      personTotal,
+      bookletTotal,
+      unitTotal,
+      responseTotal,
+      personRows,
+      bookletRows,
+      unitRows,
+      responseRows
+    ] = await Promise.all([
+      personQb.clone().getCount(),
+      bookletQb.clone().getCount(),
+      unitQb.clone().getCount(),
+      responseQb.clone().getCount(),
+      personQb
+        .clone()
+        .select([
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('person.code', 'ASC')
+        .addOrderBy('person.login', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      bookletQb
+        .clone()
+        .select([
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('bookletinfo.name', 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      unitQb
+        .clone()
+        .select([
+          'unit.id AS "unitId"',
+          'unit.name AS "unitName"',
+          'unit.alias AS "unitAlias"',
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"',
+          '(SELECT r.id FROM response r WHERE r.unitid = unit.id AND r.is_autocoder_generated IS NOT TRUE ORDER BY r.id ASC LIMIT 1) AS "responseId"'
+        ])
+        .orderBy('COALESCE(unit.alias, unit.name)', 'ASC')
+        .addOrderBy('person.code', 'ASC')
+        .limit(validLimit)
+        .getRawMany(),
+      responseQb
+        .clone()
+        .select([
+          'response.id AS "responseId"',
+          'response.variableid AS "variableId"',
+          'SUBSTRING(response.value, 1, 200) AS "responseValue"',
+          'response.status AS "responseStatus"',
+          'unit.id AS "unitId"',
+          'unit.name AS "unitName"',
+          'unit.alias AS "unitAlias"',
+          'booklet.id AS "bookletId"',
+          'bookletinfo.name AS "bookletName"',
+          'person.id AS "personId"',
+          'person.code AS "personCode"',
+          'person.group AS "personGroup"',
+          'person.login AS "personLogin"'
+        ])
+        .orderBy('person.code', 'ASC')
+        .addOrderBy('bookletinfo.name', 'ASC')
+        .addOrderBy('COALESCE(unit.alias, unit.name)', 'ASC')
+        .addOrderBy('response.variableid', 'ASC')
+        .limit(validLimit)
+        .getRawMany()
+    ]);
+
+    return {
+      query: normalizedQuery,
+      limit: validLimit,
+      persons: (personRows || []).map(row => ({
+        kind: 'person',
+        id: Number(row.personId),
+        label: String(row.personCode || row.personLogin || row.personId),
+        secondaryLabel: [row.personGroup, row.personLogin]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || '')
+      })),
+      booklets: (bookletRows || []).map(row => ({
+        kind: 'booklet',
+        id: Number(row.bookletId),
+        label: String(row.bookletName || row.bookletId),
+        secondaryLabel: [row.personCode, row.personGroup, row.personLogin]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || '')
+      })),
+      units: (unitRows || []).map(row => ({
+        kind: 'unit',
+        id: Number(row.unitId),
+        label: String(row.unitAlias || row.unitName || row.unitId),
+        secondaryLabel: [
+          row.bookletName,
+          row.unitAlias && row.unitAlias !== row.unitName ?
+            row.unitName :
+            '',
+          row.personCode
+        ]
+          .filter(Boolean)
+          .join(' · '),
+        personId: Number(row.personId),
+        personCode: String(row.personCode || ''),
+        personGroup: String(row.personGroup || ''),
+        personLogin: String(row.personLogin || ''),
+        bookletId: Number(row.bookletId),
+        bookletName: String(row.bookletName || ''),
+        unitId: Number(row.unitId),
+        unitName: String(row.unitName || ''),
+        unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
+        responseId: row.responseId == null ? undefined : Number(row.responseId)
+      })),
+      responses: (responseRows || []).map(row => {
+        const responseStatus = statusNumberToString(
+          Number(row.responseStatus)
+        ) || String(row.responseStatus ?? '');
+        return {
+          kind: 'response',
+          id: Number(row.responseId),
+          label: String(row.variableId || row.responseId),
+          secondaryLabel: [
+            row.bookletName,
+            row.unitAlias || row.unitName,
+            row.personCode,
+            responseStatus
+          ]
+            .filter(Boolean)
+            .join(' · '),
+          personId: Number(row.personId),
+          personCode: String(row.personCode || ''),
+          personGroup: String(row.personGroup || ''),
+          personLogin: String(row.personLogin || ''),
+          bookletId: Number(row.bookletId),
+          bookletName: String(row.bookletName || ''),
+          unitId: Number(row.unitId),
+          unitName: String(row.unitName || ''),
+          unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
+          responseId: Number(row.responseId),
+          variableId: String(row.variableId || ''),
+          responseValue: String(row.responseValue || ''),
+          responseStatus
+        };
+      }),
+      totals: {
+        person: personTotal,
+        booklet: bookletTotal,
+        unit: unitTotal,
+        response: responseTotal
+      }
+    };
   }
 
   async findWorkspaceResponses(

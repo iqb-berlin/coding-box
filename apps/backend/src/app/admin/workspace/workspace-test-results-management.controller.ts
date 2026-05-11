@@ -26,7 +26,11 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import Persons from '../../database/entities/persons.entity';
 import {
-  RequestWithUser, PersonTestResult, BookletSearchResult, UnitSearchResult
+  RequestWithUser,
+  PersonTestResult,
+  BookletSearchResult,
+  UnitSearchResult,
+  QuickSearchResult
 } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -127,6 +131,47 @@ export class WorkspaceTestResultsManagementController {
       page,
       limit
     };
+  }
+
+  @Get(':workspace_id/test-results/quick-search')
+  @ApiOperation({
+    summary: 'Quick search test results',
+    description:
+            'Searches across persons, booklets, units and responses for quick navigation in the test results area.'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    description: 'ID of the workspace'
+  })
+  @ApiQuery({
+    name: 'q',
+    required: true,
+    description: 'Search text',
+    type: String
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Maximum results per category',
+    type: Number
+  })
+  @ApiOkResponse({
+    description: 'Quick search results retrieved successfully.'
+  })
+  @ApiBadRequestResponse({ description: 'Failed to run quick search' })
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async quickSearchTestResults(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+      @Query('q') query: string,
+                                         @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
+  ): Promise<QuickSearchResult> {
+    return this.workspaceTestResultsService.quickSearchTestResults(
+      workspaceId,
+      query,
+      limit
+    );
   }
 
   @Delete(':workspace_id/test-results')
