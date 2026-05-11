@@ -30,6 +30,10 @@ describe('UploadResultsService', () => {
               uniqueResponses: 0
             }),
             createPersonList: jest.fn().mockResolvedValue([]),
+            filterLogRowsForPerson: jest.fn((rows, person) => (rows || []).filter(row => row.groupname === person.group &&
+              row.loginname === person.login &&
+              row.code === person.code)),
+            ensureBookletsForUnitLogs: jest.fn(person => person),
             processPersonLogs: jest.fn().mockResolvedValue({
               issues: []
             })
@@ -309,6 +313,84 @@ test-group;test-user;code;booklet1;unit1;id1;123456789;KEY=VALUE`;
       expect(personService.assignBookletLogsToPerson).toHaveBeenCalledWith(
         person,
         [expect.objectContaining({ unitname: '' })],
+        expect.any(Array),
+        'test.csv'
+      );
+    });
+
+    it('should pass only the current person unit logs into unit log assignment', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;originalUnitId;timestamp;logentry
+group-a;login-a;code-a;booklet1;unit1;id1;111;KEY=A
+group-b;login-b;code-b;booklet1;unit1;id1;222;KEY=B`;
+
+      const filePath = path.join(os.tmpdir(), 'test-person-scoped-unit-logs.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const bookletA = {
+        id: 'booklet1',
+        logs: [],
+        units: [],
+        sessions: []
+      };
+      const bookletB = {
+        id: 'booklet1',
+        logs: [],
+        units: [],
+        sessions: []
+      };
+      const personA = {
+        workspace_id: 1,
+        group: 'group-a',
+        login: 'login-a',
+        code: 'code-a',
+        booklets: [bookletA]
+      };
+      const personB = {
+        workspace_id: 1,
+        group: 'group-b',
+        login: 'login-b',
+        code: 'code-b',
+        booklets: [bookletB]
+      };
+
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([personA, personB]);
+      jest.spyOn(personService, 'assignBookletLogsToPerson').mockImplementation(person => person);
+      jest.spyOn(personService, 'assignUnitLogsToBooklet').mockImplementation(booklet => booklet);
+      jest.spyOn(personService, 'processPersonLogs').mockResolvedValue({
+        issues: []
+      } as never);
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'logs'
+        }
+      }));
+
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenCalledTimes(2);
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenNthCalledWith(
+        1,
+        bookletA,
+        [expect.objectContaining({ loginname: 'login-a', timestamp: '111' })],
+        expect.any(Array),
+        'test.csv'
+      );
+      expect(personService.assignUnitLogsToBooklet).toHaveBeenNthCalledWith(
+        2,
+        bookletB,
+        [expect.objectContaining({ loginname: 'login-b', timestamp: '222' })],
         expect.any(Array),
         'test.csv'
       );
