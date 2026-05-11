@@ -605,9 +605,13 @@ export class PersonPersistenceService {
         );
 
         if (!enrichedPerson) {
-          this.logger.warn(
-            `Enriched person not found in database: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`
-          );
+          const message = `Person not found in database: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}`;
+          this.logger.warn(message);
+          issues.push({
+            level: 'warning',
+            category: 'other',
+            message: `${message}. Logs for this person will be skipped.`
+          });
           continue;
         }
 
@@ -633,6 +637,11 @@ export class PersonPersistenceService {
           });
 
           if (!existingPerson) {
+            issues.push({
+              level: 'warning',
+              category: 'other',
+              message: `Person not found in database: ${originalPerson.group}-${originalPerson.login}-${originalPerson.code}. Logs for booklet "${booklet.id}" will be skipped.`
+            });
             continue;
           }
 
@@ -641,7 +650,13 @@ export class PersonPersistenceService {
           });
 
           if (!bookletInfo) {
-            this.logger.warn(`BookletInfo not found for booklet ID: ${booklet.id}`);
+            const message = `BookletInfo not found for booklet ID: ${booklet.id}`;
+            this.logger.warn(message);
+            issues.push({
+              level: 'warning',
+              category: 'missing_booklet',
+              message: `${message}. Logs for this booklet will be skipped.`
+            });
             continue;
           }
 
@@ -653,9 +668,13 @@ export class PersonPersistenceService {
           });
 
           if (!existingBooklet) {
-            this.logger.warn(
-              `Booklet not found in the repository: ${booklet.id}. Logs for this booklet will be skipped.`
-            );
+            const message = `Booklet not found in the repository: ${booklet.id}. Logs for this booklet will be skipped.`;
+            this.logger.warn(message);
+            issues.push({
+              level: 'warning',
+              category: 'missing_booklet',
+              message
+            });
             continue;
           }
 
@@ -674,7 +693,7 @@ export class PersonPersistenceService {
               success = false;
             }
 
-            await this.storeBookletSessions(booklet, existingBooklet);
+            await this.storeBookletSessions(booklet, existingBooklet, overwriteExistingLogs);
             await this.processUnits(booklet, existingBooklet, originalPerson, overwriteExistingLogs, issues);
           } catch (error) {
             success = false;
@@ -769,13 +788,14 @@ export class PersonPersistenceService {
    */
   async storeBookletSessions(
     booklet: TcMergeBooklet,
-    existingBooklet: Booklet
+    existingBooklet: Booklet,
+    overwriteExisting: boolean = true
   ): Promise<void> {
     if (!booklet.sessions || booklet.sessions.length === 0) {
       return;
     }
 
-    const sessionEntries = booklet.sessions.map(session => ({
+    let sessionEntries = booklet.sessions.map(session => ({
       browser: session.browser,
       os: session.os,
       screen: session.screen,
@@ -785,6 +805,44 @@ export class PersonPersistenceService {
     }));
 
     try {
+      if (overwriteExisting) {
+        await this.bookletSessionRepository.delete({
+          booklet: { id: existingBooklet.id } as Booklet
+        });
+      } else {
+        const existingSessions = await this.bookletSessionRepository.find({
+          where: {
+            booklet: { id: existingBooklet.id } as Booklet
+          },
+          select: ['browser', 'os', 'screen', 'loadcompletems', 'ts']
+        });
+        const existingSessionKeys = new Set(
+          existingSessions.map(session => [
+            session.browser || '',
+            session.os || '',
+            session.screen || '',
+            Number(session.loadcompletems) || 0,
+            Number(session.ts) || 0
+          ].join('@@'))
+        );
+
+        sessionEntries = sessionEntries.filter(session => {
+          const key = [
+            session.browser || '',
+            session.os || '',
+            session.screen || '',
+            Number(session.loadcompletems) || 0,
+            Number(session.ts) || 0
+          ].join('@@');
+          return !existingSessionKeys.has(key);
+        });
+      }
+
+      if (sessionEntries.length === 0) {
+        this.logger.log(`Skipped duplicate sessions for booklet ${booklet.id}`);
+        return;
+      }
+
       await this.bookletSessionRepository.save(sessionEntries);
       this.logger.log(
         `Saved ${sessionEntries.length} sessions for booklet ${booklet.id}`

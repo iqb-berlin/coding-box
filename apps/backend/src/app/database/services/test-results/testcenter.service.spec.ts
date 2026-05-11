@@ -358,6 +358,12 @@ describe('TestCenterService', () => {
         expect.any(Array),
         'Testcenter:ws-456:group1'
       );
+      expect(personService.assignBookletLogsToPerson).toHaveBeenCalledWith(
+        mockPersons[0],
+        [mockLogs[0]],
+        expect.any(Array),
+        'Testcenter:ws-456:group1'
+      );
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(123);

@@ -22,6 +22,7 @@ describe('PersonPersistenceService', () => {
   let unitRepository: Repository<Unit>;
   let bookletInfoRepository: Repository<BookletInfo>;
   let bookletLogRepository: Repository<BookletLog>;
+  let bookletSessionRepository: Repository<Session>;
   let chunkRepository: Repository<ChunkEntity>;
 
   beforeEach(async () => {
@@ -47,6 +48,7 @@ describe('PersonPersistenceService', () => {
     unitRepository = module.get(getRepositoryToken(Unit));
     bookletInfoRepository = module.get(getRepositoryToken(BookletInfo));
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
+    bookletSessionRepository = module.get(getRepositoryToken(Session));
     chunkRepository = module.get(getRepositoryToken(ChunkEntity));
   });
 
@@ -139,6 +141,80 @@ describe('PersonPersistenceService', () => {
     expect(result.success).toBe(true);
     expect(result.totalLogsSaved).toBe(2);
     expect(bookletLogRepository.save).toHaveBeenCalled();
+  });
+
+  it('should replace existing sessions when overwriting booklet logs', async () => {
+    jest.spyOn(bookletSessionRepository, 'delete').mockResolvedValue({} as never);
+    jest.spyOn(bookletSessionRepository, 'save').mockResolvedValue([] as never);
+
+    await service.storeBookletSessions(
+      {
+        id: 'b1',
+        logs: [],
+        units: [],
+        sessions: [
+          {
+            browser: 'Firefox 149',
+            os: 'Windows 10',
+            screen: '2048 x 1152',
+            ts: '123',
+            loadCompleteMS: 2706
+          }
+        ]
+      },
+      { id: 30 } as Booklet,
+      true
+    );
+
+    expect(bookletSessionRepository.delete).toHaveBeenCalledWith({
+      booklet: { id: 30 }
+    });
+    expect(bookletSessionRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        browser: 'Firefox 149',
+        booklet: expect.objectContaining({ id: 30 })
+      })
+    ]);
+  });
+
+  it('should skip duplicate sessions when not overwriting booklet logs', async () => {
+    jest.spyOn(bookletSessionRepository, 'find').mockResolvedValue([
+      {
+        browser: 'Firefox 149',
+        os: 'Windows 10',
+        screen: '2048 x 1152',
+        ts: 123,
+        loadcompletems: 2706
+      } as Session
+    ]);
+    const saveSpy = jest.spyOn(bookletSessionRepository, 'save');
+
+    await service.storeBookletSessions(
+      {
+        id: 'b1',
+        logs: [],
+        units: [],
+        sessions: [
+          {
+            browser: 'Firefox 149',
+            os: 'Windows 10',
+            screen: '2048 x 1152',
+            ts: '123',
+            loadCompleteMS: 2706
+          }
+        ]
+      },
+      { id: 30 } as Booklet,
+      false
+    );
+
+    expect(bookletSessionRepository.find).toHaveBeenCalledWith({
+      where: {
+        booklet: { id: 30 }
+      },
+      select: ['browser', 'os', 'screen', 'loadcompletems', 'ts']
+    });
+    expect(saveSpy).not.toHaveBeenCalled();
   });
 
   it('should match imported unit logs by original unit alias and visible unit name', async () => {
