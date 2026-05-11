@@ -21,6 +21,7 @@ import {
   ImportWorkspaceOptionKey
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { CacheService } from '../../../cache/cache.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
 
 export { Result };
 
@@ -55,7 +56,8 @@ export class TestcenterService {
     private readonly personService: PersonService,
     private readonly httpService: HttpService,
     private workspaceFilesService: WorkspaceFilesService,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) {}
 
   persons: Person[] = [];
@@ -134,7 +136,11 @@ export class TestcenterService {
       }));
     } catch (error) {
       logger.error(`Error fetching test groups: ${error.message}`);
-      return [];
+      throw new Error(
+        `Failed to retrieve test groups from Testcenter: ${
+          error?.message || 'Unknown error'
+        }`
+      );
     }
   }
 
@@ -880,6 +886,9 @@ export class TestcenterService {
           }
         });
       }
+      if (responses === 'true' || logs === 'true') {
+        await this.invalidateWorkspaceOverviewCache(workspace_id, result);
+      }
       result.success = true;
       return result;
     } catch (error) {
@@ -900,6 +909,27 @@ export class TestcenterService {
       }
       result.success = false;
       return result;
+    }
+  }
+
+  private async invalidateWorkspaceOverviewCache(
+    workspaceId: string,
+    result: Result
+  ): Promise<void> {
+    try {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
+        Number(workspaceId)
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not invalidate workspace overview cache after Testcenter import: ${detail}`);
+      if (!result.issues) result.issues = [];
+      result.issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Übersichtscache konnte nicht zuverlässig aktualisiert werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
     }
   }
 

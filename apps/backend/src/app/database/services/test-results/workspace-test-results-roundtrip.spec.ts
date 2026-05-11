@@ -297,7 +297,10 @@ describe('test results export/import roundtrip', () => {
 
     return new UploadResultsService(
       new PersonService(queryService, persistenceService),
-      createMock<JobQueueService>()
+      createMock<JobQueueService>(),
+      createMock<WorkspaceTestResultsService>({
+        invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+      })
     );
   };
 

@@ -1,5 +1,5 @@
 import {
-  Controller, Get, Param, Query, UseGuards
+  BadRequestException, Controller, Get, Param, Query, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -277,12 +277,20 @@ export class WorkspaceTestCenterController {
       @Query('tc_workspace') tc_workspace: string,
       @Query('token') token: string
   ): Promise<TestGroupsInfoDto[]> {
-    return this.testCenterService.getTestgroups(
-      workspace_id,
-      tc_workspace,
-      server,
-      decodeURIComponent(url),
-      token
-    );
+    try {
+      return await this.testCenterService.getTestgroups(
+        workspace_id,
+        tc_workspace,
+        server,
+        decodeURIComponent(url),
+        token
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ?
+          error.message :
+          'Failed to retrieve test groups from Testcenter.'
+      );
+    }
   }
 }

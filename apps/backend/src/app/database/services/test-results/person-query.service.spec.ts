@@ -5,6 +5,7 @@ import { Booklet } from '../../entities/booklet.entity';
 import { Unit } from '../../entities/unit.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
+import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 const mockQueryBuilder = () => ({
   select: jest.fn().mockReturnThis(),
@@ -16,6 +17,7 @@ const mockQueryBuilder = () => ({
   groupBy: jest.fn().mockReturnThis(),
   addGroupBy: jest.fn().mockReturnThis(),
   getRawMany: jest.fn().mockResolvedValue([]),
+  getRawOne: jest.fn().mockResolvedValue({ count: 0 }),
   getCount: jest.fn().mockResolvedValue(0)
 });
 
@@ -26,6 +28,7 @@ describe('PersonQueryService', () => {
   let unitRepository: Repository<Unit>;
   let responseRepository: Repository<ResponseEntity>;
   let bookletLogRepository: Repository<BookletLog>;
+  let workspaceExclusionService: Pick<WorkspaceExclusionService, 'resolveExclusionsForQueries'>;
 
   beforeEach(() => {
     personsRepository = {
@@ -49,12 +52,21 @@ describe('PersonQueryService', () => {
       createQueryBuilder: jest.fn(() => mockQueryBuilder())
     } as unknown as Repository<BookletLog>;
 
+    workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
     service = new PersonQueryService(
       personsRepository,
       bookletRepository,
       unitRepository,
       responseRepository,
-      bookletLogRepository
+      bookletLogRepository,
+      workspaceExclusionService as WorkspaceExclusionService
     );
   });
 
@@ -97,13 +109,13 @@ describe('PersonQueryService', () => {
       (personsRepository.count as jest.Mock).mockResolvedValue(10);
 
       const groupsQb = mockQueryBuilder();
-      groupsQb.getRawMany.mockResolvedValue([{ group: 'G1' }, { group: 'G2' }]);
+      groupsQb.getRawOne.mockResolvedValue({ count: '2' });
 
       const bookletsQb = mockQueryBuilder();
-      bookletsQb.getRawMany.mockResolvedValue([{ name: 'B1' }, { name: 'B2' }]);
+      bookletsQb.getRawOne.mockResolvedValue({ count: '2' });
 
       const unitsQb = mockQueryBuilder();
-      unitsQb.getRawMany.mockResolvedValue([{ unitKey: 'U1' }, { unitKey: 'U2' }]);
+      unitsQb.getRawOne.mockResolvedValue({ count: '2' });
 
       const responsesQb = mockQueryBuilder();
       responsesQb.getCount.mockResolvedValue(50);
@@ -122,6 +134,7 @@ describe('PersonQueryService', () => {
         uniqueUnits: 2,
         uniqueResponses: 50
       });
+      expect(workspaceExclusionService.resolveExclusionsForQueries).toHaveBeenCalledWith(1);
     });
 
     it('should return zero values when workspace is empty', async () => {
@@ -129,6 +142,7 @@ describe('PersonQueryService', () => {
 
       const qb = mockQueryBuilder();
       qb.getRawMany.mockResolvedValue([]);
+      qb.getRawOne.mockResolvedValue({ count: 0 });
       qb.getCount.mockResolvedValue(0);
 
       (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
@@ -147,18 +161,61 @@ describe('PersonQueryService', () => {
       });
     });
 
-    it('should handle database errors gracefully', async () => {
+    it('should use the same exclusions and autocoder filtering as the workspace overview', async () => {
+      (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
+        globalIgnoredUnits: ['ignored-unit.xml'],
+        ignoredBooklets: ['ignored-booklet'],
+        testletIgnoredUnits: [{ bookletId: 'booklet-a', unitId: 'testlet-unit.xml' }]
+      });
+      (personsRepository.count as jest.Mock).mockResolvedValue(10);
+
+      const groupsQb = mockQueryBuilder();
+      groupsQb.getRawOne.mockResolvedValue({ count: '2' });
+
+      const bookletsQb = mockQueryBuilder();
+      bookletsQb.getRawOne.mockResolvedValue({ count: '1' });
+
+      const unitsQb = mockQueryBuilder();
+      unitsQb.getRawOne.mockResolvedValue({ count: '3' });
+
+      const responsesQb = mockQueryBuilder();
+      responsesQb.getCount.mockResolvedValue(30);
+
+      (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(groupsQb);
+      (bookletRepository.createQueryBuilder as jest.Mock).mockReturnValue(bookletsQb);
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitsQb);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responsesQb);
+
+      await service.getWorkspaceUploadStats(1);
+
+      expect(bookletsQb.andWhere).toHaveBeenCalledWith(
+        'UPPER(bookletinfo.name) NOT IN (:...ignoredBookletsOnly)',
+        { ignoredBookletsOnly: ['IGNORED-BOOKLET'] }
+      );
+      expect(unitsQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
+        expect.objectContaining({ workspaceExclusionIgnoredUnits: ['IGNORED-UNIT'] })
+      );
+      expect(unitsQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('UPPER(bookletinfo.name) NOT IN'),
+        expect.objectContaining({ workspaceExclusionIgnoredBooklets: ['IGNORED-BOOKLET'] })
+      );
+      expect(unitsQb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('NOT ((UPPER(bookletinfo.name) = :workspaceExclusionBooklet0'),
+        expect.objectContaining({
+          workspaceExclusionBooklet0: 'BOOKLET-A',
+          workspaceExclusionUnit0: 'TESTLET-UNIT'
+        })
+      );
+      expect(responsesQb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should surface database errors instead of returning misleading zero stats', async () => {
       (personsRepository.count as jest.Mock).mockRejectedValue(new Error('DB Error'));
 
-      const result = await service.getWorkspaceUploadStats(1);
-
-      expect(result).toEqual({
-        testPersons: 0,
-        testGroups: 0,
-        uniqueBooklets: 0,
-        uniqueUnits: 0,
-        uniqueResponses: 0
-      });
+      await expect(service.getWorkspaceUploadStats(1)).rejects.toThrow('DB Error');
     });
   });
 
