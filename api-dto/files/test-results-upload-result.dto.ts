@@ -60,4 +60,10 @@ export class TestResultsUploadResultDto {
 
   @ApiProperty({ type: Boolean, required: false })
     importedResponses?: boolean;
+
+  @ApiProperty({ type: Boolean, required: false })
+    overviewPending?: boolean;
+
+  @ApiProperty({ type: String, required: false })
+    overviewMessage?: string;
 }

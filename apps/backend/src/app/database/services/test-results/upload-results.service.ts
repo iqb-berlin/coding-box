@@ -20,6 +20,7 @@ import {
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -30,8 +31,66 @@ export class UploadResultsService {
   constructor(
     private readonly personService: PersonService,
     @Inject(forwardRef(() => JobQueueService))
-    private readonly jobQueueService: JobQueueService
+    private readonly jobQueueService: JobQueueService,
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService
   ) {
+  }
+
+  private emptyUploadStats(): TestResultsUploadStatsDto {
+    return {
+      testPersons: 0,
+      testGroups: 0,
+      uniqueBooklets: 0,
+      uniqueUnits: 0,
+      uniqueResponses: 0
+    };
+  }
+
+  private async readWorkspaceUploadStats(
+    workspaceId: number,
+    phase: 'before' | 'after',
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<{ stats: TestResultsUploadStatsDto; failed: boolean }> {
+    try {
+      return {
+        stats: await this.personService.getWorkspaceUploadStats(workspaceId),
+        failed: false
+      };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not read upload stats ${phase} import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Datenbankstatistik konnte nicht zuverlässig gelesen werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
+
+      return {
+        stats: this.emptyUploadStats(),
+        failed: true
+      };
+    }
+  }
+
+  private async invalidateWorkspaceOverviewCache(
+    workspaceId: number,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<boolean> {
+    try {
+      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      return false;
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not invalidate workspace overview cache after import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Ergebnisdaten wurden verarbeitet, aber der Übersichtscache konnte nicht zuverlässig aktualisiert werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
+      });
+      return true;
+    }
   }
 
   private filterImportedPersons(
@@ -137,7 +196,10 @@ export class UploadResultsService {
 
     this.logger.log(`Processing upload job ${job.id} for workspace ${workspaceId}, file: ${file.originalname}`);
 
-    const before = await this.personService.getWorkspaceUploadStats(workspaceId);
+    const issues: TestResultsUploadIssueDto[] = [];
+    const beforeStats = await this.readWorkspaceUploadStats(workspaceId, 'before', issues);
+    const before = beforeStats.stats;
+    let overviewPending = beforeStats.failed;
     // Initialize aggregation structures locally for this job
     const expectedAgg = {
       persons: new Set<string>(),
@@ -146,7 +208,6 @@ export class UploadResultsService {
       units: new Set<string>(),
       responses: new Set<string>()
     };
-    const issues: TestResultsUploadIssueDto[] = [];
     const logMetricsAgg = {
       allBooklets: new Set<string>(),
       bookletsWithLogs: new Set<string>(),
@@ -359,7 +420,12 @@ export class UploadResultsService {
       issues.push({ level: 'error', message: `Processing error: ${e.message}`, fileName: file.originalname });
     }
 
-    const after = await this.personService.getWorkspaceUploadStats(workspaceId);
+    overviewPending = overviewPending ||
+      await this.invalidateWorkspaceOverviewCache(workspaceId, issues);
+
+    const afterStats = await this.readWorkspaceUploadStats(workspaceId, 'after', issues);
+    const after = afterStats.stats;
+    overviewPending = overviewPending || afterStats.failed;
     const expected: TestResultsUploadStatsDto = {
       testPersons: expectedAgg.persons.size,
       testGroups: expectedAgg.groups.size,
@@ -404,7 +470,11 @@ export class UploadResultsService {
       issues: issues.length ? issues : undefined,
       logMetrics,
       importedLogs: resultType === 'logs',
-      importedResponses: resultType === 'responses'
+      importedResponses: resultType === 'responses',
+      overviewPending: overviewPending || undefined,
+      overviewMessage: overviewPending ?
+        'Die Daten wurden verarbeitet, aber die aggregierten Datenbankzahlen konnten noch nicht zuverlässig gelesen werden.' :
+        undefined
     };
   }
 

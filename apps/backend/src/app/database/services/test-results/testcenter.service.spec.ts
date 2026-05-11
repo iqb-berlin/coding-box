@@ -10,11 +10,13 @@ import { PersonService } from './person.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { Person, Response, Log } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
+import { WorkspaceTestResultsService } from './workspace-test-results.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
   let httpService: { put: jest.Mock; axiosRef: { get: jest.Mock } };
   let personService: DeepMocked<PersonService>;
+  let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -43,6 +45,12 @@ describe('TestCenterService', () => {
             get: jest.fn().mockResolvedValue(null),
             set: jest.fn().mockResolvedValue(true)
           })
+        },
+        {
+          provide: WorkspaceTestResultsService,
+          useValue: createMock<WorkspaceTestResultsService>({
+            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+          })
         }
       ]
     }).compile();
@@ -50,6 +58,7 @@ describe('TestCenterService', () => {
     service = module.get<TestcenterService>(TestcenterService);
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
+    workspaceTestResultsService = module.get(WorkspaceTestResultsService);
   });
 
   afterEach(() => {
@@ -184,16 +193,15 @@ describe('TestCenterService', () => {
         expect(result[0].existsInDatabase).toBe(true);
       });
 
-      it('should handle API errors gracefully', async () => {
+      it('should surface API errors when fetching test groups fails', async () => {
         httpService.axiosRef.get.mockRejectedValue(new Error('Network error'));
-        const result = await service.getTestgroups(
+        await expect(service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
           'demo',
           '',
           mockAuthToken
-        );
-        expect(result).toEqual([]);
+        )).rejects.toThrow('Failed to retrieve test groups from Testcenter');
       });
     });
   });
@@ -260,6 +268,9 @@ describe('TestCenterService', () => {
       expect(result.persons).toBe(1);
       expect(result.booklets).toBe(1);
       expect(result.units).toBe(1);
+      expect(
+        workspaceTestResultsService.invalidateWorkspaceStatsCache
+      ).toHaveBeenCalledWith(123);
     });
   });
 
@@ -347,6 +358,9 @@ describe('TestCenterService', () => {
         expect.any(Array),
         'Testcenter:ws-456:group1'
       );
+      expect(
+        workspaceTestResultsService.invalidateWorkspaceStatsCache
+      ).toHaveBeenCalledWith(123);
     });
   });
 
