@@ -328,13 +328,20 @@ export class PersonService {
       const normalizedLogEntry = this.normalizeQuotedLogPart(logEntry);
 
       try {
-        const parsedJson = JSON.parse(normalizedLogEntry) as Record<string, string | number | undefined>;
+        const parsedJson = JSON.parse(normalizedLogEntry) as Record<string, string | number | null | undefined>;
+        const stringValue = (
+          key: string,
+          fallback: string
+        ): string => {
+          const value = parsedJson[key];
+          return value === undefined || value === null ? fallback : value.toString();
+        };
 
         return {
-          browserVersion: parsedJson.browserVersion?.toString() || 'Unknown',
-          browserName: parsedJson.browserName?.toString() || 'Unknown',
-          osName: parsedJson.osName?.toString() || 'Unknown',
-          device: parsedJson.device?.toString() || 'Unknown',
+          browserVersion: stringValue('browserVersion', 'Unknown'),
+          browserName: stringValue('browserName', 'Unknown'),
+          osName: stringValue('osName', 'Unknown'),
+          device: stringValue('device', 'Unknown'),
           screenSizeWidth: Number(parsedJson.screenSizeWidth) || 0,
           screenSizeHeight: Number(parsedJson.screenSizeHeight) || 0,
           loadTime: Number(parsedJson.loadTime) || 0
@@ -344,17 +351,24 @@ export class PersonService {
       }
 
       const keyValues = normalizedLogEntry.slice(1, -1).split(',');
-      const parsedResult: { [key: string]: string | number | undefined } = {};
+      const parsedResult: { [key: string]: string | number | null | undefined } = {};
       keyValues.forEach(pair => {
         const [key, value] = pair.split(':', 2).map(part => this.normalizeQuotedLogPart(part));
-        parsedResult[key] = value || undefined;
+        parsedResult[key] = value === undefined ? undefined : value;
       });
+      const stringValue = (
+        key: string,
+        fallback: string
+      ): string => {
+        const value = parsedResult[key];
+        return value === undefined || value === null ? fallback : value.toString();
+      };
 
       return {
-        browserVersion: parsedResult.browserVersion?.toString() || 'Unknown',
-        browserName: parsedResult.browserName?.toString() || 'Unknown',
-        osName: parsedResult.osName?.toString() || 'Unknown',
-        device: parsedResult.device?.toString() || 'Unknown',
+        browserVersion: stringValue('browserVersion', 'Unknown'),
+        browserName: stringValue('browserName', 'Unknown'),
+        osName: stringValue('osName', 'Unknown'),
+        device: stringValue('device', 'Unknown'),
         screenSizeWidth: Number(parsedResult.screenSizeWidth) || 0,
         screenSizeHeight: Number(parsedResult.screenSizeHeight) || 0,
         loadTime: Number(parsedResult.loadTime) || 0
