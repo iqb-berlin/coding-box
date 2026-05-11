@@ -1,5 +1,5 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">Item/Variablenanalyse</h2>
+  <h2 class="dialog-title">Code-/Score-Verteilung</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
@@ -38,7 +38,7 @@
     @if (isLoadingVariableAnalysis) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Lade Variablenanalyse...</p>
+        <p class="loading-text">Lade Code-/Score-Verteilung...</p>
       </div>
     }
 
@@ -128,8 +128,8 @@
     @if (!isLoadingVariableAnalysis && variableAnalysisData.length === 0) {
       <div class="empty-state">
         <mat-icon class="empty-icon">analytics</mat-icon>
-        <h3>Keine Variablenanalyse-Daten verfügbar</h3>
-        <p class="empty-text">Es wurden keine Daten für die Variablenanalyse gefunden.</p>
+        <h3>Keine Code-/Score-Daten verfügbar</h3>
+        <p class="empty-text">Es wurden keine Daten für die Code-/Score-Verteilung gefunden.</p>
       </div>
     }
   </div>
