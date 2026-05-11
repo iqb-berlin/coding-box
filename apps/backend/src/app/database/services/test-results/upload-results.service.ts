@@ -36,6 +36,10 @@ type UploadSummaryAccumulator = {
   skippedLogs: number;
 };
 
+type LogRowWarningStats = {
+  zeroTimestampRows: number;
+};
+
 @Injectable()
 export class UploadResultsService {
   private readonly logger = new Logger(UploadResultsService.name);
@@ -167,13 +171,13 @@ export class UploadResultsService {
     fileName: string,
     issues: TestResultsUploadIssueDto[],
     bookletLogKeys: Set<string>,
-    missingBookletLogWarnings: Set<string>
+    missingBookletLogWarnings: Set<string>,
+    warningStats: LogRowWarningStats
   ): boolean {
     let rowCannotBeImported = false;
     const missingIdentityFields = [
       !row.groupname ? 'groupname' : '',
-      !row.loginname ? 'loginname' : '',
-      !row.code ? 'code' : ''
+      !row.loginname ? 'loginname' : ''
     ].filter(Boolean);
 
     if (missingIdentityFields.length > 0) {
@@ -218,13 +222,7 @@ export class UploadResultsService {
         rowIndex
       });
     } else if (Number(timestamp) === 0) {
-      issues.push({
-        level: 'warning',
-        category: 'timestamp',
-        message: 'Timestamp is 0 in log row; chronological replay views may place this entry at the Unix epoch.',
-        fileName,
-        rowIndex
-      });
+      warningStats.zeroTimestampRows += 1;
     }
 
     if (row.unitname && row.bookletname) {
@@ -242,6 +240,22 @@ export class UploadResultsService {
     }
 
     return rowCannotBeImported;
+  }
+
+  private addAggregatedLogRowWarnings(
+    fileName: string,
+    issues: TestResultsUploadIssueDto[],
+    warningStats: LogRowWarningStats
+  ): void {
+    if (warningStats.zeroTimestampRows > 0) {
+      const plural = warningStats.zeroTimestampRows === 1 ? 'entry has' : 'entries have';
+      issues.push({
+        level: 'warning',
+        category: 'timestamp',
+        message: `${warningStats.zeroTimestampRows} log ${plural} timestamp 0; chronological replay views may place these entries at the Unix epoch.`,
+        fileName
+      });
+    }
   }
 
   private countIssues(issues: TestResultsUploadIssueDto[]): TestResultsUploadSummaryDto['issueCounts'] | undefined {
@@ -462,6 +476,9 @@ export class UploadResultsService {
                 .map(row => this.getLogPersonBookletKey(row))
             );
             const missingBookletLogWarnings = new Set<string>();
+            const warningStats: LogRowWarningStats = {
+              zeroTimestampRows: 0
+            };
 
             rowData.forEach((row, rowIndex) => {
               const groupname = row.groupname || '';
@@ -483,7 +500,8 @@ export class UploadResultsService {
                 file.originalname,
                 issues,
                 bookletLogKeys,
-                missingBookletLogWarnings
+                missingBookletLogWarnings,
+                warningStats
               )) {
                 importSummaryAgg.skippedRows += 1;
               }
@@ -507,6 +525,7 @@ export class UploadResultsService {
                 logMetricsAgg.unitsWithLogs.add(uKey);
               }
             });
+            this.addAggregatedLogRowWarnings(file.originalname, issues, warningStats);
 
             const { bookletLogs, unitLogs } = rowData.reduce(
               (acc, row) => {
