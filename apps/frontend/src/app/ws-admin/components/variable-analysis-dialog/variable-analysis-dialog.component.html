@@ -73,6 +73,21 @@
           @for (combo of variableCombos; track combo) {
           <div class="variable-section">
             <h3 class="variable-title">{{ combo.unitName }}: {{ combo.variableId }}</h3>
+            @let summary = getComboSummary(combo);
+            <div class="variable-summary" [matTooltip]="summary.statusSummary">
+              <span>
+                <strong>{{ 'variable-analysis.total-cases' | translate }}:</strong>
+                {{ summary.totalCount }}
+              </span>
+              <span>
+                <strong>{{ 'variable-analysis.empty-values' | translate }}:</strong>
+                {{ summary.emptyCount }} ({{ formatPercentage(summary.emptyPercentage) }})
+              </span>
+              <span>
+                <strong>{{ 'variable-analysis.status-distribution' | translate }}:</strong>
+                {{ summary.statusSummary }}
+              </span>
+            </div>
 
             <div class="table-container">
               <table mat-table [dataSource]="variableFrequencies[getComboKey(combo)]" matSort class="frequency-table">

@@ -26,6 +26,16 @@ export interface VariableCombo {
   unitId: number;
   unitName: string;
   variableId: string;
+  totalCount?: number;
+  emptyCount?: number;
+  emptyPercentage?: number;
+  statusCounts?: VariableStatusCount[];
+}
+
+export interface VariableStatusCount {
+  status: number;
+  count: number;
+  percentage: number;
 }
 
 export interface VariableAnalysisResultDto {

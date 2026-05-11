@@ -5,7 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { VariableAnalysisJobData } from '../job-queue.service';
-import { VariableAnalysisResultDto } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
+import { VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import {
   applyResolvedExclusionsToQuery,
@@ -65,10 +65,14 @@ export class VariableAnalysisProcessor {
 
       // Execute the query to get variable combinations
       const variableCombosResult = await variableCombosQuery.getRawMany();
-      const variableCombos = variableCombosResult.map(result => ({
+      const variableCombos: VariableCombo[] = variableCombosResult.map(result => ({
         unitId: Number(result.unitId),
         unitName: result.unitName,
-        variableId: result.variableId
+        variableId: result.variableId,
+        totalCount: 0,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        statusCounts: []
       }));
 
       // If no variable combinations found, return empty result
@@ -111,6 +115,27 @@ export class VariableAnalysisProcessor {
           const valuesResult = await valuesQuery.getRawMany();
 
           const totalResponses = valuesResult.reduce((sum, result) => sum + parseInt(result.count, 10), 0);
+          const emptyCount = valuesResult
+            .filter(result => result.value === null || result.value === undefined || result.value === '')
+            .reduce((sum, result) => sum + parseInt(result.count, 10), 0);
+
+          const statusQuery = query.clone()
+            .select('response.status', 'status')
+            .addSelect('COUNT(*)', 'count')
+            .andWhere('unit.id = :unitId', { unitId: combo.unitId })
+            .andWhere('response.variableid = :varId', { varId: combo.variableId })
+            .groupBy('response.status')
+            .orderBy('count', 'DESC');
+
+          const statusResults = await statusQuery.getRawMany();
+          combo.totalCount = totalResponses;
+          combo.emptyCount = emptyCount;
+          combo.emptyPercentage = totalResponses > 0 ? (emptyCount / totalResponses) * 100 : 0;
+          combo.statusCounts = statusResults.map(result => ({
+            status: Number(result.status),
+            count: parseInt(result.count, 10),
+            percentage: totalResponses > 0 ? (parseInt(result.count, 10) / totalResponses) * 100 : 0
+          }));
 
           // Map to DTOs
           frequencies[comboKey] = valuesResult.map(result => ({

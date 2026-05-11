@@ -46,6 +46,10 @@ export interface VariableAnalysisData {
       unitId: number;
       unitName: string;
       variableId: string;
+      totalCount?: number;
+      emptyCount?: number;
+      emptyPercentage?: number;
+      statusCounts?: VariableStatusCount[];
     }[];
     frequencies: {
       [key: string]: {
@@ -71,10 +75,27 @@ export interface VariableFrequency {
   percentage: number;
 }
 
+export interface VariableStatusCount {
+  status: number | string;
+  count: number;
+  percentage: number;
+}
+
 export interface VariableCombo {
   unitId: number;
   unitName: string;
   variableId: string;
+  totalCount?: number;
+  emptyCount?: number;
+  emptyPercentage?: number;
+  statusCounts?: VariableStatusCount[];
+}
+
+interface VariableComboSummary {
+  totalCount: number;
+  emptyCount: number;
+  emptyPercentage: number;
+  statusSummary: string;
 }
 
 @Component({
@@ -104,6 +125,16 @@ export interface VariableCombo {
   ]
 })
 export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
+  private readonly responseStatusLabels: Record<number, string> = {
+    0: 'UNSET',
+    1: 'NOT_REACHED',
+    2: 'DISPLAYED',
+    3: 'VALUE_CHANGED',
+    4: 'DERIVE_ERROR',
+    5: 'CODING_COMPLETE',
+    6: 'NO_CODING'
+  };
+
   isLoading = false;
   variableFrequencies: { [key: string]: VariableFrequency[] } = {};
   displayedColumns: string[] = ['value', 'count', 'percentage'];
@@ -209,9 +240,9 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   analyzeVariables(): void {
     this.isLoading = true;
+    this.variableFrequencies = {};
 
     if (this.data.analysisResults) {
-      this.allVariableCombos = this.data.analysisResults!.variableCombos;
       Object.keys(this.data.analysisResults!.frequencies).forEach(comboKey => {
         const firstFreq = this.data.analysisResults!.frequencies[comboKey][0];
         if (firstFreq) {
@@ -225,14 +256,20 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           }));
         }
       });
+      this.allVariableCombos = this.data.analysisResults!.variableCombos.map(combo => this.withDerivedSummary(combo));
     } else if (this.data.responses && this.data.responses.length > 0) {
       const responsesByVariable: { [key: string]: { [key: string]: number } } = {};
+      const comboSummaries = new Map<string, VariableCombo>();
 
       const variableIds = Array.from(new Set(this.data.responses.map(r => r.variableid)));
       this.allVariableCombos = variableIds.map(variableId => ({
         unitId: 0,
         unitName: 'Unknown',
-        variableId
+        variableId,
+        totalCount: 0,
+        emptyCount: 0,
+        emptyPercentage: 0,
+        statusCounts: []
       }));
 
       this.data.responses.forEach(response => {
@@ -246,6 +283,32 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         }
 
         responsesByVariable[response.variableid][value] += 1;
+
+        const comboKey = `0:${response.variableid}`;
+        const summary = comboSummaries.get(comboKey) || {
+          unitId: 0,
+          unitName: 'Unknown',
+          variableId: response.variableid,
+          totalCount: 0,
+          emptyCount: 0,
+          emptyPercentage: 0,
+          statusCounts: []
+        };
+        summary.totalCount = (summary.totalCount || 0) + 1;
+        if (value === '') {
+          summary.emptyCount = (summary.emptyCount || 0) + 1;
+        }
+
+        const status = response.status;
+        const statusCounts = summary.statusCounts || [];
+        const existingStatus = statusCounts.find(item => item.status === status);
+        if (existingStatus) {
+          existingStatus.count += 1;
+        } else {
+          statusCounts.push({ status, count: 1, percentage: 0 });
+        }
+        summary.statusCounts = statusCounts;
+        comboSummaries.set(comboKey, summary);
       });
 
       Object.keys(responsesByVariable).forEach(variableid => {
@@ -266,6 +329,22 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           .sort((a, b) => b.count - a.count)
           .slice(0, this.MAX_VALUES_PER_VARIABLE);
       });
+      this.allVariableCombos = this.allVariableCombos.map(combo => {
+        const comboKey = this.getComboKey(combo);
+        const summary = comboSummaries.get(comboKey) || combo;
+        const totalCount = summary.totalCount || 0;
+        const emptyCount = summary.emptyCount || 0;
+        return {
+          ...summary,
+          emptyPercentage: totalCount > 0 ? (emptyCount / totalCount) * 100 : 0,
+          statusCounts: (summary.statusCounts || [])
+            .map(item => ({
+              ...item,
+              percentage: totalCount > 0 ? (item.count / totalCount) * 100 : 0
+            }))
+            .sort((a, b) => b.count - a.count)
+        };
+      });
     } else {
       this.allVariableCombos = [];
     }
@@ -283,6 +362,56 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   getComboKey(combo: { unitId: number; variableId: string }): string {
     return `${combo.unitId}:${combo.variableId}`;
+  }
+
+  private withDerivedSummary(combo: VariableCombo): VariableCombo {
+    const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
+    const totalCount = combo.totalCount ?? frequencies.reduce((sum, item) => sum + item.count, 0);
+    const emptyCount = combo.emptyCount ?? frequencies
+      .filter(item => item.value === '')
+      .reduce((sum, item) => sum + item.count, 0);
+
+    return {
+      ...combo,
+      totalCount,
+      emptyCount,
+      emptyPercentage: combo.emptyPercentage ?? (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0),
+      statusCounts: combo.statusCounts || []
+    };
+  }
+
+  getComboSummary(combo: VariableCombo): VariableComboSummary {
+    const frequencies = this.variableFrequencies[this.getComboKey(combo)] || [];
+    const totalCount = combo.totalCount ?? frequencies.reduce((sum, item) => sum + item.count, 0);
+    const emptyCount = combo.emptyCount ?? frequencies
+      .filter(item => item.value === '')
+      .reduce((sum, item) => sum + item.count, 0);
+    const emptyPercentage = combo.emptyPercentage ?? (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0);
+
+    return {
+      totalCount,
+      emptyCount,
+      emptyPercentage,
+      statusSummary: this.getStatusSummary(combo.statusCounts || [])
+    };
+  }
+
+  formatPercentage(value: number): string {
+    return `${value.toFixed(1)}%`;
+  }
+
+  private getStatusSummary(statusCounts: VariableStatusCount[]): string {
+    if (!statusCounts.length) {
+      return 'keine Statusdaten';
+    }
+
+    const visibleItems = statusCounts.slice(0, 3).map(item => {
+      const status = typeof item.status === 'number' ? this.responseStatusLabels[item.status] || item.status : item.status;
+      return `${status}: ${item.count} (${this.formatPercentage(item.percentage)})`;
+    });
+    const remainingCount = statusCounts.length - visibleItems.length;
+
+    return remainingCount > 0 ? `${visibleItems.join(', ')} +${remainingCount}` : visibleItems.join(', ');
   }
 
   filterVariables(): void {
