@@ -130,6 +130,7 @@ describe('TestResultsComponent', () => {
             })),
             getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
             invalidateCache: jest.fn(),
+            flatResponseFilterRequests$: of(),
             previewDeleteTestResults: jest.fn().mockReturnValue(of(null)),
             createDeleteTestResultsJob: jest.fn(),
             previewDeleteTestLogs: jest.fn().mockReturnValue(of(null)),
@@ -141,6 +142,7 @@ describe('TestResultsComponent', () => {
           useValue: {
             getValidationStatus: jest.fn().mockReturnValue(of({})),
             getAllTaskIds: jest.fn().mockReturnValue({}),
+            getAllValidationResults: jest.fn().mockReturnValue({}),
             observeTaskIds: jest.fn().mockReturnValue(of({})),
             observeValidationResults: jest.fn().mockReturnValue(of({})),
             observeBatchState: jest.fn().mockReturnValue(of({ status: 'idle' }))
