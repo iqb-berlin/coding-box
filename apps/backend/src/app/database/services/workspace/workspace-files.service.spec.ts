@@ -530,3 +530,155 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
     ]);
   });
 });
+
+describe('WorkspaceFilesService.getUnitVariableDetails', () => {
+  type CtorParams = ConstructorParameters<typeof WorkspaceFilesService>;
+
+  const unitXml = `
+    <Unit>
+      <Metadata><Id>UnitA</Id></Metadata>
+      <BaseVariables>
+        <Variable id="B1" alias="base_alias" type="string" />
+        <Variable alias="derived_alias" type="integer" />
+      </BaseVariables>
+      <DerivedVariables>
+        <Variable id="DX" alias="xml_derived_alias" type="boolean" />
+      </DerivedVariables>
+    </Unit>
+  `;
+
+  const codingScheme = {
+    version: '3.2',
+    variableCodings: [
+      {
+        id: 'B1',
+        alias: 'base_alias',
+        sourceType: 'BASE',
+        type: 'string',
+        codes: []
+      },
+      {
+        id: 'D1',
+        alias: 'derived_alias',
+        sourceType: 'MANUAL',
+        type: 'integer',
+        codes: [{ id: 1, label: 'Code 1', score: 1 }]
+      },
+      {
+        id: 'S1',
+        alias: 'scheme_only_alias',
+        sourceType: 'SUM_SCORE',
+        type: 'number',
+        codes: [{ id: 2, label: 'Code 2', score: 2 }]
+      },
+      {
+        id: 'N1',
+        alias: 'excluded_alias',
+        sourceType: 'BASE_NO_VALUE',
+        type: 'string',
+        codes: []
+      }
+    ]
+  };
+
+  const unitFiles = [
+    {
+      workspace_id: 1,
+      file_type: 'Unit',
+      file_id: 'UnitA',
+      data: Buffer.from(unitXml)
+    }
+  ];
+
+  const codingSchemes = [
+    {
+      workspace_id: 1,
+      file_type: 'Resource',
+      file_id: 'UnitA.VOCS',
+      data: JSON.stringify(codingScheme)
+    }
+  ];
+
+  const mockFileUploadRepository = {
+    find: jest.fn()
+  };
+
+  function makeService(): WorkspaceFilesService {
+    return new WorkspaceFilesService(
+      mockFileUploadRepository as unknown as CtorParams[0],
+      {} as unknown as CtorParams[1],
+      {} as unknown as CtorParams[2],
+      {} as unknown as CtorParams[3],
+      {} as unknown as CtorParams[4],
+      {} as unknown as CtorParams[5],
+      {} as unknown as CtorParams[6],
+      {} as unknown as CtorParams[7],
+      {} as unknown as CtorParams[8],
+      {} as unknown as CtorParams[9],
+      { delete: jest.fn() } as unknown as CtorParams[10],
+      { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11]
+    );
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    mockFileUploadRepository.find.mockImplementation(({ where }) => {
+      if (where.file_type === 'Unit') {
+        return Promise.resolve(unitFiles);
+      }
+      if (where.file_type === 'Resource') {
+        return Promise.resolve(codingSchemes);
+      }
+      return Promise.resolve([]);
+    });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('should mark base XML variables as derived when the VOCS sourceType is derived', async () => {
+    const service = makeService();
+
+    const [unit] = await service.getUnitVariableDetails(1);
+    const derivedFromScheme = unit.variables.find(variable => variable.alias === 'derived_alias');
+    const baseVariable = unit.variables.find(variable => variable.alias === 'base_alias');
+
+    expect(baseVariable).toMatchObject({
+      id: 'B1',
+      alias: 'base_alias',
+      isDerived: false
+    });
+    expect(derivedFromScheme).toMatchObject({
+      id: 'D1',
+      alias: 'derived_alias',
+      type: 'integer',
+      isDerived: true
+    });
+  });
+
+  it('should include XML-derived and scheme-only derived variables', async () => {
+    const service = makeService();
+
+    const [unit] = await service.getUnitVariableDetails(1);
+    const xmlDerived = unit.variables.find(variable => variable.alias === 'xml_derived_alias');
+    const schemeOnlyDerived = unit.variables.find(variable => variable.alias === 'scheme_only_alias');
+    const excludedVariable = unit.variables.find(variable => variable.alias === 'excluded_alias');
+
+    expect(xmlDerived).toMatchObject({
+      id: 'DX',
+      alias: 'xml_derived_alias',
+      isDerived: true
+    });
+    expect(schemeOnlyDerived).toMatchObject({
+      id: 'S1',
+      alias: 'scheme_only_alias',
+      type: 'number',
+      isDerived: true
+    });
+    expect(excludedVariable).toBeUndefined();
+  });
+});

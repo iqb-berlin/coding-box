@@ -62,6 +62,15 @@ type WorkspaceUnitVisibility = {
   visibleUnitIds: Set<string> | null;
 };
 
+type UnitVariableType =
+  | 'string'
+  | 'integer'
+  | 'number'
+  | 'boolean'
+  | 'attachment'
+  | 'json'
+  | 'no-value';
+
 @Injectable()
 export class WorkspaceFilesService implements OnModuleInit {
   private readonly logger = new Logger(WorkspaceFilesService.name);
@@ -77,6 +86,10 @@ export class WorkspaceFilesService implements OnModuleInit {
     if (this.detailedUnitCacheLogging) {
       this.logger.debug(message);
     }
+  }
+
+  private isDerivedSourceType(sourceType: string | undefined): boolean {
+    return !!sourceType && sourceType !== 'BASE' && sourceType !== 'BASE_NO_VALUE';
   }
 
   private toRedisMap(map: Map<string, Set<string>>): Record<string, string[]> {
@@ -2621,8 +2634,7 @@ ${bookletRefs}
                 // Resolve to alias — alias is what response.variableid contains
                 const resolvedAlias = idToAlias?.get(schemeId) ?? schemeId;
                 if (
-                  sourceType !== 'BASE_NO_VALUE' &&
-                  sourceType !== 'BASE' &&
+                  this.isDerivedSourceType(sourceType) &&
                   !variables.has(resolvedAlias)
                 ) {
                   variables.add(resolvedAlias);
@@ -2808,6 +2820,12 @@ ${bookletRefs}
 
       const codingSchemeMap = new Map<string, string>();
       const codingSchemeVariablesMap = new Map<string, Map<string, string>>();
+      const codingSchemeAliasToIdMap = new Map<string, Map<string, string>>();
+      const codingSchemeIdToAliasMap = new Map<string, Map<string, string>>();
+      const codingSchemeVariableTypesMap = new Map<
+      string,
+      Map<string, UnitVariableType>
+      >();
       const codingSchemeCodesMap = new Map<
       string,
       Map<
@@ -2836,7 +2854,9 @@ ${bookletRefs}
           const parsedScheme = JSON.parse(scheme.data) as {
             variableCodings?: {
               id: string;
+              alias?: string;
               sourceType?: string;
+              type?: UnitVariableType;
               processing?: string[];
               codes?: Array<{
                 id: number | string;
@@ -2852,6 +2872,9 @@ ${bookletRefs}
             Array.isArray(parsedScheme.variableCodings)
           ) {
             const variableSourceTypes = new Map<string, string>();
+            const variableAliasToId = new Map<string, string>();
+            const variableIdToAlias = new Map<string, string>();
+            const variableTypes = new Map<string, UnitVariableType>();
             const variableCodes = new Map<
             string,
             Array<{ id: string | number; label: string; score?: number }>
@@ -2863,6 +2886,13 @@ ${bookletRefs}
             for (const vc of parsedScheme.variableCodings) {
               if (vc.id && vc.sourceType) {
                 variableSourceTypes.set(vc.id, vc.sourceType);
+              }
+              if (vc.id && vc.alias) {
+                variableAliasToId.set(vc.alias, vc.id);
+                variableIdToAlias.set(vc.id, vc.alias);
+              }
+              if (vc.id && vc.type) {
+                variableTypes.set(vc.id, vc.type);
               }
               if (vc.id && vc.processing && Array.isArray(vc.processing)) {
                 if (vc.processing.includes('CODER_TRAINING_REQUIRED')) {
@@ -2902,6 +2932,9 @@ ${bookletRefs}
               }
             }
             codingSchemeVariablesMap.set(unitId, variableSourceTypes);
+            codingSchemeAliasToIdMap.set(unitId, variableAliasToId);
+            codingSchemeIdToAliasMap.set(unitId, variableIdToAlias);
+            codingSchemeVariableTypesMap.set(unitId, variableTypes);
             codingSchemeCodesMap.set(unitId, variableCodes);
             codingSchemeManualInstructionsMap.set(
               unitId,
@@ -2943,14 +2976,7 @@ ${bookletRefs}
             const variables: Array<{
               id: string;
               alias: string;
-              type:
-              | 'string'
-              | 'integer'
-              | 'number'
-              | 'boolean'
-              | 'attachment'
-              | 'json'
-              | 'no-value';
+              type: UnitVariableType;
               hasCodingScheme: boolean;
               codingSchemeRef?: string;
               codes?: Array<{
@@ -2963,6 +2989,8 @@ ${bookletRefs}
               hasClosedCoding?: boolean;
               coderTrainingRequired?: boolean;
             }> = [];
+            const seenSchemeIds = new Set<string>();
+            const seenAliases = new Set<string>();
 
             // Process BaseVariables
             if (
@@ -2977,7 +3005,12 @@ ${bookletRefs}
 
               for (const variable of baseVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
-                  const variableId = variable.$.id || variable.$.alias;
+                  const variableAlias = variable.$.alias;
+                  const unitAliasToId =
+                    codingSchemeAliasToIdMap.get(unitName);
+                  const variableId = variable.$.id ||
+                    unitAliasToId?.get(variableAlias) ||
+                    variableAlias;
                   const unitSourceTypes =
                     codingSchemeVariablesMap.get(unitName);
                   const sourceType = unitSourceTypes?.get(variableId);
@@ -3003,28 +3036,24 @@ ${bookletRefs}
                     codingSchemeTrainingRequiredMap.get(unitName);
                   const coderTrainingRequired =
                     unitTrainingRequired?.get(variableId) || false;
+                  const isDerived = this.isDerivedSourceType(sourceType);
 
                   variables.push({
                     id: variableId,
-                    alias: variable.$.alias,
-                    type: variable.$.type as
-                      | 'string'
-                      | 'integer'
-                      | 'number'
-                      | 'boolean'
-                      | 'attachment'
-                      | 'json'
-                      | 'no-value',
+                    alias: variableAlias,
+                    type: variable.$.type as UnitVariableType,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
                       undefined,
                     codes: variableCodes,
-                    isDerived: false,
+                    isDerived,
                     hasManualInstruction,
                     hasClosedCoding,
                     coderTrainingRequired
                   });
+                  seenSchemeIds.add(variableId);
+                  seenAliases.add(variableAlias);
                 }
               }
             }
@@ -3042,7 +3071,12 @@ ${bookletRefs}
 
               for (const variable of derivedVariables) {
                 if (variable.$.alias && variable.$.type !== 'no-value') {
-                  const variableId = variable.$.id || variable.$.alias;
+                  const variableAlias = variable.$.alias;
+                  const unitAliasToId =
+                    codingSchemeAliasToIdMap.get(unitName);
+                  const variableId = variable.$.id ||
+                    unitAliasToId?.get(variableAlias) ||
+                    variableAlias;
                   const unitSourceTypes =
                     codingSchemeVariablesMap.get(unitName);
                   const sourceType = unitSourceTypes?.get(variableId);
@@ -3071,15 +3105,8 @@ ${bookletRefs}
 
                   variables.push({
                     id: variableId,
-                    alias: variable.$.alias,
-                    type: variable.$.type as
-                      | 'string'
-                      | 'integer'
-                      | 'number'
-                      | 'boolean'
-                      | 'attachment'
-                      | 'json'
-                      | 'no-value',
+                    alias: variableAlias,
+                    type: variable.$.type as UnitVariableType,
                     hasCodingScheme,
                     codingSchemeRef: hasCodingScheme ?
                       codingSchemeMap.get(unitName) :
@@ -3090,7 +3117,57 @@ ${bookletRefs}
                     hasClosedCoding,
                     coderTrainingRequired
                   });
+                  seenSchemeIds.add(variableId);
+                  seenAliases.add(variableAlias);
                 }
+              }
+            }
+
+            const unitSourceTypes = codingSchemeVariablesMap.get(unitName);
+            const unitIdToAlias = codingSchemeIdToAliasMap.get(unitName);
+            const unitVariableTypes = codingSchemeVariableTypesMap.get(unitName);
+            if (unitSourceTypes) {
+              for (const [schemeId, sourceType] of unitSourceTypes.entries()) {
+                if (!this.isDerivedSourceType(sourceType)) {
+                  continue;
+                }
+                const variableAlias = unitIdToAlias?.get(schemeId) || schemeId;
+                if (
+                  seenSchemeIds.has(schemeId) ||
+                  seenAliases.has(variableAlias)
+                ) {
+                  continue;
+                }
+
+                const unitCodes = codingSchemeCodesMap.get(unitName);
+                const variableCodes = unitCodes?.get(schemeId);
+                const unitManualInstructions =
+                  codingSchemeManualInstructionsMap.get(unitName);
+                const hasManualInstruction =
+                  unitManualInstructions?.get(schemeId) || false;
+                const unitClosedCoding =
+                  codingSchemeClosedCodingMap.get(unitName);
+                const hasClosedCoding =
+                  unitClosedCoding?.get(schemeId) || false;
+                const unitTrainingRequired =
+                  codingSchemeTrainingRequiredMap.get(unitName);
+                const coderTrainingRequired =
+                  unitTrainingRequired?.get(schemeId) || false;
+
+                variables.push({
+                  id: schemeId,
+                  alias: variableAlias,
+                  type: unitVariableTypes?.get(schemeId) || 'string',
+                  hasCodingScheme: true,
+                  codingSchemeRef: codingSchemeMap.get(unitName),
+                  codes: variableCodes,
+                  isDerived: true,
+                  hasManualInstruction,
+                  hasClosedCoding,
+                  coderTrainingRequired
+                });
+                seenSchemeIds.add(schemeId);
+                seenAliases.add(variableAlias);
               }
             }
 
