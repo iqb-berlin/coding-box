@@ -72,6 +72,8 @@ export class PersonService {
     totalBooklets: number;
     unitsWithLogs: number;
     totalUnits: number;
+    bookletDetails?: { name: string; hasLog: boolean }[];
+    unitDetails?: { bookletName: string; unitKey: string; hasLog: boolean }[];
   }> {
     return this.personQueryService.getLogCoverageStats(workspaceId);
   }

@@ -37,5 +37,7 @@ export interface ImportResultDto {
   totalBooklets?: number;
   unitsWithLogs?: number;
   totalUnits?: number;
+  bookletDetails?: { name: string; hasLog: boolean }[];
+  unitDetails?: { bookletName: string; unitKey: string; hasLog: boolean }[];
   codingFreshness?: CodingFreshnessSummaryDto;
 }

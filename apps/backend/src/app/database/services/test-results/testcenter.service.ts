@@ -864,6 +864,8 @@ export class TestcenterService {
           result.totalBooklets = logStats.totalBooklets;
           result.unitsWithLogs = logStats.unitsWithLogs;
           result.totalUnits = logStats.totalUnits;
+          result.bookletDetails = logStats.bookletDetails;
+          result.unitDetails = logStats.unitDetails;
         } catch (statsError) {
           logger.warn(`Could not get log coverage statistics: ${statsError.message}`);
         }
