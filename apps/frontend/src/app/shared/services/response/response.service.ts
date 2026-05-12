@@ -154,7 +154,7 @@ export class ResponseService {
 
   searchResponses(
     workspaceId: number,
-    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; personLogin?: string },
+    searchParams: { value?: string; variableId?: string; unitName?: string; bookletName?: string; status?: string; codedStatus?: string; group?: string; code?: string; version?: 'v1' | 'v2' | 'v3'; geogebra?: boolean; derivedOnly?: boolean; responseSource?: 'base' | 'derived' | 'all'; personLogin?: string },
     page?: number,
     limit?: number
   ): Observable<{
@@ -223,6 +223,10 @@ export class ResponseService {
 
     if (searchParams.derivedOnly) {
       params = params.set('derivedOnly', 'true');
+    }
+
+    if (searchParams.responseSource) {
+      params = params.set('responseSource', searchParams.responseSource);
     }
 
     if (searchParams.personLogin) {

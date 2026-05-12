@@ -46,11 +46,11 @@ describe('ResponseFiltersComponent', () => {
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);
   });
 
-  it('should emit filterChange when derived-only filter changes', () => {
+  it('should emit filterChange when response source changes', () => {
     jest.spyOn(component.filterChange, 'emit');
 
     component.filterParams.codedStatus = '';
-    component.filterParams.derivedOnly = true;
+    component.filterParams.responseSource = 'derived';
     component.onFilterChange();
 
     expect(component.filterChange.emit).toHaveBeenCalledWith(component.filterParams);

@@ -20,6 +20,7 @@ export interface SearchResponsesParams {
   code?: string;
   version?: 'v1' | 'v2' | 'v3';
   derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
 }
 
 export interface SearchResponseItem {

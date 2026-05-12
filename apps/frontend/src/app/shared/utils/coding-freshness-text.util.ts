@@ -59,7 +59,7 @@ export function getCodingFreshnessSummaryText(items: CodingFreshnessSummaryItemD
   const singleAutoCodingVersion = getSingleAutoCodingVersion(warnings);
   if (singleAutoCodingVersion) {
     return `Für ${taskResults} muss ${getCodingFreshnessVersionLabel(singleAutoCodingVersion)} ` +
-      `erneut ausgeführt werden. Das betrifft ${responses}.`;
+      `${getAutoCodingActionText(warnings, singleAutoCodingVersion)}. Das betrifft ${responses}.`;
   }
 
   if (warnings.length === 1) {
@@ -81,8 +81,9 @@ export function getCodingFreshnessAutoCodingButtonLabel(
   const count = items
     .filter(item => item.version === version)
     .reduce((sum, item) => sum + normalizeCount(item.unitCount), 0);
+  const action = getAutoCodingButtonActionText(items, version);
 
-  return `${formatCodingFreshnessTaskResultCount(count)} mit ${getCodingFreshnessVersionLabel(version)} neu kodieren`;
+  return `${formatCodingFreshnessTaskResultCount(count)} mit ${getCodingFreshnessVersionLabel(version)} ${action}`;
 }
 
 function getSingleCodingFreshnessActionText(
@@ -91,7 +92,8 @@ function getSingleCodingFreshnessActionText(
 ): string {
   if ((item.version === 'v1' || item.version === 'v3') &&
     (item.state === 'PENDING' || item.state === 'STALE')) {
-    return `Für ${taskResults} muss ${getCodingFreshnessVersionLabel(item.version)} erneut ausgeführt werden`;
+    const action = item.state === 'PENDING' ? 'ausgeführt werden' : 'erneut ausgeführt werden';
+    return `Für ${taskResults} muss ${getCodingFreshnessVersionLabel(item.version)} ${action}`;
   }
 
   if (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED') {
@@ -99,6 +101,40 @@ function getSingleCodingFreshnessActionText(
   }
 
   return `Für ${taskResults} muss die Kodierung aktualisiert werden`;
+}
+
+function getAutoCodingActionText(
+  items: CodingFreshnessSummaryItemDto[],
+  version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>
+): string {
+  const states = new Set(items
+    .filter(item => item.version === version)
+    .map(item => item.state));
+
+  if (states.size === 1 && states.has('PENDING')) {
+    return 'ausgeführt werden';
+  }
+
+  if (states.size === 1 && states.has('STALE')) {
+    return 'erneut ausgeführt werden';
+  }
+
+  return 'ausgeführt oder aktualisiert werden';
+}
+
+function getAutoCodingButtonActionText(
+  items: CodingFreshnessSummaryItemDto[],
+  version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>
+): string {
+  const states = new Set(items
+    .filter(item => item.version === version)
+    .map(item => item.state));
+
+  if (states.size === 1 && states.has('PENDING')) {
+    return 'kodieren';
+  }
+
+  return 'neu kodieren';
 }
 
 function getSingleAutoCodingVersion(

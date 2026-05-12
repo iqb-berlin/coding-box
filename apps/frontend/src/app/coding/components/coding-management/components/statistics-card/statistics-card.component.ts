@@ -120,6 +120,16 @@ export class StatisticsCardComponent {
     return this.derivedAnswerCount > 0;
   }
 
+  get showCodingStatisticsEmptyState(): boolean {
+    return this.effectiveTotalResponses === 0 && this.getStatuses().length === 0;
+  }
+
+  get codingStatisticsEmptyTextKey(): string {
+    return this.codingStatistics.totalResponses > 0 ?
+      'coding-management.statistics.only-raw-statuses-text' :
+      'coding-management.statistics.no-coding-results-text';
+  }
+
   get effectiveReferenceTotalResponses(): number {
     if (!this.referenceStatistics) return 0;
     return this.getIgnoredAdjustedTotal(this.referenceStatistics);

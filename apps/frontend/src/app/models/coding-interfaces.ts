@@ -117,6 +117,7 @@ export interface SearchResponsesParams {
   version?: 'v1' | 'v2' | 'v3';
   geogebra?: boolean;
   derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
   personLogin?: string;
 }
 

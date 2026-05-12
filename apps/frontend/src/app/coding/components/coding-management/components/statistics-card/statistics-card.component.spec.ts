@@ -125,6 +125,20 @@ describe('StatisticsCardComponent', () => {
     expect(component.derivedAnswerCount).toBe(0);
     expect(component.derivedVariableCount).toBe(2);
     expect(component.hasDerivedStatistics).toBe(false);
+    expect(component.showCodingStatisticsEmptyState).toBe(true);
+    expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.no-coding-results-text');
+  });
+
+  it('should explain when only raw or intermediate statuses are available', () => {
+    component.codingStatistics = {
+      totalResponses: 4,
+      statusCounts: { 1: 2, 2: 2 }
+    };
+
+    expect(component.effectiveTotalResponses).toBe(0);
+    expect(component.getStatuses()).toEqual([]);
+    expect(component.showCodingStatisticsEmptyState).toBe(true);
+    expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.only-raw-statuses-text');
   });
 
   it('should render derived answer statistics when available', () => {
