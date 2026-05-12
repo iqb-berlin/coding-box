@@ -174,6 +174,23 @@ export class ValidationTaskService {
     });
   }
 
+  private static parseResponseIds(value: unknown): number[] {
+    if (Array.isArray(value)) {
+      return value
+        .map(id => Number(id))
+        .filter(id => Number.isInteger(id) && id > 0);
+    }
+
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map(id => Number(id.trim()))
+        .filter(id => Number.isInteger(id) && id > 0);
+    }
+
+    return [];
+  }
+
   async getValidationResults(taskId: number, workspaceId?: number): Promise<unknown> {
     const task = await this.getValidationTask(taskId, workspaceId);
 
@@ -331,8 +348,13 @@ export class ValidationTaskService {
           );
           break;
         case 'deleteResponses':
-          if (taskData && Array.isArray(taskData.responseIds)) {
-            const responseIds = taskData.responseIds as number[];
+          if (taskData) {
+            const responseIds = ValidationTaskService.parseResponseIds(
+              taskData.responseIds
+            );
+            if (responseIds.length === 0) {
+              throw new Error('No response IDs provided for deletion');
+            }
             const deletedCount =
               await this.validationService.deleteInvalidResponses(
                 task.workspace_id,
@@ -415,7 +437,9 @@ export class ValidationTaskService {
   }
 
   private static isDeletionTask(validationType: ValidationType): boolean {
-    return validationType === 'deleteTestResults' ||
+    return validationType === 'deleteResponses' ||
+      validationType === 'deleteAllResponses' ||
+      validationType === 'deleteTestResults' ||
       validationType === 'deleteTestLogs';
   }
 }

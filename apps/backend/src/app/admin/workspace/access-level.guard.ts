@@ -25,7 +25,12 @@ export class AccessLevelGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredLevel = this.reflector.get<number>('accessLevel', context.getHandler());
+    const metadataTargets = typeof context.getClass === 'function' ?
+      [context.getHandler(), context.getClass()] :
+      [context.getHandler()];
+    const requiredLevel = typeof this.reflector.getAllAndOverride === 'function' ?
+      this.reflector.getAllAndOverride<number>('accessLevel', metadataTargets) :
+      this.reflector.get<number>('accessLevel', context.getHandler());
 
     // If no access level is specified, allow access
     if (requiredLevel === undefined || requiredLevel === null) {
