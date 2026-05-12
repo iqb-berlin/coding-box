@@ -156,7 +156,7 @@ export class CodingManagementService {
 
   private pollStatisticsJob(workspaceId: number, jobId: string, version: StatisticsVersion): void {
     timer(0, 2000).pipe(
-      switchMap(() => this.executionService.getCodingJobStatus(workspaceId, jobId)),
+      switchMap(() => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId)),
       takeWhile(status => ['pending', 'processing'].includes(status.status), true),
       finalize(() => this._isLoadingStatistics.next(false))
     ).subscribe((status: CodingJobStatus) => {

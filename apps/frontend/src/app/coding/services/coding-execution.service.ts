@@ -70,6 +70,41 @@ export class CodingExecutionService {
       );
   }
 
+  getCodingStatisticsJobStatus(workspace_id: number, jobId: string): Observable<{
+    status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+    progress: number;
+    result?: {
+      totalResponses: number;
+      statusCounts: {
+        [key: string]: number;
+      };
+    };
+    error?: string;
+  }> {
+    return this.http
+      .get<{
+      status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
+      progress: number;
+      result?: {
+        totalResponses: number;
+        statusCounts: {
+          [key: string]: number;
+        };
+      };
+      error?: string;
+    }>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job/${jobId}`,
+      {}
+    )
+      .pipe(
+        catchError(() => of({
+          status: 'failed' as const,
+          progress: 0,
+          error: 'Failed to get coding statistics job status'
+        }))
+      );
+  }
+
   createCodingStatisticsJob(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Observable<{ jobId: string; message: string }> {
     const params = new HttpParams().set('version', version);
     return this.http

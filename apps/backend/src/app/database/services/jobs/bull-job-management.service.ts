@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Job } from 'bull';
-import { JobQueueService, TestPersonCodingJobData } from '../../../job-queue/job-queue.service';
+import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { CodingStatistics } from '../shared';
 
 @Injectable()
@@ -121,7 +121,7 @@ export class BullJobManagementService {
     }
   }
 
-  extractJobResult(bullJob: Job<TestPersonCodingJobData>, state: string): { result?: CodingStatistics; error?: string } {
+  extractJobResult<T>(bullJob: Job<T>, state: string): { result?: CodingStatistics; error?: string } {
     let result: CodingStatistics | undefined;
     let error: string | undefined;
 

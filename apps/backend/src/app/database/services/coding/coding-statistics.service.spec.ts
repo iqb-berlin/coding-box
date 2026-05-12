@@ -441,6 +441,37 @@ describe('CodingStatisticsService', () => {
       expect(result.message).toBe('Using cached coding statistics');
     });
 
+    it('should read coding statistics job status only from the statistics queue', async () => {
+      const mockAutoCodingJob: Partial<Job> = {
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockReturnValue(100)
+      };
+      const mockStatisticsJob: Partial<Job> = {
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockReturnValue(100)
+      };
+      const mockStatistics = { totalResponses: 12, statusCounts: { 5: 12 } };
+
+      mockJobQueueService.getTestPersonCodingJob.mockResolvedValue(
+        mockAutoCodingJob as Job
+      );
+      mockJobQueueService.getCodingStatisticsJob.mockResolvedValue(
+        mockStatisticsJob as Job
+      );
+      mockBullJobManagementService.mapJobStateToStatus.mockReturnValue('completed');
+      mockBullJobManagementService.extractJobResult.mockReturnValue({
+        result: mockStatistics
+      });
+
+      const result = await service.getCodingStatisticsJobStatus('job-123');
+
+      expect(mockJobQueueService.getTestPersonCodingJob).not.toHaveBeenCalled();
+      expect(mockJobQueueService.getCodingStatisticsJob).toHaveBeenCalledWith('job-123');
+      expect(mockBullJobManagementService.extractJobResult)
+        .toHaveBeenCalledWith(mockStatisticsJob, 'completed');
+      expect(result?.result).toEqual(mockStatistics);
+    });
+
     it('should cancel job successfully', async () => {
       const mockJob: Partial<Job> = {
         getState: jest.fn().mockResolvedValue('waiting')

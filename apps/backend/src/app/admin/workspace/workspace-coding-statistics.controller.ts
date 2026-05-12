@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Param,
   Post,
   Query,
   UseGuards,
@@ -36,6 +37,13 @@ import {
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
+
+type CodingStatisticsJobStatusResponse = {
+  status: string;
+  progress: number;
+  result?: CodingStatistics;
+  error?: string;
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -211,6 +219,24 @@ export class WorkspaceCodingStatisticsController {
                    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     return this.codingStatisticsService.createCodingStatisticsJob(workspace_id, version);
+  }
+
+  @Get(':workspace_id/coding/statistics/job/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String, description: 'ID of the coding statistics job' })
+  @ApiOkResponse({
+    description: 'Coding statistics job status retrieved successfully.'
+  })
+  async getCodingStatisticsJobStatus(
+    @Param('jobId') jobId: string
+  ): Promise<CodingStatisticsJobStatusResponse | { error: string }> {
+    const status = await this.codingStatisticsService.getCodingStatisticsJobStatus(jobId);
+    if (!status) {
+      return { error: `Coding statistics job with ID ${jobId} not found` };
+    }
+    return status;
   }
 
   private parseVersions(value?: string | string[]): CodingFreshnessVersion[] {

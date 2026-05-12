@@ -337,6 +337,47 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     }
   }
 
+  async getCodingStatisticsJobStatus(
+    jobId: string
+  ): Promise<{
+      status:
+      | 'pending'
+      | 'processing'
+      | 'completed'
+      | 'failed'
+      | 'cancelled'
+      | 'paused';
+      progress: number;
+      result?: CodingStatistics;
+      error?: string;
+    } | null> {
+    try {
+      const bullJob = await this.jobQueueService.getCodingStatisticsJob(jobId);
+      if (!bullJob) {
+        return null;
+      }
+
+      const state = await bullJob.getState();
+      const progress = (await bullJob.progress()) || 0;
+      const status = this.bullJobManagementService.mapJobStateToStatus(state);
+      const { result, error } =
+        this.bullJobManagementService.extractJobResult(bullJob, state);
+
+      return {
+        status,
+        progress: typeof progress === 'number' ? progress : 0,
+        result: result as CodingStatistics,
+        error
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error getting coding statistics job status: ${error.message}`,
+        error.stack
+      );
+      return null;
+    }
+  }
+
   async createCodingStatisticsJob(
     workspaceId: number,
     version: 'v1' | 'v2' | 'v3' = 'v1'
