@@ -6,6 +6,10 @@ import { In, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingFreshnessService } from './coding-freshness.service';
+import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+
+type ResetCodingVersion = 'v1' | 'v2' | 'v3';
+type ResetUnitIdsByVersion = Record<ResetCodingVersion, Set<number>>;
 
 @Injectable()
 export class CodingVersionService {
@@ -22,7 +26,7 @@ export class CodingVersionService {
 
   async resetCodingVersion(
     workspaceId: number,
-    version: 'v1' | 'v2' | 'v3',
+    version: ResetCodingVersion,
     unitFilters?: string[],
     variableFilters?: string[],
     progressCallback?: (progress: number) => Promise<void>
@@ -42,7 +46,8 @@ export class CodingVersionService {
       if (progressCallback) await progressCallback(0);
 
       // Determine which versions to reset and build the appropriate WHERE clause
-      const versionsToReset: ('v1' | 'v2' | 'v3')[] = [version];
+      const versionsToReset: ResetCodingVersion[] = [version];
+      const resetUnitIdsByVersion = this.createResetUnitIdsByVersion();
 
       const baseQueryBuilder = this.responseRepository
         .createQueryBuilder('response')
@@ -104,11 +109,6 @@ export class CodingVersionService {
             unitFilters,
             variableFilters
           );
-        await this.codingFreshnessService?.clearVersionsAfterReset(
-          workspaceId,
-          versionsToReset,
-          unitFilters
-        );
         await this.invalidateStatisticsCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
@@ -135,7 +135,11 @@ export class CodingVersionService {
       for (; ;) {
         const batchQueryBuilder = baseQueryBuilder
           .clone()
-          .select(['response.id'])
+          .select([
+            'response.id',
+            'response.unitid',
+            ...this.getVersionCodingColumns(versionsToReset)
+          ])
           .orderBy('response.id', 'ASC')
           .skip(offset)
           .take(batchSize);
@@ -144,6 +148,8 @@ export class CodingVersionService {
         if (batchResponses.length === 0) {
           break;
         }
+
+        this.collectResetUnitIds(batchResponses, versionsToReset, resetUnitIdsByVersion);
 
         const batchIds = batchResponses.map(r => r.id);
         await this.responseRepository.update(
@@ -184,10 +190,9 @@ export class CodingVersionService {
       }
 
       // Invalidate statistics cache for all affected versions
-      await this.codingFreshnessService?.clearVersionsAfterReset(
+      await this.codingFreshnessService?.markVersionsPendingAfterReset(
         workspaceId,
-        versionsToReset,
-        unitFilters
+        this.toResetUnitIdsByVersion(resetUnitIdsByVersion)
       );
       await this.invalidateStatisticsCaches(workspaceId, version);
 
@@ -210,7 +215,7 @@ export class CodingVersionService {
     }
   }
 
-  private buildResetTargetCondition(versions: ('v1' | 'v2' | 'v3')[]): string {
+  private buildResetTargetCondition(versions: ResetCodingVersion[]): string {
     const fields = ['status', 'code', 'score'];
     const conditions = versions.flatMap(version => fields.map(
       field => `response.${field}_${version} IS NOT NULL`
@@ -285,7 +290,7 @@ export class CodingVersionService {
 
   private async invalidateStatisticsCaches(
     workspaceId: number,
-    version: 'v1' | 'v2' | 'v3'
+    version: ResetCodingVersion
   ): Promise<void> {
     this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version ${version}`);
     await this.codingStatisticsService.invalidateCache(workspaceId, version);
@@ -300,5 +305,57 @@ export class CodingVersionService {
       this.logger.log(`Invalidating statistics cache for workspace ${workspaceId}, version v3 (cascade)`);
       await this.codingStatisticsService.invalidateCache(workspaceId, 'v3');
     }
+  }
+
+  private createResetUnitIdsByVersion(): ResetUnitIdsByVersion {
+    return {
+      v1: new Set<number>(),
+      v2: new Set<number>(),
+      v3: new Set<number>()
+    };
+  }
+
+  private getVersionCodingColumns(versions: ResetCodingVersion[]): string[] {
+    const fields = ['status', 'code', 'score'];
+    return versions.flatMap(version => fields.map(
+      field => `response.${field}_${version}`
+    ));
+  }
+
+  private collectResetUnitIds(
+    responses: ResponseEntity[],
+    versions: ResetCodingVersion[],
+    resetUnitIdsByVersion: ResetUnitIdsByVersion
+  ): void {
+    responses.forEach(response => {
+      const unitId = Number(response.unitid);
+      if (!Number.isInteger(unitId) || unitId <= 0) {
+        return;
+      }
+
+      versions.forEach(version => {
+        if (this.hasVersionCoding(response, version)) {
+          resetUnitIdsByVersion[version].add(unitId);
+        }
+      });
+    });
+  }
+
+  private hasVersionCoding(response: ResponseEntity, version: ResetCodingVersion): boolean {
+    const fields = ['status', 'code', 'score'];
+    return fields.some(field => {
+      const key = `${field}_${version}` as keyof ResponseEntity;
+      return response[key] !== null && response[key] !== undefined;
+    });
+  }
+
+  private toResetUnitIdsByVersion(
+    resetUnitIdsByVersion: ResetUnitIdsByVersion
+  ): Partial<Record<CodingFreshnessVersion, number[]>> {
+    return Object.fromEntries(
+      Object.entries(resetUnitIdsByVersion)
+        .map(([version, unitIds]) => [version, Array.from(unitIds)])
+        .filter(([, unitIds]) => (unitIds as number[]).length > 0)
+    ) as Partial<Record<CodingFreshnessVersion, number[]>>;
   }
 }

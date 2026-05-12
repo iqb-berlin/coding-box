@@ -54,6 +54,8 @@ type FreshnessUpsert = {
   coded_revision: number | null;
 };
 
+type ResetFreshnessUnitMap = Partial<Record<CodingFreshnessVersion, number[]>>;
+
 @Injectable()
 export class CodingFreshnessService {
   private readonly logger = new Logger(CodingFreshnessService.name);
@@ -302,6 +304,56 @@ export class CodingFreshnessService {
       revision,
       revision
     )));
+  }
+
+  async markVersionsPendingAfterReset(
+    workspaceId: number,
+    resetUnitIdsByVersion: ResetFreshnessUnitMap
+  ): Promise<void> {
+    const entries = this.uniqueVersions(
+      Object.keys(resetUnitIdsByVersion) as CodingFreshnessVersion[]
+    )
+      .map(version => ({
+        version,
+        unitIds: this.uniquePositiveIds(resetUnitIdsByVersion[version] || [])
+      }))
+      .filter(entry => entry.unitIds.length > 0);
+
+    if (entries.length === 0) {
+      return;
+    }
+
+    const includedUnitIds = await this.filterIncludedUnitIds(
+      workspaceId,
+      this.uniquePositiveIds(entries.flatMap(entry => entry.unitIds))
+    );
+    if (includedUnitIds.length === 0) {
+      return;
+    }
+
+    const includedUnitIdSet = new Set(includedUnitIds);
+    const revision = await this.getCurrentRevision(workspaceId);
+    const responseCounts = await this.getResponseCountsByUnit(workspaceId, includedUnitIds);
+    const rows: FreshnessUpsert[] = [];
+
+    entries.forEach(entry => {
+      const state: CodingFreshnessState =
+        entry.version === 'v2' ? 'MANUAL_REVIEW_REQUIRED' : 'PENDING';
+      entry.unitIds
+        .filter(unitId => includedUnitIdSet.has(unitId))
+        .forEach(unitId => rows.push(this.buildRow(
+          workspaceId,
+          unitId,
+          entry.version,
+          state,
+          'RESET',
+          responseCounts.get(unitId) || 0,
+          revision,
+          null
+        )));
+    });
+
+    await this.upsertRows(rows);
   }
 
   async clearVersionsAfterReset(
