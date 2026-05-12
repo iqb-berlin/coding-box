@@ -308,6 +308,60 @@ describe('CodingFreshnessService', () => {
       .not.toContain('"unit_id":20');
   });
 
+  it('marks reset units as pending or manual review by coding version', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitId: 10, count: '2' },
+        { unitId: 20, count: '5' }
+      ])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markVersionsPendingAfterReset(1, {
+      v1: [10, 20, 10],
+      v2: [10],
+      v3: [20]
+    });
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 2,
+          source_revision: 9,
+          coded_revision: null
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v1',
+          state: 'PENDING',
+          reason: 'RESET',
+          affected_response_count: 5
+        }),
+        expect.objectContaining({
+          unit_id: 10,
+          version: 'v2',
+          state: 'MANUAL_REVIEW_REQUIRED',
+          reason: 'RESET'
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          version: 'v3',
+          state: 'PENDING',
+          reason: 'RESET'
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+    expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
+  });
+
   it('does not apply the aggregate import count to imported units with zero responses', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 6 }]);
 

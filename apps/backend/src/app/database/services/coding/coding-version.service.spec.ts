@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { CodingVersionService } from './coding-version.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingFreshnessService } from './coding-freshness.service';
 
 describe('CodingVersionService', () => {
   let service: CodingVersionService;
@@ -30,6 +31,10 @@ describe('CodingVersionService', () => {
     invalidateCache: jest.fn().mockResolvedValue(undefined)
   };
 
+  const mockCodingFreshnessService = {
+    markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined)
+  };
+
   beforeAll(() => {
     jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
@@ -51,6 +56,10 @@ describe('CodingVersionService', () => {
         {
           provide: CodingStatisticsService,
           useValue: mockCodingStatisticsService
+        },
+        {
+          provide: CodingFreshnessService,
+          useValue: mockCodingFreshnessService
         }
       ]
     }).compile();
@@ -67,6 +76,7 @@ describe('CodingVersionService', () => {
     mockResponseRepository.delete.mockReset();
     mockResponseRepository.update.mockResolvedValue({ affected: 0 });
     mockResponseRepository.delete.mockResolvedValue({ affected: 0 });
+    mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
   });
 
   it('should be defined', () => {
@@ -192,6 +202,48 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledTimes(1);
     });
 
+    it('should mark affected reset units pending by the versions that had coding data', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 10,
+          status_v2: 2,
+          code_v2: null,
+          score_v2: null,
+          status_v3: null,
+          code_v3: null,
+          score_v3: null
+        },
+        {
+          id: 2,
+          unitid: 11,
+          status_v2: null,
+          code_v2: null,
+          score_v2: null,
+          status_v3: 1,
+          code_v3: null,
+          score_v3: null
+        }
+      ];
+
+      mockQueryBuilder.getCount.mockResolvedValue(2);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 2 });
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockCodingFreshnessService.markVersionsPendingAfterReset)
+        .toHaveBeenCalledWith(1, {
+          v2: [10],
+          v3: [11]
+        });
+    });
+
     it('should target v1 rows when only code or score values remain', async () => {
       const workspaceId = 1;
       const version = 'v1';
@@ -275,6 +327,7 @@ describe('CodingVersionService', () => {
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v1');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v2');
       expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1, 'v3');
+      expect(mockCodingFreshnessService.markVersionsPendingAfterReset).not.toHaveBeenCalled();
     });
 
     it('should handle large batches correctly', async () => {
