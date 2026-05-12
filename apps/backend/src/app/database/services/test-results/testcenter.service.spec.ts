@@ -79,6 +79,14 @@ describe('TestCenterService', () => {
         row.loginname === person.login &&
         row.code === person.code)
     ));
+    personService.getLogCoverageStats.mockResolvedValue({
+      bookletsWithLogs: 0,
+      totalBooklets: 0,
+      unitsWithLogs: 0,
+      totalUnits: 0,
+      bookletDetails: [],
+      unitDetails: []
+    });
   });
 
   afterEach(() => {
@@ -366,6 +374,16 @@ describe('TestCenterService', () => {
         totalLogsSkipped: 0,
         issues: []
       });
+      personService.getLogCoverageStats.mockResolvedValue({
+        bookletsWithLogs: 1,
+        totalBooklets: 1,
+        unitsWithLogs: 1,
+        totalUnits: 1,
+        bookletDetails: [{ name: 'booklet1', hasLog: true }],
+        unitDetails: [
+          { bookletName: 'booklet1', unitKey: 'unit1', hasLog: true }
+        ]
+      });
       const importOptions: ImportOptionsDto = {
         responses: 'false',
         logs: 'true',
@@ -389,6 +407,10 @@ describe('TestCenterService', () => {
       );
       expect(result.success).toBe(true);
       expect(result.logs).toBe(1);
+      expect(result.bookletDetails).toEqual([{ name: 'booklet1', hasLog: true }]);
+      expect(result.unitDetails).toEqual([
+        { bookletName: 'booklet1', unitKey: 'unit1', hasLog: true }
+      ]);
       expect(personService.assignUnitLogsToBooklet).toHaveBeenCalledWith(
         mockPersons[0].booklets[0],
         [mockLogs[1]],

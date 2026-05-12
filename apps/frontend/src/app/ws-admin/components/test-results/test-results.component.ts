@@ -1668,6 +1668,12 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               totalBooklets: number;
               unitsWithLogs: number;
               totalUnits: number;
+              bookletDetails?: { name: string; hasLog: boolean }[];
+              unitDetails?: {
+                bookletName: string;
+                unitKey: string;
+                hasLog: boolean;
+              }[];
             };
           };
 
@@ -1676,7 +1682,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               bookletsWithLogs: payload.uploadResult.bookletsWithLogs ?? 0,
               totalBooklets: payload.uploadResult.totalBooklets ?? 0,
               unitsWithLogs: payload.uploadResult.unitsWithLogs ?? 0,
-              totalUnits: payload.uploadResult.totalUnits ?? 0
+              totalUnits: payload.uploadResult.totalUnits ?? 0,
+              bookletDetails: payload.uploadResult.bookletDetails || [],
+              unitDetails: payload.uploadResult.unitDetails || []
             } :
             payload.logMetrics;
 
