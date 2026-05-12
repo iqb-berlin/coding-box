@@ -14,7 +14,7 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 5397
       }
     ])).toBe(
-      'Für 704 Aufgaben-Ergebnisse muss Auto-Coding 1 erneut ausgeführt werden. ' +
+      'Für 704 Aufgaben-Ergebnisse muss Auto-Coding 1 ausgeführt werden. ' +
       'Das betrifft 5397 einzelne Antworten.'
     );
   });
@@ -54,7 +54,7 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 3
       }
     ])).toBe(
-      'Für 3 Aufgaben-Ergebnisse muss Auto-Coding 1 erneut ausgeführt werden. ' +
+      'Für 3 Aufgaben-Ergebnisse muss Auto-Coding 1 ausgeführt oder aktualisiert werden. ' +
       'Das betrifft 9 einzelne Antworten.'
     );
   });
@@ -77,7 +77,24 @@ describe('coding freshness text utils', () => {
       'Auto-Coding 1: neu zu kodieren (1 Aufgaben-Ergebnis)'
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
-      '1 Aufgaben-Ergebnis mit Auto-Coding 1 neu kodieren'
+      '1 Aufgaben-Ergebnis mit Auto-Coding 1 kodieren'
+    );
+  });
+
+  it('uses refresh wording for stale auto-coding work', () => {
+    const item = {
+      version: 'v1' as const,
+      state: 'STALE' as const,
+      unitCount: 2,
+      affectedResponseCount: 4
+    };
+
+    expect(getCodingFreshnessSummaryText([item])).toBe(
+      'Für 2 Aufgaben-Ergebnisse muss Auto-Coding 1 erneut ausgeführt werden. ' +
+      'Das betrifft 4 einzelne Antworten.'
+    );
+    expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
+      '2 Aufgaben-Ergebnisse mit Auto-Coding 1 neu kodieren'
     );
   });
 });

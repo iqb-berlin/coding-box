@@ -167,6 +167,33 @@
   min-width: 0;
 }
 
+.statistics-empty-state {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  margin: 12px 0 4px;
+  padding: 12px 16px;
+  border: 1px solid rgba(25, 118, 210, 0.2);
+  border-radius: 8px;
+  background: rgba(25, 118, 210, 0.06);
+  color: rgba(0, 0, 0, 0.74);
+
+  mat-icon {
+    color: #1565c0;
+  }
+}
+
+.statistics-empty-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.statistics-empty-text {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
 .percentage {
   font-size: 14px;
   color: rgba(0, 0, 0, 0.6);

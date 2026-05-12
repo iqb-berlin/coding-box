@@ -21,6 +21,7 @@ import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
+export type ResponseSource = 'base' | 'derived' | 'all';
 
 export interface FilterParams {
   unitName: string;
@@ -31,7 +32,7 @@ export interface FilterParams {
   bookletName: string;
   variableId: string;
   geogebra: boolean;
-  derivedOnly: boolean;
+  responseSource: ResponseSource;
   personLogin: string;
 }
 
@@ -242,7 +243,7 @@ export class CodingManagementService {
       bookletName: filterParams.bookletName,
       variableId: filterParams.variableId,
       geogebra: filterParams.geogebra,
-      derivedOnly: filterParams.derivedOnly,
+      responseSource: filterParams.responseSource,
       personLogin: filterParams.personLogin
     };
 

@@ -42,12 +42,16 @@
   </div>
   }
 
-  <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessWarnings">
+  <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessAttention">
     <div class="coding-freshness-main">
-      <mat-icon>{{ hasCodingFreshnessWarnings ? 'warning' : 'check_circle' }}</mat-icon>
+      <mat-icon>{{ hasCodingFreshnessAttention ? 'warning' : 'check_circle' }}</mat-icon>
       <div class="coding-freshness-copy">
         <div class="coding-freshness-title">
+          @if (hasImportedResultsWithoutCoding) {
+          Kodierung noch nicht gestartet
+          } @else {
           {{ hasCodingFreshnessWarnings ? 'Kodierstand nicht vollständig aktuell' : 'Kodierstand aktuell' }}
+          }
         </div>
         <div class="coding-freshness-text">
           @if (isLoadingCodingFreshness) {
@@ -58,6 +62,8 @@
           @if (codingFreshnessGroupPreview) {
           <div>Betroffene Gruppen: {{ codingFreshnessGroupPreview }}.</div>
           }
+          } @else if (hasImportedResultsWithoutCoding) {
+          Testergebnisse sind vorhanden. Starten Sie Auto-Coding 1, damit Kodierergebnisse und Kodierstatistik erzeugt werden.
           } @else {
           Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.
           }
@@ -132,8 +138,8 @@
       <div class="data-section">
         <app-response-table [data]="data" [displayedColumns]="displayedColumns" [totalRecords]="totalRecords"
           [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
-          [currentStatusFilter]="currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
-          [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.derivedOnly"
+          [currentStatusFilter]="filterParams.codedStatus || currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
+          [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.responseSource === 'derived'"
           (pageChange)="onPageChange($event)"
           (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
           (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()">

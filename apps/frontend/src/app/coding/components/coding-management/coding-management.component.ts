@@ -145,7 +145,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     bookletName: '',
     variableId: '',
     geogebra: false,
-    derivedOnly: false,
+    responseSource: 'base',
     personLogin: ''
   };
 
@@ -350,13 +350,21 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   onStatusClick(status: string): void {
-    this.fetchResponsesByStatus(status);
+    this.filterParams = {
+      ...this.filterParams,
+      version: this.selectedStatisticsVersion,
+      codedStatus: status,
+      responseSource: 'all'
+    };
+    this.currentStatusFilter = null;
+    this.pageIndex = 0;
+    this.fetchResponsesWithFilters();
   }
 
   onDerivedClick(): void {
     this.filterParams = {
       ...this.createDefaultFilterParams(this.selectedStatisticsVersion),
-      derivedOnly: true
+      responseSource: 'derived'
     };
     this.currentStatusFilter = null;
     this.pageIndex = 0;
@@ -453,6 +461,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   get hasCodingFreshnessWarnings(): boolean {
     return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get hasImportedResultsWithoutCoding(): boolean {
+    return !this.hasCodingFreshnessWarnings &&
+      (this.codingFreshnessSummary?.currentRevision || 0) > 0 &&
+      (this.codingFreshnessSummary?.items || []).length === 0 &&
+      (this.codingStatistics.totalResponses || 0) === 0;
+  }
+
+  get hasCodingFreshnessAttention(): boolean {
+    return this.hasCodingFreshnessWarnings || this.hasImportedResultsWithoutCoding;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -849,15 +868,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       bookletName: '',
       variableId: '',
       geogebra: false,
-      derivedOnly: false,
+      responseSource: 'base',
       personLogin: ''
     };
   }
 
   private hasActiveFilters(filterParams: FilterParams = this.filterParams): boolean {
     return Object.entries(filterParams).some(
-      ([key, value]) => key !== 'version' &&
-        (typeof value === 'string' ? value.trim() !== '' : value === true)
+      ([key, value]) => {
+        if (key === 'version') return false;
+        if (key === 'responseSource') return value !== 'base';
+        return typeof value === 'string' ? value.trim() !== '' : value === true;
+      }
     );
   }
 

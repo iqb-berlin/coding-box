@@ -210,12 +210,20 @@ describe('CodingManagementComponent', () => {
       expect(mockCodingManagementService.fetchCodingStatistics).toHaveBeenCalledWith('v1');
     });
 
-    it('should handle status click from statistics card', () => {
+    it('should handle status click from statistics card through the normal table filter', () => {
+      component.filterParams.group = 'ID26010601';
+
       component.onStatusClick('200');
 
-      expect(mockCodingManagementService.fetchResponsesByStatus).toHaveBeenCalledWith(
-        '200',
-        'v1',
+      expect(component.currentStatusFilter).toBeNull();
+      expect(component.filterParams).toEqual(expect.objectContaining({
+        codedStatus: '200',
+        group: 'ID26010601',
+        responseSource: 'all',
+        version: 'v1'
+      }));
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        component.filterParams,
         1,
         100
       );
@@ -233,7 +241,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
-        derivedOnly: false,
+        responseSource: 'base' as const,
         personLogin: ''
       };
 
@@ -255,7 +263,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
-        derivedOnly: false,
+        responseSource: 'base' as const,
         personLogin: ''
       };
 
@@ -266,7 +274,7 @@ describe('CodingManagementComponent', () => {
       expect(component.currentStatusFilter).toBeNull();
     });
 
-    it('should apply derived-only filter when derived statistics are clicked', () => {
+    it('should apply derived response source when derived statistics are clicked', () => {
       component.selectedStatisticsVersion = 'v2';
 
       component.onDerivedClick();
@@ -280,7 +288,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
-        derivedOnly: true,
+        responseSource: 'derived',
         personLogin: ''
       });
       expect(component.currentStatusFilter).toBeNull();

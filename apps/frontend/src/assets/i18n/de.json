@@ -856,7 +856,7 @@
       "coding-data": "Kodierdaten"
     },
     "descriptions": {
-      "statistics-overview": "Übersicht über den Status der Kodierung und Antworten",
+      "statistics-overview": "Übersicht über Kodierergebnisse nach Auto-Coding oder manueller Kodierung",
       "load-statistics": "Klicken Sie hier, um die Kodierstatistiken zu laden",
       "no-data": "Noch keine Kodierdaten angezeigt",
       "no-results": "Keine Antworten mit Status {{status}} gefunden.",
@@ -911,9 +911,13 @@
       "show-unit-xml": "Unit-XML anzeigen"
     },
     "statistics": {
-      "total-responses": "Gesamtanzahl der gegebenen Antworten:",
+      "total-responses": "Kodierstatistisch berücksichtigte Antworten:",
+      "total-responses-tooltip": "Zählt Kodierergebnisse nach einem Kodierlauf. Importierte Rohantworten in den Testergebnissen können vorhanden sein, bevor sie hier erscheinen.",
+      "no-coding-results-title": "Noch keine Kodierergebnisse",
+      "no-coding-results-text": "Testergebnisse können bereits vorhanden sein. Die Kodierstatistik füllt sich erst nach einem Auto-Coding- oder manuellen Kodierlauf.",
+      "only-raw-statuses-text": "Für diesen Lauf liegen nur Roh- oder Zwischenstatus vor. Diese werden nicht als kodierstatistisch berücksichtigte Ergebnisse gezählt.",
       "derived-answers": "abgeleitete Antworten:",
-      "derived-answers-tooltip": "Ermittelt aus {{count}} abgeleiteten Variablen.",
+      "derived-answers-tooltip": "Ermittelt aus {{count}} abgeleiteten Variablen mit kodierrelevantem Status.",
       "uncoded-responses": "unkodierte Antworten:",
       "responses-with-status": "Anzahl der Antworten mit Status {{status}}:",
       "missing-schemas": "Kodierschemata fehlen",
@@ -959,7 +963,11 @@
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
       "geogebra": "Spezialfilter: Geogebra",
-      "derived-only": "Nur abgeleitete Variablen",
+      "response-source": "Antwortquelle",
+      "response-source-base": "Basisantworten",
+      "response-source-derived": "Abgeleitete Variablen",
+      "response-source-all": "Beides",
+      "derived-only": "Nur abgeleitete Variablen anzeigen",
       "clear": "Filter löschen"
     },
     "reset-dialog": {
