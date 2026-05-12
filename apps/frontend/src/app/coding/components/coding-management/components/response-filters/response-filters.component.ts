@@ -46,7 +46,7 @@ export class ResponseFiltersComponent implements OnDestroy {
     bookletName: '',
     variableId: '',
     geogebra: false,
-    responseSource: 'base',
+    responseSource: 'all',
     personLogin: ''
   };
 
@@ -59,16 +59,10 @@ export class ResponseFiltersComponent implements OnDestroy {
 
   private filterTimer?: NodeJS.Timeout;
 
-  readonly codingRunOptions = [
-    { value: 'v1' as const, label: 'coding-management.statistics.first-autocode-run' },
-    { value: 'v2' as const, label: 'coding-management.statistics.manual-coding-run' },
-    { value: 'v3' as const, label: 'coding-management.statistics.second-autocode-run' }
-  ];
-
   readonly responseSourceOptions = [
+    { value: 'all' as const, label: 'coding-management.filters.response-source-all' },
     { value: 'base' as const, label: 'coding-management.filters.response-source-base' },
-    { value: 'derived' as const, label: 'coding-management.filters.response-source-derived' },
-    { value: 'all' as const, label: 'coding-management.filters.response-source-all' }
+    { value: 'derived' as const, label: 'coding-management.filters.response-source-derived' }
   ];
 
   private responseStatusMap = new Map(

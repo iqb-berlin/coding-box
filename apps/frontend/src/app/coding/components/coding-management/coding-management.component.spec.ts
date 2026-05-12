@@ -199,6 +199,7 @@ describe('CodingManagementComponent', () => {
       component.onVersionChange('v2');
 
       expect(component.selectedStatisticsVersion).toBe('v2');
+      expect(component.filterParams.version).toBe('v2');
       expect(component.data).toEqual([]);
       expect(component.currentStatusFilter).toBeNull();
       expect(component.totalRecords).toBe(0);
@@ -241,13 +242,37 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
-        responseSource: 'base' as const,
+        responseSource: 'all' as const,
         personLogin: ''
       };
 
       component.onFilterChange(filterParams);
 
       expect(component.filterParams).toEqual(filterParams);
+    });
+
+    it('should keep filter version aligned with selected statistics version', () => {
+      component.selectedStatisticsVersion = 'v2';
+
+      component.onFilterChange({
+        unitName: 'test',
+        codedStatus: '200',
+        version: 'v1',
+        code: '',
+        group: '',
+        bookletName: '',
+        variableId: '',
+        geogebra: false,
+        responseSource: 'all',
+        personLogin: ''
+      });
+
+      expect(component.filterParams.version).toBe('v2');
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        component.filterParams,
+        1,
+        100
+      );
     });
 
     it('should clear data when filter status is empty', () => {
@@ -263,7 +288,7 @@ describe('CodingManagementComponent', () => {
         bookletName: '',
         variableId: '',
         geogebra: false,
-        responseSource: 'base' as const,
+        responseSource: 'all' as const,
         personLogin: ''
       };
 
@@ -272,6 +297,7 @@ describe('CodingManagementComponent', () => {
       expect(component.data).toEqual([]);
       expect(component.totalRecords).toBe(0);
       expect(component.currentStatusFilter).toBeNull();
+      expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
     });
 
     it('should apply derived response source when derived statistics are clicked', () => {
@@ -301,12 +327,19 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should handle clear filters event', () => {
-      component.filterParams.unitName = 'test';
+      component.selectedStatisticsVersion = 'v3';
+      component.filterParams = {
+        ...component.filterParams,
+        version: 'v3',
+        unitName: 'test'
+      };
       component.data = [{ id: 1 } as Success];
 
       component.onClearFilters();
 
       expect(component.filterParams.unitName).toBe('');
+      expect(component.filterParams.version).toBe('v3');
+      expect(component.filterParams.responseSource).toBe('all');
       expect(component.data).toEqual([]);
       expect(component.totalRecords).toBe(0);
     });

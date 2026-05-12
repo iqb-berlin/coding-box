@@ -1,5 +1,16 @@
 <div class="filter-controls">
     <mat-form-field appearance="outline" class="filter-field">
+        <mat-label>{{ 'coding-management.filters.response-source' | translate }}</mat-label>
+        <mat-select [(ngModel)]="filterParams.responseSource" (selectionChange)="onFilterChange()">
+            @for (option of responseSourceOptions; track option.value) {
+            <mat-option [value]="option.value">
+                {{ option.label | translate }}
+            </mat-option>
+            }
+        </mat-select>
+    </mat-form-field>
+
+    <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.coded-status' | translate }}</mat-label>
         <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onFilterChange()">
             <mat-option></mat-option>
@@ -19,17 +30,6 @@
         <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
         <input matInput [(ngModel)]="filterParams.unitName" (input)="onFilterChange()"
             placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
-    </mat-form-field>
-
-    <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>{{ 'coding-management.filters.run' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.version" (selectionChange)="onFilterChange()">
-            @for (option of codingRunOptions; track option.value) {
-            <mat-option [value]="option.value">
-                {{ option.label | translate }}
-            </mat-option>
-            }
-        </mat-select>
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
@@ -67,17 +67,6 @@
         {{ 'coding-management.filters.geogebra' | translate }}
     </mat-checkbox>
     }
-
-    <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>{{ 'coding-management.filters.response-source' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.responseSource" (selectionChange)="onFilterChange()">
-            @for (option of responseSourceOptions; track option.value) {
-            <mat-option [value]="option.value">
-                {{ option.label | translate }}
-            </mat-option>
-            }
-        </mat-select>
-    </mat-form-field>
 
     <button mat-button (click)="onClearFilters()" [disabled]="isLoading">
         <mat-icon>clear</mat-icon>
