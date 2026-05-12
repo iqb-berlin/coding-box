@@ -13,6 +13,8 @@ describe('ValidationTaskService', () => {
   let workspaceFilesService: {
     getTestFilesValidationCacheKey: jest.Mock;
     refreshTestFilesValidationResult: jest.Mock;
+    deleteInvalidResponses: jest.Mock;
+    deleteAllInvalidResponses: jest.Mock;
   };
   let jobQueueService: {
     addValidationTaskJob: jest.Mock;
@@ -31,7 +33,9 @@ describe('ValidationTaskService', () => {
     };
     workspaceFilesService = {
       getTestFilesValidationCacheKey: jest.fn(),
-      refreshTestFilesValidationResult: jest.fn()
+      refreshTestFilesValidationResult: jest.fn(),
+      deleteInvalidResponses: jest.fn(),
+      deleteAllInvalidResponses: jest.fn()
     };
     jobQueueService = {
       addValidationTaskJob: jest.fn()
@@ -191,6 +195,34 @@ describe('ValidationTaskService', () => {
       'user-1',
       expect.any(Function)
     );
+    expect(task.progress_message).toBe('Löschung abgeschlossen.');
+    expect(task.status).toBe('completed');
+  });
+
+  it('should process delete response tasks with comma-separated response IDs', async () => {
+    const task = {
+      id: 4,
+      workspace_id: 7,
+      validation_type: 'deleteResponses',
+      status: 'pending',
+      result: JSON.stringify({
+        responseIds: '1, 2, invalid, 3'
+      })
+    } as ValidationTask;
+
+    taskRepository.findOne?.mockResolvedValue(task);
+    taskRepository.save?.mockImplementation(
+      savedTask => Promise.resolve(savedTask)
+    );
+    workspaceFilesService.deleteInvalidResponses.mockResolvedValue(3);
+
+    await service.processValidationTask(4);
+
+    expect(workspaceFilesService.deleteInvalidResponses).toHaveBeenCalledWith(
+      7,
+      [1, 2, 3]
+    );
+    expect(task.result).toBe(JSON.stringify({ deletedCount: 3 }));
     expect(task.progress_message).toBe('Löschung abgeschlossen.');
     expect(task.status).toBe('completed');
   });
