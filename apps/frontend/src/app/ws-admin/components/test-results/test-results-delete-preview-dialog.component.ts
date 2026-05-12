@@ -69,6 +69,55 @@ export class TestResultsDeletePreviewDialogComponent {
       'Die Zählweise entspricht der Arbeitsbereich-Übersicht: Testhefte, Aufgaben und Antworten werden eindeutig gezählt.';
   }
 
+  get hasCodingImpact(): boolean {
+    const impact = this.preview.codingImpact;
+    return !this.isLogDelete &&
+      !!impact &&
+      (
+        (impact.affectedUnits || 0) > 0 ||
+        (impact.autoCodingV1 || 0) > 0 ||
+        (impact.manualCodingV2 || 0) > 0 ||
+        (impact.autoCodingV3 || 0) > 0
+      );
+  }
+
+  get codingImpactText(): string {
+    return 'Mit diesen Testergebnissen werden auch vorhandene Kodierergebnisse entfernt. ' +
+      'Danach erscheinen diese gelöschten Fälle nicht als veralteter Kodierstand.';
+  }
+
+  get codingImpactMetrics(): DeleteMetric[] {
+    const impact = this.preview.codingImpact || {
+      affectedUnits: 0,
+      autoCodingV1: 0,
+      manualCodingV2: 0,
+      autoCodingV3: 0
+    };
+
+    return [
+      {
+        label: 'Aufgaben-Ergebnisse',
+        value: impact.affectedUnits || 0,
+        hint: 'mit Kodierung'
+      },
+      {
+        label: 'Auto-Coding 1',
+        value: impact.autoCodingV1 || 0,
+        hint: 'Antwort-Kodierungen'
+      },
+      {
+        label: 'Manuelle Kodierung',
+        value: impact.manualCodingV2 || 0,
+        hint: 'Antwort-Kodierungen'
+      },
+      {
+        label: 'Auto-Coding 2',
+        value: impact.autoCodingV3 || 0,
+        hint: 'Antwort-Kodierungen'
+      }
+    ];
+  }
+
   get acknowledgementLabel(): string {
     return this.isLogDelete ?
       'Ich verstehe, dass diese Logs endgültig entfernt werden.' :

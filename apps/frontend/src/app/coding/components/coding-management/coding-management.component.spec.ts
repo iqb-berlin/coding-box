@@ -12,6 +12,7 @@ import { CodingManagementService } from '../../services/coding-management.servic
 import { CodingManagementUiService } from './services/coding-management-ui.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../ws-admin/services/workspace-settings.service';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
@@ -24,6 +25,7 @@ describe('CodingManagementComponent', () => {
   let mockDialog: jest.Mocked<Partial<MatDialog>>;
   let mockAppService: jest.Mocked<Partial<AppService>>;
   let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
+  let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
   let mockRouter: jest.Mocked<Partial<Router>>;
 
   const fakeActivatedRoute = {
@@ -81,6 +83,39 @@ describe('CodingManagementComponent', () => {
       getAutoFetchCodingStatistics: jest.fn().mockReturnValue(of(false))
     };
 
+    mockTestPersonCodingService = {
+      autoCodingCompleted$: of(),
+      testResultsChanged$: of(),
+      getCodingFreshness: jest.fn().mockReturnValue(of({
+        workspaceId: 1,
+        currentRevision: 0,
+        items: []
+      })),
+      getCodingFreshnessScope: jest.fn().mockReturnValue(of({
+        workspaceId: 1,
+        currentRevision: 0,
+        versions: ['v1', 'v2', 'v3'],
+        states: ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED'],
+        unitCount: 0,
+        personCount: 0,
+        groupCount: 0,
+        affectedResponseCount: 0,
+        unitIds: [],
+        personIds: [],
+        groupNames: [],
+        groups: []
+      })),
+      startFreshnessCoding: jest.fn().mockReturnValue(of({
+        totalResponses: 0,
+        statusCounts: {},
+        unitCount: 0,
+        personCount: 0,
+        groupNames: []
+      })),
+      getJobStatus: jest.fn(),
+      notifyAutoCodingCompleted: jest.fn()
+    };
+
     mockRouter = {
       navigate: jest.fn()
     };
@@ -119,6 +154,10 @@ describe('CodingManagementComponent', () => {
         {
           provide: WorkspaceSettingsService,
           useValue: mockWorkspaceSettingsService
+        },
+        {
+          provide: TestPersonCodingService,
+          useValue: mockTestPersonCodingService
         },
         {
           provide: Router,

@@ -711,7 +711,8 @@ export class TestCenterImportComponent {
       units: (base.units || 0) + (current.units || 0),
       persons: (base.persons || 0) + (current.persons || 0),
       importedGroups: [...new Set([...(base.importedGroups || []), ...(current.importedGroups || [])])],
-      issues: [...(base.issues || []), ...(current.issues || [])]
+      issues: [...(base.issues || []), ...(current.issues || [])],
+      codingFreshness: current.codingFreshness || base.codingFreshness
     };
   }
 

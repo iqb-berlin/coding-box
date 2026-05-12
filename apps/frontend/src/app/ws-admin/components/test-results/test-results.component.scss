@@ -68,6 +68,73 @@
   }
 }
 
+.coding-freshness-banner {
+  align-items: flex-start;
+  background: rgba(245, 124, 0, 0.08);
+  border: 1px solid rgba(245, 124, 0, 0.26);
+  border-radius: 8px;
+  box-sizing: border-box;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  width: 100%;
+
+  button {
+    white-space: nowrap;
+
+    mat-icon {
+      margin-right: 6px;
+    }
+  }
+}
+
+.coding-freshness-icon {
+  color: #ef6c00;
+  display: flex;
+  padding-top: 2px;
+}
+
+.coding-freshness-copy {
+  min-width: 0;
+}
+
+.coding-freshness-title {
+  color: rgba(0, 0, 0, 0.82);
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.coding-freshness-text {
+  color: rgba(0, 0, 0, 0.72);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.coding-freshness-help {
+  color: rgba(0, 0, 0, 0.58);
+  margin-top: 3px;
+}
+
+.coding-freshness-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.coding-freshness-chip {
+  background: rgba(255, 255, 255, 0.74);
+  border: 1px solid rgba(245, 124, 0, 0.24);
+  border-radius: 999px;
+  color: rgba(0, 0, 0, 0.76);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 5px 8px;
+}
+
 .overview-card {
   background-color: white;
   border-radius: 8px;
@@ -275,6 +342,17 @@
       font-weight: 600;
       color: #5c6b7a;
       margin-left: 4px;
+    }
+  }
+}
+
+@media (max-width: 760px) {
+  .coding-freshness-banner {
+    grid-template-columns: auto minmax(0, 1fr);
+
+    button {
+      grid-column: 1 / -1;
+      justify-self: start;
     }
   }
 }

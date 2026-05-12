@@ -24,6 +24,7 @@ import { FileService } from '../../../shared/services/file/file.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
@@ -107,7 +108,20 @@ describe('TestResultsComponent', () => {
         },
         {
           provide: CodingStatisticsService,
-          useValue: { getCodingStatistics: jest.fn().mockReturnValue(of({})) }
+          useValue: {
+            getCodingStatistics: jest.fn().mockReturnValue(of({})),
+            getCodingFreshness: jest.fn().mockReturnValue(of({
+              workspaceId: 1,
+              currentRevision: 0,
+              items: []
+            }))
+          }
+        },
+        {
+          provide: TestPersonCodingService,
+          useValue: {
+            notifyTestResultsChanged: jest.fn()
+          }
         },
         {
           provide: VariableAnalysisService,
@@ -174,6 +188,9 @@ describe('TestResultsComponent', () => {
     const testResultService = TestBed.inject(TestResultService) as unknown as {
       getWorkspaceOverview: jest.Mock;
     };
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      notifyTestResultsChanged: jest.Mock;
+    };
     const unit = { id: 7, alias: 'Unit 7', name: 'Unit 7' };
     const booklet = { units: [unit] };
 
@@ -187,6 +204,7 @@ describe('TestResultsComponent', () => {
     component.deleteUnit(unit as never, booklet as never);
 
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
   });
 
   it('should reload workspace overview after deleting a response', () => {
@@ -196,6 +214,9 @@ describe('TestResultsComponent', () => {
     };
     const testResultService = TestBed.inject(TestResultService) as unknown as {
       getWorkspaceOverview: jest.Mock;
+    };
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      notifyTestResultsChanged: jest.Mock;
     };
     const response = { id: 13, variableid: 'VAR_1' };
 
@@ -210,6 +231,24 @@ describe('TestResultsComponent', () => {
     component.deleteResponse(response as never);
 
     expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
+  });
+
+  it('should refresh overview and coding state after flat-table response deletion', () => {
+    const testResultService = TestBed.inject(TestResultService) as unknown as {
+      getWorkspaceOverview: jest.Mock;
+      invalidateCache: jest.Mock;
+    };
+    const testPersonCodingService = TestBed.inject(TestPersonCodingService) as unknown as {
+      notifyTestResultsChanged: jest.Mock;
+    };
+
+    testResultService.getWorkspaceOverview.mockClear();
+    component.onFlatTableResponseDeleted();
+
+    expect(testResultService.invalidateCache).toHaveBeenCalledWith(1);
+    expect(testResultService.getWorkspaceOverview).toHaveBeenCalledWith(1);
+    expect(testPersonCodingService.notifyTestResultsChanged).toHaveBeenCalled();
   });
 
   it('should keep the last workspace overview while a reload has no result yet', () => {
@@ -316,7 +355,12 @@ describe('TestResultsComponent', () => {
             importedLogs: false,
             uploadResult: {
               success: true,
-              issues: []
+              issues: [],
+              codingFreshness: {
+                workspaceId: 1,
+                currentRevision: 0,
+                items: []
+              }
             }
           })
         };

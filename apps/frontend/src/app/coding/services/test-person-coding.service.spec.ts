@@ -302,6 +302,67 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('coding freshness', () => {
+    it('should request the freshness scope with version and states', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        currentRevision: 1,
+        versions: ['v1'],
+        states: ['PENDING', 'STALE'],
+        unitCount: 2,
+        personCount: 1,
+        groupCount: 1,
+        affectedResponseCount: 4,
+        unitIds: [10, 11],
+        personIds: [100],
+        groupNames: ['Group1'],
+        groups: []
+      };
+
+      service.getCodingFreshnessScope(mockWorkspaceId, 'v1', ['PENDING', 'STALE'])
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/scope` &&
+        request.params.get('version') === 'v1' &&
+        request.params.get('state') === 'PENDING,STALE'
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
+    it('should start a coding freshness job', () => {
+      const mockResponse = {
+        totalResponses: 0,
+        statusCounts: {},
+        jobId: 'job-123',
+        message: 'started',
+        unitCount: 2,
+        personCount: 1,
+        groupNames: ['Group1']
+      };
+
+      service.startFreshnessCoding(mockWorkspaceId, {
+        version: 'v1',
+        states: ['PENDING', 'STALE']
+      }).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/freshness/code`
+      );
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        version: 'v1',
+        states: ['PENDING', 'STALE']
+      });
+      req.flush(mockResponse);
+    });
+  });
+
   describe('exportCodingListAsCsv', () => {
     it('should send a GET request to export coding list as CSV', () => {
       const mockBlob = new Blob(['test,data'], { type: 'text/csv' });

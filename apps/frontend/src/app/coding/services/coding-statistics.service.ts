@@ -8,6 +8,7 @@ import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
+import { CodingFreshnessSummaryDto } from '../../../../../../api-dto/coding/coding-freshness.dto';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -32,6 +33,20 @@ export class CodingStatisticsService {
       { params })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+      );
+  }
+
+  getCodingFreshness(workspace_id: number): Observable<CodingFreshnessSummaryDto> {
+    return this.http
+      .get<CodingFreshnessSummaryDto>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`
+    )
+      .pipe(
+        catchError(() => of({
+          workspaceId: workspace_id,
+          currentRevision: 0,
+          items: []
+        }))
       );
   }
 

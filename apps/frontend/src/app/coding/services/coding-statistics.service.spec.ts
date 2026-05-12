@@ -51,6 +51,28 @@ describe('CodingStatisticsService', () => {
     req.flush(mockRes);
   });
 
+  it('should get coding freshness', () => {
+    const mockRes = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v1' as const,
+          state: 'STALE' as const,
+          unitCount: 3,
+          affectedResponseCount: 12
+        }
+      ]
+    };
+    service.getCodingFreshness(1).subscribe(res => {
+      expect(res).toEqual(mockRes);
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/freshness`);
+    expect(req.request.method).toBe('GET');
+    req.flush(mockRes);
+  });
+
   it('should get responses by status', () => {
     const mockRes = {
       data: [], total: 0, page: 1, limit: 100

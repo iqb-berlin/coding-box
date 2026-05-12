@@ -6,7 +6,7 @@ import {
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { takeUntil } from 'rxjs/operators';
+import { finalize, takeUntil } from 'rxjs/operators';
 import { Subject } from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
@@ -30,6 +30,7 @@ import {
 import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
+import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
@@ -43,6 +44,22 @@ import { ResponseTableComponent } from './components/response-table/response-tab
 import { SearchResponseItem } from '../../../models/coding-interfaces';
 import { ItemListDialogComponent } from '../../../shared/dialogs/item-list-dialog/item-list-dialog.component';
 import { ReviewListDialogComponent } from './components/review-list-dialog/review-list-dialog.component';
+import {
+  CodingFreshnessScopeDto,
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessSummaryItemDto
+} from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CODING_FRESHNESS_TASK_RESULT_HELP,
+  getCodingFreshnessAffectedResponseCount,
+  getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAutoCodingButtonLabel,
+  getCodingFreshnessChipLabel,
+  getCodingFreshnessStateLabel,
+  getCodingFreshnessSummaryText,
+  getCodingFreshnessVersionLabel
+} from '../../../shared/utils/coding-freshness-text.util';
 
 @Component({
   selector: 'app-coding-management',
@@ -70,6 +87,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private codingManagementService = inject(CodingManagementService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
   private router = inject(Router);
@@ -111,6 +129,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   pageIndex = 0;
 
   selectedStatisticsVersion: 'v1' | 'v2' | 'v3' = 'v1';
+  codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
+  codingFreshnessScope: CodingFreshnessScopeDto | null = null;
+  isLoadingCodingFreshness = false;
+  isStartingFreshnessCoding = false;
+  activeFreshnessJobId: string | null = null;
+  activeFreshnessJobProgress: number | null = null;
 
   filterParams: FilterParams = {
     unitName: '',
@@ -126,6 +150,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   };
 
   private destroy$ = new Subject<void>();
+  private freshnessJobPollingInterval: number | null = null;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -177,6 +202,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.resetProgress = progress;
         if (progress === null && this.statisticsLoaded) {
           this.fetchCodingStatistics();
+          this.loadCodingFreshness();
           this.refreshTableData();
         }
       });
@@ -194,11 +220,29 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.codingListDownloadProgress = progress;
       });
 
+    this.testPersonCodingService.autoCodingCompleted$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.fetchCodingStatistics();
+        this.loadCodingFreshness();
+        this.refreshTableData();
+      });
+
+    this.testPersonCodingService.testResultsChanged$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.fetchCodingStatistics();
+        this.loadCodingFreshness();
+        this.refreshTableData();
+      });
+
     // Check for active reset job (persists across navigation)
     this.codingManagementService.checkActiveResetJob();
+    this.loadCodingFreshness();
   }
 
   ngOnDestroy(): void {
+    this.stopFreshnessJobPolling();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -219,6 +263,82 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   fetchCodingStatistics(): void {
     this.codingManagementService.fetchCodingStatistics(this.selectedStatisticsVersion);
+  }
+
+  loadCodingFreshness(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingCodingFreshness = true;
+    this.testPersonCodingService.getCodingFreshness(workspaceId)
+      .pipe(
+        finalize(() => {
+          this.isLoadingCodingFreshness = false;
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(summary => {
+        this.codingFreshnessSummary = summary;
+        if (this.hasCodingFreshnessWarnings) {
+          this.loadCodingFreshnessScope();
+        } else {
+          this.codingFreshnessScope = null;
+        }
+      });
+  }
+
+  loadCodingFreshnessScope(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.testPersonCodingService.getCodingFreshnessScope(workspaceId)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(scope => {
+        this.codingFreshnessScope = scope;
+      });
+  }
+
+  startFreshnessCoding(version: 'v1' | 'v3'): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId || this.isStartingFreshnessCoding) {
+      return;
+    }
+
+    this.isStartingFreshnessCoding = true;
+    this.testPersonCodingService.startFreshnessCoding(workspaceId, {
+      version,
+      states: ['PENDING', 'STALE']
+    })
+      .pipe(
+        finalize(() => {
+          this.isStartingFreshnessCoding = false;
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(result => {
+        if (!result.jobId) {
+          this.snackBar.open(
+            result.message || 'Keine betroffenen Ergebnisse für Auto-Coding gefunden.',
+            'Schließen',
+            { duration: 5000 }
+          );
+          this.loadCodingFreshness();
+          return;
+        }
+
+        this.activeFreshnessJobId = result.jobId;
+        this.activeFreshnessJobProgress = 0;
+        this.startFreshnessJobPolling(result.jobId);
+        this.snackBar.open(
+          `Auto-Coding für ${result.unitCount} betroffene Einträge gestartet.`,
+          'Schließen',
+          { duration: 5000 }
+        );
+      });
   }
 
   onDownloadResults(): void {
@@ -324,6 +444,124 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         title: this.translateService.instant('coding-management.actions.review-session')
       }
     });
+  }
+
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.codingFreshnessSummary?.items || [])
+      .filter(item => item.state !== 'CURRENT' && item.unitCount > 0);
+  }
+
+  get hasCodingFreshnessWarnings(): boolean {
+    return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.codingFreshnessWarnings.filter(item => (
+      (item.version === 'v1' || item.version === 'v3') &&
+      (item.state === 'PENDING' || item.state === 'STALE')
+    ));
+  }
+
+  get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.codingFreshnessWarnings.filter(item => (
+      item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED'
+    ));
+  }
+
+  get codingFreshnessAffectedUnits(): number {
+    return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessAffectedResponses(): number {
+    return getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessSummaryText(): string {
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessExplanationText(): string {
+    return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  get codingFreshnessGroupPreview(): string {
+    const groupNames = this.codingFreshnessScope?.groupNames || [];
+    if (groupNames.length === 0) {
+      return '';
+    }
+    const visible = groupNames.slice(0, 4).join(', ');
+    const hidden = groupNames.length - 4;
+    return hidden > 0 ? `${visible} +${hidden}` : visible;
+  }
+
+  hasFreshnessAutoCodingWork(version: 'v1' | 'v3'): boolean {
+    return this.autoCodingFreshnessWarnings.some(item => item.version === version);
+  }
+
+  getFreshnessVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
+    return getCodingFreshnessVersionLabel(version);
+  }
+
+  getFreshnessStateLabel(state: CodingFreshnessState): string {
+    return getCodingFreshnessStateLabel(state);
+  }
+
+  getFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    return getCodingFreshnessChipLabel(item);
+  }
+
+  getFreshnessAutoCodingButtonLabel(version: 'v1' | 'v3'): string {
+    return getCodingFreshnessAutoCodingButtonLabel(this.autoCodingFreshnessWarnings, version);
+  }
+
+  private startFreshnessJobPolling(jobId: string): void {
+    this.stopFreshnessJobPolling();
+    this.freshnessJobPollingInterval = window.setInterval(() => {
+      const workspaceId = this.appService.selectedWorkspaceId;
+      if (!workspaceId) {
+        this.stopFreshnessJobPolling();
+        return;
+      }
+
+      this.testPersonCodingService.getJobStatus(workspaceId, jobId)
+        .pipe(takeUntil(this.destroy$))
+        .subscribe(status => {
+          if (!('status' in status)) {
+            this.snackBar.open(status.error, 'Schließen', { duration: 5000 });
+            this.stopFreshnessJobPolling();
+            return;
+          }
+
+          this.activeFreshnessJobProgress = status.progress;
+          if (['completed', 'failed', 'cancelled', 'paused'].includes(status.status)) {
+            this.stopFreshnessJobPolling();
+            if (status.status === 'completed') {
+              this.testPersonCodingService.notifyAutoCodingCompleted();
+              this.snackBar.open(
+                'Betroffene Ergebnisse wurden kodiert.',
+                'Schließen',
+                { duration: 4000 }
+              );
+            } else if (status.status === 'failed') {
+              this.snackBar.open(
+                status.error || 'Auto-Coding für betroffene Ergebnisse fehlgeschlagen.',
+                'Schließen',
+                { duration: 6000 }
+              );
+            }
+            this.loadCodingFreshness();
+          }
+        });
+    }, 2000);
+  }
+
+  private stopFreshnessJobPolling(): void {
+    if (this.freshnessJobPollingInterval) {
+      clearInterval(this.freshnessJobPollingInterval);
+      this.freshnessJobPollingInterval = null;
+    }
+    this.activeFreshnessJobId = null;
+    this.activeFreshnessJobProgress = null;
   }
 
   // Data Fetching Methods

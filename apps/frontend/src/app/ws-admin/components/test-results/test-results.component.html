@@ -72,6 +72,32 @@
     </div>
   </div>
 
+  @if (hasCodingFreshnessWarning) {
+  <div class="coding-freshness-banner">
+    <div class="coding-freshness-icon">
+      <mat-icon>warning</mat-icon>
+    </div>
+    <div class="coding-freshness-copy">
+      <div class="coding-freshness-title">Kodierung nicht mehr vollständig aktuell</div>
+      <div class="coding-freshness-text">
+        <div>{{ codingFreshnessSummaryText }}</div>
+        <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
+      </div>
+      <div class="coding-freshness-chip-row">
+        @for (item of codingFreshnessWarnings; track item.version + item.state) {
+        <span class="coding-freshness-chip">
+          {{ getCodingFreshnessChipLabel(item) }}
+        </span>
+        }
+      </div>
+    </div>
+    <button mat-stroked-button type="button" (click)="openCodingManagement()">
+      <mat-icon>rule</mat-icon>
+      Kodierung öffnen
+    </button>
+  </div>
+  }
+
   <div class="overview-card">
     <h2 class="section-title">Übersicht (Arbeitsbereich)</h2>
     <p class="section-description">
@@ -169,6 +195,7 @@
   } @if(!isUploadingResults){ @if (dataSource) { @if (isTableView) {
   <coding-box-test-results-flat-table
     [initialFilters]="quickSearchTableFilters"
+    (responseDeleted)="onFlatTableResponseDeleted()"
   ></coding-box-test-results-flat-table>
   } @else {
   <div class="content-container">

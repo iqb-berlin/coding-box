@@ -42,6 +42,69 @@
   </div>
   }
 
+  <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessWarnings">
+    <div class="coding-freshness-main">
+      <mat-icon>{{ hasCodingFreshnessWarnings ? 'warning' : 'check_circle' }}</mat-icon>
+      <div class="coding-freshness-copy">
+        <div class="coding-freshness-title">
+          {{ hasCodingFreshnessWarnings ? 'Kodierstand nicht vollständig aktuell' : 'Kodierstand aktuell' }}
+        </div>
+        <div class="coding-freshness-text">
+          @if (isLoadingCodingFreshness) {
+          Zustand wird geprüft...
+          } @else if (hasCodingFreshnessWarnings) {
+          <div>{{ codingFreshnessSummaryText }}</div>
+          <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
+          @if (codingFreshnessGroupPreview) {
+          <div>Betroffene Gruppen: {{ codingFreshnessGroupPreview }}.</div>
+          }
+          } @else {
+          Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.
+          }
+        </div>
+        @if (hasCodingFreshnessWarnings) {
+        <div class="coding-freshness-chip-row">
+          @for (item of codingFreshnessWarnings; track item.version + item.state) {
+          <span class="coding-freshness-chip">
+            {{ getFreshnessChipLabel(item) }}
+          </span>
+          }
+        </div>
+        }
+      </div>
+    </div>
+
+    @if (activeFreshnessJobId) {
+    <div class="coding-freshness-job">
+      <mat-spinner diameter="18"></mat-spinner>
+      <span>Aktualisierung läuft: {{ activeFreshnessJobProgress || 0 }}%</span>
+    </div>
+    } @else if (hasCodingFreshnessWarnings) {
+    <div class="coding-freshness-actions">
+      @if (hasFreshnessAutoCodingWork('v1')) {
+      <button mat-stroked-button color="primary" [disabled]="isStartingFreshnessCoding"
+        (click)="startFreshnessCoding('v1')">
+        <mat-icon>auto_fix_high</mat-icon>
+        {{ getFreshnessAutoCodingButtonLabel('v1') }}
+      </button>
+      }
+      @if (hasFreshnessAutoCodingWork('v3')) {
+      <button mat-stroked-button color="primary" [disabled]="isStartingFreshnessCoding"
+        (click)="startFreshnessCoding('v3')">
+        <mat-icon>auto_fix_high</mat-icon>
+        {{ getFreshnessAutoCodingButtonLabel('v3') }}
+      </button>
+      }
+      @if (manualCodingFreshnessWarnings.length > 0) {
+      <button mat-stroked-button color="primary" (click)="openManualCoding()">
+        <mat-icon>keyboard</mat-icon>
+        Manuelle Prüfung öffnen
+      </button>
+      }
+    </div>
+    }
+  </section>
+
   <div class="coding-content-area">
     <div class="content-row-container">
       <!-- Statistics Section -->
