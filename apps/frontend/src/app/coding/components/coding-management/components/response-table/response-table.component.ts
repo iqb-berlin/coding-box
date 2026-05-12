@@ -122,6 +122,15 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
     return this.translateService.instant(headers[column] || column);
   }
 
+  getSelectedVersionLabel(): string {
+    const labels: Record<'v1' | 'v2' | 'v3', string> = {
+      v1: 'coding-management.statistics.first-autocode-run',
+      v2: 'coding-management.statistics.manual-coding-run',
+      v3: 'coding-management.statistics.second-autocode-run'
+    };
+    return this.translateService.instant(labels[this.selectedVersion]);
+  }
+
   getStatusString(status: string): string {
     if (!status) return '';
     const num = parseInt(status, 10);

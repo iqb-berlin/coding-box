@@ -25,6 +25,19 @@ describe('ResponseFiltersComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('should use all responses as the default response source', () => {
+    expect(component.filterParams.responseSource).toBe('all');
+    expect(component.responseSourceOptions[0].value).toBe('all');
+  });
+
+  it('should render the response source filter before the status filter', () => {
+    const text = fixture.nativeElement.textContent as string;
+
+    expect(text.indexOf('coding-management.filters.response-source')).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf('coding-management.filters.response-source'))
+      .toBeLessThan(text.indexOf('coding-management.filters.coded-status'));
+  });
+
   it('should emit filterChange after debounce timeout', done => {
     jest.spyOn(component.filterChange, 'emit');
 

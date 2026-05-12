@@ -71,6 +71,12 @@ describe('ResponseTableComponent', () => {
     expect(component.getStatusString('')).toBe('');
   });
 
+  it('should expose the selected version label for the table header', () => {
+    component.selectedVersion = 'v3';
+
+    expect(component.getSelectedVersionLabel()).toBe('coding-management.statistics.second-autocode-run');
+  });
+
   it('should return correct label for filter status', () => {
     component.currentStatusFilter = '200';
     expect(component.getFilterStatusLabel()).toBeTruthy();

@@ -35,6 +35,16 @@
     font-weight: 500;
 }
 
+.title-block {
+    min-width: 0;
+}
+
+.active-version-indicator {
+    color: rgba(0, 0, 0, 0.7);
+    font-size: 14px;
+    line-height: 1.4;
+}
+
 .current-status h3 {
     margin: 8px 0 0 0;
     font-size: 16px;

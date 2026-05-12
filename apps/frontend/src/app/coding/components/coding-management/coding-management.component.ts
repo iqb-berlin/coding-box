@@ -145,7 +145,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     bookletName: '',
     variableId: '',
     geogebra: false,
-    responseSource: 'base',
+    responseSource: 'all',
     personLogin: ''
   };
 
@@ -250,6 +250,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   // Statistics Card Event Handlers
   onVersionChange(version: 'v1' | 'v2' | 'v3'): void {
     this.selectedStatisticsVersion = version;
+    this.filterParams = {
+      ...this.filterParams,
+      version
+    };
     this.data = [];
     this.currentStatusFilter = null;
     this.totalRecords = 0;
@@ -373,9 +377,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Filter Event Handlers
   onFilterChange(filterParams: FilterParams): void {
-    this.filterParams = filterParams;
+    this.filterParams = {
+      ...filterParams,
+      version: this.selectedStatisticsVersion
+    };
 
-    if (!this.hasActiveFilters(filterParams)) {
+    if (!this.hasActiveFilters(this.filterParams)) {
       this.data = [];
       this.totalRecords = 0;
       this.currentStatusFilter = null;
@@ -389,7 +396,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   onClearFilters(): void {
-    this.filterParams = this.createDefaultFilterParams();
+    this.filterParams = this.createDefaultFilterParams(this.selectedStatisticsVersion);
     this.data = [];
     this.totalRecords = 0;
     this.currentStatusFilter = null;
@@ -602,6 +609,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.data = response.data.map((item: ResponseEntity) => {
           const codeKey = `code_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
           const scoreKey = `score_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
+          const statusKey = `status_${this.selectedStatisticsVersion}` as keyof ResponseEntity;
 
           return {
             id: item.id,
@@ -613,7 +621,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             code: (item[codeKey] as number)?.toString() || null,
             score: (item[scoreKey] as number)?.toString() || null,
             unit: item.unit,
-            codedstatus: item.status_v1 || '',
+            codedstatus: (item[statusKey] as string) || '',
             unitname: item.unit?.name || '',
             login_name: item.unit?.booklet?.person?.login || '',
             login_group: (item.unit?.booklet?.person as { group?: string } | undefined)?.group || '',
@@ -858,7 +866,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
   }
 
-  private createDefaultFilterParams(version: StatisticsVersion = 'v1'): FilterParams {
+  private createDefaultFilterParams(version: StatisticsVersion = this.selectedStatisticsVersion): FilterParams {
     return {
       unitName: '',
       codedStatus: '',
@@ -868,7 +876,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       bookletName: '',
       variableId: '',
       geogebra: false,
-      responseSource: 'base',
+      responseSource: 'all',
       personLogin: ''
     };
   }
@@ -877,7 +885,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return Object.entries(filterParams).some(
       ([key, value]) => {
         if (key === 'version') return false;
-        if (key === 'responseSource') return value !== 'base';
+        if (key === 'responseSource') return value !== 'all';
         return typeof value === 'string' ? value.trim() !== '' : value === true;
       }
     );

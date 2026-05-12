@@ -8,7 +8,12 @@
 @if (!isLoading && data.length > 0) {
 <div class="data-card">
     <div class="card-header">
-        <h2 class="section-title">{{ 'coding-management.titles.coding-data' | translate }}</h2>
+        <div class="title-block">
+            <h2 class="section-title">{{ 'coding-management.titles.coding-data' | translate }}</h2>
+            <div class="active-version-indicator">
+                {{ 'coding-management.filters.active-run' | translate:{run: getSelectedVersionLabel()} }}
+            </div>
+        </div>
         @if (currentStatusFilter) {
         <div class="current-status">
             <h3>
