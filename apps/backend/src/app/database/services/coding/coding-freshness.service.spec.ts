@@ -307,4 +307,99 @@ describe('CodingFreshnessService', () => {
     expect(JSON.stringify((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]))
       .not.toContain('"unit_id":20');
   });
+
+  it('does not apply the aggregate import count to imported units with zero responses', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 6 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: false, v3: false })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await service.markUnitsPendingAfterImport(1, [10, 20], 100);
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          unit_id: 10,
+          affected_response_count: 2
+        }),
+        expect.objectContaining({
+          unit_id: 20,
+          affected_response_count: 0
+        })
+      ]),
+      ['workspace_id', 'unit_id', 'version']
+    );
+  });
+
+  it('marks imported units pending for the first auto-coding run when no coding exists yet', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '3' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: false, v2: false, v3: false })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await service.markUnitsPendingAfterImport(1, [10], 3);
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({
+        unit_id: 10,
+        version: 'v1',
+        state: 'PENDING',
+        reason: 'RESULT_ADDED',
+        affected_response_count: 3,
+        source_revision: 7
+      })],
+      ['workspace_id', 'unit_id', 'version']
+    );
+  });
+
+  it('keeps changed uncoded units pending for the first auto-coding run', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 8 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '5' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: false, v2: false, v3: false })
+    });
+    const unitPresenceQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{
+        unitId: 10,
+        v1: false,
+        v2: false,
+        v3: false
+      }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(unitPresenceQb);
+
+    await service.markUnitsStaleAfterResultChange(1, [10], 'RESULT_UPDATED');
+
+    expect(freshnessRepository.upsert).toHaveBeenCalledWith(
+      [expect.objectContaining({
+        unit_id: 10,
+        version: 'v1',
+        state: 'PENDING',
+        reason: 'RESULT_UPDATED',
+        affected_response_count: 5,
+        source_revision: 8
+      })],
+      ['workspace_id', 'unit_id', 'version']
+    );
+  });
 });

@@ -5521,6 +5521,7 @@ export class WorkspaceTestResultsService {
       version?: 'v1' | 'v2' | 'v3';
       geogebra?: boolean;
       derivedOnly?: boolean;
+      responseSource?: 'base' | 'derived' | 'all';
       personLogin?: string;
     },
     options: { page?: number; limit?: number } = {}
@@ -5606,10 +5607,10 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const statusColumn = searchParams.version ?
-          `status_${searchParams.version}` :
-          'status_v1';
-        query.andWhere(`response.${statusColumn} = :codedStatus`, {
+        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
+        query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
           codedStatus: searchParams.codedStatus
         });
       }
@@ -5638,13 +5639,23 @@ export class WorkspaceTestResultsService {
         query.addOrderBy('person.code', 'ASC');
       }
 
-      if (searchParams.derivedOnly) {
+      const responseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+
+      if (responseSource === 'derived') {
         const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
           searchParams.version || 'v1'
         );
         query.andWhere('response.is_autocoder_generated = :derivedOnly', {
           derivedOnly: true
         });
+        query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
+        });
+      } else if (responseSource === 'all') {
+        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+          searchParams.version || 'v1'
+        );
         query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
         query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
