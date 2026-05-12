@@ -80,7 +80,8 @@ type ValidationProgressReporter = (
   message?: string
 ) => void | Promise<void>;
 
-const TEST_FILES_VALIDATION_CACHE_VERSION = 2;
+// Bump this whenever test-file validation semantics or result shape changes.
+export const TEST_FILES_VALIDATION_CACHE_VERSION = 3;
 
 @Injectable()
 export class WorkspaceTestFilesValidationService {
