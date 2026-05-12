@@ -29,6 +29,7 @@ export interface VariableCombo {
   totalCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
+  distinctValueCount?: number;
   statusCounts?: VariableStatusCount[];
 }
 
@@ -84,7 +85,7 @@ export class VariableAnalysisService {
 
   getAnalysisJob(
     workspaceId: number,
-    jobId: number
+    jobId: number | string
   ): Observable<VariableAnalysisJobDto> {
     return this.http.get<VariableAnalysisJobDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
@@ -99,7 +100,7 @@ export class VariableAnalysisService {
 
   getAnalysisResults(
     workspaceId: number,
-    jobId: number
+    jobId: number | string
   ): Observable<VariableAnalysisResultDto> {
     return this.http.get<VariableAnalysisResultDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results`,
@@ -124,7 +125,7 @@ export class VariableAnalysisService {
     );
   }
 
-  cancelJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+  cancelJob(workspaceId: number, jobId: number | string): Observable<JobCancelResult> {
     return this.http.post<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/cancel`,
       null,
@@ -137,7 +138,7 @@ export class VariableAnalysisService {
     );
   }
 
-  deleteJob(workspaceId: number, jobId: number): Observable<JobCancelResult> {
+  deleteJob(workspaceId: number, jobId: number | string): Observable<JobCancelResult> {
     return this.http.delete<JobCancelResult>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}`,
       { headers: this.authHeader }

@@ -16,6 +16,8 @@ import {
 export class VariableAnalysisProcessor {
   private readonly logger = new Logger(VariableAnalysisProcessor.name);
 
+  private readonly MAX_VALUES_PER_VARIABLE = 20;
+
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
@@ -72,6 +74,7 @@ export class VariableAnalysisProcessor {
         totalCount: 0,
         emptyCount: 0,
         emptyPercentage: 0,
+        distinctValueCount: 0,
         statusCounts: []
       }));
 
@@ -85,73 +88,132 @@ export class VariableAnalysisProcessor {
         };
       }
 
-      // Get total count of distinct variable combinations
-      const totalQuery = query.clone()
-        .select("COUNT(DISTINCT CONCAT(unit.id, ':', response.variableid))", 'count');
-      const totalResult = await totalQuery.getRawOne();
-      const total = parseInt(totalResult.count, 10);
+      const total = variableCombos.length;
 
-      // Get frequencies for each variable combination
       const frequencies: { [key: string]: VariableFrequencyDto[] } = {};
+      const comboByKey = new Map<string, VariableCombo>();
+      variableCombos.forEach(combo => {
+        const comboKey = `${combo.unitId}:${combo.variableId}`;
+        comboByKey.set(comboKey, combo);
+        frequencies[comboKey] = [];
+      });
 
-      // Process in chunks
-      const CHUNK_SIZE = 10;
-      for (let i = 0; i < variableCombos.length; i += CHUNK_SIZE) {
-        const chunk = variableCombos.slice(i, i + CHUNK_SIZE);
+      await job.progress(25);
 
-        for (const combo of chunk) {
-          // Create a unique key for this combination
-          const comboKey = `${combo.unitId}:${combo.variableId}`;
+      const summaryRows = await query.clone()
+        .select('unit.id', 'unitId')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect('COUNT(*)', 'totalCount')
+        .addSelect("SUM(CASE WHEN response.value IS NULL OR response.value = '' THEN 1 ELSE 0 END)", 'emptyCount')
+        .addSelect("COUNT(DISTINCT COALESCE(response.value, ''))", 'distinctValueCount')
+        .groupBy('unit.id')
+        .addGroupBy('response.variableid')
+        .getRawMany();
 
-          // Get all values for this variable combination
-          const valuesQuery = query.clone()
-            .select('response.value', 'value')
-            .addSelect('COUNT(*)', 'count')
-            .andWhere('unit.id = :unitId', { unitId: combo.unitId })
-            .andWhere('response.variableid = :varId', { varId: combo.variableId })
-            .groupBy('response.value')
-            .orderBy('count', 'DESC');
+      for (const row of summaryRows) {
+        const combo = comboByKey.get(`${Number(row.unitId)}:${row.variableId}`);
 
-          const valuesResult = await valuesQuery.getRawMany();
-
-          const totalResponses = valuesResult.reduce((sum, result) => sum + parseInt(result.count, 10), 0);
-          const emptyCount = valuesResult
-            .filter(result => result.value === null || result.value === undefined || result.value === '')
-            .reduce((sum, result) => sum + parseInt(result.count, 10), 0);
-
-          const statusQuery = query.clone()
-            .select('response.status', 'status')
-            .addSelect('COUNT(*)', 'count')
-            .andWhere('unit.id = :unitId', { unitId: combo.unitId })
-            .andWhere('response.variableid = :varId', { varId: combo.variableId })
-            .groupBy('response.status')
-            .orderBy('count', 'DESC');
-
-          const statusResults = await statusQuery.getRawMany();
-          combo.totalCount = totalResponses;
-          combo.emptyCount = emptyCount;
-          combo.emptyPercentage = totalResponses > 0 ? (emptyCount / totalResponses) * 100 : 0;
-          combo.statusCounts = statusResults.map(result => ({
-            status: Number(result.status),
-            count: parseInt(result.count, 10),
-            percentage: totalResponses > 0 ? (parseInt(result.count, 10) / totalResponses) * 100 : 0
-          }));
-
-          // Map to DTOs
-          frequencies[comboKey] = valuesResult.map(result => ({
-            unitId: combo.unitId,
-            unitName: combo.unitName,
-            variableId: combo.variableId,
-            value: result.value || '',
-            count: parseInt(result.count, 10),
-            percentage: (parseInt(result.count, 10) / totalResponses) * 100
-          }));
+        if (combo) {
+          combo.totalCount = parseInt(row.totalCount, 10);
+          combo.emptyCount = parseInt(row.emptyCount, 10);
+          combo.distinctValueCount = parseInt(row.distinctValueCount, 10);
         }
+      }
 
-        // Update progress
-        const processedCount = Math.min(i + CHUNK_SIZE, variableCombos.length);
-        const progressPercentage = Math.round((processedCount / variableCombos.length) * 100);
-        await job.progress(progressPercentage);
+      await job.progress(40);
+
+      const topValuesQuery = query.clone()
+        .select('unit.id', 'unitId')
+        .addSelect('unit.name', 'unitName')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect("COALESCE(response.value, '')", 'value')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('unit.id')
+        .addGroupBy('unit.name')
+        .addGroupBy('response.variableid')
+        .addGroupBy("COALESCE(response.value, '')")
+        .orderBy('unit.name', 'ASC')
+        .addOrderBy('response.variableid', 'ASC')
+        .addOrderBy('count', 'DESC');
+
+      const [topValuesSql, topValuesParameters] = topValuesQuery.getQueryAndParameters();
+      const maxValuesParameter = `$${topValuesParameters.length + 1}`;
+      const valueRows = await this.responseRepository.query(
+        `
+          SELECT ranked_values.*
+          FROM (
+            SELECT
+              grouped_values.*,
+              ROW_NUMBER() OVER (
+                PARTITION BY grouped_values."unitId", grouped_values."variableId"
+                ORDER BY grouped_values."count" DESC, grouped_values."value" ASC
+              ) AS "rank"
+            FROM (${topValuesSql}) grouped_values
+          ) ranked_values
+          WHERE ranked_values."rank" <= ${maxValuesParameter}
+          ORDER BY ranked_values."unitName" ASC, ranked_values."variableId" ASC, ranked_values."count" DESC
+        `,
+        [...topValuesParameters, this.MAX_VALUES_PER_VARIABLE]
+      );
+
+      for (const row of valueRows) {
+        const unitIdNumber = Number(row.unitId);
+        const comboKey = `${unitIdNumber}:${row.variableId}`;
+        const combo = comboByKey.get(comboKey);
+
+        if (combo) {
+          const count = parseInt(row.count, 10);
+          frequencies[comboKey].push({
+            unitId: unitIdNumber,
+            unitName: row.unitName,
+            variableId: row.variableId,
+            value: row.value || '',
+            count,
+            percentage: 0
+          });
+        }
+      }
+
+      variableCombos.forEach(combo => {
+        const comboKey = `${combo.unitId}:${combo.variableId}`;
+        const totalResponses = combo.totalCount || 0;
+        combo.emptyPercentage = totalResponses > 0 ? ((combo.emptyCount || 0) / totalResponses) * 100 : 0;
+        frequencies[comboKey] = frequencies[comboKey].map(item => ({
+          ...item,
+          percentage: totalResponses > 0 ? (item.count / totalResponses) * 100 : 0
+        }));
+      });
+
+      await job.progress(70);
+
+      const statusRows = await query.clone()
+        .select('unit.id', 'unitId')
+        .addSelect('response.variableid', 'variableId')
+        .addSelect('response.status', 'status')
+        .addSelect('COUNT(*)', 'count')
+        .groupBy('unit.id')
+        .addGroupBy('response.variableid')
+        .addGroupBy('response.status')
+        .orderBy('unit.id', 'ASC')
+        .addOrderBy('response.variableid', 'ASC')
+        .addOrderBy('count', 'DESC')
+        .getRawMany();
+
+      for (const row of statusRows) {
+        const combo = comboByKey.get(`${Number(row.unitId)}:${row.variableId}`);
+
+        if (combo) {
+          const count = parseInt(row.count, 10);
+          const totalResponses = combo.totalCount || 0;
+          combo.statusCounts = [
+            ...(combo.statusCounts || []),
+            {
+              status: Number(row.status),
+              count,
+              percentage: totalResponses > 0 ? (count / totalResponses) * 100 : 0
+            }
+          ];
+        }
       }
 
       await job.progress(100);
