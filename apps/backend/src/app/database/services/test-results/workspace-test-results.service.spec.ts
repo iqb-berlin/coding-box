@@ -568,6 +568,44 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('should include base and derived responses with kodierstatistical statuses when responseSource is all', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should apply codedStatus through the effective version status expression', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { codedStatus: '5', version: 'v3', responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('COALESCE(CASE WHEN response.status_v3'),
+        { codedStatus: '5' }
+      );
+    });
+
     it('should apply the v3 fallback status expression for derived-only searches', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);

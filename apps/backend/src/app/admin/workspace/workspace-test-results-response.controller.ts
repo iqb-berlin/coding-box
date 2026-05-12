@@ -250,6 +250,7 @@ export class WorkspaceTestResultsResponseController {
       @Query('version') version?: 'v1' | 'v2' | 'v3',
       @Query('geogebra') geogebra?: string,
       @Query('derivedOnly') derivedOnly?: string,
+      @Query('responseSource') responseSource?: 'base' | 'derived' | 'all',
       @Query('personLogin') personLogin?: string,
                                          @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
                                          @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
@@ -273,6 +274,7 @@ export class WorkspaceTestResultsResponseController {
           version,
           geogebra: geogebra === 'true',
           derivedOnly: derivedOnly === 'true',
+          responseSource,
           personLogin
         },
         { page, limit }

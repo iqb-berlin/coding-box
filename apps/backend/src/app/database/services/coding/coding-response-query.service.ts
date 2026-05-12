@@ -11,6 +11,11 @@ import {
 @Injectable()
 export class CodingResponseQueryService {
   private readonly logger = new Logger(CodingResponseQueryService.name);
+  private readonly codingResponseStatuses = [
+    statusStringToNumber('NOT_REACHED') || 1,
+    statusStringToNumber('DISPLAYED') || 2,
+    statusStringToNumber('VALUE_CHANGED') || 3
+  ];
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -50,33 +55,18 @@ export class CodingResponseQueryService {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.person', 'person')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .where('response.status IN (:...codingResponseStatuses)', {
+          codingResponseStatuses: this.codingResponseStatuses
+        })
+        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true });
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
       applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
-      switch (version) {
-        case 'v1':
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v2':
-          queryBuilder.andWhere('response.status_v2 = :status', {
-            status: statusNumber
-          });
-          break;
-        case 'v3':
-          queryBuilder.andWhere("CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END = :status", {
-            status: statusNumber
-          });
-          break;
-        default:
-          queryBuilder.andWhere('response.status_v1 = :status', {
-            status: statusNumber
-          });
-          break;
-      }
+      queryBuilder.andWhere(
+        `${this.getEffectiveCodingStatusExpression(version)} = :status`,
+        { status: statusNumber }
+      );
 
       const total = await queryBuilder.getCount();
       const data = await queryBuilder
@@ -165,5 +155,17 @@ export class CodingResponseQueryService {
         'Could not retrieve responses. Please check the database connection or query.'
       );
     }
+  }
+
+  private getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3' = 'v1'): string {
+    if (version === 'v2') {
+      return 'COALESCE(response.status_v2, response.status_v1)';
+    }
+
+    if (version === 'v3') {
+      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
+    }
+
+    return 'response.status_v1';
   }
 }

@@ -107,6 +107,10 @@ describe('CodingResponseQueryService', () => {
         'response.status_v1 = :status',
         { status: 1 }
       );
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'response.status IN (:...codingResponseStatuses)',
+        { codingResponseStatuses: [1, 2, 3] }
+      );
     });
 
     it('should retrieve responses by status for v2', async () => {
@@ -125,7 +129,7 @@ describe('CodingResponseQueryService', () => {
         limit: 100
       });
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'response.status_v2 = :status',
+        'COALESCE(response.status_v2, response.status_v1) = :status',
         { status: 2 }
       );
     });
@@ -146,7 +150,7 @@ describe('CodingResponseQueryService', () => {
         limit: 100
       });
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        "CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END = :status",
+        "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1) = :status",
         { status: 3 }
       );
     });

@@ -210,17 +210,14 @@ export class CodingFreshnessService {
     const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
     const rows: FreshnessUpsert[] = [];
 
-    (['v1', 'v3'] as CodingFreshnessVersion[]).forEach(version => {
-      if (!workspacePresence[version]) {
-        return;
-      }
+    this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
       ids.forEach(unitId => rows.push(this.buildRow(
         workspaceId,
         unitId,
         version,
         'PENDING',
         'RESULT_ADDED',
-        responseCounts.get(unitId) || affectedResponseCount,
+        responseCounts.get(unitId) ?? affectedResponseCount,
         revision,
         null
       )));
@@ -248,10 +245,7 @@ export class CodingFreshnessService {
     const unitPresence = await this.getUnitCodingPresence(workspaceId, ids);
     const rows: FreshnessUpsert[] = [];
 
-    (['v1', 'v3'] as CodingFreshnessVersion[]).forEach(version => {
-      if (!workspacePresence[version]) {
-        return;
-      }
+    this.getAutoCodingVersionsToRefresh(workspacePresence).forEach(version => {
       ids.forEach(unitId => {
         const state: CodingFreshnessState =
           unitPresence.get(unitId)?.[version] ? 'STALE' : 'PENDING';
@@ -554,6 +548,15 @@ export class CodingFreshnessService {
       v2: this.toBoolean(raw?.v2),
       v3: this.toBoolean(raw?.v3)
     };
+  }
+
+  private getAutoCodingVersionsToRefresh(
+    workspacePresence: UnitCodingPresence
+  ): CodingFreshnessVersion[] {
+    const existingAutoCodingVersions = (['v1', 'v3'] as CodingFreshnessVersion[])
+      .filter(version => workspacePresence[version]);
+
+    return existingAutoCodingVersions.length > 0 ? existingAutoCodingVersions : ['v1'];
   }
 
   private async getUnitCodingPresence(
