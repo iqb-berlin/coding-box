@@ -1,12 +1,13 @@
 import { DataSource, QueryRunner } from 'typeorm';
 import {
-  forwardRef, Inject, Injectable, Logger
+  forwardRef, Inject, Injectable, Logger, Optional
 } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
 
 @Injectable()
 export class ResponseManagementService {
@@ -16,7 +17,9 @@ export class ResponseManagementService {
     private readonly connection: DataSource,
     private readonly journalService: JournalService,
     @Inject(forwardRef(() => WorkspaceTestResultsService))
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService
   ) { }
 
   async updateResponsesInDatabase(
@@ -378,6 +381,7 @@ export class ResponseManagementService {
       return { resolvedCount: 0, success: true };
     }
 
+    const affectedUnitIds: number[] = [];
     return this.connection.transaction(async manager => {
       let resolvedCount = 0;
 
@@ -423,7 +427,7 @@ export class ResponseManagementService {
           .andWhere("COALESCE(response.subform, '') = :subform", {
             subform: subform || ''
           })
-          .select(['response.id'])
+          .select(['response.id', 'response.unitid'])
           .getMany();
 
         const ids = (responses || []).map(r => r.id);
@@ -441,6 +445,11 @@ export class ResponseManagementService {
         const deleteIds = ids.filter(id => id !== selectedResponseId);
         if (deleteIds.length === 0) {
           continue;
+        }
+
+        const unitId = responses[0]?.unitid;
+        if (unitId) {
+          affectedUnitIds.push(unitId);
         }
 
         const deleteResult = await manager
@@ -472,7 +481,15 @@ export class ResponseManagementService {
       };
     }).then(async result => {
       if (result.success) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+          workspaceId,
+          affectedUnitIds,
+          'RESULT_DELETED'
+        );
+        await Promise.all([
+          this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+          this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+        ]);
       }
       return result;
     });
@@ -489,6 +506,7 @@ export class ResponseManagementService {
         warnings: string[];
       };
     }> {
+    let affectedUnitId: number | null = null;
     return this.connection.transaction(async manager => {
       const report = {
         deletedResponse: null,
@@ -519,6 +537,7 @@ export class ResponseManagementService {
         .execute();
 
       report.deletedResponse = responseId;
+      affectedUnitId = response.unit.id;
 
       try {
         await this.journalService.createEntry(
@@ -546,7 +565,15 @@ export class ResponseManagementService {
       return { success: true, report };
     }).then(async result => {
       if (result.success) {
-        await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+          workspaceId,
+          affectedUnitId ? [affectedUnitId] : [],
+          'RESULT_DELETED'
+        );
+        await Promise.all([
+          this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+          this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+        ]);
       }
       return result;
     });

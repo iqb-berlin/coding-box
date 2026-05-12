@@ -49,14 +49,16 @@ export class WorkspaceCodingService {
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    unitIds?: number[]
   ): Promise<CodingStatistics> {
     const statistics = await this.codingProcessService.processTestPersonsBatch(
       workspace_id,
       personIds,
       autoCoderRun,
       progressCallback,
-      jobId
+      jobId,
+      unitIds
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);

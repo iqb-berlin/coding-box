@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger, Inject, forwardRef, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -40,6 +40,10 @@ import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingValidationService } from '../coding/coding-validation.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+// eslint-disable-next-line import/no-cycle
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 // eslint-disable-next-line import/no-cycle
 import { ResponseManagementService } from './response-management.service';
 // eslint-disable-next-line import/no-cycle
@@ -342,7 +346,12 @@ export class WorkspaceTestResultsService {
     private readonly codingValidationService: CodingValidationService,
     private readonly responseManagementService: ResponseManagementService,
     private readonly workspaceCoreService: WorkspaceCoreService,
-    private readonly workspaceExclusionService: WorkspaceExclusionService
+    private readonly workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    @Inject(forwardRef(() => CodingStatisticsService))
+    private readonly codingStatisticsService?: CodingStatisticsService
   ) { }
 
   private applyExclusionsToQuery(qb: SelectQueryBuilder<unknown>, exclusions: { globalIgnoredUnits: string[], ignoredBooklets: string[], testletIgnoredUnits: Array<{ bookletId: string, unitId: string }> }, options: { unitAlias?: string; bookletInfoAlias?: string } = {}) {
@@ -1312,6 +1321,18 @@ export class WorkspaceTestResultsService {
       this.cacheService.deleteByPattern(`${FLAT_FREQUENCIES_CACHE_PREFIX}${workspaceId}-*`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
       this.cacheService.deleteByPattern(`flat_response_filter_options:${workspaceId}:*`)
+    ]);
+  }
+
+  async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
+    await this.codingStatisticsService?.invalidateCache(workspaceId);
+  }
+
+  private async invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
+    await Promise.all([
+      this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId),
+      this.invalidateWorkspaceStatsCache(workspaceId),
+      this.invalidateCodingStatisticsCache(workspaceId)
     ]);
   }
 
@@ -4163,11 +4184,10 @@ export class WorkspaceTestResultsService {
         }
       }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     }).then(async result => {
       if (result.success) {
-        await this.invalidateWorkspaceStatsCache(workspaceId);
+        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
       }
       return result;
     });
@@ -4290,10 +4310,7 @@ export class WorkspaceTestResultsService {
     );
 
     await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
-    await this.codingValidationService.invalidateIncompleteVariablesCache(
-      workspaceId
-    );
-    await this.invalidateWorkspaceStatsCache(workspaceId);
+    await this.invalidateCachesAfterTestResultDeletion(workspaceId);
 
     if (userId) {
       try {
@@ -5051,6 +5068,17 @@ export class WorkspaceTestResultsService {
   ): Promise<TestResultsDeletePreviewDto> {
     const counts = await this.getDeleteCounts(workspaceId, kind, ids);
     const metadata = await this.getDeleteMetadata(kind, ids);
+    const unitIds = await this.collectAffectedUnitIds(kind, ids);
+    const codingImpact =
+      await this.codingFreshnessService?.getDeleteImpactForUnitIds(
+        workspaceId,
+        unitIds
+      ) || {
+        autoCodingV1: 0,
+        manualCodingV2: 0,
+        autoCodingV3: 0,
+        affectedUnits: 0
+      };
 
     return {
       scope: request.scope,
@@ -5062,6 +5090,7 @@ export class WorkspaceTestResultsService {
       groups: metadata.groups,
       bookletNames: metadata.bookletNames,
       unitNames: metadata.unitNames,
+      codingImpact,
       warnings
     };
   }
@@ -5369,11 +5398,10 @@ export class WorkspaceTestResultsService {
         );
       }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     }).then(async result => {
       if (result.success) {
-        await this.invalidateWorkspaceStatsCache(workspaceId);
+        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
       }
       return result;
     });
@@ -5399,6 +5427,7 @@ export class WorkspaceTestResultsService {
       await this.codingValidationService.invalidateIncompleteVariablesCache(
         workspaceId
       );
+      await this.invalidateCodingStatisticsCache(workspaceId);
     }
     return result;
   }
@@ -5469,11 +5498,10 @@ export class WorkspaceTestResultsService {
         );
       }
 
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
       return { success: true, report };
     }).then(async result => {
       if (result.success) {
-        await this.invalidateWorkspaceStatsCache(workspaceId);
+        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
       }
       return result;
     });

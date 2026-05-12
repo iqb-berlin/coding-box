@@ -22,6 +22,7 @@ import { JournalService } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
@@ -71,6 +72,7 @@ describe('WorkspaceTestResultsService', () => {
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
   let codingValidationService: CodingValidationService;
+  let codingStatisticsService: CodingStatisticsService;
   let cacheService: {
     generateUnitResponseCacheKey: jest.Mock;
     get: jest.Mock;
@@ -112,6 +114,10 @@ describe('WorkspaceTestResultsService', () => {
     codingValidationService = {
       invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
     } as unknown as CodingValidationService;
+
+    codingStatisticsService = {
+      invalidateCache: jest.fn().mockResolvedValue(undefined)
+    } as unknown as CodingStatisticsService;
 
     journalService = {
       createEntry: jest.fn().mockResolvedValue(undefined)
@@ -182,7 +188,9 @@ describe('WorkspaceTestResultsService', () => {
       codingValidationService,
       responseManagementService,
       workspaceCoreService,
-      workspaceExclusionService
+      workspaceExclusionService,
+      undefined,
+      codingStatisticsService
     );
   });
 
@@ -1106,6 +1114,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteTestPersons(workspaceId, testPersonIds, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });
@@ -1130,6 +1139,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteUnit(workspaceId, unitId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });
@@ -1144,6 +1154,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteResponse(workspaceId, responseId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
     });
 
     it('deleteBooklet should invalidate cache', async () => {
@@ -1166,6 +1177,7 @@ describe('WorkspaceTestResultsService', () => {
       await service.deleteBooklet(workspaceId, bookletId, userId);
 
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
+      expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
     });

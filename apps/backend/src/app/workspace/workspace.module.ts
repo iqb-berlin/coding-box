@@ -32,6 +32,7 @@ import { CodingJob } from '../database/entities/coding-job.entity';
 import { CodingJobUnit } from '../database/entities/coding-job-unit.entity';
 import { CodingJobVariable } from '../database/entities/coding-job-variable.entity';
 import { JobDefinition } from '../database/entities/job-definition.entity';
+import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import {
   WorkspaceCoreService,
   WorkspaceFilesService,
@@ -80,7 +81,8 @@ import {
   CodingVersionService,
   CodingJobOperationsService,
   CodebookGenerationService,
-  CodingResponseQueryService
+  CodingResponseQueryService,
+  CodingFreshnessService
 } from '../database/services/coding';
 import {
   JobService,
@@ -126,7 +128,8 @@ import { CodingModule } from '../coding/coding.module';
       CodingJob,
       CodingJobUnit,
       CodingJobVariable,
-      JobDefinition
+      JobDefinition,
+      CodingUnitFreshness
     ]),
     HttpModule,
     forwardRef(() => JobQueueModule),
@@ -177,6 +180,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,
+    CodingFreshnessService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService
@@ -219,6 +223,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,
+    CodingFreshnessService,
     UnitInfoService,
     BookletInfoService,
     WorkspaceExclusionService

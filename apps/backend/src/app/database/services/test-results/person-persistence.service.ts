@@ -23,6 +23,13 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 
+export interface TestResultsMutationSummary {
+  addedUnitIds: number[];
+  changedUnitIds: number[];
+  addedResponseCount: number;
+  changedResponseCount: number;
+}
+
 /**
  * PersonPersistenceService
  *
@@ -133,15 +140,16 @@ export class PersonPersistenceService {
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
     issues: TestResultsUploadIssueDto[] = []
-  ): Promise<void> {
+  ): Promise<TestResultsMutationSummary> {
+    const mutationSummary = this.createMutationSummary();
     try {
       if (!Array.isArray(personList) || personList.length === 0) {
         this.logger.warn('Person list is empty or invalid');
-        return;
+        return mutationSummary;
       }
       if (!workspace_id || workspace_id <= 0) {
         this.logger.error('Invalid workspace ID provided');
-        return;
+        return mutationSummary;
       }
 
       this.logger.log(`Starting to process ${personList.length} persons for workspace ${workspace_id}`);
@@ -191,7 +199,7 @@ export class PersonPersistenceService {
 
       if (!persons || persons.length === 0) {
         this.logger.warn(`No persons found for workspace_id: ${workspace_id}`);
-        return;
+        return mutationSummary;
       }
 
       this.logger.log(`Found ${persons.length} persons for workspace ${workspace_id}`);
@@ -211,7 +219,8 @@ export class PersonPersistenceService {
           }
 
           try {
-            await this.processBookletWithTransaction(booklet, person, overwriteMode, issues);
+            const bookletSummary = await this.processBookletWithTransaction(booklet, person, overwriteMode, issues);
+            this.mergeMutationSummary(mutationSummary, bookletSummary);
             totalBookletsProcessed += 1;
 
             if (Array.isArray(booklet.units)) {
@@ -243,6 +252,10 @@ export class PersonPersistenceService {
     } catch (error) {
       this.logger.error(`Failed to process person booklets: ${error.message}`);
     }
+
+    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
+    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    return mutationSummary;
   }
 
   /**
@@ -257,7 +270,8 @@ export class PersonPersistenceService {
     person: Persons,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     issues: TestResultsUploadIssueDto[] = []
-  ): Promise<void> {
+  ): Promise<TestResultsMutationSummary> {
+    const mutationSummary = this.createMutationSummary();
     let bookletInfo = await this.bookletInfoRepository.findOne({ where: { name: booklet.id } });
     if (!bookletInfo) {
       bookletInfo = await this.bookletInfoRepository.save(
@@ -277,7 +291,7 @@ export class PersonPersistenceService {
 
     if (!person.id) {
       this.logger.error(`Person ID is missing for person: ${person.group}-${person.login}-${person.code}`);
-      return;
+      return mutationSummary;
     }
 
     const targetBooklet = existingBooklet || await this.bookletRepository.save(
@@ -311,6 +325,7 @@ export class PersonPersistenceService {
                 return;
               }
 
+              const isNewUnit = !existingUnit;
               const targetUnit = existingUnit || await this.unitRepository.save(
                 this.unitRepository.create({
                   alias: unit.alias,
@@ -322,9 +337,21 @@ export class PersonPersistenceService {
               if (targetUnit) {
                 await Promise.all([
                   this.saveUnitLastState(unit, targetUnit),
-                  this.processSubforms(unit, targetUnit, overwriteMode),
                   this.processChunks(unit, targetUnit, booklet)
                 ]);
+                const responseResult = await this.processSubforms(unit, targetUnit, overwriteMode);
+                if (isNewUnit) {
+                  mutationSummary.addedUnitIds.push(targetUnit.id);
+                  mutationSummary.addedResponseCount += responseResult.saved;
+                } else if (
+                  responseResult.saved > 0 ||
+                  responseResult.deleted > 0 ||
+                  overwriteMode === 'replace'
+                ) {
+                  mutationSummary.changedUnitIds.push(targetUnit.id);
+                  mutationSummary.changedResponseCount +=
+                    responseResult.saved + responseResult.deleted;
+                }
               }
             } catch (unitError) {
               const msg = `Failed to process unit ${unit.id} in booklet ${booklet.id} for person ${person.id}: ${unitError.message}`;
@@ -335,6 +362,10 @@ export class PersonPersistenceService {
         );
       }
     }
+
+    mutationSummary.addedUnitIds = Array.from(new Set(mutationSummary.addedUnitIds));
+    mutationSummary.changedUnitIds = Array.from(new Set(mutationSummary.changedUnitIds));
+    return mutationSummary;
   }
 
   /**
@@ -380,16 +411,20 @@ export class PersonPersistenceService {
     unit: TcMergeUnit,
     savedUnit: Unit,
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
-  ): Promise<{ success: boolean; saved: number; skipped: number }> {
+  ): Promise<{ success: boolean; saved: number; skipped: number; deleted: number }> {
     try {
       const subforms = unit.subforms;
       if (subforms && subforms.length > 0) {
         return await this.saveSubformResponsesForUnit(savedUnit, subforms, overwriteMode);
       }
-      return { success: true, saved: 0, skipped: 0 };
+      return {
+        success: true, saved: 0, skipped: 0, deleted: 0
+      };
     } catch (error) {
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${error.message}`);
-      return { success: false, saved: 0, skipped: 0 };
+      return {
+        success: false, saved: 0, skipped: 0, deleted: 0
+      };
     }
   }
 
@@ -469,10 +504,11 @@ export class PersonPersistenceService {
     savedUnit: Unit,
     subforms: TcMergeSubForms[],
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip'
-  ): Promise<{ success: boolean; saved: number; skipped: number }> {
+  ): Promise<{ success: boolean; saved: number; skipped: number; deleted: number }> {
     try {
       let totalResponsesSaved = 0;
       let totalResponsesSkipped = 0;
+      let totalResponsesDeleted = 0;
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
           const responseEntries = subform.responses.map(response => {
@@ -500,7 +536,7 @@ export class PersonPersistenceService {
             const variables = Array.from(new Set(responseEntries.map(r => r.variableid)));
 
             if (overwriteMode === 'replace') {
-              await this.responseRepository
+              const deleteResult = await this.responseRepository
                 .createQueryBuilder()
                 .delete()
                 .from(ResponseEntity)
@@ -508,6 +544,7 @@ export class PersonPersistenceService {
                 .andWhere('subform = :subform', { subform: subform.id })
                 .andWhere('variableid IN (:...variables)', { variables })
                 .execute();
+              totalResponsesDeleted += deleteResult.affected || 0;
             }
 
             let filteredEntries = responseEntries;
@@ -544,16 +581,37 @@ export class PersonPersistenceService {
       return {
         success: true,
         saved: totalResponsesSaved,
-        skipped: totalResponsesSkipped
+        skipped: totalResponsesSkipped,
+        deleted: totalResponsesDeleted
       };
     } catch (error) {
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${error.message}`);
       return {
         success: false,
         saved: 0,
-        skipped: 0
+        skipped: 0,
+        deleted: 0
       };
     }
+  }
+
+  private createMutationSummary(): TestResultsMutationSummary {
+    return {
+      addedUnitIds: [],
+      changedUnitIds: [],
+      addedResponseCount: 0,
+      changedResponseCount: 0
+    };
+  }
+
+  private mergeMutationSummary(
+    target: TestResultsMutationSummary,
+    source: TestResultsMutationSummary
+  ): void {
+    target.addedUnitIds.push(...source.addedUnitIds);
+    target.changedUnitIds.push(...source.changedUnitIds);
+    target.addedResponseCount += source.addedResponseCount;
+    target.changedResponseCount += source.changedResponseCount;
   }
 
   /**

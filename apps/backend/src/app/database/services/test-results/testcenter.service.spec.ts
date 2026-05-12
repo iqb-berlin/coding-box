@@ -11,12 +11,14 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { Person, Response, Log } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
 
 describe('TestCenterService', () => {
   let service: TestcenterService;
   let httpService: { put: jest.Mock; axiosRef: { get: jest.Mock } };
   let personService: DeepMocked<PersonService>;
   let workspaceTestResultsService: DeepMocked<WorkspaceTestResultsService>;
+  let codingFreshnessService: DeepMocked<CodingFreshnessService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -51,6 +53,18 @@ describe('TestCenterService', () => {
           useValue: createMock<WorkspaceTestResultsService>({
             invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
           })
+        },
+        {
+          provide: CodingFreshnessService,
+          useValue: createMock<CodingFreshnessService>({
+            markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+            markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
+            getSummary: jest.fn().mockResolvedValue({
+              workspaceId: 123,
+              currentRevision: 1,
+              items: []
+            })
+          })
         }
       ]
     }).compile();
@@ -59,6 +73,7 @@ describe('TestCenterService', () => {
     httpService = module.get(HttpService);
     personService = module.get(PersonService);
     workspaceTestResultsService = module.get(WorkspaceTestResultsService);
+    codingFreshnessService = module.get(CodingFreshnessService);
     personService.filterLogRowsForPerson.mockImplementation((rows, person) => (
       (rows || []).filter(row => row.groupname === person.group &&
         row.loginname === person.login &&
@@ -254,7 +269,12 @@ describe('TestCenterService', () => {
       personService.assignUnitsToBookletAndPerson.mockResolvedValue(
         mockPersons[0]
       );
-      personService.processPersonBooklets.mockResolvedValue(undefined);
+      personService.processPersonBooklets.mockResolvedValue({
+        addedUnitIds: [10],
+        changedUnitIds: [20],
+        addedResponseCount: 2,
+        changedResponseCount: 1
+      });
       personService.getImportStatistics.mockResolvedValue({
         persons: 1,
         booklets: 1,
@@ -276,6 +296,18 @@ describe('TestCenterService', () => {
       expect(
         workspaceTestResultsService.invalidateWorkspaceStatsCache
       ).toHaveBeenCalledWith(123);
+      expect(
+        codingFreshnessService.markUnitsPendingAfterImport
+      ).toHaveBeenCalledWith(123, [10], 2);
+      expect(
+        codingFreshnessService.markUnitsStaleAfterResultChange
+      ).toHaveBeenCalledWith(123, [20], 'RESULT_UPDATED');
+      expect(codingFreshnessService.getSummary).toHaveBeenCalledWith(123);
+      expect(result.codingFreshness).toEqual({
+        workspaceId: 123,
+        currentRevision: 1,
+        items: []
+      });
     });
   });
 
