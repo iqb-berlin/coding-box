@@ -71,7 +71,8 @@ describe('TestResultsComponent Polling', () => {
           provide: TestResultService,
           useValue: {
             getTestResults: jest.fn().mockReturnValue(of([])),
-            getWorkspaceOverview: jest.fn().mockReturnValue(of({}))
+            getWorkspaceOverview: jest.fn().mockReturnValue(of({})),
+            flatResponseFilterRequests$: of()
           }
         },
         {
@@ -79,6 +80,7 @@ describe('TestResultsComponent Polling', () => {
           useValue: {
             getValidationStatus: jest.fn().mockReturnValue(of({})),
             getAllTaskIds: jest.fn().mockReturnValue({}),
+            getAllValidationResults: jest.fn().mockReturnValue({}),
             observeTaskIds: jest.fn().mockReturnValue(of({})),
             observeValidationResults: jest.fn().mockReturnValue(of({})),
             observeBatchState: jest.fn().mockReturnValue(of({ status: 'idle' }))

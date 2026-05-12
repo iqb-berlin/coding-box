@@ -99,7 +99,10 @@ import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.d
 import { ValidationDialogComponent } from '../validation-dialog/validation-dialog.component';
 import { VariableValidationDto } from '../../../../../../../api-dto/files/variable-validation.dto';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
-import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
+import {
+  ValidationTaskStateService,
+  ValidationType
+} from '../../../shared/services/validation/validation-task-state.service';
 import {
   UnitsReplay,
   UnitsReplayService
@@ -533,24 +536,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               if (updatedTask.status === 'completed' || updatedTask.status === 'failed') {
                 this.validationTaskStateService.removeTaskId(
                   this.appService.selectedWorkspaceId,
-                  type as
-                    | 'variables'
-                    | 'variableTypes'
-                    | 'responseStatus'
-                    | 'testTakers'
-                    | 'groupResponses'
+                  type as ValidationType
                 );
               } else {
                 // Update task details in state service to keep progress up to date
                 this.validationTaskStateService.setTaskId(
                   this.appService.selectedWorkspaceId,
-                  type as
-                    | 'variables'
-                    | 'variableTypes'
-                    | 'responseStatus'
-                    | 'testTakers'
-                    | 'groupResponses'
-                    | 'duplicateResponses',
+                  type as ValidationType,
                   updatedTask
                 );
               }
@@ -558,12 +550,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             error: () => {
               this.validationTaskStateService.removeTaskId(
                 this.appService.selectedWorkspaceId,
-                type as
-                  | 'variables'
-                  | 'variableTypes'
-                  | 'responseStatus'
-                  | 'testTakers'
-                  | 'groupResponses'
+                type as ValidationType
               );
             }
           });
@@ -582,7 +569,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Object.keys(taskIds).length > 0;
   }
 
-  getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'not-run' {
+  getOverallValidationStatus(): 'running' | 'failed' | 'success' | 'partial' | 'not-run' {
     if (this.isAnyValidationRunning()) {
       return 'running';
     }
@@ -605,6 +592,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           'variableTypes',
           'responseStatus',
           'testTakers',
+          'duplicateResponses',
           'groupResponses'
         ];
         const hasAllValidations = validationTypes.every(
@@ -614,7 +602,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           return 'success';
         }
 
-        return 'success';
+        return 'partial';
       }
     }
 
