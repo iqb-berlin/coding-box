@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   Component,
   Inject,
   OnInit,
@@ -28,7 +29,6 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitVariableDetailsDto } from '../../models/unit-variable-details.dto';
 import { FileService } from '../../shared/services/file/file.service';
 import { FileBackendService } from '../../shared/services/file/file-backend.service';
-import { AppService } from '../../core/services/app.service';
 import { UnitInfoDialogComponent } from '../../ws-admin/components/unit-info-dialog/unit-info-dialog.component';
 import { SchemeEditorDialogComponent } from '../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { UnitInfoDto } from '../../../../../../api-dto/unit-info/unit-info.dto';
@@ -82,14 +82,14 @@ export interface FlattenedVariable {
     MatSelectModule
   ]
 })
-export class CodingVariablesDialogComponent implements OnInit {
+export class CodingVariablesDialogComponent implements OnInit, AfterViewInit {
   dataSource = new MatTableDataSource<FlattenedVariable>([]);
-  displayedColumns: string[] = ['unitName', 'variableAlias', 'variableType', 'actions'];
+  displayedColumns: string[] = ['unitName', 'variableId', 'variableType', 'actions'];
 
   unitNameFilter = '';
   variableIdFilter = '';
-  hasCodingSchemeFilter = true;
-  hasCodesFilter = true;
+  hasCodingSchemeFilter = false;
+  hasCodesFilter = false;
   isDerivedFilter = false;
   isManualOnlyFilter = false;
   isClosedCodingFilter = false;
@@ -104,14 +104,38 @@ export class CodingVariablesDialogComponent implements OnInit {
     @Inject(MAT_DIALOG_DATA) public data: CodingVariablesDialogData,
     private fileService: FileService,
     private fileBackendService: FileBackendService,
-    private appService: AppService,
     private dialog: MatDialog,
     private snackBar: MatSnackBar
   ) { }
 
   ngOnInit(): void {
-    this.loadData();
     this.setupFilter();
+    this.loadData();
+  }
+
+  ngAfterViewInit(): void {
+    this.dataSource.sort = this.sort;
+  }
+
+  get hasVariables(): boolean {
+    return this.dataSource.data.length > 0;
+  }
+
+  get hasFilteredVariables(): boolean {
+    return this.dataSource.filteredData.length > 0;
+  }
+
+  get hasActiveFilters(): boolean {
+    return !!(
+      this.unitNameFilter.trim() ||
+      this.variableIdFilter.trim() ||
+      this.hasCodingSchemeFilter ||
+      this.hasCodesFilter ||
+      this.isDerivedFilter ||
+      this.isManualOnlyFilter ||
+      this.isClosedCodingFilter ||
+      this.selectedTypes.length
+    );
   }
 
   private setupFilter(): void {
@@ -122,9 +146,10 @@ export class CodingVariablesDialogComponent implements OnInit {
         } = JSON.parse(filter || '{}');
 
         const matchesUnitName = !unitName ||
-          data.unitName.toLowerCase().includes(unitName.toLowerCase());
+          this.includesFilter(data.unitName, unitName);
         const matchesVariableId = !variableId ||
-          data.variableAlias.toLowerCase().includes(variableId.toLowerCase());
+          this.includesFilter(data.variableId, variableId) ||
+          this.includesFilter(data.variableAlias, variableId);
         const matchesCodingScheme = !hasCodingScheme || data.hasCodingScheme;
         const matchesCodes = !hasCodes || (!!data.codes && data.codes.length > 0);
         const matchesDerived = !isDerived || data.isDerived === true;
@@ -137,6 +162,10 @@ export class CodingVariablesDialogComponent implements OnInit {
         return true;
       }
     };
+  }
+
+  private includesFilter(value: string | undefined, filter: string): boolean {
+    return (value || '').toLowerCase().includes(filter.toLowerCase());
   }
 
   private loadData(): void {
@@ -162,7 +191,7 @@ export class CodingVariablesDialogComponent implements OnInit {
               unitName: unit.unitName,
               unitId: unit.unitId,
               variableId: variable.id,
-              variableAlias: variable.alias,
+              variableAlias: variable.alias || variable.id,
               variableType: variable.type,
               hasCodingScheme: variable.hasCodingScheme,
               codingSchemeRef: variable.codingSchemeRef,
@@ -175,7 +204,9 @@ export class CodingVariablesDialogComponent implements OnInit {
         });
 
         this.dataSource.data = flattenedData;
-        this.dataSource.sort = this.sort;
+        if (this.sort) {
+          this.dataSource.sort = this.sort;
+        }
         this.applyFilter();
         this.isLoading = false;
       },
@@ -191,8 +222,8 @@ export class CodingVariablesDialogComponent implements OnInit {
 
   applyFilter(): void {
     const filterValue = JSON.stringify({
-      unitName: this.unitNameFilter,
-      variableId: this.variableIdFilter,
+      unitName: this.unitNameFilter.trim(),
+      variableId: this.variableIdFilter.trim(),
       hasCodingScheme: this.hasCodingSchemeFilter,
       hasCodes: this.hasCodesFilter,
       isDerived: this.isDerivedFilter,

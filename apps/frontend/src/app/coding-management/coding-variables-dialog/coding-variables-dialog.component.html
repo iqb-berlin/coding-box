@@ -70,7 +70,7 @@
       </div>
     }
 
-    @if (!isLoading && dataSource.data.length > 0) {
+    @if (!isLoading && hasFilteredVariables) {
       <div class="table-container">
         <table mat-table [dataSource]="dataSource" matSort class="variables-table">
 
@@ -84,10 +84,17 @@
             </td>
           </ng-container>
 
-          <!-- Variable Alias Column -->
-          <ng-container matColumnDef="variableAlias">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Variablen-ID</th>
-            <td mat-cell *matCellDef="let element">{{ element.variableAlias }}</td>
+          <!-- Variable ID Column -->
+          <ng-container matColumnDef="variableId">
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>Variable</th>
+            <td mat-cell *matCellDef="let element">
+              @if (element.variableAlias && element.variableAlias !== element.variableId) {
+                <div class="variable-alias">{{ element.variableAlias }}</div>
+                <div class="variable-id">ID: {{ element.variableId }}</div>
+              } @else {
+                <div class="variable-alias">{{ element.variableId }}</div>
+              }
+            </td>
           </ng-container>
 
           <!-- Variable Type Column -->
@@ -131,11 +138,27 @@
       </div>
     }
 
-    @if (!isLoading && dataSource.data.length === 0) {
+    @if (!isLoading && !hasVariables) {
       <div class="empty-state">
         <mat-icon class="empty-icon">list_alt</mat-icon>
         <h3>Keine Kodiervariablen gefunden</h3>
         <p class="empty-text">Es wurden keine Kodiervariablen im Workspace gefunden.</p>
+      </div>
+    }
+
+    @if (!isLoading && hasVariables && !hasFilteredVariables) {
+      <div class="empty-state">
+        <mat-icon class="empty-icon">filter_alt_off</mat-icon>
+        <h3>Keine Treffer</h3>
+        <p class="empty-text">
+          Es passen keine Kodiervariablen zu den aktuellen Filtern.
+        </p>
+        @if (hasActiveFilters) {
+          <button mat-raised-button (click)="clearFilters()">
+            <mat-icon>clear</mat-icon>
+            Filter zurücksetzen
+          </button>
+        }
       </div>
     }
   </div>
