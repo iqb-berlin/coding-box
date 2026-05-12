@@ -13,11 +13,12 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 
 export type TestResultsExportDialogResult =
   | { type: 'results' }
+  | { type: 'logs' }
   | { type: 'download'; jobId?: string | null };
 
 export type TestResultsExportDialogData = {
   isExporting?: boolean;
-  exportTypeInProgress?: 'test-results' | null;
+  exportTypeInProgress?: 'test-results' | 'test-logs' | null;
   exportJobStatus?: string | null;
   exportJobProgress?: number;
   exportJobId?: string | null;
@@ -44,6 +45,12 @@ export type TestResultsExportDialogData = {
           <div matListItemTitle>Ergebnisse exportieren</div>
           <div matListItemLine>Testergebnisdaten exportieren</div>
         </mat-list-item>
+        <mat-divider></mat-divider>
+        <mat-list-item (click)="selectExportType('logs')">
+          <mat-icon matListItemIcon>download</mat-icon>
+          <div matListItemTitle>Logs exportieren</div>
+          <div matListItemLine>Test-Logs exportieren</div>
+        </mat-list-item>
       </mat-list>
 
       <mat-divider class="export-divider"></mat-divider>
@@ -52,7 +59,9 @@ export type TestResultsExportDialogData = {
       <div *ngIf="data?.isExporting" class="export-progress-section">
         <div class="export-progress-header">
           <span class="export-status">
-            Ergebnisse:
+            {{
+              data.exportTypeInProgress === 'test-logs' ? 'Logs' : 'Ergebnisse'
+            }}:
             {{ data.exportJobStatus || '...' }}
           </span>
           <span class="export-percentage">{{ data.exportJobProgress }}%</span>
@@ -156,7 +165,7 @@ export class TestResultsExportDialogComponent {
     @Inject(MAT_DIALOG_DATA) public data: TestResultsExportDialogData
   ) {}
 
-  selectExportType(type: 'results'): void {
+  selectExportType(type: 'results' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
