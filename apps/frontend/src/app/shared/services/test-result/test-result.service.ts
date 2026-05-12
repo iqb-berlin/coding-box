@@ -32,6 +32,7 @@ export interface PersonTestResult {
 }
 
 export interface FlatTestResultResponseRow {
+  bookletId: number;
   responseId: number;
   unitId: number;
   personId: number;
@@ -44,6 +45,51 @@ export interface FlatTestResultResponseRow {
   responseStatus: string;
   responseValue: string;
   tags: string[];
+  logAnomalies?: LogAnomalySummary[];
+}
+
+export type LogAnomalySeverity = 'critical' | 'warning' | 'info';
+
+export interface LogAnomalySummary {
+  code: string;
+  severity: LogAnomalySeverity;
+  label: string;
+  evidence: string;
+  count: number;
+}
+
+export interface LogAnomalyDashboardSummary {
+  totalBooklets: number;
+  affectedBooklets: number;
+  criticalBooklets: number;
+  warningBooklets: number;
+  infoBooklets: number;
+  totalAnomalyRules: number;
+  totalAnomalyEvents: number;
+  byCode: Record<string, number>;
+}
+
+export interface LogAnomalyDetailRow {
+  bookletId: number;
+  booklet: string;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  maxSeverity: LogAnomalySeverity;
+  anomalies: LogAnomalySummary[];
+}
+
+export interface LogAnomalyDetailsResponse {
+  total: number;
+  data: LogAnomalyDetailRow[];
+}
+
+export interface FlatResponseFilterRequest {
+  workspaceId: number;
+  filters: {
+    logAnomalies?: string;
+  };
 }
 
 export interface FlatTestResultResponsesResponse {
@@ -181,6 +227,12 @@ export class TestResultService {
   readonly workspaceCacheInvalidated$ =
     this.workspaceCacheInvalidatedSubject.asObservable();
 
+  private flatResponseFilterRequestSubject =
+    new Subject<FlatResponseFilterRequest>();
+
+  readonly flatResponseFilterRequests$ =
+    this.flatResponseFilterRequestSubject.asObservable();
+
   getTestPersons(workspaceId: number): Observable<number[]> {
     return this.http.get<number[]>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-groups`,
@@ -218,6 +270,86 @@ export class TestResultService {
       {}
     )
       .pipe(catchError(() => of(null)));
+  }
+
+  getLogAnomalySummary(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: string;
+      focusLostThresholdMs?: string;
+      sessionSpanThresholdMs?: string;
+      repeatedStartThreshold?: string;
+    } = {}
+  ): Observable<LogAnomalyDashboardSummary> {
+    let params = new HttpParams();
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('focusLostThresholdMs', options.focusLostThresholdMs);
+    addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
+    addIf('repeatedStartThreshold', options.repeatedStartThreshold);
+
+    const emptySummary: LogAnomalyDashboardSummary = {
+      totalBooklets: 0,
+      affectedBooklets: 0,
+      criticalBooklets: 0,
+      warningBooklets: 0,
+      infoBooklets: 0,
+      totalAnomalyRules: 0,
+      totalAnomalyEvents: 0,
+      byCode: {}
+    };
+
+    return this.http
+      .get<LogAnomalyDashboardSummary>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-summary`,
+      { params }
+    )
+      .pipe(catchError(() => of(emptySummary)));
+  }
+
+  getLogAnomalyDetails(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: string;
+      focusLostThresholdMs?: string;
+      sessionSpanThresholdMs?: string;
+      repeatedStartThreshold?: string;
+      limit?: string;
+    } = {}
+  ): Observable<LogAnomalyDetailsResponse> {
+    let params = new HttpParams();
+    const addIf = (key: string, value?: string) => {
+      const v = (value || '').trim();
+      if (v) {
+        params = params.set(key, v);
+      }
+    };
+
+    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
+    addIf('focusLostThresholdMs', options.focusLostThresholdMs);
+    addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
+    addIf('repeatedStartThreshold', options.repeatedStartThreshold);
+    addIf('limit', options.limit);
+
+    return this.http
+      .get<LogAnomalyDetailsResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/test-results/log-anomaly-details`,
+      { params }
+    )
+      .pipe(catchError(() => of({ total: 0, data: [] })));
+  }
+
+  requestFlatResponseFilters(
+    workspaceId: number,
+    filters: FlatResponseFilterRequest['filters']
+  ): void {
+    this.flatResponseFilterRequestSubject.next({ workspaceId, filters });
   }
 
   quickSearch(
@@ -369,6 +501,10 @@ export class TestResultService {
       sessionOs?: string;
       sessionScreens?: string;
       sessionIds?: string;
+      logAnomalies?: string;
+      focusLostThresholdMs?: string;
+      sessionSpanThresholdMs?: string;
+      repeatedStartThreshold?: string;
     }
   ): Observable<FlatTestResultResponsesResponse> {
     let params = new HttpParams()
@@ -411,6 +547,10 @@ export class TestResultService {
     addIf('sessionOs', options.sessionOs);
     addIf('sessionScreens', options.sessionScreens);
     addIf('sessionIds', options.sessionIds);
+    addIf('logAnomalies', options.logAnomalies);
+    addIf('focusLostThresholdMs', options.focusLostThresholdMs);
+    addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
+    addIf('repeatedStartThreshold', options.repeatedStartThreshold);
 
     return this.http
       .get<FlatTestResultResponsesResponse>(

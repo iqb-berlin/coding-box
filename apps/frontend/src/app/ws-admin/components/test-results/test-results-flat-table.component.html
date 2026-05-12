@@ -115,7 +115,7 @@
             </mat-option>
             <mat-option value="longLoading">
               <span
-                matTooltip="Log-basiert: STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad).">
+                matTooltip="Log-basiert: LOADCOMPLETE oder STARTED → ENDED dauert mindestens den Schwellwert (konfigurierbar über das Zahnrad).">
                 Lange Ladezeit
               </span>
             </mat-option>
@@ -128,6 +128,46 @@
             <mat-option value="unitProgressComplete">
               <span matTooltip="Zeigt nur Testheft-Durchläufe, bei denen alle Units besucht wurden.">
                 Vollständig bearbeitet
+              </span>
+            </mat-option>
+            <mat-option value="logCritical">
+              <span matTooltip="Kritische Log-Auffälligkeiten wie Controller-Fehler, fehlender Abschluss oder Connection Lost.">
+                Log: kritisch
+              </span>
+            </mat-option>
+            <mat-option value="logTechnical">
+              <span matTooltip="Controller-Fehler, Verbindungsabbrüche, Timestamp 0, Player hängt oder lange Ladezeiten.">
+                Log: technische Probleme
+              </span>
+            </mat-option>
+            <mat-option value="logIncomplete">
+              <span matTooltip="Fehlender Abschluss, unvollständiger Unit-/Progress-Status, Timer-Restzeit oder Logs ohne Start.">
+                Log: unvollständige Durchläufe
+              </span>
+            </mat-option>
+            <mat-option value="logConnectionLost">
+              <span matTooltip="Mindestens ein CONNECTION : LOST Eintrag im Testheft-Log.">
+                Log: Connection Lost
+              </span>
+            </mat-option>
+            <mat-option value="logTimer">
+              <span matTooltip="Timer wurde nicht bis 0 geführt oder am Ende blieb Restzeit übrig.">
+                Log: Timer auffällig
+              </span>
+            </mat-option>
+            <mat-option value="logFocus">
+              <span matTooltip="Mindestens ein langer Fokusverlust im Testheft-Log.">
+                Log: Fokusverlust
+              </span>
+            </mat-option>
+            <mat-option value="logDebug">
+              <span matTooltip="Debug-Befehl wurde während des Testlaufs ausgeführt.">
+                Log: Debug-Befehl
+              </span>
+            </mat-option>
+            <mat-option value="logReloads">
+              <span matTooltip="Mehrfacher CONTROLLER : LOADING Start im selben Testheft.">
+                Log: mehrfach gestartet
               </span>
             </mat-option>
           </mat-select>

@@ -9,6 +9,10 @@ import {
 } from 'rxjs/operators';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
 import {
+  TestResultsLogAnomalyDetailsDialogComponent,
+  TestResultsLogAnomalyDetailsDialogResult
+} from '../components/test-results/test-results-log-anomaly-details-dialog.component';
+import {
   TestResultsImportProgressHandle,
   TestResultsImportProgressState
 } from '../components/test-results/test-results-import-progress-dialog.component';
@@ -340,13 +344,17 @@ export class TestResultsUploadStateService {
             undefined
         };
 
-        this.snackBar.open(
-          overviewPending ?
-            'Upload abgeschlossen; die Übersicht wird noch aktualisiert.' :
-            `Upload abgeschlossen: Δ Testpersonen ${delta.testPersons}, Δ Responses ${delta.uniqueResponses}`,
-          'OK',
-          { duration: 5000 }
-        );
+        if (batch.resultType === 'logs') {
+          this.showLogUploadAnomalyFeedback(batch.workspaceId);
+        } else {
+          this.snackBar.open(
+            overviewPending ?
+              'Upload abgeschlossen; die Übersicht wird noch aktualisiert.' :
+              `Upload abgeschlossen: Δ Testpersonen ${delta.testPersons}, Δ Responses ${delta.uniqueResponses}`,
+            'OK',
+            { duration: 5000 }
+          );
+        }
 
         this.closeProgressDialog(batch);
 
@@ -366,6 +374,74 @@ export class TestResultsUploadStateService {
         this.batches$.next(remainingBatches);
 
         localStorage.removeItem(this.getStorageKey(batch.workspaceId));
+      });
+    });
+  }
+
+  private showLogUploadAnomalyFeedback(workspaceId: number): void {
+    this.testResultService.getLogAnomalySummary(workspaceId).subscribe(summary => {
+      const affectedBooklets = Number(summary?.affectedBooklets || 0);
+      const snackBarRef = this.snackBar.open(
+        affectedBooklets > 0 ?
+          `Logs importiert. ${affectedBooklets} auffällige Testhefte erkannt.` :
+          'Logs importiert. Keine auffälligen Testhefte erkannt.',
+        affectedBooklets > 0 ? 'anzeigen' : 'OK',
+        { duration: affectedBooklets > 0 ? 8000 : 5000 }
+      );
+
+      if (affectedBooklets > 0) {
+        snackBarRef.onAction().subscribe(() => {
+          this.openLogAnomalyDetailsDialog(workspaceId, affectedBooklets);
+        });
+      }
+    });
+  }
+
+  private openLogAnomalyDetailsDialog(
+    workspaceId: number,
+    affectedBooklets: number
+  ): void {
+    const loadingSnackBar = this.snackBar.open(
+      'Lade Log-Auffälligkeiten...',
+      '',
+      { duration: undefined }
+    );
+
+    this.testResultService.getLogAnomalyDetails(workspaceId).subscribe(details => {
+      loadingSnackBar.dismiss();
+      if (!details.data.length) {
+        this.snackBar.open(
+          'Keine Log-Auffälligkeiten gefunden.',
+          'OK',
+          { duration: 4000 }
+        );
+        return;
+      }
+
+      const dialogRef = this.dialog.open<
+      TestResultsLogAnomalyDetailsDialogComponent,
+      {
+        affectedBooklets: number;
+        rows: typeof details.data;
+        truncated: boolean;
+      },
+      TestResultsLogAnomalyDetailsDialogResult | undefined
+      >(TestResultsLogAnomalyDetailsDialogComponent, {
+        width: '900px',
+        maxWidth: '95vw',
+        data: {
+          affectedBooklets,
+          rows: details.data,
+          truncated: details.total > details.data.length
+        }
+      });
+
+      dialogRef.afterClosed().subscribe(result => {
+        if (result?.showTable) {
+          this.testResultService.requestFlatResponseFilters(workspaceId, {
+            logAnomalies: 'any'
+          });
+        }
       });
     });
   }

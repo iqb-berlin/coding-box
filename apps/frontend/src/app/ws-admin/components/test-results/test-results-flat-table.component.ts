@@ -54,6 +54,7 @@ import {
 } from './test-results-flat-table-settings-dialog.component';
 
 interface FlatResponseRow {
+  bookletId: number;
   responseId: number;
   unitId: number;
   personId: number;
@@ -84,6 +85,7 @@ export interface FlatResponseFilters {
   sessionFilter: boolean;
   shortProcessing: boolean;
   longLoading: boolean;
+  logAnomalies: string;
 }
 
 interface BookletLog {
@@ -126,6 +128,24 @@ interface BookletFromPersonTestResults {
   units: UnitFromPersonTestResults[];
 }
 
+type FlatTableMediaFilter =
+  | 'geogebra'
+  | 'audioLow'
+  | 'nonEmptyResponse'
+  | 'sessionFilter'
+  | 'shortProcessing'
+  | 'longLoading'
+  | 'processingDuration'
+  | 'unitProgressComplete'
+  | 'logCritical'
+  | 'logTechnical'
+  | 'logIncomplete'
+  | 'logConnectionLost'
+  | 'logTimer'
+  | 'logFocus'
+  | 'logDebug'
+  | 'logReloads';
+
 @Component({
   selector: 'coding-box-test-results-flat-table',
   standalone: true,
@@ -165,6 +185,15 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
 
   private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
     'coding-box-test-results-long-loading-threshold-ms';
+
+  private readonly FOCUS_LOST_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-focus-lost-threshold-ms';
+
+  private readonly SESSION_SPAN_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-session-span-threshold-ms';
+
+  private readonly REPEATED_START_THRESHOLD_STORAGE_KEY =
+    'coding-box-test-results-repeated-start-threshold';
 
   private readonly PROCESSING_DURATION_MIN_STORAGE_KEY =
     'coding-box-test-results-processing-duration-min';
@@ -232,19 +261,11 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     nonEmptyResponse: false,
     sessionFilter: false,
     shortProcessing: false,
-    longLoading: false
+    longLoading: false,
+    logAnomalies: ''
   };
 
-  mediaFilters: Array<
-  | 'geogebra'
-  | 'audioLow'
-  | 'nonEmptyResponse'
-  | 'sessionFilter'
-  | 'shortProcessing'
-  | 'longLoading'
-  | 'processingDuration'
-  | 'unitProgressComplete'
-  > = [];
+  mediaFilters: FlatTableMediaFilter[] = [];
 
   processingDurationEnabled: boolean = false;
 
@@ -256,6 +277,12 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   shortProcessingThresholdMs: number = 60000;
 
   longLoadingThresholdMs: number = 5000;
+
+  focusLostThresholdMs: number = 300000;
+
+  sessionSpanThresholdMs: number = 24 * 60 * 60 * 1000;
+
+  repeatedStartThreshold: number = 2;
 
   processingDurationMin: string = '00:00';
   processingDurationMax: string = '99:59';
@@ -320,6 +347,36 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
       const parsed = raw != null ? Number(raw) : NaN;
       if (Number.isFinite(parsed)) {
         this.longLoadingThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.FOCUS_LOST_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.focusLostThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.SESSION_SPAN_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.sessionSpanThresholdMs = parsed;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const raw = localStorage.getItem(this.REPEATED_START_THRESHOLD_STORAGE_KEY);
+      const parsed = raw != null ? Number(raw) : NaN;
+      if (Number.isFinite(parsed)) {
+        this.repeatedStartThreshold = Math.max(2, Math.round(parsed));
       }
     } catch {
       // ignore
@@ -430,16 +487,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   }
 
   private syncMediaFiltersFromFlatFilters(): void {
-    const next: Array<
-    | 'geogebra'
-    | 'audioLow'
-    | 'nonEmptyResponse'
-    | 'sessionFilter'
-    | 'shortProcessing'
-    | 'longLoading'
-    | 'processingDuration'
-    | 'unitProgressComplete'
-    > = [];
+    const next: FlatTableMediaFilter[] = [];
     if (this.flatFilters.geogebra) {
       next.push('geogebra');
     }
@@ -464,6 +512,39 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     if (this.unitProgressFilters.includes('Vollständig')) {
       next.push('unitProgressComplete');
     }
+    const selectedAnomalyGroups = new Set(
+      String(this.flatFilters.logAnomalies || '')
+        .split(',')
+        .map(v => v.trim())
+        .filter(Boolean)
+    );
+    if (selectedAnomalyGroups.has('critical')) {
+      next.push('logCritical');
+    }
+    if (selectedAnomalyGroups.has('technical')) {
+      next.push('logTechnical');
+    }
+    if (selectedAnomalyGroups.has('incomplete')) {
+      next.push('logIncomplete');
+    }
+    if (
+      selectedAnomalyGroups.has('connection_lost') ||
+      selectedAnomalyGroups.has('connection')
+    ) {
+      next.push('logConnectionLost');
+    }
+    if (selectedAnomalyGroups.has('timer')) {
+      next.push('logTimer');
+    }
+    if (selectedAnomalyGroups.has('focus')) {
+      next.push('logFocus');
+    }
+    if (selectedAnomalyGroups.has('debug')) {
+      next.push('logDebug');
+    }
+    if (selectedAnomalyGroups.has('reloads')) {
+      next.push('logReloads');
+    }
     this.mediaFilters = next;
   }
 
@@ -487,6 +568,33 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
         f => f !== 'Vollständig'
       );
     }
+
+    const anomalyGroups: string[] = [];
+    if (selected.has('logCritical')) {
+      anomalyGroups.push('critical');
+    }
+    if (selected.has('logTechnical')) {
+      anomalyGroups.push('technical');
+    }
+    if (selected.has('logIncomplete')) {
+      anomalyGroups.push('incomplete');
+    }
+    if (selected.has('logConnectionLost')) {
+      anomalyGroups.push('connection_lost');
+    }
+    if (selected.has('logTimer')) {
+      anomalyGroups.push('timer');
+    }
+    if (selected.has('logFocus')) {
+      anomalyGroups.push('focus');
+    }
+    if (selected.has('logDebug')) {
+      anomalyGroups.push('debug');
+    }
+    if (selected.has('logReloads')) {
+      anomalyGroups.push('reloads');
+    }
+    this.flatFilters.logAnomalies = anomalyGroups.join(',');
 
     this.onFlatFilterChanged();
   }
@@ -979,7 +1087,8 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
       nonEmptyResponse: false,
       sessionFilter: false,
       shortProcessing: false,
-      longLoading: false
+      longLoading: false,
+      logAnomalies: ''
     };
     this.syncMediaFiltersFromFlatFilters();
 
@@ -1028,6 +1137,42 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     this.onFlatFilterChanged();
   }
 
+  onFocusLostThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
+        String(this.focusLostThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onSessionSpanThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
+        String(this.sessionSpanThresholdMs)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
+  onRepeatedStartThresholdChanged(): void {
+    try {
+      localStorage.setItem(
+        this.REPEATED_START_THRESHOLD_STORAGE_KEY,
+        String(this.repeatedStartThreshold)
+      );
+    } catch {
+      // ignore
+    }
+    this.onFlatFilterChanged();
+  }
+
   openFlatSettings(): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
@@ -1055,6 +1200,9 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
           audioLowThreshold: number;
           shortProcessingThresholdMs: number;
           longLoadingThresholdMs: number;
+          focusLostThresholdMs: number;
+          sessionSpanThresholdMs: number;
+          repeatedStartThreshold: number;
           processingDurationMin: string;
           processingDurationMax: string;
           sessionBrowsersAllowlist: string[];
@@ -1074,6 +1222,9 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
             audioLowThreshold: this.audioLowThreshold,
             shortProcessingThresholdMs: this.shortProcessingThresholdMs,
             longLoadingThresholdMs: this.longLoadingThresholdMs,
+            focusLostThresholdMs: this.focusLostThresholdMs,
+            sessionSpanThresholdMs: this.sessionSpanThresholdMs,
+            repeatedStartThreshold: this.repeatedStartThreshold,
             processingDurationMin: this.processingDurationMin,
             processingDurationMax: this.processingDurationMax,
             sessionBrowsersAllowlist:
@@ -1095,6 +1246,9 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
 
           this.shortProcessingThresholdMs = result.shortProcessingThresholdMs;
           this.longLoadingThresholdMs = result.longLoadingThresholdMs;
+          this.focusLostThresholdMs = result.focusLostThresholdMs;
+          this.sessionSpanThresholdMs = result.sessionSpanThresholdMs;
+          this.repeatedStartThreshold = result.repeatedStartThreshold;
 
           this.processingDurationMin = String(
             result.processingDurationMin ?? ''
@@ -1116,11 +1270,31 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
             result.sessionScreensAllowlist.join(',') :
             '';
 
-          this.onAudioLowThresholdChanged();
-          this.onShortProcessingThresholdChanged();
-          this.onLongLoadingThresholdChanged();
-
           try {
+            localStorage.setItem(
+              this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
+              String(this.audioLowThreshold)
+            );
+            localStorage.setItem(
+              this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
+              String(this.shortProcessingThresholdMs)
+            );
+            localStorage.setItem(
+              this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
+              String(this.longLoadingThresholdMs)
+            );
+            localStorage.setItem(
+              this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
+              String(this.focusLostThresholdMs)
+            );
+            localStorage.setItem(
+              this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
+              String(this.sessionSpanThresholdMs)
+            );
+            localStorage.setItem(
+              this.REPEATED_START_THRESHOLD_STORAGE_KEY,
+              String(this.repeatedStartThreshold)
+            );
             localStorage.setItem(
               this.PROCESSING_DURATION_MIN_STORAGE_KEY,
               String(this.processingDurationMin)
@@ -1200,9 +1374,10 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
           String(this.shortProcessingThresholdMs) :
           '',
         longLoading: this.flatFilters.longLoading ? 'true' : '',
-        longLoadingThresholdMs: this.flatFilters.longLoading ?
-          String(this.longLoadingThresholdMs) :
-          '',
+        longLoadingThresholdMs: String(this.longLoadingThresholdMs),
+        focusLostThresholdMs: String(this.focusLostThresholdMs),
+        sessionSpanThresholdMs: String(this.sessionSpanThresholdMs),
+        repeatedStartThreshold: String(this.repeatedStartThreshold),
         processingDurations: '',
         processingDurationMin: this.processingDurationEnabled ?
           String(this.processingDurationMin) :
@@ -1219,12 +1394,14 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
           '',
         sessionScreens: sessionFilterActive ?
           this.parseCsv(this.sessionScreensAllowlist) :
-          ''
+          '',
+        logAnomalies: this.flatFilters.logAnomalies
       })
       .subscribe(resp => {
         this.isLoadingFlat = false;
         this.flatTotalRecords = resp.total;
         this.flatData = (resp.data || []).map(r => ({
+          bookletId: r.bookletId,
           responseId: r.responseId,
           unitId: r.unitId,
           personId: r.personId,

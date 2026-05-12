@@ -910,6 +910,13 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('exportTestResultsToStream', () => {
+    const collectStream = (stream: PassThrough): Promise<string> => new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+      stream.on('error', reject);
+    });
+
     it('should attempt to fetch data for export', async () => {
       const workspaceId = 1;
       const resStream = new PassThrough();
@@ -943,6 +950,134 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.getMany).toHaveBeenCalled();
       expect(qb.andWhere).toHaveBeenCalledWith(
         'response.is_autocoder_generated IS NOT TRUE'
+      );
+    });
+
+    it('should keep legacy headers when log anomalies are not requested', async () => {
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+      const unitQb = mockQueryBuilder();
+      const responseQb = mockQueryBuilder();
+      const chunkQb = mockQueryBuilder();
+      const lastStateQb = mockQueryBuilder();
+      const unit = {
+        id: 1,
+        name: 'unit-a',
+        alias: 'unit-original-a',
+        booklet: {
+          id: 10,
+          person: { group: 'group-a', login: 'login-a', code: 'code-a' },
+          bookletinfo: { name: 'booklet-a' }
+        }
+      };
+
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getCount.mockResolvedValue(1);
+      unitQb.getMany
+        .mockResolvedValueOnce([unit])
+        .mockResolvedValueOnce([]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getMany.mockResolvedValue([]);
+      (chunkRepository.createQueryBuilder as jest.Mock).mockReturnValue(chunkQb);
+      chunkQb.getMany.mockResolvedValue([]);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({
+        createQueryBuilder: jest.fn(() => lastStateQb)
+      });
+      lastStateQb.getMany.mockResolvedValue([]);
+
+      await service.exportTestResultsToStream(1, resStream, {});
+
+      const output = await outputPromise;
+      const [header] = output.trim().split('\n');
+
+      expect(header).toBe(
+        'groupname;loginname;code;bookletname;unitname;responses;laststate;originalUnitId'
+      );
+      expect(header).not.toContain('log_anomaly_');
+    });
+
+    it('should add log anomaly columns when requested', async () => {
+      const workspaceId = 1;
+      const resStream = new PassThrough();
+      const outputPromise = collectStream(resStream);
+      const unitQb = mockQueryBuilder();
+      const responseQb = mockQueryBuilder();
+      const chunkQb = mockQueryBuilder();
+      const lastStateQb = mockQueryBuilder();
+      const unit = {
+        id: 1,
+        name: 'unit-a',
+        alias: 'unit-original-a',
+        booklet: {
+          id: 10,
+          person: { group: 'group-a', login: 'login-a', code: 'code-a' },
+          bookletinfo: { name: 'booklet-a' }
+        }
+      };
+      const anomalyService = service as unknown as {
+        findLogAnomaliesForBooklets: (
+          bookletIds: number[],
+          thresholds: unknown
+        ) => Promise<Map<number, Array<{
+          code: string;
+          severity: 'critical' | 'warning' | 'info';
+          label: string;
+          evidence: string;
+          count: number;
+        }>>>;
+      };
+
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      unitQb.getCount.mockResolvedValue(1);
+      unitQb.getMany
+        .mockResolvedValueOnce([unit])
+        .mockResolvedValueOnce([]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      responseQb.getMany.mockResolvedValue([]);
+      (chunkRepository.createQueryBuilder as jest.Mock).mockReturnValue(chunkQb);
+      chunkQb.getMany.mockResolvedValue([]);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({
+        createQueryBuilder: jest.fn(() => lastStateQb)
+      });
+      lastStateQb.getMany.mockResolvedValue([]);
+      jest
+        .spyOn(anomalyService, 'findLogAnomaliesForBooklets')
+        .mockResolvedValue(new Map([
+          [
+            10,
+            [
+              {
+                code: 'controller_error',
+                severity: 'critical',
+                label: 'Controller error',
+                evidence: '',
+                count: 1
+              },
+              {
+                code: 'connection_lost',
+                severity: 'warning',
+                label: 'Connection lost',
+                evidence: '',
+                count: 2
+              }
+            ]
+          ]
+        ]));
+
+      await service.exportTestResultsToStream(
+        workspaceId,
+        resStream,
+        { includeLogAnomalies: true }
+      );
+
+      const output = await outputPromise;
+      const [header, row] = output.trim().split('\n');
+
+      expect(header).toContain(
+        'log_anomaly_count;log_anomaly_max_severity;log_anomaly_codes;log_anomaly_labels'
+      );
+      expect(row).toContain(
+        '3;critical;"controller_error|connection_lost";"Controller error|Connection lost"'
       );
     });
   });

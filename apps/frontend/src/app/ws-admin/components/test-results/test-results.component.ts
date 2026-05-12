@@ -227,8 +227,6 @@ interface P {
   uploaded_at: Date;
 }
 
-type DeleteJobMode = 'test-results' | 'logs';
-
 const RESPONSE_STATUS_INFO: Record<
 string,
 { numeric: number; description: string }
@@ -365,6 +363,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
   private searchSubscription: Subscription | null = null;
   private deleteTaskSubscription: Subscription | null = null;
+  private flatFilterRequestSubscription: Subscription | null = null;
   private readonly SEARCH_DEBOUNCE_TIME = 800;
   selection = new SelectionModel<P>(true, []);
   dataSource!: MatTableDataSource<P>;
@@ -396,7 +395,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isLoadingBooklets: boolean = false;
   isDeletingTestPersons: boolean = false;
   activeDeleteTask: ValidationTaskDto | null = null;
-  activeDeleteMode: DeleteJobMode = 'test-results';
   deleteProgress: number = 0;
   deleteProgressMessage: string = '';
   unitTags: UnitTagDto[] = [];
@@ -416,7 +414,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
-  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
+  exportTypeInProgress: 'test-results' | null = null;
   uploadingMessage = 'Ergebnisse werden hochgeladen...';
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -463,6 +461,17 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       }
     });
 
+    this.flatFilterRequestSubscription =
+      this.testResultService.flatResponseFilterRequests$.subscribe(request => {
+        if (request.workspaceId !== this.appService.selectedWorkspaceId) {
+          return;
+        }
+        this.quickSearchTableFilters = { ...(request.filters || {}) };
+        this.isTableView = true;
+        this.isLoading = false;
+        this.isUploadingResults = false;
+      });
+
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
     this.startValidationStatusCheck();
@@ -478,6 +487,10 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     if (this.deleteTaskSubscription) {
       this.deleteTaskSubscription.unsubscribe();
       this.deleteTaskSubscription = null;
+    }
+    if (this.flatFilterRequestSubscription) {
+      this.flatFilterRequestSubscription.unsubscribe();
+      this.flatFilterRequestSubscription = null;
     }
 
     this.stopValidationStatusCheck();
@@ -1806,25 +1819,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteLogsForSelectedPersons(): void {
-    const selectedTestPersons = this.selection.selected;
-    if (selectedTestPersons.length === 0) {
-      return;
-    }
-
-    this.confirmAndStartDelete({
-      scope: 'persons',
-      personIds: selectedTestPersons.map(person => person.id)
-    }, 'logs');
-  }
-
-  deleteLogsForFilteredPersons(): void {
-    this.confirmAndStartDelete({
-      scope: 'filteredPersons',
-      searchText: this.getCurrentSearchText()
-    }, 'logs');
-  }
-
   deleteSelectedGroups(): void {
     const groups = Array.from(
       new Set(
@@ -1858,17 +1852,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteLogsForBookletsByName(bookletName: string): void {
-    if (!bookletName) {
-      return;
-    }
-
-    this.confirmAndStartDelete({
-      scope: 'booklets',
-      bookletNames: [bookletName]
-    }, 'logs');
-  }
-
   deleteUnitsByName(unit: Unit): void {
     const unitName = unit.alias || unit.name;
     if (!unitName) {
@@ -1881,66 +1864,39 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteLogsForUnitsByName(unit: Unit): void {
-    const unitName = unit.alias || unit.name;
-    if (!unitName) {
-      return;
-    }
-
-    this.confirmAndStartDelete({
-      scope: 'units',
-      unitNames: [unitName]
-    }, 'logs');
-  }
-
   isDeleteJobRunning(): boolean {
     return this.activeDeleteTask?.status === 'pending' ||
       this.activeDeleteTask?.status === 'processing' ||
       this.isDeletingTestPersons;
   }
 
-  private confirmAndStartDelete(
-    request: TestResultsDeleteRequestDto,
-    mode: DeleteJobMode = 'test-results'
-  ): void {
+  private confirmAndStartDelete(request: TestResultsDeleteRequestDto): void {
     if (this.isDeleteJobRunning()) {
       return;
     }
 
     this.isDeletingTestPersons = true;
-    const previewRequest = mode === 'logs' ?
-      this.testResultService.previewDeleteTestLogs(
-        this.appService.selectedWorkspaceId,
-        request
-      ) :
-      this.testResultService.previewDeleteTestResults(
-        this.appService.selectedWorkspaceId,
-        request
-      );
 
-    previewRequest
+    this.testResultService
+      .previewDeleteTestResults(this.appService.selectedWorkspaceId, request)
       .subscribe({
         next: preview => {
           this.isDeletingTestPersons = false;
           if (!preview) {
             this.snackBar.open(
-              mode === 'logs' ?
-                'Die Log-Löschvorschau konnte nicht berechnet werden.' :
-                'Die Löschvorschau konnte nicht berechnet werden.',
+              'Die Löschvorschau konnte nicht berechnet werden.',
               'Fehler',
               { duration: 4000 }
             );
             return;
           }
 
-          this.openDeletePreviewDialog(request, preview, mode);
+          this.openDeletePreviewDialog(request, preview);
         },
         error: () => {
           this.isDeletingTestPersons = false;
           this.snackBar.open(
-            mode === 'logs' ?
-              'Die Log-Löschvorschau konnte nicht berechnet werden.' :
-              'Die Löschvorschau konnte nicht berechnet werden.',
+            'Die Löschvorschau konnte nicht berechnet werden.',
             'Fehler',
             { duration: 4000 }
           );
@@ -1950,8 +1906,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   private openDeletePreviewDialog(
     request: TestResultsDeleteRequestDto,
-    preview: TestResultsDeletePreviewDto,
-    mode: DeleteJobMode = 'test-results'
+    preview: TestResultsDeletePreviewDto
   ): void {
     const dialogRef = this.dialog.open(TestResultsDeletePreviewDialogComponent, {
       width: '680px',
@@ -1963,34 +1918,19 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     dialogRef.afterClosed().subscribe(confirmed => {
       if (confirmed) {
-        this.startDeleteJob(request, mode);
+        this.startDeleteJob(request);
       }
     });
   }
 
-  private startDeleteJob(
-    request: TestResultsDeleteRequestDto,
-    mode: DeleteJobMode = 'test-results'
-  ): void {
+  private startDeleteJob(request: TestResultsDeleteRequestDto): void {
     this.resetSelectedResultDetails();
     this.isDeletingTestPersons = true;
-    this.activeDeleteMode = mode;
     this.deleteProgress = 0;
-    this.deleteProgressMessage = mode === 'logs' ?
-      'Log-Löschung wird gestartet...' :
-      'Löschung wird gestartet...';
+    this.deleteProgressMessage = 'Löschung wird gestartet...';
 
-    const deleteRequest = mode === 'logs' ?
-      this.testResultService.createDeleteTestLogsJob(
-        this.appService.selectedWorkspaceId,
-        request
-      ) :
-      this.testResultService.createDeleteTestResultsJob(
-        this.appService.selectedWorkspaceId,
-        request
-      );
-
-    deleteRequest
+    this.testResultService
+      .createDeleteTestResultsJob(this.appService.selectedWorkspaceId, request)
       .subscribe({
         next: task => {
           this.activeDeleteTask = task;
@@ -1999,11 +1939,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
-          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
-            mode === 'logs' ?
-              'Die Log-Löschung konnte nicht gestartet werden.' :
-              'Die Löschung konnte nicht gestartet werden.',
+            'Die Löschung konnte nicht gestartet werden.',
             'Fehler',
             { duration: 4000 }
           );
@@ -2039,7 +1976,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           } else if (task.status === 'failed') {
             this.isDeletingTestPersons = false;
             this.activeDeleteTask = null;
-            this.activeDeleteMode = 'test-results';
             this.snackBar.open(
               task.error || 'Die Löschung ist fehlgeschlagen.',
               'Fehler',
@@ -2050,7 +1986,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
-          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
             'Der Fortschritt der Löschung konnte nicht gelesen werden.',
             'Fehler',
@@ -2061,7 +1996,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   private finishDeleteTask(taskId: number): void {
-    const mode = this.activeDeleteMode;
     this.validationService
       .getValidationResults(this.appService.selectedWorkspaceId, taskId)
       .subscribe({
@@ -2069,7 +2003,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const deleteResult = result as TestResultsDeleteResultDto;
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
-          this.activeDeleteMode = 'test-results';
           this.deleteProgress = 100;
           this.selection.clear();
           this.testResultService.invalidateCache(
@@ -2085,9 +2018,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.getCurrentSearchText()
           );
           this.snackBar.open(
-            mode === 'logs' ?
-              `Log-Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Log-/Sitzungsdatensätze entfernt.` :
-              `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
+            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
             'OK',
             { duration: 4000 }
           );
@@ -2095,7 +2026,6 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingTestPersons = false;
           this.activeDeleteTask = null;
-          this.activeDeleteMode = 'test-results';
           this.snackBar.open(
             'Die Löschung wurde abgeschlossen, das Ergebnis konnte aber nicht geladen werden.',
             'Info',
@@ -2546,14 +2476,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result) {
         if (result.type === 'download') {
           this.downloadExportResult(result.jobId);
-        } else if (result.type === 'results' || result.type === 'logs') {
-          this.startExportJob(result.type);
+        } else if (result.type === 'results') {
+          this.startExportJob();
         }
       }
     });
   }
 
-  private startExportJob(exportType: 'results' | 'logs'): void {
+  private startExportJob(): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -2561,7 +2491,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(ExportOptionsDialogComponent, {
       width: '800px',
       data: {
-        workspaceId: this.appService.selectedWorkspaceId
+        workspaceId: this.appService.selectedWorkspaceId,
+        exportType: 'results'
       }
     });
 
@@ -2583,22 +2514,20 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           personIds:
             result.personIds && result.personIds.length > 0 ?
               result.personIds :
+              undefined,
+          includeLogAnomalies:
+            result.includeLogAnomalies ?
+              true :
               undefined
         };
 
         this.isExporting = true;
-        this.exportTypeInProgress =
-          exportType === 'results' ? 'test-results' : 'test-logs';
+        this.exportTypeInProgress = 'test-results';
         const exportMethod =
-          exportType === 'results' ?
-            this.testResultBackendService.startExportTestResultsJob(
-              this.appService.selectedWorkspaceId,
-              filters
-            ) :
-            this.testResultBackendService.startExportTestLogsJob(
-              this.appService.selectedWorkspaceId,
-              filters
-            );
+          this.testResultBackendService.startExportTestResultsJob(
+            this.appService.selectedWorkspaceId,
+            filters
+          );
 
         exportMethod.subscribe({
           next: response => {
@@ -2632,7 +2561,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
-            (j: TestResultExportJob) => j.exportType === 'test-results' || j.exportType === 'test-logs'
+            (j: TestResultExportJob) => j.exportType === 'test-results'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(
@@ -2643,9 +2572,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
-            this.exportTypeInProgress = activeJob.exportType as
-              | 'test-results'
-              | 'test-logs';
+            this.exportTypeInProgress = 'test-results';
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -2711,9 +2638,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const link = document.createElement('a');
           link.href = url;
           const datePart = new Date().toISOString().split('T')[0];
-          const suffix =
-            this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
-          link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
 

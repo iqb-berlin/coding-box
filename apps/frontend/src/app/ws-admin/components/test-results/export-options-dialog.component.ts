@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { FormsModule } from '@angular/forms';
 import { MatListModule } from '@angular/material/list';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { CommonModule } from '@angular/common';
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 
@@ -14,6 +15,7 @@ export interface ExportOptions {
   bookletNames: string[];
   unitNames: string[];
   personIds: number[];
+  includeLogAnomalies: boolean;
 }
 
 @Component({
@@ -27,12 +29,21 @@ export interface ExportOptions {
     MatButtonModule,
     FormsModule,
     MatListModule,
-    MatTabsModule
+    MatTabsModule,
+    MatCheckboxModule
   ],
   template: `
     <h1 mat-dialog-title>Export-Optionen</h1>
     <div mat-dialog-content>
       <p>Wählen Sie die Daten aus, die exportiert werden sollen.</p>
+
+      @if (dialogData?.exportType === 'results') {
+        <div class="export-extra-options">
+          <mat-checkbox [(ngModel)]="data.includeLogAnomalies">
+            Log-Auffälligkeiten als Zusatzspalten exportieren
+          </mat-checkbox>
+        </div>
+      }
 
       <mat-tab-group>
         <mat-tab label="Testgruppen">
@@ -123,6 +134,9 @@ export interface ExportOptions {
       margin-top: 10px;
       margin-bottom: 5px;
     }
+    .export-extra-options {
+      margin: 8px 0 12px;
+    }
   `]
 })
 export class ExportOptionsDialogComponent implements OnInit {
@@ -134,7 +148,8 @@ export class ExportOptionsDialogComponent implements OnInit {
     groupNames: [],
     bookletNames: [],
     unitNames: [],
-    personIds: []
+    personIds: [],
+    includeLogAnomalies: false
   };
 
   availableOptions: {
