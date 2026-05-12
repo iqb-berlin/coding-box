@@ -16,6 +16,14 @@ import {
 } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
+import {
+  CodingFreshnessJobResultDto,
+  CodingFreshnessScopeDto,
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessVersion,
+  StartCodingFreshnessJobDto
+} from '../../../../../../api-dto/coding/coding-freshness.dto';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -70,6 +78,10 @@ export interface JobStatus {
   durationMs?: number;
   completedAt?: Date;
   autoCoderRun?: number;
+  source?: 'manual-selection' | 'coding-freshness';
+  freshnessVersion?: 'v1' | 'v3';
+  freshnessStates?: ('PENDING' | 'STALE')[];
+  unitCount?: number;
 }
 
 export interface JobInfo extends JobStatus {
@@ -130,7 +142,9 @@ export class TestPersonCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private autoCodingCompletedSubject = new Subject<void>();
+  private testResultsChangedSubject = new Subject<void>();
   autoCodingCompleted$ = this.autoCodingCompletedSubject.asObservable();
+  testResultsChanged$ = this.testResultsChangedSubject.asObservable();
 
   get authHeader() {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
@@ -138,6 +152,10 @@ export class TestPersonCodingService {
 
   notifyAutoCodingCompleted(): void {
     this.autoCodingCompletedSubject.next();
+  }
+
+  notifyTestResultsChanged(): void {
+    this.testResultsChangedSubject.next();
   }
 
   codeTestPersons(workspaceId: number, testPersonIds: string, autoCoderRun: number = 1): Observable<CodingStatisticsWithJob> {
@@ -290,6 +308,88 @@ export class TestPersonCodingService {
     )
       .pipe(
         catchError(() => of([]))
+      );
+  }
+
+  getCodingFreshness(workspaceId: number): Observable<CodingFreshnessSummaryDto> {
+    return this.http
+      .get<CodingFreshnessSummaryDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          workspaceId,
+          currentRevision: 0,
+          items: []
+        }))
+      );
+  }
+
+  getCodingFreshnessScope(
+    workspaceId: number,
+    version?: 'v1' | 'v2' | 'v3',
+    states?: ('PENDING' | 'STALE' | 'MANUAL_REVIEW_REQUIRED')[]
+  ): Observable<CodingFreshnessScopeDto> {
+    let params = new HttpParams();
+    if (version) {
+      params = params.set('version', version);
+    }
+    if (states && states.length > 0) {
+      params = params.set('state', states.join(','));
+    }
+
+    return this.http
+      .get<CodingFreshnessScopeDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
+      { headers: this.authHeader, params }
+    )
+      .pipe(
+        catchError(() => {
+          const fallback: CodingFreshnessScopeDto = {
+            workspaceId,
+            currentRevision: 0,
+            versions: version ?
+              [version] :
+              (['v1', 'v2', 'v3'] as CodingFreshnessVersion[]),
+            states: states || ([
+              'PENDING',
+              'STALE',
+              'MANUAL_REVIEW_REQUIRED'
+            ] as CodingFreshnessState[]),
+            unitCount: 0,
+            personCount: 0,
+            groupCount: 0,
+            affectedResponseCount: 0,
+            unitIds: [],
+            personIds: [],
+            groupNames: [],
+            groups: []
+          };
+          return of(fallback);
+        })
+      );
+  }
+
+  startFreshnessCoding(
+    workspaceId: number,
+    request: StartCodingFreshnessJobDto
+  ): Observable<CodingFreshnessJobResultDto> {
+    return this.http
+      .post<CodingFreshnessJobResultDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/code`,
+      request,
+      { headers: this.authHeader }
+    )
+      .pipe(
+        catchError(() => of({
+          totalResponses: 0,
+          statusCounts: {},
+          message: 'Failed to start coding freshness job',
+          unitCount: 0,
+          personCount: 0,
+          groupNames: []
+        }))
       );
   }
 

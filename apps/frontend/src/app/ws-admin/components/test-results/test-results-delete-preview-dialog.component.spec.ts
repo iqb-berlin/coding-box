@@ -22,6 +22,12 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
       groups: ['G1', 'G2'],
       bookletNames: ['B1', 'B2'],
       unitNames: ['U1', 'U2'],
+      codingImpact: {
+        affectedUnits: 12,
+        autoCodingV1: 120,
+        manualCodingV2: 40,
+        autoCodingV3: 15
+      },
       warnings: []
     }
   };
@@ -50,6 +56,14 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     ]);
     expect(component.requiresAcknowledgement).toBe(true);
     expect(component.canConfirm).toBe(false);
+    expect(component.hasCodingImpact).toBe(true);
+    expect(component.codingImpactMetrics).toEqual([
+      { label: 'Aufgaben-Ergebnisse', value: 12, hint: 'mit Kodierung' },
+      { label: 'Auto-Coding 1', value: 120, hint: 'Antwort-Kodierungen' },
+      { label: 'Manuelle Kodierung', value: 40, hint: 'Antwort-Kodierungen' },
+      { label: 'Auto-Coding 2', value: 15, hint: 'Antwort-Kodierungen' }
+    ]);
+    expect(component.codingImpactText).toContain('Kodierergebnisse entfernt');
 
     component.onAcknowledgementChange({ checked: true } as never);
     expect(component.canConfirm).toBe(true);
@@ -84,6 +98,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
       { label: 'Testpersonen', value: 3, hint: 'betroffen' }
     ]);
     expect(component.canConfirm).toBe(false);
+    expect(component.hasCodingImpact).toBe(false);
 
     component.onAcknowledgementChange({ checked: true } as never);
     expect(component.canConfirm).toBe(true);

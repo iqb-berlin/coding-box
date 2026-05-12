@@ -73,6 +73,7 @@ import { UnitNoteService } from '../../../shared/services/unit/unit-note.service
 import { ResponseService } from '../../../shared/services/response/response.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
+import { TestPersonCodingService } from '../../../coding/services/test-person-coding.service';
 import { VariableAnalysisService } from '../../../shared/services/response/variable-analysis.service';
 import { AppService } from '../../../core/services/app.service';
 import {
@@ -122,6 +123,21 @@ import {
   TestResultsUploadIssueDto,
   TestResultsUploadResultDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import {
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessSummaryItemDto,
+  CodingFreshnessVersion
+} from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CODING_FRESHNESS_TASK_RESULT_HELP,
+  getCodingFreshnessAffectedResponseCount,
+  getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessChipLabel,
+  getCodingFreshnessStateLabel,
+  getCodingFreshnessSummaryText,
+  getCodingFreshnessVersionLabel
+} from '../../../shared/utils/coding-freshness-text.util';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
 import {
@@ -356,6 +372,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   private unitService = inject(UnitService);
   private uploadStateService = inject(TestResultsUploadStateService);
   private statisticsService = inject(CodingStatisticsService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private variableAnalysisService = inject(VariableAnalysisService);
   private appService = inject(AppService);
   private testResultService = inject(TestResultService);
@@ -412,6 +429,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   overview: TestResultsOverviewResponse | null = null;
   isLoadingOverview: boolean = false;
+  codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
 
   exportJobId: string | null = null;
   isExporting: boolean = false;
@@ -454,6 +472,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.uploadStateService.uploadsFinished$.subscribe((wsId: number) => {
       if (wsId === this.appService.selectedWorkspaceId) {
         this.loadWorkspaceOverview();
+        this.loadCodingFreshnessSummary();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -477,6 +496,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
     this.createTestResultsList(0, this.pageSize);
     this.loadWorkspaceOverview();
+    this.loadCodingFreshnessSummary();
     this.startValidationStatusCheck();
     this.checkExistingExportJobs();
     this.isInitialized = true;
@@ -1220,6 +1240,48 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       });
   }
 
+  private loadCodingFreshnessSummary(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.codingFreshnessSummary = null;
+      return;
+    }
+
+    const getCodingFreshness =
+      (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
+    if (!getCodingFreshness) {
+      return;
+    }
+
+    getCodingFreshness.call(this.statisticsService, workspaceId)
+      .subscribe({
+        next: summary => {
+          this.codingFreshnessSummary = summary;
+        },
+        error: () => {
+          this.codingFreshnessSummary = null;
+        }
+      });
+  }
+
+  private async fetchCodingFreshnessSummary(
+    workspaceId: number
+  ): Promise<CodingFreshnessSummaryDto | null> {
+    const getCodingFreshness =
+      (this.statisticsService as Partial<CodingStatisticsService>).getCodingFreshness;
+    if (!getCodingFreshness) {
+      return null;
+    }
+
+    try {
+      return await firstValueFrom(
+        getCodingFreshness.call(this.statisticsService, workspaceId)
+      );
+    } catch {
+      return null;
+    }
+  }
+
   get overviewStatusCounts(): Array<{ status: string; count: number }> {
     const map = (this.overview?.responseStatusCounts || {}) as Record<
     string,
@@ -1228,6 +1290,59 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return Object.entries(map)
       .map(([status, count]) => ({ status, count: Number(count) }))
       .sort((a, b) => b.count - a.count);
+  }
+
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.codingFreshnessSummary?.items || [])
+      .filter(item => item.state !== 'CURRENT')
+      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
+  }
+
+  get hasCodingFreshnessWarning(): boolean {
+    return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get codingFreshnessAffectedUnitVersions(): number {
+    return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessAffectedResponses(): number {
+    return getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessSummaryText(): string {
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessExplanationText(): string {
+    return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
+    return getCodingFreshnessVersionLabel(version);
+  }
+
+  getCodingFreshnessStateLabel(state: CodingFreshnessState): string {
+    return getCodingFreshnessStateLabel(state);
+  }
+
+  getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    return getCodingFreshnessChipLabel(item);
+  }
+
+  openCodingManagement(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/management`]);
+  }
+
+  onFlatTableResponseDeleted(): void {
+    this.testResultService.invalidateCache(this.appService.selectedWorkspaceId);
+    this.loadWorkspaceOverview();
+    this.loadCodingFreshnessSummary();
+    this.testPersonCodingService.notifyTestResultsChanged();
   }
 
   private toSortedCountList(
@@ -1566,6 +1681,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             payload.logMetrics;
 
           const overviewPending = !overviewResult.loaded;
+          let codingFreshness = payload.uploadResult?.codingFreshness || null;
+          if (!codingFreshness && workspaceId) {
+            codingFreshness = await this.fetchCodingFreshnessSummary(workspaceId);
+          }
+          if (codingFreshness) {
+            this.codingFreshnessSummary = codingFreshness;
+          }
 
           const dialogResult: TestResultsUploadResultDto = {
             expected: { ...delta },
@@ -1592,7 +1714,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             overviewPending,
             overviewMessage: overviewPending ?
               'Der Import wurde vom Server angenommen, aber die aktualisierte Übersicht konnte noch nicht zuverlässig gelesen werden. Bitte diese Ansicht in Kürze aktualisieren.' :
-              undefined
+              undefined,
+            codingFreshness: codingFreshness || undefined
           };
 
           this.dialog.open(TestResultsUploadResultDialogComponent, {
@@ -1611,6 +1734,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.testResultService.invalidateCache(workspaceId);
         }
         this.loadWorkspaceOverview();
+        this.loadCodingFreshnessSummary();
         this.createTestResultsList(
           this.pageIndex,
           this.pageSize,
@@ -2000,13 +2124,15 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             this.appService.selectedWorkspaceId
           );
           this.loadWorkspaceOverview();
+          this.loadCodingFreshnessSummary();
+          this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
             this.pageSize,
             this.getCurrentSearchText()
           );
           this.snackBar.open(
-            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet.`,
+            `Löschung abgeschlossen: ${deleteResult.deletedTargetCount} Datensätze verarbeitet. Betroffene Kodierungen wurden mit entfernt.`,
             'OK',
             { duration: 4000 }
           );
@@ -2020,6 +2146,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
             { duration: 5000 }
           );
           this.loadWorkspaceOverview();
+          this.loadCodingFreshnessSummary();
+          this.testPersonCodingService.notifyTestResultsChanged();
           this.createTestResultsList(
             this.pageIndex,
             this.pageSize,
@@ -2204,11 +2332,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 this.snackBar.open(
                   `Unit "${
                     unit.alias || 'Unbenannte Einheit'
-                  }" wurde erfolgreich gelöscht.`,
+                  }" wurde erfolgreich gelöscht. Betroffene Kodierungen wurden mit entfernt.`,
                   'Erfolg',
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
+                this.loadCodingFreshnessSummary();
+                this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Unit: ${result.report.warnings.join(
@@ -2269,11 +2399,13 @@ export class TestResultsComponent implements OnInit, OnDestroy {
                 }
 
                 this.snackBar.open(
-                  `Antwort für Variable "${response.variableid}" wurde erfolgreich gelöscht.`,
+                  `Antwort für Variable "${response.variableid}" wurde gelöscht. Kodierstatus wurde aktualisiert.`,
                   'Erfolg',
                   { duration: 3000 }
                 );
                 this.loadWorkspaceOverview();
+                this.loadCodingFreshnessSummary();
+                this.testPersonCodingService.notifyTestResultsChanged();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Antwort: ${result.report.warnings.join(

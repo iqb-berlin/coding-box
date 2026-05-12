@@ -48,10 +48,49 @@
   border-color: rgba(245, 124, 0, 0.24);
 }
 
+.coding-freshness-section {
+  background: rgba(245, 124, 0, 0.08);
+  border-color: rgba(245, 124, 0, 0.28);
+}
+
+.freshness-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+
+  mat-icon {
+    color: #ef6c00;
+    flex: 0 0 auto;
+  }
+}
+
+.freshness-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.freshness-chip {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(245, 124, 0, 0.24);
+  border-radius: 999px;
+  color: rgba(0, 0, 0, 0.76);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 5px 8px;
+}
+
 .warning-text {
   color: rgba(0, 0, 0, 0.72);
   font-size: 13px;
   line-height: 1.45;
+}
+
+.freshness-explanation {
+  color: rgba(0, 0, 0, 0.58);
+  margin-top: 3px;
 }
 
 .log-import-note-section {

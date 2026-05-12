@@ -87,6 +87,58 @@
   margin: -6px 0 0;
 }
 
+.coding-impact-section {
+  background: rgba(245, 124, 0, 0.08);
+  border: 1px solid rgba(245, 124, 0, 0.26);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+}
+
+.coding-impact-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+
+  mat-icon {
+    color: #ef6c00;
+    flex: 0 0 auto;
+    margin-top: 1px;
+  }
+
+  p {
+    color: rgba(0, 0, 0, 0.72);
+    font-size: 13px;
+    line-height: 1.45;
+    margin: 4px 0 0;
+  }
+}
+
+.coding-impact-title {
+  color: rgba(0, 0, 0, 0.82);
+  font-weight: 700;
+}
+
+.coding-impact-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.coding-impact-metric {
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(245, 124, 0, 0.18);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 10px;
+
+  .metric-value {
+    color: #8a4500;
+    font-size: 20px;
+  }
+}
+
 .detail-section {
   border-top: 1px solid rgba(0, 0, 0, 0.08);
   display: grid;
@@ -158,7 +210,8 @@ button mat-icon {
 }
 
 @media (max-width: 720px) {
-  .metrics-grid {
+  .metrics-grid,
+  .coding-impact-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

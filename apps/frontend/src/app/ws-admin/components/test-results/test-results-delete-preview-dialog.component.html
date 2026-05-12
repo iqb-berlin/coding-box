@@ -26,6 +26,29 @@
     {{ countNote }}
   </p>
 
+  @if (hasCodingImpact) {
+  <section class="coding-impact-section">
+    <div class="coding-impact-header">
+      <mat-icon>rule</mat-icon>
+      <div>
+        <div class="coding-impact-title">Auswirkungen auf Kodierung</div>
+        <p>{{ codingImpactText }}</p>
+      </div>
+    </div>
+    <div class="coding-impact-grid">
+      @for (metric of codingImpactMetrics; track metric.label) {
+      <div class="coding-impact-metric">
+        <div class="metric-value">{{ metric.value }}</div>
+        <div class="metric-label">{{ metric.label }}</div>
+        @if (metric.hint) {
+        <div class="metric-hint">{{ metric.hint }}</div>
+        }
+      </div>
+      }
+    </div>
+  </section>
+  }
+
   @if (hasDetails) {
   <section class="detail-section">
     @if (preview.groups.length > 0) {

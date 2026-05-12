@@ -21,6 +21,27 @@
       </div>
     </div>
     }
+    @if (hasCodingFreshnessWarning) {
+    <div class="section coding-freshness-section">
+      <div class="freshness-header">
+        <mat-icon>warning</mat-icon>
+        <div>
+          <div class="section-title">Kodierung nicht mehr vollständig aktuell</div>
+          <div class="warning-text">
+            <div>{{ codingFreshnessSummaryText }}</div>
+            <div class="freshness-explanation">{{ codingFreshnessExplanationText }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="freshness-chip-row">
+        @for (item of codingFreshnessWarnings; track item.version + item.state) {
+        <span class="freshness-chip">
+          {{ getCodingFreshnessChipLabel(item) }}
+        </span>
+        }
+      </div>
+    </div>
+    }
     @if (result.importSummary) {
     <div class="section import-summary-section">
       <div class="section-title">Import-Zusammenfassung</div>

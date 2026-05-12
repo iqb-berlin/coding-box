@@ -12,6 +12,20 @@ import { FormsModule } from '@angular/forms';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { buildCsv, downloadCsvFile } from '../validation-dialog/shared/validation-export.util';
+import {
+  CodingFreshnessState,
+  CodingFreshnessSummaryItemDto,
+  CodingFreshnessVersion
+} from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CODING_FRESHNESS_TASK_RESULT_HELP,
+  getCodingFreshnessAffectedResponseCount,
+  getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessChipLabel,
+  getCodingFreshnessStateLabel,
+  getCodingFreshnessSummaryText,
+  getCodingFreshnessVersionLabel
+} from '../../../shared/utils/coding-freshness-text.util';
 
 export type TestResultsUploadResultDialogData = {
   resultType: 'logs' | 'responses';
@@ -39,7 +53,7 @@ export type TestResultsUploadResultDialogData = {
 })
 export class TestResultsUploadResultDialogComponent {
   @ViewChild('issuesViewport')
-  issuesViewport?: CdkVirtualScrollViewport;
+    issuesViewport?: CdkVirtualScrollViewport;
 
   private issueFilterText = '';
   private issueCategory: string | null = null;
@@ -162,6 +176,44 @@ export class TestResultsUploadResultDialogComponent {
       (delta.uniqueBooklets || 0) === 0 &&
       (delta.uniqueUnits || 0) === 0 &&
       (delta.uniqueResponses || 0) === 0;
+  }
+
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.result.codingFreshness?.items || [])
+      .filter(item => item.state !== 'CURRENT')
+      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
+  }
+
+  get hasCodingFreshnessWarning(): boolean {
+    return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get codingFreshnessAffectedUnitVersions(): number {
+    return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessAffectedResponses(): number {
+    return getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessSummaryText(): string {
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+  }
+
+  get codingFreshnessExplanationText(): string {
+    return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  getVersionLabel(version: CodingFreshnessVersion): string {
+    return getCodingFreshnessVersionLabel(version);
+  }
+
+  getFreshnessStateLabel(state: CodingFreshnessState): string {
+    return getCodingFreshnessStateLabel(state);
+  }
+
+  getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    return getCodingFreshnessChipLabel(item);
   }
 
   getCategoryLabel(category: string): string {

@@ -1,6 +1,6 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, Input, OnChanges, OnDestroy, SimpleChanges, inject
+  Component, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, inject
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
@@ -318,6 +318,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
   private suppressNextFlatFilterChange = false;
 
   @Input() initialFilters: Partial<FlatResponseFilters> | null = null;
+  @Output() responseDeleted = new EventEmitter<void>();
 
   constructor() {
     try {
@@ -1545,6 +1546,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
                   { duration: 3000 }
                 );
                 this.fetchFlatResponses(this.flatPageIndex, this.flatPageSize);
+                this.responseDeleted.emit();
               } else {
                 this.snackBar.open(
                   `Fehler beim Löschen der Antwort: ${result.report.warnings.join(
