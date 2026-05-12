@@ -414,7 +414,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   isExporting: boolean = false;
   exportJobStatus: string | null = null;
   exportJobProgress: number = 0;
-  exportTypeInProgress: 'test-results' | null = null;
+  exportTypeInProgress: 'test-results' | 'test-logs' | null = null;
   uploadingMessage = 'Ergebnisse werden hochgeladen...';
 
   @ViewChild(MatPaginator) paginator!: MatPaginator;
@@ -2476,14 +2476,14 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       if (result) {
         if (result.type === 'download') {
           this.downloadExportResult(result.jobId);
-        } else if (result.type === 'results') {
-          this.startExportJob();
+        } else if (result.type === 'results' || result.type === 'logs') {
+          this.startExportJob(result.type);
         }
       }
     });
   }
 
-  private startExportJob(): void {
+  private startExportJob(exportType: 'results' | 'logs'): void {
     if (!this.appService.selectedWorkspaceId) {
       return;
     }
@@ -2492,7 +2492,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       width: '800px',
       data: {
         workspaceId: this.appService.selectedWorkspaceId,
-        exportType: 'results'
+        exportType
       }
     });
 
@@ -2516,18 +2516,24 @@ export class TestResultsComponent implements OnInit, OnDestroy {
               result.personIds :
               undefined,
           includeLogAnomalies:
-            result.includeLogAnomalies ?
+            exportType === 'results' && result.includeLogAnomalies ?
               true :
               undefined
         };
 
         this.isExporting = true;
-        this.exportTypeInProgress = 'test-results';
+        this.exportTypeInProgress =
+          exportType === 'results' ? 'test-results' : 'test-logs';
         const exportMethod =
-          this.testResultBackendService.startExportTestResultsJob(
-            this.appService.selectedWorkspaceId,
-            filters
-          );
+          exportType === 'results' ?
+            this.testResultBackendService.startExportTestResultsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            ) :
+            this.testResultBackendService.startExportTestLogsJob(
+              this.appService.selectedWorkspaceId,
+              filters
+            );
 
         exportMethod.subscribe({
           next: response => {
@@ -2561,7 +2567,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           const relevantJobs = jobs.filter(
-            (j: TestResultExportJob) => j.exportType === 'test-results'
+            (j: TestResultExportJob) => j.exportType === 'test-results' ||
+              j.exportType === 'test-logs'
           );
           // Find the most recent active job only (not completed jobs)
           const activeJob = relevantJobs.find(
@@ -2572,7 +2579,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           if (activeJob) {
             this.exportJobId = activeJob.jobId;
             this.isExporting = true;
-            this.exportTypeInProgress = 'test-results';
+            this.exportTypeInProgress = activeJob.exportType as
+              | 'test-results'
+              | 'test-logs';
             this.pollExportJobStatus(activeJob.jobId);
           }
         }
@@ -2638,7 +2647,9 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const link = document.createElement('a');
           link.href = url;
           const datePart = new Date().toISOString().split('T')[0];
-          link.download = `workspace-${this.appService.selectedWorkspaceId}-results-${datePart}.csv`;
+          const suffix =
+            this.exportTypeInProgress === 'test-logs' ? 'logs' : 'results';
+          link.download = `workspace-${this.appService.selectedWorkspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
 
