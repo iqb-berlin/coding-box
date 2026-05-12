@@ -39,7 +39,8 @@ describe('CodingManagementService', () => {
     // Create mocks
     executionServiceMock = {
       createCodingStatisticsJob: jest.fn(),
-      getCodingJobStatus: jest.fn()
+      getCodingJobStatus: jest.fn(),
+      getCodingStatisticsJobStatus: jest.fn()
     } as unknown as jest.Mocked<CodingExecutionService>;
 
     statisticsServiceMock = {
@@ -105,14 +106,14 @@ describe('CodingManagementService', () => {
       executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId, message: 'test' }));
 
       // First poll: processing
-      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
         status: 'processing',
         progress: 50,
         result: undefined
       } as CodingJobStatus));
 
       // Second poll: completed
-      executionServiceMock.getCodingJobStatus.mockReturnValueOnce(of({
+      executionServiceMock.getCodingStatisticsJobStatus.mockReturnValueOnce(of({
         status: 'completed',
         progress: 100,
         result: mockCodingStatistics
@@ -129,10 +130,11 @@ describe('CodingManagementService', () => {
 
       // Advance time for polling (timer(0, 2000))
       tick(0); // initial
-      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(1);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+      expect(executionServiceMock.getCodingJobStatus).not.toHaveBeenCalled();
 
       tick(2000); // next poll
-      expect(executionServiceMock.getCodingJobStatus).toHaveBeenCalledTimes(2);
+      expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
 
       // Check if statistics were emitted
       let currentStats: CodingStatistics | undefined;
