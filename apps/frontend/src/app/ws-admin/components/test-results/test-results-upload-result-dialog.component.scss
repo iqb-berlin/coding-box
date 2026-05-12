@@ -220,7 +220,7 @@ mat-tab-group {
 }
 
 .filter-row {
-  grid-template-columns: auto minmax(220px, 1fr);
+  grid-template-columns: auto minmax(180px, 240px) minmax(220px, 1fr);
 }
 
 .issue-filters {
@@ -228,6 +228,7 @@ mat-tab-group {
 }
 
 .search-field,
+.detail-status-filter,
 .issue-filters mat-form-field {
   font-size: 14px;
   width: 100%;
@@ -410,6 +411,7 @@ mat-tab-group {
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   box-sizing: border-box;
   display: flex;
+  gap: 10px;
   height: 40px;
   padding: 8px 12px;
 }
@@ -417,7 +419,6 @@ mat-tab-group {
 .detail-icon {
   align-items: center;
   display: flex;
-  margin-right: 12px;
 
   mat-icon {
     font-size: 20px;
@@ -435,9 +436,31 @@ mat-tab-group {
 }
 
 .detail-text {
+  flex: 1 1 auto;
   font-size: 14px;
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.detail-status {
+  align-items: center;
+  border-radius: 999px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  padding: 3px 8px;
+
+  &.success {
+    background: rgba(46, 125, 50, 0.1);
+    color: #2e7d32;
+  }
+
+  &.missing {
+    background: rgba(198, 40, 40, 0.1);
+    color: #c62828;
+  }
 }
 
 .unit-booklet {

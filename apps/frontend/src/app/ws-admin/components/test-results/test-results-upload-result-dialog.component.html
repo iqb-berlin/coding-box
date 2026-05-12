@@ -158,7 +158,7 @@
 
     @if (result.importedLogs && result.logMetrics) {
     <div class="section log-coverage-section">
-      <div class="section-title">Log-Abdeckung</div>
+      <div class="section-title">Log-Abdeckung im Arbeitsbereich nach Import</div>
       <div class="kv">
         <div class="k">Testhefte mit Logs</div>
         <div class="v">{{ result.logMetrics.bookletsWithLogs }} / {{ result.logMetrics.totalBooklets }}</div>
@@ -177,8 +177,7 @@
 
   <mat-tab-group dynamicHeight (selectedTabChange)="onTabChange()">
     @if (result.importedLogs) {
-    <mat-tab
-      label="Details ({{ detailView === 'booklets' ? filteredBookletDetails.length : filteredUnitDetails.length }})">
+    <mat-tab [label]="detailTabLabel">
       <div class="tab-pad">
         <div class="filter-row">
           <div class="toggle-group">
@@ -187,6 +186,14 @@
             <button mat-stroked-button [class.active]="detailView === 'units'" (click)="detailView = 'units'"
               class="right-toggle">Units</button>
           </div>
+          <mat-form-field appearance="outline" class="detail-status-filter">
+            <mat-label>Log-Status</mat-label>
+            <mat-select [(ngModel)]="detailStatusFilter" [disabled]="!hasAnyLogDetails">
+              <mat-option value="all">Alle</mat-option>
+              <mat-option value="withLogs">Mit Logs</mat-option>
+              <mat-option value="withoutLogs">Ohne Logs</mat-option>
+            </mat-select>
+          </mat-form-field>
           <mat-form-field appearance="outline" class="search-field">
             <mat-label>Suche</mat-label>
             <input matInput [(ngModel)]="detailFilterText" placeholder="Name..." />
@@ -194,9 +201,18 @@
           </mat-form-field>
         </div>
 
+        @if (!hasAnyLogDetails) {
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
+        } @else {
         @if (detailView === 'booklets') {
         @if (filteredBookletDetails.length === 0) {
-        <div class="empty">Keine Booklets gefunden.</div>
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
         } @else {
         <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let b of filteredBookletDetails; trackBy: trackByBookletDetail" class="detail-row">
@@ -204,12 +220,18 @@
               <mat-icon>{{ b.hasLog ? 'check_circle' : 'cancel' }}</mat-icon>
             </div>
             <div class="detail-text">{{ b.name }}</div>
+            <span class="detail-status" [class.success]="b.hasLog" [class.missing]="!b.hasLog">
+              {{ b.hasLog ? 'mit Logs' : 'ohne Logs' }}
+            </span>
           </div>
         </cdk-virtual-scroll-viewport>
         }
         } @else {
         @if (filteredUnitDetails.length === 0) {
-        <div class="empty">Keine Units gefunden.</div>
+        <div class="empty">
+          <mat-icon>info</mat-icon>
+          <span>{{ emptyDetailMessage }}</span>
+        </div>
         } @else {
         <cdk-virtual-scroll-viewport itemSize="40" class="viewport details-viewport">
           <div *cdkVirtualFor="let u of filteredUnitDetails; trackBy: trackByUnitDetail" class="detail-row">
@@ -221,8 +243,12 @@
               <span class="unit-separator">/</span>
               <span class="unit-key">{{ u.unitKey }}</span>
             </div>
+            <span class="detail-status" [class.success]="u.hasLog" [class.missing]="!u.hasLog">
+              {{ u.hasLog ? 'mit Logs' : 'ohne Logs' }}
+            </span>
           </div>
         </cdk-virtual-scroll-viewport>
+        }
         }
         }
       </div>
@@ -293,7 +319,7 @@
         @if (filteredIssues.length === 0) {
         <div class="empty success">
           <mat-icon>check_circle</mat-icon>
-          <span>Keine Probleme gefunden.</span>
+          <span>{{ emptyIssuesMessage }}</span>
         </div>
         } @else {
         <cdk-virtual-scroll-viewport

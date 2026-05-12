@@ -32,6 +32,9 @@ export type TestResultsUploadResultDialogData = {
   result: TestResultsUploadResultDto;
 };
 
+type LogBookletDetail = { name: string; hasLog: boolean };
+type LogUnitDetail = { bookletName: string; unitKey: string; hasLog: boolean };
+
 @Component({
   selector: 'coding-box-test-results-upload-result-dialog',
   standalone: true,
@@ -291,28 +294,70 @@ export class TestResultsUploadResultDialogComponent {
   }
 
   detailView: 'booklets' | 'units' = 'booklets';
+  detailStatusFilter: 'all' | 'withLogs' | 'withoutLogs' = 'all';
   detailFilterText = '';
 
-  get bookletDetails(): { name: string; hasLog: boolean }[] {
+  get bookletDetails(): LogBookletDetail[] {
     return this.result.logMetrics?.bookletDetails || [];
   }
 
-  get unitDetails(): { bookletName: string; unitKey: string; hasLog: boolean }[] {
+  get unitDetails(): LogUnitDetail[] {
     return this.result.logMetrics?.unitDetails || [];
   }
 
-  get filteredBookletDetails(): { name: string; hasLog: boolean }[] {
+  get hasAnyLogDetails(): boolean {
+    return this.bookletDetails.length > 0 || this.unitDetails.length > 0;
+  }
+
+  get detailTabLabel(): string {
+    if (!this.hasAnyLogDetails) {
+      return 'Details';
+    }
+
+    const count = this.detailView === 'booklets' ?
+      this.filteredBookletDetails.length :
+      this.filteredUnitDetails.length;
+
+    return `Details (${count})`;
+  }
+
+  get emptyDetailMessage(): string {
+    if (!this.hasAnyLogDetails) {
+      return 'Detaildaten konnten nicht geladen werden.';
+    }
+
+    const hasFilter = (this.detailFilterText || '').trim().length > 0 ||
+      this.detailStatusFilter !== 'all';
+
+    if (hasFilter) {
+      return this.detailView === 'booklets' ?
+        'Keine Booklets passend zum Filter gefunden.' :
+        'Keine Units passend zum Filter gefunden.';
+    }
+
+    return this.detailView === 'booklets' ?
+      'Keine Booklets gefunden.' :
+      'Keine Units gefunden.';
+  }
+
+  get emptyIssuesMessage(): string {
+    return this.hasActiveIssueFilter ?
+      'Keine passenden technischen Importprobleme gefunden.' :
+      'Keine technischen Importprobleme gefunden.';
+  }
+
+  get filteredBookletDetails(): LogBookletDetail[] {
     const q = (this.detailFilterText || '').trim().toUpperCase();
-    let list = this.bookletDetails;
+    let list = this.applyLogDetailStatusFilter([...this.bookletDetails]);
     if (q) {
       list = list.filter(b => b.name.toUpperCase().includes(q));
     }
     return list.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  get filteredUnitDetails(): { bookletName: string; unitKey: string; hasLog: boolean }[] {
+  get filteredUnitDetails(): LogUnitDetail[] {
     const q = (this.detailFilterText || '').trim().toUpperCase();
-    let list = this.unitDetails;
+    let list = this.applyLogDetailStatusFilter([...this.unitDetails]);
     if (q) {
       list = list.filter(u => u.bookletName.toUpperCase().includes(q) ||
         u.unitKey.toUpperCase().includes(q)
@@ -325,12 +370,24 @@ export class TestResultsUploadResultDialogComponent {
     });
   }
 
-  trackByBookletDetail(index: number, item: { name: string; hasLog: boolean }): string {
+  trackByBookletDetail(index: number, item: LogBookletDetail): string {
     return `${item.name}-${item.hasLog}`;
   }
 
-  trackByUnitDetail(index: number, item: { bookletName: string; unitKey: string; hasLog: boolean }): string {
+  trackByUnitDetail(index: number, item: LogUnitDetail): string {
     return `${item.bookletName}-${item.unitKey}-${item.hasLog}`;
+  }
+
+  private applyLogDetailStatusFilter<T extends { hasLog: boolean }>(items: T[]): T[] {
+    if (this.detailStatusFilter === 'withLogs') {
+      return items.filter(item => item.hasLog);
+    }
+
+    if (this.detailStatusFilter === 'withoutLogs') {
+      return items.filter(item => !item.hasLog);
+    }
+
+    return items;
   }
 
   onCategoryChange(): void {
