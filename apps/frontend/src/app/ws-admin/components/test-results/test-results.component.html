@@ -193,15 +193,6 @@
           <button
             mat-stroked-button
             [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
-            (click)="deleteLogsForSelectedPersons()"
-            class="delete-button"
-          >
-            <mat-icon>playlist_remove</mat-icon>
-            Logs ausgewählter entfernen
-          </button>
-          <button
-            mat-stroked-button
-            [disabled]="selection.selected.length === 0 || isDeleteJobRunning()"
             (click)="deleteSelectedGroups()"
             class="delete-button"
           >
@@ -216,15 +207,6 @@
           >
             <mat-icon>filter_alt_off</mat-icon>
             Gefilterte löschen
-          </button>
-          <button
-            mat-stroked-button
-            [disabled]="totalRecords === 0 || isDeleteJobRunning()"
-            (click)="deleteLogsForFilteredPersons()"
-            class="delete-button"
-          >
-            <mat-icon>playlist_remove</mat-icon>
-            Logs gefilterter entfernen
           </button>
         </div>
       </div>
@@ -442,16 +424,6 @@
               </button>
               <button
                 mat-stroked-button
-                color="warn"
-                [disabled]="isDeleteJobRunning()"
-                (click)="deleteLogsForBookletsByName(booklet.name)"
-                class="action-button"
-              >
-                <mat-icon>playlist_remove</mat-icon>
-                Logs entfernen
-              </button>
-              <button
-                mat-stroked-button
                 color="primary"
                 (click)="openBookletInfo(booklet.name)"
                 class="action-button"
@@ -627,16 +599,6 @@
           >
             <mat-icon>list</mat-icon>
             Logs
-          </button>
-          <button
-            mat-stroked-button
-            color="warn"
-            [disabled]="isDeleteJobRunning() || !selectedUnit"
-            (click)="selectedUnit ? deleteLogsForUnitsByName(selectedUnit) : null"
-            class="action-button"
-          >
-            <mat-icon>playlist_remove</mat-icon>
-            Logs entfernen
           </button>
           <button
             mat-stroked-button

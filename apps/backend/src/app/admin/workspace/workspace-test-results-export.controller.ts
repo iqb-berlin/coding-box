@@ -350,6 +350,7 @@ export class WorkspaceTestResultsExportController {
                                            bookletNames?: string[];
                                            unitNames?: string[];
                                            personIds?: number[];
+                                           includeLogAnomalies?: boolean;
                                          }
   ): Promise<{ jobId: string; message: string }> {
     const job = await this.jobQueueService.addExportJob({

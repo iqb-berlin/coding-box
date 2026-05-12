@@ -119,6 +119,75 @@ string,
 }
 >;
 
+type LogAnomalySeverity = 'critical' | 'warning' | 'info';
+
+type LogAnomalyCode =
+  | 'controller_error'
+  | 'missing_termination'
+  | 'connection_lost'
+  | 'timestamp_zero'
+  | 'player_stuck_loading'
+  | 'repeated_start'
+  | 'long_loading'
+  | 'timer_left_on_exit'
+  | 'timer_never_finished'
+  | 'focus_lost_long'
+  | 'unit_progress_incomplete'
+  | 'progress_incomplete'
+  | 'debug_command'
+  | 'session_span_long'
+  | 'orphan_logs';
+
+interface LogAnomalySummary {
+  code: LogAnomalyCode;
+  severity: LogAnomalySeverity;
+  label: string;
+  evidence: string;
+  count: number;
+}
+
+interface LogAnomalyThresholds {
+  longLoadingThresholdMs: number;
+  focusLostThresholdMs: number;
+  sessionSpanThresholdMs: number;
+  repeatedStartThreshold: number;
+}
+
+interface LogAnomalyDashboardSummary {
+  totalBooklets: number;
+  affectedBooklets: number;
+  criticalBooklets: number;
+  warningBooklets: number;
+  infoBooklets: number;
+  totalAnomalyRules: number;
+  totalAnomalyEvents: number;
+  byCode: Record<string, number>;
+}
+
+interface LogAnomalyDetailRow {
+  bookletId: number;
+  booklet: string;
+  personId: number;
+  code: string;
+  group: string;
+  login: string;
+  maxSeverity: LogAnomalySeverity;
+  anomalies: LogAnomalySummary[];
+}
+
+interface LogAnomalyDetailsResponse {
+  total: number;
+  data: LogAnomalyDetailRow[];
+}
+
+interface TestResultsExportFilters {
+  groupNames?: string[];
+  bookletNames?: string[];
+  unitNames?: string[];
+  personIds?: number[];
+  includeLogAnomalies?: boolean;
+}
+
 type TestResultsDeleteTargetKind = 'persons' | 'booklets' | 'units';
 
 interface TestResultsDeleteTargets {
@@ -286,6 +355,955 @@ export class WorkspaceTestResultsService {
         ignoredBookletsOnly: ignoredBooklets.map(normalizeExclusionBookletId)
       });
     }
+  }
+
+  private buildLogAnomalyThresholds(options: {
+    longLoadingThresholdMs?: number | string;
+    focusLostThresholdMs?: number | string;
+    sessionSpanThresholdMs?: number | string;
+    repeatedStartThreshold?: number | string;
+  }): LogAnomalyThresholds {
+    const parseNumber = (
+      raw: number | string | undefined,
+      fallback: number
+    ): number => {
+      const parsed = Number(String(raw ?? '').trim() || fallback);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    };
+
+    return {
+      longLoadingThresholdMs: parseNumber(
+        options.longLoadingThresholdMs,
+        5000
+      ),
+      focusLostThresholdMs: parseNumber(options.focusLostThresholdMs, 300000),
+      sessionSpanThresholdMs: parseNumber(
+        options.sessionSpanThresholdMs,
+        24 * 60 * 60 * 1000
+      ),
+      repeatedStartThreshold: Math.max(
+        2,
+        Math.round(parseNumber(options.repeatedStartThreshold, 2))
+      )
+    };
+  }
+
+  private expandLogAnomalyCodes(rawCodes: string[]): LogAnomalyCode[] {
+    const allCodes: LogAnomalyCode[] = [
+      'controller_error',
+      'missing_termination',
+      'connection_lost',
+      'timestamp_zero',
+      'player_stuck_loading',
+      'repeated_start',
+      'long_loading',
+      'timer_left_on_exit',
+      'timer_never_finished',
+      'focus_lost_long',
+      'unit_progress_incomplete',
+      'progress_incomplete',
+      'debug_command',
+      'session_span_long',
+      'orphan_logs'
+    ];
+    const groups: Record<string, LogAnomalyCode[]> = {
+      any: allCodes,
+      all: allCodes,
+      critical: [
+        'controller_error',
+        'missing_termination',
+        'connection_lost',
+        'player_stuck_loading'
+      ],
+      warning: [
+        'repeated_start',
+        'long_loading',
+        'timer_left_on_exit',
+        'timer_never_finished',
+        'focus_lost_long',
+        'unit_progress_incomplete',
+        'progress_incomplete'
+      ],
+      info: ['timestamp_zero', 'debug_command', 'session_span_long', 'orphan_logs'],
+      technical: [
+        'controller_error',
+        'connection_lost',
+        'timestamp_zero',
+        'player_stuck_loading',
+        'long_loading'
+      ],
+      incomplete: [
+        'missing_termination',
+        'unit_progress_incomplete',
+        'progress_incomplete',
+        'timer_left_on_exit',
+        'timer_never_finished',
+        'orphan_logs'
+      ],
+      connection: ['connection_lost'],
+      connection_lost: ['connection_lost'],
+      timer: ['timer_left_on_exit', 'timer_never_finished'],
+      focus: ['focus_lost_long'],
+      debug: ['debug_command'],
+      reloads: ['repeated_start'],
+      span: ['session_span_long']
+    };
+    const expanded = rawCodes.flatMap(raw => {
+      const key = raw.trim().toLowerCase();
+      if (groups[key]) {
+        return groups[key];
+      }
+      return allCodes.includes(key as LogAnomalyCode) ?
+        [key as LogAnomalyCode] :
+        [];
+    });
+
+    return Array.from(new Set(expanded));
+  }
+
+  private getLogAnomalySql(
+    code: LogAnomalyCode,
+    thresholds: LogAnomalyThresholds
+  ): string {
+    const longLoadingThreshold = Math.round(thresholds.longLoadingThresholdMs);
+    const focusLostThreshold = Math.round(thresholds.focusLostThresholdMs);
+    const sessionSpanThreshold = Math.round(thresholds.sessionSpanThresholdMs);
+    const repeatedStartThreshold = Math.round(
+      thresholds.repeatedStartThreshold
+    );
+
+    switch (code) {
+      case 'controller_error':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONTROLLER'
+            AND bl.parameter = 'ERROR'
+        )`;
+      case 'missing_termination':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl_started
+          WHERE bl_started.bookletid = "bookletEntity"."id"
+            AND bl_started.key = 'CONTROLLER'
+            AND bl_started.parameter IN ('LOADING', 'RUNNING')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_terminated
+          WHERE bl_terminated.bookletid = "bookletEntity"."id"
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+        )`;
+      case 'connection_lost':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONNECTION'
+            AND bl.parameter = 'LOST'
+        )`;
+      case 'timestamp_zero':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND COALESCE(bl.ts, 0) = 0
+        )
+        OR EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND COALESCE(ul.ts, 0) = 0
+        )`;
+      case 'player_stuck_loading':
+        return `EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+          GROUP BY u.id
+          HAVING COUNT(*) FILTER (
+            WHERE ul.key = 'PLAYER' AND ul.parameter = 'LOADING'
+          ) > COUNT(*) FILTER (
+            WHERE ul.key = 'PLAYER' AND ul.parameter = 'RUNNING'
+          )
+        )`;
+      case 'repeated_start':
+        return `(SELECT COUNT(*)
+          FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'CONTROLLER'
+            AND bl.parameter = 'LOADING'
+        ) >= ${repeatedStartThreshold}`;
+      case 'long_loading':
+        return `EXISTS (
+          SELECT 1 FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= ${longLoadingThreshold}
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM unit u
+          JOIN unitlog ul_started ON ul_started.unitid = u.id
+          JOIN unitlog ul_ended ON ul_ended.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND ul_started.key = 'STARTED'
+            AND ul_ended.key = 'ENDED'
+            AND (ul_ended.ts - ul_started.ts) >= ${longLoadingThreshold}
+        )`;
+      case 'timer_left_on_exit':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'TESTLETS_TIMELEFT'
+            AND bl.id = (
+              SELECT bl_last.id
+              FROM bookletlog bl_last
+              WHERE bl_last.bookletid = "bookletEntity"."id"
+                AND bl_last.key = 'TESTLETS_TIMELEFT'
+              ORDER BY bl_last.ts DESC NULLS LAST, bl_last.id DESC
+              LIMIT 1
+            )
+            AND COALESCE(bl.parameter, '') ~ ':[[:space:]]*(0\\.[0-9]*[1-9]|[1-9][0-9]*(\\.[0-9]+)?)'
+        )`;
+      case 'timer_never_finished':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'TESTLETS_TIMELEFT'
+            AND COALESCE(bl.parameter, '') ~ ':[[:space:]]*(0\\.[0-9]*[1-9]|[1-9][0-9]*(\\.[0-9]+)?)'
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_zero
+          WHERE bl_zero.bookletid = "bookletEntity"."id"
+            AND bl_zero.key = 'TESTLETS_TIMELEFT'
+            AND COALESCE(bl_zero.parameter, '') ~ ':[[:space:]]*0(\\.0+)?([,}])'
+        )`;
+      case 'focus_lost_long':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl_lost
+          WHERE bl_lost.bookletid = "bookletEntity"."id"
+            AND bl_lost.key = 'FOCUS'
+            AND bl_lost.parameter = 'HAS_NOT'
+            AND (
+              COALESCE(
+                (
+                  SELECT bl_has.ts
+                  FROM bookletlog bl_has
+                  WHERE bl_has.bookletid = bl_lost.bookletid
+                    AND bl_has.key = 'FOCUS'
+                    AND bl_has.parameter = 'HAS'
+                    AND (
+                      bl_has.ts > bl_lost.ts
+                      OR (bl_has.ts = bl_lost.ts AND bl_has.id > bl_lost.id)
+                    )
+                  ORDER BY bl_has.ts ASC NULLS LAST, bl_has.id ASC
+                  LIMIT 1
+                ),
+                (
+                  SELECT MAX(bl_any.ts)
+                  FROM bookletlog bl_any
+                  WHERE bl_any.bookletid = bl_lost.bookletid
+                ),
+                bl_lost.ts
+              ) - bl_lost.ts
+            ) >= ${focusLostThreshold}
+        )`;
+      case 'unit_progress_incomplete':
+        return `EXISTS (
+          SELECT 1 FROM unit u2
+          WHERE u2.bookletid = "bookletEntity"."id"
+            AND u2.alias IS NOT NULL
+        )
+        AND EXISTS (
+          SELECT 1 FROM unit u3
+          WHERE u3.bookletid = "bookletEntity"."id"
+            AND u3.alias IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM bookletlog bl
+              WHERE bl.bookletid = "bookletEntity"."id"
+                AND bl.key = 'CURRENT_UNIT_ID'
+                AND bl.parameter = u3.alias
+            )
+        )`;
+      case 'progress_incomplete':
+        return `EXISTS (
+          SELECT 1 FROM unit u
+          JOIN unitlog ul ON ul.unitid = u.id
+          WHERE u.bookletid = "bookletEntity"."id"
+            AND ul.key IN ('PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS')
+            AND ul.id = (
+              SELECT ul_last.id
+              FROM unitlog ul_last
+              WHERE ul_last.unitid = ul.unitid
+                AND ul_last.key = ul.key
+              ORDER BY ul_last.ts DESC NULLS LAST, ul_last.id DESC
+              LIMIT 1
+            )
+            AND COALESCE(ul.parameter, '') <> 'complete'
+        )`;
+      case 'debug_command':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+            AND bl.key = 'command executed'
+            AND COALESCE(bl.parameter, '') ILIKE '%debug%'
+        )`;
+      case 'session_span_long':
+        return `(
+          COALESCE("bookletEntity"."lastts", 0) > 0
+          AND COALESCE("bookletEntity"."firstts", 0) > 0
+          AND ("bookletEntity"."lastts" - "bookletEntity"."firstts") >= ${sessionSpanThreshold}
+        )`;
+      case 'orphan_logs':
+        return `EXISTS (
+          SELECT 1 FROM bookletlog bl
+          WHERE bl.bookletid = "bookletEntity"."id"
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM bookletlog bl_started
+          WHERE bl_started.bookletid = "bookletEntity"."id"
+            AND bl_started.key = 'CONTROLLER'
+            AND bl_started.parameter IN ('LOADING', 'RUNNING')
+        )`;
+      default:
+        return 'FALSE';
+    }
+  }
+
+  private applyLogAnomalyFilters(
+    qb: SelectQueryBuilder<unknown>,
+    codes: LogAnomalyCode[],
+    thresholds: LogAnomalyThresholds
+  ): void {
+    if (codes.length === 0) {
+      return;
+    }
+    const anomalySql = codes.map(code => `(${this.getLogAnomalySql(code, thresholds)})`);
+    qb.andWhere(`(${anomalySql.join(' OR ')})`);
+  }
+
+  private ensureLogAnomalyList(
+    map: Map<number, LogAnomalySummary[]>,
+    bookletId: number
+  ): LogAnomalySummary[] {
+    const existing = map.get(bookletId);
+    if (existing) {
+      return existing;
+    }
+    const created: LogAnomalySummary[] = [];
+    map.set(bookletId, created);
+    return created;
+  }
+
+  private addLogAnomaly(
+    map: Map<number, LogAnomalySummary[]>,
+    bookletId: number,
+    anomaly: LogAnomalySummary
+  ): void {
+    const list = this.ensureLogAnomalyList(map, bookletId);
+    const existing = list.find(a => a.code === anomaly.code);
+    if (existing) {
+      existing.count += anomaly.count;
+      return;
+    }
+    list.push(anomaly);
+  }
+
+  private getLogAnomalySortValue(severity: LogAnomalySeverity): number {
+    switch (severity) {
+      case 'critical':
+        return 0;
+      case 'warning':
+        return 1;
+      case 'info':
+        return 2;
+      default:
+        return 3;
+    }
+  }
+
+  private toLogTimestamp(value: number | string | null | undefined): number | null {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  }
+
+  private formatDurationForEvidence(ms: number): string {
+    const safeMs = Math.max(0, Math.round(ms));
+    const totalSeconds = Math.round(safeMs / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${String(seconds).padStart(2, '0')} min`;
+  }
+
+  private async findLogAnomaliesForBooklets(
+    bookletIds: number[],
+    thresholds: LogAnomalyThresholds
+  ): Promise<Map<number, LogAnomalySummary[]>> {
+    type SessionLogRow = {
+      id: number;
+      bookletid: number;
+      browser: string | null;
+      os: string | null;
+      screen: string | null;
+      ts: number | null;
+      loadcompletems: number | null;
+    };
+    const uniqueBookletIds = Array.from(
+      new Set(bookletIds.map(id => Number(id)).filter(id => id > 0))
+    );
+    const result = new Map<number, LogAnomalySummary[]>();
+    if (uniqueBookletIds.length === 0) {
+      return result;
+    }
+
+    const [bookletLogs, sessions, units] = await Promise.all([
+      this.bookletLogRepository
+        .createQueryBuilder('bookletLog')
+        .where('bookletLog.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select([
+          'bookletLog.id',
+          'bookletLog.bookletid',
+          'bookletLog.key',
+          'bookletLog.parameter',
+          'bookletLog.ts'
+        ])
+        .orderBy('bookletLog.bookletid', 'ASC')
+        .addOrderBy('bookletLog.ts', 'ASC', 'NULLS LAST')
+        .addOrderBy('bookletLog.id', 'ASC')
+        .getMany(),
+      this.sessionRepository
+        .createQueryBuilder('session')
+        .where('session.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select('session.id', 'id')
+        .addSelect('session.bookletid', 'bookletid')
+        .addSelect('session.browser', 'browser')
+        .addSelect('session.os', 'os')
+        .addSelect('session.screen', 'screen')
+        .addSelect('session.ts', 'ts')
+        .addSelect('session.loadcompletems', 'loadcompletems')
+        .orderBy('session.bookletid', 'ASC')
+        .addOrderBy('session.id', 'ASC')
+        .getRawMany<SessionLogRow>(),
+      this.unitRepository
+        .createQueryBuilder('unit')
+        .where('unit.bookletid IN (:...bookletIds)', {
+          bookletIds: uniqueBookletIds
+        })
+        .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias'])
+        .orderBy('unit.bookletid', 'ASC')
+        .addOrderBy('unit.id', 'ASC')
+        .getMany()
+    ]);
+
+    const unitIds = (units || []).map(unit => Number(unit.id)).filter(id => id > 0);
+    const unitLogs = unitIds.length > 0 ?
+      await this.unitLogRepository
+        .createQueryBuilder('unitLog')
+        .where('unitLog.unitid IN (:...unitIds)', { unitIds })
+        .select([
+          'unitLog.id',
+          'unitLog.unitid',
+          'unitLog.key',
+          'unitLog.parameter',
+          'unitLog.ts'
+        ])
+        .orderBy('unitLog.unitid', 'ASC')
+        .addOrderBy('unitLog.ts', 'ASC', 'NULLS LAST')
+        .addOrderBy('unitLog.id', 'ASC')
+        .getMany() :
+      [];
+
+    const logsByBooklet = new Map<number, BookletLog[]>();
+    const sessionsByBooklet = new Map<number, SessionLogRow[]>();
+    const unitsByBooklet = new Map<number, Unit[]>();
+    const unitLogsByUnit = new Map<number, UnitLog[]>();
+
+    (bookletLogs || []).forEach(log => {
+      const list = logsByBooklet.get(log.bookletid) || [];
+      list.push(log);
+      logsByBooklet.set(log.bookletid, list);
+    });
+    (sessions || []).forEach(session => {
+      const bookletId = Number(session.bookletid);
+      const list = sessionsByBooklet.get(bookletId) || [];
+      list.push(session);
+      sessionsByBooklet.set(bookletId, list);
+    });
+    (units || []).forEach(unit => {
+      const list = unitsByBooklet.get(unit.bookletid) || [];
+      list.push(unit);
+      unitsByBooklet.set(unit.bookletid, list);
+    });
+    (unitLogs || []).forEach(log => {
+      const list = unitLogsByUnit.get(log.unitid) || [];
+      list.push(log);
+      unitLogsByUnit.set(log.unitid, list);
+    });
+
+    const nonZeroTimerPattern =
+      /:\s*(?:0\.[0-9]*[1-9]|[1-9][0-9]*(?:\.[0-9]+)?)/;
+    const zeroTimerPattern = /:\s*0(?:\.0+)?(?=[,}])/;
+
+    uniqueBookletIds.forEach(bookletId => {
+      const logs = logsByBooklet.get(bookletId) || [];
+      const bookletSessions = sessionsByBooklet.get(bookletId) || [];
+      const bookletUnits = unitsByBooklet.get(bookletId) || [];
+      const controllerLogs = logs.filter(log => log.key === 'CONTROLLER');
+      const startedLogs = controllerLogs.filter(log => ['LOADING', 'RUNNING'].includes(String(log.parameter || '')));
+      const terminatedLogs = controllerLogs.filter(log => log.parameter === 'TERMINATED');
+      const allTimestamps = [
+        ...logs.map(log => this.toLogTimestamp(log.ts)),
+        ...bookletSessions.map(session => this.toLogTimestamp(session.ts))
+      ].filter((ts): ts is number => ts !== null);
+
+      const controllerError = controllerLogs.find(log => log.parameter === 'ERROR');
+      if (controllerError) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'controller_error',
+          severity: 'critical',
+          label: 'Controller-Fehler',
+          evidence: `CONTROLLER : ERROR bei ${controllerError.ts || 'unbekannter Zeit'}`,
+          count: 1
+        });
+      }
+
+      if (startedLogs.length > 0 && terminatedLogs.length === 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'missing_termination',
+          severity: 'critical',
+          label: 'Kein Abschluss',
+          evidence: 'CONTROLLER wurde gestartet, aber TERMINATED fehlt.',
+          count: 1
+        });
+      }
+
+      const connectionLostCount = logs.filter(
+        log => log.key === 'CONNECTION' && log.parameter === 'LOST'
+      ).length;
+      if (connectionLostCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'connection_lost',
+          severity: 'critical',
+          label: 'Verbindung verloren',
+          evidence: `${connectionLostCount} CONNECTION : LOST Eintrag/Einträge`,
+          count: connectionLostCount
+        });
+      }
+
+      const unitLogZeroCount = bookletUnits
+        .flatMap(unit => unitLogsByUnit.get(unit.id) || [])
+        .filter(log => Number(log.ts || 0) === 0).length;
+      const timestampZeroCount =
+        logs.filter(log => Number(log.ts || 0) === 0).length + unitLogZeroCount;
+      if (timestampZeroCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timestamp_zero',
+          severity: 'info',
+          label: 'Timestamp 0',
+          evidence: `${timestampZeroCount} Logeintrag/Logeinträge ohne echte Clientzeit`,
+          count: timestampZeroCount
+        });
+      }
+
+      const loadingCount = controllerLogs.filter(log => log.parameter === 'LOADING').length;
+      if (loadingCount >= thresholds.repeatedStartThreshold) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'repeated_start',
+          severity: 'warning',
+          label: 'Mehrfach gestartet',
+          evidence: `${loadingCount} CONTROLLER : LOADING Einträge`,
+          count: loadingCount
+        });
+      }
+
+      const maxLoadTime = Math.max(
+        0,
+        ...bookletSessions.map(session => Number(session.loadcompletems || 0))
+      );
+      if (maxLoadTime >= thresholds.longLoadingThresholdMs) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'long_loading',
+          severity: 'warning',
+          label: 'Lange Ladezeit',
+          evidence: `Maximale LOADCOMPLETE-Ladezeit ${Math.round(maxLoadTime)} ms`,
+          count: bookletSessions.filter(
+            session => Number(session.loadcompletems || 0) >= thresholds.longLoadingThresholdMs
+          ).length
+        });
+      }
+
+      const timerLogs = logs.filter(log => log.key === 'TESTLETS_TIMELEFT');
+      const lastTimer = [...timerLogs].sort((a, b) => {
+        const tsDelta = Number(b.ts || 0) - Number(a.ts || 0);
+        return tsDelta || (Number(b.id || 0) - Number(a.id || 0));
+      })[0];
+      if (
+        lastTimer &&
+        nonZeroTimerPattern.test(String(lastTimer.parameter || ''))
+      ) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timer_left_on_exit',
+          severity: 'warning',
+          label: 'Restzeit am Ende',
+          evidence: `Letzter Timerstatus: ${lastTimer.parameter}`,
+          count: 1
+        });
+      }
+      if (
+        timerLogs.length > 0 &&
+        timerLogs.some(log => nonZeroTimerPattern.test(String(log.parameter || ''))) &&
+        !timerLogs.some(log => zeroTimerPattern.test(String(log.parameter || '')))
+      ) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'timer_never_finished',
+          severity: 'warning',
+          label: 'Timer nicht beendet',
+          evidence: 'Timer wurde gesetzt, aber kein 0-Status gefunden.',
+          count: 1
+        });
+      }
+
+      const focusLogs = logs.filter(log => log.key === 'FOCUS');
+      let currentFocusLost: BookletLog | null = null;
+      let maxFocusLostMs = 0;
+      focusLogs.forEach(log => {
+        if (log.parameter === 'HAS_NOT' && currentFocusLost === null) {
+          currentFocusLost = log;
+          return;
+        }
+        if (log.parameter === 'HAS' && currentFocusLost !== null) {
+          const startTs = this.toLogTimestamp(currentFocusLost.ts);
+          const endTs = this.toLogTimestamp(log.ts);
+          if (startTs !== null && endTs !== null && endTs >= startTs) {
+            maxFocusLostMs = Math.max(maxFocusLostMs, endTs - startTs);
+          }
+          currentFocusLost = null;
+        }
+      });
+      if (currentFocusLost !== null && allTimestamps.length > 0) {
+        const startTs = this.toLogTimestamp(currentFocusLost.ts);
+        const endTs = Math.max(...allTimestamps);
+        if (startTs !== null && endTs >= startTs) {
+          maxFocusLostMs = Math.max(maxFocusLostMs, endTs - startTs);
+        }
+      }
+      if (maxFocusLostMs >= thresholds.focusLostThresholdMs) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'focus_lost_long',
+          severity: 'warning',
+          label: 'Langer Fokusverlust',
+          evidence: `Längste Fokus-Abwesenheit ${this.formatDurationForEvidence(maxFocusLostMs)}`,
+          count: 1
+        });
+      }
+
+      const visitedUnitAliases = new Set(
+        logs
+          .filter(log => log.key === 'CURRENT_UNIT_ID')
+          .map(log => String(log.parameter || '').trim())
+          .filter(Boolean)
+      );
+      const unitAliases = bookletUnits
+        .map(unit => String(unit.alias || '').trim())
+        .filter(Boolean);
+      const missingUnitAliases = unitAliases.filter(alias => !visitedUnitAliases.has(alias));
+      if (unitAliases.length > 0 && missingUnitAliases.length > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'unit_progress_incomplete',
+          severity: 'warning',
+          label: 'Units fehlen',
+          evidence: `${missingUnitAliases.length} von ${unitAliases.length} Unit-Aliasen ohne CURRENT_UNIT_ID`,
+          count: missingUnitAliases.length
+        });
+      }
+
+      let incompleteUnitProgressCount = 0;
+      let playerStuckCount = 0;
+      bookletUnits.forEach(unit => {
+        const logsForUnit = unitLogsByUnit.get(unit.id) || [];
+        ['PRESENTATION_PROGRESS', 'RESPONSE_PROGRESS'].forEach(key => {
+          const progressLogs = logsForUnit
+            .filter(log => log.key === key)
+            .sort((a, b) => {
+              const tsDelta = Number(b.ts || 0) - Number(a.ts || 0);
+              return tsDelta || (Number(b.id || 0) - Number(a.id || 0));
+            });
+          const lastProgress = progressLogs[0];
+          if (lastProgress && lastProgress.parameter !== 'complete') {
+            incompleteUnitProgressCount += 1;
+          }
+        });
+
+        const playerLoading = logsForUnit.filter(
+          log => log.key === 'PLAYER' && log.parameter === 'LOADING'
+        ).length;
+        const playerRunning = logsForUnit.filter(
+          log => log.key === 'PLAYER' && log.parameter === 'RUNNING'
+        ).length;
+        if (playerLoading > playerRunning) {
+          playerStuckCount += 1;
+        }
+      });
+      if (incompleteUnitProgressCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'progress_incomplete',
+          severity: 'warning',
+          label: 'Progress unvollständig',
+          evidence: `${incompleteUnitProgressCount} finale Unit-Progress-Werte nicht complete`,
+          count: incompleteUnitProgressCount
+        });
+      }
+      if (playerStuckCount > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'player_stuck_loading',
+          severity: 'critical',
+          label: 'Player hängt',
+          evidence: `${playerStuckCount} Unit(s) mit mehr PLAYER=LOADING als PLAYER=RUNNING`,
+          count: playerStuckCount
+        });
+      }
+
+      const debugCommands = logs.filter(
+        log => log.key === 'command executed' &&
+          String(log.parameter || '').toLowerCase().includes('debug')
+      );
+      if (debugCommands.length > 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'debug_command',
+          severity: 'info',
+          label: 'Debug-Befehl',
+          evidence: `${debugCommands.length} command executed : debug Eintrag/Einträge`,
+          count: debugCommands.length
+        });
+      }
+
+      if (allTimestamps.length > 1) {
+        const span = Math.max(...allTimestamps) - Math.min(...allTimestamps);
+        if (span >= thresholds.sessionSpanThresholdMs) {
+          this.addLogAnomaly(result, bookletId, {
+            code: 'session_span_long',
+            severity: 'info',
+            label: 'Lange Zeitspanne',
+            evidence: `Logs verteilen sich über ${this.formatDurationForEvidence(span)}`,
+            count: 1
+          });
+        }
+      }
+
+      if (logs.length > 0 && startedLogs.length === 0) {
+        this.addLogAnomaly(result, bookletId, {
+          code: 'orphan_logs',
+          severity: 'info',
+          label: 'Logs ohne Start',
+          evidence: 'Booklet-Logs vorhanden, aber kein CONTROLLER-Start gefunden.',
+          count: 1
+        });
+      }
+    });
+
+    result.forEach(list => list.sort((a, b) => {
+      const severityDelta =
+        this.getLogAnomalySortValue(a.severity) -
+        this.getLogAnomalySortValue(b.severity);
+      return severityDelta || a.label.localeCompare(b.label);
+    }));
+
+    return result;
+  }
+
+  async getLogAnomalySummary(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: number | string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
+    } = {}
+  ): Promise<LogAnomalyDashboardSummary> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const emptySummary: LogAnomalyDashboardSummary = {
+      totalBooklets: 0,
+      affectedBooklets: 0,
+      criticalBooklets: 0,
+      warningBooklets: 0,
+      infoBooklets: 0,
+      totalAnomalyRules: 0,
+      totalAnomalyEvents: 0,
+      byCode: {}
+    };
+
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const qb = this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+
+    this.applyIgnoredBookletsToQuery(qb, exclusions.ignoredBooklets, 'bookletinfo');
+
+    const bookletRows = await qb.getRawMany<{ id: number | string }>();
+    const bookletIds = bookletRows
+      .map(row => Number(row.id))
+      .filter(id => Number.isFinite(id) && id > 0);
+
+    if (bookletIds.length === 0) {
+      return emptySummary;
+    }
+
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      bookletIds,
+      this.buildLogAnomalyThresholds(options)
+    );
+
+    const summary: LogAnomalyDashboardSummary = {
+      ...emptySummary,
+      totalBooklets: bookletIds.length,
+      byCode: {}
+    };
+
+    anomaliesByBooklet.forEach(anomalies => {
+      if (anomalies.length === 0) {
+        return;
+      }
+      summary.affectedBooklets += 1;
+      summary.totalAnomalyRules += anomalies.length;
+
+      if (anomalies.some(anomaly => anomaly.severity === 'critical')) {
+        summary.criticalBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'warning')) {
+        summary.warningBooklets += 1;
+      }
+      if (anomalies.some(anomaly => anomaly.severity === 'info')) {
+        summary.infoBooklets += 1;
+      }
+
+      anomalies.forEach(anomaly => {
+        summary.totalAnomalyEvents += anomaly.count;
+        summary.byCode[anomaly.code] =
+          (summary.byCode[anomaly.code] || 0) + 1;
+      });
+    });
+
+    return summary;
+  }
+
+  async getLogAnomalyDetails(
+    workspaceId: number,
+    options: {
+      longLoadingThresholdMs?: number | string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
+      limit?: number | string;
+    } = {}
+  ): Promise<LogAnomalyDetailsResponse> {
+    if (!workspaceId || workspaceId <= 0) {
+      throw new Error('Invalid workspaceId provided');
+    }
+
+    const parsedLimit = Number(String(options.limit ?? '').trim() || 200);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ?
+      Math.min(Math.round(parsedLimit), 1000) :
+      200;
+
+    const exclusions =
+      await this.workspaceExclusionService.resolveExclusionsForQueries(
+        workspaceId
+      );
+    const rows = await this.bookletRepository
+      .createQueryBuilder('bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'bookletId')
+      .addSelect('bookletinfo.name', 'booklet')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.code', 'code')
+      .addSelect('person.group', 'group')
+      .addSelect('person.login', 'login')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .orderBy('person.code', 'ASC')
+      .addOrderBy('bookletinfo.name', 'ASC')
+      .getRawMany<{
+      bookletId: number | string;
+      booklet: string | null;
+      personId: number | string;
+      code: string | null;
+      group: string | null;
+      login: string | null;
+    }>();
+
+    const ignoredBooklets = new Set(
+      exclusions.ignoredBooklets.map(normalizeExclusionBookletId)
+    );
+    const filteredRows = rows.filter(row => {
+      if (ignoredBooklets.size === 0) {
+        return true;
+      }
+      const normalizedBooklet = normalizeExclusionBookletId(
+        String(row.booklet || '')
+      );
+      return !ignoredBooklets.has(normalizedBooklet);
+    });
+    const bookletIds = filteredRows
+      .map(row => Number(row.bookletId))
+      .filter(id => Number.isFinite(id) && id > 0);
+
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      bookletIds,
+      this.buildLogAnomalyThresholds(options)
+    );
+
+    const details = filteredRows
+      .map((row): LogAnomalyDetailRow | null => {
+        const bookletId = Number(row.bookletId);
+        const anomalies = anomaliesByBooklet.get(bookletId) || [];
+        if (anomalies.length === 0) {
+          return null;
+        }
+        const maxSeverity = anomalies.reduce<LogAnomalySeverity>(
+          (current, anomaly) => {
+            const anomalySort = this.getLogAnomalySortValue(anomaly.severity);
+            const currentSort = this.getLogAnomalySortValue(current);
+            return anomalySort < currentSort ? anomaly.severity : current;
+          },
+          'info'
+        );
+        return {
+          bookletId,
+          booklet: String(row.booklet || ''),
+          personId: Number(row.personId),
+          code: String(row.code || ''),
+          group: String(row.group || ''),
+          login: String(row.login || ''),
+          maxSeverity,
+          anomalies
+        };
+      })
+      .filter((row): row is LogAnomalyDetailRow => row !== null)
+      .sort((a, b) => {
+        const severityDelta =
+          this.getLogAnomalySortValue(a.maxSeverity) -
+          this.getLogAnomalySortValue(b.maxSeverity);
+        return severityDelta ||
+          a.code.localeCompare(b.code) ||
+          a.booklet.localeCompare(b.booklet);
+      });
+
+    return {
+      total: details.length,
+      data: details.slice(0, limit)
+    };
   }
 
   async invalidateWorkspaceStatsCache(workspaceId: number): Promise<void> {
@@ -1107,10 +2125,15 @@ export class WorkspaceTestResultsService {
       sessionOs?: string;
       sessionScreens?: string;
       sessionIds?: string;
+      logAnomalies?: string;
+      focusLostThresholdMs?: number | string;
+      sessionSpanThresholdMs?: number | string;
+      repeatedStartThreshold?: number | string;
     }
   ): Promise<
     [
       Array<{
+        bookletId: number;
         responseId: number;
         unitId: number;
         personId: number;
@@ -1123,6 +2146,7 @@ export class WorkspaceTestResultsService {
         responseStatus: string;
         responseValue: string;
         tags: string[];
+        logAnomalies: LogAnomalySummary[];
       }>,
       number
     ]
@@ -1268,6 +2292,15 @@ export class WorkspaceTestResultsService {
     const sessionIds = parseCsv(options.sessionIds)
       .map(v => Number(v))
       .filter(v => Number.isFinite(v) && v > 0);
+    const logAnomalyThresholds = this.buildLogAnomalyThresholds({
+      longLoadingThresholdMs,
+      focusLostThresholdMs: options.focusLostThresholdMs,
+      sessionSpanThresholdMs: options.sessionSpanThresholdMs,
+      repeatedStartThreshold: options.repeatedStartThreshold
+    });
+    const logAnomalyCodes = this.expandLogAnomalyCodes(
+      parseCsv(options.logAnomalies)
+    );
 
     const parseResponseStatus = (s: string): number | null => {
       const v = (s || '').trim();
@@ -1506,7 +2539,13 @@ export class WorkspaceTestResultsService {
 
     if (longLoadingOnly) {
       qb.andWhere(
-        `EXISTS (
+        `(EXISTS (
+          SELECT 1
+          FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
+        )
+        OR EXISTS (
           SELECT 1
           FROM unitlog ul_started
           JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
@@ -1514,10 +2553,12 @@ export class WorkspaceTestResultsService {
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-        )`,
+        ))`,
         { longLoadingThresholdMs }
       );
     }
+
+    this.applyLogAnomalyFilters(qb, logAnomalyCodes, logAnomalyThresholds);
 
     const countQb = this.responseRepository
       .createQueryBuilder('response')
@@ -1615,7 +2656,13 @@ export class WorkspaceTestResultsService {
 
     if (longLoadingOnly) {
       countQb.andWhere(
-        `EXISTS (
+        `(EXISTS (
+          SELECT 1
+          FROM session s
+          WHERE s.bookletid = "bookletEntity"."id"
+            AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
+        )
+        OR EXISTS (
           SELECT 1
           FROM unitlog ul_started
           JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
@@ -1623,10 +2670,16 @@ export class WorkspaceTestResultsService {
             AND ul_started.key = 'STARTED'
             AND ul_ended.key = 'ENDED'
             AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-        )`,
+        ))`,
         { longLoadingThresholdMs }
       );
     }
+
+    this.applyLogAnomalyFilters(
+      countQb,
+      logAnomalyCodes,
+      logAnomalyThresholds
+    );
 
     if (processingDurations.length > 0) {
       countQb.andWhere(
@@ -1731,6 +2784,7 @@ export class WorkspaceTestResultsService {
 
     const raw = await qb
       .select([
+        'bookletEntity.id AS "bookletId"',
         'response.id AS "responseId"',
         'unit.id AS "unitId"',
         'person.id AS "personId"',
@@ -1747,6 +2801,7 @@ export class WorkspaceTestResultsService {
       .setParameter('maxResponseValueLen', MAX_RESPONSE_VALUE_LEN)
       .groupBy('response.id')
       .addGroupBy('unit.id')
+      .addGroupBy('bookletEntity.id')
       .addGroupBy('person.id')
       .addGroupBy('bookletinfo.name')
       .addGroupBy('unit.alias')
@@ -1776,6 +2831,7 @@ export class WorkspaceTestResultsService {
       const statusNum = Number(r.responseStatus);
       const statusLabel = statusNumberToString(statusNum);
       return {
+        bookletId: Number(r.bookletId),
         responseId: Number(r.responseId),
         unitId: Number(r.unitId),
         personId: Number(r.personId),
@@ -1787,11 +2843,23 @@ export class WorkspaceTestResultsService {
         response: String(r.response || ''),
         responseStatus: statusLabel || String(r.responseStatus ?? ''),
         responseValue: String(r.responseValue ?? ''),
-        tags: tagList
+        tags: tagList,
+        logAnomalies: []
       };
     });
 
-    return [mapped, total];
+    const anomaliesByBooklet = await this.findLogAnomaliesForBooklets(
+      mapped.map(row => row.bookletId),
+      logAnomalyThresholds
+    );
+
+    return [
+      mapped.map(row => ({
+        ...row,
+        logAnomalies: anomaliesByBooklet.get(row.bookletId) || []
+      })),
+      total
+    ];
   }
 
   async findFlatResponseFrequencies(
@@ -4883,26 +5951,30 @@ export class WorkspaceTestResultsService {
   async exportTestResults(
     workspaceId: number,
     res: Response,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    }
+    filters?: TestResultsExportFilters
   ): Promise<void> {
     this.logger.log(`Exporting test results for workspace ${workspaceId}`);
     await this.exportTestResultsToStream(workspaceId, res, filters);
   }
 
+  private getLogAnomalyExportColumns(
+    anomalies: LogAnomalySummary[]
+  ): Record<string, string | number> {
+    return {
+      log_anomaly_count: anomalies.reduce(
+        (sum, anomaly) => sum + anomaly.count,
+        0
+      ),
+      log_anomaly_max_severity: anomalies[0]?.severity || '',
+      log_anomaly_codes: anomalies.map(anomaly => anomaly.code).join('|'),
+      log_anomaly_labels: anomalies.map(anomaly => anomaly.label).join('|')
+    };
+  }
+
   async exportTestResultsToFile(
     workspaceId: number,
     filePath: string,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    },
+    filters?: TestResultsExportFilters,
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
     this.logger.log(
@@ -4920,25 +5992,32 @@ export class WorkspaceTestResultsService {
   async exportTestResultsToStream(
     workspaceId: number,
     stream: Writable,
-    filters?: {
-      groupNames?: string[];
-      bookletNames?: string[];
-      unitNames?: string[];
-      personIds?: number[];
-    },
+    filters?: TestResultsExportFilters,
     progressCallback?: (progress: number) => Promise<void> | void
   ): Promise<void> {
+    const includeLogAnomalies = filters?.includeLogAnomalies === true;
+    const headers = [
+      'groupname',
+      'loginname',
+      'code',
+      'bookletname',
+      'unitname',
+      'responses',
+      'laststate',
+      'originalUnitId'
+    ];
+
+    if (includeLogAnomalies) {
+      headers.push(
+        'log_anomaly_count',
+        'log_anomaly_max_severity',
+        'log_anomaly_codes',
+        'log_anomaly_labels'
+      );
+    }
+
     const csvStream = csv.format({
-      headers: [
-        'groupname',
-        'loginname',
-        'code',
-        'bookletname',
-        'unitname',
-        'responses',
-        'laststate',
-        'originalUnitId'
-      ],
+      headers,
       delimiter: ';',
       quote: '"'
     });
@@ -5050,6 +6129,13 @@ export class WorkspaceTestResultsService {
         .where('laststate.unitid IN (:...unitIds)', { unitIds })
         .getMany();
 
+      const anomaliesByBookletId = includeLogAnomalies ?
+        await this.findLogAnomaliesForBooklets(
+          Array.from(new Set(units.map(unit => unit.booklet.id))),
+          this.buildLogAnomalyThresholds({})
+        ) :
+        new Map<number, LogAnomalySummary[]>();
+
       // Create maps for quick lookup
       const responsesByUnitId = new Map<number, ResponseEntity[]>();
       const chunksByUnitId = new Map<number, ChunkEntity[]>();
@@ -5148,7 +6234,7 @@ export class WorkspaceTestResultsService {
           lastStateMap[ls.key] = ls.value;
         });
 
-        const canContinue = csvStream.write({
+        const row: Record<string, unknown> = {
           groupname: unit.booklet.person.group,
           loginname: unit.booklet.person.login,
           code: unit.booklet.person.code,
@@ -5157,7 +6243,18 @@ export class WorkspaceTestResultsService {
           responses: JSON.stringify(exportChunks),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
-        });
+        };
+
+        if (includeLogAnomalies) {
+          Object.assign(
+            row,
+            this.getLogAnomalyExportColumns(
+              anomaliesByBookletId.get(unit.booklet.id) || []
+            )
+          );
+        }
+
+        const canContinue = csvStream.write(row);
 
         if (!canContinue) {
           await new Promise(resolve => {

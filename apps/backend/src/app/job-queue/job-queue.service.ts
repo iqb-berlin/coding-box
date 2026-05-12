@@ -134,6 +134,7 @@ export interface ExportJobData {
     bookletNames?: string[];
     unitNames?: string[];
     personIds?: number[];
+    includeLogAnomalies?: boolean;
   };
   jobDefinitionIds?: number[];
   coderTrainingIds?: number[];
