@@ -60,6 +60,10 @@ describe('TestResultsUploadResultDialogComponent', () => {
         }
       },
       logMetrics: {
+        bookletsWithLogs: 1,
+        totalBooklets: 2,
+        unitsWithLogs: 1,
+        totalUnits: 2,
         bookletDetails: [{ name: 'B2', hasLog: false }, { name: 'B1', hasLog: true }],
         unitDetails: [
           { bookletName: 'B1', unitKey: 'U2', hasLog: false },
@@ -95,6 +99,7 @@ describe('TestResultsUploadResultDialogComponent', () => {
     expect(component.getCategoryLabel('csv_columns')).toBe('CSV-Spalten fehlen');
     expect(component.getCategoryLabel('no_logs_saved')).toBe('Keine Logs gespeichert');
     expect(component.getCategoryLabel('custom')).toBe('custom');
+    expect(component.emptyIssuesMessage).toBe('Keine technischen Importprobleme gefunden.');
     expect(component.issueSummaryEntries).toEqual([
       { category: 'other', label: 'Sonstiges', count: 1 },
       { category: 'unit_not_found', label: 'Unit nicht gefunden', count: 1 }
@@ -109,11 +114,21 @@ describe('TestResultsUploadResultDialogComponent', () => {
     component.selectedCategory = 'unit_not_found';
     expect(component.filteredIssues).toHaveLength(1);
     expect(component.issueExportButtonLabel).toBe('Gefilterte exportieren (1)');
+    expect(component.emptyIssuesMessage).toBe('Keine passenden technischen Importprobleme gefunden.');
     expect(component.buildIssueExportCsv()).not.toContain('"Other problem"');
     component.filterText = 'missing';
     expect(component.filteredIssues).toHaveLength(1);
     component.filterText = 'nomatch';
     expect(component.filteredIssues).toHaveLength(0);
+
+    expect(component.hasAnyLogDetails).toBe(true);
+    expect(component.detailTabLabel).toBe('Details (2)');
+    expect(component.emptyDetailMessage).toBe('Keine Booklets gefunden.');
+    component.detailStatusFilter = 'withLogs';
+    expect(component.filteredBookletDetails).toEqual([{ name: 'B1', hasLog: true }]);
+    component.detailStatusFilter = 'withoutLogs';
+    expect(component.filteredBookletDetails).toEqual([{ name: 'B2', hasLog: false }]);
+    component.detailStatusFilter = 'all';
 
     component.detailFilterText = 'b1';
     expect(component.filteredBookletDetails).toEqual([{ name: 'B1', hasLog: true }]);

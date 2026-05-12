@@ -268,12 +268,12 @@
               </button>
               <button mat-icon-button (click)="
                   $event.stopPropagation(); openBookletLogsFromFlatRow(row)
-                " matTooltip="Logs (Testheft)">
-                <mat-icon>description</mat-icon>
+                " matTooltip="Logs (Testheft)" aria-label="Logs des Testhefts anzeigen">
+                <mat-icon>article</mat-icon>
               </button>
               <button mat-icon-button (click)="$event.stopPropagation(); openUnitLogsFromFlatRow(row)"
-                matTooltip="Logs (Aufgabe)">
-                <mat-icon>description</mat-icon>
+                matTooltip="Logs (Aufgabe)" aria-label="Logs der Aufgabe anzeigen">
+                <mat-icon>fact_check</mat-icon>
               </button>
               <button mat-icon-button (click)="$event.stopPropagation(); openNotesFromFlatRow(row)" matTooltip="Notizen"
                 style="position: relative">
