@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusNumberToString } from '../../utils/response-status-converter';
+import {
+  statusNumberToString,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
 import { mapCodeForExport } from '../../../utils/coding-utils';
 import { CodingFileCacheService } from './coding-file-cache.service';
 
@@ -32,6 +35,17 @@ export class CodingItemBuilderService {
   private readonly logger = new Logger(CodingItemBuilderService.name);
 
   constructor(private readonly fileCacheService: CodingFileCacheService) {}
+
+  private formatStatus(status: number | string | null | undefined): string {
+    if (status === null || status === undefined || status === '') {
+      return '';
+    }
+
+    const statusNumber = typeof status === 'number' ?
+      status :
+      statusStringToNumber(String(status));
+    return statusNumber === null ? '' : statusNumberToString(statusNumber) || '';
+  }
 
   /**
    * Build a basic CodingItem from a ResponseEntity.
@@ -152,43 +166,25 @@ export class CodingItemBuilderService {
 
       // Add version-specific data (include all lower versions) and convert status numbers to strings
       if (targetVersion === 'v1') {
-        baseItem.status_v1 =
-            response.status_v1 != null ?
-              statusNumberToString(response.status_v1) || '' :
-              '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 ?? '';
       } else if (targetVersion === 'v2') {
-        baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 ?? '';
-        baseItem.status_v2 =
-          response.status_v2 != null ?
-            statusNumberToString(response.status_v2) || '' :
-            '';
+        baseItem.status_v2 = this.formatStatus(response.status_v2);
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
         baseItem.score_v2 = response.score_v2 ?? '';
       } else {
         // v3
-        baseItem.status_v1 =
-          response.status_v1 != null ?
-            statusNumberToString(response.status_v1) || '' :
-            '';
+        baseItem.status_v1 = this.formatStatus(response.status_v1);
         baseItem.code_v1 = mapCodeForExport(response.code_v1) ?? '';
         baseItem.score_v1 = response.score_v1 ?? '';
-        baseItem.status_v2 =
-          response.status_v2 != null ?
-            statusNumberToString(response.status_v2) || '' :
-            '';
+        baseItem.status_v2 = this.formatStatus(response.status_v2);
         baseItem.code_v2 = mapCodeForExport(response.code_v2) ?? '';
         baseItem.score_v2 = response.score_v2 ?? '';
-        baseItem.status_v3 =
-          response.status_v3 != null ?
-            statusNumberToString(response.status_v3) || '' :
-            '';
+        baseItem.status_v3 = this.formatStatus(response.status_v3);
         baseItem.code_v3 = mapCodeForExport(response.code_v3) ?? '';
         baseItem.score_v3 = response.score_v3 ?? '';
       }

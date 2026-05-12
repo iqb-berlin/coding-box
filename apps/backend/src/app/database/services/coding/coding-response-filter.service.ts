@@ -2,7 +2,10 @@ import { Inject, Injectable, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
-import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';
+import {
+  statusStringToNumber,
+  STATISTICS_IGNORED_STATUSES
+} from '../../utils/response-status-converter';
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -114,8 +117,12 @@ export class CodingResponseFilterService {
 
     // Establish base conditions
     if (version) {
-      queryBuilder.where(`response.status_${version} IS NOT NULL`)
-        .andWhere(`response.status_${version} NOT IN (:...excludedStatuses)`, { excludedStatuses: EXCLUDED_STATUSES });
+      const effectiveStatusExpression = this.getEffectiveCodingStatusExpression(version);
+      queryBuilder.where(`${effectiveStatusExpression} IS NOT NULL`)
+        .andWhere(
+          `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
+          { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
+        );
     } else {
       queryBuilder.where('response.status_v1 = :status', {
         status: statusStringToNumber(status)
@@ -166,6 +173,18 @@ export class CodingResponseFilterService {
 
   private toVariablePairKey(unitName: string, variableId: string): string {
     return `${unitName}\u001F${variableId}`;
+  }
+
+  private getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3'): string {
+    if (version === 'v2') {
+      return 'COALESCE(response.status_v2, response.status_v1)';
+    }
+
+    if (version === 'v3') {
+      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
+    }
+
+    return 'response.status_v1';
   }
 
   /**

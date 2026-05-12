@@ -165,4 +165,47 @@ describe('CodingListService', () => {
 
     expect(item).not.toHaveProperty('value');
   });
+
+  it('should convert string status values in versioned coding items', async () => {
+    const fileCacheService = {
+      loadVoudData: jest.fn().mockResolvedValue(new Map())
+    } as unknown as CodingFileCacheService;
+    const itemBuilderService = new CodingItemBuilderService(fileCacheService);
+    const response = {
+      id: 1,
+      variableid: 'VAR1',
+      value: 'Antworttext',
+      status_v1: 'CODING_INCOMPLETE',
+      code_v1: null,
+      score_v1: null,
+      status_v2: 5,
+      code_v2: null,
+      score_v2: null,
+      status_v3: '5',
+      code_v3: null,
+      score_v3: null,
+      unit: {
+        name: 'UNIT1',
+        alias: 'Unit 1',
+        booklet: {
+          person: { login: 'login', code: 'code', group: 'group' },
+          bookletinfo: { name: 'BOOKLET1' }
+        }
+      }
+    } as unknown as ResponseEntity;
+
+    await expect(
+      itemBuilderService.buildCodingItemWithVersions(
+        response,
+        'v3',
+        'token',
+        'http://server',
+        1
+      )
+    ).resolves.toMatchObject({
+      status_v1: 'CODING_INCOMPLETE',
+      status_v2: 'CODING_COMPLETE',
+      status_v3: 'CODING_COMPLETE'
+    });
+  });
 });
