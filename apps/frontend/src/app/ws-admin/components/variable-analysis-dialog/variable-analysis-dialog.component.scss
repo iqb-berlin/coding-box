@@ -51,13 +51,22 @@
     font-size: 16px;
     color: #666;
   }
+
+  button {
+    margin-top: 8px;
+  }
 }
 
-.search-container {
+.result-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 16px;
 
   .search-field {
-    width: 100%;
+    flex: 1 1 320px;
+    min-width: 260px;
   }
 }
 
@@ -109,7 +118,8 @@
     gap: 8px;
     margin-bottom: 14px;
 
-    span {
+    .summary-chip,
+    .status-chip-list {
       background-color: #fff;
       border: 1px solid #e0e0e0;
       border-radius: 4px;
@@ -117,10 +127,35 @@
       font-size: 13px;
       line-height: 1.3;
       max-width: 100%;
-      overflow: hidden;
       padding: 6px 8px;
+    }
+
+    .summary-chip {
+      overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .status-chip-list {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .status-chip {
+      background-color: #eef4ff;
+      border: 1px solid #d6e4ff;
+      border-radius: 4px;
+      color: #254a7d;
+      display: inline-flex;
+      font-size: 12px;
+      line-height: 1.2;
+      padding: 3px 6px;
+    }
+
+    .muted {
+      color: #777;
     }
   }
 }
@@ -154,6 +189,12 @@
     font-style: italic;
     color: #888;
   }
+}
+
+.values-hidden-note {
+  color: #666;
+  font-size: 12px;
+  margin-top: 8px;
 }
 
 .dialog-actions {
@@ -256,12 +297,15 @@
 
 .actions-container {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-bottom: 16px;
 }
 
 .top-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
   margin-bottom: 8px;
 

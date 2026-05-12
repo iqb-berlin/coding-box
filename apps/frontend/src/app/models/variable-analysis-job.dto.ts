@@ -1,5 +1,5 @@
 export interface VariableAnalysisJobDto {
-  id: number;
+  id: number | string;
   workspace_id: number;
 
   /**
@@ -11,7 +11,7 @@ export interface VariableAnalysisJobDto {
    * Optional variable ID to filter by
    */
   variable_id?: string;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+  status: 'pending' | 'waiting' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
   progress?: number;
   error?: string;
   created_at: Date;
