@@ -7,6 +7,7 @@ export interface VariableCombo {
   totalCount?: number;
   emptyCount?: number;
   emptyPercentage?: number;
+  distinctValueCount?: number;
   statusCounts?: VariableStatusCountDto[];
 }
 
