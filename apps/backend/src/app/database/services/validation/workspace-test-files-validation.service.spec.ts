@@ -1,7 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { WorkspaceTestFilesValidationService } from './workspace-test-files-validation.service';
+import * as crypto from 'crypto';
+import {
+  TEST_FILES_VALIDATION_CACHE_VERSION,
+  WorkspaceTestFilesValidationService
+} from './workspace-test-files-validation.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { WorkspaceXmlSchemaValidationService } from '../workspace/workspace-xml-schema-validation.service';
@@ -86,6 +90,33 @@ describe('WorkspaceTestFilesValidationService', () => {
     }).compile();
 
     service = module.get<WorkspaceTestFilesValidationService>(WorkspaceTestFilesValidationService);
+  });
+
+  it('should include the validation algorithm version in the fingerprint', async () => {
+    fileUploadRepository.find.mockResolvedValue([]);
+    workspaceExclusionService.getExclusions.mockResolvedValue({
+      ignoredUnits: [],
+      ignoredBooklets: [],
+      ignoredTestlets: []
+    });
+    personsRepository.find?.mockResolvedValue([]);
+
+    const fingerprint = await service.getTestFilesFingerprint(1);
+
+    const expectedHash = crypto.createHash('sha256');
+    expectedHash.update(JSON.stringify({
+      cacheVersion: 3,
+      exclusions: {
+        ignoredUnits: [],
+        ignoredBooklets: [],
+        ignoredTestlets: []
+      },
+      persons: []
+    }));
+    expectedHash.update('\n');
+
+    expect(TEST_FILES_VALIDATION_CACHE_VERSION).toBe(3);
+    expect(fingerprint).toBe(expectedHash.digest('hex'));
   });
 
   it('should include ignored test file settings in the validation fingerprint', async () => {
