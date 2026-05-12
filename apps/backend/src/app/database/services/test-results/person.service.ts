@@ -14,7 +14,10 @@ import {
   TestResultsUploadStatsDto
 } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { PersonQueryService } from './person-query.service';
-import { PersonPersistenceService } from './person-persistence.service';
+import {
+  PersonPersistenceService,
+  TestResultsMutationSummary
+} from './person-persistence.service';
 
 @Injectable()
 export class PersonService {
@@ -556,8 +559,7 @@ export class PersonService {
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' = 'person',
     issues: TestResultsUploadIssueDto[] = []
-  ): Promise<void> {
-    // We could pass issues to persistence service if we update it
+  ): Promise<TestResultsMutationSummary> {
     return this.personPersistenceService.processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
   }
 

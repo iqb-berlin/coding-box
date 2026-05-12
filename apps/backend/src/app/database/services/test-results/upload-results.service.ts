@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, Inject, forwardRef
+  Injectable, Logger, Inject, forwardRef, Optional
 } from '@nestjs/common';
 import 'multer';
 import * as csv from 'fast-csv';
@@ -22,6 +22,7 @@ import {
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -48,7 +49,9 @@ export class UploadResultsService {
     private readonly personService: PersonService,
     @Inject(forwardRef(() => JobQueueService))
     private readonly jobQueueService: JobQueueService,
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService
   ) {
   }
 
@@ -642,7 +645,22 @@ export class UploadResultsService {
             );
 
             const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
-            await this.personService.processPersonBooklets(filteredPersons, workspaceId, overwriteMode, scope === 'workspace' ? 'workspace' : 'person');
+            const mutationSummary = await this.personService.processPersonBooklets(
+              filteredPersons,
+              workspaceId,
+              overwriteMode,
+              scope === 'workspace' ? 'workspace' : 'person'
+            );
+            await this.codingFreshnessService?.markUnitsPendingAfterImport(
+              workspaceId,
+              mutationSummary.addedUnitIds,
+              mutationSummary.addedResponseCount
+            );
+            await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+              workspaceId,
+              mutationSummary.changedUnitIds,
+              'RESULT_UPDATED'
+            );
           });
         }
         // Cleanup temp file

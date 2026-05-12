@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
@@ -22,6 +22,8 @@ import {
 } from '../../../../../../../api-dto/files/import-workspace-progress.dto';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { TestResultsMutationSummary } from './person-persistence.service';
 
 export { Result };
 
@@ -57,7 +59,9 @@ export class TestcenterService {
     private readonly httpService: HttpService,
     private workspaceFilesService: WorkspaceFilesService,
     private cacheService: CacheService,
-    private readonly workspaceTestResultsService: WorkspaceTestResultsService
+    private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    @Optional()
+    private readonly codingFreshnessService?: CodingFreshnessService
   ) {}
 
   persons: Person[] = [];
@@ -171,6 +175,8 @@ export class TestcenterService {
         try {
           const PERSON_BATCH_SIZE = 50;
 
+          const mutationSummary = this.createMutationSummary();
+
           for (const chunk of chunks) {
             const endpoint = url ?
               `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
@@ -231,27 +237,35 @@ export class TestcenterService {
               personList.push(personWithUnits);
 
               if (personList.length >= PERSON_BATCH_SIZE) {
-                await this.personService.processPersonBooklets(
+                const batchSummary = await this.personService.processPersonBooklets(
                   personList,
                   Number(workspace_id),
                   'skip',
                   'person',
                   issues
                 );
+                this.mergeMutationSummary(mutationSummary, batchSummary);
                 personList = [];
               }
             }
 
             if (personList.length > 0) {
-              await this.personService.processPersonBooklets(
+              const batchSummary = await this.personService.processPersonBooklets(
                 personList,
                 Number(workspace_id),
                 'skip',
                 'person',
                 issues
               );
+              this.mergeMutationSummary(mutationSummary, batchSummary);
             }
           }
+
+          await this.updateCodingFreshnessAfterResponseImport(
+            Number(workspace_id),
+            mutationSummary,
+            issues
+          );
 
           return { issues };
         } catch (error) {
@@ -888,6 +902,9 @@ export class TestcenterService {
           }
         });
       }
+      if (responses === 'true') {
+        await this.attachCodingFreshnessSummary(Number(workspace_id), result);
+      }
       if (responses === 'true' || logs === 'true') {
         await this.invalidateWorkspaceOverviewCache(workspace_id, result);
       }
@@ -933,6 +950,99 @@ export class TestcenterService {
           'Der Testcenter-Import wurde verarbeitet, aber der Übersichtscache konnte nicht zuverlässig aktualisiert werden. Die Übersicht kann sich nach Aktualisierung noch ändern.'
       });
     }
+  }
+
+  private createMutationSummary(): TestResultsMutationSummary {
+    return {
+      addedUnitIds: [],
+      changedUnitIds: [],
+      addedResponseCount: 0,
+      changedResponseCount: 0
+    };
+  }
+
+  private mergeMutationSummary(
+    target: TestResultsMutationSummary,
+    source?: Partial<TestResultsMutationSummary> | null
+  ): void {
+    if (!source) {
+      return;
+    }
+    target.addedUnitIds.push(...(source.addedUnitIds || []));
+    target.changedUnitIds.push(...(source.changedUnitIds || []));
+    target.addedResponseCount += source.addedResponseCount || 0;
+    target.changedResponseCount += source.changedResponseCount || 0;
+  }
+
+  private async updateCodingFreshnessAfterResponseImport(
+    workspaceId: number,
+    mutationSummary: TestResultsMutationSummary,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<void> {
+    if (!this.codingFreshnessService || !Number.isFinite(workspaceId) || workspaceId <= 0) {
+      return;
+    }
+
+    const addedUnitIds = this.uniquePositiveIds(mutationSummary.addedUnitIds);
+    const changedUnitIds = this.uniquePositiveIds(mutationSummary.changedUnitIds);
+    if (addedUnitIds.length === 0 && changedUnitIds.length === 0) {
+      return;
+    }
+
+    try {
+      await this.codingFreshnessService.markUnitsPendingAfterImport(
+        workspaceId,
+        addedUnitIds,
+        mutationSummary.addedResponseCount
+      );
+      await this.codingFreshnessService.markUnitsStaleAfterResultChange(
+        workspaceId,
+        changedUnitIds,
+        'RESULT_UPDATED'
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not update coding freshness after Testcenter import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Kodierungsstatus konnte nicht zuverlässig aktualisiert werden.'
+      });
+    }
+  }
+
+  private async attachCodingFreshnessSummary(
+    workspaceId: number,
+    result: Result
+  ): Promise<void> {
+    if (!this.codingFreshnessService || !Number.isFinite(workspaceId) || workspaceId <= 0) {
+      return;
+    }
+
+    try {
+      result.codingFreshness = await this.codingFreshnessService.getSummary(workspaceId);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      logger.warn(`Could not load coding freshness after Testcenter import: ${detail}`);
+      if (!result.issues) result.issues = [];
+      result.issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Der Testcenter-Import wurde verarbeitet, aber der Kodierungsstatus konnte nicht geladen werden.'
+      });
+    }
+  }
+
+  private uniquePositiveIds(ids: number[]): number[] {
+    return Array.from(
+      new Set(
+        (ids || [])
+          .map(id => Number(id))
+          .filter(id => Number.isInteger(id) && id > 0)
+      )
+    );
   }
 
   private shouldImportFiles(importOptions: ImportOptions): boolean {

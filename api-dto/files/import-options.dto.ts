@@ -1,5 +1,6 @@
 import { TestFilesUploadResultDto } from './test-files-upload-result.dto';
 import { TestResultsUploadIssueDto } from './test-results-upload-result.dto';
+import { CodingFreshnessSummaryDto } from '../coding/coding-freshness.dto';
 
 export interface ImportOptionsDto {
   responses: string;
@@ -36,4 +37,5 @@ export interface ImportResultDto {
   totalBooklets?: number;
   unitsWithLogs?: number;
   totalUnits?: number;
+  codingFreshness?: CodingFreshnessSummaryDto;
 }

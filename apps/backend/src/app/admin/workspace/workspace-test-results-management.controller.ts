@@ -226,6 +226,10 @@ export class WorkspaceTestResultsManagementController {
       @Body() request: TestResultsDeleteRequestDto,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
+    await this.jobQueueService.assertNoDependencyConflicts(
+      'validation-task',
+      workspaceId
+    );
     const task = await this.validationTaskService.createValidationTask(
       workspaceId,
       'deleteTestResults',
@@ -270,6 +274,10 @@ export class WorkspaceTestResultsManagementController {
       @Body() request: TestResultsDeleteRequestDto,
       @Req() req: RequestWithUser
   ): Promise<ValidationTaskDto> {
+    await this.jobQueueService.assertNoDependencyConflicts(
+      'validation-task',
+      workspaceId
+    );
     const task = await this.validationTaskService.createValidationTask(
       workspaceId,
       'deleteTestLogs',

@@ -18,10 +18,24 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
-  CodingStatisticsService, CodingJobService, CodingProgressService, CodingReviewService
+  CodingStatisticsService,
+  CodingJobService,
+  CodingProgressService,
+  CodingReviewService,
+  CodingFreshnessService,
+  CodingProcessService
 } from '../../database/services/coding';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatistics } from '../../database/services/shared';
+import {
+  CodingFreshnessJobResultDto,
+  CodingFreshnessScopeDto,
+  CodingFreshnessState,
+  CodingFreshnessSummaryDto,
+  CodingFreshnessVersion,
+  StartCodingFreshnessJobDto
+} from '../../../../../../api-dto/coding/coding-freshness.dto';
+import { JobQueueService } from '../../job-queue/job-queue.service';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -32,7 +46,10 @@ export class WorkspaceCodingStatisticsController {
     private codingJobService: CodingJobService,
     private personService: PersonService,
     private codingProgressService: CodingProgressService,
-    private codingReviewService: CodingReviewService
+    private codingReviewService: CodingReviewService,
+    private codingFreshnessService: CodingFreshnessService,
+    private codingProcessService: CodingProcessService,
+    private jobQueueService: JobQueueService
   ) { }
 
   @Get(':workspace_id/coding/statistics')
@@ -57,6 +74,115 @@ export class WorkspaceCodingStatisticsController {
       workspace_id,
       version
     );
+  }
+
+  @Get(':workspace_id/coding/freshness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Coding freshness summary retrieved successfully.'
+  })
+  async getCodingFreshnessSummary(
+    @WorkspaceId() workspace_id: number
+  ): Promise<CodingFreshnessSummaryDto> {
+    return this.codingFreshnessService.getSummary(workspace_id);
+  }
+
+  @Get(':workspace_id/coding/freshness/scope')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'version',
+    required: false,
+    description: 'Coding version(s) to include. Supports comma-separated values.',
+    enum: ['v1', 'v2', 'v3']
+  })
+  @ApiQuery({
+    name: 'state',
+    required: false,
+    description: 'Freshness state(s) to include. Supports comma-separated values.',
+    enum: ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED']
+  })
+  @ApiOkResponse({
+    description: 'Coding freshness scope retrieved successfully.'
+  })
+  async getCodingFreshnessScope(
+    @WorkspaceId() workspace_id: number,
+      @Query('version') version?: string | string[],
+      @Query('state') state?: string | string[]
+  ): Promise<CodingFreshnessScopeDto> {
+    return this.codingFreshnessService.getScope(
+      workspace_id,
+      this.parseVersions(version),
+      this.parseStates(state)
+    );
+  }
+
+  @Post(':workspace_id/coding/freshness/code')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['version'],
+      properties: {
+        version: { type: 'string', enum: ['v1', 'v3'] },
+        states: {
+          type: 'array',
+          items: { type: 'string', enum: ['PENDING', 'STALE'] }
+        }
+      }
+    }
+  })
+  @ApiOkResponse({
+    description: 'Coding freshness auto-coding job created successfully.'
+  })
+  async codeFreshnessScope(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: StartCodingFreshnessJobDto
+  ): Promise<CodingFreshnessJobResultDto> {
+    await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
+
+    const version = body.version === 'v3' ? 'v3' : 'v1';
+    const states = this.parseCodingStates(body.states);
+    const scope = await this.codingFreshnessService.getScope(
+      workspace_id,
+      [version],
+      states
+    );
+
+    if (scope.unitIds.length === 0 || scope.personIds.length === 0) {
+      return {
+        totalResponses: 0,
+        statusCounts: {},
+        message: 'No coding freshness units need auto-coding.',
+        unitCount: 0,
+        personCount: 0,
+        groupNames: []
+      };
+    }
+
+    const result = await this.codingProcessService.codeUnitIds(
+      workspace_id,
+      scope.unitIds,
+      version === 'v3' ? 2 : 1,
+      {
+        source: 'coding-freshness',
+        freshnessVersion: version,
+        freshnessStates: states,
+        groupNames: scope.groupNames.join(',')
+      }
+    );
+
+    return {
+      ...result,
+      unitCount: scope.unitCount,
+      personCount: scope.personCount,
+      groupNames: scope.groupNames
+    };
   }
 
   @Post(':workspace_id/coding/statistics/job')
@@ -85,6 +211,47 @@ export class WorkspaceCodingStatisticsController {
                    @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     return this.codingStatisticsService.createCodingStatisticsJob(workspace_id, version);
+  }
+
+  private parseVersions(value?: string | string[]): CodingFreshnessVersion[] {
+    const allowed = new Set<CodingFreshnessVersion>(['v1', 'v2', 'v3']);
+    const values = this.parseArrayQuery(value);
+    const versions = values.filter((item): item is CodingFreshnessVersion => (
+      allowed.has(item as CodingFreshnessVersion)
+    ));
+    return versions.length > 0 ? versions : ['v1', 'v2', 'v3'];
+  }
+
+  private parseStates(value?: string | string[]): CodingFreshnessState[] {
+    const allowed = new Set<CodingFreshnessState>([
+      'PENDING',
+      'STALE',
+      'MANUAL_REVIEW_REQUIRED'
+    ]);
+    const values = this.parseArrayQuery(value);
+    const states = values.filter((item): item is CodingFreshnessState => (
+      allowed.has(item as CodingFreshnessState)
+    ));
+    return states.length > 0 ? states : ['PENDING', 'STALE', 'MANUAL_REVIEW_REQUIRED'];
+  }
+
+  private parseCodingStates(
+    states?: Extract<CodingFreshnessState, 'PENDING' | 'STALE'>[]
+  ): Extract<CodingFreshnessState, 'PENDING' | 'STALE'>[] {
+    const allowed = new Set<Extract<CodingFreshnessState, 'PENDING' | 'STALE'>>([
+      'PENDING',
+      'STALE'
+    ]);
+    const values = (states || []).filter(state => allowed.has(state));
+    return values.length > 0 ? values : ['PENDING', 'STALE'];
+  }
+
+  private parseArrayQuery(value?: string | string[]): string[] {
+    const rawValues = Array.isArray(value) ? value : [value || ''];
+    return rawValues
+      .flatMap(item => String(item).split(','))
+      .map(item => item.trim())
+      .filter(item => item !== '');
   }
 
   @Get(':workspace_id/coding/groups')

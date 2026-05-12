@@ -1,10 +1,11 @@
 import {
-  Injectable, Logger, forwardRef, Inject
+  Injectable, Logger, forwardRef, Inject, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingFreshnessService } from './coding-freshness.service';
 
 @Injectable()
 export class CodingVersionService {
@@ -14,7 +15,9 @@ export class CodingVersionService {
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
     @Inject(forwardRef(() => CodingStatisticsService))
-    private codingStatisticsService: CodingStatisticsService
+    private codingStatisticsService: CodingStatisticsService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) { }
 
   async resetCodingVersion(
@@ -101,6 +104,11 @@ export class CodingVersionService {
             unitFilters,
             variableFilters
           );
+        await this.codingFreshnessService?.clearVersionsAfterReset(
+          workspaceId,
+          versionsToReset,
+          unitFilters
+        );
         await this.invalidateStatisticsCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
@@ -176,6 +184,11 @@ export class CodingVersionService {
       }
 
       // Invalidate statistics cache for all affected versions
+      await this.codingFreshnessService?.clearVersionsAfterReset(
+        workspaceId,
+        versionsToReset,
+        unitFilters
+      );
       await this.invalidateStatisticsCaches(workspaceId, version);
 
       if (progressCallback) await progressCallback(100);

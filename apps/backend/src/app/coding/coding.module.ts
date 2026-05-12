@@ -21,6 +21,7 @@ import Persons from '../database/entities/persons.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { Booklet } from '../database/entities/booklet.entity';
 import { ChunkEntity } from '../database/entities/chunk.entity';
+import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 
 import {
   CodingJobService,
@@ -38,7 +39,8 @@ import {
   MissingsProfilesService,
   ExternalCodingImportService,
   CodingValidationService,
-  CodingAnalysisService
+  CodingAnalysisService,
+  CodingFreshnessService
 } from '../database/services/coding';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
@@ -71,7 +73,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
       Persons,
       Unit,
       Booklet,
-      ChunkEntity
+      ChunkEntity,
+      CodingUnitFreshness
     ]),
     forwardRef(() => JobQueueModule),
     forwardRef(() => CacheModule),
@@ -94,7 +97,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     CodingExportService,
     CodingProcessService,
     CodingValidationService,
-    CodingAnalysisService
+    CodingAnalysisService,
+    CodingFreshnessService
   ],
   exports: [
     CodingJobService,
@@ -113,7 +117,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     CodingExportService,
     CodingProcessService,
     CodingValidationService,
-    CodingAnalysisService
+    CodingAnalysisService,
+    CodingFreshnessService
   ]
 })
 export class CodingModule { }

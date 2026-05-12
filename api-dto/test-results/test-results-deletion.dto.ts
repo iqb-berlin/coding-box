@@ -1,3 +1,5 @@
+import { CodingFreshnessImpactDto } from '../coding/coding-freshness.dto';
+
 export type TestResultsDeleteScope =
   | 'persons'
   | 'filteredPersons'
@@ -31,6 +33,7 @@ export interface TestResultsDeletePreviewDto {
   bookletNames: string[];
   unitNames: string[];
   warnings: string[];
+  codingImpact?: CodingFreshnessImpactDto;
 }
 
 export interface TestResultsDeleteResultDto extends TestResultsDeletePreviewDto {

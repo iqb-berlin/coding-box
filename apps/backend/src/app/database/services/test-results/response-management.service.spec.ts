@@ -4,7 +4,8 @@ import { ResponseEntity } from '../../entities/response.entity';
 
 describe('ResponseManagementService', () => {
   const workspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
   };
 
   const createQueryBuilder = (executeResult: { affected?: number } = { affected: 1 }) => ({
@@ -127,5 +128,62 @@ describe('ResponseManagementService', () => {
     expect(manager.insert).not.toHaveBeenCalled();
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+  });
+
+  it('invalidates coding statistics after deleting a response directly', async () => {
+    const selectQueryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        id: 50,
+        unit: {
+          id: 7,
+          name: 'UNIT_1',
+          booklet: {
+            id: 3,
+            person: { id: 2 }
+          }
+        },
+        variableid: 'VAR_1',
+        value: 'old'
+      })
+    };
+    const deleteQueryBuilder = {
+      delete: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const manager = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(selectQueryBuilder)
+        .mockReturnValueOnce(deleteQueryBuilder)
+    };
+    const connection = {
+      transaction: jest.fn(cb => cb(manager))
+    };
+    const journalService = {
+      createEntry: jest.fn().mockResolvedValue(undefined)
+    };
+    const codingFreshnessService = {
+      markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = new ResponseManagementService(
+      connection as never,
+      journalService as never,
+      workspaceTestResultsService as never,
+      codingFreshnessService as never
+    );
+
+    const result = await service.deleteResponse(1, 50, 'user-1');
+
+    expect(result.success).toBe(true);
+    expect(codingFreshnessService.markUnitsStaleAfterResultChange)
+      .toHaveBeenCalledWith(1, [7], 'RESULT_DELETED');
+    expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)
+      .toHaveBeenCalledWith(1);
+    expect(workspaceTestResultsService.invalidateCodingStatisticsCache)
+      .toHaveBeenCalledWith(1);
   });
 });

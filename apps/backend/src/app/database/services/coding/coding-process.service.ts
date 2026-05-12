@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
@@ -29,6 +29,14 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { CodingFreshnessService } from './coding-freshness.service';
+
+type UnitCodingJobMetadata = {
+  source?: 'manual-selection' | 'coding-freshness';
+  freshnessVersion?: 'v1' | 'v3';
+  freshnessStates?: ('PENDING' | 'STALE')[];
+  groupNames?: string;
+};
 
 @Injectable()
 export class CodingProcessService {
@@ -49,7 +57,9 @@ export class CodingProcessService {
     private responseManagementService: ResponseManagementService,
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) { }
 
   private codingSchemeCache: Map<
@@ -163,12 +173,77 @@ export class CodingProcessService {
     };
   }
 
+  async codeUnitIds(
+    workspace_id: number,
+    unitIds: number[],
+    autoCoderRun: number = 1,
+    metadata: UnitCodingJobMetadata = {}
+  ): Promise<CodingStatisticsWithJob> {
+    const ids = this.uniquePositiveIds(unitIds);
+    if (!workspace_id || ids.length === 0) {
+      this.logger.warn('Ungültige Eingabeparameter: workspace_id oder unitIds fehlen.');
+      return { totalResponses: 0, statusCounts: {} };
+    }
+
+    const rows = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .select('unit.id', 'unitId')
+      .addSelect('person.id', 'personId')
+      .addSelect('person.group', 'groupName')
+      .where('person.workspace_id = :workspaceId', { workspaceId: workspace_id })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('unit.id IN (:...unitIds)', { unitIds: ids })
+      .getRawMany<{ unitId: number | string; personId: number | string; groupName: string | null }>();
+
+    const includedUnitIds = this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
+    const personIds = this.uniquePositiveIds(rows.map(row => Number(row.personId)))
+      .map(id => id.toString());
+    const groupNames = Array.from(new Set(
+      rows
+        .map(row => row.groupName || '')
+        .filter(groupName => groupName.trim() !== '')
+    )).sort((a, b) => a.localeCompare(b));
+
+    if (includedUnitIds.length === 0 || personIds.length === 0) {
+      return {
+        totalResponses: 0,
+        statusCounts: {},
+        message: 'No matching coding units found for the selected freshness scope.'
+      };
+    }
+
+    const bullJob = await this.jobQueueService.addTestPersonCodingJob({
+      workspaceId: workspace_id,
+      personIds,
+      unitIds: includedUnitIds,
+      groupNames: metadata.groupNames || groupNames.join(','),
+      autoCoderRun,
+      source: metadata.source || 'manual-selection',
+      freshnessVersion: metadata.freshnessVersion,
+      freshnessStates: metadata.freshnessStates
+    });
+
+    this.logger.log(
+      `Added unit-scoped coding job ${bullJob.id} for ${includedUnitIds.length} units and ${personIds.length} persons`
+    );
+
+    return {
+      totalResponses: 0,
+      statusCounts: {},
+      jobId: bullJob.id.toString(),
+      message: `Processing ${includedUnitIds.length} affected coding units in the background. Check job status with jobId: ${bullJob.id}`
+    };
+  }
+
   async processTestPersonsBatch(
     workspace_id: number,
     personIds: string[],
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
-    jobId?: string
+    jobId?: string,
+    targetUnitIds?: number[]
   ): Promise<CodingStatistics> {
     this.cleanupCaches();
 
@@ -255,7 +330,7 @@ export class CodingProcessService {
 
       // Step 3: Get units - 30% progress
       const unitQueryStart = Date.now();
-      const units = await this.fetchUnits(workspace_id, bookletIds);
+      const units = await this.fetchUnits(workspace_id, bookletIds, targetUnitIds);
       metrics.unitQuery = Date.now() - unitQueryStart;
 
       if (!units || units.length === 0) {
@@ -500,6 +575,12 @@ export class CodingProcessService {
         return statistics;
       }
 
+      await this.codingFreshnessService?.markVersionCurrent(
+        workspace_id,
+        unitIdsArray,
+        autoCoderRun === 2 ? 'v3' : 'v1'
+      );
+
       if (progressCallback) {
         progressCallback(100);
       }
@@ -547,13 +628,22 @@ export class CodingProcessService {
       .getMany();
   }
 
-  private async fetchUnits(workspace_id: number, bookletIds: number[]): Promise<Unit[]> {
+  private async fetchUnits(
+    workspace_id: number,
+    bookletIds: number[],
+    unitIds?: number[]
+  ): Promise<Unit[]> {
     const { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits } = await this.workspaceExclusionService.resolveExclusionsForQueries(workspace_id);
     const query = this.unitRepository.createQueryBuilder('unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
       .select(['unit.id', 'unit.bookletid', 'unit.name', 'unit.alias']);
+
+    const ids = this.uniquePositiveIds(unitIds || []);
+    if (ids.length > 0) {
+      query.andWhere('unit.id IN (:...unitIds)', { unitIds: ids });
+    }
 
     applyResolvedExclusionsToQuery(query, { globalIgnoredUnits, ignoredBooklets, testletIgnoredUnits });
 
@@ -1006,5 +1096,15 @@ export class CodingProcessService {
       return 'NO_CODING';
     }
     return status;
+  }
+
+  private uniquePositiveIds(ids: number[]): number[] {
+    return Array.from(
+      new Set(
+        ids
+          .map(id => Number(id))
+          .filter(id => Number.isInteger(id) && id > 0)
+      )
+    );
   }
 }

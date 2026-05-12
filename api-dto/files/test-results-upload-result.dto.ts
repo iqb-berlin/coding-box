@@ -1,5 +1,6 @@
 /* eslint-disable max-classes-per-file */
 import { ApiProperty } from '@nestjs/swagger';
+import { CodingFreshnessSummaryDto } from '../coding/coding-freshness.dto';
 
 export class TestResultsUploadStatsDto {
   @ApiProperty({ type: Number })
@@ -96,4 +97,7 @@ export class TestResultsUploadResultDto {
 
   @ApiProperty({ type: String, required: false })
     overviewMessage?: string;
+
+  @ApiProperty({ type: Object, required: false })
+    codingFreshness?: CodingFreshnessSummaryDto;
 }
