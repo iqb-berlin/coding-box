@@ -1,6 +1,6 @@
 <div class="coder-training-container">
   <div class="header">
-    <h2 class="title">Kodierer-Schulung erstellen</h2>
+    <h2 class="title">{{ getDialogTitle() }}</h2>
     <button mat-icon-button (click)="onClose()" class="close-button">
       <mat-icon>close</mat-icon>
     </button>
@@ -77,10 +77,18 @@
           <mat-option *ngFor="let t of availableTrainings" [value]="t.id">{{ t.label }} ({{ t.jobsCount }} Jobs)</mat-option>
         </mat-select>
       </mat-form-field>
-      <mat-radio-group formControlName="referenceMode" class="reference-mode-controls" *ngIf="(trainingForm.get('referenceTrainingIds')?.value?.length || 0) > 0">
+      <mat-radio-group
+        formControlName="referenceMode"
+        class="reference-mode-controls"
+        [class.has-error]="!hasValidReferenceMode()"
+        *ngIf="(trainingForm.get('referenceTrainingIds')?.value?.length || 0) > 0">
         <mat-radio-button value="same">{{ 'coding-job-definition-dialog.reference-trainings.same' | translate }}</mat-radio-button>
         <mat-radio-button value="different">{{ 'coding-job-definition-dialog.reference-trainings.different' | translate }}</mat-radio-button>
       </mat-radio-group>
+      <div class="reference-mode-error" *ngIf="!hasValidReferenceMode()">
+        <mat-icon>error_outline</mat-icon>
+        <span>Bitte wählen Sie den Vergleichsmodus für die ausgewählten Vergleichsschulungen.</span>
+      </div>
     </div>
 
     <mat-divider class="section-divider"></mat-divider>
@@ -113,6 +121,27 @@
       <div *ngIf="coders.length === 0" class="no-coders-message">
         <mat-icon>group_off</mat-icon>
         <p>Keine Kodierer verfügbar</p>
+      </div>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
+    <!-- Variable Basis Section -->
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">Variablenbasis</h3>
+      </div>
+
+      <div class="variable-basis-panel">
+        <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
+          Abgeleitete Variablen einbeziehen
+          <span *ngIf="getDerivedVariablesCount() > 0" class="derived-count">
+            ({{getDerivedVariablesCount()}} verfügbar)
+          </span>
+        </mat-checkbox>
+        <span class="basis-meta">
+          Standard: einbezogen
+        </span>
       </div>
     </div>
 
@@ -217,6 +246,12 @@
                 </button>
               </div>
             </div>
+            <div class="bundle-ordering-note">
+              <mat-icon>swap_vert</mat-icon>
+              <span>
+                Reihenfolge: {{getCaseOrderingModeLabel(bundleGroup.bundle.caseOrderingMode || trainingForm.get('caseOrderingMode')?.value)}}
+              </span>
+            </div>
             <!-- Individual variable details hidden for bundles as per requirement -->
           </div>
         </div>
@@ -247,13 +282,6 @@
       </div>
 
       <div class="variable-selection-controls">
-        <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
-          Abgeleitete Variablen einbeziehen
-          <span *ngIf="getDerivedVariablesCount() > 0" class="derived-count">
-            ({{getDerivedVariablesCount()}} verfügbar)
-          </span>
-        </mat-checkbox>
-
         <mat-form-field appearance="outline" class="variable-multiselect-field">
           <mat-label>Variablen auswählen</mat-label>
           <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
@@ -297,7 +325,7 @@
 
               <mat-form-field appearance="outline" class="sample-count-field density-compact"
                 [class.insufficient-input]="isManualVariableInsufficient(item)">
-                <mat-label>Anzahl Stichproben</mat-label>
+                <mat-label>Stichproben pro Variable</mat-label>
                 <input matInput type="number" formControlName="sampleCount" min="1" [max]="getAvailableCount(item)">
                 <mat-hint *ngIf="isManualVariableInsufficient(item)" class="warn-text">
                   Max. {{getAvailableCount(item)}} Fälle verfügbar
@@ -336,14 +364,19 @@
       <ul>
         <li>Ausgewählte Kodierer: <strong>{{selectedCoders.size}}</strong></li>
         <li>
-          Ausgewählte Variablen: <strong>{{groupedVariables.manual.length}}</strong>
+          Manuell ausgewählte Variablen: <strong>{{getManualVariablesCount()}}</strong>
         </li>
         <li>
-          Ausgewählte Variablenbündel: <strong>{{groupedVariables.bundles.length}}</strong>
+          Variablen aus Variablenbündeln: <strong>{{getBundleVariablesCount()}}</strong>
         </li>
         <li>
-          Gesamte Stichproben:
-          <strong>{{getTotalSamples()}}</strong>
+          Gesamtvariablen: <strong>{{getSelectedVariablesCount()}}</strong>
+        </li>
+        <li>
+          Ausgewählte Variablenbündel: <strong>{{getSelectedBundleCount()}}</strong>
+        </li>
+        <li>
+          Gesamtfälle: <strong>{{getTotalSamples()}}</strong>
         </li>
         <li>
           Abgeleitete Variablen:
@@ -357,18 +390,32 @@
           Reihenfolge:
           <strong>{{getCaseOrderingModeLabel(trainingForm.get('caseOrderingMode')?.value)}}</strong>
         </li>
-
       </ul>
+      <div class="summary-note" *ngIf="hasBundleOrderingOverrides()">
+        <mat-icon>swap_vert</mat-icon>
+        <span>Abweichende Bündel-Reihenfolge: {{getBundleOrderingDetails()}}</span>
+      </div>
+      <div class="validation-checklist" *ngIf="!canStartTraining()">
+        <div
+          class="validation-item"
+          *ngFor="let item of getValidationItems()"
+          [class.valid]="item.valid"
+          [class.invalid]="!item.valid">
+          <mat-icon>{{item.valid ? 'check_circle' : 'error_outline'}}</mat-icon>
+          <span>{{item.label}}</span>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Action Buttons -->
   <div class="action-buttons">
     <button mat-raised-button color="primary" (click)="onStartTraining()" [disabled]="!canStartTraining() || isLoading"
-      class="start-training-button">
-      <mat-icon *ngIf="!isLoading">play_arrow</mat-icon>
+      class="start-training-button"
+      [matTooltip]="!canStartTraining() ? getFirstValidationMessage() : ''">
+      <mat-icon *ngIf="!isLoading">{{ isEditMode ? 'save' : 'play_arrow' }}</mat-icon>
       <mat-progress-spinner mode="indeterminate" diameter="20" *ngIf="isLoading"></mat-progress-spinner>
-      {{ isLoading ? 'Kodierungsaufträge werden erstellt...' : 'Kodierungsaufträge erstellen' }}
+      {{ getPrimaryActionLabel() }}
     </button>
 
     <button mat-button (click)="onClose()" [disabled]="isLoading" class="cancel-button">

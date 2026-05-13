@@ -61,9 +61,19 @@ describe('CoderTrainingComponent', () => {
           createdAt: new Date(),
           updatedAt: new Date(),
           caseOrderingMode: 'alternating'
+        },
+        {
+          id: 6,
+          name: 'Derived Bundle',
+          description: 'Derived only',
+          variables: [
+            { unitName: 'UNIT3', variableId: 'DERIVED' }
+          ],
+          createdAt: new Date(),
+          updatedAt: new Date()
         }
       ],
-      total: 1
+      total: 2
     }));
 
     await TestBed.configureTestingModule({
@@ -107,6 +117,16 @@ describe('CoderTrainingComponent', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         caseOrderingMode: 'alternating'
+      },
+      {
+        id: 6,
+        name: 'Derived Bundle',
+        description: 'Derived only',
+        variables: [
+          { unitName: 'UNIT3', variableId: 'DERIVED' }
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date()
       }
     ] as never;
     component.coders = [
@@ -194,6 +214,68 @@ describe('CoderTrainingComponent', () => {
     expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR');
     expect(component.getSelectedDerivedVariablesCount()).toBe(0);
     expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+  });
+
+  it('removes derived-only bundle selections when derived variables are excluded', () => {
+    component.onBundleSelectionChange([6]);
+
+    expect(component.variablesFormArray.length).toBe(1);
+    expect(component.selectedBundleArray).toContain(6);
+
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Derived disabled');
+
+    expect(component.variablesFormArray.length).toBe(0);
+    expect(component.selectedBundleArray).not.toContain(6);
+    expect(component.canStartTraining()).toBe(false);
+    expect(component.getFirstValidationMessage()).toBe('Mindestens eine Variable ausgewählt');
+  });
+
+  it('requires a reference mode when reference trainings are selected', () => {
+    component.addVariable('VAR', 'UNIT', 2);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Reference validation');
+
+    expect(component.canStartTraining()).toBe(true);
+
+    component.trainingForm.get('referenceTrainingIds')?.setValue([99]);
+
+    expect(component.hasValidReferenceMode()).toBe(false);
+    expect(component.canStartTraining()).toBe(false);
+
+    component.trainingForm.get('referenceMode')?.setValue('same');
+
+    expect(component.hasValidReferenceMode()).toBe(true);
+    expect(component.canStartTraining()).toBe(true);
+
+    component.trainingForm.get('referenceTrainingIds')?.setValue([]);
+
+    expect(component.trainingForm.get('referenceMode')?.value).toBeNull();
+    expect(component.hasValidReferenceMode()).toBe(true);
+  });
+
+  it('shows edit action labels and consistent summary counts', () => {
+    component.editTraining = { id: 1, label: 'Existing training' } as never;
+    component.addVariable('VAR', 'UNIT', 2);
+    component.onBundleSelectionChange([5]);
+
+    expect(component.getDialogTitle()).toBe('Kodierer-Schulung bearbeiten');
+    expect(component.getPrimaryActionLabel()).toBe('Schulung aktualisieren');
+    expect(component.getManualVariablesCount()).toBe(1);
+    expect(component.getBundleVariablesCount()).toBe(2);
+    expect(component.getSelectedVariablesCount()).toBe(3);
+    expect(component.getSelectedBundleCount()).toBe(1);
+    expect(component.hasBundleOrderingOverrides()).toBe(false);
+
+    component.updateBundleCaseOrderingMode(5, 'alternating');
+
+    expect(component.hasBundleOrderingOverrides()).toBe(true);
+    expect(component.getBundleOrderingDetails()).toContain('Bundle: Abwechselnd');
+
+    component.isLoading = true;
+
+    expect(component.getPrimaryActionLabel()).toBe('Schulung wird aktualisiert...');
   });
 
   it('skips derived variables from bundles when disabled and submits only included variables', () => {
