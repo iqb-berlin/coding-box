@@ -50,6 +50,22 @@
         </td>
       </ng-container>
 
+      <ng-container matColumnDef="selectionStrategy">
+        <th mat-header-cell *matHeaderCellDef>Fallauswahl</th>
+        <td mat-cell *matCellDef="let training">
+          <div class="strategy-cell">
+            <span
+              class="strategy-label"
+              [matTooltip]="getCaseSelectionModeDescription(training.case_selection_mode)">
+              {{ getCaseSelectionModeLabel(training.case_selection_mode) }}
+            </span>
+            <span class="strategy-subline">
+              {{ getCaseOrderingModeLabel(training.case_ordering_mode) }}
+            </span>
+          </div>
+        </td>
+      </ng-container>
+
       <ng-container matColumnDef="created_at">
         <th mat-header-cell *matHeaderCellDef>{{ 'coding.trainings.table.created' | translate }}</th>
         <td mat-cell *matCellDef="let training">

@@ -141,6 +141,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       trainingLabel: ['', [Validators.required]],
       caseOrderingMode: ['continuous'],
       caseSelectionMode: ['oldest_first' as CaseSelectionMode],
+      includeDerivedVariables: [true],
       referenceTrainingIds: [[] as number[]],
       referenceMode: [null as ReferenceMode | null],
       variables: this.fb.array([])
@@ -150,6 +151,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.updateGroupedVariables();
     this.setupFilters();
     this.setupManualSelectSync();
+    this.setupDerivedVariableSync();
   }
 
   private setupManualSelectSync(): void {
@@ -195,9 +197,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.variableFilterCtrl.valueChanges.pipe(startWith('')),
       this.bundleSelection$,
       this.manualVariablesSelectControl.valueChanges.pipe(startWith([])),
+      this.trainingForm.get('includeDerivedVariables')!.valueChanges.pipe(startWith(true)),
       this._availableVariables$
     ]).pipe(
-      map(([filter, selectedBundleIds, , availableVariables]) => {
+      map(([filter, selectedBundleIds, , includeDerivedVariables, availableVariables]) => {
         const search = (filter || '').toLowerCase();
 
         const variablesInBundles = new Set<string>();
@@ -214,7 +217,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           const matchesSearch = v.variableId.toLowerCase().includes(search) ||
             v.unitName.toLowerCase().includes(search);
           const inBundle = variablesInBundles.has(`${v.unitName}::${v.variableId}`);
-          return matchesSearch && !inBundle;
+          const matchesDerivedFilter = includeDerivedVariables || !v.isDerived;
+          return matchesSearch && !inBundle && matchesDerivedFilter;
         });
       })
     );
@@ -228,6 +232,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         );
       })
     );
+  }
+
+  private setupDerivedVariableSync(): void {
+    this.trainingForm.get('includeDerivedVariables')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(includeDerivedVariables => {
+        this.syncDerivedVariableSelection(!!includeDerivedVariables);
+      });
   }
 
   ngOnInit(): void {
@@ -363,6 +375,154 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
+  get includeDerivedVariables(): boolean {
+    return !!this.trainingForm.get('includeDerivedVariables')?.value;
+  }
+
+  isVariableDerived(variable: Pick<Variable, 'unitName' | 'variableId' | 'isDerived'>): boolean {
+    if (variable.isDerived !== undefined) {
+      return !!variable.isDerived;
+    }
+
+    return this.isDerivedVariableKey(variable.unitName, variable.variableId);
+  }
+
+  isControlDerived(control: FormGroup): boolean {
+    const unitId = control.get('unitId')?.value;
+    const variableId = control.get('variableId')?.value;
+    return this.isDerivedVariableKey(unitId, variableId);
+  }
+
+  getDerivedVariablesCount(): number {
+    return this.availableVariables.filter(variable => this.isVariableDerived(variable)).length;
+  }
+
+  getSelectedDerivedVariablesCount(): number {
+    return this.variablesFormArray.controls.filter(control => this.isControlDerived(control as FormGroup)).length;
+  }
+
+  getBundleDerivedVariablesCount(bundle: VariableBundle): number {
+    return bundle.variables.filter(variable => this.isVariableDerived(variable)).length;
+  }
+
+  getBundleEffectiveVariableCount(bundle: VariableBundle): number {
+    if (this.includeDerivedVariables) {
+      return bundle.variables.length;
+    }
+
+    return bundle.variables.filter(variable => !this.isVariableDerived(variable)).length;
+  }
+
+  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste Fälle zuerst';
+      case 'newest_first':
+        return 'Neueste Fälle zuerst';
+      case 'random':
+        return 'Zufällige Fälle';
+      case 'random_per_testgroup':
+        return 'Zufällig je Testgruppe';
+      case 'random_testgroups':
+        return 'Zufällige Testgruppen';
+      default:
+        return 'Älteste Fälle zuerst';
+    }
+  }
+
+  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+      case 'newest_first':
+        return 'Nimmt pro Variable die neuesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+      case 'random':
+        return 'Zieht die gewünschte Anzahl zufällig aus allen verfügbaren Fällen der Variable.';
+      case 'random_per_testgroup':
+        return 'Zieht zufällig und verteilt die Auswahl möglichst gleichmäßig über vorhandene Testgruppen.';
+      case 'random_testgroups':
+        return 'Wählt zunächst zufällige Testgruppen und zieht Fälle innerhalb dieser Gruppen.';
+      default:
+        return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+    }
+  }
+
+  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+    return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
+  }
+
+  private syncDerivedVariableSelection(includeDerivedVariables: boolean): void {
+    if (includeDerivedVariables) {
+      this.addMissingDerivedBundleVariables();
+      return;
+    }
+
+    const removedCount = this.removeSelectedDerivedVariables();
+    if (removedCount > 0) {
+      this.showSuccess(`${removedCount} abgeleitete Variable(n) aus der Auswahl entfernt.`);
+    }
+  }
+
+  private addMissingDerivedBundleVariables(): void {
+    Array.from(this.selectedBundleIds).forEach(bundleId => {
+      const bundle = this.availableBundles.find(b => b.id === bundleId);
+      if (!bundle) return;
+
+      const bundleSampleCount = this.getBundleSampleCount(bundleId);
+      const bundleCaseOrderingMode = bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
+      bundle.variables
+        .filter(variable => this.isVariableDerived(variable))
+        .forEach(variable => {
+          if (!this.isVariableAlreadyAdded(variable)) {
+            this.addVariable(
+              variable.variableId,
+              variable.unitName,
+              bundleSampleCount,
+              bundle.id,
+              bundle.name,
+              true,
+              bundleCaseOrderingMode
+            );
+          }
+        });
+    });
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+  }
+
+  private removeSelectedDerivedVariables(): number {
+    const indexesToRemove = this.variablesFormArray.controls
+      .map((control, index) => ({ control: control as FormGroup, index }))
+      .filter(item => this.isControlDerived(item.control))
+      .map(item => item.index);
+
+    indexesToRemove.reverse().forEach(index => this.variablesFormArray.removeAt(index));
+
+    const manualSelection = this.manualVariablesSelectControl.value || [];
+    const filteredManualSelection = manualSelection.filter(key => {
+      const [unitId, variableId] = key.split('::');
+      return !this.isDerivedVariableKey(unitId, variableId);
+    });
+
+    if (filteredManualSelection.length !== manualSelection.length) {
+      this.manualVariablesSelectControl.setValue(filteredManualSelection, { emitEvent: false });
+    }
+
+    this.updateGroupedVariables();
+    this.checkForOverlaps();
+
+    return indexesToRemove.length;
+  }
+
+  private isDerivedVariableKey(unitId: string | undefined, variableId: string | undefined): boolean {
+    return !!this.availableVariables.find(variable => (
+      variable.unitName === unitId &&
+      variable.variableId === variableId &&
+      variable.isDerived
+    ));
+  }
+
   addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
     const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
     const maxAvailable = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 1000;
@@ -438,7 +598,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const duplicateVariables: string[] = [];
     const effectiveCaseOrderingMode = caseOrderingMode || bundle.caseOrderingMode || this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
 
-    bundle.variables.forEach(variable => {
+    const variablesToAdd = this.includeDerivedVariables ?
+      bundle.variables :
+      bundle.variables.filter(variable => !this.isVariableDerived(variable));
+    const skippedDerivedCount = bundle.variables.length - variablesToAdd.length;
+
+    if (variablesToAdd.length === 0) {
+      this.showError(`Das Variablenbündel "${bundle.name}" enthält nur abgeleitete Variablen. Aktivieren Sie „abgeleitete Variablen einbeziehen“, um es zu verwenden.`);
+      return;
+    }
+
+    variablesToAdd.forEach(variable => {
       if (this.isVariableAlreadyAdded(variable)) {
         duplicateVariables.push(`${variable.unitName} - ${variable.variableId}`);
       } else {
@@ -448,7 +618,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     if (addedCount > 0 && !silent) {
-      this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt`);
+      const skippedText = skippedDerivedCount > 0 ? ` (${skippedDerivedCount} abgeleitete ausgelassen)` : '';
+      this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt${skippedText}`);
     }
 
     if (duplicateVariables.length > 0 && !silent) {
@@ -477,14 +648,16 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       newBundleIds.forEach(bundleId => {
         const defaultMode = this.trainingForm.get('caseOrderingMode')?.value || 'continuous';
         this.addBundleVariables(bundleId, undefined, defaultMode);
-        this.selectedBundleIds.add(bundleId);
+        if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === bundleId)) {
+          this.selectedBundleIds.add(bundleId);
+        }
       });
 
       removedBundleIds.forEach(bundleId => {
         this.removeBundle(bundleId);
       });
 
-      this.bundleSelection$.next(selectedBundleIds);
+      this.bundleSelection$.next(Array.from(this.selectedBundleIds));
     }
   }
 
@@ -503,7 +676,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     newKeys.forEach(key => {
       const [unitId, variableId] = key.split('::');
-      if (unitId && variableId) {
+      if (unitId && variableId && (this.includeDerivedVariables || !this.isDerivedVariableKey(unitId, variableId))) {
         this.addVariable(variableId, unitId, undefined, undefined, undefined, true);
       }
     });
@@ -914,6 +1087,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (jobDef.assignedVariables && jobDef.assignedVariables.length > 0) {
       jobDef.assignedVariables.forEach((v: Variable) => {
+        if (!this.includeDerivedVariables && this.isVariableDerived(v)) {
+          return;
+        }
+
         const isAlreadyAdded = this.variablesFormArray.controls.some(c => !c.get('bundleId')?.value &&
           c.get('variableId')?.value === v.variableId &&
           c.get('unitId')?.value === v.unitName

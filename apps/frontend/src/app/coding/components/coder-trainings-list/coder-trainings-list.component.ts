@@ -19,13 +19,14 @@ import { MatCardModule } from '@angular/material/card';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   MatDialog, MatDialogModule
 } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
-import { CoderTraining } from '../../models/coder-training.model';
+import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 import { AppService } from '../../../core/services/app.service';
 import { CodingResultsComparisonComponent } from '../coding-results-comparison/coding-results-comparison.component';
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
@@ -49,7 +50,8 @@ import { BackendMessageTranslatorService } from '../../services/backend-message-
     MatDialogModule,
     MatSnackBarModule,
     MatFormFieldModule,
-    MatSelectModule
+    MatSelectModule,
+    MatTooltipModule
   ],
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
@@ -71,7 +73,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
   originalData: CoderTraining[] = [];
   selectedTrainingName: string | null = null;
   isLoading = false;
-  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'created_at'];
+  displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
 
   ngOnInit(): void {
     this.loadCoderTrainings();
@@ -151,6 +153,44 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         selectedTraining: training
       }
     });
+  }
+
+  getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste zuerst';
+      case 'newest_first':
+        return 'Neueste zuerst';
+      case 'random':
+        return 'Zufällig';
+      case 'random_per_testgroup':
+        return 'Zufällig je Testgruppe';
+      case 'random_testgroups':
+        return 'Zufällige Testgruppen';
+      default:
+        return 'Älteste zuerst';
+    }
+  }
+
+  getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
+    switch (mode || 'oldest_first') {
+      case 'oldest_first':
+        return 'Älteste verfügbare Fälle pro Variable';
+      case 'newest_first':
+        return 'Neueste verfügbare Fälle pro Variable';
+      case 'random':
+        return 'Zufällig aus allen verfügbaren Fällen';
+      case 'random_per_testgroup':
+        return 'Möglichst gleichmäßig über Testgruppen';
+      case 'random_testgroups':
+        return 'Erst Testgruppen, dann Fälle zufällig';
+      default:
+        return 'Älteste verfügbare Fälle pro Variable';
+    }
+  }
+
+  getCaseOrderingModeLabel(mode?: 'continuous' | 'alternating' | null): string {
+    return mode === 'alternating' ? 'Abwechselnd' : 'Fortlaufend';
   }
 
   showTrainingJobs(training: CoderTraining): void {

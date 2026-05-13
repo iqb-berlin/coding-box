@@ -159,6 +159,17 @@ mat-form-field {
 .variable-selection-controls {
   width: 100%;
 
+  .derived-toggle {
+    display: block;
+    margin-bottom: 12px;
+    color: #2d3748;
+  }
+
+  .derived-count {
+    color: #718096;
+    font-size: 0.85rem;
+  }
+
   .bundle-select-field,
   .variable-multiselect-field {
     width: 100%;
@@ -252,6 +263,13 @@ mat-form-field {
       min-width: 0;
     }
 
+    .variable-name-cell {
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
     .variable-name-field,
     .sample-count-field {
       overflow: visible;
@@ -276,6 +294,65 @@ mat-form-field {
         color: #e53e3e;
       }
     }
+  }
+}
+
+// Informational chips and strategy copy
+.strategy-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-top: -4px;
+  color: #2a4365;
+  background: #ebf8ff;
+  border: 1px solid #bee3f8;
+  border-radius: 6px;
+  max-width: 720px;
+
+  mat-icon {
+    color: #3182ce;
+    font-size: 20px;
+    height: 20px;
+    width: 20px;
+    margin-top: 1px;
+  }
+
+  div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  strong {
+    font-size: 0.85rem;
+  }
+
+  span {
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+}
+
+.derived-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #edf2f7;
+  border: 1px solid #cbd5e0;
+  color: #2d3748;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+
+  &.compact {
+    margin-left: 8px;
+    padding: 1px 6px;
+    min-height: 18px;
+    font-size: 0.68rem;
   }
 }
 
