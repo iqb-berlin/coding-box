@@ -1153,17 +1153,17 @@ export class ExternalCodingImportService {
   }
 
   private generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables:${workspaceId}`;
+    return `coding_incomplete_variables_v3:${workspaceId}`;
   }
 
   /**
-   * Clear the CODING_INCOMPLETE variables cache for a specific workspace
+   * Clear the manual coding variables cache for a specific workspace
    * Should be called whenever coding status changes for the workspace
    * @param workspaceId The workspace ID to clear cache for
    */
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 }

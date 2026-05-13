@@ -1363,9 +1363,9 @@ export class CodingResultsExportService {
       incompleteVariables = await this.codingListService.getCodingListVariables(workspaceId);
 
       if (incompleteVariables.length === 0) {
-        throw new Error('No CODING_INCOMPLETE variables found for this workspace');
+        throw new Error('No manual coding variables found for this workspace');
       }
-      this.logger.log(`Found ${incompleteVariables.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      this.logger.log(`Found ${incompleteVariables.length} manual coding variables for workspace ${workspaceId}`);
     }
 
     // Create a filter set for quick lookup: "unitName|variableId"
@@ -1407,7 +1407,7 @@ export class CodingResultsExportService {
     this.logger.log(`Filtered to ${filteredUnitVariableResults.length} unit-variable combinations from ${unitVariableResults.length} total CODING_INCOMPLETE responses`);
 
     if (filteredUnitVariableResults.length === 0) {
-      throw new Error('No CODING_INCOMPLETE variables with responses found for this workspace');
+      throw new Error('No manual coding variables with responses found for this workspace');
     }
 
     // Check if we exceed the worksheet limit

@@ -18,37 +18,37 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
   ) { }
 
   /**
-   * Run on module initialization to pre-cache all CODING_INCOMPLETE variables
+   * Run on module initialization to pre-cache all manual coding variables.
    */
   async onModuleInit(): Promise<void> {
-    this.logger.log('Starting CODING_INCOMPLETE variables cache warmup on application startup');
+    this.logger.log('Starting manual coding variables cache warmup on application startup');
 
     try {
       await this.cacheAllWorkspacesIncompleteVariables();
-      this.logger.log('Completed CODING_INCOMPLETE variables cache warmup');
+      this.logger.log('Completed manual coding variables cache warmup');
     } catch (error) {
-      this.logger.error(`Error during CODING_INCOMPLETE variables cache warmup: ${error.message}`, error.stack);
+      this.logger.error(`Error during manual coding variables cache warmup: ${error.message}`, error.stack);
       // Don't throw error to avoid crashing application startup
     }
   }
 
   /**
-   * Daily refresh of CODING_INCOMPLETE variables cache
+   * Daily refresh of manual coding variables cache.
    */
   @Cron(CronExpression.EVERY_DAY_AT_2AM)
   async refreshAllCODINGIncompleteVariablesCache(): Promise<void> {
-    this.logger.log('Starting daily refresh of CODING_INCOMPLETE variables cache');
+    this.logger.log('Starting daily refresh of manual coding variables cache');
 
     try {
       await this.cacheAllWorkspacesIncompleteVariables();
-      this.logger.log('Completed daily refresh of CODING_INCOMPLETE variables cache');
+      this.logger.log('Completed daily refresh of manual coding variables cache');
     } catch (error) {
-      this.logger.error(`Error during daily CODING_INCOMPLETE variables cache refresh: ${error.message}`, error.stack);
+      this.logger.error(`Error during daily manual coding variables cache refresh: ${error.message}`, error.stack);
     }
   }
 
   /**
-   * Cache CODING_INCOMPLETE variables for all workspaces
+   * Cache manual coding variables for all workspaces.
    */
   private async cacheAllWorkspacesIncompleteVariables(): Promise<void> {
     const startTime = Date.now();
@@ -101,23 +101,23 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
 
       const finalMemoryUsage = this.getMemoryUsage();
       const duration = (Date.now() - startTime) / 1000;
-      this.logger.log(`Cached CODING_INCOMPLETE variables for all workspaces in ${duration.toFixed(2)} seconds. Final memory usage: ${finalMemoryUsage}`);
+      this.logger.log(`Cached manual coding variables for all workspaces in ${duration.toFixed(2)} seconds. Final memory usage: ${finalMemoryUsage}`);
     } catch (error) {
-      this.logger.error(`Error caching all workspaces' CODING_INCOMPLETE variables: ${error.message}`, error.stack);
+      this.logger.error(`Error caching all workspaces' manual coding variables: ${error.message}`, error.stack);
     }
   }
 
   /**
-   * Cache CODING_INCOMPLETE variables for a single workspace
+   * Cache manual coding variables for a single workspace.
    */
   private async cacheWorkspaceIncompleteVariables(workspaceId: number): Promise<void> {
     try {
-      this.logger.debug(`Caching CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      this.logger.debug(`Caching manual coding variables for workspace ${workspaceId}`);
 
       // Call the getCodingIncompleteVariables method which will fill the cache
       await this.codingValidationService.getCodingIncompleteVariables(workspaceId);
 
-      this.logger.debug(`Successfully cached CODING_INCOMPLETE variables for workspace ${workspaceId}`);
+      this.logger.debug(`Successfully cached manual coding variables for workspace ${workspaceId}`);
     } catch (error) {
       // Handle specific memory-related errors
       if (error.message.includes('heap limit') || error.message.includes('out of memory') || error.code === 'ERR_OUT_OF_MEMORY') {
@@ -143,7 +143,7 @@ export class CodingIncompleteCacheSchedulerService implements OnModuleInit {
         // Continue processing other workspaces but don't stop the whole operation
         this.logger.warn(`Skipping workspace ${workspaceId} due to memory constraints. Continuing with other workspaces.`);
       } else {
-        this.logger.error(`Error caching CODING_INCOMPLETE variables for workspace ${workspaceId}: ${error.message}`, error.stack);
+        this.logger.error(`Error caching manual coding variables for workspace ${workspaceId}: ${error.message}`, error.stack);
       }
       // Don't rethrow to avoid failing other workspaces
     }

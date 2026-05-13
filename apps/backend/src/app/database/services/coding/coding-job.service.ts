@@ -503,9 +503,9 @@ export class CodingJobService {
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables_v2:${workspaceId}`;
+    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
   async assignCoders(codingJobId: number, userIds: number[], manager?: EntityManager): Promise<CodingJobCoder[]> {
@@ -1195,7 +1195,13 @@ export class CodingJobService {
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      });
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};

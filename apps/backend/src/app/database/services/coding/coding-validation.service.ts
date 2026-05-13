@@ -222,7 +222,7 @@ export class CodingValidationService {
     try {
       if (unitName || trainingRequired !== undefined) {
         this.logger.log(
-          `Querying CODING_INCOMPLETE variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
+          `Querying manual coding variables for workspace ${workspaceId}${unitName ? ` and unit ${unitName}` : ''}${trainingRequired !== undefined ? ` (trainingRequired: ${trainingRequired})` : ''} (not cached)`
         );
         const variables = await this.fetchCodingIncompleteVariablesFromDb(
           workspaceId,
@@ -246,12 +246,12 @@ export class CodingValidationService {
       >(cacheKey);
       if (cachedResult) {
         this.logger.log(
-          `Retrieved ${cachedResult.length} CODING_INCOMPLETE variables from cache for workspace ${workspaceId}`
+          `Retrieved ${cachedResult.length} manual coding variables from cache for workspace ${workspaceId}`
         );
         return cachedResult;
       }
       this.logger.log(
-        `Cache miss: Querying CODING_INCOMPLETE variables for workspace ${workspaceId}`
+        `Cache miss: Querying manual coding variables for workspace ${workspaceId}`
       );
       const variables = await this.fetchCodingIncompleteVariablesFromDb(
         workspaceId
@@ -264,21 +264,21 @@ export class CodingValidationService {
       const cacheSet = await this.cacheService.set(cacheKey, result, 300); // Cache for 5 minutes
       if (cacheSet) {
         this.logger.log(
-          `Cached ${result.length} CODING_INCOMPLETE variables for workspace ${workspaceId}`
+          `Cached ${result.length} manual coding variables for workspace ${workspaceId}`
         );
       } else {
         this.logger.warn(
-          `Failed to cache CODING_INCOMPLETE variables for workspace ${workspaceId}`
+          `Failed to cache manual coding variables for workspace ${workspaceId}`
         );
       }
       return result;
     } catch (error) {
       this.logger.error(
-        `Error getting CODING_INCOMPLETE variables: ${error.message}`,
+        `Error getting manual coding variables: ${error.message}`,
         error.stack
       );
       throw new Error(
-        'Could not get CODING_INCOMPLETE variables. Please check the database connection.'
+        'Could not get manual coding variables. Please check the database connection.'
       );
     }
   }
@@ -441,9 +441,8 @@ export class CodingValidationService {
     );
 
     // Load both lookup maps from the file service
-    const [unitVariableMap, intendedIncompleteSchemeMap, derivedVariableMap, trainingRequiredMap] = await Promise.all([
+    const [unitVariableMap, derivedVariableMap, trainingRequiredMap] = await Promise.all([
       this.workspaceFilesService.getUnitVariableMap(workspaceId),
-      this.workspaceFilesService.getIntendedIncompleteSchemeVariableMap(workspaceId),
       this.workspaceFilesService.getDerivedVariableMap(workspaceId),
       this.workspaceFilesService.getCoderTrainingRequiredVariableMap(workspaceId)
     ]);
@@ -459,11 +458,6 @@ export class CodingValidationService {
       derivedVariableSets.set(unitNameKey.toUpperCase(), variables);
     });
 
-    const intendedIncompleteSchemeVars = new Map<string, Set<string>>();
-    intendedIncompleteSchemeMap.forEach((variables: Set<string>, unitNameKey: string) => {
-      intendedIncompleteSchemeVars.set(unitNameKey.toUpperCase(), variables);
-    });
-
     const trainingRequiredSets = new Map<string, Set<string>>();
     trainingRequiredMap.forEach((variables: Set<string>, unitNameKey: string) => {
       trainingRequiredSets.set(unitNameKey.toUpperCase(), variables);
@@ -472,15 +466,6 @@ export class CodingValidationService {
     this.logger.debug(
       `[DEBUG] unitVariableMap units: [${Array.from(validVariableSets.keys()).join(', ')}]`
     );
-    this.logger.debug(
-      `[DEBUG] intendedIncompleteSchemeMap units: [${Array.from(intendedIncompleteSchemeVars.keys()).join(', ')}]`
-    );
-    for (const [unit, vars] of intendedIncompleteSchemeVars.entries()) {
-      this.logger.debug(
-        `[DEBUG] INTENDED_INCOMPLETE scheme vars for unit "${unit}": [${Array.from(vars).join(', ')}]`
-      );
-    }
-
     // Filter results, applying trainingRequired filter if provided
     const filterFn = (row: { unitName: string; variableId: string; responseCount: string }) => {
       const unitKey = row.unitName?.toUpperCase();
@@ -501,20 +486,7 @@ export class CodingValidationService {
     };
 
     const filteredCodingIncomplete = codingIncompleteRaw.filter(filterFn);
-
-    // INTENDED_INCOMPLETE: also check scheme exclusion
-    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(row => {
-      if (!filterFn(row)) return false;
-
-      const schemeVars = intendedIncompleteSchemeVars.get(row.unitName?.toUpperCase());
-      const hasIntendedIncompleteInScheme = schemeVars?.has(row.variableId) ?? false;
-      if (hasIntendedIncompleteInScheme) {
-        this.logger.debug(
-          `[DEBUG] INTENDED_INCOMPLETE EXCLUDED ${row.unitName}::${row.variableId} — has INTENDED_INCOMPLETE code in scheme`
-        );
-      }
-      return !hasIntendedIncompleteInScheme;
-    });
+    const filteredIntendedIncomplete = intendedIncompleteRaw.filter(filterFn);
 
     // Merge results, summing response counts for variables that appear in both
     const mergedMap = new Map<string, {
@@ -556,14 +528,14 @@ export class CodingValidationService {
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v2:${workspaceId}`;
+    return `coding_incomplete_variables_v3:${workspaceId}`;
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
     const cacheKey = this.generateIncompleteVariablesCacheKey(workspaceId);
     await this.cacheService.delete(cacheKey);
     this.logger.log(
-      `Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`
+      `Invalidated manual coding variables cache for workspace ${workspaceId}`
     );
   }
 
@@ -612,7 +584,7 @@ export class CodingValidationService {
   ): Promise<number> {
     try {
       this.logger.log(
-        `Getting applied results count for ${incompleteVariables.length} CODING_INCOMPLETE variables in workspace ${workspaceId}`
+        `Getting applied results count for ${incompleteVariables.length} manual coding variables in workspace ${workspaceId}`
       );
 
       if (incompleteVariables.length === 0) {

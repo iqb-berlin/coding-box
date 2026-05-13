@@ -147,7 +147,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der CODING_INCOMPLETE Variablen', 'Schließen', { duration: 3000 });
+        this.snackBar.open('Fehler beim Laden der manuell zu kodierenden Variablen', 'Schließen', { duration: 3000 });
       }
     });
   }
@@ -187,7 +187,7 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
         });
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der CODING_INCOMPLETE Variablen', 'Schließen', { duration: 3000 });
+        this.snackBar.open('Fehler beim Laden der manuell zu kodierenden Variablen', 'Schließen', { duration: 3000 });
       }
     });
   }
