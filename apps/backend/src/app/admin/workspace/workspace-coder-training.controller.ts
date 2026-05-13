@@ -467,6 +467,11 @@ export class WorkspaceCoderTrainingController {
           personCode: { type: 'string', description: 'Person code' },
           testPerson: { type: 'string', description: 'Test person details' },
           givenAnswer: { type: 'string', description: 'Given answer' },
+          discussionCode: { type: 'number', nullable: true },
+          discussionScore: { type: 'number', nullable: true },
+          discussionManagerUserId: { type: 'number', nullable: true },
+          discussionManagerName: { type: 'string', nullable: true },
+          discussionSource: { type: 'string', enum: ['manual', 'auto_agreement'], nullable: true },
           coders: {
             type: 'array',
             items: {
@@ -508,6 +513,7 @@ export class WorkspaceCoderTrainingController {
         discussionScore: number | null;
         discussionManagerUserId: number | null;
         discussionManagerName: string | null;
+        discussionSource: 'manual' | 'auto_agreement' | null;
         coders: Array<{
           jobId: number;
           coderName: string;
