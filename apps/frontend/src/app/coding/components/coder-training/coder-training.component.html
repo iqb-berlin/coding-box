@@ -282,23 +282,47 @@
       </div>
 
       <div class="variable-selection-controls">
-        <mat-form-field appearance="outline" class="variable-multiselect-field">
-          <mat-label>Variablen auswählen</mat-label>
-          <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
-            <div class="select-search-container">
-              <mat-form-field appearance="fill" class="select-search-field">
-                <mat-icon matPrefix>search</mat-icon>
-                <input matInput [formControl]="variableFilterCtrl" placeholder="Suchen..."
-                  (keydown)="$event.stopPropagation()">
-              </mat-form-field>
-            </div>
-            <mat-option *ngFor="let variable of filteredVariables$ | async"
-              [value]="variable.unitName + '::' + variable.variableId">
-              {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
-              <span *ngIf="isVariableDerived(variable)" class="derived-chip compact">abgeleitet</span>
-            </mat-option>
-          </mat-select>
-        </mat-form-field>
+        <div class="variable-selection-row">
+          <mat-form-field appearance="outline" class="variable-multiselect-field">
+            <mat-label>Variablen auswählen</mat-label>
+            <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
+              <div class="select-search-container">
+                <mat-form-field appearance="fill" class="select-search-field">
+                  <mat-icon matPrefix>search</mat-icon>
+                  <input matInput [formControl]="variableFilterCtrl" placeholder="Suchen..."
+                    (keydown)="$event.stopPropagation()">
+                </mat-form-field>
+              </div>
+              <mat-option *ngFor="let variable of filteredVariables$ | async"
+                [value]="variable.unitName + '::' + variable.variableId">
+                {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+                <span *ngIf="isVariableDerived(variable)" class="derived-chip compact">abgeleitet</span>
+              </mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <div class="variable-selection-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              color="primary"
+              (click)="selectAllManualVariables()"
+              [disabled]="!hasSelectableManualVariables()"
+              matTooltip="Wählt alle aktuell gefilterten, manuell auswählbaren Variablen aus. Variablenbündel bleiben unverändert.">
+              <mat-icon>select_all</mat-icon>
+              Alle auswählen
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="clearManualVariables()"
+              [disabled]="!hasManualVariablesSelected()"
+              matTooltip="Entfernt nur die manuell ausgewählten Variablen. Variablen aus Variablenbündeln bleiben erhalten.">
+              <mat-icon>clear_all</mat-icon>
+              Alle abwählen
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="variable-config">

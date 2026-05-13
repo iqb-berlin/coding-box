@@ -167,6 +167,32 @@ mat-form-field {
   }
 }
 
+.variable-selection-row {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.variable-selection-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  button {
+    min-height: 40px;
+    white-space: nowrap;
+  }
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+    margin-right: 4px;
+  }
+}
+
 .variable-basis-panel {
   display: flex;
   align-items: center;
@@ -695,6 +721,17 @@ mat-form-field {
         justify-content: flex-start;
         height: auto;
       }
+    }
+  }
+
+  .variable-selection-row,
+  .variable-selection-actions {
+    width: 100%;
+  }
+
+  .variable-selection-actions {
+    button {
+      flex: 1 1 160px;
     }
   }
 

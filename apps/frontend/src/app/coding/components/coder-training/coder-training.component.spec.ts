@@ -216,6 +216,77 @@ describe('CoderTrainingComponent', () => {
     expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
   });
 
+  it('selects all currently filtered manual variables and respects the derived filter', () => {
+    component.variableFilterCtrl.setValue('VAR2');
+
+    component.selectAllManualVariables();
+
+    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT2::VAR2']);
+    expect(component.selectedManualVariableIds).toEqual(['VAR2']);
+
+    component.variableFilterCtrl.setValue('');
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+
+    component.selectAllManualVariables();
+
+    expect(new Set(component.manualVariablesSelectControl.value || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
+    expect(component.getSelectedDerivedVariablesCount()).toBe(0);
+    expect(component.hasSelectableManualVariables()).toBe(false);
+  });
+
+  it('clears only manual variables and keeps bundle variables selected', () => {
+    component.onVariablesSelectionChange(['UNIT::VAR']);
+    component.onBundleSelectionChange([5]);
+
+    expect(component.getManualVariablesCount()).toBe(1);
+    expect(component.getBundleVariablesCount()).toBe(2);
+
+    component.clearManualVariables();
+
+    expect(component.getManualVariablesCount()).toBe(0);
+    expect(component.getBundleVariablesCount()).toBe(2);
+    expect(component.selectedBundleArray).toContain(5);
+    expect(component.variablesFormArray.controls.every(control => control.get('bundleId')?.value === 5)).toBe(true);
+  });
+
+  it('keeps derived toggle synchronized after bulk selection and submits only included variables', () => {
+    component.selectAllManualVariables();
+
+    expect(component.getSelectedVariablesCount()).toBe(3);
+    expect(component.getSelectedDerivedVariablesCount()).toBe(1);
+
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+
+    expect(component.getSelectedVariablesCount()).toBe(2);
+    expect(component.getSelectedDerivedVariablesCount()).toBe(0);
+    expect(new Set(component.manualVariablesSelectControl.value || [])).toEqual(new Set(['UNIT::VAR', 'UNIT2::VAR2']));
+
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('Bulk Derived');
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [component.coders[0]],
+      [
+        { variableId: 'VAR', unitId: 'UNIT', sampleCount: 8 },
+        { variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }
+      ],
+      'Bulk Derived',
+      undefined,
+      [
+        { variableId: 'VAR', unitName: 'UNIT', sampleCount: 8 },
+        { variableId: 'VAR2', unitName: 'UNIT2', sampleCount: 4 }
+      ],
+      [],
+      'continuous',
+      'oldest_first',
+      undefined,
+      undefined
+    );
+  });
+
   it('removes derived-only bundle selections when derived variables are excluded', () => {
     component.onBundleSelectionChange([6]);
 
