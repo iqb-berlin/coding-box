@@ -211,27 +211,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.trainingForm.get('includeDerivedVariables')!.valueChanges.pipe(startWith(true)),
       this._availableVariables$
     ]).pipe(
-      map(([filter, selectedBundleIds, , includeDerivedVariables, availableVariables]) => {
-        const search = (filter || '').toLowerCase();
-
-        const variablesInBundles = new Set<string>();
-        selectedBundleIds.forEach(bundleId => {
-          const bundle = this.availableBundles.find(b => b.id === bundleId);
-          if (bundle) {
-            bundle.variables.forEach(v => {
-              variablesInBundles.add(`${v.unitName}::${v.variableId}`);
-            });
-          }
-        });
-
-        return availableVariables.filter(v => {
-          const matchesSearch = v.variableId.toLowerCase().includes(search) ||
-            v.unitName.toLowerCase().includes(search);
-          const inBundle = variablesInBundles.has(`${v.unitName}::${v.variableId}`);
-          const matchesDerivedFilter = includeDerivedVariables || !v.isDerived;
-          return matchesSearch && !inBundle && matchesDerivedFilter;
-        });
-      })
+      map(([filter, selectedBundleIds, , includeDerivedVariables, availableVariables]) => this.getSelectableManualVariables(
+        filter || '',
+        selectedBundleIds,
+        !!includeDerivedVariables,
+        availableVariables
+      ))
     );
 
     this.filteredBundles$ = this.bundleFilterCtrl.valueChanges.pipe(
@@ -582,6 +567,68 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       variable.variableId === variableId &&
       variable.isDerived
     ));
+  }
+
+  private getVariableKey(variable: Pick<Variable, 'unitName' | 'variableId'>): string {
+    return `${variable.unitName}::${variable.variableId}`;
+  }
+
+  private getVariablesInSelectedBundles(selectedBundleIds: number[] = this.selectedBundleArray): Set<string> {
+    const variablesInBundles = new Set<string>();
+    selectedBundleIds.forEach(bundleId => {
+      const bundle = this.availableBundles.find(b => b.id === bundleId);
+      bundle?.variables.forEach(variable => {
+        variablesInBundles.add(this.getVariableKey(variable));
+      });
+    });
+    return variablesInBundles;
+  }
+
+  private getSelectableManualVariables(
+    filter = this.variableFilterCtrl.value || '',
+    selectedBundleIds: number[] = this.selectedBundleArray,
+    includeDerivedVariables = this.includeDerivedVariables,
+    availableVariables: Variable[] = this.availableVariables
+  ): Variable[] {
+    const search = filter.toLowerCase();
+    const variablesInBundles = this.getVariablesInSelectedBundles(selectedBundleIds);
+
+    return availableVariables.filter(variable => {
+      const matchesSearch = variable.variableId.toLowerCase().includes(search) ||
+        variable.unitName.toLowerCase().includes(search);
+      const inBundle = variablesInBundles.has(this.getVariableKey(variable));
+      const matchesDerivedFilter = includeDerivedVariables || !this.isVariableDerived(variable);
+      return matchesSearch && !inBundle && matchesDerivedFilter;
+    });
+  }
+
+  getSelectableManualVariableKeys(): string[] {
+    return this.getSelectableManualVariables().map(variable => this.getVariableKey(variable));
+  }
+
+  hasSelectableManualVariables(): boolean {
+    const selectedManualKeys = new Set(this.manualVariablesSelectControl.value || []);
+    return this.getSelectableManualVariableKeys().some(key => !selectedManualKeys.has(key));
+  }
+
+  hasManualVariablesSelected(): boolean {
+    return this.getManualVariablesCount() > 0;
+  }
+
+  selectAllManualVariables(): void {
+    const selectedManualKeys = this.manualVariablesSelectControl.value || [];
+    const selectableManualKeys = this.getSelectableManualVariableKeys();
+    const nextSelection = Array.from(new Set([...selectedManualKeys, ...selectableManualKeys]));
+
+    if (nextSelection.length !== selectedManualKeys.length) {
+      this.manualVariablesSelectControl.setValue(nextSelection);
+    }
+  }
+
+  clearManualVariables(): void {
+    if (this.hasManualVariablesSelected()) {
+      this.manualVariablesSelectControl.setValue([]);
+    }
   }
 
   addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
