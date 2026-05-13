@@ -1301,7 +1301,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const currentSelectedIds = Array.from(this.selectedBundleIds);
       jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
         if (!currentSelectedIds.includes(b.id)) {
-          this.addBundleVariables(b.id, defaultSampleCount);
+          this.addBundleVariables(b.id, defaultSampleCount, b.caseOrderingMode);
           if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
             this.selectedBundleIds.add(b.id);
             bundlesAdded += 1;

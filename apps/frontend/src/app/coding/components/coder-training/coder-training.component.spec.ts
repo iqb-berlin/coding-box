@@ -382,4 +382,40 @@ describe('CoderTrainingComponent', () => {
       undefined
     );
   });
+
+  it('preserves bundle ordering overrides when importing a job definition', () => {
+    component.availableBundles = [
+      {
+        id: 5,
+        name: 'Bundle',
+        description: 'Bundle description',
+        variables: [
+          { unitName: 'UNIT2', variableId: 'VAR2' }
+        ],
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ] as never;
+
+    (component as unknown as {
+      importJobDefinitionSelections: (
+        jobDef: {
+          assignedVariables?: never[];
+          assignedVariableBundles: Array<{ id: number; name: string; caseOrderingMode: 'continuous' | 'alternating' }>;
+        },
+        defaultSampleCount: number
+      ) => void;
+    }).importJobDefinitionSelections({
+      assignedVariables: [],
+      assignedVariableBundles: [
+        { id: 5, name: 'Bundle', caseOrderingMode: 'alternating' }
+      ]
+    }, 2);
+
+    expect(component.getSelectedBundleCount()).toBe(1);
+    expect(component.getBundleOrderingOverrides()).toEqual([
+      { name: 'Bundle', label: 'Abwechselnd' }
+    ]);
+    expect(component.variablesFormArray.at(0).get('bundleCaseOrderingMode')?.value).toBe('alternating');
+  });
 });
