@@ -182,7 +182,7 @@ export class WorkspaceCoreService {
       this.cacheService.delete(`coding-statistics:${workspaceId}:v1`),
       this.cacheService.delete(`coding-statistics:${workspaceId}:v2`),
       this.cacheService.delete(`coding-statistics:${workspaceId}:v3`),
-      this.cacheService.delete(`coding_incomplete_variables_v2:${workspaceId}`),
+      this.cacheService.delete(`coding_incomplete_variables_v3:${workspaceId}`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
       this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),
       this.cacheService.deleteByPattern(`responses:${workspaceId}:*`),

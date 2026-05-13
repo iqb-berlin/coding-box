@@ -280,9 +280,9 @@ export class CodingResultsService {
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
-    const cacheKey = `coding_incomplete_variables:${workspaceId}`;
+    const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
     await this.cacheService.delete(cacheKey);
-    this.logger.log(`Invalidated CODING_INCOMPLETE variables cache for workspace ${workspaceId}`);
+    this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
   /**

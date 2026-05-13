@@ -16,6 +16,7 @@ describe('CodingValidationService', () => {
   let mockCodingJobUnitRepository: jest.Mocked<Repository<CodingJobUnit>>;
   let mockCacheService: jest.Mocked<CacheService>;
   let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
+  let mockCodingJobService: jest.Mocked<CodingJobService>;
 
   const mockQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
@@ -42,6 +43,20 @@ describe('CodingValidationService', () => {
     ...overrides
   });
 
+  const createQueryBuilderMock = <T extends Record<string, unknown>>(rawResults: T[] = []) => ({
+    innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orWhere: jest.fn().mockReturnThis(),
+    getCount: jest.fn(),
+    select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue(rawResults)
+  }) as unknown as jest.Mocked<SelectQueryBuilder<ResponseEntity>>;
+
   beforeEach(async () => {
     mockResponseRepository = {
       createQueryBuilder: jest.fn(() => mockQueryBuilder),
@@ -62,8 +77,18 @@ describe('CodingValidationService', () => {
     } as unknown as jest.Mocked<CacheService>;
 
     mockWorkspaceFilesService = {
-      getUnitVariableMap: jest.fn()
+      getUnitVariableMap: jest.fn(),
+      getIntendedIncompleteSchemeVariableMap: jest.fn(),
+      getDerivedVariableMap: jest.fn(),
+      getCoderTrainingRequiredVariableMap: jest.fn()
     } as unknown as jest.Mocked<WorkspaceFilesService>;
+
+    mockCodingJobService = {
+      getResponseMatchingMode: jest.fn().mockResolvedValue([]),
+      getAggregationThreshold: jest.fn().mockResolvedValue(2),
+      getSlimResponsesForVariables: jest.fn().mockResolvedValue([]),
+      aggregateResponsesByValue: jest.fn().mockReturnValue([])
+    } as unknown as jest.Mocked<CodingJobService>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -96,12 +121,7 @@ describe('CodingValidationService', () => {
         },
         {
           provide: CodingJobService,
-          useValue: {
-            getResponseMatchingMode: jest.fn().mockResolvedValue([]),
-            getAggregationThreshold: jest.fn().mockResolvedValue(2),
-            getSlimResponsesForVariables: jest.fn().mockResolvedValue([]),
-            aggregateResponsesByValue: jest.fn().mockReturnValue([])
-          }
+          useValue: mockCodingJobService
         }
       ]
     }).compile();
@@ -402,7 +422,59 @@ describe('CodingValidationService', () => {
 
       expect(result).toEqual(cachedVariables);
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v2:1'
+        'coding_incomplete_variables_v3:1'
+      );
+    });
+
+    it('should include INTENDED_INCOMPLETE variables even when they are defined in the scheme', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '3' },
+        { unitName: 'unit1', variableId: 'intended-only', responseCount: '2' }
+      ]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1', 'intended-only'])]])
+      );
+      mockWorkspaceFilesService.getIntendedIncompleteSchemeVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1', 'intended-only'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 8,
+          availableCases: 8,
+          uniqueCasesAfterAggregation: 8
+        }),
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'intended-only',
+          responseCount: 2,
+          availableCases: 2,
+          uniqueCasesAfterAggregation: 2
+        })
+      ]);
+      expect(mockCacheService.set).toHaveBeenCalledWith(
+        'coding_incomplete_variables_v3:1',
+        result,
+        300
       );
     });
 
@@ -471,7 +543,7 @@ describe('CodingValidationService', () => {
       mockCacheService.get.mockRejectedValue(new Error('Database error'));
 
       await expect(service.getCodingIncompleteVariables(1)).rejects.toThrow(
-        'Could not get CODING_INCOMPLETE variables'
+        'Could not get manual coding variables'
       );
     });
   });
@@ -504,7 +576,7 @@ describe('CodingValidationService', () => {
     it('should generate correct cache key', () => {
       const cacheKey = service.generateIncompleteVariablesCacheKey(123);
 
-      expect(cacheKey).toBe('coding_incomplete_variables_v2:123');
+      expect(cacheKey).toBe('coding_incomplete_variables_v3:123');
     });
   });
 
@@ -515,7 +587,7 @@ describe('CodingValidationService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v2:1'
+        'coding_incomplete_variables_v3:1'
       );
     });
   });

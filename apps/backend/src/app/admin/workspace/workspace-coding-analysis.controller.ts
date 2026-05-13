@@ -199,7 +199,7 @@ export class WorkspaceCodingAnalysisController {
     type: Boolean
   })
   @ApiOkResponse({
-    description: 'CODING_INCOMPLETE variables retrieved successfully.',
+    description: 'Manual coding variables retrieved successfully.',
     schema: {
       type: 'array',
       items: {
@@ -266,7 +266,7 @@ export class WorkspaceCodingAnalysisController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiBody({
     description:
-      'List of CODING_INCOMPLETE variables to check for applied results',
+      'List of manual coding variables to check for applied results',
     schema: {
       type: 'object',
       properties: {
@@ -279,18 +279,18 @@ export class WorkspaceCodingAnalysisController {
               variableId: { type: 'string', description: 'Variable ID' }
             }
           },
-          description: 'List of variables that are CODING_INCOMPLETE'
+          description: 'List of variables with manual coding cases'
         }
       },
       required: ['incompleteVariables']
     }
   })
   @ApiOkResponse({
-    description: 'Count of applied results for CODING_INCOMPLETE variables.',
+    description: 'Count of applied results for manual coding variables.',
     schema: {
       type: 'number',
       description:
-        'Number of responses that were CODING_INCOMPLETE but have been changed to final statuses in status_v2'
+        'Number of manual coding responses that have been changed to final statuses in status_v2'
     }
   })
   async getAppliedResultsCount(
