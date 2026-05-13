@@ -1121,15 +1121,18 @@ export class WorkspaceCodingExportController {
         return;
       }
 
+      const normalizedFileName = metadata.fileName.toLowerCase();
       const isCsv =
-        metadata.fileName.toLowerCase().endsWith('.csv') ||
+        normalizedFileName.endsWith('.csv') ||
         metadata.exportType === 'detailed';
-      res.setHeader(
-        'Content-Type',
-        isCsv ?
-          'text/csv; charset=utf-8' :
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      );
+      const isJson = normalizedFileName.endsWith('.json');
+      let contentType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      if (isCsv) {
+        contentType = 'text/csv; charset=utf-8';
+      } else if (isJson) {
+        contentType = 'application/json; charset=utf-8';
+      }
+      res.setHeader('Content-Type', contentType);
       res.setHeader(
         'Content-Disposition',
         `attachment; filename="${metadata.fileName}"`

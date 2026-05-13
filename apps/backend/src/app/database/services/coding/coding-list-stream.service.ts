@@ -54,7 +54,7 @@ export class CodingListStreamService {
     (async () => {
       try {
         const totalRows = await this.responseFilterService.countResponses(workspace_id);
-        const batchSize = 5000;
+        const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
 
@@ -425,7 +425,7 @@ export class CodingListStreamService {
           validCodingVariablesOnly: true,
           givenResponsesOnly: true
         });
-        const batchSize = 5000;
+        const batchSize = 500;
         let lastId = 0;
         let totalWritten = 0;
 
@@ -447,23 +447,19 @@ export class CodingListStreamService {
 
           if (!responses.length) break;
 
-          // Process responses in parallel batches
-          const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
-            response,
-            version,
-            authToken,
-            serverUrl!,
-            workspace_id,
-            includeReplayUrls,
-            includeResponseValues
-          ));
+          for (const response of responses) {
+            const item = await this.itemBuilderService.buildCodingItemWithVersions(
+              response,
+              version,
+              authToken,
+              serverUrl!,
+              workspace_id,
+              includeReplayUrls,
+              includeResponseValues
+            );
 
-          const results = await Promise.allSettled(processingPromises);
-
-          // Write items directly to CSV stream without accumulating
-          for (const result of results) {
-            if (result.status === 'fulfilled' && result.value !== null) {
-              const ok = csvStream.write(result.value);
+            if (item !== null) {
+              const ok = csvStream.write(item);
               totalWritten += 1;
 
               if (!ok) {
@@ -555,7 +551,7 @@ export class CodingListStreamService {
 
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
-    const batchSize = 1000; // Reduced batch size for streaming
+    const batchSize = 500;
     let lastId = 0;
     let totalWritten = 0;
 
@@ -580,23 +576,19 @@ export class CodingListStreamService {
 
         if (!responses.length) break;
 
-        // Process responses in parallel batches
-        const processingPromises = responses.map(response => this.itemBuilderService.buildCodingItemWithVersions(
-          response,
-          version,
-          authToken || '',
-          serverUrl || '',
-          workspace_id,
-          includeReplayUrls,
-          includeResponseValues
-        )
-        );
+        for (const response of responses) {
+          const item = await this.itemBuilderService.buildCodingItemWithVersions(
+            response,
+            version,
+            authToken || '',
+            serverUrl || '',
+            workspace_id,
+            includeReplayUrls,
+            includeResponseValues
+          );
 
-        const results = await Promise.allSettled(processingPromises);
-
-        for (const result of results) {
-          if (result.status === 'fulfilled' && result.value !== null) {
-            worksheet.addRow(result.value).commit(); // Commit each row immediately
+          if (item !== null) {
+            worksheet.addRow(item).commit(); // Commit each row immediately
             totalWritten += 1;
           }
         }
