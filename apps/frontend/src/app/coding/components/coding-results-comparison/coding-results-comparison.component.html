@@ -38,15 +38,15 @@
         </mat-form-field>
       </div>
       <mat-checkbox
+        class="training-checkbox"
         *ngFor="let training of filteredTrainings"
         [checked]="selectedTrainings.isSelected(training.id)"
         (change)="
           selectedTrainings.toggle(training.id); onTrainingSelectionChange()
         "
       >
-        {{ training.label }} ({{ training.jobsCount }}
-        {{ training.jobsCount === 1 ? 'Job' : 'Jobs' }}, erstellt:
-        {{ training.created_at | date: 'dd.MM.yyyy HH:mm' }})
+        <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+        <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
       </mat-checkbox>
 
       <div
@@ -76,7 +76,7 @@
               *ngFor="let coder of availableCodersFromTrainings"
               [value]="coder.trainingId + '_' + coder.coderId"
             >
-              {{ coder.trainingLabel }}: {{ coder.coderName }}
+              {{ getTrainingCoderOptionLabel(coder) }}
             </mat-option>
           </mat-select>
         </mat-form-field>
@@ -98,9 +98,10 @@
             *ngFor="let training of availableTrainings"
             [value]="training.id"
           >
-            {{ training.label }} ({{ training.jobsCount }}
-            {{ training.jobsCount === 1 ? 'Kodierer' : 'Kodierer' }}, erstellt:
-            {{ training.created_at | date: 'dd.MM.yyyy HH:mm' }})
+            <div class="training-option">
+              <span class="training-option-title">{{ getTrainingOptionTitle(training) }}</span>
+              <span class="training-option-meta">{{ getTrainingOptionMeta(training) }}</span>
+            </div>
           </mat-option>
         </mat-select>
       </mat-form-field>

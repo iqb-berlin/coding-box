@@ -45,6 +45,11 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 import { AppService } from '../../../core/services/app.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { CoderTraining, CaseSelectionMode, ReferenceMode } from '../../models/coder-training.model';
+import {
+  getDuplicateTrainingLabelMatches,
+  getTrainingOptionMeta,
+  getTrainingOptionTitle
+} from '../../utils/coder-training-display';
 
 export interface VariableConfig {
   variableId: string;
@@ -407,6 +412,37 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     return this.isEditMode ? 'Schulung aktualisieren' : 'Kodierungsaufträge erstellen';
+  }
+
+  getDuplicateTrainingLabelMatches(): CoderTraining[] {
+    return getDuplicateTrainingLabelMatches(
+      this.availableTrainings,
+      this.trainingForm.get('trainingLabel')?.value,
+      this.editTraining?.id
+    );
+  }
+
+  hasDuplicateTrainingLabel(): boolean {
+    return this.getDuplicateTrainingLabelMatches().length > 0;
+  }
+
+  getDuplicateTrainingLabelWarning(): string {
+    const matches = this.getDuplicateTrainingLabelMatches();
+    if (matches.length === 0) {
+      return '';
+    }
+
+    const ids = matches.slice(0, 3).map(training => `ID ${training.id}`).join(', ');
+    const suffix = matches.length > 3 ? ` und ${matches.length - 3} weitere` : '';
+    return `Diese Bezeichnung existiert bereits (${ids}${suffix}). Die Schulung kann trotzdem erstellt werden.`;
+  }
+
+  getTrainingOptionTitle(training: CoderTraining): string {
+    return getTrainingOptionTitle(training);
+  }
+
+  getTrainingOptionMeta(training: CoderTraining): string {
+    return getTrainingOptionMeta(training, 'Job', 'Jobs');
   }
 
   isVariableDerived(variable: Pick<Variable, 'unitName' | 'variableId' | 'isDerived'>): boolean {

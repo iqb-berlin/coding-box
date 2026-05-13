@@ -47,7 +47,14 @@ describe('CoderTrainingComponent', () => {
         unitName: 'UNIT3', variableId: 'DERIVED', responseCount: 6, uniqueCasesAfterAggregation: 6, isDerived: true
       }
     ]));
-    codingTrainingBackendService.getCoderTrainings.mockReturnValue(of([{ id: 99, label: 'Other' }]));
+    codingTrainingBackendService.getCoderTrainings.mockReturnValue(of([{
+      id: 99,
+      workspace_id: 1,
+      label: 'Other',
+      created_at: new Date('2026-05-13T09:00:00'),
+      updated_at: new Date('2026-05-13T09:00:00'),
+      jobsCount: 1
+    }]));
     variableBundleService.getBundles.mockReturnValue(of({
       bundles: [
         {
@@ -200,6 +207,41 @@ describe('CoderTrainingComponent', () => {
 
     expect(component.getSelectedDerivedVariablesCount()).toBe(1);
     expect(component.isControlDerived(component.variablesFormArray.at(0) as never)).toBe(true);
+  });
+
+  it('warns about duplicate training labels without blocking the workflow', () => {
+    component.availableTrainings = [
+      {
+        id: 10,
+        workspace_id: 1,
+        label: 'Training',
+        created_at: new Date('2026-05-13T10:00:00'),
+        updated_at: new Date('2026-05-13T10:00:00'),
+        jobsCount: 2
+      }
+    ];
+    component.selectAllCoders();
+    component.addVariable('VAR', 'UNIT', 1);
+    component.trainingForm.get('trainingLabel')?.setValue('  Training  ');
+
+    expect(component.hasDuplicateTrainingLabel()).toBe(true);
+    expect(component.getDuplicateTrainingLabelWarning()).toContain('ID 10');
+    expect(component.getDuplicateTrainingLabelWarning()).toContain('trotzdem erstellt');
+    expect(component.canStartTraining()).toBe(true);
+  });
+
+  it('formats reference training options with stable disambiguation data', () => {
+    const training = {
+      id: 33,
+      workspace_id: 1,
+      label: 'Duplicate Label',
+      created_at: new Date('2026-05-13T11:36:00'),
+      updated_at: new Date('2026-05-13T11:36:00'),
+      jobsCount: 2
+    };
+
+    expect(component.getTrainingOptionTitle(training)).toBe('Duplicate Label · ID 33');
+    expect(component.getTrainingOptionMeta(training)).toContain('2 Jobs');
   });
 
   it('removes derived variables when they are excluded', () => {

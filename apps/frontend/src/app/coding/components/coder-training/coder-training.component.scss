@@ -167,6 +167,43 @@ mat-form-field {
   }
 }
 
+.duplicate-label-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+  color: #805b10;
+  font-size: 0.85rem;
+  line-height: 1.35;
+
+  mat-icon {
+    flex: 0 0 auto;
+    color: #b7791f;
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
+  }
+}
+
+.training-option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.25;
+
+  .training-option-title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+
+  .training-option-meta {
+    color: #718096;
+    font-size: 0.78rem;
+    overflow-wrap: anywhere;
+  }
+}
+
 .variable-selection-row {
   display: flex;
   align-items: flex-start;

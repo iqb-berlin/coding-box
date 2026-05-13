@@ -32,6 +32,15 @@ import { CodingResultsComparisonComponent } from '../coding-results-comparison/c
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog.component';
 import { TrainingJobsDialogComponent } from './training-jobs-dialog.component';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
+import {
+  getTrainingOptionMeta,
+  normalizeTrainingLabel
+} from '../../utils/coder-training-display';
+
+interface TrainingNameFilterOption {
+  label: string;
+  count: number;
+}
 
 @Component({
   selector: 'coding-box-coder-trainings-list',
@@ -71,6 +80,8 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
 
   coderTrainings: CoderTraining[] = [];
   originalData: CoderTraining[] = [];
+  trainingNameFilterOptions: TrainingNameFilterOption[] = [];
+  duplicateTrainingLabels = new Set<string>();
   selectedTrainingName: string | null = null;
   isLoading = false;
   displayedColumns: string[] = ['actions', 'label', 'jobsCount', 'selectionStrategy', 'created_at'];
@@ -97,6 +108,7 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         .subscribe({
           next: (trainings: CoderTraining[]) => {
             this.originalData = trainings;
+            this.rebuildTrainingNameFilterOptions();
             this.applyAllFilters();
             this.isLoading = false;
             resolve();
@@ -104,6 +116,8 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
           error: () => {
             this.coderTrainings = [];
             this.originalData = [];
+            this.trainingNameFilterOptions = [];
+            this.duplicateTrainingLabels.clear();
             this.isLoading = false;
             reject();
           }
@@ -135,6 +149,50 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     }
 
     this.coderTrainings = this.originalData.filter(training => training.label === this.selectedTrainingName);
+  }
+
+  rebuildTrainingNameFilterOptions(): void {
+    const options = new Map<string, TrainingNameFilterOption>();
+    const normalizedCounts = new Map<string, number>();
+    this.originalData.forEach(training => {
+      const current = options.get(training.label);
+      if (current) {
+        current.count += 1;
+      } else {
+        options.set(training.label, { label: training.label, count: 1 });
+      }
+
+      const normalizedLabel = normalizeTrainingLabel(training.label);
+      if (normalizedLabel) {
+        normalizedCounts.set(normalizedLabel, (normalizedCounts.get(normalizedLabel) || 0) + 1);
+      }
+    });
+    this.trainingNameFilterOptions = Array.from(options.values());
+    this.duplicateTrainingLabels = new Set(
+      Array.from(normalizedCounts.entries())
+        .filter(([, count]) => count > 1)
+        .map(([label]) => label)
+    );
+  }
+
+  getTrainingNameFilterOptions(): TrainingNameFilterOption[] {
+    return this.trainingNameFilterOptions;
+  }
+
+  getTrainingNameFilterLabel(option: TrainingNameFilterOption): string {
+    return option.count > 1 ? `${option.label} (${option.count} Schulungen)` : option.label;
+  }
+
+  getTrainingOptionMeta(training: CoderTraining): string {
+    return getTrainingOptionMeta(training, 'Job', 'Jobs');
+  }
+
+  getTrainingTableMeta(training: CoderTraining): string {
+    return `ID ${training.id} · ${this.getTrainingOptionMeta(training)}`;
+  }
+
+  isDuplicateTrainingLabel(training: CoderTraining): boolean {
+    return this.duplicateTrainingLabels.has(normalizeTrainingLabel(training.label));
   }
 
   openResultsComparison(training?: CoderTraining): void {
