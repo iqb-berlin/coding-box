@@ -12,12 +12,48 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 
 type MockedRepo<T> = Partial<Record<keyof Repository<T>, jest.Mock>>;
 
-function createServiceWithDetailedMocks(codingIssueOption: number) {
+function createServiceWithDetailedMocks(
+  codingIssueOption: number,
+  overrides: {
+    unit?: Record<string, unknown>,
+    discussionResults?: Record<string, unknown>[],
+    users?: Record<string, unknown>[]
+  } = {}
+) {
   const totalCountQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn().mockResolvedValue(1)
+  };
+
+  const defaultUnit = {
+    code: 7,
+    coding_issue_option: codingIssueOption,
+    notes: '',
+    updated_at: new Date('2026-04-14T10:00:00.000Z'),
+    response_id: 123,
+    unit_name: 'U1',
+    variable_id: 'V1',
+    coding_job: {
+      training_id: null,
+      codingJobCoders: [{ user: { username: 'coder1' } }]
+    },
+    response: {
+      unit: {
+        name: 'U1',
+        booklet: {
+          person: {
+            login: 'p-login',
+            code: 'p-code',
+            group: 'G1'
+          },
+          bookletinfo: {
+            name: 'B1'
+          }
+        }
+      }
+    }
   };
 
   const unitsBatchQueryBuilder = {
@@ -28,34 +64,7 @@ function createServiceWithDetailedMocks(codingIssueOption: number) {
     orderBy: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
-    getMany: jest.fn().mockResolvedValue([{
-      code: 7,
-      coding_issue_option: codingIssueOption,
-      notes: '',
-      updated_at: new Date('2026-04-14T10:00:00.000Z'),
-      response_id: 123,
-      unit_name: 'U1',
-      variable_id: 'V1',
-      coding_job: {
-        training_id: null,
-        codingJobCoders: [{ user: { username: 'coder1' } }]
-      },
-      response: {
-        unit: {
-          name: 'U1',
-          booklet: {
-            person: {
-              login: 'p-login',
-              code: 'p-code',
-              group: 'G1'
-            },
-            bookletinfo: {
-              name: 'B1'
-            }
-          }
-        }
-      }
-    }])
+    getMany: jest.fn().mockResolvedValue([overrides.unit || defaultUnit])
   };
 
   const codingJobUnitRepository: MockedRepo<CodingJobUnit> = {
@@ -73,13 +82,20 @@ function createServiceWithDetailedMocks(codingIssueOption: number) {
     })
   } as unknown as WorkspaceExclusionService;
 
+  const discussionResultRepository = {
+    find: jest.fn().mockResolvedValue(overrides.discussionResults || [])
+  };
+  const userRepository = {
+    findBy: jest.fn().mockResolvedValue(overrides.users || [])
+  };
+
   const service = new CodingExportService(
     {} as Repository<ResponseEntity>,
     {} as Repository<CodingJob>,
     {} as Repository<CodingJobVariable>,
     codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
-    {} as Repository<CoderTrainingDiscussionResult>,
-    {} as Repository<User>,
+    discussionResultRepository as unknown as Repository<CoderTrainingDiscussionResult>,
+    userRepository as unknown as Repository<User>,
     {} as CodingListService,
     {} as WorkspaceCoreService,
     workspaceExclusionService
@@ -106,6 +122,67 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     const csv = buffer.toString('utf-8');
 
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+  });
+
+  it('emits detailed discussion rows even when the coder unit has no code', async () => {
+    const { service } = createServiceWithDetailedMocks(0, {
+      unit: {
+        code: null,
+        coding_issue_option: null,
+        notes: '',
+        updated_at: new Date('2026-04-14T10:00:00.000Z'),
+        response_id: 123,
+        unit_name: 'U1',
+        variable_id: 'V1',
+        coding_job: {
+          training_id: 5,
+          codingJobCoders: [{ user: { username: 'coder1' } }]
+        },
+        response: {
+          unit: {
+            name: 'U1',
+            booklet: {
+              person: {
+                login: 'p-login',
+                code: 'p-code',
+                group: 'G1'
+              },
+              bookletinfo: {
+                name: 'B1'
+              }
+            }
+          }
+        }
+      },
+      discussionResults: [{
+        training_id: 5,
+        response_id: 123,
+        code: 4,
+        manager_user_id: 2,
+        manager_name: 'stored-manager',
+        updated_at: new Date('2026-04-14T11:00:00.000Z')
+      }],
+      users: [{ id: 2, username: 'manager1' }]
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      [5]
+    );
+    const csv = buffer.toString('utf-8');
+
+    expect(csv).not.toContain('"coder1";"U1";"V1"');
+    expect(csv).toContain('"p-login";"p-code";"G1";"manager1";"U1";"V1";"";');
+    expect(csv).toContain(';"4";""');
   });
 
   it('ignores invalid job/training/coder filter ids', () => {
@@ -198,6 +275,50 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       expect.stringContaining('EXISTS'),
       { coderIds: [33] }
     );
+  });
+
+  it('keeps stored discussion manager names when manager users cannot be resolved', async () => {
+    const discussionResult = {
+      training_id: 5,
+      response_id: 100,
+      code: 2,
+      manager_user_id: 12,
+      manager_name: 'Stored Manager',
+      updated_at: new Date('2026-04-14T11:00:00.000Z')
+    };
+    const discussionResultRepository = {
+      find: jest.fn().mockResolvedValue([discussionResult])
+    };
+    const userRepository = {
+      findBy: jest.fn().mockResolvedValue([])
+    };
+
+    const service = new CodingExportService(
+      {} as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      {} as Repository<CodingJobUnit>,
+      discussionResultRepository as unknown as Repository<CoderTrainingDiscussionResult>,
+      userRepository as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      {} as WorkspaceExclusionService
+    );
+
+    const discussionResults = await (service as unknown as {
+      getTrainingDiscussionResultsMap: (
+        workspaceId: number,
+        trainingIds?: number[],
+        responseIds?: number[]
+      ) => Promise<Map<string, { code: number | null; managerUsername: string | null; updatedAt: Date }>>
+    }).getTrainingDiscussionResultsMap(7, [5], [100]);
+
+    expect(discussionResults.get('5|100')).toMatchObject({
+      code: 2,
+      managerUsername: 'Stored Manager',
+      updatedAt: discussionResult.updated_at
+    });
+    expect(userRepository.findBy).toHaveBeenCalledTimes(1);
   });
 
   it('scopes variable export helper queries to the current workspace', async () => {

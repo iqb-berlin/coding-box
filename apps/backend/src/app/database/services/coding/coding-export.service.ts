@@ -1899,7 +1899,7 @@ export class CodingExportService {
       coderTrainingIds,
       coderIds
     );
-    const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
+    const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '1000', 10);
 
     const BATCH_SIZE = 100;
 
@@ -1954,14 +1954,21 @@ export class CodingExportService {
 
     const isExcluded = await this.getExclusionChecker(workspaceId);
 
-    const filteredCombinations = combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName))
-      .slice(0, MAX_WORKSHEETS);
+    const filteredCombinations = combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName));
 
     if (filteredCombinations.length === 0) {
       throw new Error(
         hasScopedJobFilters ?
           'Keine Antworten für den gewählten Job-/Training-/Kodierer-Filter in diesem Export gefunden' :
           'Keine Antworten für den angeforderten Export gefunden'
+      );
+    }
+
+    if (filteredCombinations.length > MAX_WORKSHEETS) {
+      throw new Error(
+        `Der Export enthaelt ${filteredCombinations.length} Unit-Variable-Kombinationen ` +
+        `und ueberschreitet das konfigurierte Limit von ${MAX_WORKSHEETS} Tabellenblaettern. ` +
+        'Bitte EXPORT_MAX_WORKSHEETS erhoehen, damit der Export vollstaendig erzeugt wird.'
       );
     }
 
@@ -2420,7 +2427,6 @@ export class CodingExportService {
         };
 
         for (const unit of sortedUnitsBatch) {
-          if (unit.code === null || unit.code === undefined) continue;
           if (unit.unit_name && isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) continue;
           if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
 
@@ -2435,6 +2441,8 @@ export class CodingExportService {
 
           currentCaseKey = caseKey;
           if (!currentCaseRepresentative) currentCaseRepresentative = unit;
+
+          if (unit.code === null || unit.code === undefined) continue;
 
           const person = unit.response?.unit?.booklet?.person;
           const personLogin = person?.login || '';
@@ -2816,8 +2824,8 @@ export class CodingExportService {
     return new Map(
       discussionResults.map(result => {
         const managerUsername = result.manager_user_id ?
-          (managerUsernameById.get(result.manager_user_id) || null) :
-          null;
+          (managerUsernameById.get(result.manager_user_id) || result.manager_name || null) :
+          (result.manager_name || null);
 
         return [`${result.training_id}|${result.response_id}`, {
           code: result.code,
