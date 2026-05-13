@@ -379,14 +379,8 @@
                   (click)="!isVariableDisabled(variable) && selectedVariables.toggle(variable)">
                   <div class="variable-card-header">
                     <div class="variable-identifiers">
-                      <div class="variable-id">
-                        {{ variable.unitName }}_{{ variable.variableId }}
-                        @if (variable.coderTrainingRequired) {
-                        <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
-                          <mat-icon>school</mat-icon>
-                          Schulungsaufwand
-                        </mat-chip>
-                        }
+                      <div class="variable-id-row">
+                        <span class="variable-id-text">{{ variable.unitName }}_{{ variable.variableId }}</span>
                         @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
                         <mat-chip class="availability-chip" [ngClass]="getAvailabilityClass(variable)">
                           {{ getAvailabilityText(variable) }} verfügbar
@@ -400,11 +394,21 @@
                           matTooltipPosition="above">block</mat-icon>
                         }
                       </div>
-                      @if (variable.isDerived) {
-                      <mat-chip class="derived-chip" matTooltip="Abgeleitete Variable" matTooltipPosition="above">
-                        <mat-icon class="derived-chip-icon">merge_type</mat-icon>
-                        Abgeleitet
-                      </mat-chip>
+                      @if (variable.coderTrainingRequired || variable.isDerived) {
+                      <div class="variable-badges">
+                        @if (variable.coderTrainingRequired) {
+                        <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
+                          <mat-icon>school</mat-icon>
+                          Schulungsaufwand
+                        </mat-chip>
+                        }
+                        @if (variable.isDerived) {
+                        <mat-chip class="derived-chip" matTooltip="Abgeleitete Variable" matTooltipPosition="above">
+                          <mat-icon class="derived-chip-icon">merge_type</mat-icon>
+                          Abgeleitet
+                        </mat-chip>
+                        }
+                      </div>
                       }
                     </div>
                   </div>
