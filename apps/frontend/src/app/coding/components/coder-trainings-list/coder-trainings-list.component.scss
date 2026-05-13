@@ -49,7 +49,7 @@
   }
 
   .trainings-list {
-    --trainings-table-min-width: 720px;
+    --trainings-table-min-width: 860px;
 
     width: 100%;
     max-width: 100%;
@@ -170,12 +170,34 @@
     width: 120px;
   }
 
+  .mat-column-selectionStrategy {
+    width: 210px;
+  }
+
   .mat-column-created_at {
     width: 180px;
   }
 
   .mat-column-label {
     width: auto;
+  }
+
+  .strategy-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .strategy-label {
+    font-weight: 600;
+    color: #2d3748;
+    overflow-wrap: anywhere;
+  }
+
+  .strategy-subline {
+    font-size: 12px;
+    color: #718096;
   }
 
 @media (max-width: 768px) {

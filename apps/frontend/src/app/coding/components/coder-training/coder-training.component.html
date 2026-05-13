@@ -56,6 +56,13 @@
           <mat-option value="random_testgroups">{{ 'coding-job-definition-dialog.case-selection-mode.random_testgroups' | translate }}</mat-option>
         </mat-select>
       </mat-form-field>
+      <div class="strategy-info">
+        <mat-icon>info</mat-icon>
+        <div>
+          <strong>{{ getCaseSelectionModeLabel(trainingForm.get('caseSelectionMode')?.value) }}</strong>
+          <span>{{ getCaseSelectionModeDescription(trainingForm.get('caseSelectionMode')?.value) }}</span>
+        </div>
+      </div>
     </div>
 
     <!-- Reference Trainings Section -->
@@ -150,7 +157,15 @@
               <mat-option *ngFor="let bundle of filteredBundles$ | async" [value]="bundle.id"
                 [matTooltip]="bundle.description || ''" matTooltipPosition="above">
                 {{bundle.name}}
-                <span class="bundle-variable-count"> ({{bundle.variables.length}} Variablen)</span>
+                <span class="bundle-variable-count">
+                  ({{getBundleEffectiveVariableCount(bundle)}}{{ includeDerivedVariables ? '' : ' von ' + bundle.variables.length }} Variablen)
+                </span>
+                <span
+                  *ngIf="getBundleDerivedVariablesCount(bundle) > 0"
+                  class="derived-chip compact"
+                  matTooltip="Dieses Variablenbündel enthält abgeleitete Variablen">
+                  {{getBundleDerivedVariablesCount(bundle)}} abgeleitet
+                </span>
               </mat-option>
             </mat-select>
           </mat-form-field>
@@ -163,6 +178,12 @@
                 <mat-icon>inventory_2</mat-icon>
                 Variablenbündel: {{bundleGroup.bundle.name}}
                 <span class="bundle-variable-count-badge">({{bundleGroup.variables.length}} Variablen)</span>
+                <span
+                  *ngIf="getBundleDerivedVariablesCount(bundleGroup.bundle) > 0"
+                  class="derived-chip"
+                  matTooltip="Abgeleitete Variablen im Bündel werden standardmäßig einbezogen.">
+                  abgeleitet enthalten
+                </span>
               </h4>
               <div class="bundle-controls">
                 <!-- Case Count Validation Warning for Bundle -->
@@ -226,6 +247,13 @@
       </div>
 
       <div class="variable-selection-controls">
+        <mat-checkbox class="derived-toggle" formControlName="includeDerivedVariables" color="primary">
+          Abgeleitete Variablen einbeziehen
+          <span *ngIf="getDerivedVariablesCount() > 0" class="derived-count">
+            ({{getDerivedVariablesCount()}} verfügbar)
+          </span>
+        </mat-checkbox>
+
         <mat-form-field appearance="outline" class="variable-multiselect-field">
           <mat-label>Variablen auswählen</mat-label>
           <mat-select placeholder="Variable(n) auswählen" multiple [formControl]="manualVariablesSelectControl">
@@ -239,6 +267,7 @@
             <mat-option *ngFor="let variable of filteredVariables$ | async"
               [value]="variable.unitName + '::' + variable.variableId">
               {{variable.unitName}} - {{variable.variableId}} ({{variable.responseCount}} Fälle)
+              <span *ngIf="isVariableDerived(variable)" class="derived-chip compact">abgeleitet</span>
             </mat-option>
           </mat-select>
         </mat-form-field>
@@ -252,11 +281,19 @@
             <div class="variable-item" *ngFor="let item of groupedVariables.manual" [formGroup]="item.control"
               [class.has-error]="isManualVariableInsufficient(item)">
 
-              <mat-form-field appearance="outline" class="variable-name-field density-compact">
-                <mat-label>Variable</mat-label>
-                <input matInput
-                  [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
-              </mat-form-field>
+              <div class="variable-name-cell">
+                <mat-form-field appearance="outline" class="variable-name-field density-compact">
+                  <mat-label>Variable</mat-label>
+                  <input matInput
+                    [value]="item.control.get('unitId')?.value + ' - ' + item.control.get('variableId')?.value" readonly>
+                </mat-form-field>
+                <span
+                  *ngIf="isControlDerived(item.control)"
+                  class="derived-chip"
+                  matTooltip="Abgeleitete Variable">
+                  abgeleitet
+                </span>
+              </div>
 
               <mat-form-field appearance="outline" class="sample-count-field density-compact"
                 [class.insufficient-input]="isManualVariableInsufficient(item)">
@@ -307,6 +344,18 @@
         <li>
           Gesamte Stichproben:
           <strong>{{getTotalSamples()}}</strong>
+        </li>
+        <li>
+          Abgeleitete Variablen:
+          <strong>{{getSelectedDerivedVariablesCount()}}</strong>
+        </li>
+        <li>
+          Fallauswahl:
+          <strong>{{getCaseSelectionModeLabel(trainingForm.get('caseSelectionMode')?.value)}}</strong>
+        </li>
+        <li>
+          Reihenfolge:
+          <strong>{{getCaseOrderingModeLabel(trainingForm.get('caseOrderingMode')?.value)}}</strong>
         </li>
 
       </ul>

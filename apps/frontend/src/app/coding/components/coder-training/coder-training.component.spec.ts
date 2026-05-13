@@ -42,7 +42,10 @@ describe('CoderTrainingComponent', () => {
       {
         unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
       },
-      { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 }
+      { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 },
+      {
+        unitName: 'UNIT3', variableId: 'DERIVED', responseCount: 6, uniqueCasesAfterAggregation: 6, isDerived: true
+      }
     ]));
     codingTrainingBackendService.getCoderTrainings.mockReturnValue(of([{ id: 99, label: 'Other' }]));
     variableBundleService.getBundles.mockReturnValue(of({
@@ -51,7 +54,10 @@ describe('CoderTrainingComponent', () => {
           id: 5,
           name: 'Bundle',
           description: 'Bundle description',
-          variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }],
+          variables: [
+            { unitName: 'UNIT2', variableId: 'VAR2' },
+            { unitName: 'UNIT3', variableId: 'DERIVED' }
+          ],
           createdAt: new Date(),
           updatedAt: new Date(),
           caseOrderingMode: 'alternating'
@@ -84,14 +90,20 @@ describe('CoderTrainingComponent', () => {
       {
         unitName: 'UNIT', variableId: 'VAR', responseCount: 10, uniqueCasesAfterAggregation: 8
       },
-      { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 }
+      { unitName: 'UNIT2', variableId: 'VAR2', responseCount: 4 },
+      {
+        unitName: 'UNIT3', variableId: 'DERIVED', responseCount: 6, uniqueCasesAfterAggregation: 6, isDerived: true
+      }
     ] as never;
     component.availableBundles = [
       {
         id: 5,
         name: 'Bundle',
         description: 'Bundle description',
-        variables: [{ unitName: 'UNIT2', variableId: 'VAR2' }],
+        variables: [
+          { unitName: 'UNIT2', variableId: 'VAR2' },
+          { unitName: 'UNIT3', variableId: 'DERIVED' }
+        ],
         createdAt: new Date(),
         updatedAt: new Date(),
         caseOrderingMode: 'alternating'
@@ -156,5 +168,65 @@ describe('CoderTrainingComponent', () => {
     component.ngOnDestroy();
 
     expect(component.canStartTraining()).toBe(false);
+  });
+
+  it('includes derived variables by default and marks them', () => {
+    expect(component.includeDerivedVariables).toBe(true);
+    expect(component.getDerivedVariablesCount()).toBe(1);
+    expect(component.isVariableDerived({ unitName: 'UNIT3', variableId: 'DERIVED' })).toBe(true);
+    expect(component.getBundleDerivedVariablesCount(component.availableBundles[0])).toBe(1);
+
+    component.addVariable('DERIVED', 'UNIT3', 2);
+
+    expect(component.getSelectedDerivedVariablesCount()).toBe(1);
+    expect(component.isControlDerived(component.variablesFormArray.at(0) as never)).toBe(true);
+  });
+
+  it('removes derived variables when they are excluded', () => {
+    component.onVariablesSelectionChange(['UNIT::VAR', 'UNIT3::DERIVED']);
+
+    expect(component.variablesFormArray.length).toBe(2);
+
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+
+    expect(component.includeDerivedVariables).toBe(false);
+    expect(component.variablesFormArray.length).toBe(1);
+    expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR');
+    expect(component.getSelectedDerivedVariablesCount()).toBe(0);
+    expect(component.manualVariablesSelectControl.value).toEqual(['UNIT::VAR']);
+  });
+
+  it('skips derived variables from bundles when disabled and submits only included variables', () => {
+    component.trainingForm.get('includeDerivedVariables')?.setValue(false);
+    component.onBundleSelectionChange([5]);
+    component.toggleCoderSelection(component.coders[0]);
+    component.trainingForm.get('trainingLabel')?.setValue('No Derived');
+
+    expect(component.variablesFormArray.length).toBe(1);
+    expect(component.variablesFormArray.at(0).get('variableId')?.value).toBe('VAR2');
+    expect(component.canStartTraining()).toBe(true);
+
+    component.onStartTraining();
+
+    expect(codingTrainingBackendService.createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [component.coders[0]],
+      [{ variableId: 'VAR2', unitId: 'UNIT2', sampleCount: 4 }],
+      'No Derived',
+      undefined,
+      [],
+      [
+        {
+          id: 5,
+          name: 'Bundle',
+          sampleCount: 4,
+          caseOrderingMode: 'continuous'
+        }
+      ],
+      'continuous',
+      'oldest_first',
+      undefined,
+      undefined
+    );
   });
 });
