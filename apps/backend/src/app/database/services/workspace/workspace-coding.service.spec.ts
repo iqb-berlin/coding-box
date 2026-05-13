@@ -305,7 +305,8 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        undefined
       );
 
       expect(
@@ -315,7 +316,8 @@ describe('WorkspaceCodingService', () => {
         personIds,
         autoCoderRun,
         undefined,
-        jobId
+        jobId,
+        undefined
       );
       expect(result).toEqual(expectedResult);
     });
