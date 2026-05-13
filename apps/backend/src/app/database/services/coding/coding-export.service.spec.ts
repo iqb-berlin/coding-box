@@ -17,14 +17,15 @@ function createServiceWithDetailedMocks(
   overrides: {
     unit?: Record<string, unknown>,
     discussionResults?: Record<string, unknown>[],
-    users?: Record<string, unknown>[]
+    users?: Record<string, unknown>[],
+    totalCount?: number
   } = {}
 ) {
   const totalCountQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
-    getCount: jest.fn().mockResolvedValue(1)
+    getCount: jest.fn().mockResolvedValue(overrides.totalCount ?? 1)
   };
 
   const defaultUnit = {
@@ -183,6 +184,23 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(csv).not.toContain('"coder1";"U1";"V1"');
     expect(csv).toContain('"p-login";"p-code";"G1";"manager1";"U1";"V1";"";');
     expect(csv).toContain(';"4";""');
+  });
+
+  it('rejects detailed export when scoped filters match no coding rows', async () => {
+    const { service } = createServiceWithDetailedMocks(0, { totalCount: 0 });
+
+    await expect(service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      [123]
+    )).rejects.toThrow('Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter');
   });
 
   it('ignores invalid job/training/coder filter ids', () => {
@@ -447,5 +465,47 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
       expect.stringContaining('EXISTS'),
       { coderIds: [66] }
     );
+  });
+
+  it('rejects coding-times export when scoped filters match no coded units', async () => {
+    const codingTimesQueryBuilder = {
+      innerJoinAndSelect: jest.fn().mockReturnThis(),
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(codingTimesQueryBuilder)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      {} as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    await expect(service.exportCodingTimesReport(
+      1,
+      false,
+      false,
+      false,
+      undefined,
+      [123]
+    )).rejects.toThrow('Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter');
   });
 });

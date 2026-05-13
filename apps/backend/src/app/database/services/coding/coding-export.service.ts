@@ -1545,6 +1545,11 @@ export class CodingExportService {
       coderTrainingIds,
       coderIds
     );
+    const hasScopedJobFilters = this.hasScopedJobFilters(
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
     if (checkCancellation) await checkCancellation();
 
     const codingJobsQuery = this.codingJobRepository.createQueryBuilder('cj')
@@ -1562,7 +1567,7 @@ export class CodingExportService {
     const codingJobs = await codingJobsQuery.getMany();
 
     if (codingJobs.length === 0) {
-      throw new Error('No coding jobs found for this workspace');
+      throw new Error(this.getNoCodingResultsMessage(hasScopedJobFilters));
     }
 
     const coderJobsMap = new Map<string, CodingJob[]>();
@@ -2260,6 +2265,11 @@ export class CodingExportService {
       coderTrainingIds,
       coderIds
     );
+    const hasScopedJobFilters = this.hasScopedJobFilters(
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
     if (checkCancellation) await checkCancellation();
 
     try {
@@ -2313,9 +2323,14 @@ export class CodingExportService {
       if (includeReplayUrl) headerColumns.push('"Replay URL"');
       chunks.push(Buffer.from(`${headerColumns.join(';')}\n`, 'utf-8'));
 
+      if (totalCount === 0 && hasScopedJobFilters) {
+        throw new Error(this.getNoCodingResultsMessage(true));
+      }
+
       const batchSize = 500;
       const pseudoCoderMappings = new Map<string, Map<string, string>>();
       const escapeCsvField = (field: string): string => `"${field?.toString().replace(/"/g, '""') || ''}"`;
+      let exportedRowCount = 0;
 
       for (let i = 0; i < totalCount; i += batchSize) {
         if (checkCancellation) await checkCancellation();
@@ -2379,18 +2394,18 @@ export class CodingExportService {
         let currentCaseRepresentative: CodingJobUnit | null = null;
         let emittedManagerForCurrentCase = false;
 
-        const flushManagerRowIfNeeded = async (): Promise<void> => {
-          if (!includeDiscussionResult) return;
-          if (!currentCaseRepresentative) return;
-          if (emittedManagerForCurrentCase) return;
+        const flushManagerRowIfNeeded = async (): Promise<boolean> => {
+          if (!includeDiscussionResult) return false;
+          if (!currentCaseRepresentative) return false;
+          if (emittedManagerForCurrentCase) return false;
 
           const trainingId = currentCaseRepresentative.coding_job?.training_id;
           const responseId = currentCaseRepresentative.response_id;
-          if (!trainingId || !responseId) return;
+          if (!trainingId || !responseId) return false;
 
           const discussion = discussionResultMap.get(`${trainingId}|${responseId}`);
-          if (!discussion) return;
-          if (!discussion.managerUsername) return;
+          if (!discussion) return false;
+          if (!discussion.managerUsername) return false;
 
           const person = currentCaseRepresentative.response?.unit?.booklet?.person;
           const personLogin = person?.login || '';
@@ -2424,6 +2439,7 @@ export class CodingExportService {
 
           batchCsv += `${discussionRowFields.join(';')}\n`;
           emittedManagerForCurrentCase = true;
+          return true;
         };
 
         for (const unit of sortedUnitsBatch) {
@@ -2434,7 +2450,7 @@ export class CodingExportService {
           const caseKey = `${trainingId}|${unit.response_id}`;
 
           if (currentCaseKey !== null && caseKey !== currentCaseKey) {
-            await flushManagerRowIfNeeded();
+            if (await flushManagerRowIfNeeded()) exportedRowCount += 1;
             currentCaseRepresentative = null;
             emittedManagerForCurrentCase = false;
           }
@@ -2498,11 +2514,16 @@ export class CodingExportService {
           }
 
           batchCsv += `${rowFields.join(';')}\n`;
+          exportedRowCount += 1;
         }
 
         // Flush last case in this batch
-        await flushManagerRowIfNeeded();
+        if (await flushManagerRowIfNeeded()) exportedRowCount += 1;
         chunks.push(Buffer.from(batchCsv, 'utf-8'));
+      }
+
+      if (exportedRowCount === 0 && hasScopedJobFilters) {
+        throw new Error(this.getNoCodingResultsMessage(true));
       }
 
       this.logger.log(`Exported detailed results for workspace ${workspaceId}`);
@@ -2532,6 +2553,11 @@ export class CodingExportService {
       jobDefinitionIds,
       coderTrainingIds,
       coderIds
+    );
+    const hasScopedJobFilters = this.hasScopedJobFilters(
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
     );
 
     // Check for cancellation before starting
@@ -2610,6 +2636,10 @@ export class CodingExportService {
       }
 
       if (codingJobUnits.length === 0) {
+        if (hasScopedJobFilters) {
+          throw new Error(this.getNoCodingResultsMessage(true));
+        }
+
         const workbook = new ExcelJS.Workbook();
         const worksheet = workbook.addWorksheet('Kodierzeiten-Bericht');
 
@@ -2674,6 +2704,10 @@ export class CodingExportService {
       const coderList = Array.from(new Set(
         Array.from(variableUnitCoders.values()).flatMap(coders => Array.from(coders.values()))
       )).sort();
+
+      if (variableUnitCoders.size === 0 && hasScopedJobFilters) {
+        throw new Error(this.getNoCodingResultsMessage(true));
+      }
 
       const displayCoderList = coderNameMapping ?
         coderList.map(coder => coderNameMapping.get(coder) || coder) :
@@ -2869,6 +2903,24 @@ export class CodingExportService {
       coderTrainingIds: this.normalizeFilterIds(coderTrainingIds),
       coderIds: this.normalizeFilterIds(coderIds)
     };
+  }
+
+  private hasScopedJobFilters(
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): boolean {
+    return !!(
+      this.normalizeFilterIds(jobDefinitionIds).length ||
+      this.normalizeFilterIds(coderTrainingIds).length ||
+      this.normalizeFilterIds(coderIds).length
+    );
+  }
+
+  private getNoCodingResultsMessage(hasScopedJobFilters: boolean): string {
+    return hasScopedJobFilters ?
+      'Keine Kodierergebnisse für den gewählten Job-/Training-/Kodierer-Filter in diesem Workspace gefunden' :
+      'Keine Kodierergebnisse für diesen Workspace gefunden';
   }
 
   private applyJobFilters(

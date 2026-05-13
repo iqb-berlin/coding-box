@@ -24,11 +24,11 @@
     <div class="filter-section">
       <h3>{{ 'export-dialog.filter.section-title' | translate }}</h3>
       <div class="filter-option">
-        <label class="filter-label">Schulungsaufwand:</label>
+        <label class="filter-label">{{ 'export-dialog.filter.training-effort' | translate }}</label>
         <mat-button-toggle-group [(ngModel)]="trainingRequiredFilter" name="trainingRequiredFilter">
-          <mat-button-toggle value="all">Alle</mat-button-toggle>
-          <mat-button-toggle value="true">Erhöht</mat-button-toggle>
-          <mat-button-toggle value="false">Normal</mat-button-toggle>
+          <mat-button-toggle value="all">{{ 'export-dialog.filter.all' | translate }}</mat-button-toggle>
+          <mat-button-toggle value="true">{{ 'export-dialog.filter.increased' | translate }}</mat-button-toggle>
+          <mat-button-toggle value="false">{{ 'export-dialog.filter.normal' | translate }}</mat-button-toggle>
         </mat-button-toggle-group>
       </div>
     </div>

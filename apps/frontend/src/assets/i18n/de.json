@@ -221,8 +221,8 @@
     },
     "export-options-title": "Exportoptionen",
     "export-options": {
-      "exclude-auto-coded": "Nur manuell kodierte Variablen exportieren",
-      "exclude-auto-coded-tooltip": "Beschränkt den Export auf Variablen mit CODING_INCOMPLETE Status. Standardmäßig werden alle Variablen exportiert.",
+      "exclude-auto-coded": "Nur manuell zu kodierende Variablen exportieren",
+      "exclude-auto-coded-tooltip": "Wenn aktiviert, werden nur Variablen aus der Kodierliste mit manuellem Kodierbedarf exportiert. Ohne Haken werden alle exportierbaren Variablen ausgegeben.",
       "include-auto-coded": "Automatisch kodierte Variablen einbeziehen",
       "include-auto-coded-tooltip": "Erweitert den Export um alle Variablen, die nicht manuell kodiert werden müssen. Standardmäßig werden nur Variablen mit CODING_INCOMPLETE Status exportiert.",
       "only-manual-coding": "Nur manuell zu kodierende Variablen",
@@ -1493,6 +1493,13 @@
     },
     "cancel": "Abbrechen",
     "export": "Exportieren",
+    "filter": {
+      "section-title": "Filter",
+      "training-effort": "Schulungsaufwand:",
+      "all": "Alle",
+      "increased": "Erhöht",
+      "normal": "Normal"
+    },
     "validation": {
       "section-title": "Validierung externer Kodierliste für Replay-Funktionalität",
       "upload-button": "Validierungs-Kodierliste",
