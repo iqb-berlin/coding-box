@@ -57,6 +57,16 @@ export interface VariableGrouping {
   bundles: { bundle: VariableBundle; variables: { control: FormGroup; index: number }[] }[];
 }
 
+interface ValidationItem {
+  label: string;
+  valid: boolean;
+}
+
+interface BundleOrderingOverride {
+  name: string;
+  label: string;
+}
+
 @Component({
   selector: 'coding-box-coder-training',
   standalone: true,
@@ -152,6 +162,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.setupFilters();
     this.setupManualSelectSync();
     this.setupDerivedVariableSync();
+    this.setupReferenceModeValidation();
   }
 
   private setupManualSelectSync(): void {
@@ -242,6 +253,26 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       });
   }
 
+  private setupReferenceModeValidation(): void {
+    const referenceTrainingIdsControl = this.trainingForm.get('referenceTrainingIds');
+    const referenceModeControl = this.trainingForm.get('referenceMode');
+
+    referenceTrainingIdsControl?.valueChanges
+      .pipe(
+        startWith(referenceTrainingIdsControl.value),
+        takeUntil(this.destroy$)
+      )
+      .subscribe((referenceTrainingIds: number[]) => {
+        const hasReferenceTrainings = (referenceTrainingIds || []).length > 0;
+        referenceModeControl?.setValidators(hasReferenceTrainings ? [Validators.required] : []);
+        if (!hasReferenceTrainings && referenceModeControl?.value) {
+          referenceModeControl.setValue(null, { emitEvent: false });
+        }
+        referenceModeControl?.updateValueAndValidity({ emitEvent: false });
+        this.changeDetectorRef.markForCheck();
+      });
+  }
+
   ngOnInit(): void {
     this.loadCoders();
     this.loadAvailableVariables();
@@ -311,7 +342,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
             this.editTraining?.case_ordering_mode ||
             'continuous';
           this.addBundleVariables(b.id, sampleCount, caseOrderingMode, true);
-          this.selectedBundleIds.add(b.id);
+          if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
+            this.selectedBundleIds.add(b.id);
+          }
         }
       });
       this.bundleSelection$.next(Array.from(this.selectedBundleIds));
@@ -377,6 +410,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   get includeDerivedVariables(): boolean {
     return !!this.trainingForm.get('includeDerivedVariables')?.value;
+  }
+
+  getDialogTitle(): string {
+    return this.isEditMode ? 'Kodierer-Schulung bearbeiten' : 'Kodierer-Schulung erstellen';
+  }
+
+  getPrimaryActionLabel(): string {
+    if (this.isLoading) {
+      return this.isEditMode ? 'Schulung wird aktualisiert...' : 'Kodierungsaufträge werden erstellt...';
+    }
+
+    return this.isEditMode ? 'Schulung aktualisieren' : 'Kodierungsaufträge erstellen';
   }
 
   isVariableDerived(variable: Pick<Variable, 'unitName' | 'variableId' | 'isDerived'>): boolean {
@@ -509,10 +554,26 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       this.manualVariablesSelectControl.setValue(filteredManualSelection, { emitEvent: false });
     }
 
+    this.pruneSelectedBundlesWithoutVariables();
     this.updateGroupedVariables();
     this.checkForOverlaps();
 
     return indexesToRemove.length;
+  }
+
+  private pruneSelectedBundlesWithoutVariables(): void {
+    const bundleIdsWithVariables = new Set(
+      this.variablesFormArray.controls
+        .map(control => control.get('bundleId')?.value as number | null)
+        .filter((bundleId): bundleId is number => !!bundleId)
+    );
+    const selectedBundleIds = Array.from(this.selectedBundleIds);
+    const prunedBundleIds = selectedBundleIds.filter(bundleId => bundleIdsWithVariables.has(bundleId));
+
+    if (prunedBundleIds.length !== selectedBundleIds.length) {
+      this.selectedBundleIds = new Set(prunedBundleIds);
+      this.bundleSelection$.next(prunedBundleIds);
+    }
   }
 
   private isDerivedVariableKey(unitId: string | undefined, variableId: string | undefined): boolean {
@@ -524,8 +585,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   addVariable(variableId: string = '', unitId: string = '', sampleCount?: number, bundleId?: number, bundleName?: string, skipUpdate = false, bundleCaseOrderingMode?: 'continuous' | 'alternating'): void {
-    const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
-    const maxAvailable = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 1000;
+    const variableData = this.getAvailableVariable(unitId, variableId);
+    const maxAvailable = variableData ? this.getEffectiveAvailableCount(unitId, variableId) : 1000;
     const defaultSampleCount = sampleCount !== undefined ? sampleCount : maxAvailable;
 
     const variableGroup = this.fb.group({
@@ -579,12 +640,12 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
     const bundle = this.availableBundles.find(b => b.id === bundleId);
     if (!bundle) {
-      this.showError('Variable-Bundle nicht gefunden');
+      this.showError('Variablenbündel nicht gefunden');
       return;
     }
 
     if (bundle.variables.length === 0) {
-      this.showError('Das gewählte Variable-Bundle enthält keine Variablen');
+      this.showError('Das gewählte Variablenbündel enthält keine Variablen');
       return;
     }
 
@@ -619,7 +680,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (addedCount > 0 && !silent) {
       const skippedText = skippedDerivedCount > 0 ? ` (${skippedDerivedCount} abgeleitete ausgelassen)` : '';
-      this.showSuccess(`${addedCount} Variable(n) aus Bundle "${bundle.name}" hinzugefügt${skippedText}`);
+      this.showSuccess(`${addedCount} Variable(n) aus Variablenbündel "${bundle.name}" hinzugefügt${skippedText}`);
     }
 
     if (duplicateVariables.length > 0 && !silent) {
@@ -753,12 +814,50 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   canStartTraining(): boolean {
-    const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
-    return this.selectedCoders.size > 0 &&
-      trainingLabel?.trim() &&
+    return this.hasTrainingLabel() &&
+      this.hasSelectedCoders() &&
       this.trainingForm.valid &&
-      (this.hasAtLeastOneVariableSelected() || this.hasBundlesSelected()) &&
+      this.hasVariableSelection() &&
+      this.hasValidReferenceMode() &&
+      this.hasValidCaseCounts();
+  }
+
+  hasTrainingLabel(): boolean {
+    const trainingLabel = this.trainingForm.get('trainingLabel')?.value;
+    return typeof trainingLabel === 'string' && trainingLabel.trim().length > 0;
+  }
+
+  hasSelectedCoders(): boolean {
+    return this.selectedCoders.size > 0;
+  }
+
+  hasVariableSelection(): boolean {
+    return this.getSelectedVariablesCount() > 0;
+  }
+
+  hasValidReferenceMode(): boolean {
+    const referenceTrainingIds = (this.trainingForm.get('referenceTrainingIds')?.value as number[]) || [];
+    return referenceTrainingIds.length === 0 || !!this.trainingForm.get('referenceMode')?.value;
+  }
+
+  hasValidCaseCounts(): boolean {
+    return this.variablesFormArray.controls.every(control => control.get('sampleCount')?.valid !== false) &&
       !this.hasAnyInsufficientCases();
+  }
+
+  getValidationItems(): ValidationItem[] {
+    return [
+      { label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
+      { label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
+      { label: 'Mindestens eine Variable ausgewählt', valid: this.hasVariableSelection() },
+      { label: 'Vergleichsmodus gewählt, wenn Vergleichsschulungen gesetzt sind', valid: this.hasValidReferenceMode() },
+      { label: 'Stichproben pro Variable liegen innerhalb verfügbarer Fälle', valid: this.hasValidCaseCounts() }
+    ];
+  }
+
+  getFirstValidationMessage(): string {
+    const firstInvalidItem = this.getValidationItems().find(item => !item.valid);
+    return firstInvalidItem ? firstInvalidItem.label : 'Bitte prüfen Sie die Schulungseinstellungen.';
   }
 
   private hasAnyInsufficientCases(): boolean {
@@ -766,20 +865,33 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const unitId = control.get('unitId')?.value;
       const variableId = control.get('variableId')?.value;
       const requestedCount = control.get('sampleCount')?.value || 0;
-      const variableData = this.availableVariables.find(v => v.unitName === unitId && v.variableId === variableId);
-      return variableData && (variableData.responseCount || 0) < requestedCount;
+      const variableData = this.getAvailableVariable(unitId, variableId);
+      const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
+      return !!variableData && effectiveCount < requestedCount;
     });
-  }
-
-  private hasBundlesSelected(): boolean {
-    return this.selectedBundleIds.size > 0;
   }
 
   hasAtLeastOneVariableSelected(): boolean {
-    return this.variablesFormArray.controls.some(control => {
+    return this.hasVariableSelection();
+  }
+
+  getManualVariablesCount(): number {
+    return this.groupedVariables.manual.length;
+  }
+
+  getBundleVariablesCount(): number {
+    return this.groupedVariables.bundles.reduce((total, bundleGroup) => total + bundleGroup.variables.length, 0);
+  }
+
+  getSelectedVariablesCount(): number {
+    return this.variablesFormArray.controls.filter(control => {
       const variableId = control.get('variableId')?.value;
-      return variableId && variableId.trim() !== '';
-    });
+      return typeof variableId === 'string' && variableId.trim() !== '';
+    }).length;
+  }
+
+  getSelectedBundleCount(): number {
+    return this.groupedVariables.bundles.length;
   }
 
   getTotalSamples(): number {
@@ -878,18 +990,20 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.changeDetectorRef.markForCheck();
   }
 
-  updateBundleSampleCount(bundleId: number, newSampleCount: number): void {
-    if (Number.isNaN(newSampleCount) || newSampleCount < 1 || newSampleCount > 1000) {
+  updateBundleSampleCount(bundleId: number, newSampleCount: number | string): void {
+    const parsedSampleCount = Number(newSampleCount);
+    if (Number.isNaN(parsedSampleCount) || parsedSampleCount < 1 || parsedSampleCount > 1000) {
       this.showError('Ungültige Stichprobenanzahl. Muss zwischen 1 und 1000 liegen.');
       return;
     }
 
     this.variablesFormArray.controls.forEach(control => {
       if (control.get('bundleId')?.value === bundleId) {
-        control.get('sampleCount')?.setValue(newSampleCount);
+        control.get('sampleCount')?.setValue(parsedSampleCount);
       }
     });
 
+    this.updateGroupedVariables();
     this.changeDetectorRef.markForCheck();
   }
 
@@ -908,6 +1022,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         control.get('bundleCaseOrderingMode')?.setValue(mode, { emitEvent: false });
       }
     });
+    this.updateGroupedVariables();
     this.changeDetectorRef.markForCheck();
   }
 
@@ -918,9 +1033,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return bundleGroup.variables.some(v => {
       const unitId = v.control.get('unitId')?.value;
       const variableId = v.control.get('variableId')?.value;
-      const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-      const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
-      return variableData && effectiveCount < requestedCount;
+      const variableData = this.getAvailableVariable(unitId, variableId);
+      const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
+      return !!variableData && effectiveCount < requestedCount;
     });
   }
 
@@ -928,16 +1043,48 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const unitId = item.control.get('unitId')?.value;
     const variableId = item.control.get('variableId')?.value;
     const requestedCount = item.control.get('sampleCount')?.value || 0;
-    const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
-    const effectiveCount = variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+    const variableData = this.getAvailableVariable(unitId, variableId);
+    const effectiveCount = this.getEffectiveAvailableCount(unitId, variableId);
     return !!variableData && effectiveCount < requestedCount;
   }
 
   getAvailableCount(item: { control: FormGroup }): number {
     const unitId = item.control.get('unitId')?.value;
     const variableId = item.control.get('variableId')?.value;
-    const variableData = this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+    return this.getEffectiveAvailableCount(unitId, variableId);
+  }
+
+  private getEffectiveAvailableCount(unitId: string | undefined, variableId: string | undefined): number {
+    const variableData = this.getAvailableVariable(unitId, variableId);
     return variableData?.uniqueCasesAfterAggregation ?? variableData?.responseCount ?? 0;
+  }
+
+  private getAvailableVariable(unitId: string | undefined, variableId: string | undefined): Variable | undefined {
+    return this.availableVariables.find(avail => avail.unitName === unitId && avail.variableId === variableId);
+  }
+
+  getBundleOrderingOverrides(): BundleOrderingOverride[] {
+    const globalMode = (this.trainingForm.get('caseOrderingMode')?.value || 'continuous') as 'continuous' | 'alternating';
+    return this.groupedVariables.bundles
+      .map(bundleGroup => ({
+        name: bundleGroup.bundle.name,
+        mode: (bundleGroup.bundle.caseOrderingMode || globalMode) as 'continuous' | 'alternating'
+      }))
+      .filter(bundle => bundle.mode !== globalMode)
+      .map(bundle => ({
+        name: bundle.name,
+        label: this.getCaseOrderingModeLabel(bundle.mode)
+      }));
+  }
+
+  hasBundleOrderingOverrides(): boolean {
+    return this.getBundleOrderingOverrides().length > 0;
+  }
+
+  getBundleOrderingDetails(): string {
+    return this.getBundleOrderingOverrides()
+      .map(bundle => `${bundle.name}: ${bundle.label}`)
+      .join(', ');
   }
 
   trackByCoderId(index: number, coder: Coder): number {
@@ -946,7 +1093,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   onStartTraining(): void {
     if (!this.canStartTraining()) {
-      this.showError('Bitte wählen Sie mindestens einen Kodierer aus und konfigurieren Sie die Variablen');
+      this.showError(this.getFirstValidationMessage());
       return;
     }
 
@@ -1107,9 +1254,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       const currentSelectedIds = Array.from(this.selectedBundleIds);
       jobDef.assignedVariableBundles.forEach((b: VariableBundle) => {
         if (!currentSelectedIds.includes(b.id)) {
-          this.selectedBundleIds.add(b.id);
           this.addBundleVariables(b.id, defaultSampleCount);
-          bundlesAdded += 1;
+          if (this.variablesFormArray.controls.some(control => control.get('bundleId')?.value === b.id)) {
+            this.selectedBundleIds.add(b.id);
+            bundlesAdded += 1;
+          }
         }
       });
       this.bundleSelection$.next(Array.from(this.selectedBundleIds));

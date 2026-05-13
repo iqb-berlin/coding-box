@@ -159,22 +159,62 @@ mat-form-field {
 .variable-selection-controls {
   width: 100%;
 
-  .derived-toggle {
-    display: block;
-    margin-bottom: 12px;
-    color: #2d3748;
-  }
-
-  .derived-count {
-    color: #718096;
-    font-size: 0.85rem;
-  }
-
   .bundle-select-field,
   .variable-multiselect-field {
     width: 100%;
     max-width: 500px;
     margin-bottom: -10px;
+  }
+}
+
+.variable-basis-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  max-width: 720px;
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f7fafc;
+
+  .derived-toggle {
+    color: #2d3748;
+  }
+
+  .derived-count,
+  .basis-meta {
+    color: #718096;
+    font-size: 0.85rem;
+  }
+}
+
+.reference-mode-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 4px;
+
+  &.has-error {
+    padding: 8px 10px;
+    border: 1px solid #feb2b2;
+    border-radius: 6px;
+    background: #fff5f5;
+  }
+}
+
+.reference-mode-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: #c53030;
+  font-size: 0.8rem;
+
+  mat-icon {
+    font-size: 18px;
+    height: 18px;
+    width: 18px;
   }
 }
 
@@ -189,7 +229,8 @@ mat-form-field {
   .bundle-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
+    align-items: flex-start;
+    gap: 12px;
     padding: 8px 16px;
     background: #f7fafc;
     border-bottom: 1px solid #e2e8f0;
@@ -198,6 +239,7 @@ mat-form-field {
       margin: 0;
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 8px;
       font-size: 0.95rem;
       font-weight: 600;
@@ -220,12 +262,36 @@ mat-form-field {
     .bundle-controls {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
       gap: 12px;
 
-      .bundle-sample-field {
+      .bundle-sample-field,
+      .bundle-case-ordering-field {
         width: 130px;
         margin-bottom: -1.25em;
       }
+
+      .bundle-case-ordering-field {
+        width: 160px;
+      }
+    }
+  }
+
+  .bundle-ordering-note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    color: #4a5568;
+    font-size: 0.8rem;
+    background: #ffffff;
+
+    mat-icon {
+      font-size: 18px;
+      height: 18px;
+      width: 18px;
+      color: #718096;
     }
   }
 }
@@ -396,6 +462,53 @@ mat-form-field {
         }
       }
     }
+
+    .summary-note {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      color: #2a4365;
+      font-size: 0.8rem;
+
+      mat-icon {
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+      }
+    }
+
+    .validation-checklist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 14px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid #bee3f8;
+
+      .validation-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 0.78rem;
+        color: #718096;
+
+        mat-icon {
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
+        }
+
+        &.valid {
+          color: #2f855a;
+        }
+
+        &.invalid {
+          color: #c53030;
+          font-weight: 600;
+        }
+      }
+    }
   }
 }
 
@@ -526,6 +639,69 @@ mat-form-field {
 }
 
 @media (max-width: 600px) {
+  .training-form {
+    padding: 16px;
+
+    .section {
+      .section-header {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+
+        .section-subtitle {
+          flex-wrap: wrap;
+        }
+
+        .header-actions {
+          width: 100%;
+          flex-wrap: wrap;
+        }
+      }
+    }
+  }
+
+  .coder-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bundle-variable-group {
+    .bundle-header {
+      flex-direction: column;
+
+      .bundle-controls {
+        justify-content: flex-start;
+        width: 100%;
+
+        .bundle-sample-field,
+        .bundle-case-ordering-field {
+          width: min(100%, 220px);
+        }
+      }
+    }
+  }
+
+  .variable-list {
+    .variable-item {
+      grid-template-columns: 1fr;
+      gap: 8px;
+      padding: 16px;
+
+      .variable-name-cell {
+        flex-wrap: wrap;
+      }
+
+      .warning-container,
+      .remove-variable-button {
+        justify-content: flex-start;
+        height: auto;
+      }
+    }
+  }
+
+  .training-summary {
+    padding: 0 16px;
+  }
+
   .action-buttons {
     flex-direction: column-reverse;
 
