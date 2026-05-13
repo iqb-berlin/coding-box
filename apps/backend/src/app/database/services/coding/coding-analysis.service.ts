@@ -22,6 +22,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CacheService } from '../../../cache/cache.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
+import { createAggregationSummary } from './aggregation-metrics.util';
 
 @Injectable()
 export class CodingAnalysisService {
@@ -90,19 +91,31 @@ export class CodingAnalysisService {
         progress = await activeJob.progress();
       }
 
+      if (fullAnalysis && !fullAnalysis.aggregationSummary) {
+        await this.invalidateCache(workspaceId);
+        if (!isCalculating) {
+          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
+        }
+        return {
+          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
+          isCalculating: true,
+          progress
+        };
+      }
+
       if (!fullAnalysis) {
         if (!isCalculating) {
           // If no analysis and no job running, trigger one (or return empty with isCalculating=false and let frontend trigger)
           // For better UX, let's trigger it automatically if missing
           await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
           return {
-            ...this.createEmptyAnalysisResult(matchingFlags),
+            ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
             isCalculating: true,
             progress
           };
         }
         return {
-          ...this.createEmptyAnalysisResult(matchingFlags),
+          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
           isCalculating: true,
           progress
         };
@@ -360,7 +373,7 @@ export class CodingAnalysisService {
           success: true,
           aggregatedGroups: 0,
           aggregatedResponses: 0,
-          uniqueCodingCases: analysis.duplicateValues.totalResponses,
+          uniqueCodingCases: analysis.aggregationSummary.rawCases,
           message: `No duplicate groups meet the threshold of ${threshold}`
         };
       }
@@ -420,7 +433,10 @@ export class CodingAnalysisService {
         this.invalidateCache(workspaceId);
 
         // Calculate unique coding cases after aggregation
-        const uniqueCodingCases = analysis.duplicateValues.totalResponses - totalAggregatedResponses;
+        const uniqueCodingCases = Math.max(
+          0,
+          analysis.aggregationSummary.rawCases - totalAggregatedResponses
+        );
 
         this.logger.log(
           `Successfully aggregated ${totalAggregatedResponses} responses in ${groupsToAggregate.length} groups`
@@ -465,7 +481,8 @@ export class CodingAnalysisService {
   }
 
   private createEmptyAnalysisResult(
-    matchingFlags: ResponseMatchingFlag[]
+    matchingFlags: ResponseMatchingFlag[],
+    threshold: number | null = null
   ): ResponseAnalysisDto {
     const result: ResponseAnalysisDto = {
       emptyResponses: {
@@ -477,10 +494,15 @@ export class CodingAnalysisService {
         total: 0,
         totalResponses: 0,
         groups: [],
-        isAggregationApplied: !matchingFlags.includes(
-          ResponseMatchingFlag.NO_AGGREGATION
-        )
+        isAggregationApplied: false
       },
+      aggregationSummary: createAggregationSummary(
+        0,
+        0,
+        0,
+        threshold,
+        matchingFlags
+      ),
       matchingFlags: matchingFlags as unknown as string[],
       analysisTimestamp: new Date().toISOString()
     };

@@ -49,9 +49,20 @@ export interface DuplicateValueAnalysisDto {
   pageSize?: number;
 }
 
+export interface AggregationSummaryDto {
+  duplicateGroups: number;
+  duplicateResponses: number;
+  collapsedCases: number;
+  rawCases: number;
+  effectiveCases: number;
+  threshold: number | null;
+  aggregationActive: boolean;
+}
+
 export interface ResponseAnalysisDto {
   emptyResponses: EmptyResponseAnalysisDto;
   duplicateValues: DuplicateValueAnalysisDto;
+  aggregationSummary: AggregationSummaryDto;
   matchingFlags: string[];
   analysisTimestamp: string;
   isCalculating?: boolean;

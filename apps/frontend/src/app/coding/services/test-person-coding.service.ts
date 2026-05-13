@@ -834,6 +834,15 @@ export class TestPersonCodingService {
           duplicateValues: {
             total: 0, totalResponses: 0, groups: [], isAggregationApplied: false
           },
+          aggregationSummary: {
+            duplicateGroups: 0,
+            duplicateResponses: 0,
+            collapsedCases: 0,
+            rawCases: 0,
+            effectiveCases: 0,
+            threshold: null,
+            aggregationActive: false
+          },
           matchingFlags: [],
           analysisTimestamp: new Date().toISOString()
         } as ResponseAnalysisDto))

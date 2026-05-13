@@ -14,6 +14,10 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import {
+  buildAggregationGroups,
+  summarizeAggregationGroups
+} from './aggregation-metrics.util';
 
 type ResponseMatchingFlag =
   | 'NO_AGGREGATION'
@@ -372,33 +376,31 @@ export class CodingProgressService {
     }
 
     const derivedVariableMap = await this.getDerivedVariableMap(workspaceId);
-    const groupedResponses = new Map<string, CoverageResponse[]>();
-
-    for (const response of responses) {
-      const variableKey = `${response.unitName.toUpperCase()}::${response.variableId}`;
-      const isDerivedVariable = derivedVariableMap.get(response.unitName.toUpperCase())?.has(response.variableId) ?? false;
-      const groupKey = isDerivedVariable ?
-        `${variableKey}::${response.responseId}` :
-        `${variableKey}::${this.normalizeValue(response.value, matchingFlags)}`;
-      const group = groupedResponses.get(groupKey) || [];
-      group.push(response);
-      groupedResponses.set(groupKey, group);
-    }
+    const groupedResponses = buildAggregationGroups(
+      responses,
+      matchingFlags,
+      aggregationThreshold,
+      derivedVariableMap
+    );
+    const aggregationSummary = summarizeAggregationGroups(
+      groupedResponses,
+      responses.length,
+      aggregationThreshold,
+      matchingFlags
+    );
 
     let effectiveTotalCasesToCode = 0;
     let effectiveCasesInJobs = 0;
-    let aggregatedDuplicateCases = 0;
 
     groupedResponses.forEach(group => {
-      if (aggregationThreshold !== null && group.length >= aggregationThreshold) {
+      if (aggregationThreshold !== null && group.responses.length >= aggregationThreshold) {
         effectiveTotalCasesToCode += 1;
-        if (group.some(response => completedResponseIds.has(response.responseId))) {
+        if (group.responses.some(response => completedResponseIds.has(response.responseId))) {
           effectiveCasesInJobs += 1;
         }
-        aggregatedDuplicateCases += group.length - 1;
       } else {
-        effectiveTotalCasesToCode += group.length;
-        effectiveCasesInJobs += group
+        effectiveTotalCasesToCode += group.responses.length;
+        effectiveCasesInJobs += group.responses
           .filter(response => completedResponseIds.has(response.responseId))
           .length;
       }
@@ -409,7 +411,7 @@ export class CodingProgressService {
       effectiveCompletedCases: effectiveCasesInJobs,
       aggregationActive,
       aggregationThreshold,
-      aggregatedDuplicateCases
+      aggregatedDuplicateCases: aggregationSummary.collapsedCases
     };
   }
 
@@ -563,20 +565,6 @@ export class CodingProgressService {
     }
   }
 
-  private normalizeValue(value: string | null, flags: ResponseMatchingFlag[]): string {
-    let normalized = value ?? '';
-
-    if (flags.includes('IGNORE_CASE')) {
-      normalized = normalized.toLowerCase();
-    }
-
-    if (flags.includes('IGNORE_WHITESPACE')) {
-      normalized = normalized.replace(/\s+/g, '');
-    }
-
-    return normalized;
-  }
-
   private async getDerivedVariableMap(workspaceId: number): Promise<Map<string, Set<string>>> {
     try {
       return await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
@@ -618,7 +606,7 @@ export class CodingProgressService {
   }> {
     try {
       this.logger.log(
-        `Getting variable coverage overview for workspace ${workspaceId} (CODING_INCOMPLETE variables only)`
+        `Getting variable coverage overview for workspace ${workspaceId} (manual coding variables)`
       );
 
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
@@ -808,7 +796,7 @@ export class CodingProgressService {
         totalVariables > 0 ? (coveredCount / totalVariables) * 100 : 0;
 
       this.logger.log(
-        `Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} CODING_INCOMPLETE variables covered (${coveragePercentage.toFixed(
+        `Variable coverage for workspace ${workspaceId}: ${coveredCount}/${totalVariables} manual coding variables covered (${coveragePercentage.toFixed(
           1
         )}%) - Draft: ${draftCount}, Pending: ${pendingReviewCount}, Approved: ${approvedCount}, Conflicted: ${conflictCount}, Fully covered: ${fullyAbgedeckteCount}, Partially covered: ${partiallyAbgedeckteCount}`
       );
