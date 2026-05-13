@@ -97,6 +97,24 @@ describe('CodingExportService', () => {
     req.flush({ jobId: 'job-1', message: 'started' });
   });
 
+  it('should pass trainingRequired to coding-list export jobs', () => {
+    service.startExportJob(1, 'coding-list', undefined, 'json', false, true).subscribe(res => {
+      expect(res).toBeDefined();
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/export/start`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toMatchObject({
+      exportType: 'coding-list',
+      format: 'json',
+      includeReplayUrl: false,
+      includeResponseValues: true,
+      trainingRequired: true,
+      authToken: 'auth-token'
+    });
+    req.flush({ jobId: 'job-1', message: 'started' });
+  });
+
   it('should get coding book', () => {
     const mockContent = {
       unitName: true, variableId: true, variableLabel: true, variableDescription: true, value: true, valueLabel: true, valueDescription: true

@@ -901,6 +901,7 @@ export class WorkspaceCodingExportController {
             'by-variable',
             'detailed',
             'coding-times',
+            'coding-list',
             'results-by-version'
           ],
           description: 'Type of export to generate'
