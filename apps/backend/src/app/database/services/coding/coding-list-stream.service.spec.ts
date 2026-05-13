@@ -186,7 +186,7 @@ describe('CodingListStreamService', () => {
       expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
         1,
         0,
-        5000,
+        500,
         versionExportOptions
       );
       expect(mockItemBuilderService.buildCodingItemWithVersions).toHaveBeenCalledWith(
