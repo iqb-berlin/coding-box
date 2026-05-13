@@ -94,6 +94,14 @@
           [(ngModel)]="selectedTrainingForWithin"
           (selectionChange)="onTrainingForWithinChange()"
         >
+          <mat-select-trigger>
+            <ng-container *ngIf="getSelectedWithinTraining() as training">
+              <span class="selected-training-trigger">
+                <span class="selected-training-title">{{ getTrainingOptionTitle(training) }}</span>
+                <span class="selected-training-meta">{{ getTrainingOptionMeta(training) }}</span>
+              </span>
+            </ng-container>
+          </mat-select-trigger>
           <mat-option
             *ngFor="let training of availableTrainings"
             [value]="training.id"
@@ -219,18 +227,47 @@
         </button>
       </div>
 
-      <div class="statistics-section" *ngIf="totalComparisons > 0">
+      <div class="comparison-warning-list" *ngIf="getComparisonWarnings().length > 0">
+        <div
+          class="comparison-warning"
+          *ngFor="let warning of getComparisonWarnings()"
+          [class.comparison-warning-warn]="warning.severity === 'warn'"
+        >
+          <mat-icon>{{ warning.icon }}</mat-icon>
+          <span>{{ warning.text }}</span>
+        </div>
+      </div>
+
+      <div
+        class="statistics-section"
+        *ngIf="
+          !hasNoSelectedCodersState() &&
+          !hasFilterEmptyState() &&
+          (totalComparisons > 0 ||
+            incompleteComparisons > 0 ||
+            notComparableComparisons > 0)
+        "
+      >
         <h4>Kodierungsübereinstimmung</h4>
         <div class="statistics-row">
           <span
-            >Gesamtvergleiche: <strong>{{ totalComparisons }}</strong></span
+            >Auswertbare Vergleiche:
+            <strong>{{ totalComparisons }}</strong></span
           >
-          <span
+          <span *ngIf="totalComparisons > 0"
             >Übereinstimmungen: <strong>{{ matchingComparisons }}</strong></span
           >
-          <span
+          <span *ngIf="totalComparisons > 0"
             >Übereinstimmungsrate:
             <strong>{{ matchingPercentage }}%</strong></span
+          >
+          <span *ngIf="incompleteComparisons > 0"
+            >Unvollständig:
+            <strong>{{ incompleteComparisons }}</strong></span
+          >
+          <span *ngIf="notComparableComparisons > 0"
+            >Nicht vergleichbar:
+            <strong>{{ notComparableComparisons }}</strong></span
           >
           <span
             *ngIf="
@@ -382,10 +419,22 @@
               </div>
             </div>
 
+            <div class="kappa-empty-state" *ngIf="hasKappaNoDoubleCodingState()">
+              <mat-icon>info</mat-icon>
+              <span>
+                Für die aktuelle Auswahl gibt es noch keine doppelt kodierten Antworten.
+                Kappa und mittlere Übereinstimmung werden berechnet, sobald mindestens
+                zwei ausgewählte Kodierer denselben Fall kodiert haben.
+              </span>
+            </div>
+
             <!-- Detailed Coder Pair Statistics -->
             <div
               class="coder-pairs-details"
-              *ngIf="kappaStatistics.variables.length > 0"
+              *ngIf="
+                kappaStatistics.variables.length > 0 &&
+                !hasKappaNoDoubleCodingState()
+              "
             >
               <h5>Details nach Kodierer-Paaren</h5>
               <div class="kappa-table-container">
@@ -485,7 +534,28 @@
         </div>
       </div>
 
-      <div class="table-container">
+      <div class="comparison-empty-state" *ngIf="hasNoSelectedCodersState()">
+        <mat-icon>person_off</mat-icon>
+        <h4>Keine Kodierer ausgewählt</h4>
+        <p>
+          Wählen Sie mindestens zwei Kodierer aus, damit die Vergleichstabelle
+          und die Kennzahlen berechnet werden können.
+        </p>
+      </div>
+
+      <div class="comparison-empty-state" *ngIf="hasFilterEmptyState()">
+        <mat-icon>filter_alt_off</mat-icon>
+        <h4>Keine Treffer für die aktuellen Filter</h4>
+        <p>
+          Passen Sie die Filter an oder setzen Sie sie zurück, um die Fälle
+          wieder einzublenden.
+        </p>
+      </div>
+
+      <div
+        class="table-container"
+        *ngIf="!hasNoSelectedCodersState() && !hasFilterEmptyState()"
+      >
         <table
           mat-table
           [dataSource]="dataSource"
@@ -561,15 +631,10 @@
             <td
               mat-cell
               *matCellDef="let comparison"
-              [class]="
-                areCodesTheSame(comparison)
-                  ? 'match-status-match'
-                  : 'match-status-differ'
-              "
+              [ngClass]="'match-status-' + getComparisonStatus(comparison)"
+              [matTooltip]="getComparisonStatusTooltip(comparison)"
             >
-              <mat-icon>{{
-                areCodesTheSame(comparison) ? 'check_circle' : 'cancel'
-              }}</mat-icon>
+              <mat-icon>{{ getComparisonStatusIcon(comparison) }}</mat-icon>
             </td>
           </ng-container>
 
@@ -723,8 +788,10 @@
           <tr
             mat-row
             *matRowDef="let row; columns: displayedColumns"
-            [class.codes-match]="areCodesTheSame(row)"
-            [class.codes-differ]="!areCodesTheSame(row)"
+            [class.codes-match]="getComparisonStatus(row) === 'match'"
+            [class.codes-differ]="getComparisonStatus(row) === 'differ'"
+            [class.codes-incomplete]="getComparisonStatus(row) === 'incomplete'"
+            [class.codes-not-comparable]="getComparisonStatus(row) === 'not_comparable'"
           ></tr>
         </table>
 
@@ -798,8 +865,8 @@
       <mat-icon>info</mat-icon>
       <h4>Keine Daten gefunden</h4>
       <p>
-        Die ausgewählte Schulung hat keine Kodierergebnisse oder alle Kodierer
-        haben die gleichen Ergebnisse.
+        Die ausgewählte Schulung hat keine Vergleichsfälle oder noch keine
+        Kodierergebnisse.
       </p>
     </div>
   </div>
