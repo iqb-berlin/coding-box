@@ -369,12 +369,95 @@ describe('CodingResultsComparisonComponent', () => {
       ];
 
       component.dataSource.data = component.comparisonData;
+      component.codersFromTrainingsFormControl.setValue(['1_101', '2_102']);
       component.selectedCodersFromTrainings = new Set(['1_101', '2_102']);
       component.calculateStatistics();
 
       expect(component.totalComparisons).toBe(3);
-      expect(component.matchingComparisons).toBe(1); // First comparison matches (both 'A'), second differs ('B' vs 'C'), third has only one code so considered matching
+      expect(component.matchingComparisons).toBe(1); // First comparison matches; the other rows differ.
       expect(component.matchingPercentage).toBe(33); // 1 out of 3 = 33%
+    });
+
+    it('should treat selected but missing coder results as incomplete instead of matching', () => {
+      component.comparisonMode = 'between-trainings';
+      component.codersFromTrainingsFormControl.setValue(['1_101', '2_102']);
+      component.comparisonData = [
+        {
+          responseId: 1,
+          unitName: 'Unit1',
+          variableId: 'Var1',
+          testPerson: 'Test1',
+          personLogin: 'Login1',
+          personCode: 'Code1',
+          personGroup: 'Group1',
+          coders: [
+            {
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              coderId: 101,
+              coderName: 'Coder 101',
+              code: 'A',
+              score: null
+            }
+          ]
+        }
+      ];
+      component.dataSource.data = component.comparisonData;
+
+      component.calculateStatistics();
+
+      expect(component.getComparisonStatus(component.comparisonData[0])).toBe('incomplete');
+      expect(component.areCodesTheSame(component.comparisonData[0])).toBe(false);
+      expect(component.totalComparisons).toBe(0);
+      expect(component.incompleteComparisons).toBe(1);
+
+      component.tableFilters.match = 'match';
+      component.applyTableFilters();
+
+      expect(component.getFilteredRowsCount()).toBe(0);
+      expect(component.hasFilterEmptyState()).toBe(true);
+    });
+
+    it('should keep a selected training without coder columns visible as incomplete', () => {
+      component.comparisonMode = 'between-trainings';
+      component.selectedTrainings.select(1, 2);
+      component.codersFromTrainingsFormControl.setValue(['1_101', '1_102']);
+      component.comparisonData = [
+        {
+          responseId: 1,
+          unitName: 'Unit1',
+          variableId: 'Var1',
+          testPerson: 'Test1',
+          personLogin: 'Login1',
+          personCode: 'Code1',
+          personGroup: 'Group1',
+          coders: [
+            {
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              coderId: 101,
+              coderName: 'Coder 101',
+              code: 'A',
+              score: null
+            },
+            {
+              trainingId: 1,
+              trainingLabel: 'Training 1',
+              coderId: 102,
+              coderName: 'Coder 102',
+              code: 'A',
+              score: null
+            }
+          ]
+        }
+      ];
+      component.dataSource.data = component.comparisonData;
+
+      component.calculateStatistics();
+
+      expect(component.getComparisonStatus(component.comparisonData[0])).toBe('incomplete');
+      expect(component.totalComparisons).toBe(0);
+      expect(component.incompleteComparisons).toBe(1);
     });
 
     it('should calculate statistics correctly for within training mode', () => {
@@ -441,6 +524,72 @@ describe('CodingResultsComparisonComponent', () => {
       expect(component.matchingComparisons).toBe(0);
       expect(component.matchingPercentage).toBe(0);
     });
+  });
+
+  it('should restore automatic agreement immediately when clearing a manual discussion result', () => {
+    codingTrainingBackendService.saveDiscussionResult.mockReturnValueOnce(of({
+      success: true,
+      code: null,
+      score: null,
+      managerUserId: null,
+      managerName: null
+    }));
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'Test1',
+      discussionCode: 8,
+      discussionScore: 2,
+      discussionSource: 'manual' as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '7',
+          score: 2
+        },
+        {
+          jobId: 2,
+          coderName: 'Coder2',
+          code: '7',
+          score: 2
+        }
+      ]
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.discussionCodeByResponseId[1] = '';
+
+    component.onDiscussionCodeBlur(row);
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, null, null);
+    expect(component.discussionCodeByResponseId[1]).toBe('7');
+    expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(row.discussionCode).toBe(7);
+    expect(row.discussionScore).toBe(2);
+    expect(row.discussionSource).toBe('auto_agreement');
+  });
+
+  it('should clear stale kappa values when changing comparison mode', () => {
+    component.kappaStatistics = {
+      variables: [],
+      workspaceSummary: {
+        totalDoubleCodedResponses: 10,
+        totalCoderPairs: 1,
+        averageKappa: 1,
+        variablesIncluded: 1,
+        codersIncluded: 2,
+        weightingMethod: 'weighted'
+      }
+    };
+    component.originalKappaStatistics = component.kappaStatistics;
+
+    component.onModeChange();
+
+    expect(component.kappaStatistics).toBeNull();
+    expect(component.originalKappaStatistics).toBeNull();
+    expect(component.variableKappaSummaries).toEqual([]);
   });
 
   describe('calculateMeanAgreement', () => {
