@@ -29,6 +29,10 @@ import { CodingTrainingBackendService } from '../../services/coding-training-bac
 import { CoderTraining } from '../../models/coder-training.model';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
+import {
+  getTrainingOptionMeta,
+  getTrainingOptionTitle
+} from '../../utils/coder-training-display';
 
 interface ReplayCodeSelectedMessage extends PostMessage {
   testPerson: string;
@@ -575,6 +579,18 @@ export class CodingResultsComparisonComponent implements OnInit {
     });
   }
 
+  getTrainingOptionTitle(training: CoderTraining): string {
+    return getTrainingOptionTitle(training);
+  }
+
+  getTrainingOptionMeta(training: CoderTraining): string {
+    return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
+  }
+
+  getTrainingCoderOptionLabel(coder: { trainingId: number; trainingLabel: string; coderName: string }): string {
+    return `${coder.trainingLabel} · ID ${coder.trainingId}: ${coder.coderName}`;
+  }
+
   onModeChange(): void {
     this.selectedTrainings.clear();
     this.filteredTrainings = [...this.availableTrainings];
@@ -929,8 +945,9 @@ export class CodingResultsComparisonComponent implements OnInit {
       return;
     }
 
-    this.filteredTrainings = this.availableTrainings.filter(training => training.label.toLowerCase().includes(value)
-    );
+    this.filteredTrainings = this.availableTrainings.filter(training => (
+      `${training.label} ${training.id} ${this.getTrainingOptionMeta(training)}`.toLowerCase().includes(value)
+    ));
   }
 
   trackByCoder(index: number, coder: { jobId: number; coderName: string }): number {

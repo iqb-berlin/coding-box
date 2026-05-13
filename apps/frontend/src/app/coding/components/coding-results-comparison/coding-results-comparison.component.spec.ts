@@ -13,6 +13,7 @@ import { CodingResultsComparisonComponent } from './coding-results-comparison.co
 import { SERVER_URL } from '../../../injection-tokens';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { AppService } from '../../../core/services/app.service';
+import { CoderTraining } from '../../models/coder-training.model';
 
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
@@ -92,6 +93,32 @@ describe('CodingResultsComparisonComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should format and filter trainings with stable disambiguation data', () => {
+    const training = {
+      id: 33,
+      workspace_id: 1,
+      label: 'Duplicate Label',
+      created_at: new Date('2026-05-13T11:36:00'),
+      updated_at: new Date('2026-05-13T11:36:00'),
+      jobsCount: 2
+    } as CoderTraining;
+
+    component.availableTrainings = [training];
+    component.filteredTrainings = [training];
+
+    expect(component.getTrainingOptionTitle(training)).toBe('Duplicate Label · ID 33');
+    expect(component.getTrainingOptionMeta(training)).toContain('2 Kodierer');
+    expect(component.getTrainingCoderOptionLabel({
+      trainingId: 33,
+      trainingLabel: 'Duplicate Label',
+      coderName: 'coder1'
+    })).toBe('Duplicate Label · ID 33: coder1');
+
+    component.applyTrainingFilter({ target: { value: '33' } } as unknown as Event);
+
+    expect(component.filteredTrainings).toEqual([training]);
   });
 
   it('should show discussion result as the main header and manager as subordinate info', () => {

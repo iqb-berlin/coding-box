@@ -17,6 +17,10 @@
         <input matInput formControlName="trainingLabel" placeholder="z.B. Schulung 2024 - Mathematik">
         <mat-hint>Diese Bezeichnung wird den Kodierern als Projekttitel angezeigt.</mat-hint>
       </mat-form-field>
+      <div class="duplicate-label-warning" *ngIf="hasDuplicateTrainingLabel()">
+        <mat-icon>info</mat-icon>
+        <span>{{ getDuplicateTrainingLabelWarning() }}</span>
+      </div>
     </div>
 
     <mat-divider class="section-divider"></mat-divider>
@@ -74,7 +78,12 @@
       <mat-form-field appearance="outline" class="full-width">
         <mat-label>{{ 'coding-job-definition-dialog.reference-trainings.select-placeholder' | translate }}</mat-label>
         <mat-select formControlName="referenceTrainingIds" multiple>
-          <mat-option *ngFor="let t of availableTrainings" [value]="t.id">{{ t.label }} ({{ t.jobsCount }} Jobs)</mat-option>
+          <mat-option *ngFor="let t of availableTrainings" [value]="t.id">
+            <div class="training-option">
+              <span class="training-option-title">{{ getTrainingOptionTitle(t) }}</span>
+              <span class="training-option-meta">{{ getTrainingOptionMeta(t) }}</span>
+            </div>
+          </mat-option>
         </mat-select>
       </mat-form-field>
       <mat-radio-group

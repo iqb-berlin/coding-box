@@ -78,6 +78,46 @@
     margin-top: 16px;
   }
 
+  .training-checkbox {
+    display: block;
+    margin: 6px 0;
+
+    .training-option-title,
+    .training-option-meta {
+      display: block;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+
+    .training-option-title {
+      font-weight: 600;
+    }
+
+    .training-option-meta {
+      color: #6c757d;
+      font-size: 12px;
+    }
+  }
+
+  .training-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    line-height: 1.25;
+
+    .training-option-title {
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .training-option-meta {
+      color: #6c757d;
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+  }
+
 
   .loading-container,
   .no-data,
