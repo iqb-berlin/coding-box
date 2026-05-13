@@ -402,6 +402,40 @@ export class WorkspaceCodingAnalysisController {
             }
           }
         },
+        aggregationSummary: {
+          type: 'object',
+          properties: {
+            duplicateGroups: {
+              type: 'number',
+              description: 'Number of aggregatable duplicate groups'
+            },
+            duplicateResponses: {
+              type: 'number',
+              description: 'Number of responses in aggregatable duplicate groups'
+            },
+            collapsedCases: {
+              type: 'number',
+              description: 'Number of raw cases collapsed by aggregation'
+            },
+            rawCases: {
+              type: 'number',
+              description: 'Total raw coding cases considered for aggregation'
+            },
+            effectiveCases: {
+              type: 'number',
+              description: 'Total coding cases after aggregation'
+            },
+            threshold: {
+              type: 'number',
+              nullable: true,
+              description: 'Duplicate aggregation threshold'
+            },
+            aggregationActive: {
+              type: 'boolean',
+              description: 'Whether duplicate aggregation is active'
+            }
+          }
+        },
         matchingFlags: {
           type: 'array',
           items: { type: 'string' },

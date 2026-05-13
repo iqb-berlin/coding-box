@@ -231,7 +231,7 @@
                   <div class="analysis-title-content">
                     <span class="analysis-title">
                       {{ 'coding-management-manual.response-analysis.duplicate-values' | translate }}
-                      <span *ngIf="isDuplicateAggregationActive"
+                      <span *ngIf="responseAnalysis.duplicateValues.isAggregationApplied"
                         class="aggregation-applied-badge">
                         <mat-icon>layers</mat-icon>
                         {{ 'coding-management-manual.duplicate-aggregation.is-applied' | translate }}

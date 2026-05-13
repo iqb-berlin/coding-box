@@ -1226,15 +1226,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get responseAnalysisAggregationSavings(): number {
-    if (!this.responseAnalysis || !this.isDuplicateAggregationActive) {
-      return 0;
-    }
-
-    return Math.max(
-      0,
-      this.responseAnalysis.duplicateValues.totalResponses -
-      this.responseAnalysis.duplicateValues.total
-    );
+    return this.responseAnalysis?.aggregationSummary?.collapsedCases ?? 0;
   }
 
   getVariableEffectiveCaseCount(variable: {
