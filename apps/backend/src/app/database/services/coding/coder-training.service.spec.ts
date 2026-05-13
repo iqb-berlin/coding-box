@@ -336,6 +336,127 @@ describe('CoderTrainingService', () => {
       const groups = Array.from(new Set(result.map((r: { personGroup: string }) => r.personGroup))).sort();
       expect(groups).toEqual(['A', 'B']);
     });
+
+    it('should fill the requested count for random_per_testgroup with uneven large groups', () => {
+      const responses = [
+        ...Array.from({ length: 90 }, (_, index) => makeResponse(1000 + index, index, 'A')),
+        ...Array.from({ length: 9 }, (_, index) => makeResponse(2000 + index, index, 'B')),
+        makeResponse(3000, 1, 'C')
+      ];
+      const shuffleSpy = jest.spyOn(service as unknown as { shuffle: <T>(arr: T[]) => T[] }, 'shuffle')
+        .mockImplementation(<T>(arr: T[]) => [...arr]);
+
+      const result = getSampleResponses(service)(responses, 10, 'random_per_testgroup');
+      const groupCounts = result.reduce<Record<string, number>>((acc, response) => {
+        acc[response.personGroup] = (acc[response.personGroup] || 0) + 1;
+        return acc;
+      }, {});
+
+      expect(result).toHaveLength(10);
+      expect(new Set(result.map(response => response.responseId)).size).toBe(10);
+      expect(groupCounts).toEqual({ A: 5, B: 4, C: 1 });
+      shuffleSpy.mockRestore();
+    });
+
+    it('should take cases from a randomly chosen test group before moving to the next for random_testgroups', () => {
+      const responses = [
+        makeResponse(1, 10, 'A'),
+        makeResponse(2, 20, 'A'),
+        makeResponse(3, 10, 'B'),
+        makeResponse(4, 20, 'B')
+      ];
+      const shuffleSpy = jest.spyOn(service as unknown as { shuffle: <T>(arr: T[]) => T[] }, 'shuffle')
+        .mockImplementation(<T>(arr: T[]) => [...arr]);
+
+      const result = getSampleResponses(service)(responses, 3, 'random_testgroups');
+
+      expect(result.map((r: { responseId: number }) => r.responseId)).toEqual([1, 2, 3]);
+      expect(result.map((r: { personGroup: string }) => r.personGroup)).toEqual(['A', 'A', 'B']);
+      shuffleSpy.mockRestore();
+    });
+
+    it('should take all requested random_testgroups cases from the first group when it has enough cases', () => {
+      const responses = [
+        ...Array.from({ length: 90 }, (_, index) => makeResponse(1000 + index, index, 'A')),
+        ...Array.from({ length: 9 }, (_, index) => makeResponse(2000 + index, index, 'B')),
+        makeResponse(3000, 1, 'C')
+      ];
+      const shuffleSpy = jest.spyOn(service as unknown as { shuffle: <T>(arr: T[]) => T[] }, 'shuffle')
+        .mockImplementation(<T>(arr: T[]) => [...arr]);
+
+      const result = getSampleResponses(service)(responses, 10, 'random_testgroups');
+
+      expect(result).toHaveLength(10);
+      expect(new Set(result.map(response => response.personGroup))).toEqual(new Set(['A']));
+      expect(result.map(response => response.responseId)).toEqual([1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009]);
+      shuffleSpy.mockRestore();
+    });
+
+    it('should return all cases when sampleCount is larger than the available pool', () => {
+      const responses = [
+        makeResponse(1, 10, 'A'),
+        makeResponse(2, 20, 'B'),
+        makeResponse(3, 30, 'C')
+      ];
+
+      const result = getSampleResponses(service)(responses, 10, 'random_per_testgroup');
+
+      expect(result).toEqual(responses);
+    });
+  });
+
+  describe('deriveAutomaticDiscussionResult', () => {
+    type DeriveAutomaticDiscussionResultFn = (
+      coders: Array<{
+        jobId: number;
+        coderName: string;
+        code: string | null;
+        score: number | null;
+        notes: string | null;
+        codingIssueOption: number | null;
+      }>
+    ) => { code: number; score: number | null } | null;
+
+    const getAutomaticDiscussionResult = (svc: CoderTrainingService): DeriveAutomaticDiscussionResultFn => {
+      const serviceWithPrivateMethod = svc as unknown as { deriveAutomaticDiscussionResult: DeriveAutomaticDiscussionResultFn };
+      return serviceWithPrivateMethod.deriveAutomaticDiscussionResult.bind(svc);
+    };
+
+    const coderResult = (jobId: number, code: string | null, score: number | null) => ({
+      jobId,
+      coderName: `Coder ${jobId}`,
+      code,
+      score,
+      notes: null,
+      codingIssueOption: null
+    });
+
+    it('should derive a discussion result only when all coders fully agree', () => {
+      const result = getAutomaticDiscussionResult(service)([
+        coderResult(1, '7', 2),
+        coderResult(2, '7', 2),
+        coderResult(3, '7', 2)
+      ]);
+
+      expect(result).toEqual({ code: 7, score: 2 });
+    });
+
+    it('should leave conflicts and incomplete coder sets without automatic discussion result', () => {
+      const derive = getAutomaticDiscussionResult(service);
+
+      expect(derive([
+        coderResult(1, '7', 2),
+        coderResult(2, '8', 2)
+      ])).toBeNull();
+      expect(derive([
+        coderResult(1, '7', 2),
+        coderResult(2, '7', 3)
+      ])).toBeNull();
+      expect(derive([
+        coderResult(1, '7', 2),
+        coderResult(2, null, null)
+      ])).toBeNull();
+    });
   });
 
   describe('getTrainingResponseIds', () => {

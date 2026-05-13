@@ -74,6 +74,17 @@ interface CoderTrainingWithJobs {
 
 export type TrainingResponseIdsMap = Record<string, number[]>;
 
+type DiscussionSource = 'manual' | 'auto_agreement' | null;
+
+type WithinTrainingCoderResult = {
+  jobId: number;
+  coderName: string;
+  code: string | null;
+  score: number | null;
+  notes: string | null;
+  codingIssueOption: number | null;
+};
+
 @Injectable()
 export class CoderTrainingService {
   private readonly logger = new Logger(CoderTrainingService.name);
@@ -228,6 +239,34 @@ export class CoderTrainingService {
     };
   }
 
+  private deriveAutomaticDiscussionResult(
+    coders: WithinTrainingCoderResult[]
+  ): { code: number; score: number | null } | null {
+    if (coders.length === 0 || coders.some(coder => coder.code === null)) {
+      return null;
+    }
+
+    const firstCode = coders[0].code;
+    const firstScore = coders[0].score ?? null;
+    if (firstCode === null || !/^-?\d+$/.test(firstCode)) {
+      return null;
+    }
+
+    const allCodersAgree = coders.every(coder => (
+      coder.code === firstCode &&
+      (coder.score ?? null) === firstScore
+    ));
+
+    if (!allCodersAgree) {
+      return null;
+    }
+
+    return {
+      code: parseInt(firstCode, 10),
+      score: firstScore
+    };
+  }
+
   async saveDiscussionResult(
     workspaceId: number,
     trainingId: number,
@@ -354,14 +393,20 @@ export class CoderTrainingService {
           if (!byGroup.has(key)) byGroup.set(key, []);
           byGroup.get(key)!.push(r);
         }
-        const groups = Array.from(byGroup.values());
-        const perGroup = Math.ceil(sampleCount / groups.length);
+        const groups = this.shuffle(Array.from(byGroup.values()).map(group => this.shuffle(group)));
         const result: CoderTrainingResponse[] = [];
-        for (const group of groups) {
-          const sampled = this.shuffle(group).slice(0, perGroup);
-          result.push(...sampled);
+
+        while (result.length < sampleCount && groups.some(group => group.length > 0)) {
+          for (const group of groups) {
+            if (result.length >= sampleCount) break;
+            const response = group.shift();
+            if (response) {
+              result.push(response);
+            }
+          }
         }
-        return this.shuffle(result).slice(0, sampleCount);
+
+        return result;
       }
       case 'random_testgroups': {
         const byGroup = new Map<string, CoderTrainingResponse[]>();
@@ -1122,14 +1167,8 @@ export class CoderTrainingService {
       discussionScore: number | null;
       discussionManagerUserId: number | null;
       discussionManagerName: string | null;
-      coders: Array<{
-        jobId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-        notes: string | null;
-        codingIssueOption: number | null;
-      }>;
+      discussionSource: DiscussionSource;
+      coders: WithinTrainingCoderResult[];
     }>> {
     this.logger.log(`Getting within-training coding comparison for training ${trainingId} in workspace ${workspaceId}`);
 
@@ -1218,14 +1257,7 @@ export class CoderTrainingService {
     }
 
     for (const [, unitVar] of unitVariableMap.entries()) {
-      const codersData: Array<{
-        jobId: number;
-        coderName: string;
-        code: string | null;
-        score: number | null;
-        notes: string | null;
-        codingIssueOption: number | null;
-      }> = [];
+      const codersData: WithinTrainingCoderResult[] = [];
 
       for (const job of training.codingJobs) {
         let code: number | null = null;
@@ -1269,6 +1301,25 @@ export class CoderTrainingService {
       }
 
       const discussionResult = discussionByResponseId.get(unitVar.responseId);
+      const hasManualDiscussionResult = discussionResult?.code !== null && discussionResult?.code !== undefined;
+      const automaticDiscussionResult = hasManualDiscussionResult ?
+        null :
+        this.deriveAutomaticDiscussionResult(codersData);
+      let discussionCode = automaticDiscussionResult?.code ?? null;
+      let discussionScore = automaticDiscussionResult?.score ?? null;
+      let discussionManagerUserId: number | null = null;
+      let discussionManagerName: string | null = null;
+      let discussionSource: DiscussionSource = automaticDiscussionResult ? 'auto_agreement' : null;
+
+      if (hasManualDiscussionResult) {
+        discussionCode = discussionResult!.code;
+        discussionScore = discussionResult!.score;
+        discussionManagerUserId = discussionResult!.manager_user_id ?? null;
+        discussionManagerName = discussionResult!.manager_user_id ?
+          (managerNameById.get(discussionResult!.manager_user_id) ?? discussionResult!.manager_name ?? null) :
+          (discussionResult!.manager_name ?? null);
+        discussionSource = 'manual';
+      }
 
       comparisonData.push({
         responseId: unitVar.responseId,
@@ -1281,10 +1332,11 @@ export class CoderTrainingService {
         givenAnswer: unitVar.givenAnswer,
         replayCode: unitVar.replayCode,
         replayScore: unitVar.replayScore,
-        discussionCode: discussionResult?.code ?? null,
-        discussionScore: discussionResult?.score ?? null,
-        discussionManagerUserId: discussionResult?.manager_user_id ?? null,
-        discussionManagerName: discussionResult?.manager_user_id ? (managerNameById.get(discussionResult.manager_user_id) ?? discussionResult.manager_name ?? null) : (discussionResult?.manager_name ?? null),
+        discussionCode,
+        discussionScore,
+        discussionManagerUserId,
+        discussionManagerName,
+        discussionSource,
         coders: codersData
       });
     }

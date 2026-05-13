@@ -56,7 +56,6 @@ describe('CodingJobService', () => {
   let variableBundleRepository: ReturnType<typeof createRepo>;
   let responseRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
-  let discussionResultRepository: ReturnType<typeof createRepo>;
   let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock };
 
@@ -70,7 +69,6 @@ describe('CodingJobService', () => {
     responseRepository = createRepo();
     const fileUploadRepository = createRepo();
     settingRepository = createRepo();
-    discussionResultRepository = createRepo();
     connection = {
       transaction: jest.fn(callback => callback({
         getRepository: (entity: unknown) => {
@@ -104,7 +102,6 @@ describe('CodingJobService', () => {
       responseRepository as never,
       fileUploadRepository as never,
       settingRepository as never,
-      discussionResultRepository as never,
       connection as never,
       cacheService as never,
       {} as never,
@@ -345,6 +342,41 @@ describe('CodingJobService', () => {
       coding_issue_option: null,
       is_open: true
     }));
+  });
+
+  it('does not create a discussion result when saving progress for a training job', async () => {
+    const trainingJob = { id: 1, workspace_id: 3, training_id: 42 };
+    const unit = {
+      coding_job_id: 1,
+      response_id: 99,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: true,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(trainingJob);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7, score: 2 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: 7,
+      score: 2,
+      is_open: false
+    }));
+    expect(service).not.toHaveProperty('discussionResultRepository');
   });
 
   it('maps saved coding progress and notes by composite key', async () => {
