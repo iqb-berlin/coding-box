@@ -461,6 +461,25 @@
           position: sticky;
           top: 0;
           z-index: 10;
+
+          .discussion-header {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            line-height: 1.2;
+          }
+
+          .discussion-header-title {
+            color: #212121;
+            font-weight: 600;
+          }
+
+          .discussion-header-manager {
+            color: #616161;
+            font-size: 11px;
+            font-weight: 400;
+            white-space: normal;
+          }
         }
 
         td {
@@ -575,6 +594,24 @@
               font-size: 11px;
               color: #1976d2;
             }
+
+            .discussion-source {
+              align-self: flex-start;
+              border-radius: 4px;
+              font-size: 11px;
+              line-height: 1;
+              padding: 4px 6px;
+            }
+
+            .discussion-source-auto {
+              background: #e8f5e9;
+              color: #2e7d32;
+            }
+
+            .discussion-source-manual {
+              background: #e3f2fd;
+              color: #1565c0;
+            }
           }
 
           strong {
@@ -626,8 +663,8 @@
         }
 
         .mat-column-discussion {
-          width: 210px;
-          max-width: 210px;
+          width: 230px;
+          max-width: 230px;
         }
       }
 

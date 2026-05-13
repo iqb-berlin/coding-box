@@ -574,7 +574,12 @@
 
           <ng-container matColumnDef="discussion">
             <th mat-header-cell *matHeaderCellDef>
-              {{ discussionManagerLabel }}
+              <div class="discussion-header">
+                <span class="discussion-header-title">Diskussionsergebnis</span>
+                <span class="discussion-header-manager" *ngIf="discussionManagerLabel">
+                  Manager: {{ discussionManagerLabel }}
+                </span>
+              </div>
             </th>
             <td mat-cell *matCellDef="let comparison">
               <div class="discussion-cell">
@@ -604,6 +609,16 @@
                   class="discussion-saving"
                   *ngIf="isSavingDiscussionByResponseId[comparison.responseId]"
                   >Speichert ...</span
+                >
+                <span
+                  class="discussion-source discussion-source-auto"
+                  *ngIf="comparison.discussionSource === 'auto_agreement'"
+                  >Auto-Konsens</span
+                >
+                <span
+                  class="discussion-source discussion-source-manual"
+                  *ngIf="comparison.discussionSource === 'manual'"
+                  >Festgelegt</span
                 >
               </div>
             </td>

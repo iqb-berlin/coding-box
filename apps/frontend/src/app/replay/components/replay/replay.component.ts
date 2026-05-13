@@ -692,6 +692,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         unitId: this.unitId,
         variableId: event.variableId,
         code: savedCode.code,
+        score: savedCode.score ?? null,
         responseId: this.originResponseId
       }, '*');
 

@@ -54,6 +54,7 @@ export interface WithinTrainingCodingResult {
   discussionScore: number | null;
   discussionManagerUserId: number | null;
   discussionManagerName: string | null;
+  discussionSource: 'manual' | 'auto_agreement' | null;
   coders: Array<{
     jobId: number;
     coderName: string;
