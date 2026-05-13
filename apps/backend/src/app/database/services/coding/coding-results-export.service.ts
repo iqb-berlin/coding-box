@@ -1345,7 +1345,7 @@ export class CodingResultsExportService {
 
     // Clear page maps cache at start of export
     this.clearPageMapsCache();
-    const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '100', 10);
+    const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '1000', 10);
     const MAX_RESPONSES_PER_WORKSHEET = parseInt(process.env.EXPORT_MAX_RESPONSES_PER_WORKSHEET || '10000', 10);
     const BATCH_SIZE = parseInt(process.env.EXPORT_BATCH_SIZE || '50', 10);
 
@@ -1412,8 +1412,11 @@ export class CodingResultsExportService {
 
     // Check if we exceed the worksheet limit
     if (filteredUnitVariableResults.length > MAX_WORKSHEETS) {
-      this.logger.warn(`Too many unit-variable combinations (${filteredUnitVariableResults.length}) for workspace ${workspaceId}. Limiting to ${MAX_WORKSHEETS} worksheets.`);
-      filteredUnitVariableResults.splice(MAX_WORKSHEETS); // Truncate to limit
+      throw new Error(
+        `Der Export enthaelt ${filteredUnitVariableResults.length} Unit-Variable-Kombinationen ` +
+        `und ueberschreitet das konfigurierte Limit von ${MAX_WORKSHEETS} Tabellenblaettern. ` +
+        'Bitte EXPORT_MAX_WORKSHEETS erhoehen, damit der Export vollstaendig erzeugt wird.'
+      );
     }
 
     this.logger.log(`Processing ${filteredUnitVariableResults.length} unit-variable combinations in batches of ${BATCH_SIZE}`);
