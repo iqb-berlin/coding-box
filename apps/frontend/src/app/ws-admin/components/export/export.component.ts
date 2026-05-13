@@ -70,7 +70,7 @@ export class ExportComponent {
   anonymizeCoders = false;
   usePseudoCoders = false;
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
-  excludeAutoCoded = true;
+  excludeAutoCoded = false;
 
   jobDefinitions: JobDefinition[] = [];
   coderTrainings: CoderTraining[] = [];
@@ -170,17 +170,29 @@ export class ExportComponent {
   }
 
   onFormatChange(): void {
-    this.clearReplayUrlIfNeeded();
+    this.clearUnsupportedOptions();
   }
 
   onDoubleCodingMethodChange(): void {
-    this.clearReplayUrlIfNeeded();
+    this.clearUnsupportedOptions();
   }
 
-  private clearReplayUrlIfNeeded(): void {
-    if (this.selectedFormat === 'coding-times' ||
-      (this.selectedFormat === 'aggregated' && this.doubleCodingMethod === 'new-column-per-coder')) {
+  supportsReplayUrl(): boolean {
+    return this.selectedFormat !== 'coding-times' &&
+      (this.selectedFormat !== 'aggregated' || this.doubleCodingMethod === 'new-row-per-variable');
+  }
+
+  supportsCommentsInsteadOfCodes(): boolean {
+    return this.selectedFormat !== 'coding-times';
+  }
+
+  private clearUnsupportedOptions(): void {
+    if (!this.supportsReplayUrl()) {
       this.includeReplayUrl = false;
+    }
+
+    if (!this.supportsCommentsInsteadOfCodes()) {
+      this.outputCommentsInsteadOfCodes = false;
     }
   }
 

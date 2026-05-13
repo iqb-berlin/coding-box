@@ -97,14 +97,11 @@
         </div>
 
         <!-- General export options -->
-        <mat-checkbox
-          *ngIf="selectedFormat !== 'coding-times' && selectedFormat !== 'by-coder' && (selectedFormat !== 'aggregated' || doubleCodingMethod === 'new-row-per-variable')"
-          [(ngModel)]="includeReplayUrl" color="primary"
+        <mat-checkbox *ngIf="supportsReplayUrl()" [(ngModel)]="includeReplayUrl" color="primary"
           [matTooltip]="'ws-admin.export-options.include-replay-url-tooltip' | translate">
           {{ 'ws-admin.export-options.include-replay-url' | translate }}
         </mat-checkbox>
-        <mat-checkbox *ngIf="selectedFormat !== 'detailed' && selectedFormat !== 'coding-times'"
-          [(ngModel)]="outputCommentsInsteadOfCodes" color="primary"
+        <mat-checkbox *ngIf="supportsCommentsInsteadOfCodes()" [(ngModel)]="outputCommentsInsteadOfCodes" color="primary"
           [matTooltip]="'ws-admin.export-options.output-comments-instead-of-codes-tooltip' | translate">
           {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
         </mat-checkbox>
