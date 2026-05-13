@@ -7,6 +7,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { HttpClientTestingModule } from '@angular/common/http/testing';
 import { TranslateModule } from '@ngx-translate/core';
+import { of } from 'rxjs';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CodingResultsComparisonComponent } from './coding-results-comparison.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -16,8 +17,29 @@ import { AppService } from '../../../core/services/app.service';
 describe('CodingResultsComparisonComponent', () => {
   let component: CodingResultsComparisonComponent;
   let fixture: ComponentFixture<CodingResultsComparisonComponent>;
+  let codingTrainingBackendService: {
+    getCoderTrainings: jest.Mock;
+    compareTrainingCodingResults: jest.Mock;
+    compareWithinTrainingCodingResults: jest.Mock;
+    saveDiscussionResult: jest.Mock;
+    getTrainingCohensKappa: jest.Mock;
+  };
 
   beforeEach(async () => {
+    codingTrainingBackendService = {
+      getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
+      compareTrainingCodingResults: jest.fn(),
+      compareWithinTrainingCodingResults: jest.fn(),
+      saveDiscussionResult: jest.fn().mockReturnValue(of({
+        success: true,
+        code: 7,
+        score: 2,
+        managerUserId: 2,
+        managerName: 'Test User'
+      })),
+      getTrainingCohensKappa: jest.fn()
+    };
+
     await TestBed.configureTestingModule({
       imports: [
         CodingResultsComparisonComponent,
@@ -44,13 +66,7 @@ describe('CodingResultsComparisonComponent', () => {
         },
         {
           provide: CodingTrainingBackendService,
-          useValue: {
-            getCoderTrainings: jest.fn().mockReturnValue({ subscribe: jest.fn() }),
-            compareTrainingCodingResults: jest.fn(),
-            compareWithinTrainingCodingResults: jest.fn(),
-            saveDiscussionResult: jest.fn(),
-            getTrainingCohensKappa: jest.fn()
-          }
+          useValue: codingTrainingBackendService
         },
         {
           provide: CodingStatisticsService,
@@ -76,6 +92,166 @@ describe('CodingResultsComparisonComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should show discussion result as the main header and manager as subordinate info', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 1;
+    component.availableCoders = [{ jobId: 1, coderName: 'Coder1' }];
+    component.codersFormControl.setValue([1]);
+    component.discussionManagerLabel = 'reichlej@gmx.de';
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: 'A',
+            score: null
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.withinTrainingData;
+
+    (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
+    fixture.detectChanges();
+
+    const discussionHeader: HTMLElement | null = fixture.nativeElement.querySelector('.mat-column-discussion');
+
+    expect(discussionHeader?.textContent).toContain('Diskussionsergebnis');
+    expect(discussionHeader?.textContent).toContain('Manager: reichlej@gmx.de');
+  });
+
+  it('should initialize discussion values from automatic agreement but not from replay code fallback', () => {
+    (component as unknown as {
+      initDiscussionValues: (data: Array<{
+        responseId: number;
+        unitName: string;
+        variableId: string;
+        replayCode?: number | null;
+        replayScore?: number | null;
+        discussionCode?: number | null;
+        discussionScore?: number | null;
+        discussionSource?: 'manual' | 'auto_agreement' | null;
+        coders: Array<{ jobId: number; coderName: string; code: string | null; score: number | null }>;
+      }>) => void;
+    }).initDiscussionValues([
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        replayCode: 5,
+        replayScore: 1,
+        discussionCode: null,
+        discussionScore: null,
+        coders: []
+      },
+      {
+        responseId: 2,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        discussionCode: 7,
+        discussionScore: 2,
+        discussionSource: 'auto_agreement',
+        coders: []
+      }
+    ]);
+
+    expect(component.discussionCodeByResponseId[1]).toBe('');
+    expect(component.discussionScoreByResponseId[1]).toBeNull();
+    expect(component.discussionCodeByResponseId[2]).toBe('7');
+    expect(component.discussionScoreByResponseId[2]).toBe(2);
+  });
+
+  it('should mark automatic agreement in the discussion column', () => {
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 1;
+    component.availableCoders = [{ jobId: 1, coderName: 'Coder1' }];
+    component.codersFormControl.setValue([1]);
+    component.withinTrainingData = [
+      {
+        responseId: 1,
+        unitName: 'Unit1',
+        variableId: 'Var1',
+        testperson: 'Test1',
+        discussionCode: 7,
+        discussionScore: 2,
+        discussionSource: 'auto_agreement',
+        coders: [
+          {
+            jobId: 1,
+            coderName: 'Coder1',
+            code: '7',
+            score: 2
+          }
+        ]
+      }
+    ];
+    component.dataSource.data = component.withinTrainingData;
+    component.discussionCodeByResponseId[1] = '7';
+    component.discussionScoreByResponseId[1] = 2;
+
+    (component as unknown as { updateDisplayedColumns: () => void }).updateDisplayedColumns();
+    fixture.detectChanges();
+
+    const discussionSource: HTMLElement | null = fixture.nativeElement.querySelector('.discussion-source-auto');
+
+    expect(discussionSource?.textContent).toContain('Auto-Konsens');
+  });
+
+  it('should save an active replay selection with its score as manual discussion result', () => {
+    const row = {
+      responseId: 1,
+      unitName: 'Unit1',
+      variableId: 'Var1',
+      testperson: 'login@code@booklet',
+      discussionCode: null,
+      discussionScore: null,
+      discussionSource: 'auto_agreement' as 'manual' | 'auto_agreement' | null,
+      coders: [
+        {
+          jobId: 1,
+          coderName: 'Coder1',
+          code: '3',
+          score: 1
+        }
+      ]
+    };
+    component.comparisonMode = 'within-training';
+    component.selectedTrainingForWithin = 5;
+    component.withinTrainingData = [row];
+
+    (component as unknown as {
+      handleReplayCodeSelected: (data: {
+        type: 'replayCodeSelected';
+        testPerson: string;
+        unitId: string;
+        variableId: string;
+        code: string;
+        score: number | null;
+        responseId: number;
+      }) => void;
+    }).handleReplayCodeSelected({
+      type: 'replayCodeSelected',
+      testPerson: 'login@code@booklet',
+      unitId: 'Unit1',
+      variableId: 'Var1',
+      code: '7',
+      score: 2,
+      responseId: 1
+    });
+
+    expect(codingTrainingBackendService.saveDiscussionResult).toHaveBeenCalledWith(1, 5, 1, 7, 2);
+    expect(component.discussionCodeByResponseId[1]).toBe('7');
+    expect(component.discussionScoreByResponseId[1]).toBe(2);
+    expect(row.discussionCode).toBe(7);
+    expect(row.discussionScore).toBe(2);
+    expect(row.discussionSource).toBe('manual');
   });
 
   describe('calculateStatistics', () => {

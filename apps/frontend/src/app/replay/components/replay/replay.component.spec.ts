@@ -150,6 +150,43 @@ describe('ReplayComponent', () => {
     );
   });
 
+  it('should send selected replay code and score back to the comparison opener', async () => {
+    const postMessage = jest.fn();
+    Object.defineProperty(window, 'opener', {
+      value: { postMessage },
+      configurable: true
+    });
+    component.originResponseId = 99;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.workspaceId = 5;
+    jest.spyOn(component.codingService, 'handleCodeSelected').mockResolvedValue({
+      id: 7,
+      code: '7',
+      label: 'Code 7',
+      score: 2
+    });
+
+    await component.onCodeSelected({
+      variableId: 'VAR1',
+      code: {
+        id: 7,
+        label: 'Code 7',
+        score: 2
+      }
+    });
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'replayCodeSelected',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      variableId: 'VAR1',
+      code: '7',
+      score: 2,
+      responseId: 99
+    }, '*');
+  });
+
   it('should dismiss page error when null is passed', () => {
     // First create an error
     component.checkPageError('notInList');

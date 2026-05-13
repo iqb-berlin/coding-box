@@ -35,6 +35,7 @@ interface ReplayCodeSelectedMessage extends PostMessage {
   unitId: string;
   variableId: string;
   code: string;
+  score?: number | null;
   responseId?: number;
 }
 
@@ -74,6 +75,7 @@ interface WithinTrainingComparison {
   discussionScore?: number | null;
   discussionManagerUserId?: number | null;
   discussionManagerName?: string | null;
+  discussionSource?: 'manual' | 'auto_agreement' | null;
   coders: Array<{
     jobId: number;
     coderName: string;
@@ -454,7 +456,10 @@ export class CodingResultsComparisonComponent implements OnInit {
     return parseInt(normalized, 10);
   }
 
-  onDiscussionCodeBlur(comparison: TrainingComparison | WithinTrainingComparison): void {
+  onDiscussionCodeBlur(
+    comparison: TrainingComparison | WithinTrainingComparison,
+    scoreOverride?: number | null
+  ): void {
     if (this.comparisonMode !== 'within-training' || !this.selectedTrainingForWithin) {
       return;
     }
@@ -469,7 +474,12 @@ export class CodingResultsComparisonComponent implements OnInit {
       return;
     }
 
-    const score = parsedCode === null ? null : this.getDiscussionScoreFromKnownCodes(withinComparison, parsedCode);
+    let score: number | null = null;
+    if (parsedCode !== null) {
+      score = scoreOverride !== undefined ?
+        scoreOverride :
+        this.getDiscussionScoreFromKnownCodes(withinComparison, parsedCode);
+    }
     this.isSavingDiscussionByResponseId[responseId] = true;
 
     this.codingTrainingBackendService.saveDiscussionResult(
@@ -486,6 +496,7 @@ export class CodingResultsComparisonComponent implements OnInit {
         withinComparison.discussionScore = result.score;
         withinComparison.discussionManagerUserId = result.managerUserId;
         withinComparison.discussionManagerName = result.managerName;
+        withinComparison.discussionSource = result.code !== null ? 'manual' : null;
         if (result.managerName) {
           this.discussionManagerLabel = result.managerName;
         }
@@ -512,9 +523,6 @@ export class CodingResultsComparisonComponent implements OnInit {
       if (item.discussionCode !== null && item.discussionCode !== undefined) {
         this.discussionCodeByResponseId[item.responseId] = this.mapCodeForDisplay(item.discussionCode.toString());
         this.discussionScoreByResponseId[item.responseId] = item.discussionScore ?? this.getDiscussionScoreFromKnownCodes(item, item.discussionCode);
-      } else if (item.replayCode !== null && item.replayCode !== undefined) {
-        this.discussionCodeByResponseId[item.responseId] = this.mapCodeForDisplay(item.replayCode.toString());
-        this.discussionScoreByResponseId[item.responseId] = item.replayScore ?? this.getDiscussionScoreFromKnownCodes(item, item.replayCode);
       } else {
         this.discussionCodeByResponseId[item.responseId] = '';
         this.discussionScoreByResponseId[item.responseId] = null;
@@ -841,6 +849,7 @@ export class CodingResultsComparisonComponent implements OnInit {
             discussionScore: item.discussionScore,
             discussionManagerUserId: item.discussionManagerUserId,
             discussionManagerName: item.discussionManagerName,
+            discussionSource: item.discussionSource,
             coders: item.coders
           }));
 
@@ -1137,7 +1146,7 @@ export class CodingResultsComparisonComponent implements OnInit {
     this.loadKappaStatistics();
   }
 
-  private handleReplayCodeSelected(data: { testPerson: string; unitId: string; variableId: string; code: string, responseId?: number }): void {
+  private handleReplayCodeSelected(data: ReplayCodeSelectedMessage): void {
     if (this.comparisonMode !== 'within-training') return;
 
     const targetVarId = (data.variableId || '').toLowerCase();
@@ -1161,8 +1170,9 @@ export class CodingResultsComparisonComponent implements OnInit {
 
     if (row) {
       this.discussionCodeByResponseId[row.responseId] = this.mapCodeForDisplay(data.code);
-      // Trigger the existing save logic as if the user blurs the input
-      this.onDiscussionCodeBlur(row);
+      this.discussionScoreByResponseId[row.responseId] =
+        data.score !== undefined ? data.score : this.getDiscussionScoreFromKnownCodes(row, parseInt(data.code, 10));
+      this.onDiscussionCodeBlur(row, data.score);
 
       this.snackBar.open(
         `Kodierung für ${data.variableId} aus Replay übernommen`,
