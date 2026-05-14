@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
@@ -17,6 +18,11 @@ import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 export class ErrorMessageDisplayComponent {
   appService: AppService = inject(AppService);
   authService = inject(AuthService);
+  private router = inject(Router);
+
+  get showGlobalReAuthenticationMessage(): boolean {
+    return this.appService.needsReAuthentication && !this.isHomeRoute();
+  }
 
   dismissError(errorId: number): void {
     this.appService.errorMessages = this.appService.errorMessages.filter((e: AppHttpError) => e.id !== errorId);
@@ -32,5 +38,9 @@ export class ErrorMessageDisplayComponent {
 
   handleLogin(): void {
     this.authService.login(this.appService.reAuthenticationReturnUrl);
+  }
+
+  private isHomeRoute(): boolean {
+    return this.router.url === '/home' || this.router.url.startsWith('/home?');
   }
 }

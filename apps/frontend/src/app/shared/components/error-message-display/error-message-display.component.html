@@ -18,7 +18,7 @@
   </div>
   }
 
-  @if (appService.needsReAuthentication) {
+  @if (showGlobalReAuthenticationMessage) {
   <div class="error-message re-authentication">
     <div class="error-content">
       <mat-icon class="error-icon">lock</mat-icon>

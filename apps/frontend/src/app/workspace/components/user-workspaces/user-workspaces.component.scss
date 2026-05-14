@@ -29,6 +29,43 @@
   height: 100%;
 }
 
+.login-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.reauthentication-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-left: 4px solid #dc3545;
+  border-radius: 4px;
+  background: #f8d7da;
+  color: #721c24;
+
+  mat-icon {
+    flex: 0 0 auto;
+    margin-top: 1px;
+  }
+
+  strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 15px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+  }
+}
+
 p {
   font-size: 18px;
   line-height: 20pt;
