@@ -95,12 +95,13 @@ export function getLatestCode(response: ResponseEntity): { code: number | null; 
  * -3 -> -98
  * -4 -> -97
  * -1/-2 -> empty (null)
+ * -111 -> empty (legacy duplicate-aggregation marker)
  */
 export function mapCodeForExport(code: number | null | undefined): number | null {
   if (code === null || code === undefined) return null;
   if (code === -3) return -98;
   if (code === -4) return -97;
-  if (code === -1 || code === -2) return null;
+  if (code === -1 || code === -2 || code === -111) return null;
   return code;
 }
 

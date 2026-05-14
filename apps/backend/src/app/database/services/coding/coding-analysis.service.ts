@@ -1,8 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-// Rebuild trigger
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { statusStringToNumber } from '../../utils/response-status-converter';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -23,6 +21,15 @@ import { CodingStatisticsService } from './coding-statistics.service';
 import { CacheService } from '../../../cache/cache.service';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { createAggregationSummary } from './aggregation-metrics.util';
+
+export interface AggregationSettingsResult {
+  success: boolean;
+  threshold: number;
+  flags: ResponseMatchingFlag[];
+  aggregationActive: boolean;
+  revertedResponses: number;
+  message: string;
+}
 
 @Injectable()
 export class CodingAnalysisService {
@@ -46,19 +53,12 @@ export class CodingAnalysisService {
   ) { }
 
   /**
-     * Analyzes responses for a workspace to identify:
-     * 1. Empty responses (null or empty string values)
-     * 2. Duplicate values (same normalized value across different testperson/variable combinations)
-     *
-     * Uses the response matching settings (ignore case, ignore whitespace) for normalization.
-     */
-  /**
-     * Analyzes responses for a workspace to identify:
-     * 1. Empty responses (null or empty string values)
-     * 2. Duplicate values (same normalized value across different testperson/variable combinations)
-     *
-     * Uses the response matching settings (ignore case, ignore whitespace) for normalization.
-     */
+   * Analyzes responses for a workspace to identify:
+   * 1. Empty responses (null or empty string values)
+   * 2. Duplicate values (same normalized value across different testperson/variable combinations)
+   *
+   * Uses the response matching settings (ignore case, ignore whitespace) for normalization.
+   */
   async getResponseAnalysis(
     workspaceId: number,
     threshold = 2,
@@ -68,8 +68,9 @@ export class CodingAnalysisService {
     duplicateLimit = 50
   ): Promise<ResponseAnalysisDto & { isCalculating?: boolean; progress?: number }> {
     try {
+      const requestedThreshold = this.normalizeThreshold(threshold);
       this.logger.log(
-        `Getting response analysis for workspace ${workspaceId} with threshold ${threshold}`
+        `Getting response analysis for workspace ${workspaceId} with threshold ${requestedThreshold}`
       );
 
       const matchingFlags = await this.codingJobService.getResponseMatchingMode(
@@ -77,7 +78,9 @@ export class CodingAnalysisService {
       );
 
       // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
-      const effectiveThreshold = matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ? 2 : threshold;
+      const effectiveThreshold = matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+        2 :
+        requestedThreshold;
 
       // Check cache for the FULL analysis for this threshold
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
@@ -123,10 +126,16 @@ export class CodingAnalysisService {
 
       // Slice the results for pagination
       const emptyStart = (emptyPage - 1) * emptyLimit;
-      const emptyItems = fullAnalysis.emptyResponses.items.slice(emptyStart, emptyStart + emptyLimit);
+      const emptyItems = fullAnalysis.emptyResponses.items.slice(
+        emptyStart,
+        emptyStart + emptyLimit
+      );
 
       const duplicateStart = (duplicatePage - 1) * duplicateLimit;
-      const duplicateGroups = fullAnalysis.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit);
+      const duplicateGroups = fullAnalysis.duplicateValues.groups.slice(
+        duplicateStart,
+        duplicateStart + duplicateLimit
+      );
 
       return {
         ...fullAnalysis,
@@ -159,11 +168,17 @@ export class CodingAnalysisService {
     matchingFlags?: ResponseMatchingFlag[],
     threshold?: number
   ): Promise<void> {
-    const activeMatchingFlags = matchingFlags || await this.codingJobService.getResponseMatchingMode(workspaceId);
-    const activeThreshold = threshold || 2; // Simplification, ideally fetch from settings if needed or use default
+    const activeMatchingFlags = matchingFlags ||
+      await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const savedThreshold = threshold === undefined ?
+      await this.codingJobService.getAggregationThreshold(workspaceId) :
+      threshold;
+    const activeThreshold = this.normalizeThreshold(savedThreshold ?? 2);
 
     // If NO_AGGREGATION is set, we want to see all duplicates regardless of the requested threshold
-    const effectiveThreshold = activeMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ? 2 : activeThreshold;
+    const effectiveThreshold = activeMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION) ?
+      2 :
+      activeThreshold;
 
     const cacheKey = this.getCacheKey(workspaceId, activeMatchingFlags, effectiveThreshold);
 
@@ -268,10 +283,69 @@ export class CodingAnalysisService {
     }
   }
 
+  async getAggregationSettings(workspaceId: number): Promise<AggregationSettingsResult> {
+    const [threshold, flags] = await Promise.all([
+      this.codingJobService.getAggregationThreshold(workspaceId),
+      this.codingJobService.getResponseMatchingMode(workspaceId)
+    ]);
+    const normalizedThreshold = this.normalizeThreshold(threshold ?? 2);
+    const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(flags);
+
+    return {
+      success: true,
+      threshold: normalizedThreshold,
+      flags: normalizedFlags,
+      aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+      revertedResponses: 0,
+      message: 'Aggregation settings loaded.'
+    };
+  }
+
+  async saveAggregationSettings(
+    workspaceId: number,
+    threshold: number,
+    flags?: ResponseMatchingFlag[]
+  ): Promise<AggregationSettingsResult> {
+    const validThreshold = this.normalizeThreshold(threshold);
+    const currentFlags = flags ?? await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const normalizedFlags = this.codingJobService.normalizeResponseMatchingFlags(currentFlags);
+
+    try {
+      await this.codingJobService.setAggregationThreshold(workspaceId, validThreshold);
+      const savedFlags = await this.codingJobService.setResponseMatchingMode(workspaceId, normalizedFlags);
+      const revertedCount = await this.revertMaterializedDuplicateAggregation(workspaceId);
+      await this.invalidateAggregationDependentCaches(workspaceId);
+
+      return {
+        success: true,
+        threshold: validThreshold,
+        flags: savedFlags,
+        aggregationActive: !savedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+        revertedResponses: revertedCount,
+        message: revertedCount > 0 ?
+          `Aggregation settings saved. Reverted ${revertedCount} materialized duplicate responses.` :
+          'Aggregation settings saved.'
+      };
+    } catch (error) {
+      this.logger.error(
+        `Error saving aggregation settings: ${error.message}`,
+        error.stack
+      );
+
+      return {
+        success: false,
+        threshold: validThreshold,
+        flags: normalizedFlags,
+        aggregationActive: !normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+        revertedResponses: 0,
+        message: `Error saving aggregation settings: ${error.message}`
+      };
+    }
+  }
+
   /**
-   * Apply aggregation to duplicate responses based on threshold
-   * For each duplicate group meeting the threshold, one response is kept as the "master"
-   * and others are marked by setting their status_v2 to CODING_COMPLETE with a special code
+   * Backwards-compatible wrapper for older clients. Aggregation is now represented
+   * by settings and metrics instead of materialized response rows.
    */
   async applyDuplicateAggregation(
     workspaceId: number,
@@ -284,200 +358,19 @@ export class CodingAnalysisService {
       uniqueCodingCases: number;
       message: string;
     }> {
-    this.logger.log(
-      `Applying duplicate aggregation for workspace ${workspaceId} with threshold ${threshold}, mode: ${aggregateMode}`
-    );
+    const currentFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+    const nextFlags = aggregateMode ?
+      currentFlags.filter(flag => flag !== ResponseMatchingFlag.NO_AGGREGATION) :
+      [ResponseMatchingFlag.NO_AGGREGATION];
+    const result = await this.saveAggregationSettings(workspaceId, threshold, nextFlags);
 
-    if (!aggregateMode) {
-      // Revert aggregation: Reset all responses with code_v2 = -99 to NULL
-      this.logger.log(`Reverting duplicate aggregation for workspace ${workspaceId}`);
-
-      // Invalidate existing cache before operation
-      this.invalidateCache(workspaceId);
-
-      // Better approach for safe update across relations:
-      // 1. Find IDs of aggregated responses in workspace
-      // 2. Update by IDs
-
-      const aggregatedResponses = await this.responseRepository
-        .createQueryBuilder('response')
-        .select('response.id', 'id')
-        .innerJoin('response.unit', 'unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
-        .getRawMany();
-
-      if (aggregatedResponses.length === 0) {
-        return {
-          success: true,
-          aggregatedGroups: 0,
-          aggregatedResponses: 0,
-          uniqueCodingCases: 0,
-          message: 'Aggregation deactivated. No aggregated responses found to revert.'
-        };
-      }
-
-      const responseIds = aggregatedResponses.map(r => r.id);
-
-      // Perform update in chunks
-      const chunkSize = 1000;
-      for (let i = 0; i < responseIds.length; i += chunkSize) {
-        const chunk = responseIds.slice(i, i + chunkSize);
-        await this.responseRepository.update(
-          { id: In(chunk) },
-          {
-            code_v2: null,
-            score_v2: null,
-            status_v2: null
-          }
-        );
-      }
-
-      // Invalidate cache
-      await this.invalidateCache(workspaceId);
-      await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
-      await this.codingStatisticsService.invalidateCache(workspaceId);
-
-      return {
-        success: true,
-        aggregatedGroups: 0, // Not relevant for revert
-        aggregatedResponses: responseIds.length,
-        uniqueCodingCases: 0, // Client will reload stats
-        message: `Aggregation deactivated. Reverted ${responseIds.length} aggregated responses.`
-      };
-    }
-
-    if (threshold < 2) {
-      return {
-        success: false,
-        aggregatedGroups: 0,
-        aggregatedResponses: 0,
-        uniqueCodingCases: 0,
-        message: 'Threshold must be at least 2'
-      };
-    }
-
-    try {
-      // Get the current response analysis
-      const analysis = await this.getResponseAnalysis(workspaceId);
-
-      // Filter groups that meet the threshold
-      const groupsToAggregate = analysis.duplicateValues.groups.filter(
-        group => group.occurrences.length >= threshold
-      );
-
-      if (groupsToAggregate.length === 0) {
-        return {
-          success: true,
-          aggregatedGroups: 0,
-          aggregatedResponses: 0,
-          uniqueCodingCases: analysis.aggregationSummary.rawCases,
-          message: `No duplicate groups meet the threshold of ${threshold}`
-        };
-      }
-
-      this.logger.log(
-        `Found ${groupsToAggregate.length} duplicate groups meeting threshold ${threshold}`
-      );
-
-      // Start transaction
-      const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
-      await queryRunner.connect();
-      await queryRunner.startTransaction('READ COMMITTED');
-
-      try {
-        let totalAggregatedResponses = 0;
-
-        // For each group, keep the first response as master and mark others as aggregated
-        for (const group of groupsToAggregate) {
-          // Sort occurrences by responseId to ensure consistent master selection
-          const sortedOccurrences = [...group.occurrences].sort(
-            (a, b) => a.responseId - b.responseId
-          );
-
-          // First response is the master, rest are aggregated
-          const masterResponseId = sortedOccurrences[0].responseId;
-          const responsesToAggregate = sortedOccurrences.slice(1);
-
-          this.logger.log(
-            `Group ${group.unitName}/${group.variableId}/${group.normalizedValue}: ` +
-            `Master: ${masterResponseId}, Aggregating: ${responsesToAggregate.length} responses`
-          );
-
-          // Update aggregated responses
-          // Use code_v2 = -99 to indicate this is an aggregated duplicate
-          // Use status_v2 = CODING_COMPLETE to mark it as processed
-          const updatePromises = responsesToAggregate.map(occurrence => queryRunner.manager.update(
-            ResponseEntity,
-            occurrence.responseId,
-            {
-              code_v2: -111, // Special code for aggregated duplicates
-              score_v2: 0,
-              status_v2: statusStringToNumber('CODING_COMPLETE')
-            }
-          )
-          );
-
-          await Promise.all(updatePromises);
-          totalAggregatedResponses += responsesToAggregate.length;
-        }
-
-        await queryRunner.commitTransaction();
-
-        // Save threshold as workspace setting
-        await this.codingJobService.setAggregationThreshold(workspaceId, threshold);
-
-        // Invalidate cache since data changed
-        this.invalidateCache(workspaceId);
-
-        // Calculate unique coding cases after aggregation
-        const uniqueCodingCases = Math.max(
-          0,
-          analysis.aggregationSummary.rawCases - totalAggregatedResponses
-        );
-
-        this.logger.log(
-          `Successfully aggregated ${totalAggregatedResponses} responses in ${groupsToAggregate.length} groups`
-        );
-
-        // Invalidate the cache for incomplete variables so UI reflects the aggregation immediately
-        await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
-        await this.codingStatisticsService.invalidateCache(workspaceId);
-
-        return {
-          success: true,
-          aggregatedGroups: groupsToAggregate.length,
-          aggregatedResponses: totalAggregatedResponses,
-          uniqueCodingCases,
-          message: `Successfully aggregated ${totalAggregatedResponses} responses in ${groupsToAggregate.length} groups`
-        };
-      } catch (error) {
-        await queryRunner.rollbackTransaction();
-        this.logger.error(
-          `Error aggregating duplicate responses: ${error.message}`,
-          error.stack
-        );
-        throw new Error(
-          `Failed to aggregate duplicate responses: ${error.message}`
-        );
-      } finally {
-        await queryRunner.release();
-      }
-    } catch (error) {
-      this.logger.error(
-        `Error in applyDuplicateAggregation: ${error.message}`,
-        error.stack
-      );
-      return {
-        success: false,
-        aggregatedGroups: 0,
-        aggregatedResponses: 0,
-        uniqueCodingCases: 0,
-        message: `Error: ${error.message}`
-      };
-    }
+    return {
+      success: result.success,
+      aggregatedGroups: 0,
+      aggregatedResponses: result.revertedResponses,
+      uniqueCodingCases: 0,
+      message: result.message
+    };
   }
 
   private createEmptyAnalysisResult(
@@ -520,11 +413,60 @@ export class CodingAnalysisService {
     await this.cacheService.deleteByPattern(pattern);
   }
 
+  private async invalidateAggregationDependentCaches(workspaceId: number): Promise<void> {
+    await this.invalidateCache(workspaceId);
+    await this.codingValidationService.invalidateIncompleteVariablesCache(workspaceId);
+    await this.codingStatisticsService.invalidateCache(workspaceId);
+  }
+
   private getCacheKey(
     workspaceId: number,
     matchingFlags: ResponseMatchingFlag[],
     threshold: number
   ): string {
     return `${this.CACHE_KEY_PREFIX}:${workspaceId}_${[...matchingFlags].sort().join(',')}_t${threshold}`;
+  }
+
+  private normalizeThreshold(threshold: number | null | undefined): number {
+    const parsed = Number(threshold);
+    if (!Number.isFinite(parsed)) {
+      return 2;
+    }
+    return Math.min(100, Math.max(2, Math.round(parsed)));
+  }
+
+  private async revertMaterializedDuplicateAggregation(workspaceId: number): Promise<number> {
+    const aggregatedResponses = await this.responseRepository
+      .createQueryBuilder('response')
+      .select('response.id', 'id')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
+      .getRawMany();
+
+    const responseIds = aggregatedResponses
+      .map(r => Number(r.id))
+      .filter(id => Number.isFinite(id));
+
+    if (responseIds.length === 0) {
+      return 0;
+    }
+
+    const chunkSize = 1000;
+    for (let i = 0; i < responseIds.length; i += chunkSize) {
+      const chunk = responseIds.slice(i, i + chunkSize);
+      await this.responseRepository.update(
+        { id: In(chunk) },
+        {
+          code_v2: null,
+          score_v2: null,
+          status_v2: null
+        }
+      );
+    }
+
+    return responseIds.length;
   }
 }

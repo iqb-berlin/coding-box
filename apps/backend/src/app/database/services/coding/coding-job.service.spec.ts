@@ -8,6 +8,10 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 
+jest.mock('../workspace/workspace-files.service', () => ({
+  WorkspaceFilesService: class {}
+}));
+
 const createRepo = () => ({
   count: jest.fn(),
   find: jest.fn(),
@@ -466,7 +470,9 @@ describe('CodingJobService', () => {
   it('loads matching mode and aggregation threshold settings', async () => {
     settingRepository.findOne
       .mockResolvedValueOnce({ content: JSON.stringify({ flags: [ResponseMatchingFlag.IGNORE_CASE] }) })
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ content: 'not-json' })
+      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ content: 'disabled' })
       .mockResolvedValueOnce({ content: '5' });
@@ -479,6 +485,11 @@ describe('CodingJobService', () => {
 
     await service.setAggregationThreshold(3, null);
     await service.setAggregationThreshold(3, 4);
+    await service.setResponseMatchingMode(3, [
+      ResponseMatchingFlag.IGNORE_CASE,
+      ResponseMatchingFlag.IGNORE_CASE,
+      'UNKNOWN' as ResponseMatchingFlag
+    ]);
 
     expect(settingRepository.save).toHaveBeenNthCalledWith(1, {
       key: 'workspace-3-duplicate-aggregation-threshold',
@@ -488,6 +499,20 @@ describe('CodingJobService', () => {
       key: 'workspace-3-duplicate-aggregation-threshold',
       content: '4'
     });
+    expect(settingRepository.save).toHaveBeenNthCalledWith(3, {
+      key: 'workspace-3-response-matching-mode',
+      content: JSON.stringify({ flags: [ResponseMatchingFlag.IGNORE_CASE] })
+    });
+  });
+
+  it('treats legacy disabled thresholds as no aggregation matching mode', async () => {
+    settingRepository.findOne
+      .mockResolvedValueOnce({ content: JSON.stringify({ flags: [ResponseMatchingFlag.IGNORE_CASE] }) })
+      .mockResolvedValueOnce({ content: 'disabled' });
+
+    await expect(service.getResponseMatchingMode(3)).resolves.toEqual([
+      ResponseMatchingFlag.NO_AGGREGATION
+    ]);
   });
 
   it('detects coding issues and builds bulk progress', async () => {

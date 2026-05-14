@@ -1505,20 +1505,52 @@ export class CodingJobService {
 
   async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
     const settingKey = `workspace-${workspaceId}-response-matching-mode`;
-    const setting = await this.settingRepository.findOne({
-      where: { key: settingKey }
+    const [setting, aggregationThreshold] = await Promise.all([
+      this.settingRepository.findOne({ where: { key: settingKey } }),
+      this.getAggregationThreshold(workspaceId)
+    ]);
+
+    let flags: ResponseMatchingFlag[] = [];
+    if (setting) {
+      try {
+        const parsed = JSON.parse(setting.content);
+        flags = this.normalizeResponseMatchingFlags(parsed.flags);
+      } catch {
+        flags = [];
+      }
+    }
+
+    if (aggregationThreshold === null) {
+      return [ResponseMatchingFlag.NO_AGGREGATION];
+    }
+
+    return flags;
+  }
+
+  async setResponseMatchingMode(
+    workspaceId: number,
+    flags: ResponseMatchingFlag[]
+  ): Promise<ResponseMatchingFlag[]> {
+    const normalizedFlags = this.normalizeResponseMatchingFlags(flags);
+    await this.settingRepository.save({
+      key: `workspace-${workspaceId}-response-matching-mode`,
+      content: JSON.stringify({ flags: normalizedFlags })
     });
 
-    if (!setting) {
-      return []; // Default: exact match (no flags)
+    this.logger.log(`Set response matching mode for workspace ${workspaceId}: ${normalizedFlags.join(', ')}`);
+    return normalizedFlags;
+  }
+
+  normalizeResponseMatchingFlags(flags: ResponseMatchingFlag[] | undefined | null): ResponseMatchingFlag[] {
+    const allowedFlags = new Set(Object.values(ResponseMatchingFlag));
+    const normalizedFlags = Array.from(new Set(flags ?? []))
+      .filter((flag): flag is ResponseMatchingFlag => allowedFlags.has(flag));
+
+    if (normalizedFlags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
+      return [ResponseMatchingFlag.NO_AGGREGATION];
     }
 
-    try {
-      const parsed = JSON.parse(setting.content);
-      return parsed.flags || [];
-    } catch {
-      return [];
-    }
+    return normalizedFlags;
   }
 
   normalizeValue(value: string | null, flags: ResponseMatchingFlag[]): string {
@@ -2374,7 +2406,12 @@ export class CodingJobService {
       return null;
     }
 
-    return parseInt(setting.content, 10);
+    const threshold = parseInt(setting.content, 10);
+    if (Number.isNaN(threshold)) {
+      return 2;
+    }
+
+    return Math.min(100, Math.max(2, threshold));
   }
 
   /**
