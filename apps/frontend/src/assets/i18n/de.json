@@ -1719,10 +1719,30 @@
     "actions": {
       "edit": "Bearbeiten",
       "submit-for-review": "Zur Prüfung einreichen",
+      "submit-for-review-short": "Einreichen",
       "approve": "Genehmigen",
+      "approve-short": "Freigeben",
       "reject": "Ablehnen",
       "create-coding-jobs": "Kodier-Jobs erstellen",
+      "create-coding-jobs-short": "Jobs erstellen",
+      "more": "Weitere Aktionen",
       "delete": "Löschen"
+    },
+    "summary": {
+      "total": "Gesamt",
+      "draft": "Entwürfe",
+      "pending": "In Prüfung",
+      "approved": "Freigegeben",
+      "ready": "Bereit für Jobs"
+    },
+    "status-hints": {
+      "draft": "Kann noch bearbeitet und zur Prüfung eingereicht werden.",
+      "pending_review": "Wartet auf Freigabe.",
+      "approved": "Aus dieser Definition können Kodierjobs erstellt werden."
+    },
+    "empty": {
+      "title": "Planung beginnt mit einer Job-Definition",
+      "description": "Legen Sie fest, welche Variablen oder Bündel von welchen Kodierer:innen bearbeitet werden sollen. Danach können daraus konkrete Kodierjobs erzeugt werden."
     },
     "messages": {
       "empty-state": "Keine Job-Definitionen gefunden",

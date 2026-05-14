@@ -99,31 +99,108 @@
     <ng-container matColumnDef="actions">
       <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
       <mat-cell *matCellDef="let element">
-        <button mat-icon-button (click)="startCodingJob(element)" matTooltip="Kodierjob starten"
-          aria-label="Kodierjob starten">
-          <mat-icon>play_arrow</mat-icon>
-        </button>
-        <button mat-icon-button (click)="deleteCodingJob(element)" matTooltip="Kodierjob löschen"
-          aria-label="Kodierjob löschen">
-          <mat-icon>delete</mat-icon>
-        </button>
-        <button mat-icon-button (click)="viewCodingResults(element)" matTooltip="Ergebnisse anzeigen"
-          aria-label="Ergebnisse anzeigen">
-          <mat-icon>assessment</mat-icon>
-        </button>
-        @if ((element.totalUnits || 0) > 0 && (element.openUnits || 0) > 0 && !element.training_id && !element.training) {
-        <button mat-icon-button (click)="restartCodingJob(element)" [matTooltip]="'Ansicht mit offenen Fälle'"
-          aria-label="Ansicht mit offenen Fälle">
-          <mat-icon>restart_alt</mat-icon>
-        </button>
-        }
-        @if (canApplyResults) {
-        <button mat-icon-button (click)="applyCodingResults(element)" matTooltip="Ergebnisse anwenden"
-          aria-label="Ergebnisse anwenden"
-          [disabled]="element.status !== 'completed' || !!element.training?.id || !!element.training_id">
-          <mat-icon>check_circle</mat-icon>
-        </button>
-        }
+        <div class="job-row-actions">
+          @switch (getPrimaryJobAction(element)) {
+            @case ('apply') {
+              <button
+                mat-stroked-button
+                type="button"
+                class="primary-row-action"
+                color="primary"
+                (click)="applyCodingResults(element)"
+                [attr.aria-label]="getJobActionAriaLabel('apply', element)">
+                <mat-icon>check_circle</mat-icon>
+                <span>Anwenden</span>
+              </button>
+            }
+            @case ('results') {
+              <button
+                mat-stroked-button
+                type="button"
+                class="primary-row-action"
+                (click)="viewCodingResults(element)"
+                [attr.aria-label]="getJobActionAriaLabel('results', element)">
+                <mat-icon>assessment</mat-icon>
+                <span>Ergebnisse</span>
+              </button>
+            }
+            @default {
+              <button
+                mat-stroked-button
+                type="button"
+                class="primary-row-action"
+                color="primary"
+                (click)="startCodingJob(element)"
+                [attr.aria-label]="getJobActionAriaLabel('start', element)">
+                <mat-icon>play_arrow</mat-icon>
+                <span>Starten</span>
+              </button>
+            }
+          }
+
+          <button
+            mat-icon-button
+            type="button"
+            class="more-actions-button"
+            [matMenuTriggerFor]="jobActionsMenu"
+            [attr.aria-label]="getJobActionAriaLabel('more', element)">
+            <mat-icon>more_vert</mat-icon>
+          </button>
+
+          <mat-menu #jobActionsMenu="matMenu">
+            @if (getPrimaryJobAction(element) !== 'start') {
+              <button
+                mat-menu-item
+                type="button"
+                (click)="startCodingJob(element)"
+                [attr.aria-label]="getJobActionAriaLabel('start', element)">
+                <mat-icon>play_arrow</mat-icon>
+                <span>Kodierjob starten</span>
+              </button>
+            }
+            @if (getPrimaryJobAction(element) !== 'results') {
+              <button
+                mat-menu-item
+                type="button"
+                (click)="viewCodingResults(element)"
+                [attr.aria-label]="getJobActionAriaLabel('results', element)">
+                <mat-icon>assessment</mat-icon>
+                <span>Ergebnisse anzeigen</span>
+              </button>
+            }
+            @if (canRestartCodingJob(element)) {
+              <button
+                mat-menu-item
+                type="button"
+                (click)="restartCodingJob(element)"
+                [attr.aria-label]="getJobActionAriaLabel('restart', element)">
+                <mat-icon>restart_alt</mat-icon>
+                <span>Offene Fälle ansehen</span>
+              </button>
+            }
+            @if (canApplyResults && getPrimaryJobAction(element) !== 'apply') {
+              <button
+                mat-menu-item
+                type="button"
+                (click)="applyCodingResults(element)"
+                [attr.aria-label]="getJobActionAriaLabel('apply', element)"
+                [disabled]="!canApplyCodingResults(element)">
+                <mat-icon>check_circle</mat-icon>
+                <span>Ergebnisse anwenden</span>
+              </button>
+            }
+            <mat-divider class="menu-section-divider"></mat-divider>
+            <button
+              mat-menu-item
+              type="button"
+              class="danger-menu-item"
+              (click)="deleteCodingJob(element)"
+              [attr.aria-label]="getJobActionAriaLabel('delete', element)">
+              <mat-icon>delete</mat-icon>
+              <span>Kodierjob löschen</span>
+            </button>
+          </mat-menu>
+        </div>
       </mat-cell>
     </ng-container>
 

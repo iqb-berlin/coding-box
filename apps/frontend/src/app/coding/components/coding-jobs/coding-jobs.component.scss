@@ -65,6 +65,7 @@
 
 a,
 button[mat-button],
+button[mat-stroked-button],
 button[mat-raised-button] {
   min-width: auto;
   min-height: 40px;
@@ -85,7 +86,7 @@ button[mat-raised-button] {
 }
 
 .coding-jobs-table {
-  --coding-jobs-table-min-width: 1340px;
+  --coding-jobs-table-min-width: 1260px;
 
   display: block;
   width: 100%;
@@ -231,8 +232,66 @@ mat-cell {
 }
 
 .mat-column-actions {
-  flex: 0 0 240px;
+  flex: 0 0 192px;
   justify-content: flex-start;
+  overflow-wrap: normal;
+}
+
+.job-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+button.primary-row-action[mat-stroked-button] {
+  flex: 0 0 124px;
+  justify-content: flex-start;
+  min-height: 34px;
+  line-height: 1.2;
+  border-radius: 6px;
+  padding: 0 8px;
+  white-space: nowrap;
+  max-width: 124px;
+  overflow-wrap: normal;
+  word-break: keep-all;
+
+  mat-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    margin-right: 4px;
+  }
+
+  span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+
+  &:hover {
+    transform: none;
+  }
+}
+
+.more-actions-button {
+  flex: 0 0 auto;
+}
+
+.menu-section-divider {
+  margin: 4px 0;
+}
+
+.danger-menu-item {
+  color: #b42318;
+
+  mat-icon {
+    color: #b42318;
+  }
 }
 
 .mat-column-created_at, .mat-column-updated_at {
@@ -344,7 +403,7 @@ mat-cell {
   }
 
   .coding-jobs-table {
-    --coding-jobs-table-min-width: 1120px;
+    --coding-jobs-table-min-width: 1060px;
   }
 }
 
@@ -366,7 +425,7 @@ mat-cell {
   }
 
   .coding-jobs-table {
-    --coding-jobs-table-min-width: 980px;
+    --coding-jobs-table-min-width: 920px;
 
     max-height: 60vh;
   }

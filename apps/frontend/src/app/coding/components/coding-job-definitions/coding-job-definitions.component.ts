@@ -14,6 +14,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatDialog } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -75,6 +76,7 @@ interface BulkCreationResult {
     MatIconModule,
     MatButtonModule,
     MatMenuModule,
+    MatDividerModule,
     MatCardModule,
     MatChipsModule,
     MatTooltipModule
@@ -249,7 +251,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.expandedVariableDefinitions.add(definition);
   }
 
-  getStatusLabel(status: string): string {
+  getStatusLabel(status?: string): string {
+    if (!status) {
+      return '-';
+    }
+
     return (
       this.translateService.instant(
         `coding-job-definition-dialog.status.definition.${status}`
@@ -257,6 +263,39 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       status ||
       '-'
     );
+  }
+
+  getDefinitionCountByStatus(
+    status: NonNullable<JobDefinition['status']>
+  ): number {
+    return this.jobDefinitions.filter(definition => definition.status === status)
+      .length;
+  }
+
+  getDefinitionsReadyForJobsCount(): number {
+    return this.getDefinitionCountByStatus('approved');
+  }
+
+  getStatusHint(status?: JobDefinition['status']): string {
+    if (!status) {
+      return '';
+    }
+
+    return this.translateService.instant(
+      `coding-job-definitions.status-hints.${status}`
+    );
+  }
+
+  getActionAriaLabel(action: string, definition: JobDefinition): string {
+    const actionLabel = this.translateService.instant(
+      `coding-job-definitions.actions.${action}`
+    );
+
+    if (!definition.id) {
+      return actionLabel;
+    }
+
+    return `${actionLabel}: Definition ${definition.id}`;
   }
 
   createDefinition(): void {

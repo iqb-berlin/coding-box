@@ -22,6 +22,7 @@ import { MatButton, MatIconButton } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatMenuModule } from '@angular/material/menu';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { VariableBundleService, PaginatedBundles } from '../../services/variable-bundle.service';
 import { VariableBundleDialogComponent } from '../variable-bundle-dialog/variable-bundle-dialog.component';
@@ -57,7 +58,8 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
     MatTooltipModule,
     MatIconButton,
     MatSelectModule,
-    MatFormFieldModule
+    MatFormFieldModule,
+    MatMenuModule
   ]
 })
 export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
@@ -221,5 +223,18 @@ export class VariableBundleManagerComponent implements OnInit, AfterViewInit {
 
   getVariableCount(bundleGroup: VariableBundle): number {
     return bundleGroup.variables.length;
+  }
+
+  getVariableBundleActionAriaLabel(action: 'edit' | 'delete' | 'more', bundleGroup: VariableBundle): string {
+    switch (action) {
+      case 'edit':
+        return `Variablenbündel bearbeiten: ${bundleGroup.name}`;
+      case 'delete':
+        return `Variablenbündel löschen: ${bundleGroup.name}`;
+      case 'more':
+        return `Weitere Aktionen: ${bundleGroup.name}`;
+      default:
+        return bundleGroup.name;
+    }
   }
 }

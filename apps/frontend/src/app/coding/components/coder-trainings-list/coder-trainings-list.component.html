@@ -87,21 +87,55 @@
       <ng-container matColumnDef="actions">
         <th mat-header-cell *matHeaderCellDef>{{ 'common.actions' | translate }}</th>
         <td mat-cell *matCellDef="let training">
-          <div class="action-buttons">
-            <button mat-icon-button title="{{ 'coding.trainings.compare.button' | translate }}"
-              (click)="openResultsComparison(training)">
-              <mat-icon>compare</mat-icon>
-            </button>
-            <button mat-icon-button title="{{ 'coding.trainings.action.details' | translate }}"
-              (click)="showTrainingJobs(training)">
+          <div class="training-row-actions">
+            <button
+              mat-stroked-button
+              type="button"
+              class="primary-row-action"
+              color="primary"
+              (click)="showTrainingJobs(training)"
+              [attr.aria-label]="getTrainingActionAriaLabel('details', training)">
               <mat-icon>visibility</mat-icon>
+              <span>Details</span>
             </button>
-            <button mat-icon-button title="{{ 'common.edit' | translate }}" (click)="requestFullEdit(training)">
-              <mat-icon>edit</mat-icon>
+
+            <button
+              mat-icon-button
+              type="button"
+              class="more-actions-button"
+              [matMenuTriggerFor]="trainingActionsMenu"
+              [attr.aria-label]="getTrainingActionAriaLabel('more', training)">
+              <mat-icon>more_vert</mat-icon>
             </button>
-            <button mat-icon-button title="{{ 'common.delete' | translate }}" (click)="deleteTraining(training)">
-              <mat-icon>delete</mat-icon>
-            </button>
+
+            <mat-menu #trainingActionsMenu="matMenu">
+              <button
+                mat-menu-item
+                type="button"
+                (click)="openResultsComparison(training)"
+                [attr.aria-label]="getTrainingActionAriaLabel('compare', training)">
+                <mat-icon>compare</mat-icon>
+                <span>{{ 'coding.trainings.compare.button' | translate }}</span>
+              </button>
+              <button
+                mat-menu-item
+                type="button"
+                (click)="requestFullEdit(training)"
+                [attr.aria-label]="getTrainingActionAriaLabel('edit', training)">
+                <mat-icon>edit</mat-icon>
+                <span>{{ 'common.edit' | translate }}</span>
+              </button>
+              <mat-divider class="menu-section-divider"></mat-divider>
+              <button
+                mat-menu-item
+                type="button"
+                class="danger-menu-item"
+                (click)="deleteTraining(training)"
+                [attr.aria-label]="getTrainingActionAriaLabel('delete', training)">
+                <mat-icon>delete</mat-icon>
+                <span>{{ 'common.delete' | translate }}</span>
+              </button>
+            </mat-menu>
           </div>
         </td>
       </ng-container>
