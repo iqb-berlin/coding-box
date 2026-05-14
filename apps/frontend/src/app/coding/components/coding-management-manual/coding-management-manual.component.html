@@ -386,6 +386,11 @@
                         - {{ responseAnalysisAggregationSavings }} zusammengefasst
                       </span>
                     </span>
+                    <span *ngIf="hasDuplicateFindingsWithoutAggregation"
+                      class="analysis-note aggregation-disabled-note">
+                      <mat-icon>info</mat-icon>
+                      {{ 'coding-management-manual.response-analysis.duplicates-detected-no-aggregation' | translate }}
+                    </span>
                   </div>
                 </div>
                 <mat-icon class="expand-icon">{{ showDuplicateValuesDetails ? 'expand_less' : 'expand_more'
@@ -430,7 +435,16 @@
 
           </div>
 
-          <div *ngIf="!responseAnalysis && !isLoadingResponseAnalysis" class="no-analysis-data">
+          <div *ngIf="responseAnalysisError && !isLoadingResponseAnalysis" class="no-analysis-data error-state">
+            <mat-icon>error</mat-icon>
+            <span>{{ responseAnalysisError }}</span>
+            <button mat-stroked-button color="warn" (click)="restartAnalysis()">
+              <mat-icon>autorenew</mat-icon>
+              Erneut versuchen
+            </button>
+          </div>
+
+          <div *ngIf="!responseAnalysis && !responseAnalysisError && !isLoadingResponseAnalysis" class="no-analysis-data">
             <mat-icon>info</mat-icon>
             <span>{{ 'coding-management-manual.response-analysis.no-data' | translate }}</span>
             <button mat-stroked-button color="primary" (click)="restartAnalysis()">

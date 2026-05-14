@@ -1411,6 +1411,7 @@
       "empty-responses": "Leere Antworten",
       "open": "offen",
       "duplicate-values": "Doppelte Werte",
+      "duplicates-detected-no-aggregation": "Doppelte Werte erkannt, aber Aggregation ist deaktiviert.",
       "groups": "Gruppen",
       "responses": "Antworten",
       "more": "weitere",

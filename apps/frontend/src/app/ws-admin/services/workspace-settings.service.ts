@@ -112,14 +112,13 @@ export class WorkspaceSettingsService {
     );
   }
 
-  getAggregationThreshold(workspaceId: number): Observable<number> {
+  getAggregationThreshold(workspaceId: number): Observable<number | null> {
     return new Observable(observer => {
       this.getWorkspaceSetting(workspaceId, 'duplicate-aggregation-threshold')
         .subscribe({
           next: setting => {
             try {
-              const value = parseInt(setting.value, 10);
-              observer.next(Number.isNaN(value) ? 2 : value);
+              observer.next(this.normalizeAggregationThreshold(setting.value));
             } catch {
               observer.next(2);
             }
@@ -133,12 +132,24 @@ export class WorkspaceSettingsService {
     });
   }
 
-  setAggregationThreshold(workspaceId: number, threshold: number): Observable<WorkspaceSettings> {
+  setAggregationThreshold(workspaceId: number, threshold: number | null): Observable<WorkspaceSettings> {
+    const normalizedThreshold = this.normalizeAggregationThreshold(threshold);
     return this.setWorkspaceSetting(
       workspaceId,
       'duplicate-aggregation-threshold',
-      threshold.toString(),
+      normalizedThreshold === null ? 'disabled' : normalizedThreshold.toString(),
       'Minimum number of identical responses required for aggregation'
     );
+  }
+
+  private normalizeAggregationThreshold(value: number | string | null | undefined): number | null {
+    if (value === 'disabled' || value === '0' || value === 0 || value === null) {
+      return null;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return 2;
+    }
+    return Math.min(100, Math.max(2, Math.round(numericValue)));
   }
 }

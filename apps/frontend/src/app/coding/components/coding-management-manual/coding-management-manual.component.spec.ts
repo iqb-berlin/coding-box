@@ -49,4 +49,29 @@ describe('CodingManagementManualComponent', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('should flag duplicate findings as diagnostic when aggregation is disabled', () => {
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 2,
+        totalResponses: 5,
+        groups: [],
+        isAggregationApplied: false
+      },
+      aggregationSummary: {
+        duplicateGroups: 2,
+        duplicateResponses: 5,
+        collapsedCases: 0,
+        rawCases: 10,
+        effectiveCases: 10,
+        threshold: 2,
+        aggregationActive: false
+      },
+      matchingFlags: ['NO_AGGREGATION'],
+      analysisTimestamp: new Date().toISOString()
+    };
+
+    expect(component.hasDuplicateFindingsWithoutAggregation).toBe(true);
+  });
 });

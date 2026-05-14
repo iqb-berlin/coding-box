@@ -106,4 +106,24 @@ describe('CodingJobBackendService', () => {
       });
     });
   });
+
+  describe('triggerResponseAnalysis', () => {
+    it('should post the selected threshold when restarting response analysis', () => {
+      service.triggerResponseAnalysis(5, 17).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/response-analysis`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({ threshold: 17 });
+      req.flush(null);
+    });
+
+    it('should post an empty body when no threshold is supplied', () => {
+      service.triggerResponseAnalysis(5).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/response-analysis`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      req.flush(null);
+    });
+  });
 });

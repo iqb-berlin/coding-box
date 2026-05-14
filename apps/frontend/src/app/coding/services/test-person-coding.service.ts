@@ -24,6 +24,7 @@ import {
   CodingFreshnessVersion,
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
+import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
 
 interface ExternalCodingImportWithPreviewDto {
   file: string;
@@ -45,6 +46,15 @@ export interface CodingStatistics {
 export interface CodingStatisticsWithJob extends CodingStatistics {
   jobId?: string;
   message?: string;
+}
+
+export interface AggregationSettingsResponse {
+  success: boolean;
+  threshold: number;
+  flags: ResponseMatchingFlag[];
+  aggregationActive: boolean;
+  revertedResponses: number;
+  message: string;
 }
 
 export interface CodingListItem {
@@ -150,6 +160,10 @@ export class TestPersonCodingService {
     return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
   }
 
+  private hasJobId(jobId: string | null | undefined): jobId is string {
+    return typeof jobId === 'string' && jobId.trim().length > 0;
+  }
+
   notifyAutoCodingCompleted(): void {
     this.autoCodingCompletedSubject.next();
   }
@@ -229,6 +243,10 @@ export class TestPersonCodingService {
   }
 
   getJobStatus(workspaceId: number, jobId: string): Observable<JobStatus | { error: string }> {
+    if (!this.hasJobId(jobId)) {
+      return of({ error: 'Fehlende Job-ID für Statusabfrage' });
+    }
+
     return this.http
       .get<JobStatus | { error: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}`,
@@ -240,6 +258,10 @@ export class TestPersonCodingService {
   }
 
   cancelJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    if (!this.hasJobId(jobId)) {
+      return of({ success: false, message: 'Fehlende Job-ID für Abbruch' });
+    }
+
     return this.http
       .get<{ success: boolean; message: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/cancel`,
@@ -251,6 +273,10 @@ export class TestPersonCodingService {
   }
 
   deleteJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string }> {
+    if (!this.hasJobId(jobId)) {
+      return of({ success: false, message: 'Fehlende Job-ID für Löschung' });
+    }
+
     return this.http
       .get<{ success: boolean; message: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/delete`,
@@ -394,6 +420,10 @@ export class TestPersonCodingService {
   }
 
   restartJob(workspaceId: number, jobId: string): Observable<{ success: boolean; message: string; jobId?: string }> {
+    if (!this.hasJobId(jobId)) {
+      return of({ success: false, message: 'Fehlende Job-ID für Neustart' });
+    }
+
     return this.http
       .get<{ success: boolean; message: string; jobId?: string }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/job/${jobId}/restart`,
@@ -827,26 +857,26 @@ export class TestPersonCodingService {
       .get<ResponseAnalysisDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/response-analysis`,
       { headers: this.authHeader, params }
-    )
-      .pipe(
-        catchError(() => of({
-          emptyResponses: { total: 0, totalUncoded: 0, items: [] },
-          duplicateValues: {
-            total: 0, totalResponses: 0, groups: [], isAggregationApplied: false
-          },
-          aggregationSummary: {
-            duplicateGroups: 0,
-            duplicateResponses: 0,
-            collapsedCases: 0,
-            rawCases: 0,
-            effectiveCases: 0,
-            threshold: null,
-            aggregationActive: false
-          },
-          matchingFlags: [],
-          analysisTimestamp: new Date().toISOString()
-        } as ResponseAnalysisDto))
-      );
+    );
+  }
+
+  getAggregationSettings(workspaceId: number): Observable<AggregationSettingsResponse> {
+    return this.http.get<AggregationSettingsResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/aggregation-settings`,
+      { headers: this.authHeader }
+    );
+  }
+
+  saveAggregationSettings(
+    workspaceId: number,
+    threshold: number,
+    flags: ResponseMatchingFlag[]
+  ): Observable<AggregationSettingsResponse> {
+    return this.http.post<AggregationSettingsResponse>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/aggregation-settings`,
+      { threshold, flags },
+      { headers: this.authHeader }
+    );
   }
 
   applyEmptyResponseCoding(workspaceId: number): Observable<{
