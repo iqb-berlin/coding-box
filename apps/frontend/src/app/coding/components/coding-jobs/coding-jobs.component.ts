@@ -30,7 +30,7 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { ApplyCodingResultsResponse, CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 
 import { CodingJob, Variable, VariableBundle } from '../../models/coding-job.model';
@@ -46,6 +46,10 @@ import {
   TransferCodingCasesDialogComponent,
   TransferCodingCasesDialogResult
 } from './transfer-coding-cases-dialog/transfer-coding-cases-dialog.component';
+import {
+  ApplyCodingResultsDialogComponent,
+  ApplyCodingResultsDialogResult
+} from './apply-coding-results-dialog.component';
 
 interface BulkApplyResultItem {
   jobId: number;
@@ -56,6 +60,8 @@ interface BulkApplyResultItem {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
+    skippedAlreadyCodedCount: number;
+    overwrittenExistingCount: number;
     message: string;
   };
 }
@@ -1016,24 +1022,87 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
 
-    const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
-
-    this.codingJobBackendService.applyCodingResults(workspaceId, job.id).subscribe({
-      next: result => {
-        loadingSnack.dismiss();
-        if (result.success) {
-          this.snackBar.open(`Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`, 'Schließen', { duration: 3000 });
-          this.loadCodingJobs(); // Refresh the list to show updated status
-          this.jobsChanged.emit();
-        } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
-        }
-      },
-      error: error => {
-        loadingSnack.dismiss();
-        this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
-      }
+    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
+      width: '600px',
+      data: { jobName: job.name }
     });
+
+    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+      if (!dialogResult) {
+        return;
+      }
+
+      const loadingSnack = this.snackBar.open(`Wende Ergebnisse für Kodierjob "${job.name}" an...`, '', { duration: 3000 });
+
+      this.codingJobBackendService.applyCodingResults(workspaceId, job.id, {
+        overwriteExisting: dialogResult.overwriteExisting
+      }).subscribe({
+        next: result => {
+          loadingSnack.dismiss();
+          if (result.success) {
+            this.snackBar.open(this.formatApplyCodingResultsMessage(result), 'Schließen', { duration: 6000 });
+            this.loadCodingJobs(); // Refresh the list to show updated status
+            this.jobsChanged.emit();
+          } else {
+            this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(result.messageKey, result.messageParams || {})}`, 'Schließen', { duration: 5000 });
+          }
+        },
+        error: error => {
+          loadingSnack.dismiss();
+          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`, 'Schließen', { duration: 5000 });
+        }
+      });
+    });
+  }
+
+  private formatApplyCodingResultsMessage(result: ApplyCodingResultsResponse): string {
+    const parts = [
+      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
+    ];
+
+    if (result.skippedAlreadyCodedCount > 0) {
+      parts.push(`Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`);
+    }
+
+    if (result.overwrittenExistingCount > 0) {
+      parts.push(`Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`);
+    }
+
+    if (result.skippedReviewCount > 0) {
+      parts.push(`Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`);
+    }
+
+    return parts.join('\n');
+  }
+
+  getAggregationSettingsText(job: CodingJob): string {
+    if (!job.aggregationSettingsVersion) {
+      return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
+    }
+
+    if (!job.aggregationEnabled || job.aggregationThreshold === null || job.aggregationThreshold === undefined) {
+      return 'Aggregation beim Erstellen: aus';
+    }
+
+    const flags = job.responseMatchingFlags || [];
+    const matchingText = flags.length > 0 ?
+      flags.map(flag => this.getResponseMatchingFlagLabel(flag)).join(', ') :
+      'exakte Übereinstimmung';
+
+    return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
+  }
+
+  private getResponseMatchingFlagLabel(flag: string): string {
+    switch (flag) {
+      case 'IGNORE_CASE':
+        return 'Groß-/Kleinschreibung ignoriert';
+      case 'IGNORE_WHITESPACE':
+        return 'Leerzeichen ignoriert';
+      case 'NO_AGGREGATION':
+        return 'nicht aggregiert';
+      default:
+        return flag;
+    }
   }
 
   bulkApplyCodingResults(): void {
@@ -1077,7 +1146,10 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         if (result.success) {
           const skippedCount = result.results.filter((r: BulkApplyResultItem) => r.skipped).length;
           const processedCount = result.jobsProcessed;
-          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
+          const alreadyCodedInfo = result.totalSkippedAlreadyCoded > 0 ?
+            `, ${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten` :
+            '';
+          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
           this.jobsChanged.emit();
         } else {

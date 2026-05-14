@@ -84,6 +84,44 @@ export interface TransferCodingCasesResponse {
   transferredCases: number;
 }
 
+export interface ApplyCodingResultsOptions {
+  overwriteExisting?: boolean;
+}
+
+export interface ApplyCodingResultsResponse {
+  success: boolean;
+  updatedResponsesCount: number;
+  skippedReviewCount: number;
+  skippedAlreadyCodedCount: number;
+  overwrittenExistingCount: number;
+  messageKey: string;
+  messageParams?: Record<string, unknown>;
+}
+
+export interface BulkApplyCodingResultsResponse {
+  success: boolean;
+  jobsProcessed: number;
+  totalUpdatedResponses: number;
+  totalSkippedReview: number;
+  totalSkippedAlreadyCoded: number;
+  totalOverwrittenExisting: number;
+  message: string;
+  results: Array<{
+    jobId: number;
+    jobName: string;
+    hasIssues: boolean;
+    skipped: boolean;
+    result?: {
+      success: boolean;
+      updatedResponsesCount: number;
+      skippedReviewCount: number;
+      skippedAlreadyCodedCount: number;
+      overwrittenExistingCount: number;
+      message: string;
+    };
+  }>;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -146,6 +184,14 @@ export class CodingJobBackendService {
         apiJob.open_units ??
         apiJob.open ??
         0) as number,
+      aggregationEnabled: (apiJob.aggregationEnabled ??
+        apiJob.aggregation_enabled) as boolean | undefined,
+      aggregationThreshold: (apiJob.aggregationThreshold ??
+        apiJob.aggregation_threshold) as number | null | undefined,
+      responseMatchingFlags: (apiJob.responseMatchingFlags ??
+        apiJob.response_matching_flags) as string[] | null | undefined,
+      aggregationSettingsVersion: (apiJob.aggregationSettingsVersion ??
+        apiJob.aggregation_settings_version) as number | null | undefined,
       created_at: (apiJob.created_at ?? apiJob.createdAt) as Date,
       updated_at: (apiJob.updated_at ?? apiJob.updatedAt) as Date,
       workspace_id: (apiJob.workspace_id ?? apiJob.workspaceId) as number
@@ -387,22 +433,11 @@ export class CodingJobBackendService {
 
   applyCodingResults(
     workspaceId: number,
-    codingJobId: number
-  ): Observable<{
-      success: boolean;
-      updatedResponsesCount: number;
-      skippedReviewCount: number;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-    }> {
+    codingJobId: number,
+    options: ApplyCodingResultsOptions = {}
+  ): Observable<ApplyCodingResultsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/apply-results`;
-    return this.http.post<{
-      success: boolean;
-      updatedResponsesCount: number;
-      skippedReviewCount: number;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-    }>(url, {}, { headers: this.authHeader }).pipe(
+    return this.http.post<ApplyCodingResultsResponse>(url, options, { headers: this.authHeader }).pipe(
       tap(result => {
         if (result.success) {
           this.validationTaskStateService.invalidateWorkspace(workspaceId);
@@ -411,45 +446,9 @@ export class CodingJobBackendService {
     );
   }
 
-  bulkApplyCodingResults(workspaceId: number): Observable<{
-    success: boolean;
-    jobsProcessed: number;
-    totalUpdatedResponses: number;
-    totalSkippedReview: number;
-    message: string;
-    results: Array<{
-      jobId: number;
-      jobName: string;
-      hasIssues: boolean;
-      skipped: boolean;
-      result?: {
-        success: boolean;
-        updatedResponsesCount: number;
-        skippedReviewCount: number;
-        message: string;
-      };
-    }>;
-  }> {
+  bulkApplyCodingResults(workspaceId: number): Observable<BulkApplyCodingResultsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/bulk-apply-results`;
-    return this.http.post<{
-      success: boolean;
-      jobsProcessed: number;
-      totalUpdatedResponses: number;
-      totalSkippedReview: number;
-      message: string;
-      results: Array<{
-        jobId: number;
-        jobName: string;
-        hasIssues: boolean;
-        skipped: boolean;
-        result?: {
-          success: boolean;
-          updatedResponsesCount: number;
-          skippedReviewCount: number;
-          message: string;
-        };
-      }>;
-    }>(url, {}, { headers: this.authHeader }).pipe(
+    return this.http.post<BulkApplyCodingResultsResponse>(url, {}, { headers: this.authHeader }).pipe(
       tap(result => {
         if (result.success && result.totalUpdatedResponses > 0) {
           this.validationTaskStateService.invalidateWorkspace(workspaceId);

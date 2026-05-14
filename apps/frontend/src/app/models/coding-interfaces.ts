@@ -76,6 +76,8 @@ export interface BulkApplyResultItem {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
+    skippedAlreadyCodedCount: number;
+    overwrittenExistingCount: number;
     message: string;
   };
 }
@@ -85,6 +87,8 @@ export interface BulkApplyCodingResultsResponse {
   jobsProcessed: number;
   totalUpdatedResponses: number;
   totalSkippedReview: number;
+  totalSkippedAlreadyCoded: number;
+  totalOverwrittenExisting: number;
   message: string;
   results: BulkApplyResultItem[];
 }

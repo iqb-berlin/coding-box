@@ -1827,6 +1827,32 @@
     line-height: 1.4;
   }
 
+  .config-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .threshold-control,
+  .matching-section {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .settings-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+  }
+
+  .checkbox-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+
   .aggregation-impact {
     display: flex;
     align-items: flex-start;

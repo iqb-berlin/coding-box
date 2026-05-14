@@ -207,7 +207,10 @@
     <ng-container matColumnDef="name">
       <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
       <mat-cell *matCellDef="let element">
-        {{getDisplayName(element)}}
+        <div class="job-name-cell">
+          <span>{{getDisplayName(element)}}</span>
+          <small class="aggregation-snapshot">{{ getAggregationSettingsText(element) }}</small>
+        </div>
       </mat-cell>
     </ng-container>
 

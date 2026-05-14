@@ -1,6 +1,9 @@
 <div class="dialog-container">
   <div class="dialog-header">
-    <h1 mat-dialog-title>Kodierergebnisse: {{data.codingJob.name}}</h1>
+    <div>
+      <h1 mat-dialog-title>Kodierergebnisse: {{data.codingJob.name}}</h1>
+      <p class="aggregation-snapshot">{{ getAggregationSettingsText() }}</p>
+    </div>
     <button mat-icon-button mat-dialog-close aria-label="Dialog schließen">
       <mat-icon>close</mat-icon>
     </button>

@@ -143,6 +143,19 @@ mat-cell {
   min-width: 180px;
 }
 
+.job-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.aggregation-snapshot {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
 .mat-column-status {
   flex: 0 0 160px;
 }
