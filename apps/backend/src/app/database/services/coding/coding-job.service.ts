@@ -998,7 +998,8 @@ export class CodingJobService {
     }
 
     const codingJob = await this.codingJobRepository.findOne({
-      where: { id: codingJobId }
+      where: { id: codingJobId },
+      relations: ['codingJobCoders', 'codingJobCoders.user']
     });
     if (!codingJob) {
       return [];
@@ -1039,9 +1040,10 @@ export class CodingJobService {
       unit.unit_name
     ));
 
-    // Detect double coding and other coders
+    // Detect double coding and other coders in the same logical coding scope.
     const responseIds = visibleCodingJobUnits.map(unit => unit.response_id);
     const otherCodersMap = new Map<number, Set<string>>();
+    const currentCoderIds = new Set((codingJob.codingJobCoders || []).map(cjc => cjc.user_id));
 
     if (responseIds.length > 0) {
       const otherUnits = await this.codingJobUnitRepository.find({
@@ -1053,11 +1055,21 @@ export class CodingJobService {
       });
 
       otherUnits.forEach(unit => {
+        const otherJob = unit.coding_job;
+        if (!otherJob ||
+          otherJob.workspace_id !== codingJob.workspace_id ||
+          !this.isComparableDoubleCodingScope(codingJob, otherJob)) {
+          return;
+        }
+
         if (!otherCodersMap.has(unit.response_id)) {
           otherCodersMap.set(unit.response_id, new Set<string>());
         }
         const coderSet = otherCodersMap.get(unit.response_id)!;
-        unit.coding_job?.codingJobCoders?.forEach(cjc => {
+        otherJob.codingJobCoders?.forEach(cjc => {
+          if (currentCoderIds.has(cjc.user_id)) {
+            return;
+          }
           if (cjc.user) {
             coderSet.add(cjc.user.username || `Coder ${cjc.user_id}`);
           }
@@ -1104,6 +1116,18 @@ export class CodingJobService {
         otherCoders: otherCoders
       };
     });
+  }
+
+  private isComparableDoubleCodingScope(currentJob: CodingJob, otherJob: CodingJob): boolean {
+    if (currentJob.training_id || otherJob.training_id) {
+      return currentJob.training_id === otherJob.training_id;
+    }
+
+    if (currentJob.job_definition_id || otherJob.job_definition_id) {
+      return currentJob.job_definition_id === otherJob.job_definition_id;
+    }
+
+    return true;
   }
 
   private async getSlimResponsesForCodingJob(codingJobId: number, manager?: EntityManager): Promise<SlimResponse[]> {

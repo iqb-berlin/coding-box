@@ -307,7 +307,7 @@ describe('CodingJobsComponent', () => {
     component.canApplyResults = true;
 
     expect(component.getPrimaryJobAction(mockCodingJobs[0] as CodingJob)).toBe('start');
-    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('apply');
+    expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');
 
     component.canApplyResults = false;
     expect(component.getPrimaryJobAction(mockCodingJobs[1] as CodingJob)).toBe('results');

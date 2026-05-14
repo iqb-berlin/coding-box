@@ -547,10 +547,6 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   }
 
   getPrimaryJobAction(job: CodingJob): JobPrimaryAction {
-    if (this.canApplyCodingResults(job)) {
-      return 'apply';
-    }
-
     if (job.status === 'completed' || job.status === 'results_applied') {
       return 'results';
     }
@@ -832,8 +828,11 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return;
     }
     const dialogRef = this.dialog.open(CodingJobResultDialogComponent, {
-      width: '1400px',
-      height: '80vh',
+      width: 'min(1400px, 96vw)',
+      maxWidth: '96vw',
+      height: '85vh',
+      maxHeight: '90vh',
+      panelClass: 'coding-results-dialog-panel',
       data: {
         codingJob: job,
         workspaceId: workspaceId,
@@ -1024,7 +1023,12 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
 
     const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
       width: '600px',
-      data: { jobName: job.name }
+      data: {
+        jobName: job.name,
+        totalResults: job.totalUnits,
+        codedResults: job.codedUnits,
+        hasReviewIssues: job.hasIssues
+      }
     });
 
     dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
