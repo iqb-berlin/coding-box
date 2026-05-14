@@ -42,7 +42,7 @@
             translate }}</p>
 
           <div class="double-coding-controls">
-            <mat-button-toggle-group [(value)]="doubleCodingMode" (change)="toggleDoubleCodingMode()">
+            <mat-button-toggle-group [value]="doubleCodingMode" (change)="setDoubleCodingMode($event.value)">
               <mat-button-toggle value="absolute">{{ 'coding-job-definition-dialog.double-coding.modes.absolute' |
                 translate }}</mat-button-toggle>
               <mat-button-toggle value="percentage">{{ 'coding-job-definition-dialog.double-coding.modes.percentage' |
@@ -57,6 +57,9 @@
                 [step]="doubleCodingMode === 'percentage' ? 0.1 : 1">
               @if (doubleCodingMode === 'percentage') {
               <mat-hint>{{ 'coding-job-definition-dialog.double-coding.percentage-hint' | translate }}</mat-hint>
+              }
+              @if (currentDoubleCodingControl.invalid && currentDoubleCodingControl.touched) {
+              <mat-error>{{ 'coding-job-definition-dialog.double-coding.value-error' | translate }}</mat-error>
               }
             </mat-form-field>
           </div>
@@ -539,16 +542,16 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-button (click)="onCancel()" [disabled]="isSaving">Abbrechen</button>
 
     @if (data.mode === 'definition') {
     <button mat-raised-button color="primary" (click)="onSubmit()"
-      [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      [disabled]="isSaving || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
       {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
     </button>
     @if (!data.isEdit) {
     <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
-      [disabled]="codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
+      [disabled]="isSaving || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
       <mat-icon>send</mat-icon>
       Zur Prüfung einreichen
     </button>
@@ -556,7 +559,7 @@
     }
 
     @if (data.mode === 'job') {
-    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="codingJobForm.invalid">
+    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="isSaving || codingJobForm.invalid">
       {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
     </button>
     }

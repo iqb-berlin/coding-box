@@ -9,7 +9,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
 import { CodingJobDefinitionDialogComponent, CodingJobDefinitionDialogData } from './coding-job-definition-dialog.component';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -228,6 +228,80 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.selectedVariables.isSelected(mockVariables[0])).toBe(false);
   });
 
+  it('should set double coding mode without toggling the selected value back', () => {
+    createComponent();
+
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: 3, doubleCodingPercentage: 25 });
+    component.setDoubleCodingMode('percentage');
+
+    expect(component.doubleCodingMode).toBe('percentage');
+    expect(component.codingJobForm.get('doubleCodingAbsolute')?.value).toBe(0);
+    expect(component.codingJobForm.get('doubleCodingPercentage')?.value).toBe(25);
+
+    component.setDoubleCodingMode('absolute');
+
+    expect(component.doubleCodingMode).toBe('absolute');
+    expect(component.codingJobForm.get('doubleCodingPercentage')?.value).toBe(0);
+  });
+
+  it('should validate double coding limits in the reactive form', () => {
+    createComponent();
+
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: -1 });
+    expect(component.codingJobForm.get('doubleCodingAbsolute')?.invalid).toBe(true);
+    expect(component.codingJobForm.invalid).toBe(true);
+
+    component.codingJobForm.patchValue({ doubleCodingAbsolute: 0 });
+    component.setDoubleCodingMode('percentage');
+    component.codingJobForm.patchValue({ doubleCodingPercentage: 101 });
+
+    expect(component.codingJobForm.get('doubleCodingPercentage')?.invalid).toBe(true);
+    expect(component.codingJobForm.invalid).toBe(true);
+  });
+
+  it('should mark invalid fields as touched instead of submitting', async () => {
+    createComponent();
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+    component.codingJobForm.patchValue({ durationSeconds: 0 });
+
+    await component.onSubmit();
+
+    expect(component.codingJobForm.get('durationSeconds')?.touched).toBe(true);
+    expect(mockCodingJobBackendService.createJobDefinition).not.toHaveBeenCalled();
+  });
+
+  it('should count planned coding jobs using selected items and coders', () => {
+    createComponent();
+    const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+    expect(bundle).toBeDefined();
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedCoders.select(mockCoders[1]);
+    component.selectedVariableBundles.select(bundle!);
+
+    expect(component.getCodingJobCount()).toBe(2);
+
+    component.selectedVariables.select(mockVariables[0]);
+
+    expect(component.getCodingJobCount()).toBe(4);
+  });
+
+  it('should ignore duplicate definition submits while saving', () => {
+    createComponent();
+    const saveSubject = new Subject<unknown>();
+    (mockCodingJobBackendService.createJobDefinition as jest.Mock).mockReturnValue(saveSubject.asObservable());
+
+    component.selectedCoders.select(mockCoders[0]);
+    component.selectedVariables.select(mockVariables[0]);
+
+    component.onSubmit();
+    component.onSubmit();
+
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledTimes(1);
+  });
+
   describe('Mode: Job (Create/Edit)', () => {
     it('should submit create calling createCodingJob and assignCoder when 1 variable selected', fakeAsync(() => {
       createComponent({ mode: 'job', isEdit: false });
@@ -311,6 +385,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       component.selectedCoders.select(mockCoders[0]);
       component.selectedVariables.select(mockVariables[0]);
       component.selectedVariables.select(mockVariables[2]);
+      component.codingJobForm.patchValue({
+        caseOrderingMode: 'alternating',
+        maxCodingCases: 3
+      });
 
       const mockBulkResult = { confirmed: true, jobs: [] };
       const dialogRefMock = {
@@ -322,6 +400,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       await component.onSubmit();
 
       expect(mockMatDialog.open).toHaveBeenCalled();
+      expect((mockMatDialog.open as jest.Mock).mock.calls[0][1].data).toMatchObject({
+        caseOrderingMode: 'alternating',
+        maxCodingCases: 3
+      });
       expect(mockDistributedCodingService.createDistributedCodingJobs).toHaveBeenCalled();
       expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ bulkJobCreation: true }));
     });

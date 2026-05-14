@@ -298,9 +298,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const formFields: Record<string, [string | number | boolean | null | undefined, ValidatorFn[]]> = {
       durationSeconds: [this.data.codingJob?.durationSeconds || 1, [Validators.min(1)]],
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
-      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, []],
-      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, []],
-      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', []]
+      doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
+      doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
+      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]]
     };
 
     if (this.data.mode === 'job') {
@@ -682,7 +682,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getCodingJobCount(): number {
-    return this.selectedVariables.selected.length;
+    const itemCount = this.selectedVariables.selected.length + this.selectedVariableBundles.selected.length;
+    const coderCount = this.selectedCoders.selected.length;
+
+    if (itemCount === 0 || coderCount === 0) {
+      return 0;
+    }
+
+    return itemCount * coderCount;
   }
 
   getTotalCodingCases(): number {
@@ -818,7 +825,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   async onSubmit(): Promise<void> {
+    if (this.isSaving) {
+      return;
+    }
+
     if (this.codingJobForm.invalid) {
+      this.codingJobForm.markAllAsTouched();
       return;
     }
 
@@ -976,7 +988,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       selectedVariableBundles: this.selectedVariableBundles.selected,
       selectedCoders: this.selectedCoders.selected,
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
-      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage
+      doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      maxCodingCases: this.codingJobForm.value.maxCodingCases
     };
 
     if (creationResults) {
@@ -1095,14 +1109,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  toggleDoubleCodingMode(): void {
-    if (this.doubleCodingMode === 'absolute') {
-      this.doubleCodingMode = 'percentage';
+  setDoubleCodingMode(mode: 'absolute' | 'percentage'): void {
+    if (this.doubleCodingMode === mode) {
+      return;
+    }
+
+    this.doubleCodingMode = mode;
+
+    if (mode === 'percentage') {
       this.codingJobForm.get('doubleCodingAbsolute')?.setValue(0);
     } else {
-      this.doubleCodingMode = 'absolute';
       this.codingJobForm.get('doubleCodingPercentage')?.setValue(0);
     }
+
+    this.codingJobForm.get('doubleCodingAbsolute')?.updateValueAndValidity();
+    this.codingJobForm.get('doubleCodingPercentage')?.updateValueAndValidity();
+  }
+
+  toggleDoubleCodingMode(): void {
+    this.setDoubleCodingMode(this.doubleCodingMode === 'absolute' ? 'percentage' : 'absolute');
   }
 
   get currentDoubleCodingControl(): FormControl {
@@ -1204,7 +1229,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   onSubmitForReview(): void {
+    if (this.isSaving) {
+      return;
+    }
+
     if (this.codingJobForm.invalid) {
+      this.codingJobForm.markAllAsTouched();
       return;
     }
 
@@ -1266,6 +1296,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   onCancel(): void {
+    if (this.isSaving) {
+      return;
+    }
+
     this.dialogRef.close();
   }
 
