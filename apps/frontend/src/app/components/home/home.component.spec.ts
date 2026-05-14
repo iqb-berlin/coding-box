@@ -1,14 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { BehaviorSubject, Subject, of } from 'rxjs';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../core/services/auth.service';
 import { environment } from '../../../environments/environment';
-import { AppService } from '../../core/services/app.service';
+import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
+import {
+  AUTH_QUERY_PARAM_ACCESS_DENIED,
+  AUTH_QUERY_PARAM_AUTH_DATA_FAILED,
+  AUTH_QUERY_PARAM_SESSION_EXPIRED
+} from '../../core/guards/auth-redirect';
 
 const mockAuthService = {
   isLoggedIn: jest.fn(() => true)
@@ -25,6 +30,8 @@ const mockActivatedRoute = {
 
 const mockAppService = {
   refreshAuthData: jest.fn(),
+  requireReAuthentication: jest.fn(),
+  authBootstrapStatus$: of('ready' as AuthBootstrapStatus),
   authData$: of({
     workspaces: []
   }),
@@ -37,7 +44,19 @@ const mockAppService = {
 describe('HomeComponent', () => {
   let component: HomeComponent;
   let fixture: ComponentFixture<HomeComponent>;
+  let queryParamsSubject: Subject<Record<string, string>>;
+  let authStatusSubject: BehaviorSubject<AuthBootstrapStatus>;
+  let snackBarOpen: jest.Mock;
+
   beforeEach(async () => {
+    jest.clearAllMocks();
+    queryParamsSubject = new Subject<Record<string, string>>();
+    authStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('ready');
+    snackBarOpen = jest.fn();
+    mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
+    mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
+    mockAuthService.isLoggedIn.mockReturnValue(true);
+
     await TestBed.configureTestingModule({
       imports: [HomeComponent, TranslateModule.forRoot()],
       providers: [
@@ -50,16 +69,84 @@ describe('HomeComponent', () => {
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: { open: snackBarOpen }
         },
+        { provide: Router, useValue: { navigate: jest.fn() } },
         provideHttpClient()
       ]
     }).compileComponents();
+  });
+
+  function createComponent(): void {
     fixture = TestBed.createComponent(HomeComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-  });
+  }
+
   it('should create', () => {
+    createComponent();
+
     expect(component).toBeTruthy();
+  });
+
+  it('should require reauthentication for expired-session query params when Keycloak is logged out', () => {
+    createComponent();
+    mockAuthService.isLoggedIn.mockReturnValue(false);
+
+    queryParamsSubject.next({
+      auth: AUTH_QUERY_PARAM_SESSION_EXPIRED,
+      returnUrl: '/workspace-admin/1'
+    });
+
+    expect(mockAppService.requireReAuthentication).toHaveBeenCalledWith('/workspace-admin/1');
+  });
+
+  it('should not clear an active Keycloak session for stale expired-session query params', () => {
+    createComponent();
+    mockAuthService.isLoggedIn.mockReturnValue(true);
+
+    queryParamsSubject.next({
+      auth: AUTH_QUERY_PARAM_SESSION_EXPIRED,
+      returnUrl: '/workspace-admin/1'
+    });
+
+    expect(mockAppService.requireReAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('should show a dedicated message when auth data could not be loaded', () => {
+    createComponent();
+
+    queryParamsSubject.next({ auth: AUTH_QUERY_PARAM_AUTH_DATA_FAILED });
+
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      expect.stringContaining('Sitzungsdaten konnten nicht geladen werden'),
+      'Schließen',
+      expect.objectContaining({ duration: 8000 })
+    );
+  });
+
+  it('should show a dedicated message when access is denied', () => {
+    createComponent();
+
+    queryParamsSubject.next({ auth: AUTH_QUERY_PARAM_ACCESS_DENIED });
+
+    expect(snackBarOpen).toHaveBeenCalledWith(
+      'Sie haben keinen Zugriff auf diesen Bereich.',
+      'Schließen',
+      expect.objectContaining({ duration: 5000 })
+    );
+  });
+
+  it('should refresh auth data once the auth bootstrap is ready', () => {
+    authStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
+    mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
+    createComponent();
+    expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
+
+    authStatusSubject.next('backend-login-running');
+    expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
+
+    authStatusSubject.next('ready');
+    expect(mockAppService.refreshAuthData).toHaveBeenCalledTimes(1);
   });
 });

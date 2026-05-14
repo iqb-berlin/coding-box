@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { UserWorkspacesComponent } from './user-workspaces.component';
 import { AuthService } from '../../../core/services/auth.service';
+import { AppService } from '../../../core/services/app.service';
 
 const mockKeycloak = {
   idTokenParsed: { sub: 'test-user-id', preferred_username: 'test-user' },
@@ -15,7 +16,12 @@ const mockKeycloak = {
 };
 
 const mockAuthService = {
-  isLoggedIn: jest.fn().mockReturnValue(true)
+  isLoggedIn: jest.fn().mockReturnValue(true),
+  login: jest.fn()
+};
+
+const mockAppService = {
+  reAuthenticationReturnUrl: '/coding'
 };
 
 describe('UserWorkspacesComponent', () => {
@@ -25,6 +31,7 @@ describe('UserWorkspacesComponent', () => {
     await TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useValue: mockAuthService },
+        { provide: AppService, useValue: mockAppService },
         { provide: 'Keycloak', useValue: mockKeycloak }
       ],
       imports: [TranslateModule.forRoot()]
@@ -38,5 +45,11 @@ describe('UserWorkspacesComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should login with a pending reauthentication return URL', () => {
+    component.login();
+
+    expect(mockAuthService.login).toHaveBeenCalledWith('/coding');
   });
 });
