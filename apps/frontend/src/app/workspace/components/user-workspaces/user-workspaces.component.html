@@ -21,7 +21,16 @@
       </div>
     }
   }@else {
-    <div>
+    <div class="login-panel">
+      @if (appService.needsReAuthentication) {
+        <div class="reauthentication-hint" role="status">
+          <mat-icon>lock</mat-icon>
+          <div>
+            <strong>{{ 'error.reauthentication_title' | translate }}</strong>
+            <p>{{ 'error.reauthentication_message' | translate }}</p>
+          </div>
+        </div>
+      }
       <p>
         Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.
       </p>

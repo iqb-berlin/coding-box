@@ -21,13 +21,18 @@ const mockAuthService = {
 };
 
 const mockAppService = {
-  reAuthenticationReturnUrl: '/coding'
+  reAuthenticationReturnUrl: '/coding',
+  needsReAuthentication: false
 };
 
 describe('UserWorkspacesComponent', () => {
   let component: UserWorkspacesComponent;
   let fixture: ComponentFixture<UserWorkspacesComponent>;
   beforeEach(async () => {
+    jest.clearAllMocks();
+    mockAuthService.isLoggedIn.mockReturnValue(true);
+    mockAppService.needsReAuthentication = false;
+
     await TestBed.configureTestingModule({
       providers: [
         { provide: AuthService, useValue: mockAuthService },
@@ -51,5 +56,15 @@ describe('UserWorkspacesComponent', () => {
     component.login();
 
     expect(mockAuthService.login).toHaveBeenCalledWith('/coding');
+  });
+
+  it('should show reauthentication inline when logged out after an expired session', () => {
+    mockAuthService.isLoggedIn.mockReturnValue(false);
+    mockAppService.needsReAuthentication = true;
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('error.reauthentication_title');
+    expect(fixture.nativeElement.textContent).toContain('error.reauthentication_message');
   });
 });

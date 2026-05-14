@@ -15,7 +15,6 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
 import { AppService } from '../services/app.service';
-import { AuthService } from '../services/auth.service';
 
 /**
  * Functional interceptor for adding authentication headers and handling errors
@@ -26,7 +25,6 @@ export const authInterceptor: HttpInterceptorFn = (
 ): Observable<HttpEvent<unknown>> => {
   const appService: AppService = inject(AppService);
   const snackBar = inject(MatSnackBar);
-  const authService = inject(AuthService);
   const router = inject(Router);
   let httpErrorInfo: AppHttpError | null = null;
   let suppressErrorMessage = false;
@@ -65,16 +63,6 @@ export const authInterceptor: HttpInterceptorFn = (
               );
             } else if (error.status === 401) {
               appService.requireReAuthentication(router.url);
-              snackBar.open(
-                'Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen',
-                'Anmelden',
-                {
-                  duration: 0,
-                  panelClass: ['error-snackbar']
-                }
-              ).onAction().subscribe(() => {
-                authService.login(appService.reAuthenticationReturnUrl);
-              });
             } else {
               snackBar.open(
                 'Sie haben keine Berechtigung für diese Aktion',

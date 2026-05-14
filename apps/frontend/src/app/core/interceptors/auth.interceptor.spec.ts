@@ -2,11 +2,9 @@ import { TestBed } from '@angular/core/testing';
 import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
-import { of } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { authInterceptor } from './auth.interceptor';
 import { AppService } from '../services/app.service';
-import { AuthService } from '../services/auth.service';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -23,9 +21,7 @@ describe('authInterceptor', () => {
     } as unknown as jest.Mocked<AppService>;
 
     snackBar = {
-      open: jest.fn().mockReturnValue({
-        onAction: jest.fn().mockReturnValue(of(undefined))
-      })
+      open: jest.fn()
     };
 
     Object.defineProperty(window, 'localStorage', {
@@ -40,7 +36,6 @@ describe('authInterceptor', () => {
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         { provide: AppService, useValue: appService },
-        { provide: AuthService, useValue: { login: jest.fn() } },
         { provide: MatSnackBar, useValue: snackBar },
         { provide: Router, useValue: { url: '/home' } }
       ]
@@ -83,10 +78,6 @@ describe('authInterceptor', () => {
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
     expect(appService.addErrorMessage).toHaveBeenCalled();
-    expect(snackBar.open).toHaveBeenCalledWith(
-      'Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen',
-      'Anmelden',
-      expect.objectContaining({ duration: 0 })
-    );
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 });
