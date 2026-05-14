@@ -6,7 +6,8 @@ import {
   Put,
   Delete,
   UseGuards,
-  Body
+  Body,
+  ValidationPipe
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -46,7 +47,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async createJobDefinition(
     @WorkspaceId() workspace_id: number,
-      @Body() createDto: CreateJobDefinitionDto
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) createDto: CreateJobDefinitionDto
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.createJobDefinition(
       createDto,
@@ -148,13 +149,14 @@ export class WorkspaceCodingJobDefinitionController {
   async updateJobDefinition(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
-      @Body() updateDto: UpdateJobDefinitionDto
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) updateDto: UpdateJobDefinitionDto
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.updateJobDefinition(id, updateDto);
   }
 
   @Put(':workspace_id/coding/job-definitions/:id/approve')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
@@ -168,7 +170,7 @@ export class WorkspaceCodingJobDefinitionController {
   async approveJobDefinition(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number,
-      @Body() approveDto: ApproveJobDefinitionDto
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) approveDto: ApproveJobDefinitionDto
   ): Promise<JobDefinition> {
     return this.jobDefinitionService.approveJobDefinition(id, approveDto);
   }
@@ -198,7 +200,8 @@ export class WorkspaceCodingJobDefinitionController {
   }
 
   @Post(':workspace_id/coding/job-definitions/:id/create-job')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
