@@ -4,6 +4,8 @@ import {
   IsOptional,
   IsArray,
   IsNumber,
+  Max,
+  Min,
   ValidateNested
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -56,6 +58,8 @@ export class CreateJobDefinitionDto {
   })
   @IsArray()
   @IsNumber({}, { each: true })
+  @Min(1, { each: true })
+  @Type(() => Number)
   @IsOptional()
     assignedCoders?: number[];
 
@@ -65,6 +69,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
   @IsOptional()
     durationSeconds?: number;
 
@@ -74,6 +80,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(1)
+  @Type(() => Number)
   @IsOptional()
     maxCodingCases?: number;
 
@@ -83,6 +91,8 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(0)
+  @Type(() => Number)
   @IsOptional()
     doubleCodingAbsolute?: number;
 
@@ -92,6 +102,9 @@ export class CreateJobDefinitionDto {
     required: false
   })
   @IsNumber()
+  @Min(0)
+  @Max(100)
+  @Type(() => Number)
   @IsOptional()
     doubleCodingPercentage?: number;
 
