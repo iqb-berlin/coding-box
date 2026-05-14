@@ -6,6 +6,7 @@ import {
   HttpInterceptorFn,
   HttpRequest
 } from '@angular/common/http';
+import { Router } from '@angular/router';
 import {
   finalize,
   Observable,
@@ -26,14 +27,18 @@ export const authInterceptor: HttpInterceptorFn = (
   const appService: AppService = inject(AppService);
   const snackBar = inject(MatSnackBar);
   const authService = inject(AuthService);
+  const router = inject(Router);
   let httpErrorInfo: AppHttpError | null = null;
+  let suppressErrorMessage = false;
 
   let modifiedReq = req;
 
   if (!req.headers.has('Authorization')) {
     const idToken = localStorage.getItem('id_token');
-    const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
-    modifiedReq = req.clone({ headers });
+    if (idToken) {
+      const headers = new HttpHeaders({ Authorization: `Bearer ${idToken}` });
+      modifiedReq = req.clone({ headers });
+    }
   }
 
   return next(modifiedReq)
@@ -41,6 +46,11 @@ export const authInterceptor: HttpInterceptorFn = (
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
+          suppressErrorMessage = shouldSuppressBackendLoginAuthDataError(req, error, appService);
+          if (suppressErrorMessage) {
+            return;
+          }
+
           if (error.status === 401 || error.status === 403) {
             const errorMessage = error.error?.message || error.message || '';
 
@@ -54,7 +64,7 @@ export const authInterceptor: HttpInterceptorFn = (
                 }
               );
             } else if (error.status === 401) {
-              appService.setNeedsReAuthentication(true);
+              appService.requireReAuthentication(router.url);
               snackBar.open(
                 'Sie sind nicht angemeldet oder Ihre Sitzung ist abgelaufen',
                 'Anmelden',
@@ -63,7 +73,7 @@ export const authInterceptor: HttpInterceptorFn = (
                   panelClass: ['error-snackbar']
                 }
               ).onAction().subscribe(() => {
-                authService.login();
+                authService.login(appService.reAuthenticationReturnUrl);
               });
             } else {
               snackBar.open(
@@ -79,7 +89,7 @@ export const authInterceptor: HttpInterceptorFn = (
         }
       }),
       finalize(() => {
-        if (httpErrorInfo) {
+        if (httpErrorInfo && !suppressErrorMessage) {
           httpErrorInfo.method = req.method;
           httpErrorInfo.urlWithParams = req.urlWithParams;
           appService.addErrorMessage(httpErrorInfo);
@@ -87,3 +97,13 @@ export const authInterceptor: HttpInterceptorFn = (
       })
     );
 };
+
+function shouldSuppressBackendLoginAuthDataError(
+  req: HttpRequest<unknown>,
+  error: { status?: number },
+  appService: AppService
+): boolean {
+  return error.status === 401 &&
+    req.urlWithParams.includes('/auth-data') &&
+    appService.isBackendLoginRunning();
+}

@@ -17,6 +17,13 @@ import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 
+export type AuthBootstrapStatus =
+  'checking'
+  | 'backend-login-running'
+  | 'ready'
+  | 'session-expired'
+  | 'auth-data-failed';
+
 @Injectable({
   providedIn: 'root'
 })
@@ -34,7 +41,7 @@ export class AppService {
     workspaces: []
   };
 
-  kcUser !: CreateUserDto;
+  kcUser?: CreateUserDto;
   userProfile: KeycloakProfile = {};
   isLoggedInKeycloak = false;
   errorMessagesDisabled = false;
@@ -47,6 +54,9 @@ export class AppService {
   errorMessageCounter = 0;
   backendUnavailable = false;
   needsReAuthentication = false;
+  reAuthenticationReturnUrl?: string;
+  private explicitLogoutInProgress = false;
+  private authBootstrapStatusSubject = new BehaviorSubject<AuthBootstrapStatus>('checking');
 
   constructor() {
     this.loadLogoSettings();
@@ -58,11 +68,12 @@ export class AppService {
     );
   }
 
-  keycloakLogin(user: CreateUserDto): Observable<boolean | null> {
+  keycloakLogin(user: CreateUserDto): Observable<boolean> {
+    this.setAuthBootstrapStatus('backend-login-running');
+
     return this.http.post<string>(`${this.serverUrl}keycloak-login`, user)
       .pipe(
-        catchError(() => of(false)),
-        map(loginToken => {
+        switchMap(loginToken => {
           if (typeof loginToken === 'string') {
             localStorage.setItem('id_token', loginToken);
             return this.getAuthData(user.identity || '')
@@ -70,17 +81,19 @@ export class AppService {
                 map(authData => {
                   this.updateAuthData(authData);
                   return true;
-                }),
-                catchError(() => of(false))
+                })
               );
           }
           return of(false);
         }),
-        switchMap(result => {
-          if (result instanceof Observable) {
-            return result;
+        catchError(() => of(false)),
+        map(success => {
+          if (success) {
+            this.completeBackendLogin();
+          } else {
+            this.markAuthDataFailed();
           }
-          return of(result);
+          return success;
         })
       );
   }
@@ -92,6 +105,10 @@ export class AppService {
   }
 
   refreshAuthData(): void {
+    if (this.authBootstrapStatus !== 'ready') {
+      return;
+    }
+
     if (this.loggedUser?.sub) {
       this.getAuthData(this.loggedUser.sub).subscribe(authData => {
         this.updateAuthData(authData);
@@ -118,12 +135,24 @@ export class AppService {
     return this.authDataSubject.asObservable();
   }
 
+  get authBootstrapStatus$() {
+    return this.authBootstrapStatusSubject.asObservable();
+  }
+
   get authData(): AuthDataDto {
     return this.authDataSubject.value;
   }
 
+  get authBootstrapStatus(): AuthBootstrapStatus {
+    return this.authBootstrapStatusSubject.value;
+  }
+
   get userId(): number {
     return this.authDataSubject.value.userId;
+  }
+
+  setAuthBootstrapStatus(status: AuthBootstrapStatus): void {
+    this.authBootstrapStatusSubject.next(status);
   }
 
   updateAuthData(newAuthData: AuthDataDto): void {
@@ -157,6 +186,91 @@ export class AppService {
 
   setNeedsReAuthentication(needs: boolean): void {
     this.needsReAuthentication = needs;
+    if (!needs) {
+      this.reAuthenticationReturnUrl = undefined;
+    }
+  }
+
+  hasStoredAuthToken(): boolean {
+    return !!localStorage.getItem('id_token');
+  }
+
+  isBackendLoginRunning(): boolean {
+    return this.authBootstrapStatus === 'backend-login-running';
+  }
+
+  clearAuthenticationErrorMessages(): void {
+    this.errorMessages = this.errorMessages.filter(error => error.status !== 401);
+  }
+
+  completeBackendLogin(): void {
+    this.clearAuthenticationErrorMessages();
+    this.setNeedsReAuthentication(false);
+    this.setAuthBootstrapStatus('ready');
+  }
+
+  markAuthDataFailed(): void {
+    this.setAuthBootstrapStatus('auth-data-failed');
+  }
+
+  normalizeInternalRoute(returnUrl?: string): string | undefined {
+    if (!returnUrl ||
+      !returnUrl.startsWith('/') ||
+      returnUrl.startsWith('//') ||
+      returnUrl === '/' ||
+      returnUrl.startsWith('/home')) {
+      return undefined;
+    }
+
+    return returnUrl;
+  }
+
+  createLoginRedirectUri(returnUrl?: string): string | undefined {
+    const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl);
+    if (!normalizedReturnUrl) {
+      return undefined;
+    }
+
+    return `${window.location.origin}${window.location.pathname}${window.location.search}#${normalizedReturnUrl}`;
+  }
+
+  markExplicitLogoutInProgress(): void {
+    this.explicitLogoutInProgress = true;
+  }
+
+  consumeExplicitLogoutInProgress(): boolean {
+    const logoutInProgress = this.explicitLogoutInProgress;
+    this.explicitLogoutInProgress = false;
+    return logoutInProgress;
+  }
+
+  clearAuthState(options: { clearReAuthentication?: boolean; clearReturnUrl?: boolean } = {}): void {
+    localStorage.removeItem('id_token');
+    this.kcUser = undefined;
+    this.userProfile = {};
+    this.isLoggedInKeycloak = false;
+    this.loggedUser = undefined;
+    this.updateAuthData(AppService.defaultAuthData);
+
+    if (options.clearReAuthentication ?? true) {
+      this.needsReAuthentication = false;
+    }
+
+    if (options.clearReturnUrl ?? true) {
+      this.reAuthenticationReturnUrl = undefined;
+    }
+
+    if (options.clearReAuthentication ?? true) {
+      this.setAuthBootstrapStatus('ready');
+    }
+  }
+
+  requireReAuthentication(returnUrl?: string): void {
+    const normalizedReturnUrl = this.normalizeInternalRoute(returnUrl) || this.reAuthenticationReturnUrl;
+    this.clearAuthState({ clearReAuthentication: false, clearReturnUrl: false });
+    this.reAuthenticationReturnUrl = normalizedReturnUrl;
+    this.setNeedsReAuthentication(true);
+    this.setAuthBootstrapStatus('session-expired');
   }
 }
 

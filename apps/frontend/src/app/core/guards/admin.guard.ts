@@ -1,24 +1,30 @@
 import {
-  ActivatedRouteSnapshot, RouterStateSnapshot, CanActivateFn, UrlTree
+  ActivatedRouteSnapshot, Router, RouterStateSnapshot, CanActivateFn, UrlTree
 } from '@angular/router';
 import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { inject } from '@angular/core';
 import { filter, firstValueFrom, timeout } from 'rxjs';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
+import {
+  createAccessDeniedUrlTree,
+  createAuthDataFailedUrlTree,
+  createReAuthenticationUrlTree
+} from './auth-redirect';
 
 const isAdminAccessAllowed = async (
-  route: ActivatedRouteSnapshot,
+  _route: ActivatedRouteSnapshot,
   state: RouterStateSnapshot,
   authData: AuthGuardData
 ): Promise<boolean | UrlTree> => {
+  const appService = inject(AppService);
+  const router = inject(Router);
   const { authenticated } = authData;
   if (!authenticated) {
-    return false;
+    return createReAuthenticationUrlTree(router, state.url);
   }
 
   const authService = inject(AuthService);
-  const appService = inject(AppService);
   const userRoles = authService.getRoles();
 
   const adminRoles = ['admin', 'system-admin', 'sys-admin', 'administrator'];
@@ -35,11 +41,11 @@ const isAdminAccessAllowed = async (
       );
       return true;
     } catch {
-      return false;
+      return createAuthDataFailedUrlTree(router, state.url);
     }
   }
 
-  return false;
+  return createAccessDeniedUrlTree(router, state.url);
 };
 
 export const canActivateAdmin = createAuthGuard<CanActivateFn>(isAdminAccessAllowed);

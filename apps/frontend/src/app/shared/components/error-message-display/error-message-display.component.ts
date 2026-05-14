@@ -31,6 +31,6 @@ export class ErrorMessageDisplayComponent {
   }
 
   handleLogin(): void {
-    this.authService.login();
+    this.authService.login(this.appService.reAuthenticationReturnUrl);
   }
 }
