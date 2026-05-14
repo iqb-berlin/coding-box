@@ -68,4 +68,62 @@ describe('WorkspaceSettingsService', () => {
       req.flush({}, { status: 404, statusText: 'Not Found' });
     });
   });
+
+  describe('getAggregationThreshold', () => {
+    it('should return a persisted threshold', () => {
+      service.getAggregationThreshold(1).subscribe(val => {
+        expect(val).toBe(12);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/duplicate-aggregation-threshold`);
+      expect(req.request.method).toBe('GET');
+      req.flush({ value: '12' });
+    });
+
+    it('should clamp invalid persisted thresholds to the supported range', () => {
+      service.getAggregationThreshold(1).subscribe(val => {
+        expect(val).toBe(100);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/duplicate-aggregation-threshold`);
+      req.flush({ value: '250' });
+    });
+
+    it('should preserve disabled persisted thresholds', () => {
+      service.getAggregationThreshold(1).subscribe(val => {
+        expect(val).toBeNull();
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/duplicate-aggregation-threshold`);
+      req.flush({ value: 'disabled' });
+    });
+  });
+
+  describe('setAggregationThreshold', () => {
+    it('should persist a normalized threshold', () => {
+      service.setAggregationThreshold(1, 1).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'duplicate-aggregation-threshold',
+        value: '2',
+        description: 'Minimum number of identical responses required for aggregation'
+      });
+      req.flush({});
+    });
+
+    it('should persist disabled thresholds explicitly', () => {
+      service.setAggregationThreshold(1, null).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        key: 'duplicate-aggregation-threshold',
+        value: 'disabled',
+        description: 'Minimum number of identical responses required for aggregation'
+      });
+      req.flush({});
+    });
+  });
 });

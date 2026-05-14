@@ -2038,6 +2038,24 @@
               opacity: 0.8;
             }
           }
+
+          .analysis-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 12px;
+            line-height: 1.3;
+            color: #6d4c00;
+            overflow-wrap: anywhere;
+
+            mat-icon {
+              flex: 0 0 auto;
+              font-size: 14px;
+              height: 14px;
+              width: 14px;
+              color: #f57c00;
+            }
+          }
         }
       }
 
@@ -2245,6 +2263,16 @@
 
     mat-icon {
       color: #999;
+    }
+
+    &.error-state {
+      background-color: #fff5f5;
+      border: 1px solid rgba(211, 47, 47, 0.25);
+      color: #b71c1c;
+
+      mat-icon {
+        color: #d32f2f;
+      }
     }
 
     button {

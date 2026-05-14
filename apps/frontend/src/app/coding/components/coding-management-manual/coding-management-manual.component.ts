@@ -15,10 +15,10 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import {
-  Subject, takeUntil, debounceTime, finalize, Observable, of, switchMap, tap,
-  forkJoin,
+  Subject, takeUntil, debounceTime, finalize, Observable, of, tap,
   distinctUntilChanged,
-  firstValueFrom
+  firstValueFrom,
+  map
 } from 'rxjs';
 import * as ExcelJS from 'exceljs';
 import { Router } from '@angular/router';
@@ -65,7 +65,6 @@ import {
   ValidationStateService
 } from '../../services/validation-state.service';
 import {
-  WorkspaceSettingsService,
   ResponseMatchingFlag
 } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
@@ -114,7 +113,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private validationStateService = inject(ValidationStateService);
   private translateService = inject(TranslateService);
-  private workspaceSettingsService = inject(WorkspaceSettingsService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
   private document = inject(DOCUMENT);
@@ -137,6 +135,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   // Response analysis data
   responseAnalysis: ResponseAnalysisDto | null = null;
+  responseAnalysisError: string | null = null;
 
   isLoadingResponseAnalysis = false;
   showEmptyResponsesDetails = false;
@@ -297,7 +296,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const workspaceId = this.appService.selectedWorkspaceId;
         if (workspaceId) {
           this.isApplyingDuplicateAggregation = true;
-          this.workspaceSettingsService.setAggregationThreshold(workspaceId, threshold)
+          this.testPersonCodingService
+            .saveAggregationSettings(workspaceId, threshold, this.responseMatchingFlags)
             .pipe(
               finalize(() => {
                 this.isApplyingDuplicateAggregation = false;
@@ -305,7 +305,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               takeUntil(this.destroy$)
             )
             .subscribe({
-              next: () => {
+              next: result => {
+                if (!result.success) {
+                  this.showError(result.message);
+                  return;
+                }
+                this.responseMatchingFlags = result.flags;
+                this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
                 this.refreshAggregationDependentViews();
               },
               error: () => {
@@ -1025,10 +1031,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.isLoadingMatchingMode = true;
     this.isLoadingResponseAnalysis = true;
 
-    forkJoin({
-      flags: this.workspaceSettingsService.getResponseMatchingMode(workspaceId),
-      threshold: this.workspaceSettingsService.getAggregationThreshold(workspaceId)
-    })
+    this.testPersonCodingService
+      .getAggregationSettings(workspaceId)
       .pipe(
         finalize(() => {
           this.isLoadingMatchingMode = false;
@@ -1036,9 +1040,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe({
-        next: ({ flags, threshold }) => {
-          this.responseMatchingFlags = flags;
-          this.duplicateAggregationThreshold = threshold;
+        next: settings => {
+          this.responseMatchingFlags = settings.flags;
+          this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.refreshAllStatistics();
           this.loadResponseAnalysis();
         },
@@ -1379,6 +1383,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.responseAnalysis?.aggregationSummary?.collapsedCases ?? 0;
   }
 
+  get hasDuplicateFindingsWithoutAggregation(): boolean {
+    return !!this.responseAnalysis &&
+      !this.responseAnalysis.aggregationSummary.aggregationActive &&
+      this.responseAnalysis.duplicateValues.total > 0;
+  }
+
   getVariableEffectiveCaseCount(variable: {
     responseCount: number;
     uniqueCasesAfterAggregation?: number;
@@ -1418,12 +1428,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingMatchingMode = true;
-    this.workspaceSettingsService
-      .getResponseMatchingMode(workspaceId)
+    this.testPersonCodingService
+      .getAggregationSettings(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (flags: ResponseMatchingFlag[]) => {
-          this.responseMatchingFlags = flags;
+        next: settings => {
+          this.responseMatchingFlags = settings.flags;
+          this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.isLoadingMatchingMode = false;
         },
         error: () => {
@@ -1441,12 +1452,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.workspaceSettingsService
-      .getAggregationThreshold(workspaceId)
+    this.testPersonCodingService
+      .getAggregationSettings(workspaceId)
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (threshold: number) => {
-          this.duplicateAggregationThreshold = threshold;
+        next: settings => {
+          this.responseMatchingFlags = settings.flags;
+          this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(settings.threshold);
           this.loadResponseAnalysis();
         },
         error: () => {
@@ -1467,6 +1479,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingResponseAnalysis = true;
+    this.isLoadingMatchingMode = true;
 
     let newFlags: ResponseMatchingFlag[];
 
@@ -1487,25 +1500,8 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       }
     }
 
-    // Determine if we need to apply/revert aggregation (only when toggling NO_AGGREGATION)
-    const isAggregationToggle = flag === ResponseMatchingFlag.NO_AGGREGATION;
-
-    // Sequential execution: Save Settings -> (Optional) Apply Aggregation -> Refresh Stats
-    this.saveResponseMatchingMode(newFlags, isAggregationToggle)
+    this.saveResponseMatchingMode(newFlags)
       .pipe(
-        switchMap(() => {
-          if (isAggregationToggle) {
-            const isNoAggregationSet = newFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
-            // If NO_AGGREGATION is set, we deactivate aggregation (false).
-            // If NO_AGGREGATION is NOT set, we activate aggregation (true).
-            return this.testPersonCodingService.applyDuplicateAggregation(
-              workspaceId,
-              this.duplicateAggregationThreshold,
-              !isNoAggregationSet
-            );
-          }
-          return of(null);
-        }),
         finalize(() => {
           this.isLoadingMatchingMode = false;
           this.isLoadingResponseAnalysis = false;
@@ -1514,7 +1510,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: () => {
-          // Final refresh after all operations are complete
           this.onResponseMatchingModeChanged();
         },
         error: () => {
@@ -1523,29 +1518,35 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
   }
 
-  private saveResponseMatchingMode(flags: ResponseMatchingFlag[], skipRefresh = false): Observable<void> {
+  private saveResponseMatchingMode(flags: ResponseMatchingFlag[]): Observable<void> {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return of(undefined);
     }
 
     this.isSavingMatchingMode = true;
-    return this.workspaceSettingsService
-      .setResponseMatchingMode(workspaceId, flags)
+    return this.testPersonCodingService
+      .saveAggregationSettings(
+        workspaceId,
+        this.normalizeAggregationThreshold(this.duplicateAggregationThreshold),
+        flags
+      )
       .pipe(
+        map(result => {
+          if (!result.success) {
+            throw new Error(result.message);
+          }
+          return result;
+        }),
         tap({
-          next: () => {
-            this.responseMatchingFlags = flags;
-            this.isSavingMatchingMode = false;
+          next: result => {
+            this.responseMatchingFlags = result.flags;
+            this.duplicateAggregationThreshold = this.normalizeAggregationThreshold(result.threshold);
             this.showSuccess(
               this.translateService.instant(
                 'coding-management-manual.response-matching.save-success'
               )
             );
-
-            if (!skipRefresh) {
-              this.onResponseMatchingModeChanged();
-            }
           },
           error: () => {
             this.isSavingMatchingMode = false;
@@ -1556,7 +1557,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             );
           }
         }),
-        switchMap(() => of(undefined))
+        finalize(() => {
+          this.isSavingMatchingMode = false;
+        }),
+        map(() => undefined)
       );
   }
 
@@ -1584,10 +1588,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     this.isLoadingResponseAnalysis = true;
+    this.responseAnalysisError = null;
     this.testPersonCodingService
       .getResponseAnalysis(
         workspaceId,
-        this.duplicateAggregationThreshold,
+        this.normalizeAggregationThreshold(this.duplicateAggregationThreshold),
         this.emptyPageIndex + 1,
         this.emptyPageSize,
         this.duplicatePageIndex + 1,
@@ -1597,6 +1602,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (analysis: ResponseAnalysisDto & { isCalculating?: boolean }) => {
           this.responseAnalysis = analysis;
+          this.responseAnalysisError = null;
           this.isLoadingResponseAnalysis = false;
 
           if (analysis.isCalculating) {
@@ -1611,8 +1617,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         error: error => {
           this.isLoadingResponseAnalysis = false;
           this.responseAnalysis = null;
+          this.responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
           this.snackBar.open(
-            `Fehler beim Laden der Antwortanalyse: ${error.message || error}`,
+            this.responseAnalysisError,
             'OK',
             { duration: 3000 }
           );
@@ -1625,20 +1632,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     if (!workspaceId) return;
 
     this.isLoadingResponseAnalysis = true;
-    this.codingJobBackendService.triggerResponseAnalysis(workspaceId).subscribe({
-      next: () => {
-        this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
-        this.loadResponseAnalysis(); // Start polling
-      },
-      error: error => {
-        this.isLoadingResponseAnalysis = false;
-        this.snackBar.open(
-          `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
-          'OK',
-          { duration: 3000 }
-        );
-      }
-    });
+    this.responseAnalysisError = null;
+    this.codingJobBackendService
+      .triggerResponseAnalysis(
+        workspaceId,
+        this.normalizeAggregationThreshold(this.duplicateAggregationThreshold)
+      )
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: () => {
+          this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
+          this.loadResponseAnalysis(); // Start polling
+        },
+        error: error => {
+          this.isLoadingResponseAnalysis = false;
+          this.snackBar.open(
+            `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
+            'OK',
+            { duration: 3000 }
+          );
+        }
+      });
   }
 
   refreshResponseAnalysis(): void {
@@ -1788,10 +1802,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               // Sync with matching flag: Clear 'NO_AGGREGATION' when applying
               this.saveResponseMatchingMode(
                 this.responseMatchingFlags.filter(f => f !== ResponseMatchingFlag.NO_AGGREGATION)
-              );
-
-              // Refresh analysis and statistics
-              this.refreshAggregationDependentViews();
+              )
+                .pipe(takeUntil(this.destroy$))
+                .subscribe(() => {
+                  this.onResponseMatchingModeChanged();
+                });
             } else {
               this.showError(
                 this.translateService.instant(
@@ -1852,10 +1867,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
               this.showSuccess(result.message);
 
               // Sync with matching flag: Set 'NO_AGGREGATION' when deactivating
-              this.saveResponseMatchingMode([ResponseMatchingFlag.NO_AGGREGATION]);
-
-              // Refresh analysis and statistics
-              this.refreshAggregationDependentViews();
+              this.saveResponseMatchingMode([ResponseMatchingFlag.NO_AGGREGATION])
+                .pipe(takeUntil(this.destroy$))
+                .subscribe(() => {
+                  this.onResponseMatchingModeChanged();
+                });
             } else {
               this.showError(result.message);
             }
@@ -1868,13 +1884,17 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     });
   }
 
-  onThresholdChanged(newValue: number): void {
+  onThresholdChanged(newValue: number | string | null): void {
     if (this.responseAnalysis?.isCalculating) {
       return;
     }
+    const normalizedValue = this.normalizeAggregationThreshold(newValue);
+    if (this.duplicateAggregationThreshold !== normalizedValue) {
+      this.duplicateAggregationThreshold = normalizedValue;
+    }
     this.emptyPageIndex = 0;
     this.duplicatePageIndex = 0;
-    this.thresholdChangeSubject.next(newValue);
+    this.thresholdChangeSubject.next(normalizedValue);
   }
 
   onEmptyPageChange(event: PageEvent): void {
@@ -1895,5 +1915,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getUncodedCount(): number {
     return this.responseAnalysis?.emptyResponses?.totalUncoded || 0;
+  }
+
+  private normalizeAggregationThreshold(value: number | string | null | undefined): number {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      return 2;
+    }
+    return Math.min(100, Math.max(2, Math.round(numericValue)));
   }
 }

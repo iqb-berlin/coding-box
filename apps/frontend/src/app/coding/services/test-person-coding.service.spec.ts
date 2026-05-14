@@ -5,6 +5,7 @@ import {
   TestPersonCodingService, CodingStatistics, PaginatedCodingList, JobStatus, JobInfo
 } from './test-person-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
 
 describe('TestPersonCodingService', () => {
   let service: TestPersonCodingService;
@@ -191,6 +192,95 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('getResponseAnalysis', () => {
+    it('should request response analysis with threshold and pagination params', () => {
+      const mockResponse = {
+        emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+        duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+        matchingFlags: [],
+        analysisTimestamp: '2026-05-14T00:00:00.000Z'
+      };
+
+      service.getResponseAnalysis(mockWorkspaceId, 7, 2, 25, 3, 50).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis` &&
+        request.params.get('threshold') === '7' &&
+        request.params.get('emptyPage') === '2' &&
+        request.params.get('emptyLimit') === '25' &&
+        request.params.get('duplicatePage') === '3' &&
+        request.params.get('duplicateLimit') === '50'
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
+    it('should propagate response analysis errors to the component', done => {
+      service.getResponseAnalysis(mockWorkspaceId).subscribe({
+        next: () => done.fail('expected response analysis request to fail'),
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`);
+      req.flush(
+        { message: 'analysis failed' },
+        { status: 500, statusText: 'Server Error' }
+      );
+    });
+  });
+
+  describe('aggregation settings', () => {
+    it('should fetch aggregation settings through the authenticated coding endpoint', () => {
+      const mockResponse = {
+        success: true,
+        threshold: 5,
+        flags: [ResponseMatchingFlag.IGNORE_CASE],
+        aggregationActive: true,
+        revertedResponses: 0,
+        message: 'ok'
+      };
+
+      service.getAggregationSettings(mockWorkspaceId).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      req.flush(mockResponse);
+    });
+
+    it('should persist threshold and matching flags through the central endpoint', () => {
+      const mockResponse = {
+        success: true,
+        threshold: 9,
+        flags: [ResponseMatchingFlag.NO_AGGREGATION],
+        aggregationActive: false,
+        revertedResponses: 2,
+        message: 'saved'
+      };
+
+      service
+        .saveAggregationSettings(mockWorkspaceId, 9, [ResponseMatchingFlag.NO_AGGREGATION])
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/aggregation-settings`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({
+        threshold: 9,
+        flags: [ResponseMatchingFlag.NO_AGGREGATION]
+      });
+      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      req.flush(mockResponse);
+    });
+  });
+
   describe('getJobStatus', () => {
     it('should send a GET request to get job status', () => {
       const mockJobId = 'job-123';
@@ -218,6 +308,14 @@ describe('TestPersonCodingService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}`);
       req.error(new ProgressEvent('error'));
     });
+
+    it('should not request job status when job id is missing', () => {
+      service.getJobStatus(mockWorkspaceId, '').subscribe(response => {
+        expect(response).toEqual({ error: 'Fehlende Job-ID für Statusabfrage' });
+      });
+
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/`);
+    });
   });
 
   describe('cancelJob', () => {
@@ -243,6 +341,14 @@ describe('TestPersonCodingService', () => {
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/${mockJobId}/cancel`);
       req.error(new ProgressEvent('error'));
+    });
+
+    it('should not request cancellation when job id is missing', () => {
+      service.cancelJob(mockWorkspaceId, ' ').subscribe(response => {
+        expect(response).toEqual({ success: false, message: 'Fehlende Job-ID für Abbruch' });
+      });
+
+      httpMock.expectNone(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/job/ /cancel`);
     });
   });
 
