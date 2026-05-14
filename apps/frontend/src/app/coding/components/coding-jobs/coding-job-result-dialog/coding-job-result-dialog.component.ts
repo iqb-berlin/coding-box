@@ -29,6 +29,10 @@ import { AppService } from '../../../../core/services/app.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
 import { base64ToUtf8, utf8ToBase64 } from '../../../../shared/utils/common-utils';
+import {
+  ApplyCodingResultsDialogComponent,
+  ApplyCodingResultsDialogResult
+} from '../apply-coding-results-dialog.component';
 
 import { UnitsReplay, UnitsReplayUnit } from '../../../../replay/services/units-replay.service';
 
@@ -270,35 +274,86 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy {
   }
 
   applyCodingResults(): void {
-    this.isLoading = true;
-    this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id).subscribe({
-      next: result => {
-        this.isLoading = false;
-        let message = this.translateService.instant(result.messageKey, result.messageParams || {});
-        if (result.success) {
-          if (result.updatedResponsesCount > 0) {
-            message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
-          }
-          if (result.skippedReviewCount > 0) {
-            message += `\nÜbersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`;
-          }
-          this.snackBar.open(`Ergebnisse erfolgreich angewendet!\n${message}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['success-snackbar']
-          });
-          this.dialogRef.close({ resultsApplied: true });
-        } else {
-          this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
-            duration: 5000,
-            panelClass: ['error-snackbar']
-          });
-        }
-      },
-      error: error => {
-        this.isLoading = false;
-        this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
-      }
+    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
+      width: '600px',
+      data: { jobName: this.data.codingJob.name }
     });
+
+    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+      if (!dialogResult) {
+        return;
+      }
+
+      this.isLoading = true;
+      this.codingJobBackendService.applyCodingResults(this.data.workspaceId, this.data.codingJob.id, {
+        overwriteExisting: dialogResult.overwriteExisting
+      }).subscribe({
+        next: result => {
+          this.isLoading = false;
+          let message = this.translateService.instant(result.messageKey, result.messageParams || {});
+          if (result.success) {
+            if (result.updatedResponsesCount > 0) {
+              message += `\n\nAktualisiert: ${result.updatedResponsesCount} Antworten`;
+            }
+            if (result.skippedAlreadyCodedCount > 0) {
+              message += `\nBereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`;
+            }
+            if (result.overwrittenExistingCount > 0) {
+              message += `\nVorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`;
+            }
+            if (result.skippedReviewCount > 0) {
+              message += `\nÜbersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`;
+            }
+            this.snackBar.open(`Ergebnisse erfolgreich angewendet!\n${message}`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['success-snackbar']
+            });
+            this.dialogRef.close({ resultsApplied: true });
+          } else {
+            this.snackBar.open(`Fehler beim Anwenden der Ergebnisse: ${message}`, 'Schließen', {
+              duration: 5000,
+              panelClass: ['error-snackbar']
+            });
+          }
+        },
+        error: error => {
+          this.isLoading = false;
+          this.snackBar.open(`Fehler beim Anwenden der Kodierergebnisse: ${error.message || error}`, 'Schließen', { duration: 5000 });
+        }
+      });
+    });
+  }
+
+  getAggregationSettingsText(): string {
+    const job = this.data.codingJob;
+
+    if (!job.aggregationSettingsVersion) {
+      return 'Aggregation: ältere Jobs nutzen aktuelle Workspace-Einstellungen';
+    }
+
+    if (!job.aggregationEnabled || job.aggregationThreshold === null || job.aggregationThreshold === undefined) {
+      return 'Aggregation beim Erstellen: aus';
+    }
+
+    const flags = job.responseMatchingFlags || [];
+    const matchingText = flags.length > 0 ?
+      flags.map(flag => this.getResponseMatchingFlagLabel(flag)).join(', ') :
+      'exakte Übereinstimmung';
+
+    return `Aggregation beim Erstellen: Schwellenwert ${job.aggregationThreshold}, ${matchingText}`;
+  }
+
+  private getResponseMatchingFlagLabel(flag: string): string {
+    switch (flag) {
+      case 'IGNORE_CASE':
+        return 'Groß-/Kleinschreibung ignoriert';
+      case 'IGNORE_WHITESPACE':
+        return 'Leerzeichen ignoriert';
+      case 'NO_AGGREGATION':
+        return 'nicht aggregiert';
+      default:
+        return flag;
+    }
   }
 
   getCodeDisplay(result: CodingResult): string {

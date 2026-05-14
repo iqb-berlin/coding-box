@@ -67,6 +67,8 @@ export interface BulkApplyResultItem {
     success: boolean;
     updatedResponsesCount: number;
     skippedReviewCount: number;
+    skippedAlreadyCodedCount: number;
+    overwrittenExistingCount: number;
     message: string;
   };
 }
@@ -76,6 +78,8 @@ export interface BulkApplyCodingResultsResponse {
   jobsProcessed: number;
   totalUpdatedResponses: number;
   totalSkippedReview: number;
+  totalSkippedAlreadyCoded: number;
+  totalOverwrittenExisting: number;
   message: string;
   results: BulkApplyResultItem[];
 }
@@ -255,8 +259,8 @@ export class CodingFacadeService {
     return this.codingJobBackendService.getCodingJobUnits(workspaceId, codingJobId);
   }
 
-  applyCodingResults(workspaceId: number, codingJobId: number): Observable<{ success: boolean; updatedResponsesCount: number; skippedReviewCount: number; messageKey: string; messageParams?: Record<string, unknown> }> {
-    return this.codingJobBackendService.applyCodingResults(workspaceId, codingJobId);
+  applyCodingResults(workspaceId: number, codingJobId: number, options: { overwriteExisting?: boolean } = {}): Observable<{ success: boolean; updatedResponsesCount: number; skippedReviewCount: number; skippedAlreadyCodedCount: number; overwrittenExistingCount: number; messageKey: string; messageParams?: Record<string, unknown> }> {
+    return this.codingJobBackendService.applyCodingResults(workspaceId, codingJobId, options);
   }
 
   bulkApplyCodingResults(workspaceId: number): Observable<BulkApplyCodingResultsResponse> {

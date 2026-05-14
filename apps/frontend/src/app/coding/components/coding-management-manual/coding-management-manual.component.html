@@ -193,44 +193,54 @@
                       <input matInput type="number" [(ngModel)]="duplicateAggregationThreshold"
                         (ngModelChange)="onThresholdChanged($event)" min="2" max="100" step="1"
                         [disabled]="!!responseAnalysis?.isCalculating">
-                      <mat-hint>Änderungen werden nach kurzer Pause gespeichert.</mat-hint>
                     </mat-form-field>
+                    <div class="threshold-help">
+                      <small>
+                        Niedriger = weniger Kodierfälle, mehr automatische Übertragung. Höher = mehr Einzelfälle.
+                      </small>
+                      <small>
+                        Änderungen gelten für neue Analysen und neu erstellte Kodierjobs. Bestehende Kodierjobs behalten
+                        ihre beim Erstellen gespeicherten Aggregationseinstellungen.
+                      </small>
+                    </div>
 
                     <div class="saving-indicator" *ngIf="isApplyingDuplicateAggregation">
                       <mat-spinner diameter="20"></mat-spinner>
                       <span>Speichern...</span>
                     </div>
                   </div>
-                  <div class="settings-label">
-                    <mat-icon class="label-icon">compare_arrows</mat-icon>
-                    {{ 'coding-management-manual.response-matching.title' | translate }}
-                    <span *ngIf="isLoadingMatchingMode || isSavingMatchingMode" class="loading-indicator">
-                      <mat-spinner diameter="14"></mat-spinner>
-                    </span>
-                  </div>
+                  <div class="matching-section">
+                    <div class="settings-label">
+                      <mat-icon class="label-icon">compare_arrows</mat-icon>
+                      {{ 'coding-management-manual.response-matching.title' | translate }}
+                      <span *ngIf="isLoadingMatchingMode || isSavingMatchingMode" class="loading-indicator">
+                        <mat-spinner diameter="14"></mat-spinner>
+                      </span>
+                    </div>
 
-                  <div class="settings-control matching-control">
-                    <div class="checkbox-group">
-                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-                        (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || responseAnalysis?.isCalculating"
-                        color="primary">
-                        {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
-                      </mat-checkbox>
+                    <div class="settings-control matching-control">
+                      <div class="checkbox-group">
+                        <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+                          (change)="toggleMatchingFlag(ResponseMatchingFlag.NO_AGGREGATION)"
+                          [disabled]="isLoadingMatchingMode || isSavingMatchingMode || responseAnalysis?.isCalculating"
+                          color="primary">
+                          {{ 'coding-management-manual.response-matching.no-aggregation' | translate }}
+                        </mat-checkbox>
 
-                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-                        (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE) || responseAnalysis?.isCalculating"
-                        color="primary">
-                        {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
-                      </mat-checkbox>
+                        <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+                          (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_CASE)"
+                          [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_CASE) || responseAnalysis?.isCalculating"
+                          color="primary">
+                          {{ 'coding-management-manual.response-matching.ignore-case' | translate }}
+                        </mat-checkbox>
 
-                      <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-                        (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
-                        [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE) || responseAnalysis?.isCalculating"
-                        color="primary">
-                        {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
-                      </mat-checkbox>
+                        <mat-checkbox [checked]="hasMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                          (change)="toggleMatchingFlag(ResponseMatchingFlag.IGNORE_WHITESPACE)"
+                          [disabled]="isLoadingMatchingMode || isSavingMatchingMode || isMatchingOptionDisabled(ResponseMatchingFlag.IGNORE_WHITESPACE) || responseAnalysis?.isCalculating"
+                          color="primary">
+                          {{ 'coding-management-manual.response-matching.ignore-whitespace' | translate }}
+                        </mat-checkbox>
+                      </div>
                     </div>
                   </div>
                 </div>

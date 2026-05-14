@@ -77,9 +77,22 @@ describe('CodingJobsComponent', () => {
         removedDuplicateAssignments: 0,
         transferredCases: 10
       })),
-      applyCodingResults: jest.fn().mockReturnValue(of({ success: true })),
+      applyCodingResults: jest.fn().mockReturnValue(of({
+        success: true,
+        updatedResponsesCount: 1,
+        skippedReviewCount: 0,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
+        messageKey: 'coding-results.apply.success.bulk'
+      })),
       bulkApplyCodingResults: jest.fn().mockReturnValue(of({
-        success: true, jobsProcessed: 0, totalUpdatedResponses: 0, results: []
+        success: true,
+        jobsProcessed: 0,
+        totalUpdatedResponses: 0,
+        totalSkippedReview: 0,
+        totalSkippedAlreadyCoded: 0,
+        totalOverwrittenExisting: 0,
+        results: []
       }))
     };
 
@@ -448,9 +461,15 @@ describe('CodingJobsComponent', () => {
 
   it('should handle apply coding results', () => {
     const job = mockCodingJobs[0] as CodingJob;
+    (matDialogMock.open as jest.Mock).mockReturnValue({
+      afterClosed: () => of({ overwriteExisting: false })
+    });
+
     component.applyCodingResults(job);
 
-    expect(codingJobBackendServiceMock.applyCodingResults).toHaveBeenCalledWith(1, job.id);
+    expect(codingJobBackendServiceMock.applyCodingResults).toHaveBeenCalledWith(1, job.id, {
+      overwriteExisting: false
+    });
     expect(matSnackBarMock.open).toHaveBeenCalledWith(
       expect.stringContaining('Ergebnisse erfolgreich angewendet'),
       'Schließen',

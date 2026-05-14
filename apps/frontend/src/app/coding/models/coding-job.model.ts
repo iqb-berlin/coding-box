@@ -34,6 +34,10 @@ export interface CodingJob {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   hasIssues?: boolean;
+  aggregationEnabled?: boolean;
+  aggregationThreshold?: number | null;
+  responseMatchingFlags?: string[] | null;
+  aggregationSettingsVersion?: number | null;
 }
 
 export interface Variable {
