@@ -7,6 +7,7 @@ import {
   JobDefinition, JobDefinitionVariable, JobDefinitionVariableBundle, CaseOrderingMode
 } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import User from '../../entities/user.entity';
 import { CodingJobService } from '../coding/coding-job.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { CreateJobDefinitionDto } from '../../../admin/coding-job/dto/create-job-definition.dto';
@@ -50,6 +51,8 @@ export class JobDefinitionService {
     private jobDefinitionRepository: Repository<JobDefinition>,
     @InjectRepository(VariableBundle)
     private variableBundleRepository: Repository<VariableBundle>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
     private codingJobService: CodingJobService,
     private codingValidationService: CodingValidationService
   ) { }
@@ -636,22 +639,39 @@ export class JobDefinitionService {
     const filteredVariables = (jobDefinition.assigned_variables || []).filter(v => !bundleVariableKeys.has(`${v.unitName}-${v.variableId}`)
     );
 
-    const codingJobData = {
-      name: `Coding Job from Definition ${jobDefinitionId}`,
-      status: 'pending',
-      variables: filteredVariables,
-      variableBundles: fullVariableBundles,
-      assignedCoders: jobDefinition.assigned_coders || [],
-      durationSeconds: jobDefinition.duration_seconds,
-      doubleCodingAbsolute: jobDefinition.double_coding_absolute,
-      doubleCodingPercentage: jobDefinition.double_coding_percentage,
-      caseOrderingMode: jobDefinition.case_ordering_mode,
-      maxCodingCases: jobDefinition.max_coding_cases
-    };
+    const savedBundleModes = new Map(
+      (jobDefinition.assigned_variable_bundles || [])
+        .map(bundle => [bundle.id, bundle.caseOrderingMode])
+    );
+    const selectedVariableBundles = fullVariableBundles.map(bundle => ({
+      id: bundle.id,
+      name: bundle.name,
+      variables: bundle.variables || [],
+      caseOrderingMode: savedBundleModes.get(bundle.id)
+    }));
+    const assignedCoderIds = jobDefinition.assigned_coders || [];
+    const assignedUsers = assignedCoderIds.length > 0 ?
+      await this.usersRepository.find({ where: { id: In(assignedCoderIds) } }) :
+      [];
+    const assignedUsersById = new Map(assignedUsers.map(user => [user.id, user]));
+    const selectedCoders = assignedCoderIds.map(coderId => {
+      const username = assignedUsersById.get(coderId)?.username || `Coder ${coderId}`;
+      return {
+        id: coderId,
+        name: username,
+        username
+      };
+    });
 
-    return this.codingJobService.createCodingJob(workspaceId, {
-      ...codingJobData,
-      jobDefinitionId: jobDefinitionId
+    return this.codingJobService.createDistributedCodingJobs(workspaceId, {
+      selectedVariables: filteredVariables,
+      selectedVariableBundles,
+      selectedCoders,
+      doubleCodingAbsolute: jobDefinition.double_coding_absolute,
+      doubleCodingPercentage: this.toOptionalNumber(jobDefinition.double_coding_percentage),
+      caseOrderingMode: jobDefinition.case_ordering_mode,
+      maxCodingCases: jobDefinition.max_coding_cases,
+      jobDefinitionId
     });
   }
 }

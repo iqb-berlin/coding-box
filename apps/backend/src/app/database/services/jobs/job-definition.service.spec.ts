@@ -20,14 +20,19 @@ const createRepo = () => ({
 describe('JobDefinitionService', () => {
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
   let variableBundleRepository: ReturnType<typeof createRepo>;
-  let codingJobService: { createCodingJob: jest.Mock };
+  let usersRepository: ReturnType<typeof createRepo>;
+  let codingJobService: { createCodingJob: jest.Mock; createDistributedCodingJobs: jest.Mock };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let service: JobDefinitionService;
 
   beforeEach(() => {
     jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
-    codingJobService = { createCodingJob: jest.fn() };
+    usersRepository = createRepo();
+    codingJobService = {
+      createCodingJob: jest.fn(),
+      createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] })
+    };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
         { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 },
@@ -37,10 +42,12 @@ describe('JobDefinitionService', () => {
 
     jobDefinitionRepository.find.mockResolvedValue([]);
     variableBundleRepository.find.mockResolvedValue([]);
+    usersRepository.find.mockResolvedValue([]);
 
     service = new JobDefinitionService(
       jobDefinitionRepository as never,
       variableBundleRepository as never,
+      usersRepository as never,
       codingJobService as never,
       codingValidationService as never
     );
@@ -218,5 +225,65 @@ describe('JobDefinitionService', () => {
     await expect(service.approveJobDefinition(4, {
       status: 'pending_review'
     })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('creates distributed coding jobs from an approved definition', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 12,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [
+        { unitName: 'Unit 1', variableId: 'Var 1' },
+        { unitName: 'Unit 2', variableId: 'Var 2' }
+      ],
+      assigned_variable_bundles: [{ id: 9, name: 'Saved Bundle', caseOrderingMode: 'alternating' }],
+      assigned_coders: [3, 1],
+      duration_seconds: 30,
+      max_coding_cases: 7,
+      double_coding_absolute: 2,
+      double_coding_percentage: null,
+      case_ordering_mode: 'continuous'
+    });
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Hydrated Bundle',
+        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
+      }
+    ]);
+    usersRepository.find.mockResolvedValue([
+      { id: 1, username: 'Ada' },
+      { id: 3, username: 'Chris' }
+    ]);
+    codingJobService.createDistributedCodingJobs.mockResolvedValue({
+      success: true,
+      jobsCreated: 2,
+      jobs: [{ jobId: 100 }, { jobId: 101 }]
+    });
+
+    await expect(service.createCodingJobFromDefinition(12, 7)).resolves.toMatchObject({
+      success: true,
+      jobsCreated: 2
+    });
+
+    expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(7, {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedVariableBundles: [{
+        id: 9,
+        name: 'Hydrated Bundle',
+        variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        caseOrderingMode: 'alternating'
+      }],
+      selectedCoders: [
+        { id: 3, name: 'Chris', username: 'Chris' },
+        { id: 1, name: 'Ada', username: 'Ada' }
+      ],
+      doubleCodingAbsolute: 2,
+      doubleCodingPercentage: undefined,
+      caseOrderingMode: 'continuous',
+      maxCodingCases: 7,
+      jobDefinitionId: 12
+    });
   });
 });

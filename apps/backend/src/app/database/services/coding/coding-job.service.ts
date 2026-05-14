@@ -2403,6 +2403,9 @@ export class CodingJobService {
             });
           }
         }
+
+        doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey])
+          .reduce((sum, value) => sum + value, 0);
       }
 
       this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);

@@ -21,7 +21,6 @@ import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { JobDefinitionService } from '../../database/services/jobs';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
-import { CodingJob } from '../../database/entities/coding-job.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
@@ -206,12 +205,12 @@ export class WorkspaceCodingJobDefinitionController {
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
   @ApiOkResponse({
-    description: 'Coding job created successfully from job definition.'
+    description: 'Distributed coding jobs created successfully from job definition.'
   })
   async createCodingJobFromDefinition(
     @WorkspaceId() workspace_id: number,
       @Param('id') id: number
-  ): Promise<CodingJob> {
+  ): Promise<Awaited<ReturnType<JobDefinitionService['createCodingJobFromDefinition']>>> {
     return this.jobDefinitionService.createCodingJobFromDefinition(
       id,
       workspace_id
