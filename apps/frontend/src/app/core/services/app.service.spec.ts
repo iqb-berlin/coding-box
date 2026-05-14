@@ -180,5 +180,29 @@ describe('AppService', () => {
       expect(service.needsReAuthentication).toBe(false);
       expect(service.authBootstrapStatus).toBe('ready');
     });
+
+    it('should group repeated HTTP errors by status and request URL', () => {
+      service.addErrorMessage({
+        status: 0,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/jobs',
+        message: 'Backend nicht erreichbar'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 0,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/jobs',
+        message: 'Backend nicht erreichbar'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 0,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/coder-trainings',
+        message: 'Backend nicht erreichbar'
+      } as AppHttpError);
+
+      expect(service.errorMessages).toHaveLength(2);
+      expect(service.errorMessages[0].message).toBe('Backend nicht erreichbar');
+    });
   });
 });

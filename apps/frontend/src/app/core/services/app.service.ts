@@ -169,9 +169,15 @@ export class AppService {
 
   addErrorMessage(error: AppHttpError) {
     if (!this.errorMessagesDisabled) {
-      const alikeErrors = this.errorMessages.filter(e => e.status === error.status);
+      const alikeErrors = this.errorMessages.filter(e => (
+        e.status === error.status &&
+        e.method === error.method &&
+        e.urlWithParams === error.urlWithParams
+      ));
       if (alikeErrors.length > 0) {
-        alikeErrors[0].message += `; ${error.message}`;
+        if (!alikeErrors[0].message.includes(error.message)) {
+          alikeErrors[0].message += `; ${error.message}`;
+        }
       } else {
         this.errorMessageCounter += 1;
         error.id = this.errorMessageCounter;
