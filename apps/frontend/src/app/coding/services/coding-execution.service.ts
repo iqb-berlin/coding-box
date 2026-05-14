@@ -46,6 +46,14 @@ export class CodingExecutionService {
     };
     error?: string;
   }> {
+    if (!jobId?.trim()) {
+      return of({
+        status: 'failed' as const,
+        progress: 0,
+        error: 'Fehlende Job-ID für Statusabfrage'
+      });
+    }
+
     return this.http
       .get<{
       status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'paused';
