@@ -533,4 +533,67 @@ describe('CodingJobService', () => {
       2: { b: { id: 2 } }
     });
   });
+
+  it('filters current coder and unrelated scopes from double-coding markers', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 10,
+      workspace_id: 3,
+      job_definition_id: 5,
+      training_id: null,
+      case_ordering_mode: 'continuous',
+      codingJobCoders: [{ user_id: 2, user: { username: 'coder2' } }]
+    });
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.find
+      .mockResolvedValueOnce([{
+        response_id: 99,
+        unit_name: 'UNIT',
+        unit_alias: 'UNIT',
+        variable_id: 'VAR',
+        variable_anchor: 'VAR',
+        booklet_name: 'BOOKLET',
+        person_login: 'login',
+        person_code: '',
+        person_group: 'group',
+        notes: null,
+        variable_bundle_id: null
+      }])
+      .mockResolvedValueOnce([
+        {
+          response_id: 99,
+          coding_job: {
+            id: 11,
+            workspace_id: 3,
+            job_definition_id: 5,
+            training_id: null,
+            codingJobCoders: [{ user_id: 1, user: { username: 'coder1' } }]
+          }
+        },
+        {
+          response_id: 99,
+          coding_job: {
+            id: 12,
+            workspace_id: 3,
+            job_definition_id: 5,
+            training_id: null,
+            codingJobCoders: [{ user_id: 2, user: { username: 'coder2' } }]
+          }
+        },
+        {
+          response_id: 99,
+          coding_job: {
+            id: 13,
+            workspace_id: 3,
+            job_definition_id: 6,
+            training_id: null,
+            codingJobCoders: [{ user_id: 3, user: { username: 'coder3' } }]
+          }
+        }
+      ]);
+
+    const result = await service.getCodingJobUnits(10);
+
+    expect(result[0].isDoubleCoded).toBe(true);
+    expect(result[0].otherCoders).toEqual(['coder1']);
+  });
 });

@@ -8,6 +8,10 @@ import { MatIconModule } from '@angular/material/icon';
 
 export interface ApplyCodingResultsDialogData {
   jobName: string;
+  totalResults?: number;
+  codedResults?: number;
+  reviewIssues?: number;
+  hasReviewIssues?: boolean;
 }
 
 export interface ApplyCodingResultsDialogResult {
@@ -41,6 +45,28 @@ export interface ApplyCodingResultsDialogResult {
         <span>
           Bestehende v2-Kodierungen bleiben standardmäßig erhalten. Aggregierte Ergebnisse werden nur
           auf passende Antworten derselben Aggregationsgruppe angewendet.
+        </span>
+      </div>
+
+      <div class="summary-grid" *ngIf="hasSummary()">
+        <div>
+          <strong>{{ data.totalResults ?? '-' }}</strong>
+          <span>Ergebnisse</span>
+        </div>
+        <div>
+          <strong>{{ data.codedResults ?? '-' }}</strong>
+          <span>kodiert</span>
+        </div>
+        <div>
+          <strong>{{ data.reviewIssues ?? (data.hasReviewIssues ? 'vorhanden' : 0) }}</strong>
+          <span>mit Prüfung</span>
+        </div>
+      </div>
+
+      <div class="warning-box" *ngIf="hasReviewIssues()">
+        <mat-icon>rule</mat-icon>
+        <span>
+          Ergebnisse mit Kodierungshinweis werden beim Anwenden übersprungen, bis sie manuell geprüft wurden.
         </span>
       </div>
 
@@ -99,6 +125,33 @@ export interface ApplyCodingResultsDialogResult {
     .warning-box mat-icon {
       flex-shrink: 0;
     }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .summary-grid div {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 10px;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      background: #fafafa;
+    }
+
+    .summary-grid strong {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .summary-grid span {
+      color: #666;
+      font-size: 12px;
+    }
   `]
 })
 export class ApplyCodingResultsDialogComponent {
@@ -115,5 +168,19 @@ export class ApplyCodingResultsDialogComponent {
 
   onConfirm(): void {
     this.dialogRef.close({ overwriteExisting: this.overwriteExisting });
+  }
+
+  hasSummary(): boolean {
+    return this.data.totalResults !== undefined ||
+      this.data.codedResults !== undefined ||
+      this.data.reviewIssues !== undefined ||
+      this.data.hasReviewIssues !== undefined;
+  }
+
+  hasReviewIssues(): boolean {
+    if (this.data.reviewIssues !== undefined) {
+      return this.data.reviewIssues > 0;
+    }
+    return !!this.data.hasReviewIssues;
   }
 }

@@ -14,23 +14,58 @@
       <mat-form-field appearance="outline">
         <mat-label>Aufgabe filtern</mat-label>
         <input matInput [(ngModel)]="unitNameFilter" (input)="onUnitNameFilterChange()">
+        <button *ngIf="unitNameFilter" matSuffix mat-icon-button type="button"
+          aria-label="Aufgabenfilter löschen" (click)="clearUnitNameFilter()">
+          <mat-icon>close</mat-icon>
+        </button>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
         <mat-label>Variable filtern</mat-label>
         <input matInput [(ngModel)]="variableFilter" (input)="onVariableFilterChange()">
+        <button *ngIf="variableFilter" matSuffix mat-icon-button type="button"
+          aria-label="Variablenfilter löschen" (click)="clearVariableFilter()">
+          <mat-icon>close</mat-icon>
+        </button>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
         <mat-label>Kodierungshinweis filtern</mat-label>
         <input matInput [(ngModel)]="codingIssueFilter" (input)="onCodingIssueFilterChange()">
+        <button *ngIf="codingIssueFilter" matSuffix mat-icon-button type="button"
+          aria-label="Kodierungshinweisfilter löschen" (click)="clearCodingIssueFilter()">
+          <mat-icon>close</mat-icon>
+        </button>
       </mat-form-field>
 
       <mat-form-field appearance="outline">
         <mat-label>Testperson filtern</mat-label>
         <input matInput [(ngModel)]="testPersonFilter" (input)="onTestPersonFilterChange()">
+        <button *ngIf="testPersonFilter" matSuffix mat-icon-button type="button"
+          aria-label="Testpersonenfilter löschen" (click)="clearTestPersonFilter()">
+          <mat-icon>close</mat-icon>
+        </button>
       </mat-form-field>
     </div>
+
+    @if (!isLoading) {
+    <div class="result-summary">
+      <span>{{ getFilteredResultCount() }} von {{ getTotalResultCount() }} Ergebnissen</span>
+      <span>{{ getCodedResultCount() }} kodiert</span>
+      @if (getReviewIssueCount() > 0) {
+      <span class="summary-warning">{{ getReviewIssueCount() }} mit Kodierungshinweis</span>
+      }
+      @if (isNotesUnavailable) {
+      <span class="summary-warning">Notizen nicht geladen</span>
+      }
+      @if (hasActiveFilters()) {
+      <button mat-button type="button" (click)="clearAllFilters()">
+        <mat-icon>filter_alt_off</mat-icon>
+        Filter löschen
+      </button>
+      }
+    </div>
+    }
   </div>
 
   @if (isLoading) {
@@ -53,7 +88,14 @@
 
       <ng-container matColumnDef="testPerson">
         <mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</mat-header-cell>
-        <mat-cell *matCellDef="let result">{{result.testPerson}}</mat-cell>
+        <mat-cell *matCellDef="let result">
+          <div class="person-cell">
+            <strong>{{result.personLogin || '-'}}</strong>
+            <small *ngIf="result.personCode">Code: {{result.personCode}}</small>
+            <small *ngIf="result.personGroup">Gruppe: {{result.personGroup}}</small>
+            <small>Booklet: {{result.bookletName || '-'}}</small>
+          </div>
+        </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="variableId">
@@ -95,8 +137,9 @@
       <ng-container matColumnDef="doubleCoding">
         <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding-results.column-double-coding' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let result">
-          <mat-icon *ngIf="result.isDoubleCoded" color="primary" 
-                    [matTooltip]="('coding-results.tooltip-other-coder' | translate) + result.otherCoders.join(', ')"
+          <mat-icon *ngIf="result.isDoubleCoded" color="primary"
+                    aria-label="Doppelkodierung erkannt"
+                    [matTooltip]="getOtherCodersTooltip(result)"
                     matTooltipPosition="above">
             assignment
           </mat-icon>
@@ -115,21 +158,37 @@
         <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
         <mat-cell *matCellDef="let result">
           <button *ngIf="isCodingIssueOption(result)" mat-icon-button color="primary"
-            (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen">
+            (click)="reviewCodingResult(result)" matTooltip="Kodierungs-Hinweis überprüfen"
+            aria-label="Kodierungs-Hinweis überprüfen">
             <mat-icon>replay</mat-icon>
           </button>
           <button *ngIf="isNewCodeNeeded(result)" mat-icon-button color="primary" (click)="editCodingScheme(result)"
-            matTooltip="Kodierungsschema bearbeiten">
+            matTooltip="Kodierungsschema bearbeiten" aria-label="Kodierungsschema bearbeiten">
             <mat-icon>edit</mat-icon>
           </button>
         </mat-cell>
       </ng-container>
 
-      <mat-header-row *matHeaderRowDef="displayedColumns"></mat-header-row>
+      <mat-header-row *matHeaderRowDef="displayedColumns; sticky: true"></mat-header-row>
       <mat-row *matRowDef="let row; columns: displayedColumns;"></mat-row>
     </mat-table>
 
+    @if (dataSource.filteredData.length === 0) {
+    <div class="no-data-message">
+      <p>Keine Treffer für die aktuellen Filter.</p>
+      <button mat-button type="button" (click)="clearAllFilters()">
+        <mat-icon>filter_alt_off</mat-icon>
+        Filter löschen
+      </button>
+    </div>
+    }
 
+    <mat-paginator
+      [pageSize]="pageSize"
+      [pageSizeOptions]="pageSizeOptions"
+      showFirstLastButtons
+      aria-label="Kodierergebnisse paginieren">
+    </mat-paginator>
     } @else {
     <div class="no-data-message">
       <p>Keine Kodierergebnisse verfügbar.</p>
@@ -143,8 +202,8 @@
     <button mat-raised-button mat-dialog-close color="primary">Schließen</button>
     @if (data.canApplyResults !== false) {
     <button mat-raised-button color="accent"
-      [disabled]="isLoading || data.codingJob.status === 'results_applied' || !!data.codingJob.training?.id || !!data.codingJob.training_id"
-      (click)="applyCodingResults()" matTooltip="Kodierergebnisse auf Datenbank anwenden">
+      [disabled]="!canApplyCodingResults()"
+      (click)="applyCodingResults()" [matTooltip]="getApplyButtonTooltip()">
       <mat-icon>input</mat-icon>
       Ergebnisse anwenden
     </button>
