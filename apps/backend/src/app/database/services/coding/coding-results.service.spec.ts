@@ -2,7 +2,7 @@ import { Repository } from 'typeorm';
 import { CodingResultsService } from './coding-results.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
-import { CodingJobService } from './coding-job.service';
+import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 
@@ -61,6 +61,7 @@ describe('CodingResultsService', () => {
         }
       }),
       getAggregationThreshold: jest.fn().mockResolvedValue(null),
+      getResponseMatchingMode: jest.fn().mockResolvedValue([]),
       updateCodingJob: jest.fn().mockResolvedValue({ id: 10, status: 'results_applied' })
     } as unknown as jest.Mocked<CodingJobService>;
 
@@ -99,5 +100,28 @@ describe('CodingResultsService', () => {
       status: 'results_applied'
     });
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('does not propagate matching sibling responses when aggregation is disabled', async () => {
+    codingJobService.getAggregationThreshold.mockResolvedValue(2);
+    codingJobService.getResponseMatchingMode.mockResolvedValue([
+      ResponseMatchingFlag.NO_AGGREGATION
+    ]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(1);
+    expect(codingJobService.getResponseMatchingMode).toHaveBeenCalledWith(17);
+    expect(queryRunner.manager.update).toHaveBeenCalledTimes(1);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
   });
 });
