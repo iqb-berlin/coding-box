@@ -148,6 +148,9 @@
     "hono": "4.12.12",
     "@tootallnate/once": "3.0.1",
     "koa": "3.1.2",
+    "express@4.22.1": {
+      "path-to-regexp": "0.1.12"
+    },
     "serialize-javascript": "7.0.5",
     "picomatch": "4.0.4",
     "vite": "7.3.2",
