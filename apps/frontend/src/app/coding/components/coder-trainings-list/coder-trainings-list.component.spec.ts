@@ -89,4 +89,16 @@ describe('CoderTrainingsListComponent', () => {
 
     expect(component.coderTrainings.map(training => training.id)).toEqual([10, 11]);
   });
+
+  it('builds descriptive action labels for training rows', () => {
+    const actionTarget = component.getTrainingActionTarget(trainings[0]);
+
+    expect(actionTarget).toContain('Duplicate Label');
+    expect(actionTarget).toContain('ID 10');
+    expect(component.getTrainingActionAriaLabel('details', trainings[0])).toBe(`Details anzeigen: ${actionTarget}`);
+    expect(component.getTrainingActionAriaLabel('compare', trainings[0])).toBe(`Ergebnisse vergleichen: ${actionTarget}`);
+    expect(component.getTrainingActionAriaLabel('edit', trainings[0])).toBe(`Schulung bearbeiten: ${actionTarget}`);
+    expect(component.getTrainingActionAriaLabel('delete', trainings[0])).toBe(`Schulung löschen: ${actionTarget}`);
+    expect(component.getTrainingActionAriaLabel('more', trainings[0])).toBe(`Weitere Aktionen: ${actionTarget}`);
+  });
 });
