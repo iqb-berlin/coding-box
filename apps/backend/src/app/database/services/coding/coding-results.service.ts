@@ -7,6 +7,21 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
+import { buildAggregationGroups } from './aggregation-metrics.util';
+
+export interface ApplyCodingResultsOptions {
+  overwriteExisting?: boolean;
+}
+
+export interface ApplyCodingResultsResult {
+  success: boolean;
+  updatedResponsesCount: number;
+  skippedReviewCount: number;
+  skippedAlreadyCodedCount: number;
+  overwrittenExistingCount: number;
+  messageKey: string;
+  messageParams?: Record<string, unknown>;
+}
 
 @Injectable()
 export class CodingResultsService {
@@ -21,14 +36,13 @@ export class CodingResultsService {
     private codingAnalysisService: CodingAnalysisService
   ) { }
 
-  async applyCodingResults(workspaceId: number, codingJobId: number): Promise<{
-    success: boolean;
-    updatedResponsesCount: number;
-    skippedReviewCount: number;
-    messageKey: string;
-    messageParams?: Record<string, unknown>;
-  }> {
+  async applyCodingResults(
+    workspaceId: number,
+    codingJobId: number,
+    options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
+    const overwriteExisting = options.overwriteExisting === true;
 
     // Check if coding job is completed before allowing application
     const codingJob = await this.codingJobService.getCodingJobById(codingJobId);
@@ -37,6 +51,8 @@ export class CodingResultsService {
         success: false,
         updatedResponsesCount: 0,
         skippedReviewCount: 0,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
         messageKey: 'coding-results.apply.error.not-completed',
         messageParams: { status: codingJob.status }
       };
@@ -69,12 +85,16 @@ export class CodingResultsService {
           success: false,
           updatedResponsesCount: 0,
           skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
           messageKey: 'coding-results.apply.error.uncertain-issues-present',
           messageParams: { count: uncertainIssues.length }
         };
       }
 
       let skippedReviewCount = 0;
+      let skippedAlreadyCodedCount = 0;
+      let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
         const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
@@ -137,12 +157,14 @@ export class CodingResultsService {
       this.logger.log(`Prepared ${responsesToUpdate.length} responses for update, skipped ${skippedReviewCount} requiring review`);
       // If aggregation is active, find all uncoded responses that share the same normalized value
       // as a successfully coded response in this job, and apply the same result to them.
-      const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
-      if (aggregationThreshold !== null) {
-        const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
+      const aggregationSettings = await this.codingJobService.getAggregationSettingsForCodingJob(codingJob);
+      const aggregationThreshold = aggregationSettings.aggregationThreshold;
+      if (aggregationSettings.aggregationEnabled && aggregationThreshold !== null) {
+        const matchingFlags = aggregationSettings.responseMatchingFlags;
         if (matchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
           this.logger.log('Skipping group sibling propagation because response aggregation is disabled.');
         } else {
+          const derivedVariableMap = await this.codingJobService.getDerivedVariableMapForAggregation(workspaceId);
           // Collect the response IDs that are already being updated (avoid double-adding)
           const alreadyUpdatedIds = new Set(responsesToUpdate.map(r => r.responseId));
 
@@ -154,13 +176,15 @@ export class CodingResultsService {
           if (codedResponseIds.length > 0) {
             const codedResponses = await this.responseRepository
               .createQueryBuilder('response')
-              .leftJoin('response.unit', 'unit')
+              .leftJoinAndSelect('response.unit', 'unit')
               .leftJoin('unit.booklet', 'booklet')
               .leftJoin('booklet.person', 'person')
               .select([
                 'response.id',
                 'response.value',
                 'response.variableid',
+                'response.status_v2',
+                'unit.id',
                 'unit.name'
               ])
               .where('response.id IN (:...ids)', { ids: codedResponseIds })
@@ -170,19 +194,26 @@ export class CodingResultsService {
               const update = completedUpdates.find(u => u.responseId === codedResponse.id);
               if (!update) continue;
 
-              const normalizedValue = this.codingJobService.normalizeValue(codedResponse.value, matchingFlags);
               const unitName = codedResponse.unit?.name;
               const variableId = codedResponse.variableid;
 
               if (!unitName || !variableId) continue;
 
-              // Find all uncoded sibling responses for the same workspace + unit + variable
+              // Find all sibling responses for the same workspace + unit + variable.
+              // Existing v2 codings are either reported as skipped or overwritten only when explicitly requested.
               const candidates = await this.responseRepository
                 .createQueryBuilder('response')
-                .leftJoin('response.unit', 'unit')
+                .leftJoinAndSelect('response.unit', 'unit')
                 .leftJoin('unit.booklet', 'booklet')
                 .leftJoin('booklet.person', 'person')
-                .select(['response.id', 'response.value'])
+                .select([
+                  'response.id',
+                  'response.value',
+                  'response.variableid',
+                  'response.status_v2',
+                  'unit.id',
+                  'unit.name'
+                ])
                 .where('person.workspace_id = :workspaceId', { workspaceId })
                 .andWhere('person.consider = :consider', { consider: true })
                 .andWhere('response.status_v1 IN (:...statuses)', {
@@ -193,23 +224,47 @@ export class CodingResultsService {
                 })
                 .andWhere('unit.name = :unitName', { unitName })
                 .andWhere('response.variableid = :variableId', { variableId })
-                .andWhere('response.status_v2 IS NULL')
-                .andWhere('response.id != :selfId', { selfId: codedResponse.id })
                 .getMany();
 
-              // Filter candidates by normalized value in-memory (handles IGNORE_CASE / IGNORE_WHITESPACE)
-              for (const candidate of candidates) {
-                if (alreadyUpdatedIds.has(candidate.id)) continue;
-                const candidateNorm = this.codingJobService.normalizeValue(candidate.value, matchingFlags);
-                if (candidateNorm === normalizedValue) {
-                  responsesToUpdate.push({
-                    responseId: candidate.id,
-                    code_v2: update.code_v2,
-                    score_v2: update.score_v2,
-                    status_v2: update.status_v2
-                  });
-                  alreadyUpdatedIds.add(candidate.id);
+              const groups = buildAggregationGroups(
+                candidates.map(candidate => ({
+                  responseId: candidate.id,
+                  unitName: candidate.unit?.name || unitName,
+                  variableId: candidate.variableid,
+                  value: candidate.value,
+                  statusV2: candidate.status_v2
+                })),
+                matchingFlags,
+                aggregationThreshold,
+                derivedVariableMap
+              );
+              const aggregationGroup = groups.find(group => (
+                group.responses.some(candidate => candidate.responseId === codedResponse.id)
+              ));
+
+              if (!aggregationGroup || aggregationGroup.responses.length < aggregationThreshold) {
+                continue;
+              }
+
+              for (const candidate of aggregationGroup.responses) {
+                if (candidate.responseId === codedResponse.id || alreadyUpdatedIds.has(candidate.responseId)) continue;
+
+                if (candidate.statusV2 !== null && candidate.statusV2 !== undefined) {
+                  if (!overwriteExisting) {
+                    skippedAlreadyCodedCount += 1;
+                    alreadyUpdatedIds.add(candidate.responseId);
+                    continue;
+                  }
+                  overwrittenExistingCount += 1;
                 }
+
+                responsesToUpdate.push({
+                  responseId: candidate.responseId,
+                  code_v2: update.code_v2,
+                  score_v2: update.score_v2,
+                  status_v2: update.status_v2
+                });
+                alreadyUpdatedIds.add(candidate.responseId);
               }
             }
 
@@ -223,6 +278,8 @@ export class CodingResultsService {
           success: true,
           updatedResponsesCount: 0,
           skippedReviewCount,
+          skippedAlreadyCodedCount,
+          overwrittenExistingCount,
           messageKey: 'coding-results.apply.success.no-responses'
         };
       }
@@ -266,8 +323,15 @@ export class CodingResultsService {
           success: true,
           updatedResponsesCount: responsesToUpdate.length,
           skippedReviewCount,
+          skippedAlreadyCodedCount,
+          overwrittenExistingCount,
           messageKey: 'coding-results.apply.success.bulk',
-          messageParams: { count: responsesToUpdate.length, skipped: skippedReviewCount }
+          messageParams: {
+            count: responsesToUpdate.length,
+            skipped: skippedReviewCount,
+            skippedAlreadyCoded: skippedAlreadyCodedCount,
+            overwrittenExisting: overwrittenExistingCount
+          }
         };
       } catch (error) {
         await queryRunner.rollbackTransaction();
