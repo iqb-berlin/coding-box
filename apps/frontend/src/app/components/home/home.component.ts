@@ -6,15 +6,23 @@ import { MatInputModule } from '@angular/material/input';
 import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subscription, forkJoin } from 'rxjs';
-import { ActivatedRoute, Router } from '@angular/router';
+import {
+  Subscription, filter, forkJoin, take
+} from 'rxjs';
+import { ActivatedRoute, Params, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppService } from '../../core/services/app.service';
+import { AuthService } from '../../core/services/auth.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
+import {
+  AUTH_QUERY_PARAM_ACCESS_DENIED,
+  AUTH_QUERY_PARAM_AUTH_DATA_FAILED,
+  AUTH_QUERY_PARAM_SESSION_EXPIRED
+} from '../../core/guards/auth-redirect';
 
 @Component({
   selector: 'coding-box-home',
@@ -37,15 +45,17 @@ export class HomeComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
   private workspaceBackendService = inject(WorkspaceBackendService);
+  private authService = inject(AuthService);
 
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
   private isCoderChecked = false;
 
   private authSubscription?: Subscription;
+  private authBootstrapSubscription?: Subscription;
+  private queryParamsSubscription?: Subscription;
 
   ngOnInit(): void {
-    this.appService.refreshAuthData();
     this.authSubscription = this.appService.authData$.subscribe((authData: AuthDataDto) => {
       if (authData) {
         this.authData = authData;
@@ -56,11 +66,29 @@ export class HomeComponent implements OnInit, OnDestroy {
       }
     });
 
-    this.route.queryParams.subscribe(params => {
+    this.authBootstrapSubscription = this.appService.authBootstrapStatus$
+      .pipe(
+        filter(status => status === 'ready'),
+        take(1)
+      )
+      .subscribe(() => this.refreshHomeAuthDataIfNeeded());
+
+    this.queryParamsSubscription = this.route.queryParams.subscribe(params => {
       if (params.error) {
         this.showErrorMessage(params.error);
       }
+      if (params.auth) {
+        this.handleAuthQueryParams(params);
+      }
     });
+  }
+
+  private refreshHomeAuthDataIfNeeded(): void {
+    if (this.authData.userId > 0) {
+      return;
+    }
+
+    this.appService.refreshAuthData();
   }
 
   private checkIfUserIsCoder(userId: number): void {
@@ -112,8 +140,45 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
   }
 
+  private handleAuthQueryParams(params: Params): void {
+    const authReason = String(params.auth);
+    const returnUrl = typeof params.returnUrl === 'string' ? params.returnUrl : undefined;
+
+    switch (authReason) {
+      case AUTH_QUERY_PARAM_SESSION_EXPIRED:
+        if (this.authService.isLoggedIn() === false) {
+          this.appService.requireReAuthentication(returnUrl);
+        }
+        break;
+      case AUTH_QUERY_PARAM_AUTH_DATA_FAILED:
+        this.snackBar.open(
+          'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
+          'Schließen',
+          {
+            duration: 8000,
+            panelClass: ['snackbar-error']
+          }
+        );
+        break;
+      case AUTH_QUERY_PARAM_ACCESS_DENIED:
+        this.snackBar.open(
+          'Sie haben keinen Zugriff auf diesen Bereich.',
+          'Schließen',
+          {
+            duration: 5000,
+            panelClass: ['snackbar-error']
+          }
+        );
+        break;
+      default:
+        break;
+    }
+  }
+
   ngOnDestroy(): void {
     this.authSubscription?.unsubscribe();
+    this.authBootstrapSubscription?.unsubscribe();
+    this.queryParamsSubscription?.unsubscribe();
   }
 
   protected readonly Number = Number;

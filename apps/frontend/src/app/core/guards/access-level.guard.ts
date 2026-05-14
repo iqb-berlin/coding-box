@@ -7,9 +7,7 @@ import {
 } from '@angular/router';
 import { inject } from '@angular/core';
 import {
-  catchError,
   firstValueFrom,
-  of,
   filter,
   timeout
 } from 'rxjs';
@@ -17,6 +15,11 @@ import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import { AppService } from '../services/app.service';
+import {
+  createAccessDeniedUrlTree,
+  createAuthDataFailedUrlTree,
+  createReAuthenticationUrlTree
+} from './auth-redirect';
 
 /**
  * Guard factory that creates a route guard checking for minimum access level
@@ -29,15 +32,15 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
     state: RouterStateSnapshot,
     authData: AuthGuardData
   ): Promise<boolean | UrlTree> => {
+    const appService = inject(AppService);
+    const router = inject(Router);
     const { authenticated } = authData;
     if (!authenticated) {
-      return false;
+      return createReAuthenticationUrlTree(router, state.url);
     }
 
     const authService = inject(AuthService);
     const userService = inject(UserService);
-    const appService = inject(AppService);
-    const router = inject(Router);
 
     // Check if user is system admin (bypass access level check)
     const userRoles = authService.getRoles();
@@ -51,7 +54,7 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
     // Get workspace ID from route params
     const workspaceId = route.paramMap.get('ws') || route.paramMap.get('workspace_id');
     if (!workspaceId) {
-      return false;
+      return createAccessDeniedUrlTree(router, state.url);
     }
 
     try {
@@ -66,16 +69,14 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
 
       // Fetch workspace users with access levels
       const workspaceUsers = await firstValueFrom(
-        userService.getUsers(Number(workspaceId)).pipe(
-          catchError(() => of([]))
-        )
+        userService.getUsers(Number(workspaceId))
       );
 
       // Find current user in workspace users list by ID
       const currentUser = workspaceUsers.find(wu => wu.id === currentUserId);
 
       if (!currentUser) {
-        return false;
+        return createAccessDeniedUrlTree(router, state.url);
       }
 
       const userAccessLevel = currentUser.accessLevel || 0;
@@ -96,9 +97,9 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
       }
 
       // No sufficient access: redirect to home
-      return router.createUrlTree(['/']);
+      return createAccessDeniedUrlTree(router, state.url);
     } catch (error) {
-      return false;
+      return createAuthDataFailedUrlTree(router, state.url);
     }
   };
 
