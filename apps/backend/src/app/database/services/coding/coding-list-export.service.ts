@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Response } from 'express';
+import { Readable } from 'stream';
 import { CodingListService, CodingItem } from './coding-list.service';
 
 @Injectable()
@@ -10,6 +11,48 @@ export class CodingListExportService {
     private codingListService: CodingListService
   ) { }
 
+  private pipeExportStream(
+    stream: Readable,
+    res: Response,
+    context: string
+  ): Promise<void> {
+    return new Promise(resolve => {
+      let settled = false;
+
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
+      stream.once('error', (error: Error) => {
+        this.logger.error(`${context}: ${error.message}`, error.stack);
+
+        if (!res.destroyed && !res.writableEnded) {
+          if (!res.headersSent) {
+            res.removeHeader('Content-Length');
+            res.removeHeader('Content-Disposition');
+            res.status(500).json({ error: 'Export failed' });
+          } else {
+            res.end();
+          }
+        }
+
+        settle();
+      });
+
+      res.once('finish', settle);
+      res.once('close', () => {
+        if (!settled && !res.writableEnded) {
+          stream.destroy();
+        }
+        settle();
+      });
+      stream.pipe(res);
+    });
+  }
+
   async exportCodingListAsCsv(
     workspaceId: number,
     authToken: string,
@@ -17,25 +60,42 @@ export class CodingListExportService {
     res: Response,
     trainingRequired?: boolean
   ): Promise<void> {
-    const csvStream = await this.codingListService.getCodingListCsvStream(
-      workspaceId,
-      authToken || '',
-      serverUrl || '',
-      undefined,
-      trainingRequired
-    );
+    try {
+      const csvStream = await this.codingListService.getCodingListCsvStream(
+        workspaceId,
+        authToken || '',
+        serverUrl || '',
+        undefined,
+        trainingRequired
+      );
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-list-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="coding-list-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv"`
+      );
 
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
+      // Excel compatibility: UTF-8 BOM
+      res.write('\uFEFF');
+      await this.pipeExportStream(
+        csvStream,
+        res,
+        `Error streaming coding list export for workspace ${workspaceId}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error preparing coding list export for workspace ${workspaceId}: ${error.message}`,
+        error.stack
+      );
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Export failed' });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 
   async exportCodingListAsExcel(

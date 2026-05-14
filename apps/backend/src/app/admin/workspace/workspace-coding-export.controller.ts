@@ -19,6 +19,7 @@ import {
   ApiBody
 } from '@nestjs/swagger';
 import { Response, Request } from 'express';
+import { Readable } from 'stream';
 import {
   JobQueueService,
   ExportJobData,
@@ -42,6 +43,48 @@ export class WorkspaceCodingExportController {
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
+
+  private pipeExportStream(
+    stream: Readable,
+    res: Response,
+    context: string
+  ): Promise<void> {
+    return new Promise(resolve => {
+      let settled = false;
+
+      const settle = () => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
+      stream.once('error', (error: Error) => {
+        this.logger.error(`${context}: ${error.message}`, error.stack);
+
+        if (!res.destroyed && !res.writableEnded) {
+          if (!res.headersSent) {
+            res.removeHeader('Content-Length');
+            res.removeHeader('Content-Disposition');
+            res.status(500).json({ error: 'Export failed' });
+          } else {
+            res.end();
+          }
+        }
+
+        settle();
+      });
+
+      res.once('finish', settle);
+      res.once('close', () => {
+        if (!settled && !res.writableEnded) {
+          stream.destroy();
+        }
+        settle();
+      });
+      stream.pipe(res);
+    });
+  }
 
   @Get(':workspace_id/coding/coding-list')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -266,27 +309,44 @@ export class WorkspaceCodingExportController {
                    includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
-      workspace_id,
-      version,
-      authToken,
-      serverUrl,
-      includeReplayUrls,
-      undefined,
-      includeResponseValues
-    );
+    try {
+      const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
+        workspace_id,
+        version,
+        authToken,
+        serverUrl,
+        includeReplayUrls,
+        undefined,
+        includeResponseValues
+      );
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="coding-results-${version}-${new Date()
-        .toISOString()
-        .slice(0, 10)}.csv"`
-    );
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="coding-results-${version}-${new Date()
+          .toISOString()
+          .slice(0, 10)}.csv"`
+      );
 
-    // Excel compatibility: UTF-8 BOM
-    res.write('\uFEFF');
-    csvStream.pipe(res);
+      // Excel compatibility: UTF-8 BOM
+      res.write('\uFEFF');
+      await this.pipeExportStream(
+        csvStream,
+        res,
+        `Error streaming coding results export for workspace ${workspace_id}, version ${version}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Error preparing coding results export for workspace ${workspace_id}, version ${version}: ${error.message}`,
+        error.stack
+      );
+
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Export failed' });
+      } else if (!res.writableEnded) {
+        res.end();
+      }
+    }
   }
 
   @Get(':workspace_id/coding/results-by-version/excel')
@@ -1140,7 +1200,11 @@ export class WorkspaceCodingExportController {
       res.setHeader('Content-Length', metadata.fileSize);
 
       const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      await this.pipeExportStream(
+        fileStream,
+        res,
+        `Error streaming downloaded export ${jobId} for workspace ${workspace_id}`
+      );
     } catch (error) {
       this.logger.error(
         `Error downloading export: ${error.message}`,
