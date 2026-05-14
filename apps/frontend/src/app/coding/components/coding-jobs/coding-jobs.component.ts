@@ -23,6 +23,8 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { MatAnchor, MatIconButton, MatButton } from '@angular/material/button';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
@@ -68,6 +70,8 @@ interface SavedCode {
   [key: string]: unknown;
 }
 
+type JobPrimaryAction = 'start' | 'results' | 'apply';
+
 @Component({
   selector: 'coding-box-coding-jobs',
   templateUrl: './coding-jobs.component.html',
@@ -93,6 +97,8 @@ interface SavedCode {
     MatPaginatorModule,
     MatDialogModule,
     MatTooltipModule,
+    MatMenuModule,
+    MatDividerModule,
     MatIconButton,
     MatButton,
     MatCheckbox,
@@ -532,6 +538,52 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     }
 
     return `${progress}% (${codedUnits}/${totalUnits})`;
+  }
+
+  getPrimaryJobAction(job: CodingJob): JobPrimaryAction {
+    if (this.canApplyCodingResults(job)) {
+      return 'apply';
+    }
+
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'results';
+    }
+
+    return 'start';
+  }
+
+  canApplyCodingResults(job: CodingJob): boolean {
+    return this.canApplyResults &&
+      job.status === 'completed' &&
+      !job.training?.id &&
+      !job.training_id;
+  }
+
+  canRestartCodingJob(job: CodingJob): boolean {
+    return (job.totalUnits || 0) > 0 &&
+      (job.openUnits || 0) > 0 &&
+      !job.training_id &&
+      !job.training;
+  }
+
+  getJobActionAriaLabel(action: string, job: CodingJob): string {
+    const jobName = this.getDisplayName(job);
+    switch (action) {
+      case 'start':
+        return `Kodierjob starten: ${jobName}`;
+      case 'results':
+        return `Ergebnisse anzeigen: ${jobName}`;
+      case 'restart':
+        return `Offene Fälle ansehen: ${jobName}`;
+      case 'apply':
+        return `Ergebnisse anwenden: ${jobName}`;
+      case 'delete':
+        return `Kodierjob löschen: ${jobName}`;
+      case 'more':
+        return `Weitere Aktionen: ${jobName}`;
+      default:
+        return `${action}: ${jobName}`;
+    }
   }
 
   startCodingJob(job: CodingJob): void {

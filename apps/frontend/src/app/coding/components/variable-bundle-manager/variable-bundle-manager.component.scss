@@ -45,7 +45,7 @@
 }
 
 .variable-bundle-table {
-  --variable-bundle-table-min-width: 760px;
+  --variable-bundle-table-min-width: 840px;
 
   display: block;
   width: 100%;
@@ -112,8 +112,62 @@ mat-cell {
 }
 
 .mat-column-actions {
-  flex: 0 0 112px;
+  flex: 0 0 192px;
   justify-content: flex-start;
+  overflow-wrap: normal;
+}
+
+.bundle-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+button.primary-row-action[mat-stroked-button] {
+  flex: 0 0 124px;
+  justify-content: flex-start;
+  min-height: 34px;
+  line-height: 1.2;
+  border-radius: 6px;
+  padding: 0 8px;
+  white-space: nowrap;
+  max-width: 124px;
+  overflow-wrap: normal;
+  word-break: keep-all;
+
+  mat-icon {
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    margin-right: 4px;
+  }
+
+  span {
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: keep-all;
+  }
+
+  &:hover {
+    transform: none;
+  }
+}
+
+.more-actions-button {
+  flex: 0 0 auto;
+}
+
+.danger-menu-item {
+  color: #b3261e;
+
+  mat-icon {
+    color: #b3261e;
+  }
 }
 
 .loading-container {
@@ -178,7 +232,7 @@ mat-cell {
   }
 
   .variable-bundle-table {
-    --variable-bundle-table-min-width: 520px;
+    --variable-bundle-table-min-width: 620px;
   }
 }
 

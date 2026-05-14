@@ -1,7 +1,7 @@
 import {
   Component, OnDestroy, OnInit, inject, ViewChild
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
@@ -117,6 +117,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private dialog = inject(MatDialog);
   private router = inject(Router);
+  private document = inject(DOCUMENT);
   private destroy$ = new Subject<void>();
 
   validationProgress: ValidationProgress | null = null;
@@ -850,6 +851,155 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
   }
 
+  openCreateJobDefinition(): void {
+    if (this.codingJobDefinitionsComponent) {
+      this.codingJobDefinitionsComponent.createDefinition();
+      return;
+    }
+
+    this.showError('Die Jobdefinitionen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+  }
+
+  refreshManualCodingPlanning(): void {
+    this.refreshAllStatistics();
+    this.loadResponseAnalysis();
+    this.reloadCodingJobsList();
+
+    if (this.codingJobDefinitionsComponent) {
+      this.codingJobDefinitionsComponent.refresh();
+    }
+  }
+
+  isAnyPlanningDataLoading(): boolean {
+    return this.isLoadingResponseAnalysis ||
+      this.isLoadingCodingProgress ||
+      this.isLoadingVariableCoverage ||
+      this.isLoadingCaseCoverage ||
+      this.isLoadingMatchingMode;
+  }
+
+  getOpenCodingCases(): number {
+    if (this.codingProgressOverview) {
+      return Math.max(
+        0,
+        this.codingProgressOverview.totalCasesToCode -
+        this.codingProgressOverview.completedCases
+      );
+    }
+
+    return this.appliedResultsOverview?.remainingResponses || 0;
+  }
+
+  getVariableCoveragePercentage(): number {
+    return this.variableCoverageOverview?.coveragePercentage || 0;
+  }
+
+  getAppliedResultsPercentage(): number {
+    return this.appliedResultsOverview?.completionPercentage || 0;
+  }
+
+  scrollToSection(sectionId: string): void {
+    this.document.getElementById(sectionId)?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    });
+  }
+
+  hasPreparationWarnings(): boolean {
+    return this.hasUncodedEmptyResponses() ||
+      (this.responseAnalysis?.duplicateValues?.total || 0) > 0;
+  }
+
+  isPreparationReady(): boolean {
+    return !!this.responseAnalysis &&
+      !this.responseAnalysis.isCalculating &&
+      !this.hasPreparationWarnings();
+  }
+
+  hasPlanningWarnings(): boolean {
+    return (this.variableCoverageOverview?.conflictedVariables || 0) > 0 ||
+      (this.variableCoverageOverview?.missingVariables || 0) > 0 ||
+      (this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0;
+  }
+
+  isPlanningReady(): boolean {
+    return !!this.variableCoverageOverview &&
+      !!this.caseCoverageOverview &&
+      !this.hasPlanningWarnings();
+  }
+
+  hasExecutionOpenWork(): boolean {
+    return this.getOpenCodingCases() > 0;
+  }
+
+  isCompletionComplete(): boolean {
+    return this.getAppliedResultsPercentage() >= 100 &&
+      this.getOpenCodingCases() === 0;
+  }
+
+  getPlanningStatusClass(): string {
+    if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
+      return 'status-warning';
+    }
+
+    if ((this.variableCoverageOverview?.missingVariables || 0) > 0 ||
+        (this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
+      return 'status-attention';
+    }
+
+    if (this.getOpenCodingCases() === 0 && this.getAppliedResultsPercentage() >= 100) {
+      return 'status-complete';
+    }
+
+    return 'status-ready';
+  }
+
+  getPlanningStatusIcon(): string {
+    switch (this.getPlanningStatusClass()) {
+      case 'status-warning':
+        return 'warning';
+      case 'status-attention':
+        return 'assignment_late';
+      case 'status-complete':
+        return 'check_circle';
+      default:
+        return 'route';
+    }
+  }
+
+  getPlanningStatusTitle(): string {
+    switch (this.getPlanningStatusClass()) {
+      case 'status-warning':
+        return 'Konflikte prüfen';
+      case 'status-attention':
+        return 'Planung noch unvollständig';
+      case 'status-complete':
+        return 'Manuelle Kodierung abgeschlossen';
+      default:
+        return 'Bereit für die Planung';
+    }
+  }
+
+  getPlanningStatusDescription(): string {
+    if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
+      return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
+    }
+
+    if ((this.variableCoverageOverview?.missingVariables || 0) > 0) {
+      return `${this.variableCoverageOverview?.missingVariables || 0} Variablen sind noch keiner Jobdefinition zugeordnet.`;
+    }
+
+    if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
+      return `${this.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs verteilt.`;
+    }
+
+    if (this.getOpenCodingCases() === 0 && this.getAppliedResultsPercentage() >= 100) {
+      return 'Alle manuellen Kodierungen sind abgeschlossen und final übernommen.';
+    }
+
+    return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
+  }
+
   private refreshAggregationDependentViews(): void {
     this.loadResponseAnalysis();
     this.loadVariableCoverageOverview();
@@ -1509,7 +1659,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const uncodedCount = this.responseAnalysis.emptyResponses.items.filter(item => !item.isCoded).length;
+    const uncodedCount = this.getUncodedCount();
     if (uncodedCount === 0) {
       return;
     }

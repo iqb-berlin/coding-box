@@ -20,6 +20,8 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import {
   MatDialog, MatDialogModule
 } from '@angular/material/dialog';
@@ -60,7 +62,9 @@ interface TrainingNameFilterOption {
     MatSnackBarModule,
     MatFormFieldModule,
     MatSelectModule,
-    MatTooltipModule
+    MatTooltipModule,
+    MatMenuModule,
+    MatDividerModule
   ],
   templateUrl: './coder-trainings-list.component.html',
   styleUrls: ['./coder-trainings-list.component.scss']
@@ -191,6 +195,10 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
     return `ID ${training.id} · ${this.getTrainingOptionMeta(training)}`;
   }
 
+  getTrainingActionTarget(training: CoderTraining): string {
+    return `${training.label} (${this.getTrainingTableMeta(training)})`;
+  }
+
   isDuplicateTrainingLabel(training: CoderTraining): boolean {
     return this.duplicateTrainingLabels.has(normalizeTrainingLabel(training.label));
   }
@@ -211,6 +219,24 @@ export class CoderTrainingsListComponent implements OnInit, OnDestroy {
         selectedTraining: training
       }
     });
+  }
+
+  getTrainingActionAriaLabel(action: 'details' | 'compare' | 'edit' | 'delete' | 'more', training: CoderTraining): string {
+    const target = this.getTrainingActionTarget(training);
+    switch (action) {
+      case 'details':
+        return `Details anzeigen: ${target}`;
+      case 'compare':
+        return `Ergebnisse vergleichen: ${target}`;
+      case 'edit':
+        return `Schulung bearbeiten: ${target}`;
+      case 'delete':
+        return `Schulung löschen: ${target}`;
+      case 'more':
+        return `Weitere Aktionen: ${target}`;
+      default:
+        return target;
+    }
   }
 
   getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
