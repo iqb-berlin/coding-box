@@ -49,6 +49,37 @@ describe('DistributedCodingService', () => {
     req.flush(mockRes);
   });
 
+  it('should include case ordering mode in distribution calculation payload', () => {
+    const mockRes = {
+      distribution: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: []
+    };
+
+    service.calculateDistribution(
+      1,
+      [{ unitName: 'UNIT', variableId: 'VAR' }],
+      [{ id: 7, name: 'Coder', username: 'Coder' }],
+      2,
+      undefined,
+      [],
+      'alternating',
+      20
+    ).subscribe(res => {
+      expect(res).toEqual(mockRes);
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/calculate-distribution`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual(expect.objectContaining({
+      caseOrderingMode: 'alternating',
+      maxCodingCases: 20
+    }));
+    req.flush(mockRes);
+  });
+
   it('should create distributed coding jobs', () => {
     const mockRes = {
       success: true,

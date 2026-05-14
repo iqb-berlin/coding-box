@@ -88,7 +88,8 @@ export class DistributedCodingService {
     selectedCoders: { id: number; name: string; username: string }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
-    selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[],
+    selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
+    caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
@@ -103,13 +104,15 @@ export class DistributedCodingService {
       selectedCoders: { id: number; name: string; username: string }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
     } = {
       selectedVariables,
       selectedVariableBundles,
       selectedCoders,
       doubleCodingAbsolute,
-      doubleCodingPercentage
+      doubleCodingPercentage,
+      caseOrderingMode
     };
 
     if (maxCodingCases !== undefined && maxCodingCases !== null) {

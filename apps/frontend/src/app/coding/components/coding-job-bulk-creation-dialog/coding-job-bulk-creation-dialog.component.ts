@@ -152,6 +152,7 @@ export class CodingJobBulkCreationDialogComponent {
         this.data.doubleCodingAbsolute,
         this.data.doubleCodingPercentage,
         this.data.selectedVariableBundles,
+        this.data.caseOrderingMode,
         this.data.maxCodingCases
       ));
 

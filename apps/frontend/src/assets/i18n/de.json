@@ -1572,7 +1572,8 @@
         "absolute": "z.B. 10 Fälle",
         "percentage": "z.B. 25.5 für 25.5%"
       },
-      "percentage-hint": "Der Prozentsatz muss zwischen 0 und 100 liegen"
+      "percentage-hint": "Der Prozentsatz muss zwischen 0 und 100 liegen",
+      "value-error": "Die Doppelkodierung muss mindestens 0 betragen; Prozentwerte dürfen höchstens 100 sein"
     },
     "case-ordering-mode": {
       "title": "Sortierung der Kodierfälle",
@@ -1694,10 +1695,10 @@
       }
     },
     "job-count": {
-      "label": "Erstellte Kodieraufträge:",
-      "none": "Mindestens eine Variable muss ausgewählt werden",
+      "label": "Geplante Kodieraufträge:",
+      "none": "Mindestens eine Variable oder ein Variablenbündel und ein Kodierer müssen ausgewählt werden",
       "single": "Ein Kodierauftrag wird erstellt",
-      "multiple": "Multiple Kodieraufträge werden erstellt"
+      "multiple": "Mehrere Kodieraufträge werden erstellt"
     }
   },
   "coding-job-definitions": {
