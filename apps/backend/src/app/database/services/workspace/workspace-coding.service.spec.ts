@@ -31,6 +31,14 @@ import {
 import { ExportValidationResultsService } from '../validation';
 import { BullJobManagementService } from '../jobs';
 
+jest.mock('./workspace-files.service', () => ({
+  WorkspaceFilesService: jest.fn()
+}));
+
+jest.mock('./workspace-xml-schema-validation.service', () => ({
+  WorkspaceXmlSchemaValidationService: jest.fn()
+}));
+
 jest.mock('@iqb/responses', () => ({
   CodingFactory: {
     code: jest.fn()
@@ -646,6 +654,8 @@ describe('WorkspaceCodingService', () => {
         success: true,
         updatedResponsesCount: 50,
         skippedReviewCount: 5,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
         messageKey: 'Results applied successfully'
       };
 
@@ -1263,6 +1273,8 @@ describe('WorkspaceCodingService', () => {
           jobsProcessed: 5,
           totalUpdatedResponses: 100,
           totalSkippedReview: 10,
+          totalSkippedAlreadyCoded: 0,
+          totalOverwrittenExisting: 0,
           message: 'Successfully applied coding results',
           results: [
             {
@@ -1274,6 +1286,8 @@ describe('WorkspaceCodingService', () => {
                 success: true,
                 updatedResponsesCount: 20,
                 skippedReviewCount: 2,
+                skippedAlreadyCodedCount: 0,
+                overwrittenExistingCount: 0,
                 message: 'Applied'
               }
             }

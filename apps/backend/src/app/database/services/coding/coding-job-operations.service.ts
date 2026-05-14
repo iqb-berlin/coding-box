@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CodingJob } from '../../entities/coding-job.entity';
-import { CodingResultsService } from './coding-results.service';
+import {
+  ApplyCodingResultsOptions,
+  ApplyCodingResultsResult,
+  CodingResultsService
+} from './coding-results.service';
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
 
@@ -20,17 +24,13 @@ export class CodingJobOperationsService {
 
   async applyCodingResults(
     workspaceId: number,
-    codingJobId: number
-  ): Promise<{
-      success: boolean;
-      updatedResponsesCount: number;
-      skippedReviewCount: number;
-      messageKey: string;
-      messageParams?: Record<string, unknown>;
-    }> {
+    codingJobId: number,
+    options: ApplyCodingResultsOptions = {}
+  ): Promise<ApplyCodingResultsResult> {
     const result = await this.codingResultsService.applyCodingResults(
       workspaceId,
-      codingJobId
+      codingJobId,
+      options
     );
 
     if (result.success && result.updatedResponsesCount > 0) {
@@ -48,6 +48,8 @@ export class CodingJobOperationsService {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
@@ -58,6 +60,8 @@ export class CodingJobOperationsService {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;
@@ -80,12 +84,16 @@ export class CodingJobOperationsService {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }> = [];
 
     let totalUpdatedResponses = 0;
     let totalSkippedReview = 0;
+    let totalSkippedAlreadyCoded = 0;
+    let totalOverwrittenExisting = 0;
     let jobsProcessed = 0;
 
     for (const job of codingJobs) {
@@ -112,6 +120,8 @@ export class CodingJobOperationsService {
             success: applyResult.success,
             updatedResponsesCount: applyResult.updatedResponsesCount,
             skippedReviewCount: applyResult.skippedReviewCount,
+            skippedAlreadyCodedCount: applyResult.skippedAlreadyCodedCount,
+            overwrittenExistingCount: applyResult.overwrittenExistingCount,
             message: applyResult.messageKey || 'Apply result'
           }
         });
@@ -119,6 +129,8 @@ export class CodingJobOperationsService {
         if (applyResult.success) {
           totalUpdatedResponses += applyResult.updatedResponsesCount;
           totalSkippedReview += applyResult.skippedReviewCount;
+          totalSkippedAlreadyCoded += applyResult.skippedAlreadyCodedCount;
+          totalOverwrittenExisting += applyResult.overwrittenExistingCount;
           jobsProcessed += 1;
         }
       } catch (error) {
@@ -134,6 +146,8 @@ export class CodingJobOperationsService {
             success: false,
             updatedResponsesCount: 0,
             skippedReviewCount: 0,
+            skippedAlreadyCodedCount: 0,
+            overwrittenExistingCount: 0,
             message: `Error: ${error.message}`
           }
         });
@@ -150,6 +164,8 @@ export class CodingJobOperationsService {
       jobsProcessed,
       totalUpdatedResponses,
       totalSkippedReview,
+      totalSkippedAlreadyCoded,
+      totalOverwrittenExisting,
       message,
       results
     };

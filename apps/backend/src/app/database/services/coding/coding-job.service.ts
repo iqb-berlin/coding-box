@@ -27,6 +27,7 @@ import {
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { buildAggregationGroups } from './aggregation-metrics.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -86,6 +87,14 @@ interface SlimResponse {
   personCode: string;
   personGroup: string;
   variableBundleId?: number;
+}
+
+export interface CodingJobAggregationSettings {
+  aggregationEnabled: boolean;
+  aggregationThreshold: number | null;
+  responseMatchingFlags: ResponseMatchingFlag[];
+  aggregationSettingsVersion: number | null;
+  fromJobSnapshot: boolean;
 }
 
 @Injectable()
@@ -365,13 +374,18 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     return this.connection.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
+      const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
       const codingJob = codingJobRepo.create({
         workspace_id: workspaceId,
         name: createCodingJobDto.name,
         description: createCodingJobDto.description,
         status: createCodingJobDto.status || 'pending',
         missings_profile_id: createCodingJobDto.missings_profile_id,
-        job_definition_id: createCodingJobDto.jobDefinitionId
+        job_definition_id: createCodingJobDto.jobDefinitionId,
+        aggregation_enabled: aggregationSettings.aggregationEnabled,
+        aggregation_threshold: aggregationSettings.aggregationThreshold,
+        response_matching_flags: aggregationSettings.responseMatchingFlags,
+        aggregation_settings_version: aggregationSettings.aggregationSettingsVersion
       });
 
       const savedCodingJob = await codingJobRepo.save(codingJob);
@@ -1201,30 +1215,25 @@ export class CodingJobService {
     }
 
     // Get coding job to find workspace ID
-    const codingJob = await this.codingJobRepository.findOne({ where: { id: codingJobId } });
+    const codingJobRepo = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
+    const codingJob = await codingJobRepo.findOne({ where: { id: codingJobId } });
     if (!codingJob) {
       throw new Error(`Coding job ${codingJobId} not found`);
     }
     const workspaceId = codingJob.workspace_id;
 
-    // Get aggregation threshold and matching flags
-    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const aggregationSettings = await this.getAggregationSettingsForCodingJob(codingJob);
+    const aggregationThreshold = aggregationSettings.aggregationThreshold;
 
     // If aggregation is enabled, filter to unique cases using slim-compatible logic
-    if (aggregationThreshold !== null && aggregationThreshold >= 2) {
+    if (aggregationSettings.aggregationEnabled && aggregationThreshold !== null && aggregationThreshold >= 2) {
       const originalCount = responses.length;
-      const matchingFlags = await this.getResponseMatchingMode(workspaceId);
-      const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-      const filteredResponses: SlimResponse[] = [];
-      aggregatedGroups.forEach(group => {
-        if (group.responses.length >= aggregationThreshold) {
-          group.responses.sort((a, b) => a.id - b.id);
-          filteredResponses.push(group.responses[0]);
-        } else {
-          filteredResponses.push(...group.responses);
-        }
-      });
-      responses = filteredResponses;
+      responses = await this.filterSlimResponsesForAggregation(
+        workspaceId,
+        responses,
+        aggregationThreshold,
+        aggregationSettings.responseMatchingFlags
+      );
       this.logger.log(
         `Aggregation enabled (threshold: ${aggregationThreshold}). ` +
         `Reduced from ${originalCount} to ${responses.length} cases`
@@ -1331,6 +1340,7 @@ export class CodingJobService {
   ): Promise<CodingJob> {
     return this.connection.transaction(async manager => {
       const codingJobRepo = manager.getRepository(CodingJob);
+      const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
       const codingJob = codingJobRepo.create({
         workspace_id: workspaceId,
         name: createCodingJobDto.name,
@@ -1338,7 +1348,11 @@ export class CodingJobService {
         status: createCodingJobDto.status || 'pending',
         missings_profile_id: createCodingJobDto.missings_profile_id,
         job_definition_id: createCodingJobDto.jobDefinitionId,
-        case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous'
+        case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous',
+        aggregation_enabled: aggregationSettings.aggregationEnabled,
+        aggregation_threshold: aggregationSettings.aggregationThreshold,
+        response_matching_flags: aggregationSettings.responseMatchingFlags,
+        aggregation_settings_version: aggregationSettings.aggregationSettingsVersion
       });
 
       const savedCodingJob = await codingJobRepo.save(codingJob);
@@ -1503,6 +1517,56 @@ export class CodingJobService {
     return coderCases;
   }
 
+  async getCurrentAggregationSettingsSnapshot(workspaceId: number): Promise<CodingJobAggregationSettings> {
+    const [aggregationThreshold, responseMatchingFlags] = await Promise.all([
+      this.getAggregationThreshold(workspaceId),
+      this.getResponseMatchingMode(workspaceId)
+    ]);
+    const aggregationEnabled =
+      aggregationThreshold !== null && !responseMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION);
+
+    return {
+      aggregationEnabled,
+      aggregationThreshold,
+      responseMatchingFlags,
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: false
+    };
+  }
+
+  async getAggregationSettingsForCodingJob(codingJob: CodingJob): Promise<CodingJobAggregationSettings> {
+    if (codingJob.aggregation_settings_version !== null && codingJob.aggregation_settings_version !== undefined) {
+      const responseMatchingFlags = this.normalizeResponseMatchingFlags(
+        codingJob.response_matching_flags as ResponseMatchingFlag[] | undefined | null
+      );
+      const aggregationThreshold = codingJob.aggregation_enabled ? codingJob.aggregation_threshold : null;
+
+      return {
+        aggregationEnabled:
+          codingJob.aggregation_enabled &&
+          aggregationThreshold !== null &&
+          !responseMatchingFlags.includes(ResponseMatchingFlag.NO_AGGREGATION),
+        aggregationThreshold,
+        responseMatchingFlags: codingJob.aggregation_enabled ?
+          responseMatchingFlags :
+          [ResponseMatchingFlag.NO_AGGREGATION],
+        aggregationSettingsVersion: codingJob.aggregation_settings_version,
+        fromJobSnapshot: true
+      };
+    }
+
+    return this.getCurrentAggregationSettingsSnapshot(codingJob.workspace_id);
+  }
+
+  async getDerivedVariableMapForAggregation(workspaceId: number): Promise<Map<string, Set<string>>> {
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    const derivedVariableSets = new Map<string, Set<string>>();
+    derivedVariableMap.forEach((vars, unitNameKey) => {
+      derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
+    });
+    return derivedVariableSets;
+  }
+
   async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
     const settingKey = `workspace-${workspaceId}-response-matching-mode`;
     const [setting, aggregationThreshold] = await Promise.all([
@@ -1597,6 +1661,37 @@ export class CodingJobService {
       responses: groupResponses,
       totalResponses: groupResponses.length
     }));
+  }
+
+  private async filterSlimResponsesForAggregation(
+    workspaceId: number,
+    responses: SlimResponse[],
+    aggregationThreshold: number,
+    matchingFlags: ResponseMatchingFlag[]
+  ): Promise<SlimResponse[]> {
+    const derivedVariableMap = await this.getDerivedVariableMapForAggregation(workspaceId);
+    const groups = buildAggregationGroups(
+      responses.map(response => ({
+        ...response,
+        responseId: response.id,
+        variableId: response.variableid
+      })),
+      matchingFlags,
+      aggregationThreshold,
+      derivedVariableMap
+    );
+    const filteredResponses: SlimResponse[] = [];
+
+    for (const group of groups) {
+      if (group.responses.length >= aggregationThreshold) {
+        group.responses.sort((a, b) => a.id - b.id);
+        filteredResponses.push(group.responses[0]);
+      } else {
+        filteredResponses.push(...group.responses);
+      }
+    }
+
+    return filteredResponses;
   }
 
   async getResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<ResponseEntity[]> {

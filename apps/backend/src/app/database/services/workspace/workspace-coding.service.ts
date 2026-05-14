@@ -383,6 +383,8 @@ export class WorkspaceCodingService {
       success: boolean;
       updatedResponsesCount: number;
       skippedReviewCount: number;
+      skippedAlreadyCodedCount: number;
+      overwrittenExistingCount: number;
       messageKey: string;
       messageParams?: Record<string, unknown>;
     }> {
@@ -468,6 +470,8 @@ export class WorkspaceCodingService {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
@@ -478,6 +482,8 @@ export class WorkspaceCodingService {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;

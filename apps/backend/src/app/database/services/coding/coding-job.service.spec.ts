@@ -95,6 +95,9 @@ describe('CodingJobService', () => {
         testletIgnoredUnits: []
       })
     };
+    const workspaceFilesService = {
+      getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -108,7 +111,7 @@ describe('CodingJobService', () => {
       settingRepository as never,
       connection as never,
       cacheService as never,
-      {} as never,
+      workspaceFilesService as never,
       workspaceExclusionService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());

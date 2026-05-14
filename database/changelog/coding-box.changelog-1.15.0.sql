@@ -129,3 +129,17 @@ CREATE TABLE IF NOT EXISTS "public"."workspace_test_results_revision" (
 );
 
 -- rollback DROP TABLE IF EXISTS "public"."workspace_test_results_revision";
+
+-- changeset jurei733:8
+-- comment: Store aggregation settings snapshots on coding jobs
+
+ALTER TABLE "public"."coding_job"
+  ADD COLUMN IF NOT EXISTS "aggregation_enabled" BOOLEAN NOT NULL DEFAULT TRUE,
+  ADD COLUMN IF NOT EXISTS "aggregation_threshold" INTEGER,
+  ADD COLUMN IF NOT EXISTS "response_matching_flags" JSONB,
+  ADD COLUMN IF NOT EXISTS "aggregation_settings_version" INTEGER;
+
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "aggregation_settings_version";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "response_matching_flags";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "aggregation_threshold";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "aggregation_enabled";

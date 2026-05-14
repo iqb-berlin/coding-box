@@ -1,5 +1,6 @@
 import {
   Controller,
+  Body,
   Param,
   Post,
   UseGuards
@@ -14,6 +15,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { CodingJobOperationsService } from '../../database/services/coding';
+import { ApplyCodingResultsResult } from '../../database/services/coding/coding-results.service';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')
@@ -49,6 +51,14 @@ export class WorkspaceCodingResultsController {
           type: 'number',
           description: 'Number of responses skipped for manual review'
         },
+        skippedAlreadyCodedCount: {
+          type: 'number',
+          description: 'Number of aggregated sibling responses skipped because a v2 coding already exists'
+        },
+        overwrittenExistingCount: {
+          type: 'number',
+          description: 'Number of existing v2 codings overwritten by explicit request'
+        },
         messageKey: {
           type: 'string',
           description: 'Translation key for the message'
@@ -62,15 +72,12 @@ export class WorkspaceCodingResultsController {
   })
   async applyCodingResults(
     @WorkspaceId() workspace_id: number,
-      @Param('jobId') jobId: number
-  ): Promise<{
-        success: boolean;
-        updatedResponsesCount: number;
-        skippedReviewCount: number;
-        messageKey: string;
-        messageParams?: Record<string, unknown>;
-      }> {
-    return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId);
+      @Param('jobId') jobId: number,
+      @Body('overwriteExisting') overwriteExisting?: boolean
+  ): Promise<ApplyCodingResultsResult> {
+    return this.codingJobOperationsService.applyCodingResults(workspace_id, jobId, {
+      overwriteExisting: overwriteExisting === true
+    });
   }
 
   @Post(':workspace_id/coding/jobs/bulk-apply-results')
@@ -99,6 +106,14 @@ export class WorkspaceCodingResultsController {
           type: 'number',
           description: 'Total number of responses skipped for manual review'
         },
+        totalSkippedAlreadyCoded: {
+          type: 'number',
+          description: 'Total number of aggregated sibling responses skipped because a v2 coding already exists'
+        },
+        totalOverwrittenExisting: {
+          type: 'number',
+          description: 'Total number of existing v2 codings overwritten'
+        },
         message: {
           type: 'string',
           description: 'Summary message of the bulk operation'
@@ -126,6 +141,8 @@ export class WorkspaceCodingResultsController {
                   success: { type: 'boolean' },
                   updatedResponsesCount: { type: 'number' },
                   skippedReviewCount: { type: 'number' },
+                  skippedAlreadyCodedCount: { type: 'number' },
+                  overwrittenExistingCount: { type: 'number' },
                   message: { type: 'string' }
                 }
               }
@@ -140,6 +157,8 @@ export class WorkspaceCodingResultsController {
     jobsProcessed: number;
     totalUpdatedResponses: number;
     totalSkippedReview: number;
+    totalSkippedAlreadyCoded: number;
+    totalOverwrittenExisting: number;
     message: string;
     results: Array<{
       jobId: number;
@@ -150,6 +169,8 @@ export class WorkspaceCodingResultsController {
         success: boolean;
         updatedResponsesCount: number;
         skippedReviewCount: number;
+        skippedAlreadyCodedCount: number;
+        overwrittenExistingCount: number;
         message: string;
       };
     }>;

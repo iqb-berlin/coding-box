@@ -201,6 +201,37 @@ export class CodingJobDto {
   })
     assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
 
+  @ApiProperty({
+    description: 'Whether response aggregation was enabled when this coding job was created',
+    example: true,
+    required: false
+  })
+    aggregationEnabled?: boolean;
+
+  @ApiProperty({
+    description: 'Duplicate aggregation threshold captured when this coding job was created',
+    example: 2,
+    required: false,
+    nullable: true
+  })
+    aggregationThreshold?: number | null;
+
+  @ApiProperty({
+    description: 'Response matching flags captured when this coding job was created',
+    example: ['IGNORE_CASE'],
+    required: false,
+    type: [String]
+  })
+    responseMatchingFlags?: string[] | null;
+
+  @ApiProperty({
+    description: 'Version of the aggregation settings snapshot captured for this coding job',
+    example: 1,
+    required: false,
+    nullable: true
+  })
+    aggregationSettingsVersion?: number | null;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
@@ -225,6 +256,10 @@ export class CodingJobDto {
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     dto.missings_profile_id = entity.missings_profile_id;
+    dto.aggregationEnabled = entity.aggregation_enabled;
+    dto.aggregationThreshold = entity.aggregation_threshold;
+    dto.responseMatchingFlags = entity.response_matching_flags;
+    dto.aggregationSettingsVersion = entity.aggregation_settings_version;
 
     // Map progress data if available
     if (entity.progress !== undefined) {
