@@ -47,8 +47,13 @@ import {
   ApplyDuplicateAggregationDialogComponent,
   ApplyDuplicateAggregationDialogData
 } from './apply-duplicate-aggregation-dialog.component';
+import {
+  ApplyCodingResultsDialogComponent,
+  ApplyCodingResultsDialogResult
+} from '../coding-jobs/apply-coding-results-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { Coder } from '../../models/coder.model';
+import { CodingJob } from '../../models/coding-job.model';
 import {
   AppliedResultsOverview,
   CaseCoverageOverview,
@@ -58,7 +63,11 @@ import {
 import { ExpectedCombinationDto } from '../../../../../../../api-dto/coding/expected-combination.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../../api-dto/coding/external-coding-import-result.dto';
 import { AppService } from '../../../core/services/app.service';
-import { CodingJobBackendService } from '../../services/coding-job-backend.service';
+import {
+  ApplyCodingResultsResponse,
+  BulkApplyCodingResultsResponse,
+  CodingJobBackendService
+} from '../../services/coding-job-backend.service';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import {
   ValidationProgress,
@@ -240,6 +249,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       other: number;
     };
   }) | null = null;
+
+  completedJobsReadyForApply: CodingJob[] = [];
+
+  isLoadingCompletedJobsReadyForApply = false;
+
+  isApplyingCodingResults = false;
+
+  private applyingCodingResultJobIds = new Set<number>();
 
   showCoderTraining = false;
   editTraining: CoderTraining | null = null;
@@ -846,6 +863,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.loadCodingIncompleteVariables();
     this.loadStatusDistribution();
     this.loadStatusDistributionV2();
+    this.loadCompletedJobsReadyForApply();
   }
 
   reloadCodingJobsList(): void {
@@ -913,7 +931,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   hasPreparationWarnings(): boolean {
     return this.hasUncodedEmptyResponses() ||
-      (this.responseAnalysis?.duplicateValues?.total || 0) > 0;
+      this.hasDuplicateFindingsWithoutAggregation;
   }
 
   isPreparationReady(): boolean {
@@ -941,6 +959,184 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   isCompletionComplete(): boolean {
     return this.getAppliedResultsPercentage() >= 100 &&
       this.getOpenCodingCases() === 0;
+  }
+
+  hasCompletedJobsReadyForApply(): boolean {
+    return this.completedJobsReadyForApply.length > 0;
+  }
+
+  canApplyCompletedJobResults(): boolean {
+    return this.codingJobsComponent?.canApplyResults ??
+      (this.appService.authData.isAdmin === true);
+  }
+
+  getCompletionActionTitle(): string {
+    if (this.isCompletionComplete()) {
+      return 'Alle Ergebnisse sind übernommen';
+    }
+
+    if (this.hasCompletedJobsReadyForApply()) {
+      return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
+    }
+
+    if (this.hasExecutionOpenWork()) {
+      return 'Noch nicht alle Kodierfälle sind abgeschlossen';
+    }
+
+    return 'Keine übernahmebereiten Kodierjobs gefunden';
+  }
+
+  getCompletionActionDescription(): string {
+    if (this.isCompletionComplete()) {
+      return 'Die manuelle Kodierung ist abgeschlossen und die Ergebnisse sind final in den Datenbestand übernommen.';
+    }
+
+    if (this.hasCompletedJobsReadyForApply()) {
+      if (!this.canApplyCompletedJobResults()) {
+        return 'Für das Anwenden der Job-Ergebnisse ist eine höhere Berechtigung erforderlich.';
+      }
+
+      return 'Übernehmen Sie die abgeschlossenen Job-Ergebnisse hier direkt in die Antwortdaten.';
+    }
+
+    if (this.hasExecutionOpenWork()) {
+      return 'Schließen Sie die offenen Kodierfälle ab. Danach können die Ergebnisse hier übernommen werden.';
+    }
+
+    return 'Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs, falls Sie gerade einen Job abgeschlossen haben.';
+  }
+
+  getCompletionActionIcon(): string {
+    if (this.isCompletionComplete()) {
+      return 'task_alt';
+    }
+
+    if (this.hasCompletedJobsReadyForApply()) {
+      return 'pending_actions';
+    }
+
+    return this.hasExecutionOpenWork() ? 'edit_note' : 'sync_problem';
+  }
+
+  getCodingJobResultSummary(job: CodingJob): string {
+    const totalUnits = job.totalUnits ?? 0;
+    const codedUnits = job.codedUnits ?? 0;
+
+    if (totalUnits > 0) {
+      return `${codedUnits}/${totalUnits} Ergebnisse kodiert`;
+    }
+
+    return 'Kodierergebnisse vorhanden';
+  }
+
+  isApplyingJobResults(jobId: number): boolean {
+    return this.applyingCodingResultJobIds.has(jobId);
+  }
+
+  applyCompletedJobResults(job: CodingJob): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError('Kein Workspace ausgewählt');
+      return;
+    }
+
+    if (!this.canApplyCompletedJobResults()) {
+      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
+      width: '600px',
+      data: {
+        jobName: job.name,
+        totalResults: job.totalUnits,
+        codedResults: job.codedUnits,
+        hasReviewIssues: job.hasIssues
+      }
+    });
+
+    dialogRef.afterClosed().subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
+      if (!dialogResult) {
+        return;
+      }
+
+      this.isApplyingCodingResults = true;
+      this.applyingCodingResultJobIds.add(job.id);
+      const loadingSnack = this.snackBar.open(
+        `Wende Ergebnisse für Kodierjob "${job.name}" an...`,
+        '',
+        { duration: 3000 }
+      );
+
+      this.codingJobBackendService
+        .applyCodingResults(workspaceId, job.id, {
+          overwriteExisting: dialogResult.overwriteExisting
+        })
+        .pipe(
+          finalize(() => {
+            this.applyingCodingResultJobIds.delete(job.id);
+            this.isApplyingCodingResults =
+              this.applyingCodingResultJobIds.size > 0;
+            loadingSnack.dismiss();
+          }),
+          takeUntil(this.destroy$)
+        )
+        .subscribe({
+          next: result => {
+            if (result.success) {
+              this.showSuccess(this.formatApplyCodingResultsMessage(result));
+              this.refreshAfterApplyingCodingResults();
+              return;
+            }
+
+            this.showError(
+              `Fehler beim Anwenden der Ergebnisse: ${this.translateService.instant(
+                result.messageKey,
+                result.messageParams || {}
+              )}`
+            );
+          },
+          error: error => {
+            this.showError(
+              `Fehler beim Anwenden der Ergebnisse: ${error.message || 'Unbekannter Fehler'}`
+            );
+          }
+        });
+    });
+  }
+
+  applyAllCompletedJobResults(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError('Kein Workspace ausgewählt');
+      return;
+    }
+
+    if (!this.canApplyCompletedJobResults()) {
+      this.showError('Keine Berechtigung zum Anwenden von Job-Ergebnissen.');
+      return;
+    }
+
+    if (!this.hasCompletedJobsReadyForApply()) {
+      this.showError('Keine abgeschlossenen Kodierjobs zum Anwenden gefunden.');
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
+      width: '500px',
+      data: {
+        title: 'Alle abgeschlossenen Ergebnisse anwenden',
+        message: `Möchten Sie die Ergebnisse für ${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) anwenden? Jobs mit Kodierungsproblemen werden übersprungen.`,
+        confirmButtonText: 'Anwenden',
+        cancelButtonText: 'Abbrechen'
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(confirmed => {
+      if (confirmed) {
+        this.performBulkApplyCompletedJobResults(workspaceId);
+      }
+    });
   }
 
   getPlanningStatusClass(): string {
@@ -1328,6 +1524,148 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.appliedResultsOverview = null;
         }
       });
+  }
+
+  private loadCompletedJobsReadyForApply(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.completedJobsReadyForApply = [];
+      return;
+    }
+
+    this.isLoadingCompletedJobsReadyForApply = true;
+    this.codingJobBackendService
+      .getCodingJobs(workspaceId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCompletedJobsReadyForApply = false;
+        })
+      )
+      .subscribe({
+        next: response => {
+          this.completedJobsReadyForApply = (response.data || [])
+            .filter(job => this.isCodingJobReadyForApply(job));
+        },
+        error: () => {
+          this.completedJobsReadyForApply = [];
+        }
+      });
+  }
+
+  private isCodingJobReadyForApply(job: CodingJob): boolean {
+    return job.status === 'completed' &&
+      !job.training?.id &&
+      !job.training_id;
+  }
+
+  private performBulkApplyCompletedJobResults(workspaceId: number): void {
+    this.isApplyingCodingResults = true;
+    const loadingSnack = this.snackBar.open(
+      'Wende Ergebnisse für alle abgeschlossenen Kodierjobs an...',
+      '',
+      { duration: 3000 }
+    );
+
+    this.codingJobBackendService
+      .bulkApplyCodingResults(workspaceId)
+      .pipe(
+        finalize(() => {
+          this.isApplyingCodingResults = false;
+          loadingSnack.dismiss();
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: result => {
+          if (result.success) {
+            this.showSuccess(this.formatBulkApplyCodingResultsMessage(result));
+            this.refreshAfterApplyingCodingResults();
+            return;
+          }
+
+          this.showError(`Fehler bei der Massenanwendung: ${result.message}`);
+        },
+        error: error => {
+          this.showError(
+            `Fehler bei der Massenanwendung: ${error.message || 'Unbekannter Fehler'}`
+          );
+        }
+      });
+  }
+
+  private refreshAfterApplyingCodingResults(): void {
+    this.refreshAllStatistics();
+    this.reloadCodingJobsList();
+  }
+
+  private formatApplyCodingResultsMessage(
+    result: ApplyCodingResultsResponse
+  ): string {
+    const parts = [
+      `Ergebnisse erfolgreich angewendet: ${result.updatedResponsesCount} Antworten aktualisiert`
+    ];
+
+    if (result.skippedAlreadyCodedCount > 0) {
+      parts.push(
+        `Bereits vorhandene Kodierungen nicht überschrieben: ${result.skippedAlreadyCodedCount} Antworten`
+      );
+    }
+
+    if (result.overwrittenExistingCount > 0) {
+      parts.push(
+        `Vorhandene Kodierungen überschrieben: ${result.overwrittenExistingCount} Antworten`
+      );
+    }
+
+    if (result.skippedReviewCount > 0) {
+      parts.push(
+        `Übersprungen (manuelle Prüfung benötigt): ${result.skippedReviewCount} Antworten`
+      );
+    }
+
+    return parts.join('\n');
+  }
+
+  private formatBulkApplyCodingResultsMessage(
+    result: BulkApplyCodingResultsResponse
+  ): string {
+    const skippedCount = result.results.filter(item => item.skipped).length;
+    const failedCount = result.results.filter(
+      item => item.result && !item.result.success
+    ).length;
+    const parts = [
+      `Massenanwendung abgeschlossen: ${result.jobsProcessed} Jobs verarbeitet`,
+      `${result.totalUpdatedResponses} Antworten aktualisiert`
+    ];
+
+    if (result.totalSkippedAlreadyCoded > 0) {
+      parts.push(
+        `${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten`
+      );
+    }
+
+    if (result.totalOverwrittenExisting > 0) {
+      parts.push(
+        `${result.totalOverwrittenExisting} vorhandene Kodierungen überschrieben`
+      );
+    }
+
+    if (result.totalSkippedReview > 0) {
+      parts.push(
+        `${result.totalSkippedReview} Ergebnisse zur manuellen Prüfung übersprungen`
+      );
+    }
+
+    if (skippedCount > 0) {
+      parts.push(`${skippedCount} Jobs übersprungen`);
+    }
+
+    if (failedCount > 0) {
+      parts.push(`${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet`);
+    }
+
+    return parts.join(', ');
   }
 
   onTrainingStart(data: {

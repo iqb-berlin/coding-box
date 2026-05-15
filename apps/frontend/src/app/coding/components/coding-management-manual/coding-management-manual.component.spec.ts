@@ -73,5 +73,53 @@ describe('CodingManagementManualComponent', () => {
     };
 
     expect(component.hasDuplicateFindingsWithoutAggregation).toBe(true);
+    expect(component.hasPreparationWarnings()).toBe(true);
+  });
+
+  it('should not block preparation for duplicates when aggregation is active', () => {
+    component.responseAnalysis = {
+      emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+      duplicateValues: {
+        total: 2,
+        totalResponses: 5,
+        groups: [],
+        isAggregationApplied: true
+      },
+      aggregationSummary: {
+        duplicateGroups: 2,
+        duplicateResponses: 5,
+        collapsedCases: 3,
+        rawCases: 10,
+        effectiveCases: 7,
+        threshold: 2,
+        aggregationActive: true
+      },
+      matchingFlags: [],
+      analysisTimestamp: new Date().toISOString()
+    };
+
+    expect(component.hasDuplicateFindingsWithoutAggregation).toBe(false);
+    expect(component.hasPreparationWarnings()).toBe(false);
+    expect(component.isPreparationReady()).toBe(true);
+  });
+
+  it('should describe completed coding jobs as ready to apply', () => {
+    component.completedJobsReadyForApply = [
+      {
+        id: 1,
+        workspace_id: 1,
+        name: 'Job 1',
+        status: 'completed',
+        created_at: new Date(),
+        updated_at: new Date(),
+        assignedCoders: [],
+        totalUnits: 5,
+        codedUnits: 5
+      }
+    ];
+
+    expect(component.hasCompletedJobsReadyForApply()).toBe(true);
+    expect(component.getCompletionActionTitle()).toContain('1 abgeschlossene');
+    expect(component.getCodingJobResultSummary(component.completedJobsReadyForApply[0])).toBe('5/5 Ergebnisse kodiert');
   });
 });

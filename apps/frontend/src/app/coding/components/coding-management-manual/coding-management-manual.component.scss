@@ -395,6 +395,130 @@
             box-shadow: 0 0 4px rgba(76, 175, 80, 0.3);
           }
         }
+
+        .completion-action-panel {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 16px;
+          margin-top: 18px;
+          padding: 14px;
+          border: 1px solid rgba(25, 118, 210, 0.18);
+          border-radius: 8px;
+          background-color: #eef6ff;
+          color: #17456f;
+
+          &.has-ready-jobs {
+            border-color: rgba(245, 124, 0, 0.35);
+            background-color: #fff8ed;
+            color: #5f4217;
+          }
+
+          &.is-complete {
+            border-color: rgba(76, 175, 80, 0.35);
+            background-color: #edf8ef;
+            color: #255b2b;
+          }
+
+          @media (max-width: 720px) {
+            flex-direction: column;
+          }
+        }
+
+        .completion-action-copy {
+          display: flex;
+          align-items: flex-start;
+          gap: 10px;
+          min-width: 0;
+
+          mat-icon {
+            flex: 0 0 auto;
+          }
+
+          div {
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+          }
+
+          strong {
+            font-size: 14px;
+            font-weight: 700;
+          }
+
+          span {
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-wrap: anywhere;
+          }
+        }
+
+        .completion-action-buttons {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+
+          button {
+            border-radius: 8px;
+            white-space: normal;
+          }
+
+          mat-spinner {
+            margin-right: 8px;
+          }
+        }
+
+        .completed-jobs-apply-list {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-top: 12px;
+          max-height: min(360px, 45vh);
+          overflow-y: auto;
+          padding-right: 4px;
+          scrollbar-gutter: stable;
+          overscroll-behavior: contain;
+        }
+
+        .completed-job-apply-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 12px;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 8px;
+          background-color: rgba(255, 255, 255, 0.75);
+
+          @media (max-width: 640px) {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          button {
+            flex: 0 0 auto;
+            border-radius: 8px;
+            white-space: normal;
+          }
+        }
+
+        .completed-job-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 3px;
+          min-width: 0;
+
+          strong,
+          span {
+            overflow-wrap: anywhere;
+          }
+
+          span {
+            color: #666;
+            font-size: 13px;
+          }
+        }
       }
     }
 

@@ -366,7 +366,7 @@
 
             <!-- Duplicate Values Summary -->
             <div *ngIf="!responseAnalysis.isCalculating" class="analysis-card"
-              [class.has-issues]="responseAnalysis.duplicateValues.total > 0">
+              [class.has-issues]="hasDuplicateFindingsWithoutAggregation">
               <button
                 type="button"
                 class="analysis-header"
@@ -374,7 +374,7 @@
                 [attr.aria-expanded]="showDuplicateValuesDetails"
                 aria-controls="duplicate-values-details">
                 <div class="analysis-icon-title">
-                  <mat-icon [class.warning-icon]="responseAnalysis.duplicateValues.total > 0">
+                  <mat-icon [class.warning-icon]="hasDuplicateFindingsWithoutAggregation">
                     {{ responseAnalysis.duplicateValues.total > 0 ? 'content_copy' : 'check_circle' }}
                   </mat-icon>
                   <div class="analysis-title-content">
@@ -386,7 +386,7 @@
                         {{ 'coding-management-manual.duplicate-aggregation.is-applied' | translate }}
                       </span>
                     </span>
-                    <span class="analysis-count" [class.warning-count]="responseAnalysis.duplicateValues.total > 0">
+                    <span class="analysis-count" [class.warning-count]="hasDuplicateFindingsWithoutAggregation">
                       {{ responseAnalysis.duplicateValues.total }} {{
                       'coding-management-manual.response-analysis.groups'
                       | translate }}
@@ -865,6 +865,68 @@
               </div>
               <div class="coverage-bar">
                 <div class="coverage-fill" [style.width.%]="appliedResultsOverview.completionPercentage"></div>
+              </div>
+
+              <div class="completion-action-panel"
+                [class.is-complete]="isCompletionComplete()"
+                [class.has-ready-jobs]="hasCompletedJobsReadyForApply()">
+                <div class="completion-action-copy">
+                  <mat-icon>{{ getCompletionActionIcon() }}</mat-icon>
+                  <div>
+                    <strong>{{ getCompletionActionTitle() }}</strong>
+                    <span>{{ getCompletionActionDescription() }}</span>
+                  </div>
+                </div>
+                <div class="completion-action-buttons">
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    (click)="refreshManualCodingPlanning()"
+                    [disabled]="isAnyPlanningDataLoading() || isLoadingCompletedJobsReadyForApply || isApplyingCodingResults">
+                    <mat-icon>refresh</mat-icon>
+                    Aktualisieren
+                  </button>
+                  <button
+                    *ngIf="!hasCompletedJobsReadyForApply() && !isCompletionComplete()"
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    (click)="scrollToSection('manual-execution')">
+                    <mat-icon>assignment</mat-icon>
+                    Zu den Kodierjobs
+                  </button>
+                  <button
+                    *ngIf="hasCompletedJobsReadyForApply()"
+                    mat-raised-button
+                    color="accent"
+                    type="button"
+                    (click)="applyAllCompletedJobResults()"
+                    [disabled]="!canApplyCompletedJobResults() || isApplyingCodingResults || isLoadingCompletedJobsReadyForApply">
+                    <mat-icon *ngIf="!isApplyingCodingResults">done_all</mat-icon>
+                    <mat-spinner *ngIf="isApplyingCodingResults" diameter="18"></mat-spinner>
+                    Alle anwenden
+                  </button>
+                </div>
+              </div>
+
+              <div *ngIf="hasCompletedJobsReadyForApply()" class="completed-jobs-apply-list">
+                <div *ngFor="let job of completedJobsReadyForApply" class="completed-job-apply-row">
+                  <div class="completed-job-copy">
+                    <strong>{{ job.name }}</strong>
+                    <span>{{ getCodingJobResultSummary(job) }}</span>
+                  </div>
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    (click)="applyCompletedJobResults(job)"
+                    [disabled]="!canApplyCompletedJobResults() || isApplyingCodingResults || isApplyingJobResults(job.id)">
+                    <mat-icon *ngIf="!isApplyingJobResults(job.id)">input</mat-icon>
+                    <mat-spinner *ngIf="isApplyingJobResults(job.id)" diameter="18"></mat-spinner>
+                    Ergebnisse anwenden
+                  </button>
+                </div>
               </div>
             </div>
           </div>
