@@ -50,6 +50,7 @@ interface JobDefinition {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   createdJobsCount?: number;
+  blockingCreatedJobsCount?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -330,8 +331,46 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return Math.max(0, count);
   }
 
+  getBlockingCreatedJobsCount(definition: JobDefinition): number | undefined {
+    const count = definition.blockingCreatedJobsCount;
+
+    if (typeof count !== 'number' || !Number.isFinite(count)) {
+      return undefined;
+    }
+
+    return Math.max(0, count);
+  }
+
   canCreateCodingJobs(definition: JobDefinition): boolean {
     return definition.status === 'approved' && this.getCreatedJobsCount(definition) === 0;
+  }
+
+  canModifyDefinition(definition: JobDefinition): boolean {
+    return this.getCreatedJobsCount(definition) === 0;
+  }
+
+  canDeleteDefinition(definition: JobDefinition): boolean {
+    return this.getBlockingCreatedJobsCount(definition) === 0;
+  }
+
+  getEditDefinitionLabel(definition: JobDefinition): string {
+    return this.translateService.instant(
+      this.canModifyDefinition(definition) ?
+        'coding-job-definitions.actions.edit' :
+        'coding-job-definitions.actions.view'
+    );
+  }
+
+  getEditDefinitionIcon(definition: JobDefinition): string {
+    return this.canModifyDefinition(definition) ? 'edit' : 'visibility';
+  }
+
+  getEditDefinitionTooltip(definition: JobDefinition): string {
+    if (this.canModifyDefinition(definition)) {
+      return this.translateService.instant('coding-job-definitions.actions.edit');
+    }
+
+    return this.translateService.instant('coding-job-definitions.actions.view-readonly');
   }
 
   getCreateCodingJobsTooltip(definition: JobDefinition): string {
@@ -365,6 +404,24 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     return this.translateService.instant(
       'coding-job-definitions.actions.jobs-created-short',
       { count: createdJobsCount }
+    );
+  }
+
+  getDeleteDefinitionTooltip(definition: JobDefinition): string {
+    if (this.canDeleteDefinition(definition)) {
+      return this.translateService.instant('coding-job-definitions.actions.delete');
+    }
+
+    const blockingCreatedJobsCount = this.getBlockingCreatedJobsCount(definition);
+    if (blockingCreatedJobsCount === undefined) {
+      return this.translateService.instant(
+        'coding-job-definitions.actions.jobs-count-unavailable'
+      );
+    }
+
+    return this.translateService.instant(
+      'coding-job-definitions.actions.jobs-still-blocking',
+      { count: blockingCreatedJobsCount }
     );
   }
 
@@ -402,6 +459,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       isEdit: true,
       mode: 'definition',
       jobDefinitionId: definition.id,
+      readOnly: !this.canModifyDefinition(definition),
       codingJob: {
         id: definition.id!,
         workspace_id: workspaceId,
@@ -557,6 +615,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   deleteDefinition(definition: JobDefinition): void {
     if (!definition.id) return;
+
+    if (!this.canDeleteDefinition(definition)) {
+      this.showError(this.getDeleteDefinitionTooltip(definition));
+      return;
+    }
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {

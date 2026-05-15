@@ -83,7 +83,7 @@ describe('CodingResultsService', () => {
         fromJobSnapshot: true
       }),
       getDerivedVariableMapForAggregation: jest.fn().mockResolvedValue(new Map()),
-      updateCodingJob: jest.fn().mockResolvedValue({ id: 10, status: 'results_applied' })
+      markCodingJobResultsApplied: jest.fn().mockResolvedValue({ id: 10, status: 'results_applied' })
     } as unknown as jest.Mocked<CodingJobService>;
 
     codingStatisticsService = {
@@ -117,9 +117,7 @@ describe('CodingResultsService', () => {
         status_v2: 5
       }
     );
-    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(10, 17, {
-      status: 'results_applied'
-    });
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(10, 17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
@@ -135,7 +133,24 @@ describe('CodingResultsService', () => {
     expect(result.messageKey).toBe('coding-results.apply.error.double-coding-conflicts-present');
     expect(result.messageParams).toEqual({ count: 1 });
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
-    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+  });
+
+  it('does not mark coding jobs as applied while coding issues still require review', async () => {
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'person@code@booklet::booklet::UNIT::VAR': {
+        id: -2,
+        score: null
+      }
+    });
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(false);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.messageKey).toBe('coding-results.apply.error.uncertain-issues-present');
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
   });
 
   it('blocks applying coder training jobs to productive responses', async () => {
@@ -154,7 +169,7 @@ describe('CodingResultsService', () => {
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
   });
 
-  it('keeps resolved double-coding results when overwrite is not requested', async () => {
+  it('marks resolved double-coding results as applied when no response updates are needed', async () => {
     (responseRepository.manager.query as jest.Mock)
       .mockResolvedValueOnce([{ id: 99, statusV2: 5 }])
       .mockResolvedValueOnce([{ responseId: 99, statusV2: 5 }]);
@@ -165,7 +180,8 @@ describe('CodingResultsService', () => {
     expect(result.updatedResponsesCount).toBe(0);
     expect(result.skippedAlreadyCodedCount).toBe(1);
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
-    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(10, 17);
+    expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
   });
 
   it('does not propagate matching sibling responses when aggregation is disabled', async () => {

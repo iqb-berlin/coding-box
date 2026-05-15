@@ -328,6 +328,12 @@ export class CodingResultsService {
       }
 
       if (responsesToUpdate.length === 0) {
+        if (skippedReviewCount === 0) {
+          await this.codingJobService.markCodingJobResultsApplied(codingJobId, workspaceId);
+          await this.invalidateIncompleteVariablesCache(workspaceId);
+          await this.codingStatisticsService.invalidateCache(workspaceId);
+        }
+
         return {
           success: true,
           updatedResponsesCount: 0,
@@ -368,7 +374,7 @@ export class CodingResultsService {
 
         await queryRunner.commitTransaction();
 
-        await this.codingJobService.updateCodingJob(codingJobId, workspaceId, { status: 'results_applied' });
+        await this.codingJobService.markCodingJobResultsApplied(codingJobId, workspaceId);
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);

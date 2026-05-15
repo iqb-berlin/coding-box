@@ -83,6 +83,7 @@ describe('CodingJobBackendService', () => {
           expect.objectContaining({
             id: 7,
             createdJobsCount: 3,
+            blockingCreatedJobsCount: 1,
             showScore: true,
             allowComments: false,
             suppressGeneralInstructions: true
@@ -90,6 +91,7 @@ describe('CodingJobBackendService', () => {
           expect.objectContaining({
             id: 8,
             createdJobsCount: 0,
+            blockingCreatedJobsCount: 0,
             showScore: false,
             allowComments: true,
             suppressGeneralInstructions: false
@@ -104,6 +106,7 @@ describe('CodingJobBackendService', () => {
           id: 7,
           status: 'approved',
           created_jobs_count: 3,
+          blocking_created_jobs_count: 1,
           show_score: true,
           allow_comments: false,
           suppress_general_instructions: true
@@ -112,6 +115,7 @@ describe('CodingJobBackendService', () => {
           id: 8,
           status: 'draft',
           createdJobsCount: 0,
+          blockingCreatedJobsCount: 0,
           showScore: false,
           allowComments: true,
           suppressGeneralInstructions: false

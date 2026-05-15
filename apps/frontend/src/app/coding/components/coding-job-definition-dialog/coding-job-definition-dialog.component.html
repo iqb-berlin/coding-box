@@ -253,7 +253,7 @@
               @if (!isLoadingAvailableCoders && availableCoders.length > 0) {
               <div class="quick-selection-tools">
                 <button mat-stroked-button color="primary" type="button" (click)="masterCoderToggle()"
-                  class="select-all-button">
+                  class="select-all-button" [disabled]="isReadOnly">
                   <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
                   {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
                 </button>
@@ -266,7 +266,8 @@
                 <div class="coders-grid">
                   @for (coder of availableCoders; track coder.id) {
                   <div class="coder-card" [class.selected]="selectedCoders.isSelected(coder)"
-                    (click)="selectedCoders.toggle(coder)">
+                    [class.read-only]="isReadOnly"
+                    (click)="!isReadOnly && selectedCoders.toggle(coder)">
                     <div class="coder-avatar">
                       <mat-icon class="avatar-icon">person</mat-icon>
                     </div>
@@ -365,7 +366,7 @@
             @if (!isLoadingVariableAnalysis && variables.length > 0) {
             <div class="quick-selection-tools">
               <button mat-stroked-button color="primary" type="button" (click)="masterToggle()"
-                class="select-all-button">
+                class="select-all-button" [disabled]="isReadOnly">
                 <mat-icon>{{ isAllSelected() ? 'deselect' : 'select_all' }}</mat-icon>
                 {{ isAllSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
               </button>
@@ -378,8 +379,8 @@
               <div class="variables-grid">
                 @for (variable of dataSource.data; track variable.unitName + variable.variableId) {
                 <div class="variable-card" [class.selected]="selectedVariables.isSelected(variable)"
-                  [class.disabled]="isVariableDisabled(variable)" [class.clickable]="!isVariableDisabled(variable)"
-                  (click)="!isVariableDisabled(variable) && selectedVariables.toggle(variable)">
+                  [class.disabled]="isVariableDisabled(variable)" [class.read-only]="isReadOnly" [class.clickable]="!isReadOnly && !isVariableDisabled(variable)"
+                  (click)="!isReadOnly && !isVariableDisabled(variable) && selectedVariables.toggle(variable)">
                   <div class="variable-card-header">
                     <div class="variable-identifiers">
                       <div class="variable-id-row">
@@ -470,6 +471,7 @@
               <div class="bundles-grid">
                 @for (bundle of bundlesDataSource.filteredData; track bundle.id) {
                 <div class="bundle-card" [class.selected]="selectedVariableBundles.isSelected(bundle)"
+                  [class.read-only]="isReadOnly"
                   (click)="toggleBundleSelection(bundle)">
                   <div class="bundle-card-header">
                     <h3 class="bundle-name">
@@ -502,6 +504,7 @@
                           <mat-label>{{ 'coding-job-definition-dialog.case-ordering-mode.title' | translate
                             }}</mat-label>
                           <mat-select [value]="bundle.caseOrderingMode"
+                            [disabled]="isReadOnly"
                             (selectionChange)="setBundleOrderingMode(bundle, $event.value)">
                             <mat-option value="continuous">{{
                               'coding-job-definition-dialog.case-ordering-mode.continuous' | translate }}</mat-option>
@@ -542,9 +545,9 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-button (click)="onCancel()" [disabled]="isSaving">Abbrechen</button>
+    <button mat-button (click)="onCancel()" [disabled]="isSaving">{{ isReadOnly ? 'Schließen' : 'Abbrechen' }}</button>
 
-    @if (data.mode === 'definition') {
+    @if (data.mode === 'definition' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()"
       [disabled]="isSaving || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)">
       {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
@@ -558,7 +561,7 @@
     }
     }
 
-    @if (data.mode === 'job') {
+    @if (data.mode === 'job' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="isSaving || codingJobForm.invalid">
       {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
     </button>

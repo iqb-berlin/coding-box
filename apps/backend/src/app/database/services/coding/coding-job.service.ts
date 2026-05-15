@@ -108,6 +108,11 @@ interface CodingJobCountRow {
   jobsCount: number | string;
 }
 
+const JOB_DEFINITION_DELETE_READY_STATUSES = [
+  'results_applied',
+  'review'
+];
+
 type InternalCreateCodingJobDto = CreateCodingJobDto & {
   jobDefinitionId?: number;
 };
@@ -117,8 +122,7 @@ const UPDATABLE_CODING_JOB_STATUSES = new Set([
   'active',
   'paused',
   'open',
-  'completed',
-  'results_applied'
+  'completed'
 ]);
 
 export interface CodingJobAggregationSettings {
@@ -293,6 +297,38 @@ export class CodingJobService {
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.job_definition_id IN (:...definitionIds)', {
         definitionIds: uniqueDefinitionIds
+      })
+      .groupBy('coding_job.job_definition_id')
+      .getRawMany();
+
+    return new Map(rows.map(row => [
+      Number(row.jobDefinitionId),
+      Number(row.jobsCount)
+    ]));
+  }
+
+  async getBlockingCodingJobCountsByDefinitionIds(
+    workspaceId: number,
+    definitionIds: number[]
+  ): Promise<Map<number, number>> {
+    const uniqueDefinitionIds = Array.from(new Set(
+      definitionIds.filter(definitionId => Number.isFinite(definitionId))
+    ));
+
+    if (uniqueDefinitionIds.length === 0) {
+      return new Map();
+    }
+
+    const rows: CodingJobCountRow[] = await this.codingJobRepository
+      .createQueryBuilder('coding_job')
+      .select('coding_job.job_definition_id', 'jobDefinitionId')
+      .addSelect('COUNT(coding_job.id)', 'jobsCount')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id IN (:...definitionIds)', {
+        definitionIds: uniqueDefinitionIds
+      })
+      .andWhere('coding_job.status NOT IN (:...deleteReadyStatuses)', {
+        deleteReadyStatuses: JOB_DEFINITION_DELETE_READY_STATUSES
       })
       .groupBy('coding_job.job_definition_id')
       .getRawMany();
@@ -596,11 +632,8 @@ export class CodingJobService {
       if (codingJob.codingJob.status === 'results_applied') {
         throw new Error(`Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`);
       }
-      if (codingJob.codingJob.status === 'completed' && !['completed', 'results_applied'].includes(targetStatus)) {
+      if (codingJob.codingJob.status === 'completed' && targetStatus !== 'completed') {
         throw new BadRequestException(`Cannot change status of completed coding job ${id}`);
-      }
-      if (targetStatus === 'results_applied' && codingJob.codingJob.status !== 'completed') {
-        throw new BadRequestException(`Cannot apply results for coding job ${id} because it is not completed`);
       }
       if (codingJob.codingJob.status !== 'completed' && targetStatus === 'completed') {
         await this.assertCodingJobCanBeCompleted(id);
@@ -666,6 +699,26 @@ export class CodingJobService {
     }
 
     return savedCodingJob;
+  }
+
+  async markCodingJobResultsApplied(
+    id: number,
+    workspaceId: number
+  ): Promise<CodingJob> {
+    const codingJob = await this.getCodingJob(id, workspaceId);
+
+    if (codingJob.codingJob.status === 'results_applied') {
+      return codingJob.codingJob;
+    }
+
+    if (codingJob.codingJob.status !== 'completed') {
+      throw new BadRequestException(
+        `Cannot apply results for coding job ${id} because it is not completed`
+      );
+    }
+
+    codingJob.codingJob.status = 'results_applied';
+    return this.codingJobRepository.save(codingJob.codingJob);
   }
 
   async deleteCodingJob(id: number, workspaceId: number): Promise<{ success: boolean }> {

@@ -127,9 +127,10 @@
                 mat-menu-item
                 type="button"
                 (click)="editDefinition(definition)"
+                [matTooltip]="getEditDefinitionTooltip(definition)"
                 [attr.aria-label]="getActionAriaLabel('edit', definition)">
-                <mat-icon>edit</mat-icon>
-                <span>{{ 'coding-job-definitions.actions.edit' | translate }}</span>
+                <mat-icon>{{ getEditDefinitionIcon(definition) }}</mat-icon>
+                <span>{{ getEditDefinitionLabel(definition) }}</span>
               </button>
               <button
                 mat-menu-item
@@ -146,6 +147,7 @@
                 type="button"
                 class="danger-menu-item"
                 (click)="deleteDefinition(definition)"
+                [matTooltip]="getDeleteDefinitionTooltip(definition)"
                 [attr.aria-label]="getActionAriaLabel('delete', definition)">
                 <mat-icon>delete</mat-icon>
                 <span>{{ 'coding-job-definitions.actions.delete' | translate }}</span>

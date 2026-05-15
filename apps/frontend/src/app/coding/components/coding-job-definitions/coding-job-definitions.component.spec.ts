@@ -90,7 +90,9 @@ describe('CodingJobDefinitionsComponent', () => {
       id: 6,
       status: 'approved',
       assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
-      assignedCoders: [1]
+      assignedCoders: [1],
+      createdJobsCount: 0,
+      blockingCreatedJobsCount: 0
     }];
     fixture.detectChanges();
     await fixture.whenStable();
@@ -126,6 +128,73 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBe(2);
     expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
+  });
+
+  it('opens locked definitions read-only and blocks delete while jobs still block deletion', async () => {
+    component.isLoading = false;
+    component.selectionMode = false;
+    const definition = {
+      id: 6,
+      status: 'approved' as const,
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1],
+      createdJobsCount: 2,
+      blockingCreatedJobsCount: 1
+    };
+    component.jobDefinitions = [definition];
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const trigger = fixture.nativeElement.querySelector(
+      '.more-actions-button'
+    ) as HTMLButtonElement;
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const overlayElement = overlayContainer.getContainerElement();
+    const menuButtons = Array.from(
+      overlayElement.querySelectorAll('button')
+    ) as HTMLButtonElement[];
+    const deleteButton = overlayElement.querySelector('.danger-menu-item') as HTMLButtonElement;
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogOpenSpy = jest.spyOn(matDialog, 'open');
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      deleteJobDefinition: jest.Mock;
+    };
+
+    expect(component.canModifyDefinition(definition)).toBe(false);
+    expect(component.canDeleteDefinition(definition)).toBe(false);
+    expect(menuButtons[0].disabled).toBe(false);
+    expect(deleteButton.disabled).toBe(false);
+
+    component.editDefinition(definition);
+    component.deleteDefinition(definition);
+
+    expect(dialogOpenSpy).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
+      data: expect.objectContaining({
+        readOnly: true
+      })
+    }));
+    expect(codingJobBackendService.deleteJobDefinition).not.toHaveBeenCalled();
+  });
+
+  it('allows deleting definitions once all created jobs no longer block deletion', () => {
+    const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      deleteJobDefinition: jest.Mock;
+    };
+    const definition = {
+      id: 6,
+      status: 'approved' as const,
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1],
+      createdJobsCount: 2,
+      blockingCreatedJobsCount: 0
+    };
+
+    component.deleteDefinition(definition);
+
+    expect(codingJobBackendService.deleteJobDefinition).toHaveBeenCalledWith(1, 6);
   });
 
   it('blocks job creation when the created jobs count is missing', () => {
@@ -239,7 +308,8 @@ describe('CodingJobDefinitionsComponent', () => {
       caseOrderingMode: 'continuous',
       showScore: false,
       allowComments: false,
-      suppressGeneralInstructions: true
+      suppressGeneralInstructions: true,
+      createdJobsCount: 0
     });
 
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
