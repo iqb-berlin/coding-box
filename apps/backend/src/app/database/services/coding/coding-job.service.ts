@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
+import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
 import { sortUnitsContinuous, sortUnitsAlternating } from '../../../utils/coding-utils';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -28,6 +29,11 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  formatCodingTestPersonFromUnit,
+  generateCodingProgressKey,
+  parseCodingTestPerson
+} from './coding-progress-key.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -87,6 +93,12 @@ interface SlimResponse {
   personCode: string;
   personGroup: string;
   variableBundleId?: number;
+}
+
+interface DistributableResponses {
+  filteredResponses: SlimResponse[];
+  uniqueCases: number;
+  totalResponses: number;
 }
 
 export interface CodingJobAggregationSettings {
@@ -195,8 +207,7 @@ export class CodingJobService {
       openUnitsQuery.getCount()
     ]);
 
-    const accessibleUnits = totalUnits;
-    const progress = accessibleUnits > 0 ? Math.round((codedUnits / accessibleUnits) * 100) : 0;
+    const progress = totalUnits > 0 ? Math.round((Math.min(totalUnits, codedUnits) / totalUnits) * 100) : 0;
 
     return {
       progress, coded: codedUnits, total: totalUnits, open: openUnits
@@ -438,6 +449,9 @@ export class CodingJobService {
     if (updateCodingJobDto.status !== undefined) {
       if (codingJob.codingJob.status === 'results_applied') {
         throw new Error(`Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`);
+      }
+      if (updateCodingJobDto.status === 'completed') {
+        await this.assertCodingJobCanBeCompleted(id);
       }
       codingJob.codingJob.status = updateCodingJobDto.status;
     }
@@ -800,16 +814,16 @@ export class CodingJobService {
       throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
     }
 
-    const testPersonParts = progress.testPerson.split('@');
-    const personLogin = testPersonParts[0] || '';
-    const personCode = testPersonParts[1] || '';
-    const bookletName = testPersonParts[testPersonParts.length - 1] || '';
-    let personGroup: string | undefined;
-
-    // Handle new 4-part URL format: login@code@group@booklet
-    if (testPersonParts.length === 4) {
-      personGroup = testPersonParts[2];
+    if (codingJob.status === 'results_applied') {
+      throw new BadRequestException('Cannot save progress for a coding job whose results have already been applied');
     }
+
+    const {
+      login: personLogin,
+      code: personCode,
+      group: personGroup,
+      booklet: bookletName
+    } = parseCodingTestPerson(progress.testPerson);
 
     const whereCondition: Partial<CodingJobUnit> = {
       coding_job_id: codingJobId,
@@ -865,6 +879,61 @@ export class CodingJobService {
     return codingJob;
   }
 
+  async saveCodingNotes(
+    codingJobId: number,
+    notesDto: SaveCodingNotesDto
+  ): Promise<CodingJob> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    if (codingJob.status === 'results_applied') {
+      throw new BadRequestException('Cannot save notes for a coding job whose results have already been applied');
+    }
+
+    const {
+      login: personLogin,
+      code: personCode,
+      group: personGroup,
+      booklet: bookletName
+    } = parseCodingTestPerson(notesDto.testPerson);
+
+    const whereCondition: Partial<CodingJobUnit> = {
+      coding_job_id: codingJobId,
+      unit_name: notesDto.unitId,
+      variable_id: notesDto.variableId,
+      person_login: personLogin,
+      person_code: personCode,
+      booklet_name: bookletName
+    };
+
+    if (personGroup !== undefined) {
+      whereCondition.person_group = personGroup;
+    }
+
+    const codingJobUnit = await this.codingJobUnitRepository.findOne({
+      where: whereCondition
+    });
+
+    if (!codingJobUnit) {
+      throw new NotFoundException('Coding job unit not found for notes entry');
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(codingJob.workspace_id);
+    if (isExcludedByResolvedExclusions(exclusions, codingJobUnit.booklet_name, codingJobUnit.unit_name)) {
+      throw new NotFoundException('Coding job unit not found for notes entry');
+    }
+
+    codingJobUnit.notes = notesDto.notes?.trim() || null;
+    await this.codingJobUnitRepository.save(codingJobUnit);
+
+    return codingJob;
+  }
+
   async getCodingProgress(codingJobId: number): Promise<Record<string, SaveCodingProgressDto['selectedCode']>> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId }
@@ -886,8 +955,8 @@ export class CodingJobService {
     const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
 
     codingJobUnits.forEach(unit => {
-      const compositeKey = this.generateCodingProgressKey(
-        `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+      const compositeKey = generateCodingProgressKey(
+        formatCodingTestPersonFromUnit(unit),
         unit.unit_name,
         unit.variable_id
       );
@@ -952,8 +1021,8 @@ export class CodingJobService {
 
     codingJobUnits.forEach(unit => {
       if (unit.notes) {
-        const compositeKey = this.generateCodingProgressKey(
-          `${unit.person_login}@${unit.person_code}@${unit.booklet_name}`,
+        const compositeKey = generateCodingProgressKey(
+          formatCodingTestPersonFromUnit(unit),
           unit.unit_name,
           unit.variable_id
         );
@@ -962,18 +1031,6 @@ export class CodingJobService {
     });
 
     return notesMap;
-  }
-
-  private generateCodingProgressKey(testPerson: string, unitId: string, variableId: string): string {
-    let bookletId = 'default';
-    if (testPerson) {
-      const parts = testPerson.split('@');
-      if (parts.length >= 3) {
-        bookletId = parts[2];
-      }
-    }
-
-    return `${testPerson}::${bookletId}::${unitId}::${variableId}`;
   }
 
   async getCodingJobUnits(codingJobId: number, onlyOpen: boolean = false): Promise<{
@@ -1351,9 +1408,24 @@ export class CodingJobService {
   private async checkAndUpdateCodingJobCompletion(codingJobId: number): Promise<void> {
     const progress = await this.getCodingJobProgress(codingJobId);
 
-    if (progress.total > 0 && progress.progress === 100) {
+    if (progress.total > 0 && progress.coded + progress.open >= progress.total) {
       const newStatus = progress.open > 0 ? 'open' : 'completed';
       await this.codingJobRepository.update(codingJobId, { status: newStatus });
+    }
+  }
+
+  private async assertCodingJobCanBeCompleted(codingJobId: number): Promise<void> {
+    const progress = await this.getCodingJobProgress(codingJobId);
+    const missingUnits = Math.max(0, progress.total - progress.coded - progress.open);
+
+    if (progress.total === 0) {
+      throw new BadRequestException('Cannot complete a coding job without coding units');
+    }
+
+    if (missingUnits > 0 || progress.open > 0 || progress.coded < progress.total) {
+      throw new BadRequestException(
+        `Cannot complete coding job ${codingJobId}: ${missingUnits} units are uncoded and ${progress.open} units are open`
+      );
     }
   }
 
@@ -1362,56 +1434,68 @@ export class CodingJobService {
     createCodingJobDto: CreateCodingJobDto,
     unitSubset: SlimResponse[]
   ): Promise<CodingJob> {
-    return this.connection.transaction(async manager => {
-      const codingJobRepo = manager.getRepository(CodingJob);
-      const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
-      const codingJob = codingJobRepo.create({
-        workspace_id: workspaceId,
-        name: createCodingJobDto.name,
-        description: createCodingJobDto.description,
-        status: createCodingJobDto.status || 'pending',
-        missings_profile_id: createCodingJobDto.missings_profile_id,
-        job_definition_id: createCodingJobDto.jobDefinitionId,
-        case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous',
-        aggregation_enabled: aggregationSettings.aggregationEnabled,
-        aggregation_threshold: aggregationSettings.aggregationThreshold,
-        response_matching_flags: aggregationSettings.responseMatchingFlags,
-        aggregation_settings_version: aggregationSettings.aggregationSettingsVersion
-      });
+    return this.connection.transaction(manager => this.createCodingJobWithUnitSubsetInManager(
+      workspaceId,
+      createCodingJobDto,
+      unitSubset,
+      manager
+    ));
+  }
 
-      const savedCodingJob = await codingJobRepo.save(codingJob);
+  private async createCodingJobWithUnitSubsetInManager(
+    workspaceId: number,
+    createCodingJobDto: CreateCodingJobDto,
+    unitSubset: SlimResponse[],
+    manager: EntityManager
+  ): Promise<CodingJob> {
+    const codingJobRepo = manager.getRepository(CodingJob);
+    const aggregationSettings = await this.getCurrentAggregationSettingsSnapshot(workspaceId);
+    const codingJob = codingJobRepo.create({
+      workspace_id: workspaceId,
+      name: createCodingJobDto.name,
+      description: createCodingJobDto.description,
+      status: createCodingJobDto.status || 'pending',
+      missings_profile_id: createCodingJobDto.missings_profile_id,
+      job_definition_id: createCodingJobDto.jobDefinitionId,
+      case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous',
+      aggregation_enabled: aggregationSettings.aggregationEnabled,
+      aggregation_threshold: aggregationSettings.aggregationThreshold,
+      response_matching_flags: aggregationSettings.responseMatchingFlags,
+      aggregation_settings_version: aggregationSettings.aggregationSettingsVersion
+    });
 
-      if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
-      }
+    const savedCodingJob = await codingJobRepo.save(codingJob);
 
-      if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
-        await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables, manager);
-      }
+    if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
+      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
+    }
 
-      if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
-        await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds, manager);
-      } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
-        if (createCodingJobDto.variableBundles[0].id) {
-          const bundleIds = createCodingJobDto.variableBundles
-            .filter(bundle => bundle.id)
-            .map(bundle => bundle.id);
+    if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
+      await this.assignVariables(savedCodingJob.id, createCodingJobDto.variables, manager);
+    }
 
-          if (bundleIds.length > 0) {
-            await this.assignVariableBundles(savedCodingJob.id, bundleIds, manager);
-          }
-        } else {
-          const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
-          if (variables.length > 0) {
-            await this.assignVariables(savedCodingJob.id, variables, manager);
-          }
+    if (createCodingJobDto.variableBundleIds && createCodingJobDto.variableBundleIds.length > 0) {
+      await this.assignVariableBundles(savedCodingJob.id, createCodingJobDto.variableBundleIds, manager);
+    } else if (createCodingJobDto.variableBundles && createCodingJobDto.variableBundles.length > 0) {
+      if (createCodingJobDto.variableBundles[0].id) {
+        const bundleIds = createCodingJobDto.variableBundles
+          .filter(bundle => bundle.id)
+          .map(bundle => bundle.id);
+
+        if (bundleIds.length > 0) {
+          await this.assignVariableBundles(savedCodingJob.id, bundleIds, manager);
+        }
+      } else {
+        const variables = createCodingJobDto.variableBundles.flatMap(bundle => bundle.variables || []);
+        if (variables.length > 0) {
+          await this.assignVariables(savedCodingJob.id, variables, manager);
         }
       }
+    }
 
-      await this.saveCodingJobUnitsSubset(savedCodingJob.id, workspaceId, unitSubset, manager);
+    await this.saveCodingJobUnitsSubset(savedCodingJob.id, workspaceId, unitSubset, manager);
 
-      return savedCodingJob;
-    });
+    return savedCodingJob;
   }
 
   private async saveCodingJobUnitsSubset(
@@ -1823,6 +1907,121 @@ export class CodingJobService {
     }));
   }
 
+  private async getAssignedResponseIdsForVariables(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string }[]
+  ): Promise<Set<number>> {
+    if (variables.length === 0) {
+      return new Set();
+    }
+
+    const query = this.codingJobUnitRepository.createQueryBuilder('cju')
+      .select('DISTINCT cju.response_id', 'responseId')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL');
+
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    variables.forEach((variable, index) => {
+      const unitParam = `assignedUnitName${index}`;
+      const variableParam = `assignedVariableId${index}`;
+      conditions.push(`(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`);
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+    });
+
+    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    await this.applyCodingJobUnitExclusions(query, workspaceId, 'assignedResponseIdsForVariables');
+
+    const rawResults = await query.getRawMany();
+    return new Set(rawResults
+      .map(row => Number(row.responseId))
+      .filter(responseId => Number.isFinite(responseId)));
+  }
+
+  private getDistributableResponses(
+    allItemResponses: SlimResponse[],
+    assignedResponseIds: Set<number>,
+    matchingFlags: ResponseMatchingFlag[],
+    aggregationThreshold: number | null,
+    allItemVarsDerived: boolean
+  ): DistributableResponses {
+    const filteredResponses: SlimResponse[] = [];
+    let uniqueCases = 0;
+    let totalResponses = 0;
+
+    if (!allItemVarsDerived && aggregationThreshold !== null) {
+      const aggregatedGroups = this.aggregateResponsesByValue(allItemResponses, matchingFlags);
+
+      aggregatedGroups.forEach(group => {
+        if (group.responses.length >= aggregationThreshold) {
+          const groupAlreadyAssigned = group.responses.some(response => assignedResponseIds.has(response.id));
+          if (!groupAlreadyAssigned) {
+            group.responses.sort((a, b) => a.id - b.id);
+            filteredResponses.push(group.responses[0]);
+            uniqueCases += 1;
+            totalResponses += group.responses.length;
+          }
+          return;
+        }
+
+        const unassignedResponses = group.responses.filter(response => !assignedResponseIds.has(response.id));
+        filteredResponses.push(...unassignedResponses);
+        uniqueCases += unassignedResponses.length;
+        totalResponses += unassignedResponses.length;
+      });
+
+      return { filteredResponses, uniqueCases, totalResponses };
+    }
+
+    const unassignedResponses = allItemResponses.filter(response => !assignedResponseIds.has(response.id));
+
+    return {
+      filteredResponses: unassignedResponses,
+      uniqueCases: unassignedResponses.length,
+      totalResponses: unassignedResponses.length
+    };
+  }
+
+  private buildAvailabilityWarning(
+    variable: VariableReference,
+    allVariableResponses: SlimResponse[],
+    assignedResponseIds: Set<number>,
+    matchingFlags: ResponseMatchingFlag[],
+    aggregationThreshold: number | null,
+    isDerivedVariable: boolean
+  ): JobCreationWarning | null {
+    const totalCases = this.getDistributableResponses(
+      allVariableResponses,
+      new Set(),
+      matchingFlags,
+      aggregationThreshold,
+      isDerivedVariable
+    ).uniqueCases;
+    const availableCases = this.getDistributableResponses(
+      allVariableResponses,
+      assignedResponseIds,
+      matchingFlags,
+      aggregationThreshold,
+      isDerivedVariable
+    ).uniqueCases;
+    const casesInJobs = Math.max(0, totalCases - availableCases);
+
+    if (totalCases === 0 || casesInJobs === 0 || availableCases >= totalCases) {
+      return null;
+    }
+
+    return {
+      unitName: variable.unitName,
+      variableId: variable.variableId,
+      message: `Variable: nur noch ${availableCases} von ${totalCases} Fällen verfügbar`,
+      casesInJobs,
+      availableCases
+    };
+  }
+
   async calculateDistribution(
     workspaceId: number,
     request: {
@@ -1852,7 +2051,6 @@ export class CodingJobService {
     // Get response matching mode and aggregation threshold for this workspace
     const matchingFlags = await this.getResponseMatchingMode(workspaceId);
     const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
-    const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
 
     const items: DistributionItem[] = [];
     const allVariables: VariableReference[] = [];
@@ -1870,6 +2068,7 @@ export class CodingJobService {
     }
 
     const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
+    const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, allVariables);
 
     // Build derived variable lookup for this workspace to skip aggregation for derived vars
     const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
@@ -1879,22 +2078,19 @@ export class CodingJobService {
     });
     const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
 
-    // Generate warnings for variables that have reduced available cases
-    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     for (const variable of allVariables) {
-      const key = `${variable.unitName}::${variable.variableId}`;
-      const casesInJobs = casesInJobsMap.get(key) || 0;
-      const totalAvailable = allResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId).length;
-      const availableCases = totalAvailable - casesInJobs;
+      const variableResponses = allResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId);
+      const warning = this.buildAvailabilityWarning(
+        variable,
+        variableResponses,
+        assignedResponseIds,
+        matchingFlags,
+        aggregationThreshold,
+        isDerivedVariable(variable.unitName, variable.variableId)
+      );
 
-      if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
-        warnings.push({
-          unitName: variable.unitName,
-          variableId: variable.variableId,
-          message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
-          casesInJobs,
-          availableCases
-        });
+      if (warning) {
+        warnings.push(warning);
       }
     }
 
@@ -1918,38 +2114,20 @@ export class CodingJobService {
         itemCaseOrderingMode = caseOrderingMode;
       }
 
-      const responses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
+      const allItemResponses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
       );
-      const totalResponses = responses.length;
 
       // Derived variables have null/empty string values and must not be aggregated —
       // aggregation would collapse all their responses into 1 group.
       // A bundle item is treated as derived only if ALL its variables are derived.
       const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
-
-      // Calculate aggregation info based on matching mode, applying threshold exactly as in createDistributedCodingJobs
-      const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-
-      const filteredResponses: SlimResponse[] = [];
-      let uniqueCases = 0;
-
-      if (!allItemVarsDerived && aggregationThreshold !== null) {
-        // Apply filtering logic: if group size >= threshold, keep 1 representative. Else keep all.
-        aggregatedGroups.forEach(group => {
-          if (group.responses.length >= threshold) {
-            group.responses.sort((a, b) => a.id - b.id);
-            filteredResponses.push(group.responses[0]);
-            uniqueCases += 1;
-          } else {
-            filteredResponses.push(...group.responses);
-            uniqueCases += group.responses.length;
-          }
-        });
-      } else {
-        // Aggregation disabled or derived variable — use all responses as-is
-        filteredResponses.push(...responses);
-        uniqueCases = responses.length;
-      }
+      const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
+        allItemResponses,
+        assignedResponseIds,
+        matchingFlags,
+        aggregationThreshold,
+        allItemVarsDerived
+      );
 
       aggregationInfo[itemKey] = {
         uniqueCases,
@@ -2133,6 +2311,15 @@ export class CodingJobService {
       jobName: string;
       caseCount: number;
     }[] = [];
+    const jobsToCreate: {
+      coderId: number;
+      coderName: string;
+      variable: { unitName: string; variableId: string };
+      jobName: string;
+      caseCount: number;
+      createCodingJobDto: CreateCodingJobDto;
+      unitSubset: SlimResponse[];
+    }[] = [];
     const warnings: JobCreationWarning[] = [];
 
     // Get response matching mode for this workspace
@@ -2155,12 +2342,8 @@ export class CodingJobService {
         allVariables.push(variable);
       }
 
-      // Generate warnings for variables that have reduced available cases
-      const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
-
       // Hoist aggregation threshold — same for all items in this workspace
       const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
-      const threshold = aggregationThreshold !== null ? aggregationThreshold : 2;
 
       // Build derived variable lookup to skip aggregation for derived vars
       const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
@@ -2193,24 +2376,22 @@ export class CodingJobService {
         }
 
         // Fetch responses only for this item to limit peak memory usage
-        const responses = await this.getSlimResponsesForVariables(workspaceId, itemVariables);
-        const totalResponses = responses.length;
+        const allItemResponses = await this.getSlimResponsesForVariables(workspaceId, itemVariables);
+        const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, itemVariables);
 
-        // Generate warnings for variables in this item
         for (const variable of itemVariables) {
-          const key = `${variable.unitName}::${variable.variableId}`;
-          const casesInJobs = casesInJobsMap.get(key) || 0;
-          const totalAvailable = responses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId).length;
-          const availableCases = totalAvailable - casesInJobs;
+          const variableResponses = allItemResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId);
+          const warning = this.buildAvailabilityWarning(
+            variable,
+            variableResponses,
+            assignedResponseIds,
+            matchingFlags,
+            aggregationThreshold,
+            isDerivedVariable(variable.unitName, variable.variableId)
+          );
 
-          if (casesInJobs > 0 && availableCases > 0 && availableCases < totalAvailable) {
-            warnings.push({
-              unitName: variable.unitName,
-              variableId: variable.variableId,
-              message: `Variable: nur noch ${availableCases} von ${totalAvailable} Fällen verfügbar`,
-              casesInJobs,
-              availableCases
-            });
+          if (warning) {
+            warnings.push(warning);
           }
         }
 
@@ -2218,30 +2399,13 @@ export class CodingJobService {
         // aggregation would collapse all their responses into 1 group.
         // A bundle item is treated as derived only if ALL its variables are derived.
         const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
-
-        // Calculate aggregation info based on matching mode
-        const aggregatedGroups = this.aggregateResponsesByValue(responses, matchingFlags);
-
-        const filteredResponses: SlimResponse[] = [];
-        let uniqueCases = 0;
-
-        if (!allItemVarsDerived && aggregationThreshold !== null) {
-          // Apply filtering logic: if group size >= threshold, keep 1. Else keep all.
-          aggregatedGroups.forEach(group => {
-            if (group.responses.length >= threshold) {
-              group.responses.sort((a, b) => a.id - b.id);
-              filteredResponses.push(group.responses[0]);
-              uniqueCases += 1;
-            } else {
-              filteredResponses.push(...group.responses);
-              uniqueCases += group.responses.length;
-            }
-          });
-        } else {
-          // Aggregation disabled or derived variable — use all responses as-is
-          filteredResponses.push(...responses);
-          uniqueCases = responses.length;
-        }
+        const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
+          allItemResponses,
+          assignedResponseIds,
+          matchingFlags,
+          aggregationThreshold,
+          allItemVarsDerived
+        );
 
         aggregationInfo[itemKey] = {
           uniqueCases,
@@ -2376,9 +2540,15 @@ export class CodingJobService {
               `Job ${itemKey} (${coder.name})` :
               `Job ${(itemObj.item as { unitName: string }).unitName} - ${(itemObj.item as { variableId: string }).variableId} (${coder.name})`;
 
-            const codingJob = await this.createCodingJobWithUnitSubset(
-              workspaceId,
-              {
+            jobsToCreate.push({
+              coderId: coder.id,
+              coderName: coder.name,
+              variable: itemObj.type === 'bundle' ?
+                { unitName: itemKey, variableId: '' } :
+                { unitName: (itemObj.item as { unitName: string }).unitName, variableId: (itemObj.item as { variableId: string }).variableId },
+              jobName,
+              caseCount: caseCountForCoder,
+              createCodingJobDto: {
                 name: jobName,
                 assignedCoders: [coder.id],
                 caseOrderingMode: itemCaseOrderingMode,
@@ -2388,24 +2558,35 @@ export class CodingJobService {
                   { variables: itemVariables }
                 )
               },
-              coderCases
-            );
-
-            createdJobs.push({
-              coderId: coder.id,
-              coderName: coder.name,
-              variable: itemObj.type === 'bundle' ?
-                { unitName: itemKey, variableId: '' } :
-                { unitName: (itemObj.item as { unitName: string }).unitName, variableId: (itemObj.item as { variableId: string }).variableId },
-              jobId: codingJob.id,
-              jobName: jobName,
-              caseCount: caseCountForCoder
+              unitSubset: coderCases
             });
           }
         }
 
         doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey])
           .reduce((sum, value) => sum + value, 0);
+      }
+
+      if (jobsToCreate.length > 0) {
+        await this.connection.transaction(async manager => {
+          for (const job of jobsToCreate) {
+            const codingJob = await this.createCodingJobWithUnitSubsetInManager(
+              workspaceId,
+              job.createCodingJobDto,
+              job.unitSubset,
+              manager
+            );
+
+            createdJobs.push({
+              coderId: job.coderId,
+              coderName: job.coderName,
+              variable: job.variable,
+              jobId: codingJob.id,
+              jobName: job.jobName,
+              caseCount: job.caseCount
+            });
+          }
+        });
       }
 
       this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);

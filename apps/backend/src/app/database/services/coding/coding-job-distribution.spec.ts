@@ -61,7 +61,14 @@ describe('CodingJobService distribution from job definitions', () => {
     const responseRepository = createRepo();
     const fileUploadRepository = createRepo();
     const settingRepository = createRepo();
-    const connection = { transaction: jest.fn() };
+    const connection = {
+      transaction: jest.fn(callback => callback({
+        getRepository: (entity: unknown) => {
+          if (entity === CodingJob) return codingJobRepository;
+          return createRepo();
+        }
+      }))
+    };
     const cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
     workspaceFilesService = {
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
@@ -113,6 +120,10 @@ describe('CodingJobService distribution from job definitions', () => {
       service as unknown as { getVariableCasesInJobs: () => Promise<Map<string, number>> },
       'getVariableCasesInJobs'
     ).mockResolvedValue(new Map());
+    jest.spyOn(
+      service as unknown as { getAssignedResponseIdsForVariables: () => Promise<Set<number>> },
+      'getAssignedResponseIdsForVariables'
+    ).mockResolvedValue(new Set());
   }
 
   it('keeps preview distribution and created jobs aligned for capped double-coded mixed definitions', async () => {
@@ -154,7 +165,22 @@ describe('CodingJobService distribution from job definitions', () => {
     mockResponses(responses);
     jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
     jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
-    jest.spyOn(service, 'createCodingJobWithUnitSubset').mockImplementation(async (_workspaceId, dto, subset) => {
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: {
+            assignedCoders?: number[];
+            caseOrderingMode?: 'continuous' | 'alternating';
+            jobDefinitionId?: number;
+            variableBundleIds?: number[];
+            variables?: { unitName: string; variableId: string }[];
+          },
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, dto, subset) => {
       createdJobCalls.push({ dto, subset: subset as SlimResponseForTest[] });
       return { id: 100 + createdJobCalls.length } as CodingJob;
     });
@@ -191,6 +217,105 @@ describe('CodingJobService distribution from job definitions', () => {
     });
     expect(assignedResponseCounts.get(1)).toBe(2);
     expect(assignedResponseCounts.get(10)).toBe(2);
+  });
+
+  it('skips cases already assigned by an earlier definition when creating later jobs', async () => {
+    const responses = Array.from({ length: 10 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
+    const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock<Promise<Set<number>>, []> }
+    ).getAssignedResponseIdsForVariables.mockResolvedValue(new Set([1, 2, 3, 4, 5]));
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdJobCalls.push({ subset: subset as SlimResponseForTest[] });
+      return { id: 200 + createdJobCalls.length } as CodingJob;
+    });
+
+    const result = await service.createDistributedCodingJobs(5, {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      maxCodingCases: 5,
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 78
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.distribution['Unit 1::Var 1']).toEqual({ Ada: 5 });
+    expect(result.warnings).toEqual([{
+      unitName: 'Unit 1',
+      variableId: 'Var 1',
+      message: 'Variable: nur noch 5 von 10 Fällen verfügbar',
+      casesInJobs: 5,
+      availableCases: 5
+    }]);
+    expect(createdJobCalls).toHaveLength(1);
+    expect(createdJobCalls[0].subset.map(response => response.id)).toEqual([6, 7, 8, 9, 10]);
+  });
+
+  it('skips an entire aggregation group when one representative is already assigned', async () => {
+    const responses = [1, 2, 3].map(id => makeResponse(id, 'Unit 1', 'Var 1', 'same-value'));
+    const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
+    const request = {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous' as const
+    };
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+    (
+      service as unknown as { getAssignedResponseIdsForVariables: jest.Mock<Promise<Set<number>>, []> }
+    ).getAssignedResponseIdsForVariables.mockResolvedValue(new Set([1]));
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdJobCalls.push({ subset: subset as SlimResponseForTest[] });
+      return { id: 300 + createdJobCalls.length } as CodingJob;
+    });
+
+    const preview = await service.calculateDistribution(5, request);
+    const result = await service.createDistributedCodingJobs(5, {
+      ...request,
+      jobDefinitionId: 79
+    });
+
+    expect(preview.aggregationInfo['Unit 1::Var 1']).toEqual({
+      uniqueCases: 0,
+      totalResponses: 0
+    });
+    expect(preview.distribution['Unit 1::Var 1']).toEqual({ Ada: 0 });
+    expect(preview.warnings).toEqual([{
+      unitName: 'Unit 1',
+      variableId: 'Var 1',
+      message: 'Variable: nur noch 0 von 1 Fällen verfügbar',
+      casesInJobs: 1,
+      availableCases: 0
+    }]);
+    expect(result.success).toBe(true);
+    expect(result.distribution).toEqual(preview.distribution);
+    expect(result.warnings).toEqual(preview.warnings);
+    expect(result.jobsCreated).toBe(0);
+    expect(createdJobCalls).toHaveLength(0);
   });
 
   it('does not aggregate derived variables even when their values are empty', async () => {

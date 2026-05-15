@@ -56,6 +56,7 @@ export class CodingJobOperationsService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
       result?: {
         success: boolean;
         updatedResponsesCount: number;
@@ -72,7 +73,7 @@ export class CodingJobOperationsService {
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'name']
+      select: ['id', 'name', 'status', 'training_id']
     });
 
     const results: Array<{
@@ -80,6 +81,7 @@ export class CodingJobOperationsService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
       result?: {
         success: boolean;
         updatedResponsesCount: number;
@@ -104,7 +106,30 @@ export class CodingJobOperationsService {
           jobId: job.id,
           jobName: job.name,
           hasIssues: true,
-          skipped: true
+          skipped: true,
+          skippedReason: 'coding-issues'
+        });
+        continue;
+      }
+
+      if (job.training_id !== null && job.training_id !== undefined) {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'training-job'
+        });
+        continue;
+      }
+
+      if (job.status !== 'completed') {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'not-completed'
         });
         continue;
       }
@@ -154,8 +179,12 @@ export class CodingJobOperationsService {
       }
     }
 
-    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${results.filter(r => r.hasIssues).length
-    } jobs skipped due to coding issues.`;
+    const codingIssueJobs = results.filter(result => result.skippedReason === 'coding-issues').length;
+    const trainingJobs = results.filter(result => result.skippedReason === 'training-job').length;
+    const notCompletedJobs = results.filter(result => result.skippedReason === 'not-completed').length;
+    const failedJobs = results.filter(result => !result.skipped && result.result && !result.result.success).length;
+    const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${codingIssueJobs
+    } jobs skipped due to coding issues.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
 
     this.logger.log(message);
 

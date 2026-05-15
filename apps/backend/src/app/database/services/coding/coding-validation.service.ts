@@ -309,8 +309,8 @@ export class CodingValidationService {
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
       const casesInJobs = casesInJobsMap.get(key) || 0;
-      const availableCases = Math.max(0, variable.responseCount - casesInJobs);
       const uniqueCasesAfterAggregation = aggregationMap.get(key) ?? variable.responseCount;
+      const availableCases = Math.max(0, uniqueCasesAfterAggregation - casesInJobs);
 
       return {
         ...variable,

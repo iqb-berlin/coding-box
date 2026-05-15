@@ -35,6 +35,7 @@ import { CodingJobDto } from '../../admin/coding-job/dto/coding-job.dto';
 import { CreateCodingJobDto } from '../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../admin/coding-job/dto/update-coding-job.dto';
 import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-progress.dto';
+import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes.dto';
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
 import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfer-coding-cases-result.dto';
 
@@ -381,6 +382,45 @@ export class WsgCodingJobController {
     return CodingJobDto.fromEntity(codingJob);
   }
 
+  @Post(':id/notes')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Save coding notes',
+    description: 'Saves coder notes without changing the selected code or coding progress'
+  })
+  @ApiParam({
+    name: 'workspace_id',
+    type: Number,
+    required: true,
+    description: 'The ID of the workspace'
+  })
+  @ApiParam({
+    name: 'id',
+    type: Number,
+    required: true,
+    description: 'The ID of the coding job'
+  })
+  @ApiOkResponse({
+    description: 'Coding notes saved successfully',
+    type: CodingJobDto
+  })
+  @ApiNotFoundResponse({
+    description: 'Coding job not found.'
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data.'
+  })
+  async saveCodingNotes(
+    @WorkspaceId() workspaceId: number,
+      @Param('id', ParseIntPipe) id: number,
+      @Body() saveCodingNotesDto: SaveCodingNotesDto
+  ): Promise<CodingJobDto> {
+    await this.codingJobService.getCodingJob(id, workspaceId);
+    const codingJob = await this.codingJobService.saveCodingNotes(id, saveCodingNotesDto);
+    return CodingJobDto.fromEntity(codingJob);
+  }
+
   @Post(':id/restart-open-units')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiBearerAuth()
@@ -543,9 +583,16 @@ export class WsgCodingJobController {
   @ApiNotFoundResponse({
     description: 'Coding job not found.'
   })
+  @ApiQuery({
+    name: 'onlyOpen',
+    required: false,
+    type: Boolean,
+    description: 'When true, returns only units that are marked open'
+  })
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Query('onlyOpen') onlyOpen?: string
   ): Promise<Array<{
         responseId: number;
         unitName: string;
@@ -560,6 +607,6 @@ export class WsgCodingJobController {
         otherCoders: string[];
       }>> {
     await this.codingJobService.getCodingJob(id, workspaceId);
-    return this.codingJobService.getCodingJobUnits(id, false);
+    return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');
   }
 }
