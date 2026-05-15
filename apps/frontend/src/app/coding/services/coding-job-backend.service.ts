@@ -58,6 +58,10 @@ interface JobDefinitionApiResponse {
   suppressGeneralInstructions?: boolean;
   createdJobsCount?: number;
   created_jobs_count?: number;
+  blockingCreatedJobsCount?: number;
+  blocking_created_jobs_count?: number;
+  openCreatedJobsCount?: number;
+  open_created_jobs_count?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -77,6 +81,7 @@ export interface JobDefinition {
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   createdJobsCount?: number;
+  blockingCreatedJobsCount?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -551,6 +556,10 @@ export class CodingJobBackendService {
         allowComments: def.allowComments ?? def.allow_comments,
         suppressGeneralInstructions: def.suppressGeneralInstructions ?? def.suppress_general_instructions,
         createdJobsCount: def.createdJobsCount ?? def.created_jobs_count,
+        blockingCreatedJobsCount: def.blockingCreatedJobsCount ??
+          def.blocking_created_jobs_count ??
+          def.openCreatedJobsCount ??
+          def.open_created_jobs_count,
         createdAt: def.created_at,
         updatedAt: def.updated_at
       }))

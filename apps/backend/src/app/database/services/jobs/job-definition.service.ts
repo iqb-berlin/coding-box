@@ -35,6 +35,10 @@ interface JobDefinitionForUsage {
 export type JobDefinitionWithCreatedJobsCount = JobDefinition & {
   createdJobsCount: number;
   created_jobs_count: number;
+  blockingCreatedJobsCount: number;
+  blocking_created_jobs_count: number;
+  openCreatedJobsCount: number;
+  open_created_jobs_count: number;
 };
 
 interface JobDefinitionValidationState {
@@ -453,18 +457,34 @@ export class JobDefinitionService {
         const definitionIds = workspaceDefinitions
           .map(definition => definition.id)
           .filter((definitionId): definitionId is number => definitionId !== undefined);
-        const countsByDefinitionId = await this.codingJobService.getCodingJobCountsByDefinitionIds(
-          definitionWorkspaceId,
-          definitionIds
-        );
+        const [
+          countsByDefinitionId,
+          blockingCountsByDefinitionId
+        ] = await Promise.all([
+          this.codingJobService.getCodingJobCountsByDefinitionIds(
+            definitionWorkspaceId,
+            definitionIds
+          ),
+          this.codingJobService.getBlockingCodingJobCountsByDefinitionIds(
+            definitionWorkspaceId,
+            definitionIds
+          )
+        ]);
 
         workspaceDefinitions.forEach(definition => {
           const createdJobsCount = definition.id === undefined ?
             0 :
             countsByDefinitionId.get(definition.id) || 0;
+          const blockingCreatedJobsCount = definition.id === undefined ?
+            0 :
+            blockingCountsByDefinitionId.get(definition.id) || 0;
           Object.assign(definition, {
             createdJobsCount,
-            created_jobs_count: createdJobsCount
+            created_jobs_count: createdJobsCount,
+            blockingCreatedJobsCount,
+            blocking_created_jobs_count: blockingCreatedJobsCount,
+            openCreatedJobsCount: blockingCreatedJobsCount,
+            open_created_jobs_count: blockingCreatedJobsCount
           });
         });
       })
@@ -474,7 +494,11 @@ export class JobDefinitionService {
       if (!Object.prototype.hasOwnProperty.call(definition, 'createdJobsCount')) {
         Object.assign(definition, {
           createdJobsCount: 0,
-          created_jobs_count: 0
+          created_jobs_count: 0,
+          blockingCreatedJobsCount: 0,
+          blocking_created_jobs_count: 0,
+          openCreatedJobsCount: 0,
+          open_created_jobs_count: 0
         });
       }
     });
@@ -499,8 +523,37 @@ export class JobDefinitionService {
     return this.attachCreatedJobsCounts(definitions);
   }
 
+  private async assertJobDefinitionHasNoCreatedJobs(jobDefinition: JobDefinition): Promise<void> {
+    const countsByDefinitionId = await this.codingJobService.getCodingJobCountsByDefinitionIds(
+      jobDefinition.workspace_id,
+      [jobDefinition.id]
+    );
+    const createdJobsCount = countsByDefinitionId.get(jobDefinition.id) || 0;
+
+    if (createdJobsCount > 0) {
+      throw new BadRequestException(
+        `Cannot modify job definition ${jobDefinition.id} because ${createdJobsCount} coding jobs already exist`
+      );
+    }
+  }
+
+  private async assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition: JobDefinition): Promise<void> {
+    const countsByDefinitionId = await this.codingJobService.getBlockingCodingJobCountsByDefinitionIds(
+      jobDefinition.workspace_id,
+      [jobDefinition.id]
+    );
+    const blockingCreatedJobsCount = countsByDefinitionId.get(jobDefinition.id) || 0;
+
+    if (blockingCreatedJobsCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete job definition ${jobDefinition.id} because ${blockingCreatedJobsCount} coding jobs still block deletion`
+      );
+    }
+  }
+
   async updateJobDefinition(id: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
     const jobDefinition = await this.getJobDefinition(id);
+    await this.assertJobDefinitionHasNoCreatedJobs(jobDefinition);
     const nextState: JobDefinitionValidationState = {
       status: updateDto.status ?? jobDefinition.status,
       assignedVariables: updateDto.assignedVariables ?? jobDefinition.assigned_variables ?? [],
@@ -657,6 +710,7 @@ export class JobDefinitionService {
 
   async deleteJobDefinition(id: number): Promise<void> {
     const jobDefinition = await this.getJobDefinition(id);
+    await this.assertJobDefinitionHasNoBlockingCreatedJobs(jobDefinition);
     await this.jobDefinitionRepository.remove(jobDefinition);
   }
 

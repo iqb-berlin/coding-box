@@ -582,6 +582,10 @@ export class WsgCodingJobController {
       @Query('jobIds') jobIdsParam: string,
       @Req() req: Request
   ): Promise<Record<number, Record<string, unknown>>> {
+    if (!jobIdsParam?.trim()) {
+      throw new BadRequestException('Invalid job IDs provided');
+    }
+
     const jobIds = jobIdsParam.split(',')
       .map(id => parseInt(id.trim(), 10))
       .filter(id => Number.isFinite(id) && id > 0);

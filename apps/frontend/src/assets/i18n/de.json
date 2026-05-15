@@ -1727,6 +1727,8 @@
     },
     "actions": {
       "edit": "Bearbeiten",
+      "view": "Ansehen",
+      "view-readonly": "Definition schreibgeschützt ansehen",
       "submit-for-review": "Zur Prüfung einreichen",
       "submit-for-review-short": "Einreichen",
       "approve": "Genehmigen",
@@ -1735,6 +1737,7 @@
       "create-coding-jobs": "Kodier-Jobs erstellen",
       "create-coding-jobs-short": "Jobs erstellen",
       "jobs-already-created": "Aus dieser Definition wurden bereits Kodier-Jobs erstellt ({{count}}).",
+      "jobs-still-blocking": "Diese Definition kann erst gelöscht werden, wenn die daraus erzeugten Kodier-Jobs abgeschlossen und übernommen sind ({{count}} blockiert).",
       "jobs-created-short": "{{count}} erstellt",
       "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
       "jobs-count-unavailable-short": "Status unklar",

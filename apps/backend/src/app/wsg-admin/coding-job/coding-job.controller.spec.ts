@@ -69,4 +69,11 @@ describe('WsgCodingJobController', () => {
 
     expect(codingJobService.createCodingJob).not.toHaveBeenCalled();
   });
+
+  it('rejects bulk progress requests without job IDs', async () => {
+    await expect(controller.getBulkCodingProgress(47, undefined as never, req))
+      .rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+  });
 });

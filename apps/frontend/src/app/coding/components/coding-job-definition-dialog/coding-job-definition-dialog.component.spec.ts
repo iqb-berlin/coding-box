@@ -425,6 +425,44 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
   });
 
+  it('should open locked definitions read-only without submitting changes', async () => {
+    const definitionAsCodingJob = {
+      id: 555,
+      assignedCoders: [1],
+      assignedVariables: [{
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        availableCases: 10
+      }],
+      durationSeconds: 60,
+      maxCodingCases: 5,
+      doubleCodingAbsolute: 2,
+      status: 'approved'
+    } as Partial<CodingJob>;
+
+    createComponent({
+      mode: 'definition',
+      isEdit: true,
+      jobDefinitionId: 555,
+      readOnly: true,
+      codingJob: definitionAsCodingJob as CodingJob
+    });
+
+    expect(component.isReadOnly).toBe(true);
+    expect(component.codingJobForm.disabled).toBe(true);
+    expect(component.getTotalCodingCases()).toBe(5);
+    expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
+
+    component.masterCoderToggle();
+    component.setDoubleCodingMode('percentage');
+    await component.onSubmit();
+
+    expect(component.selectedCoders.selected.map(coder => coder.id)).toEqual([1]);
+    expect(component.doubleCodingMode).toBe('absolute');
+    expect(mockCodingJobBackendService.updateJobDefinition).not.toHaveBeenCalled();
+    expect(mockDialogRef.close).toHaveBeenCalled();
+  });
+
   describe('Bulk Creation', () => {
     it('should open bulk creation dialog when mode=job and >1 variables selected', async () => {
       createComponent({ mode: 'job', isEdit: false });

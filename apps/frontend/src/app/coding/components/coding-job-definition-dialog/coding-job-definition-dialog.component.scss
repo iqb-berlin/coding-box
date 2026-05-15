@@ -348,6 +348,20 @@
         box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
       }
 
+      &.read-only {
+        cursor: default;
+
+        &:hover {
+          border-color: rgba(0, 0, 0, 0.12);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        &.selected:hover {
+          border-color: #4caf50;
+          box-shadow: 0 4px 8px rgba(76, 175, 80, 0.2);
+        }
+      }
+
       .coder-avatar {
         display: flex;
         align-items: center;
@@ -435,6 +449,15 @@
 
       &.clickable {
         cursor: pointer;
+      }
+
+      &.read-only {
+        cursor: default;
+
+        &:hover {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          transform: none;
+        }
       }
 
       .variable-card-header {
@@ -594,6 +617,15 @@
       &.selected {
         border-color: #1976d2;
         background-color: #e3f2fd;
+      }
+
+      &.read-only {
+        cursor: default;
+
+        &:hover {
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          transform: none;
+        }
       }
 
       .bundle-card-header {

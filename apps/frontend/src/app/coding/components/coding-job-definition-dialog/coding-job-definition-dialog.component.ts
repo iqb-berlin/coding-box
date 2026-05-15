@@ -47,6 +47,7 @@ export interface CodingJobDefinitionDialogData {
   mode: 'definition' | 'job';
   jobDefinitionId?: number;
   preloadedVariables?: Variable[];
+  readOnly?: boolean;
 }
 
 export interface JobDefinition {
@@ -130,6 +131,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   codingJobForm!: FormGroup;
   isLoading = false;
   isSaving = false;
+
+  get isReadOnly(): boolean {
+    return this.data.readOnly === true;
+  }
 
   // Double coding configuration
   doubleCodingMode: 'absolute' | 'percentage' = 'absolute';
@@ -320,6 +325,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     this.codingJobForm = this.fb.group(formFields);
+
+    if (this.isReadOnly) {
+      this.codingJobForm.disable({ emitEvent: false });
+    }
 
     const originallyAssigned = this.data.codingJob?.assignedVariables ?? this.data.codingJob?.variables;
 
@@ -717,7 +726,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getTotalCodingCases(): number {
-    const maxCases = this.codingJobForm.value.maxCodingCases;
+    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
     const isDefinitionMode = this.data.mode === 'definition';
 
     const getAvailableCases = (v: Variable): number => (
@@ -749,7 +758,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const totalCases = this.getTotalCodingCases();
     if (totalCases === 0) return 0;
 
-    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.value;
+    const { doubleCodingAbsolute, doubleCodingPercentage } = this.codingJobForm.getRawValue();
 
     if (this.doubleCodingMode === 'absolute') {
       return Math.min(doubleCodingAbsolute || 0, totalCases);
@@ -763,7 +772,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   getTotalTimeInSeconds(): number {
-    const durationPerCase = this.codingJobForm.value.durationSeconds || 1;
+    const durationPerCase = this.codingJobForm.getRawValue().durationSeconds || 1;
     return this.getTotalCodingTasks() * durationPerCase;
   }
 
@@ -826,6 +835,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   masterToggle(): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     const selectableRows = this.dataSource.data.filter(v => !this.isVariableDisabled(v));
     if (this.isAllSelected()) {
       selectableRows.forEach(row => this.selectedVariables.deselect(row));
@@ -841,6 +854,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   masterCoderToggle(): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     if (this.isAllCodersSelected()) {
       this.selectedCoders.clear();
     } else {
@@ -849,6 +866,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   async onSubmit(): Promise<void> {
+    if (this.isReadOnly) {
+      this.dialogRef.close();
+      return;
+    }
+
     if (this.isSaving) {
       return;
     }
@@ -1111,6 +1133,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   toggleBundleSelection(bundle: VariableBundle): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     const wasSelected = this.selectedVariableBundles.isSelected(bundle);
     this.selectedVariableBundles.toggle(bundle);
     const isNowSelected = this.selectedVariableBundles.isSelected(bundle);
@@ -1124,6 +1150,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   setBundleOrderingMode(bundle: VariableBundle, mode: 'continuous' | 'alternating'): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     bundle.caseOrderingMode = mode;
     const selectedBundle = this.selectedVariableBundles.selected.find(b => b.id === bundle.id);
     if (selectedBundle && selectedBundle !== bundle) {
@@ -1142,6 +1172,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   setDoubleCodingMode(mode: 'absolute' | 'percentage'): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
     if (this.doubleCodingMode === mode) {
       return;
     }
@@ -1267,6 +1301,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   }
 
   onSubmitForReview(): void {
+    if (this.isReadOnly) {
+      this.dialogRef.close();
+      return;
+    }
+
     if (this.isSaving) {
       return;
     }

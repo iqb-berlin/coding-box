@@ -25,6 +25,7 @@ describe('JobDefinitionService', () => {
     createCodingJob: jest.Mock;
     createDistributedCodingJobs: jest.Mock;
     getCodingJobCountsByDefinitionIds: jest.Mock;
+    getBlockingCodingJobCountsByDefinitionIds: jest.Mock;
   };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let service: JobDefinitionService;
@@ -36,7 +37,8 @@ describe('JobDefinitionService', () => {
     codingJobService = {
       createCodingJob: jest.fn(),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
-      getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map())
+      getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
+      getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map())
     };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
@@ -319,22 +321,89 @@ describe('JobDefinitionService', () => {
 
     jobDefinitionRepository.find.mockResolvedValue(definitions);
     codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[3, 2]]));
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[3, 1]]));
 
     const result = await service.getJobDefinitions(7);
 
     expect(codingJobService.getCodingJobCountsByDefinitionIds).toHaveBeenCalledWith(7, [3, 4]);
+    expect(codingJobService.getBlockingCodingJobCountsByDefinitionIds).toHaveBeenCalledWith(7, [3, 4]);
     expect(result).toEqual([
       expect.objectContaining({
         id: 3,
         createdJobsCount: 2,
-        created_jobs_count: 2
+        created_jobs_count: 2,
+        blockingCreatedJobsCount: 1,
+        blocking_created_jobs_count: 1,
+        openCreatedJobsCount: 1,
+        open_created_jobs_count: 1
       }),
       expect.objectContaining({
         id: 4,
         createdJobsCount: 0,
-        created_jobs_count: 0
+        created_jobs_count: 0,
+        blockingCreatedJobsCount: 0,
+        blocking_created_jobs_count: 0,
+        openCreatedJobsCount: 0,
+        open_created_jobs_count: 0
       })
     ]);
+  });
+
+  it('rejects updates once coding jobs exist for a definition', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      case_ordering_mode: 'continuous'
+    });
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.updateJobDefinition(2, {
+      assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects deletes while coding jobs still block deletion for a definition', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      case_ordering_mode: 'continuous'
+    });
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[2, 1]]));
+
+    await expect(service.deleteJobDefinition(2)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(jobDefinitionRepository.remove).not.toHaveBeenCalled();
+  });
+
+  it('allows deletes once all created coding jobs are ready for definition deletion', async () => {
+    const definition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'approved',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      case_ordering_mode: 'continuous'
+    };
+    jobDefinitionRepository.findOne.mockResolvedValue(definition);
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+
+    await expect(service.deleteJobDefinition(2)).resolves.toBeUndefined();
+
+    expect(jobDefinitionRepository.remove).toHaveBeenCalledWith(definition);
   });
 
   it('hydrates bundles for approved definitions while preserving saved ordering mode', async () => {

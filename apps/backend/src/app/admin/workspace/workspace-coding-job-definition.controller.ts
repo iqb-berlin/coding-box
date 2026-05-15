@@ -80,6 +80,10 @@ export class WorkspaceCodingJobDefinitionController {
           suppress_general_instructions: { type: 'boolean' },
           createdJobsCount: { type: 'number' },
           created_jobs_count: { type: 'number' },
+          blockingCreatedJobsCount: { type: 'number' },
+          blocking_created_jobs_count: { type: 'number' },
+          openCreatedJobsCount: { type: 'number' },
+          open_created_jobs_count: { type: 'number' },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }
         }
