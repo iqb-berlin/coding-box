@@ -3,9 +3,18 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
-import { CodingListExportService, CodingResultsExportService, CodingTimesExportService } from '../../database/services/coding';
+import {
+  CodingExportService,
+  CodingListExportService,
+  CodingResultsExportService,
+  CodingTimesExportService
+} from '../../database/services/coding';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+
+jest.mock('../../database/services/workspace/workspace-files.service', () => ({
+  WorkspaceFilesService: jest.fn()
+}));
 
 const createWritableResponse = () => {
   const res = new PassThrough() as PassThrough & {
@@ -50,6 +59,7 @@ describe('WorkspaceCodingExportController', () => {
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
       codingResultsExportService as unknown as CodingResultsExportService,
+      {} as CodingExportService,
       {} as CodingTimesExportService,
       {} as JobQueueService,
       {} as CacheService
@@ -99,6 +109,7 @@ describe('WorkspaceCodingExportController', () => {
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
       {} as CodingResultsExportService,
+      {} as CodingExportService,
       {} as CodingTimesExportService,
       {} as JobQueueService,
       cacheService as unknown as CacheService

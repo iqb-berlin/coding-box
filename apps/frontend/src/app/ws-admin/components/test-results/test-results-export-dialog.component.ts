@@ -42,8 +42,8 @@ export type TestResultsExportDialogData = {
       <mat-list>
         <mat-list-item (click)="selectExportType('results')">
           <mat-icon matListItemIcon>download</mat-icon>
-          <div matListItemTitle>Ergebnisse exportieren</div>
-          <div matListItemLine>Testergebnisdaten exportieren</div>
+          <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
+          <div matListItemLine>Rohdaten aus der Testausführung exportieren</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectExportType('logs')">
