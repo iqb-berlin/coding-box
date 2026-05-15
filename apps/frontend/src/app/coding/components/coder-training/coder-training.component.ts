@@ -156,6 +156,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
       trainingLabel: ['', [Validators.required]],
       caseOrderingMode: ['continuous'],
       caseSelectionMode: ['oldest_first' as CaseSelectionMode],
+      suppressGeneralInstructions: [false],
       includeDerivedVariables: [true],
       referenceTrainingIds: [[] as number[]],
       referenceMode: [null as ReferenceMode | null],
@@ -307,6 +308,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (this.editTraining.reference_mode) {
       this.trainingForm.get('referenceMode')?.setValue(this.editTraining.reference_mode);
     }
+    this.trainingForm.get('suppressGeneralInstructions')?.setValue(
+      this.editTraining.suppress_general_instructions ?? false
+    );
 
     if (this.editTraining.assigned_coders) {
       this.selectedCoders = new Set(this.editTraining.assigned_coders);
@@ -1245,7 +1249,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseOrderingMode,
         caseSelectionMode,
         referenceTrainingIds.length ? referenceTrainingIds : undefined,
-        referenceMode ?? undefined
+        referenceMode ?? undefined,
+        this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       ) :
       this.codingTrainingBackendService.createCoderTrainingJobs(
         workspaceId,
@@ -1258,7 +1263,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         caseOrderingMode,
         caseSelectionMode,
         referenceTrainingIds.length ? referenceTrainingIds : undefined,
-        referenceMode ?? undefined
+        referenceMode ?? undefined,
+        this.trainingForm.get('suppressGeneralInstructions')?.value ?? false
       );
 
     request$.subscribe({
@@ -1314,6 +1320,10 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   private importJobDefinitionSelections(jobDef: JobDefinition, defaultSampleCount: number): void {
     let varsAdded = 0;
     let bundlesAdded = 0;
+
+    this.trainingForm.get('suppressGeneralInstructions')?.setValue(
+      jobDef.suppressGeneralInstructions ?? false
+    );
 
     if (jobDef.assignedVariables && jobDef.assignedVariables.length > 0) {
       jobDef.assignedVariables.forEach((v: Variable) => {

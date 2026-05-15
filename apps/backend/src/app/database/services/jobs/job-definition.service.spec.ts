@@ -242,7 +242,8 @@ describe('JobDefinitionService', () => {
       max_coding_cases: 7,
       double_coding_absolute: 2,
       double_coding_percentage: null,
-      case_ordering_mode: 'continuous'
+      case_ordering_mode: 'continuous',
+      suppress_general_instructions: true
     });
     variableBundleRepository.find.mockResolvedValue([
       {
@@ -283,7 +284,8 @@ describe('JobDefinitionService', () => {
       doubleCodingPercentage: undefined,
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
-      jobDefinitionId: 12
+      jobDefinitionId: 12,
+      suppressGeneralInstructions: true
     });
   });
 });

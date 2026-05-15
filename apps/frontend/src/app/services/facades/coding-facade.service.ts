@@ -100,6 +100,16 @@ export interface ExportJobStatus {
   error?: string;
 }
 
+interface DistributedCodingDisplayOptions {
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+}
+
+interface CoderTrainingDisplayOptions {
+  suppressGeneralInstructions?: boolean;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -207,8 +217,21 @@ export class CodingFacadeService {
     return this.codingJobBackendService.getCodingIncompleteVariables(workspaceId, unitName);
   }
 
-  createCoderTrainingJobs(workspaceId: number, selectedCoders: { id: number; name: string }[], variableConfigs: { variableId: string; unitId: string; sampleCount: number }[], trainingLabel: string, missingsProfileId?: number): Observable<CreateCoderTrainingJobsResponse> {
-    return this.codingTrainingBackendService.createCoderTrainingJobs(workspaceId, selectedCoders, variableConfigs, trainingLabel, missingsProfileId);
+  createCoderTrainingJobs(workspaceId: number, selectedCoders: { id: number; name: string }[], variableConfigs: { variableId: string; unitId: string; sampleCount: number }[], trainingLabel: string, missingsProfileId?: number, displayOptions?: CoderTrainingDisplayOptions): Observable<CreateCoderTrainingJobsResponse> {
+    return this.codingTrainingBackendService.createCoderTrainingJobs(
+      workspaceId,
+      selectedCoders,
+      variableConfigs,
+      trainingLabel,
+      missingsProfileId,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      displayOptions?.suppressGeneralInstructions
+    );
   }
 
   getCoderTrainings(workspaceId: number): Observable<CoderTraining[]> {
@@ -367,8 +390,8 @@ export class CodingFacadeService {
     return this.codingStatisticsService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation);
   }
 
-  createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, jobDefinitionId?: number): Observable<{ success: boolean; jobsCreated: number; message: string; distribution: Record<string, Record<string, number>>; doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>; aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>; matchingFlags: string[]; jobs: { coderId: number; coderName: string; variable: { unitName: string; variableId: string }; jobId: number; jobName: string; caseCount: number; }[]; }> {
-    return this.distributedCodingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases, jobDefinitionId);
+  createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, jobDefinitionId?: number, displayOptions?: DistributedCodingDisplayOptions): Observable<{ success: boolean; jobsCreated: number; message: string; distribution: Record<string, Record<string, number>>; doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>; aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>; matchingFlags: string[]; jobs: { coderId: number; coderName: string; variable: { unitName: string; variableId: string }; jobId: number; jobName: string; caseCount: number; }[]; }> {
+    return this.distributedCodingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases, jobDefinitionId, displayOptions);
   }
 
   calculateDistribution(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number): Observable<{

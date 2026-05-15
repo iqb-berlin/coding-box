@@ -160,3 +160,12 @@ DROP TABLE IF EXISTS "public"."responses";
 DROP TABLE IF EXISTS "public"."logs";
 
 -- rollback CREATE TABLE "public"."logs" ("id" SERIAL PRIMARY KEY, "unit_id" VARCHAR(50) NOT NULL, "test_group" VARCHAR(100), "workspace_id" INTEGER NOT NULL, "log_entry" VARCHAR(100), "timestamp" BIGINT, "booklet_id" VARCHAR(100));
+
+-- changeset jurei733:14
+-- comment: Add general instruction display defaults to job definitions and coder trainings
+
+ALTER TABLE "public"."job_definitions" ADD COLUMN "suppress_general_instructions" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "public"."coder_training" ADD COLUMN "suppress_general_instructions" BOOLEAN NOT NULL DEFAULT false;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "suppress_general_instructions";
+-- rollback ALTER TABLE "public"."coder_training" DROP COLUMN IF EXISTS "suppress_general_instructions";

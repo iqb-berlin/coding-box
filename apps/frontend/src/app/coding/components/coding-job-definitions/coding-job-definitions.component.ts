@@ -47,6 +47,7 @@ interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  suppressGeneralInstructions?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -345,6 +346,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
         caseOrderingMode: definition.caseOrderingMode,
+        suppressGeneralInstructions: definition.suppressGeneralInstructions,
         created_at: definition.created_at!,
         updated_at: definition.updated_at!
       }
@@ -550,7 +552,10 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
         caseOrderingMode: definition.caseOrderingMode || 'continuous',
-        maxCodingCases: definition.maxCodingCases
+        maxCodingCases: definition.maxCodingCases,
+        displayOptions: {
+          suppressGeneralInstructions: definition.suppressGeneralInstructions ?? false
+        }
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
         width: '1200px',
@@ -601,25 +606,16 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
           data.selectedVariableBundles,
           data.caseOrderingMode,
           data.maxCodingCases,
-          jobDefinitionId
+          jobDefinitionId,
+          {
+            showScore: creationResult.showScore,
+            allowComments: creationResult.allowComments,
+            suppressGeneralInstructions: creationResult.suppressGeneralInstructions
+          }
         )
       );
 
       if (result && result.success) {
-        if (creationResult) {
-          const updatePromises = result.jobs.map((job: { jobId: number }) => firstValueFrom(
-            this.codingJobBackendService.updateCodingJob(workspaceId, job.jobId, {
-              showScore: creationResult.showScore,
-              allowComments: creationResult.allowComments,
-              suppressGeneralInstructions:
-                creationResult.suppressGeneralInstructions
-            })
-          )
-          );
-
-          await Promise.allSettled(updatePromises);
-        }
-
         this.snackBar.open(
           this.translateService.instant(
             'coding-job-definitions.messages.snackbar.jobs-created',

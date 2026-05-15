@@ -1317,7 +1317,10 @@ export class WorkspaceCodingStatisticsController {
         },
         doubleCodingAbsolute: { type: 'number' },
         doubleCodingPercentage: { type: 'number' },
-        jobDefinitionId: { type: 'number' }
+        jobDefinitionId: { type: 'number' },
+        showScore: { type: 'boolean' },
+        allowComments: { type: 'boolean' },
+        suppressGeneralInstructions: { type: 'boolean' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -1394,6 +1397,9 @@ export class WorkspaceCodingStatisticsController {
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
                      jobDefinitionId?: number;
+                     showScore?: boolean;
+                     allowComments?: boolean;
+                     suppressGeneralInstructions?: boolean;
                    }
   ): Promise<{
         success: boolean;

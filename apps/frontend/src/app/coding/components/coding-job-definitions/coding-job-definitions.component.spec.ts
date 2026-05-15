@@ -155,7 +155,8 @@ describe('CodingJobDefinitionsComponent', () => {
       assignedCoders: [2, 1],
       doubleCodingAbsolute: 1,
       caseOrderingMode: 'continuous',
-      maxCodingCases: 7
+      maxCodingCases: 7,
+      suppressGeneralInstructions: true
     });
 
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
@@ -183,12 +184,36 @@ describe('CodingJobDefinitionsComponent', () => {
       assignedVariableBundles,
       'continuous',
       7,
-      42
+      42,
+      {
+        showScore: false,
+        allowComments: true,
+        suppressGeneralInstructions: true
+      }
     );
-    expect(codingJobBackendService.updateCodingJob).toHaveBeenCalledWith(1, 111, {
-      showScore: false,
-      allowComments: true,
+    expect(codingJobBackendService.updateCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('passes saved display options into the edit dialog', () => {
+    const matDialog = TestBed.inject(MatDialog);
+    const dialogRefMock = { afterClosed: () => of(false) };
+    jest.spyOn(matDialog, 'open').mockReturnValue(dialogRefMock as never);
+
+    component.editDefinition({
+      id: 24,
+      status: 'draft',
+      assignedVariables: [{ unitName: 'Unit', variableId: 'Var' }],
+      assignedCoders: [1],
+      caseOrderingMode: 'continuous',
       suppressGeneralInstructions: true
     });
+
+    expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
+      data: expect.objectContaining({
+        codingJob: expect.objectContaining({
+          suppressGeneralInstructions: true
+        })
+      })
+    }));
   });
 });

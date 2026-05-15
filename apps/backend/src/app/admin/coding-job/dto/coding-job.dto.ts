@@ -47,6 +47,27 @@ export class CodingJobDto {
     comment?: string;
 
   @ApiProperty({
+    description: 'Whether scores are shown in the code selector',
+    example: true,
+    required: false
+  })
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether coder comments are allowed in the code selector',
+    example: true,
+    required: false
+  })
+    allowComments?: boolean;
+
+  @ApiProperty({
+    description: 'Whether general variable instructions are hidden in the code selector',
+    example: false,
+    required: false
+  })
+    suppressGeneralInstructions?: boolean;
+
+  @ApiProperty({
     description: 'Date and time when the coding job was created',
     example: '2025-08-06T10:05:00.000Z'
   })
@@ -253,6 +274,9 @@ export class CodingJobDto {
     dto.description = entity.description;
     dto.status = entity.status;
     dto.comment = entity.comment;
+    dto.showScore = entity.showScore;
+    dto.allowComments = entity.allowComments;
+    dto.suppressGeneralInstructions = entity.suppressGeneralInstructions;
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     dto.missings_profile_id = entity.missings_profile_id;

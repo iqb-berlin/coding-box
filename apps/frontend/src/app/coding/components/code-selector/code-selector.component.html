@@ -106,7 +106,7 @@
                 translate }} {{ item.score }}</span>
             </span>
           </div>
-          <div class="code-instruction" *ngIf="!suppressGeneralInstructions && item.manualInstruction"
+          <div class="code-instruction" *ngIf="item.manualInstruction"
             [innerHTML]="getSafeHtml(item.manualInstruction)"></div>
         </div>
       </div>

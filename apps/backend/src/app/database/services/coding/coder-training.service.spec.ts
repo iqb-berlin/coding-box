@@ -25,6 +25,7 @@ import type { CaseSelectionMode } from '../../entities/coder-training.entity';
 describe('CoderTrainingService', () => {
   let service: CoderTrainingService;
   let coderTrainingRepository: Repository<CoderTraining>;
+  let codingJobRepository: Repository<CodingJob>;
   let coderTrainingVariableRepository: Repository<CoderTrainingVariable>;
   let coderTrainingBundleRepository: Repository<CoderTrainingBundle>;
   let coderTrainingCoderRepository: Repository<CoderTrainingCoder>;
@@ -84,6 +85,7 @@ describe('CoderTrainingService', () => {
 
     service = module.get<CoderTrainingService>(CoderTrainingService);
     coderTrainingRepository = module.get<Repository<CoderTraining>>(getRepositoryToken(CoderTraining));
+    codingJobRepository = module.get<Repository<CodingJob>>(getRepositoryToken(CodingJob));
     coderTrainingVariableRepository = module.get<Repository<CoderTrainingVariable>>(getRepositoryToken(CoderTrainingVariable));
     coderTrainingBundleRepository = module.get<Repository<CoderTrainingBundle>>(getRepositoryToken(CoderTrainingBundle));
     coderTrainingCoderRepository = module.get<Repository<CoderTrainingCoder>>(getRepositoryToken(CoderTrainingCoder));
@@ -142,6 +144,53 @@ describe('CoderTrainingService', () => {
         user_id: 10
       }));
     });
+
+    it('should persist display options on the training and created jobs', async () => {
+      const generatePackagesSpy = jest.spyOn(service, 'generateCoderTrainingPackages')
+        .mockResolvedValue([{
+          coderId: 10,
+          coderName: 'Coder 1',
+          responses: [{
+            responseId: 101,
+            unitAlias: 'Unit Alias',
+            variableId: 'v1',
+            unitName: 'u1',
+            value: 'value',
+            personLogin: 'login',
+            personCode: 'code',
+            personGroup: 'group',
+            bookletName: 'booklet',
+            variable: 'v1'
+          }]
+        }]);
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+      (codingJobRepository.save as jest.Mock).mockClear();
+      mockRepository.save.mockResolvedValue({ id: 100 });
+
+      await service.createCoderTrainingJobs(
+        1,
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 1 }],
+        'Training with display option',
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+
+      expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        suppress_general_instructions: true
+      }));
+      expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        suppressGeneralInstructions: true
+      }));
+
+      generatePackagesSpy.mockRestore();
+    });
   });
 
   describe('updateCoderTraining', () => {
@@ -188,6 +237,51 @@ describe('CoderTrainingService', () => {
         sample_count: 15
       }));
     });
+
+    it('should update display options on an existing training without recreating jobs', async () => {
+      const existingJob = { id: 100, suppressGeneralInstructions: false };
+      const existingTraining = {
+        id: 1,
+        workspace_id: 1,
+        label: 'Old Label',
+        suppress_general_instructions: false,
+        coders: [{ user_id: 10 }],
+        variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
+        bundles: [],
+        codingJobs: [existingJob]
+      };
+
+      mockRepository.findOne.mockResolvedValue(existingTraining);
+      (coderTrainingRepository.save as jest.Mock).mockClear();
+      (coderTrainingCoderRepository.delete as jest.Mock).mockClear();
+      (codingJobRepository.save as jest.Mock).mockClear();
+      mockRepository.save.mockResolvedValue({ id: 100 });
+
+      await service.updateCoderTraining(
+        1,
+        1,
+        'Updated Label',
+        [{ id: 10, name: 'Coder 1' }],
+        [{ variableId: 'v1', unitId: 'u1', sampleCount: 5 }],
+        undefined,
+        [{ variableId: 'v1', unitName: 'u1', sampleCount: 5 }],
+        [],
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        true
+      );
+
+      expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        suppress_general_instructions: true
+      }));
+      expect(coderTrainingCoderRepository.delete).not.toHaveBeenCalled();
+      expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+        id: 100,
+        suppressGeneralInstructions: true
+      }));
+    });
   });
 
   describe('getCoderTrainings', () => {
@@ -199,6 +293,7 @@ describe('CoderTrainingService', () => {
         label: 'Training 1',
         created_at: new Date(),
         updated_at: new Date(),
+        suppress_general_instructions: true,
         codingJobs: [],
         variables: [{ variable_id: 'v1', unit_name: 'u1', sample_count: 5 }],
         bundles: [{ variable_bundle_id: 2, sample_count: 25, bundle: { name: 'Bundle 1' } }],
@@ -223,6 +318,7 @@ describe('CoderTrainingService', () => {
         sampleCount: 25
       });
       expect(result[0].assigned_coders).toEqual([10]);
+      expect(result[0].suppress_general_instructions).toBe(true);
     });
   });
 

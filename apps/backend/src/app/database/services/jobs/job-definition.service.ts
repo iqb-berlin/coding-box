@@ -399,7 +399,8 @@ export class JobDefinitionService {
       max_coding_cases: createDto.maxCodingCases,
       double_coding_absolute: createDto.doubleCodingAbsolute,
       double_coding_percentage: createDto.doubleCodingPercentage,
-      case_ordering_mode: createDto.caseOrderingMode
+      case_ordering_mode: createDto.caseOrderingMode,
+      suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
     });
 
     return this.jobDefinitionRepository.save(jobDefinition);
@@ -524,6 +525,9 @@ export class JobDefinitionService {
     }
     if (updateDto.caseOrderingMode !== undefined) {
       jobDefinition.case_ordering_mode = updateDto.caseOrderingMode;
+    }
+    if (updateDto.suppressGeneralInstructions !== undefined) {
+      jobDefinition.suppress_general_instructions = updateDto.suppressGeneralInstructions;
     }
 
     const savedDefinition = await this.jobDefinitionRepository.save(jobDefinition);
@@ -671,7 +675,8 @@ export class JobDefinitionService {
       doubleCodingPercentage: this.toOptionalNumber(jobDefinition.double_coding_percentage),
       caseOrderingMode: jobDefinition.case_ordering_mode,
       maxCodingCases: jobDefinition.max_coding_cases,
-      jobDefinitionId
+      jobDefinitionId,
+      suppressGeneralInstructions: jobDefinition.suppress_general_instructions
     });
   }
 }

@@ -53,6 +53,11 @@ export interface BulkCreationData {
   distribution?: Record<string, Record<string, number>>;
   doubleCodingInfo?: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
   warnings?: JobCreationWarning[];
+  displayOptions?: {
+    showScore?: boolean;
+    allowComments?: boolean;
+    suppressGeneralInstructions?: boolean;
+  };
 }
 
 interface DoubleCodingPreview {
@@ -319,9 +324,9 @@ export class CodingJobBulkCreationDialogComponent {
 
   private initForm(): void {
     this.displayOptionsForm = this.fb.group({
-      showScore: [true],
-      allowComments: [true],
-      suppressGeneralInstructions: [false]
+      showScore: [this.data.displayOptions?.showScore ?? true],
+      allowComments: [this.data.displayOptions?.allowComments ?? true],
+      suppressGeneralInstructions: [this.data.displayOptions?.suppressGeneralInstructions ?? false]
     });
   }
 

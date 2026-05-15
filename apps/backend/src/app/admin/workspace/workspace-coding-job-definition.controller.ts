@@ -74,6 +74,7 @@ export class WorkspaceCodingJobDefinitionController {
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
+          suppress_general_instructions: { type: 'boolean' },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }
         }
@@ -105,6 +106,7 @@ export class WorkspaceCodingJobDefinitionController {
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
+          suppress_general_instructions: { type: 'boolean' },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }
         }
