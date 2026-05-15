@@ -16,6 +16,7 @@ import { AppService } from '../../../core/services/app.service';
 import * as tokenUtils from '../../utils/token-utils';
 import * as domUtils from '../../utils/dom-utils';
 import { CodingJob } from '../../../coding/models/coding-job.model';
+import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 import { utf8ToBase64 } from '../../../shared/utils/common-utils';
 
 // Beispielhafte Mocks für Services, die im Component per inject() genutzt werden
@@ -58,7 +59,12 @@ class MatSnackBarMock {
   dismiss = jest.fn();
 }
 
-let routeParams = {
+let routeParams: {
+  page: string;
+  testPerson: string;
+  unitId: string;
+  anchor: string | undefined;
+} = {
   page: 'page-1', testPerson: 'valid@test@person', unitId: 'unit-123', anchor: undefined
 };
 let routeQueryParams: Record<string, string> = { auth: 'valid-token' };
@@ -78,6 +84,14 @@ describe('ReplayComponent', () => {
   let component: ReplayComponent;
   let fixture: ComponentFixture<ReplayComponent>;
   let snackBar: MatSnackBarMock;
+  let codingJobBackendServiceMock: {
+    getCodingJobUnits: jest.Mock;
+    updateCodingJob: jest.Mock;
+    getCodingProgress: jest.Mock;
+    getCodingNotes: jest.Mock;
+    getCodingJob: jest.Mock;
+    saveCodingProgress: jest.Mock;
+  };
 
   beforeEach(async () => {
     routeParams = {
@@ -92,6 +106,15 @@ describe('ReplayComponent', () => {
     // Spy on DOM utils
     jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
 
+    codingJobBackendServiceMock = {
+      getCodingJobUnits: jest.fn().mockReturnValue(of([])),
+      updateCodingJob: jest.fn().mockReturnValue(of({})),
+      getCodingProgress: jest.fn().mockReturnValue(of({})),
+      getCodingNotes: jest.fn().mockReturnValue(of({})),
+      getCodingJob: jest.fn().mockReturnValue(of({})),
+      saveCodingProgress: jest.fn().mockReturnValue(of({}))
+    };
+
     await TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -101,6 +124,7 @@ describe('ReplayComponent', () => {
         { provide: ResponseService, useClass: ResponseServiceMock },
         { provide: FileBackendService, useClass: FileBackendServiceMock },
         { provide: ReplayBackendService, useClass: ReplayBackendServiceMock },
+        { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: AppService, useClass: AppServiceMock },
         { provide: MatSnackBar, useClass: MatSnackBarMock }
       ],
@@ -253,6 +277,45 @@ describe('ReplayComponent', () => {
     expect(replayComponent.unitsData?.units).toHaveLength(2);
     expect(component.totalUnits).toBe(2);
     expect(updateStatusSpy).not.toHaveBeenCalled();
+  });
+
+  it('should use replay auth token when loading coding job units from query params', async () => {
+    routeParams = {
+      page: '0',
+      testPerson: 'valid@test@person',
+      unitId: 'unit-123',
+      anchor: 'VAR1'
+    };
+    routeQueryParams = {
+      auth: 'valid-token',
+      mode: 'coding',
+      codingJobId: '77',
+      workspaceId: '47'
+    };
+    codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
+      responseId: 1,
+      unitName: 'unit-123',
+      unitAlias: 'Unit 123',
+      variableId: 'VAR1',
+      variableAnchor: 'VAR1',
+      bookletName: 'Booklet 1',
+      personLogin: 'valid',
+      personCode: 'test',
+      personGroup: '',
+      isDoubleCoded: false,
+      otherCoders: []
+    }]));
+
+    fixture.destroy();
+    fixture = TestBed.createComponent(ReplayComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    await fixture.whenStable();
+    await new Promise<void>(resolve => {
+      setTimeout(resolve, 0);
+    });
+
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token');
   });
 
   it('should normalize player ID correctly', () => {

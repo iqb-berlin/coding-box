@@ -51,6 +51,20 @@ describe('ReplayCodingService', () => {
       await service.updateCodingJobStatus(1, 100, 'active');
       expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(1, 100, { status: 'active' });
     });
+
+    it('should pass the replay auth token to backend status updates', async () => {
+      codingJobBackendServiceMock.updateCodingJob.mockReturnValue(of({} as CodingJob));
+      service.setAuthToken('replay-token');
+
+      await service.updateCodingJobStatus(1, 100, 'active');
+
+      expect(codingJobBackendServiceMock.updateCodingJob).toHaveBeenCalledWith(
+        1,
+        100,
+        { status: 'active' },
+        'replay-token'
+      );
+    });
   });
 
   describe('loadSavedCodingProgress', () => {
@@ -71,6 +85,19 @@ describe('ReplayCodingService', () => {
       expect(service.showScore).toBe(true);
     });
 
+    it('should pass the replay auth token while loading progress, notes, and job details', async () => {
+      codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingNotes.mockReturnValue(of({}));
+      codingJobBackendServiceMock.getCodingJob.mockReturnValue(of({} as CodingJob));
+      service.setAuthToken('replay-token');
+
+      await service.loadSavedCodingProgress(1, 100);
+
+      expect(codingJobBackendServiceMock.getCodingProgress).toHaveBeenCalledWith(1, 100, 'replay-token');
+      expect(codingJobBackendServiceMock.getCodingNotes).toHaveBeenCalledWith(1, 100, 'replay-token');
+      expect(codingJobBackendServiceMock.getCodingJob).toHaveBeenCalledWith(1, 100, 'replay-token');
+    });
+
     it('should handle errors gracefully', async () => {
       codingJobBackendServiceMock.getCodingProgress.mockReturnValue(of({}));
       await service.loadSavedCodingProgress(1, 100);
@@ -83,6 +110,31 @@ describe('ReplayCodingService', () => {
       codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
       await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
       expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalled();
+    });
+
+    it('should pass the replay auth token when saving progress', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.setAuthToken('replay-token');
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: {
+            id: 1,
+            code: '',
+            label: 'l',
+            score: null,
+            codingIssueOption: null
+          }
+        },
+        'replay-token'
+      );
     });
   });
 });
