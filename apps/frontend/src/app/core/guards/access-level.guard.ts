@@ -6,11 +6,7 @@ import {
   Router
 } from '@angular/router';
 import { inject } from '@angular/core';
-import {
-  firstValueFrom,
-  filter,
-  timeout
-} from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
@@ -20,6 +16,7 @@ import {
   createAuthDataFailedUrlTree,
   createReAuthenticationUrlTree
 } from './auth-redirect';
+import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
 
 /**
  * Guard factory that creates a route guard checking for minimum access level
@@ -58,14 +55,13 @@ export function canActivateAccessLevel(minLevel: number): CanActivateFn {
     }
 
     try {
-      // Get current user ID from authData - filter out the default value with userId: 0
-      const userAuthData = await firstValueFrom(
-        appService.authData$.pipe(
-          filter(data => data.userId > 0),
-          timeout(5000)
-        )
-      );
-      const currentUserId = userAuthData.userId;
+      const authDataStatus = await waitForRequiredAuthData(appService);
+      const authDataGuardResult = createRequiredAuthDataGuardResult(router, state.url, authDataStatus);
+      if (authDataGuardResult !== true) {
+        return authDataGuardResult;
+      }
+
+      const currentUserId = appService.authData.userId;
 
       // Fetch workspace users with access levels
       const workspaceUsers = await firstValueFrom(

@@ -7,11 +7,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Subscription, filter, forkJoin, take
+  Subscription, forkJoin
 } from 'rxjs';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { AppService } from '../../core/services/app.service';
+import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
@@ -50,6 +50,10 @@ export class HomeComponent implements OnInit, OnDestroy {
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
   private isCoderChecked = false;
+  private authBootstrapStatus: AuthBootstrapStatus = 'checking';
+  private authDataRefreshRequested = false;
+  private authDataFailedQueryParamActive = false;
+  private authDataFailedMessageShown = false;
 
   private authSubscription?: Subscription;
   private authBootstrapSubscription?: Subscription;
@@ -63,15 +67,23 @@ export class HomeComponent implements OnInit, OnDestroy {
         if (!this.isCoderChecked && authData.userId > 0) {
           this.checkIfUserIsCoder(authData.userId);
         }
+        if (authData.userId > 0) {
+          this.resolveAuthDataFailedQueryParam();
+        }
       }
     });
 
     this.authBootstrapSubscription = this.appService.authBootstrapStatus$
-      .pipe(
-        filter(status => status === 'ready'),
-        take(1)
-      )
-      .subscribe(() => this.refreshHomeAuthDataIfNeeded());
+      .subscribe(status => {
+        this.authBootstrapStatus = status;
+
+        if (status === 'ready' && !this.authDataRefreshRequested) {
+          this.authDataRefreshRequested = true;
+          this.refreshHomeAuthDataIfNeeded();
+        }
+
+        this.resolveAuthDataFailedQueryParam();
+      });
 
     this.queryParamsSubscription = this.route.queryParams.subscribe(params => {
       if (params.error) {
@@ -79,6 +91,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       }
       if (params.auth) {
         this.handleAuthQueryParams(params);
+      } else {
+        this.resetAuthDataFailedQueryParamState();
       }
     });
   }
@@ -146,21 +160,18 @@ export class HomeComponent implements OnInit, OnDestroy {
 
     switch (authReason) {
       case AUTH_QUERY_PARAM_SESSION_EXPIRED:
+        this.resetAuthDataFailedQueryParamState();
         if (this.authService.isLoggedIn() === false) {
           this.appService.requireReAuthentication(returnUrl);
         }
         break;
       case AUTH_QUERY_PARAM_AUTH_DATA_FAILED:
-        this.snackBar.open(
-          'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
-          'Schließen',
-          {
-            duration: 8000,
-            panelClass: ['snackbar-error']
-          }
-        );
+        this.authDataFailedQueryParamActive = true;
+        this.authDataFailedMessageShown = false;
+        this.resolveAuthDataFailedQueryParam();
         break;
       case AUTH_QUERY_PARAM_ACCESS_DENIED:
+        this.resetAuthDataFailedQueryParamState();
         this.snackBar.open(
           'Sie haben keinen Zugriff auf diesen Bereich.',
           'Schließen',
@@ -171,8 +182,51 @@ export class HomeComponent implements OnInit, OnDestroy {
         );
         break;
       default:
+        this.resetAuthDataFailedQueryParamState();
         break;
     }
+  }
+
+  private resolveAuthDataFailedQueryParam(): void {
+    if (!this.authDataFailedQueryParamActive) {
+      return;
+    }
+
+    if (this.authData.userId > 0 || this.authBootstrapStatus === 'ready') {
+      this.clearAuthDataFailedQueryParams();
+      return;
+    }
+
+    if (this.authBootstrapStatus === 'auth-data-failed' && !this.authDataFailedMessageShown) {
+      this.authDataFailedMessageShown = true;
+      this.snackBar.open(
+        'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
+        'Schließen',
+        {
+          duration: 8000,
+          panelClass: ['snackbar-error']
+        }
+      );
+    }
+  }
+
+  private clearAuthDataFailedQueryParams(): void {
+    this.resetAuthDataFailedQueryParamState();
+
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        auth: null,
+        returnUrl: null
+      },
+      queryParamsHandling: 'merge',
+      replaceUrl: true
+    });
+  }
+
+  private resetAuthDataFailedQueryParamState(): void {
+    this.authDataFailedQueryParamActive = false;
+    this.authDataFailedMessageShown = false;
   }
 
   ngOnDestroy(): void {
