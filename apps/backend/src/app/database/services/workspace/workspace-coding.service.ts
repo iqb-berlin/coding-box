@@ -409,6 +409,9 @@ export class WorkspaceCodingService {
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
     }
   ): Promise<{
       success: boolean;

@@ -104,7 +104,8 @@ export class CodingTrainingBackendService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
-    referenceMode?: 'same' | 'different'
+    referenceMode?: 'same' | 'different',
+    suppressGeneralInstructions?: boolean
   ): Observable<CreateCoderTrainingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-training-jobs`;
     return this.http.post<CreateCoderTrainingJobsResponse>(url, {
@@ -117,7 +118,8 @@ export class CodingTrainingBackendService {
       caseOrderingMode,
       caseSelectionMode,
       referenceTrainingIds,
-      referenceMode
+      referenceMode,
+      suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
 
@@ -138,7 +140,8 @@ export class CodingTrainingBackendService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: 'oldest_first' | 'newest_first' | 'random' | 'random_per_testgroup' | 'random_testgroups',
     referenceTrainingIds?: number[],
-    referenceMode?: 'same' | 'different'
+    referenceMode?: 'same' | 'different',
+    suppressGeneralInstructions?: boolean
   ): Observable<{ success: boolean; message: string; jobsCreated?: number }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/coder-trainings/${trainingId}`;
     return this.http.put<{ success: boolean; message: string; jobsCreated?: number }>(url, {
@@ -151,7 +154,8 @@ export class CodingTrainingBackendService {
       caseOrderingMode,
       caseSelectionMode,
       referenceTrainingIds,
-      referenceMode
+      referenceMode,
+      suppressGeneralInstructions
     }, { headers: this.authHeader });
   }
 

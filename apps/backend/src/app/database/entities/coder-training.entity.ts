@@ -60,6 +60,9 @@ export class CoderTraining {
   @Column({ type: 'varchar', length: 20, nullable: true })
     reference_mode: ReferenceMode | null;
 
+  @Column({ type: 'boolean', default: false })
+    suppress_general_instructions: boolean;
+
   @OneToMany(() => CodingJob, codingJob => codingJob.training, { cascade: true })
     codingJobs: CodingJob[];
 

@@ -391,6 +391,9 @@ export class CodingJobService {
         name: createCodingJobDto.name,
         description: createCodingJobDto.description,
         status: createCodingJobDto.status || 'pending',
+        showScore: createCodingJobDto.showScore ?? false,
+        allowComments: createCodingJobDto.allowComments ?? true,
+        suppressGeneralInstructions: createCodingJobDto.suppressGeneralInstructions ?? false,
         missings_profile_id: createCodingJobDto.missings_profile_id,
         job_definition_id: createCodingJobDto.jobDefinitionId,
         aggregation_enabled: aggregationSettings.aggregationEnabled,
@@ -1455,6 +1458,9 @@ export class CodingJobService {
       name: createCodingJobDto.name,
       description: createCodingJobDto.description,
       status: createCodingJobDto.status || 'pending',
+      showScore: createCodingJobDto.showScore ?? false,
+      allowComments: createCodingJobDto.allowComments ?? true,
+      suppressGeneralInstructions: createCodingJobDto.suppressGeneralInstructions ?? false,
       missings_profile_id: createCodingJobDto.missings_profile_id,
       job_definition_id: createCodingJobDto.jobDefinitionId,
       case_ordering_mode: createCodingJobDto.caseOrderingMode || 'continuous',
@@ -2273,6 +2279,9 @@ export class CodingJobService {
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
       jobDefinitionId?: number;
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
     }
   ): Promise<{
       success: boolean;
@@ -2553,6 +2562,9 @@ export class CodingJobService {
                 assignedCoders: [coder.id],
                 caseOrderingMode: itemCaseOrderingMode,
                 jobDefinitionId: request.jobDefinitionId,
+                showScore: request.showScore,
+                allowComments: request.allowComments,
+                suppressGeneralInstructions: request.suppressGeneralInstructions,
                 ...(itemObj.type === 'bundle' ?
                   { variableBundleIds: [(itemObj.item as { id: number }).id] } :
                   { variables: itemVariables }

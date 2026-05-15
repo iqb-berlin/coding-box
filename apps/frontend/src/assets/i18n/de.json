@@ -1597,6 +1597,13 @@
       "same": "Nur gleiche Fälle wie in der/den gewählten Schulung(en)",
       "different": "Nur andere Fälle als in der/den gewählten Schulung(en)"
     },
+    "coding-display-options": {
+      "title": "Anzeigeoptionen",
+      "description": "Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.",
+      "show-score": "Scores anzeigen",
+      "allow-comments": "Kommentare erlauben",
+      "suppress-general-instructions": "Allgemeine Hinweise ausblenden"
+    },
     "selection-summary": {
       "title": "Ausgewählte Elemente",
       "variables": "Variablen:",
@@ -1786,7 +1793,7 @@
       "description": "Steuern Sie, welche Elemente während der Kodierung angezeigt werden sollen.",
       "show-score": "Scores anzeigen",
       "allow-comments": "Kommentare erlauben",
-      "suppress-instructions": "Allgemeine Anweisungen ausblenden"
+      "suppress-instructions": "Allgemeine Hinweise ausblenden"
     },
     "buttons": {
       "cancel": "Abbrechen",

@@ -60,6 +60,7 @@ export interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  suppressGeneralInstructions?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -301,7 +302,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       maxCodingCases: [this.data.codingJob?.maxCodingCases || null, [Validators.min(1)]],
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
-      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]]
+      caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]],
+      suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false, []]
     };
 
     if (this.data.mode === 'job') {
@@ -1010,7 +1012,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
       doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
-      maxCodingCases: this.codingJobForm.value.maxCodingCases
+      maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      displayOptions: {
+        showScore: this.codingJobForm.value.showScore ?? true,
+        allowComments: this.codingJobForm.value.allowComments ?? true,
+        suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions ?? false
+      }
     };
 
     if (creationResults) {
@@ -1049,8 +1056,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     await firstValueFrom(dialogRef.afterClosed());
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private async createBulkJobs(data: BulkCreationData, _displayOptions: BulkCreationResult): Promise<void> {
+  private async createBulkJobs(data: BulkCreationData, displayOptions: BulkCreationResult): Promise<void> {
     this.isSaving = true;
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
@@ -1074,7 +1080,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         data.selectedVariableBundles,
         this.codingJobForm.value.caseOrderingMode,
         this.codingJobForm.value.maxCodingCases,
-        this.data.jobDefinitionId
+        this.data.jobDefinitionId,
+        {
+          showScore: displayOptions.showScore,
+          allowComments: displayOptions.allowComments,
+          suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
+        }
       ));
 
       if (result && result.success) {
@@ -1190,7 +1201,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({
@@ -1227,7 +1239,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     if (this.codingJobForm.get('status')) {
@@ -1298,7 +1311,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
-      caseOrderingMode: this.codingJobForm.value.caseOrderingMode
+      caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
     this.codingJobBackendService.createJobDefinition(workspaceId, jobDefinition).subscribe({

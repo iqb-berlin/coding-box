@@ -74,4 +74,64 @@ describe('CodingFacadeService', () => {
 
     expect(delegatedCalls).toBe(methodNames.length);
   });
+
+  it('forwards distributed coding display options', () => {
+    const displayOptions = {
+      showScore: false,
+      allowComments: true,
+      suppressGeneralInstructions: true
+    };
+
+    service.createDistributedCodingJobs(
+      1,
+      [{ unitName: 'Unit', variableId: 'Var' }],
+      [{ id: 2, name: 'Coder', username: 'coder' }],
+      1,
+      undefined,
+      undefined,
+      'continuous',
+      10,
+      20,
+      displayOptions
+    ).subscribe();
+
+    expect(dependencies[4].createDistributedCodingJobs).toHaveBeenCalledWith(
+      1,
+      [{ unitName: 'Unit', variableId: 'Var' }],
+      [{ id: 2, name: 'Coder', username: 'coder' }],
+      1,
+      undefined,
+      undefined,
+      'continuous',
+      10,
+      20,
+      displayOptions
+    );
+  });
+
+  it('forwards coder training display options', () => {
+    service.createCoderTrainingJobs(
+      1,
+      [{ id: 2, name: 'Coder' }],
+      [{ variableId: 'Var', unitId: 'Unit', sampleCount: 3 }],
+      'Training',
+      undefined,
+      { suppressGeneralInstructions: true }
+    ).subscribe();
+
+    expect(dependencies[8].createCoderTrainingJobs).toHaveBeenCalledWith(
+      1,
+      [{ id: 2, name: 'Coder' }],
+      [{ variableId: 'Var', unitId: 'Unit', sampleCount: 3 }],
+      'Training',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+  });
 });

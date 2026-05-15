@@ -55,7 +55,8 @@ describe('CodingTrainingBackendService', () => {
         caseOrderingMode: undefined,
         caseSelectionMode: undefined,
         referenceTrainingIds: undefined,
-        referenceMode: undefined
+        referenceMode: undefined,
+        suppressGeneralInstructions: undefined
       });
       req.flush({});
     });
@@ -72,7 +73,8 @@ describe('CodingTrainingBackendService', () => {
         'alternating',
         'random',
         [10, 11],
-        'same'
+        'same',
+        true
       ).subscribe();
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-training-jobs`);
@@ -87,7 +89,8 @@ describe('CodingTrainingBackendService', () => {
         caseOrderingMode: 'alternating',
         caseSelectionMode: 'random',
         referenceTrainingIds: [10, 11],
-        referenceMode: 'same'
+        referenceMode: 'same',
+        suppressGeneralInstructions: true
       });
       req.flush({});
     });
@@ -116,7 +119,8 @@ describe('CodingTrainingBackendService', () => {
         'continuous',
         'newest_first',
         [5],
-        'different'
+        'different',
+        true
       ).subscribe();
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/coder-trainings/10`);
@@ -131,7 +135,8 @@ describe('CodingTrainingBackendService', () => {
         caseOrderingMode: 'continuous',
         caseSelectionMode: 'newest_first',
         referenceTrainingIds: [5],
-        referenceMode: 'different'
+        referenceMode: 'different',
+        suppressGeneralInstructions: true
       });
       req.flush({});
     });

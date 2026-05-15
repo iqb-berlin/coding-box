@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsArray,
   IsEnum,
+  IsBoolean,
   IsNumber,
   ValidateNested
 } from 'class-validator';
@@ -146,6 +147,7 @@ export class CreateCodingJobDto {
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     showScore?: boolean;
 
   @ApiProperty({
@@ -155,6 +157,7 @@ export class CreateCodingJobDto {
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     allowComments?: boolean;
 
   @ApiProperty({
@@ -164,6 +167,7 @@ export class CreateCodingJobDto {
     required: false
   })
   @IsOptional()
+  @IsBoolean()
     suppressGeneralInstructions?: boolean;
 
   @ApiProperty({

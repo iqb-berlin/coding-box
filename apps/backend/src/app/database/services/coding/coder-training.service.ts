@@ -70,6 +70,7 @@ interface CoderTrainingWithJobs {
   case_selection_mode?: string;
   reference_training_ids?: number[];
   reference_mode?: string | null;
+  suppress_general_instructions?: boolean;
 }
 
 export type TrainingResponseIdsMap = Record<string, number[]>;
@@ -712,7 +713,8 @@ export class CoderTrainingService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
-    referenceMode?: ReferenceMode
+    referenceMode?: ReferenceMode,
+    suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
@@ -724,6 +726,7 @@ export class CoderTrainingService {
       coderTraining.case_selection_mode = caseSelectionMode ?? 'oldest_first';
       coderTraining.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       coderTraining.reference_mode = referenceMode ?? null;
+      coderTraining.suppress_general_instructions = suppressGeneralInstructions ?? false;
       coderTraining.created_at = new Date();
       coderTraining.updated_at = new Date();
 
@@ -813,6 +816,7 @@ export class CoderTrainingService {
         codingJob.training_id = trainingId;
         codingJob.missings_profile_id = missingsProfileId;
         codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+        codingJob.suppressGeneralInstructions = suppressGeneralInstructions ?? false;
         codingJob.created_at = new Date();
         codingJob.updated_at = new Date();
 
@@ -955,6 +959,7 @@ export class CoderTrainingService {
       case_selection_mode: training.case_selection_mode,
       reference_training_ids: training.reference_training_ids ?? undefined,
       reference_mode: training.reference_mode ?? undefined,
+      suppress_general_instructions: training.suppress_general_instructions,
       assigned_variables: training.variables?.map(v => ({
         variableId: v.variable_id,
         unitName: v.unit_name,
@@ -1358,7 +1363,8 @@ export class CoderTrainingService {
     caseOrderingMode?: 'continuous' | 'alternating',
     caseSelectionMode?: CaseSelectionMode,
     referenceTrainingIds?: number[],
-    referenceMode?: ReferenceMode
+    referenceMode?: ReferenceMode,
+    suppressGeneralInstructions?: boolean
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
       this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
@@ -1401,11 +1407,16 @@ export class CoderTrainingService {
 
       const bundlesChanged = JSON.stringify(currentBundles) !== JSON.stringify(newBundles);
 
+      const resolvedSuppressGeneralInstructions = suppressGeneralInstructions ??
+        training.suppress_general_instructions ??
+        false;
+
       training.label = trainingLabel;
       training.case_ordering_mode = caseOrderingMode || 'continuous';
       training.case_selection_mode = caseSelectionMode ?? training.case_selection_mode ?? 'oldest_first';
       training.reference_training_ids = referenceTrainingIds?.length ? referenceTrainingIds : null;
       training.reference_mode = referenceMode ?? null;
+      training.suppress_general_instructions = resolvedSuppressGeneralInstructions;
       training.updated_at = new Date();
 
       await this.coderTrainingRepository.save(training);
@@ -1504,6 +1515,7 @@ export class CoderTrainingService {
           codingJob.training_id = trainingId;
           codingJob.missings_profile_id = missingsProfileId;
           codingJob.case_ordering_mode = caseOrderingMode || 'continuous';
+          codingJob.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
           codingJob.created_at = new Date();
           codingJob.updated_at = new Date();
 
@@ -1606,6 +1618,11 @@ export class CoderTrainingService {
           jobsCreated: jobsCreatedCount,
           jobs
         };
+      }
+
+      for (const job of training.codingJobs || []) {
+        job.suppressGeneralInstructions = resolvedSuppressGeneralInstructions;
+        await this.codingJobRepository.save(job);
       }
 
       return { success: true, message: 'Training erfolgreich aktualisiert' };

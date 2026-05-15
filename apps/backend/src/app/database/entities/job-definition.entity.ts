@@ -86,6 +86,9 @@ export class JobDefinition {
   })
     case_ordering_mode: CaseOrderingMode;
 
+  @Column({ type: 'boolean', default: false })
+    suppress_general_instructions: boolean;
+
   @CreateDateColumn()
     created_at: Date;
 

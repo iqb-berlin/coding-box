@@ -69,6 +69,20 @@
       </div>
     </div>
 
+    <mat-divider class="section-divider"></mat-divider>
+
+    <div class="section">
+      <div class="section-header">
+        <h3 class="section-subtitle">{{ 'coding-job-definition-dialog.coding-display-options.title' | translate }}</h3>
+      </div>
+      <p class="section-description">{{ 'coding-job-definition-dialog.coding-display-options.description' | translate }}</p>
+      <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
+        {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}
+      </mat-checkbox>
+    </div>
+
+    <mat-divider class="section-divider"></mat-divider>
+
     <!-- Reference Trainings Section -->
     <div class="section" *ngIf="availableTrainings.length > 0">
       <div class="section-header">

@@ -49,6 +49,7 @@ interface JobDefinitionApiResponse {
   double_coding_absolute?: number;
   double_coding_percentage?: number;
   case_ordering_mode?: 'continuous' | 'alternating';
+  suppress_general_instructions?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -64,6 +65,7 @@ export interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  suppressGeneralInstructions?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -197,6 +199,10 @@ export class CodingJobBackendService {
         apiJob.response_matching_flags) as string[] | null | undefined,
       aggregationSettingsVersion: (apiJob.aggregationSettingsVersion ??
         apiJob.aggregation_settings_version) as number | null | undefined,
+      showScore: (apiJob.showScore ?? apiJob.show_score) as boolean | undefined,
+      allowComments: (apiJob.allowComments ?? apiJob.allow_comments) as boolean | undefined,
+      suppressGeneralInstructions: (apiJob.suppressGeneralInstructions ??
+        apiJob.suppress_general_instructions) as boolean | undefined,
       created_at: (apiJob.created_at ?? apiJob.createdAt) as Date,
       updated_at: (apiJob.updated_at ?? apiJob.updatedAt) as Date,
       workspace_id: (apiJob.workspace_id ?? apiJob.workspaceId) as number
@@ -528,6 +534,7 @@ export class CodingJobBackendService {
         doubleCodingAbsolute: def.double_coding_absolute,
         doubleCodingPercentage: def.double_coding_percentage,
         caseOrderingMode: def.case_ordering_mode,
+        suppressGeneralInstructions: def.suppress_general_instructions,
         createdAt: def.created_at,
         updatedAt: def.updated_at
       }))

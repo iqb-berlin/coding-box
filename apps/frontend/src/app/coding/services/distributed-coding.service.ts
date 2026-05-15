@@ -19,7 +19,12 @@ export class DistributedCodingService {
     selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
-    jobDefinitionId?: number
+    jobDefinitionId?: number,
+    displayOptions?: {
+      showScore?: boolean;
+      allowComments?: boolean;
+      suppressGeneralInstructions?: boolean;
+    }
   ): Observable<{
       success: boolean;
       jobsCreated: number;
@@ -64,7 +69,10 @@ export class DistributedCodingService {
         selectedVariableBundles,
         caseOrderingMode,
         maxCodingCases,
-        jobDefinitionId
+        jobDefinitionId,
+        showScore: displayOptions?.showScore,
+        allowComments: displayOptions?.allowComments,
+        suppressGeneralInstructions: displayOptions?.suppressGeneralInstructions
       },
       {}
     )

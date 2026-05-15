@@ -21,4 +21,5 @@ export interface CoderTraining {
   case_selection_mode?: CaseSelectionMode;
   reference_training_ids?: number[];
   reference_mode?: ReferenceMode | null;
+  suppress_general_instructions?: boolean;
 }

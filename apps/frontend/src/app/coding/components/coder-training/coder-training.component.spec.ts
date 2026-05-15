@@ -325,7 +325,8 @@ describe('CoderTrainingComponent', () => {
       'continuous',
       'oldest_first',
       undefined,
-      undefined
+      undefined,
+      false
     );
   });
 
@@ -421,7 +422,8 @@ describe('CoderTrainingComponent', () => {
       'continuous',
       'oldest_first',
       undefined,
-      undefined
+      undefined,
+      false
     );
   });
 

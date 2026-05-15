@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsArray,
+  IsBoolean,
   IsNumber,
   Max,
   Min,
@@ -117,4 +118,14 @@ export class CreateJobDefinitionDto {
   @IsEnum(['continuous', 'alternating'])
   @IsOptional()
     caseOrderingMode?: CaseOrderingMode;
+
+  @ApiProperty({
+    description: 'Whether to suppress general instructions in generated coding jobs',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    suppressGeneralInstructions?: boolean;
 }
