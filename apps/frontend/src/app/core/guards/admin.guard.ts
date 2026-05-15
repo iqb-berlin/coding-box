@@ -3,7 +3,6 @@ import {
 } from '@angular/router';
 import { createAuthGuard, AuthGuardData } from 'keycloak-angular';
 import { inject } from '@angular/core';
-import { filter, firstValueFrom, timeout } from 'rxjs';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import {
@@ -11,6 +10,7 @@ import {
   createAuthDataFailedUrlTree,
   createReAuthenticationUrlTree
 } from './auth-redirect';
+import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
 
 const isAdminAccessAllowed = async (
   _route: ActivatedRouteSnapshot,
@@ -33,13 +33,8 @@ const isAdminAccessAllowed = async (
 
   if (hasAdminRole) {
     try {
-      await firstValueFrom(
-        appService.authData$.pipe(
-          filter(data => data.userId > 0),
-          timeout(5000)
-        )
-      );
-      return true;
+      const authDataStatus = await waitForRequiredAuthData(appService);
+      return createRequiredAuthDataGuardResult(router, state.url, authDataStatus);
     } catch {
       return createAuthDataFailedUrlTree(router, state.url);
     }
