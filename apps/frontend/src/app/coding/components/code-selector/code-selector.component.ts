@@ -244,6 +244,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   deselectAll(): void {
+    if (this.isReadOnly) return;
     this.selectedCode = null;
     this.selectedCodingIssueOption = null;
     this.codeSelected.emit({
@@ -266,6 +267,7 @@ export class CodeSelectorComponent implements OnChanges {
   }
 
   onNotesChanged(): void {
+    if (this.isReadOnly) return;
     this.notesChanged.emit(this.coderNotes);
   }
 

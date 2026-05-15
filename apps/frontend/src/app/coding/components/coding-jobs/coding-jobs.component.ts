@@ -56,6 +56,7 @@ interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
+  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
@@ -539,7 +540,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
       return 'Keine Aufgaben';
     }
 
-    if (openUnits > 0 && codedUnits > 0) {
+    if (openUnits > 0) {
       return `${progress}% (${codedUnits}/${totalUnits}, ${openUnits} offen)`;
     }
 
@@ -800,7 +801,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 this.appService
                   .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
                   .subscribe(token => {
-                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
+                    const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}&onlyOpen=true`;
                     const replayUrl = `${restartResult.firstReplayUrl}?${queryParams}`;
 
                     window.open(replayUrl, '_blank');
@@ -1149,11 +1150,15 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         loadingSnack.dismiss();
         if (result.success) {
           const skippedCount = result.results.filter((r: BulkApplyResultItem) => r.skipped).length;
+          const failedCount = result.results.filter((r: BulkApplyResultItem) => r.result && !r.result.success).length;
           const processedCount = result.jobsProcessed;
           const alreadyCodedInfo = result.totalSkippedAlreadyCoded > 0 ?
             `, ${result.totalSkippedAlreadyCoded} vorhandene Kodierungen beibehalten` :
             '';
-          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}`, 'Schließen', { duration: 5000 });
+          const failedInfo = failedCount > 0 ?
+            `, ${failedCount} Jobs mit Konflikten/Fehlern nicht angewendet` :
+            '';
+          this.snackBar.open(`Massenanwendung abgeschlossen: ${processedCount} Jobs verarbeitet, ${result.totalUpdatedResponses} Antworten aktualisiert${alreadyCodedInfo}${skippedCount > 0 ? `, ${skippedCount} Jobs übersprungen` : ''}${failedInfo}`, 'Schließen', { duration: 5000 });
           this.loadCodingJobs(); // Refresh the list
           this.jobsChanged.emit();
         } else {

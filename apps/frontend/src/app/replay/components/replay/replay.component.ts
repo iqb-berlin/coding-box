@@ -188,9 +188,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
           } else if (queryParams.codingJobId && queryParams.workspaceId) {
             const jobId = Number(queryParams.codingJobId);
             const wsId = Number(queryParams.workspaceId);
+            const onlyOpen = queryParams.onlyOpen === 'true';
             try {
               const apiUnits = await firstValueFrom(
-                this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken)
+                this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken, onlyOpen)
               );
               if (apiUnits && apiUnits.length > 0) {
                 deserializedUnits = {
@@ -201,7 +202,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
                     name: item.unitName,
                     alias: item.unitAlias,
                     bookletId: 0,
-                    testPerson: `${item.personLogin}@${item.personCode}@${item.personGroup || ''}@${item.bookletName}`,
+                    testPerson: item.personGroup ?
+                      `${item.personLogin}@${item.personCode}@${item.personGroup}@${item.bookletName}` :
+                      `${item.personLogin}@${item.personCode}@${item.bookletName}`,
                     variableId: item.variableId,
                     variableAnchor: item.variableAnchor
                   })),
@@ -724,7 +727,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   getOpenCount(): number {
-    return this.codingService.getOpenCount();
+    return this.codingService.getOpenCount(this.unitsData);
   }
 
   getProgressPercentage(): number {

@@ -1955,10 +1955,12 @@
     "apply": {
       "error": {
         "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}",
-        "uncertain-issues-present": "Ergebnisse können nicht angewendet werden, da {{count}} ungewisse Kodierreaktionen (Typ -1 oder -2) vorhanden sind. Bitte überprüfen Sie diese manuell zuerst."
+        "training-job": "Trainingsergebnisse können nicht als produktive Kodierergebnisse angewendet werden.",
+        "uncertain-issues-present": "Ergebnisse können nicht angewendet werden, da {{count}} ungewisse Kodierreaktionen (Typ -1 oder -2) vorhanden sind. Bitte überprüfen Sie diese manuell zuerst.",
+        "double-coding-conflicts-present": "Ergebnisse können nicht angewendet werden, da {{count}} abweichende Doppelkodierungen vorhanden sind. Bitte lösen Sie diese zuerst in der Doppelkodierungsprüfung auf."
       },
       "success": {
-        "no-responses": "Keine Antworten zu aktualisieren. Alle Kodierungsergebnisse erfordern eine manuelle Überprüfung.",
+        "no-responses": "Keine Antworten zu aktualisieren.",
         "bulk": "Kodierungsergebnisse erfolgreich auf {{count}} Antworten angewendet ({{skipped}} für manuelle Überprüfung übersprungen)."
       }
     }

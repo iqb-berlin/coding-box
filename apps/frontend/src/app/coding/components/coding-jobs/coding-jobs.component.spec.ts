@@ -291,6 +291,13 @@ describe('CodingJobsComponent', () => {
     const completedJob = mockCodingJobs[1] as CodingJob;
     expect(component.getProgress(completedJob)).toBe('100% (20/20)');
 
+    expect(component.getProgress({
+      totalUnits: 10,
+      codedUnits: 0,
+      openUnits: 10,
+      progress: 0
+    } as CodingJob)).toBe('0% (0/10, 10 offen)');
+
     expect(component.getProgress(null as unknown as CodingJob)).toBe('Keine Daten');
     expect(component.getProgress({ totalUnits: 0 } as unknown as CodingJob)).toBe('Keine Aufgaben');
   });
@@ -450,6 +457,7 @@ describe('CodingJobsComponent', () => {
     expect(codingJobBackendServiceMock.restartCodingJobWithOpenUnits).toHaveBeenCalledWith(1, job.id);
     expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
     expect(window.open).toHaveBeenCalled();
+    expect((window.open as jest.Mock).mock.calls[0][0]).toContain('onlyOpen=true');
   }));
 
   it('should calculate next id correctly', () => {

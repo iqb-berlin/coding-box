@@ -162,6 +162,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   trainingRequiredFilter: 'all' | 'true' | 'false' = 'all';
 
   private disabledVariableKeys = new Set<string>();
+  private baseAvailableCasesByVariable = new Map<string, number>();
   existingJobDefinitions: JobDefinition[] = [];
 
   constructor(
@@ -329,6 +330,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     if (this.data.preloadedVariables && !forceReload && !unitNameFilter && trainingRequired === undefined) {
       this.variables = this.data.preloadedVariables;
+      this.snapshotBaseAvailability(this.variables);
       this.applyJobDefinitionUsage();
       this.applyAvailabilityFilter();
       this.processVariableSelection();
@@ -350,6 +352,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     ).subscribe({
       next: variables => {
         this.variables = variables;
+        this.snapshotBaseAvailability(this.variables);
         this.applyJobDefinitionUsage();
         this.applyAvailabilityFilter();
         this.processVariableSelection();
@@ -433,11 +436,24 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
+  private getVariableUsageKey(unitName?: string | null, variableId?: string | null): string {
+    return `${(unitName || '').trim().toLowerCase()}::${(variableId || '').trim().toLowerCase()}`;
+  }
+
+  private snapshotBaseAvailability(variables: Variable[]): void {
+    this.baseAvailableCasesByVariable = new Map(
+      variables.map(variable => [
+        this.getVariableUsageKey(variable.unitName, variable.variableId),
+        variable.availableCases ?? variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? 0
+      ])
+    );
+  }
+
   applyJobDefinitionUsage(): void {
     if (!this.variables || this.variables.length === 0) return;
 
     const casesUsedInDefinitions = new Map<string, number>();
-    const makeKey = (u?: string | null, v?: string | null) => `${(u || '').trim().toLowerCase()}::${(v || '').trim().toLowerCase()}`;
+    const makeKey = (u?: string | null, v?: string | null) => this.getVariableUsageKey(u, v);
 
     const getTotalCases = (unitName?: string, variableId?: string) => {
       const key = makeKey(unitName, variableId);
@@ -499,12 +515,16 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Adjust available cases based on cases used in definitions
-    // Use uniqueCasesAfterAggregation as the effective total (respects aggregation grouping)
+    // Adjust available cases based on cases used in definitions.
+    // Start with backend availability so already created coding jobs remain reserved.
     this.variables.forEach(v => {
       const key = makeKey(v.unitName, v.variableId);
       const casesUsed = casesUsedInDefinitions.get(key) || 0;
-      const originalAvailable = v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0;
+      const originalAvailable = this.baseAvailableCasesByVariable.get(key) ??
+        v.availableCases ??
+        v.uniqueCasesAfterAggregation ??
+        v.responseCount ??
+        0;
       v.availableCases = Math.max(0, originalAvailable - casesUsed);
     });
 

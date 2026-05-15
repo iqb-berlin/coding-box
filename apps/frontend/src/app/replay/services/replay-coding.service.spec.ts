@@ -18,7 +18,8 @@ describe('ReplayCodingService', () => {
       getCodingProgress: jest.fn(),
       getCodingNotes: jest.fn(),
       getCodingJob: jest.fn(),
-      saveCodingProgress: jest.fn()
+      saveCodingProgress: jest.fn(),
+      saveCodingNotes: jest.fn()
     } as unknown as jest.Mocked<CodingJobBackendService>;
 
     translateServiceMock = {
@@ -135,6 +136,41 @@ describe('ReplayCodingService', () => {
         },
         'replay-token'
       );
+    });
+  });
+
+  describe('generateCompositeKey', () => {
+    it('keeps the group segment and uses the booklet segment for grouped test persons', () => {
+      expect(service.generateCompositeKey('login@code@group@booklet', 'UNIT', 'VAR')).toBe(
+        'login@code@group@booklet::booklet::UNIT::VAR'
+      );
+    });
+
+    it('normalizes empty group segments to the ungrouped backend key format', () => {
+      expect(service.generateCompositeKey('login@code@@booklet', 'UNIT', 'VAR')).toBe(
+        'login@code@booklet::booklet::UNIT::VAR'
+      );
+    });
+  });
+
+  describe('saveNotes', () => {
+    it('saves notes without sending a dummy selected code', async () => {
+      codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+
+      await service.saveNotes(1, 'login@code@group@booklet', 'UNIT', 'VAR', 'note');
+
+      expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'login@code@group@booklet',
+          unitId: 'UNIT',
+          variableId: 'VAR',
+          notes: 'note'
+        }
+      );
+      expect(codingJobBackendServiceMock.saveCodingProgress).not.toHaveBeenCalled();
     });
   });
 });
