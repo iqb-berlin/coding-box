@@ -19,6 +19,7 @@ const createRepo = () => ({
   create: jest.fn(value => value),
   save: jest.fn(value => Promise.resolve(value)),
   delete: jest.fn(),
+  update: jest.fn(),
   remove: jest.fn(),
   createQueryBuilder: jest.fn()
 });
@@ -143,6 +144,20 @@ describe('CodingJobService', () => {
       total: 0,
       open: 0
     });
+  });
+
+  it('marks a coding job open when every unit is coded or flagged open', async () => {
+    (service as unknown as { getCodingJobProgress: jest.Mock }).getCodingJobProgress = jest.fn().mockResolvedValue({
+      progress: 50,
+      coded: 5,
+      total: 10,
+      open: 5
+    });
+
+    await (service as unknown as { checkAndUpdateCodingJobCompletion: (codingJobId: number) => Promise<void> })
+      .checkAndUpdateCodingJobCompletion(7);
+
+    expect(codingJobRepository.update).toHaveBeenCalledWith(7, { status: 'open' });
   });
 
   it('loads coding jobs with assignments, bundles and progress', async () => {
@@ -351,6 +366,78 @@ describe('CodingJobService', () => {
     }));
   });
 
+  it('uses the group segment when saving grouped test person progress', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@group@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7 }
+    } as never);
+
+    expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith({
+      where: expect.objectContaining({
+        person_login: 'login',
+        person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'booklet'
+      })
+    });
+  });
+
+  it('saves notes without changing code progress', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      person_group: 'group',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await service.saveCodingNotes(1, {
+      testPerson: 'login@code@group@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      notes: ' remember '
+    });
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      notes: 'remember',
+      code: null,
+      score: null,
+      coding_issue_option: null
+    }));
+    expect(codingJobRepository.update).not.toHaveBeenCalled();
+  });
+
   it('does not create a discussion result when saving progress for a training job', async () => {
     const trainingJob = { id: 1, workspace_id: 3, training_id: 42 };
     const unit = {
@@ -404,6 +491,19 @@ describe('CodingJobService', () => {
       {
         person_login: 'login',
         person_code: 'code',
+        person_group: 'group',
+        booklet_name: 'booklet',
+        unit_name: 'UNIT',
+        variable_id: 'GROUPED',
+        unit_alias: null,
+        is_open: false,
+        code: 2,
+        score: 1,
+        coding_issue_option: null
+      },
+      {
+        person_login: 'login',
+        person_code: 'code',
         booklet_name: 'booklet',
         unit_name: 'UNIT',
         variable_id: 'OPEN',
@@ -432,10 +532,17 @@ describe('CodingJobService', () => {
       code: '',
       label: 'OPEN'
     });
+    expect(progress['login@code@group@booklet::booklet::UNIT::GROUPED']).toEqual({
+      id: 2,
+      code: undefined,
+      label: undefined,
+      score: 1
+    });
 
     codingJobUnitRepository.find.mockResolvedValueOnce([{
       person_login: 'login',
       person_code: 'code',
+      person_group: 'group',
       booklet_name: 'booklet',
       unit_name: 'UNIT',
       variable_id: 'VAR',
@@ -443,7 +550,7 @@ describe('CodingJobService', () => {
     }]);
 
     await expect(service.getCodingNotes(1)).resolves.toEqual({
-      'login@code@booklet::booklet::UNIT::VAR': 'remember'
+      'login@code@group@booklet::booklet::UNIT::VAR': 'remember'
     });
   });
 

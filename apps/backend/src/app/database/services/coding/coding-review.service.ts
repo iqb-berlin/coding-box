@@ -107,10 +107,10 @@ export class CodingReviewService {
       if (resolvedFilter === 'resolved') {
         query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
       } else if (resolvedFilter === 'unresolved') {
-        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
+        query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
       } else if ((agreementFilter === 'differ' || (onlyConflicts && agreementFilter !== 'match')) && !resolvedFilter) {
         // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
-        query.andWhere('resp.status_v2 != :completeStatus', { completeStatus });
+        query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
       }
 
       if (excludeTrainings) {

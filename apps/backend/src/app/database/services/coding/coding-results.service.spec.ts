@@ -50,6 +50,7 @@ describe('CodingResultsService', () => {
     responseRepository = {
       createQueryBuilder: jest.fn(),
       manager: {
+        query: jest.fn().mockResolvedValue([]),
         connection: {
           createQueryRunner: jest.fn(() => queryRunner)
         }
@@ -120,6 +121,51 @@ describe('CodingResultsService', () => {
       status: 'results_applied'
     });
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('blocks applying unresolved double-coding conflicts', async () => {
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 99, statusV2: null }])
+      .mockResolvedValueOnce([{ responseId: 99, statusV2: null }]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(false);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.messageKey).toBe('coding-results.apply.error.double-coding-conflicts-present');
+    expect(result.messageParams).toEqual({ count: 1 });
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('blocks applying coder training jobs to productive responses', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      training_id: 33
+    } as never);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(false);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.messageKey).toBe('coding-results.apply.error.training-job');
+    expect(codingJobService.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+  });
+
+  it('keeps resolved double-coding results when overwrite is not requested', async () => {
+    (responseRepository.manager.query as jest.Mock)
+      .mockResolvedValueOnce([{ id: 99, statusV2: 5 }])
+      .mockResolvedValueOnce([{ responseId: 99, statusV2: 5 }]);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(result.updatedResponsesCount).toBe(0);
+    expect(result.skippedAlreadyCodedCount).toBe(1);
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
   });
 
   it('does not propagate matching sibling responses when aggregation is disabled', async () => {

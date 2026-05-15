@@ -8,6 +8,10 @@ import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { buildAggregationGroups } from './aggregation-metrics.util';
+import {
+  formatCodingTestPerson,
+  generateCodingProgressKey
+} from './coding-progress-key.util';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -43,9 +47,22 @@ export class CodingResultsService {
   ): Promise<ApplyCodingResultsResult> {
     this.logger.log(`Applying coding results for coding job ${codingJobId} in workspace ${workspaceId}`);
     const overwriteExisting = options.overwriteExisting === true;
+    const completedStatus = statusStringToNumber('CODING_COMPLETE');
 
     // Check if coding job is completed before allowing application
     const codingJob = await this.codingJobService.getCodingJobById(codingJobId);
+    if (codingJob.training_id !== null && codingJob.training_id !== undefined) {
+      return {
+        success: false,
+        updatedResponsesCount: 0,
+        skippedReviewCount: 0,
+        skippedAlreadyCodedCount: 0,
+        overwrittenExistingCount: 0,
+        messageKey: 'coding-results.apply.error.training-job',
+        messageParams: { jobId: codingJobId }
+      };
+    }
+
     if (codingJob.status !== 'completed') {
       return {
         success: false,
@@ -68,6 +85,8 @@ export class CodingResultsService {
     try {
       const codingJobUnits = await this.codingJobService.getCodingJobUnits(codingJobId);
       const codingProgress = await this.codingJobService.getCodingProgress(codingJobId);
+      const directResponseIds = Array.from(new Set(codingJobUnits.map(unit => unit.responseId)));
+      const existingV2StatusByResponseId = await this.getExistingV2StatusByResponseId(directResponseIds);
 
       const uncertainIssues = Object.values(codingProgress).filter(p => {
         if (!p || typeof p !== 'object') {
@@ -92,13 +111,48 @@ export class CodingResultsService {
         };
       }
 
+      const doubleCodingConflicts = await this.getDoubleCodingConflicts(
+        workspaceId,
+        codingJob,
+        directResponseIds
+      );
+      const blockingDoubleCodingConflicts = doubleCodingConflicts.filter(conflict => (
+        conflict.statusV2 !== completedStatus || overwriteExisting
+      ));
+
+      if (blockingDoubleCodingConflicts.length > 0) {
+        return {
+          success: false,
+          updatedResponsesCount: 0,
+          skippedReviewCount: 0,
+          skippedAlreadyCodedCount: 0,
+          overwrittenExistingCount: 0,
+          messageKey: 'coding-results.apply.error.double-coding-conflicts-present',
+          messageParams: { count: blockingDoubleCodingConflicts.length }
+        };
+      }
+
       let skippedReviewCount = 0;
       let skippedAlreadyCodedCount = 0;
       let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
-        const progressKey = `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+        const existingStatusV2 = existingV2StatusByResponseId.get(unit.responseId);
+        if (existingStatusV2 === completedStatus) {
+          if (!overwriteExisting) {
+            skippedAlreadyCodedCount += 1;
+            continue;
+          }
+          overwrittenExistingCount += 1;
+        }
+
+        const testPerson = formatCodingTestPerson({
+          login: unit.personLogin,
+          code: unit.personCode,
+          group: unit.personGroup || undefined,
+          booklet: unit.bookletName
+        });
+        const progressKey = generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
         const progress = codingProgress[progressKey];
 
         if (!progress || (progress.id === undefined && progress.score === undefined)) {
@@ -350,6 +404,82 @@ export class CodingResultsService {
     const cacheKey = `coding_incomplete_variables_v3:${workspaceId}`;
     await this.cacheService.delete(cacheKey);
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
+  }
+
+  private async getExistingV2StatusByResponseId(responseIds: number[]): Promise<Map<number, number | null>> {
+    if (responseIds.length === 0) {
+      return new Map();
+    }
+
+    const rows = await this.responseRepository.manager.query(
+      `
+        SELECT id, status_v2 as "statusV2"
+        FROM response
+        WHERE id = ANY($1::int[])
+      `,
+      [responseIds]
+    );
+
+    return new Map(rows.map(row => [
+      Number(row.id),
+      row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+    ]));
+  }
+
+  private async getDoubleCodingConflicts(
+    workspaceId: number,
+    codingJob: {
+      training_id?: number | null;
+      job_definition_id?: number | null;
+    },
+    responseIds: number[]
+  ): Promise<Array<{ responseId: number; statusV2: number | null }>> {
+    if (responseIds.length === 0) {
+      return [];
+    }
+
+    const scopeClauses = ['cj.workspace_id = $1'];
+    const params: unknown[] = [workspaceId, responseIds];
+
+    if (codingJob.training_id !== null && codingJob.training_id !== undefined) {
+      params.push(codingJob.training_id);
+      scopeClauses.push(`cj.training_id = $${params.length}`);
+    } else {
+      scopeClauses.push('cj.training_id IS NULL');
+
+      if (codingJob.job_definition_id !== null && codingJob.job_definition_id !== undefined) {
+        params.push(codingJob.job_definition_id);
+        scopeClauses.push(`cj.job_definition_id = $${params.length}`);
+      } else {
+        scopeClauses.push('cj.job_definition_id IS NULL');
+      }
+    }
+
+    const rows = await this.responseRepository.manager.query(
+      `
+        SELECT
+          cju.response_id as "responseId",
+          MAX(resp.status_v2) as "statusV2"
+        FROM coding_job_unit cju
+        INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+        INNER JOIN response resp ON resp.id = cju.response_id
+        WHERE cju.response_id = ANY($2::int[])
+          AND cju.code IS NOT NULL
+          AND ${scopeClauses.join(' AND ')}
+        GROUP BY cju.response_id
+        HAVING COUNT(DISTINCT cju.coding_job_id) > 1
+           AND COUNT(cju.code) > 1
+           AND COUNT(DISTINCT (
+             cju.code::text || ':' || COALESCE(cju.score::text, 'NULL')
+           )) > 1
+      `,
+      params
+    );
+
+    return rows.map(row => ({
+      responseId: Number(row.responseId),
+      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2)
+    }));
   }
 
   /**
