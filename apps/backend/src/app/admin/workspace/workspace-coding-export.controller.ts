@@ -29,7 +29,12 @@ import { CacheService } from '../../cache/cache.service';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
-import { CodingListExportService, CodingResultsExportService, CodingTimesExportService } from '../../database/services/coding';
+import {
+  CodingExportService,
+  CodingListExportService,
+  CodingResultsExportService,
+  CodingTimesExportService
+} from '../../database/services/coding';
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -39,6 +44,7 @@ export class WorkspaceCodingExportController {
   constructor(
     private codingListExportService: CodingListExportService,
     private codingResultsExportService: CodingResultsExportService,
+    private codingExportService: CodingExportService,
     private codingTimesExportService: CodingTimesExportService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
@@ -530,7 +536,7 @@ export class WorkspaceCodingExportController {
       const excludeAutoCodedParam = excludeAutoCoded === 'true'; // Default false
 
       const buffer =
-        await this.codingResultsExportService.exportCodingResultsAggregated(
+        await this.codingExportService.exportCodingResultsAggregated(
           workspace_id,
           outputCommentsParam,
           includeReplayUrlParam,
@@ -854,7 +860,7 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingResultsExportService.exportCodingResultsDetailed(
+      const buffer = await this.codingExportService.exportCodingResultsDetailed(
         workspace_id,
         outputCommentsParam,
         includeReplayUrlParam,

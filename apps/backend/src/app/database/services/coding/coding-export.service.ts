@@ -483,6 +483,9 @@ export class CodingExportService {
       normalizedCoderTrainingIds,
       normalizedCoderIds
     );
+    if (normalizedCoderTrainingIds.length === 0) {
+      variableRecordsQuery.andWhere('cj.training_id IS NULL');
+    }
 
     const variableRecords = await variableRecordsQuery
       .groupBy('cju.unit_name')
@@ -624,6 +627,9 @@ export class CodingExportService {
         normalizedCoderTrainingIds,
         normalizedCoderIds
       );
+      if (normalizedCoderTrainingIds.length === 0) {
+        manualCodingQuery.andWhere('cj.training_id IS NULL');
+      }
 
       const manualCoding = await manualCodingQuery.getRawMany();
       if (normalizedCoderTrainingIds.length > 0 && manualCoding.length > 0) {
@@ -2314,6 +2320,9 @@ export class CodingExportService {
         normalizedCoderTrainingIds,
         normalizedCoderIds
       );
+      if (normalizedCoderTrainingIds.length === 0) {
+        totalCountQuery.andWhere('cj.training_id IS NULL');
+      }
       const totalCount = await totalCountQuery.getCount();
 
       const chunks: Buffer[] = [];
@@ -2354,6 +2363,9 @@ export class CodingExportService {
           normalizedCoderTrainingIds,
           normalizedCoderIds
         );
+        if (normalizedCoderTrainingIds.length === 0) {
+          unitsBatchQuery.andWhere('cj.training_id IS NULL');
+        }
         const unitsBatch = await unitsBatchQuery.getMany();
 
         let discussionResultMap = new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();

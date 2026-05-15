@@ -124,6 +124,7 @@ export class DatabaseExportService {
           continue;
         }
 
+        const orderByClause = await this.getStableOrderByClause(tableName, columns);
         const batchSize = 1000;
         let offset = 0;
 
@@ -132,7 +133,7 @@ export class DatabaseExportService {
 
           const rows = await this.dataSource.query(`
             SELECT * FROM "${tableName}"
-            ORDER BY (SELECT NULL)
+            ORDER BY ${orderByClause}
             LIMIT $1 OFFSET $2
           `, [batchSize, offset]);
 
@@ -312,7 +313,7 @@ export class DatabaseExportService {
               throw error;
             }
 
-            offset += batchSize;
+            offset += rows.length;
 
             // Optional: Send progress info (this would require a different streaming approach)
             this.logger.log(`Table ${tableName}: ${Math.min(offset, totalRows)}/${totalRows} rows processed`);
@@ -465,6 +466,7 @@ export class DatabaseExportService {
           continue;
         }
 
+        const orderByClause = await this.getStableOrderByClause(tableName, columns);
         const batchSize = 1000;
         let offset = 0;
 
@@ -473,7 +475,7 @@ export class DatabaseExportService {
 
           const rows = await this.dataSource.query(
             `SELECT * FROM (${tableConfig.query}) export_rows
-             ORDER BY (SELECT NULL)
+             ORDER BY ${orderByClause}
              LIMIT $2 OFFSET $3`,
             [workspaceId, batchSize, offset]
           );
@@ -637,6 +639,40 @@ export class DatabaseExportService {
     await callback(boundedProgress, message);
   }
 
+  private async getStableOrderByClause(
+    tableName: string,
+    columns: Array<{ column_name: string }>
+  ): Promise<string> {
+    const columnNames = columns.map(column => column.column_name);
+    const primaryKeyColumns = await this.getPrimaryKeyColumns(tableName);
+    let orderColumns = primaryKeyColumns;
+    if (orderColumns.length === 0) {
+      orderColumns = columnNames.includes('id') ? ['id'] : columnNames;
+    }
+
+    return orderColumns
+      .filter(columnName => columnNames.includes(columnName))
+      .map(columnName => `"${columnName}" ASC`)
+      .join(', ') || columnNames.map(columnName => `"${columnName}" ASC`).join(', ');
+  }
+
+  private async getPrimaryKeyColumns(tableName: string): Promise<string[]> {
+    const rows = await this.dataSource.query(`
+      SELECT kcu.column_name
+      FROM information_schema.table_constraints tc
+      INNER JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+       AND tc.table_schema = kcu.table_schema
+       AND tc.table_name = kcu.table_name
+      WHERE tc.constraint_type = 'PRIMARY KEY'
+        AND tc.table_schema = 'public'
+        AND tc.table_name = $1
+      ORDER BY kcu.ordinal_position
+    `, [tableName]);
+
+    return rows.map(row => row.column_name as string);
+  }
+
   private calculateProgress(
     processedRows: number,
     totalRows: number,
@@ -749,6 +785,10 @@ export class DatabaseExportService {
           INNER JOIN persons p ON b.personid = p.id
           WHERE p.workspace_id = $1
         `
+      },
+      {
+        name: 'coding_job_unit',
+        query: 'SELECT cju.* FROM coding_job_unit cju WHERE cju.workspace_id = $1'
       },
       {
         name: 'chunk',

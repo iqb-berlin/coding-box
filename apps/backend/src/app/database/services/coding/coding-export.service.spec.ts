@@ -10,6 +10,13 @@ import { CodingListService } from './coding-list.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
+jest.mock('./coding-list.service', () => ({
+  CodingListService: function MockCodingListService() {}
+}));
+jest.mock('../workspace/workspace-core.service', () => ({
+  WorkspaceCoreService: function MockWorkspaceCoreService() {}
+}));
+
 type MockedRepo<T> = Partial<Record<keyof Repository<T>, jest.Mock>>;
 
 function createServiceWithDetailedMocks(
