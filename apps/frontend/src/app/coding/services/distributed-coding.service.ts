@@ -3,6 +3,24 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 
+export interface DistributedCodingJobsResponse {
+  success: boolean;
+  jobsCreated: number;
+  message: string;
+  distribution: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  jobs: {
+    coderId: number;
+    coderName: string;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    jobName: string;
+    caseCount: number;
+  }[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -19,47 +37,14 @@ export class DistributedCodingService {
     selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
     maxCodingCases?: number,
-    jobDefinitionId?: number,
     displayOptions?: {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
     }
-  ): Observable<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: string[];
-      jobs: {
-        coderId: number;
-        coderName: string;
-        variable: { unitName: string; variableId: string };
-        jobId: number;
-        jobName: string;
-        caseCount: number;
-      }[];
-    }> {
+  ): Observable<DistributedCodingJobsResponse> {
     return this.http
-      .post<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: string[];
-      jobs: {
-        coderId: number;
-        coderName: string;
-        variable: { unitName: string; variableId: string };
-        jobId: number;
-        jobName: string;
-        caseCount: number;
-      }[];
-    }>(
+      .post<DistributedCodingJobsResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/create-distributed-jobs`,
       {
         selectedVariables,
@@ -69,7 +54,6 @@ export class DistributedCodingService {
         selectedVariableBundles,
         caseOrderingMode,
         maxCodingCases,
-        jobDefinitionId,
         showScore: displayOptions?.showScore,
         allowComments: displayOptions?.allowComments,
         suppressGeneralInstructions: displayOptions?.suppressGeneralInstructions

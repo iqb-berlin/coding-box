@@ -6,7 +6,8 @@ import {
   Query,
   UseGuards,
   Body,
-  Logger
+  Logger,
+  BadRequestException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -1317,7 +1318,6 @@ export class WorkspaceCodingStatisticsController {
         },
         doubleCodingAbsolute: { type: 'number' },
         doubleCodingPercentage: { type: 'number' },
-        jobDefinitionId: { type: 'number' },
         showScore: { type: 'boolean' },
         allowComments: { type: 'boolean' },
         suppressGeneralInstructions: { type: 'boolean' }
@@ -1396,7 +1396,6 @@ export class WorkspaceCodingStatisticsController {
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
-                     jobDefinitionId?: number;
                      showScore?: boolean;
                      allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
@@ -1424,6 +1423,16 @@ export class WorkspaceCodingStatisticsController {
           caseCount: number;
         }>;
       }> {
+    if (!body) {
+      throw new BadRequestException('Request body is required');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(body, 'jobDefinitionId')) {
+      throw new BadRequestException(
+        'Use the job definition endpoint to create coding jobs from a job definition'
+      );
+    }
+
     return this.codingJobService.createDistributedCodingJobs(workspace_id, body);
   }
 }

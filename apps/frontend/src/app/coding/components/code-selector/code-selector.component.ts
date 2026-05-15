@@ -45,6 +45,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() isCodingActive: boolean = false;
   @Input() hasCodingJob: boolean = false;
   @Input() isCodingJobCompleted: boolean = false;
+  @Input() isCompletedJobReview: boolean = false;
   @Input() isPausingJob: boolean = false;
   @Input() unitsData: UnitsReplay | null = null;
   @Input() codingService!: ReplayCodingService;
@@ -52,6 +53,7 @@ export class CodeSelectorComponent implements OnChanges {
   @Input() allowComments: boolean = true;
   @Input() suppressGeneralInstructions: boolean = false;
   @Input() isReadOnly: boolean = false;
+  @Input() hasSaveError: boolean = false;
 
   @Output() codeSelected = new EventEmitter<CodeSelectedEvent>();
   @Output() notesChanged = new EventEmitter<string>();
@@ -275,6 +277,7 @@ export class CodeSelectorComponent implements OnChanges {
     const data = this.unitsData;
     if (!data) return;
 
+    if (this.hasSaveError) return;
     if (!this.isReadOnly && !this.hasCurrentSelection()) return;
 
     const currentIndex = data.currentUnitIndex;
@@ -303,7 +306,7 @@ export class CodeSelectorComponent implements OnChanges {
     const nextIndex = currentIndex + 1;
     const hasNext = nextIndex < data.units.length;
     if (this.isReadOnly) return hasNext;
-    return hasNext && this.hasCurrentSelection();
+    return hasNext && this.hasCurrentSelection() && !this.hasSaveError;
   }
 
   hasPreviousUnit(): boolean {

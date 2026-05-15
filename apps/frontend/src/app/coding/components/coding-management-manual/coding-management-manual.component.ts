@@ -79,6 +79,12 @@ import {
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 
+interface SavedCodeProgress {
+  id?: number;
+  codingIssueOption?: number;
+  [key: string]: unknown;
+}
+
 @Component({
   selector: 'coding-box-coding-management-manual',
   templateUrl: './coding-management-manual.component.html',
@@ -251,6 +257,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }) | null = null;
 
   completedJobsReadyForApply: CodingJob[] = [];
+  completedJobsBlockedForReview: CodingJob[] = [];
 
   isLoadingCompletedJobsReadyForApply = false;
 
@@ -965,6 +972,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return this.completedJobsReadyForApply.length > 0;
   }
 
+  hasCompletedJobsBlockedForReview(): boolean {
+    return this.completedJobsBlockedForReview.length > 0;
+  }
+
   canApplyCompletedJobResults(): boolean {
     return this.codingJobsComponent?.canApplyResults ??
       (this.appService.authData.isAdmin === true);
@@ -977,6 +988,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (this.hasCompletedJobsReadyForApply()) {
       return `${this.completedJobsReadyForApply.length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
+    }
+
+    if (this.hasCompletedJobsBlockedForReview()) {
+      return `${this.completedJobsBlockedForReview.length} abgeschlossene Kodierjob(s) benötigen Review`;
     }
 
     if (this.hasExecutionOpenWork()) {
@@ -999,6 +1014,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return 'Übernehmen Sie die abgeschlossenen Job-Ergebnisse hier direkt in die Antwortdaten.';
     }
 
+    if (this.hasCompletedJobsBlockedForReview()) {
+      return 'Mindestens ein abgeschlossener Job enthält Markierungen wie "Code-Vergabe unsicher" oder "Neuer Code nötig". Prüfen Sie diese Jobs vor dem Anwenden.';
+    }
+
     if (this.hasExecutionOpenWork()) {
       return 'Schließen Sie die offenen Kodierfälle ab. Danach können die Ergebnisse hier übernommen werden.';
     }
@@ -1013,6 +1032,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (this.hasCompletedJobsReadyForApply()) {
       return 'pending_actions';
+    }
+
+    if (this.hasCompletedJobsBlockedForReview()) {
+      return 'rule';
     }
 
     return this.hasExecutionOpenWork() ? 'edit_note' : 'sync_problem';
@@ -1530,27 +1553,68 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.completedJobsReadyForApply = [];
+      this.completedJobsBlockedForReview = [];
       return;
     }
 
     this.isLoadingCompletedJobsReadyForApply = true;
     this.codingJobBackendService
       .getCodingJobs(workspaceId)
-      .pipe(
-        takeUntil(this.destroy$),
-        finalize(() => {
-          this.isLoadingCompletedJobsReadyForApply = false;
-        })
-      )
+      .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: response => {
-          this.completedJobsReadyForApply = (response.data || [])
+          const completedJobs = (response.data || [])
             .filter(job => this.isCodingJobReadyForApply(job));
+
+          if (completedJobs.length === 0) {
+            this.completedJobsReadyForApply = [];
+            this.completedJobsBlockedForReview = [];
+            this.isLoadingCompletedJobsReadyForApply = false;
+            return;
+          }
+
+          this.codingJobBackendService
+            .getBulkCodingProgress(workspaceId, completedJobs.map(job => job.id))
+            .pipe(takeUntil(this.destroy$))
+            .subscribe({
+              next: progressByJobId => {
+                this.completedJobsBlockedForReview = completedJobs
+                  .filter(job => this.hasBlockingCodingIssues(progressByJobId[job.id]));
+                this.completedJobsReadyForApply = completedJobs
+                  .filter(job => !this.hasBlockingCodingIssues(progressByJobId[job.id]));
+                this.isLoadingCompletedJobsReadyForApply = false;
+              },
+              error: () => {
+                this.completedJobsReadyForApply = [];
+                this.completedJobsBlockedForReview = completedJobs;
+                this.isLoadingCompletedJobsReadyForApply = false;
+              }
+            });
         },
         error: () => {
           this.completedJobsReadyForApply = [];
+          this.completedJobsBlockedForReview = [];
+          this.isLoadingCompletedJobsReadyForApply = false;
         }
       });
+  }
+
+  private hasBlockingCodingIssues(progress?: Record<string, unknown>): boolean {
+    if (!progress) {
+      return false;
+    }
+
+    return Object.values(progress).some(value => {
+      if (!value || typeof value !== 'object') {
+        return false;
+      }
+
+      const savedCode = value as SavedCodeProgress;
+      return savedCode.id === -1 ||
+        savedCode.id === -2 ||
+        savedCode.codingIssueOption === -1 ||
+        savedCode.codingIssueOption === -2;
+    });
   }
 
   private isCodingJobReadyForApply(job: CodingJob): boolean {

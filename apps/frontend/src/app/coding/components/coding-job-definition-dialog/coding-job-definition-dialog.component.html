@@ -91,7 +91,6 @@
             translate }}</p>
 
           <div class="display-options-controls">
-            @if (data.mode === 'job') {
             <mat-checkbox formControlName="showScore" class="display-option-checkbox">
               {{ 'coding-job-definition-dialog.coding-display-options.show-score' | translate }}
             </mat-checkbox>
@@ -99,7 +98,6 @@
             <mat-checkbox formControlName="allowComments" class="display-option-checkbox">
               {{ 'coding-job-definition-dialog.coding-display-options.allow-comments' | translate }}
             </mat-checkbox>
-            }
 
             <mat-checkbox formControlName="suppressGeneralInstructions" class="display-option-checkbox">
               {{ 'coding-job-definition-dialog.coding-display-options.suppress-general-instructions' | translate }}

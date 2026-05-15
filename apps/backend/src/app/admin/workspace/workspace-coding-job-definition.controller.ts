@@ -20,6 +20,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { JobDefinitionService } from '../../database/services/jobs';
+import type { JobDefinitionWithCreatedJobsCount } from '../../database/services/jobs';
 import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
@@ -74,7 +75,11 @@ export class WorkspaceCodingJobDefinitionController {
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
+          show_score: { type: 'boolean' },
+          allow_comments: { type: 'boolean' },
           suppress_general_instructions: { type: 'boolean' },
+          createdJobsCount: { type: 'number' },
+          created_jobs_count: { type: 'number' },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }
         }
@@ -83,7 +88,7 @@ export class WorkspaceCodingJobDefinitionController {
   })
   async getJobDefinitions(
     @WorkspaceId() workspace_id: number
-  ): Promise<JobDefinition[]> {
+  ): Promise<JobDefinitionWithCreatedJobsCount[]> {
     return this.jobDefinitionService.getJobDefinitions(workspace_id);
   }
 
@@ -106,6 +111,8 @@ export class WorkspaceCodingJobDefinitionController {
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },
           double_coding_percentage: { type: 'number' },
+          show_score: { type: 'boolean' },
+          allow_comments: { type: 'boolean' },
           suppress_general_instructions: { type: 'boolean' },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }

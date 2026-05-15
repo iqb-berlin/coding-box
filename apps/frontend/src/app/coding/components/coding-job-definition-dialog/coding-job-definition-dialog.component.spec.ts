@@ -181,6 +181,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.codingJobForm).toBeDefined();
     expect(component.codingJobForm.get('durationSeconds')?.value).toBe(1);
     expect(component.codingJobForm.get('caseOrderingMode')?.value).toBe('continuous');
+    expect(component.codingJobForm.get('showScore')?.value).toBe(false);
+    expect(component.codingJobForm.get('allowComments')?.value).toBe(true);
   });
 
   it('should load variables and coders on init', () => {
@@ -332,6 +334,11 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.onSubmit();
 
     expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledTimes(1);
+    expect(mockCodingJobBackendService.createJobDefinition).toHaveBeenCalledWith(1, expect.objectContaining({
+      showScore: false,
+      allowComments: true,
+      suppressGeneralInstructions: false
+    }));
   });
 
   describe('Mode: Job (Create/Edit)', () => {
@@ -381,13 +388,22 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createComponent({ mode: 'definition', isEdit: true, jobDefinitionId: 555 });
       component.selectedCoders.select(mockCoders[0]);
       component.selectedVariables.select(mockVariables[0]);
+      component.codingJobForm.patchValue({
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      });
 
       (mockCodingJobBackendService.updateJobDefinition as jest.Mock).mockReturnValue(of({ id: 555 }));
 
       component.onSubmit();
       tick();
 
-      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.any(Object));
+      expect(mockCodingJobBackendService.updateJobDefinition).toHaveBeenCalledWith(1, 555, expect.objectContaining({
+        showScore: true,
+        allowComments: false,
+        suppressGeneralInstructions: true
+      }));
       expect(mockDialogRef.close).toHaveBeenCalled();
     }));
   });

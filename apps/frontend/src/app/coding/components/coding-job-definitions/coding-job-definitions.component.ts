@@ -25,7 +25,6 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
 import { CoderService } from '../../services/coder.service';
-import { DistributedCodingService } from '../../services/distributed-coding.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
   CodingJobDefinitionDialogComponent,
@@ -47,7 +46,10 @@ interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  showScore?: boolean;
+  allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  createdJobsCount?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -55,13 +57,6 @@ interface JobDefinition {
 interface Coder {
   id: number;
   name: string;
-}
-
-interface BulkCreationResult {
-  confirmed: boolean;
-  showScore: boolean;
-  allowComments: boolean;
-  suppressGeneralInstructions: boolean;
 }
 
 @Component({
@@ -85,7 +80,6 @@ interface BulkCreationResult {
 })
 export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   private codingJobBackendService = inject(CodingJobBackendService);
-  private distributedCodingService = inject(DistributedCodingService);
   private appService = inject(AppService);
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
@@ -274,7 +268,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   getDefinitionsReadyForJobsCount(): number {
-    return this.getDefinitionCountByStatus('approved');
+    return this.jobDefinitions.filter(definition => this.canCreateCodingJobs(definition)).length;
   }
 
   getStatusHint(status?: JobDefinition['status']): string {
@@ -287,9 +281,36 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     );
   }
 
+  getDefinitionStatusHint(definition: JobDefinition): string {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+
+    if (definition.status === 'approved' && createdJobsCount === undefined) {
+      return this.translateService.instant(
+        'coding-job-definitions.status-hints.approved_count_unavailable'
+      );
+    }
+
+    if (definition.status === 'approved' && createdJobsCount !== undefined && createdJobsCount > 0) {
+      return this.translateService.instant(
+        'coding-job-definitions.status-hints.approved_created',
+        { count: createdJobsCount }
+      );
+    }
+
+    return this.getStatusHint(definition.status);
+  }
+
   getActionAriaLabel(action: string, definition: JobDefinition): string {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+    const actionKey = action === 'jobs-already-created' && createdJobsCount === undefined ?
+      'jobs-count-unavailable' :
+      action;
+    const params = actionKey === 'jobs-already-created' && createdJobsCount !== undefined ?
+      { count: createdJobsCount } :
+      undefined;
     const actionLabel = this.translateService.instant(
-      `coding-job-definitions.actions.${action}`
+      `coding-job-definitions.actions.${actionKey}`,
+      params
     );
 
     if (!definition.id) {
@@ -297,6 +318,54 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     }
 
     return `${actionLabel}: Definition ${definition.id}`;
+  }
+
+  getCreatedJobsCount(definition: JobDefinition): number | undefined {
+    const count = definition.createdJobsCount;
+
+    if (typeof count !== 'number' || !Number.isFinite(count)) {
+      return undefined;
+    }
+
+    return Math.max(0, count);
+  }
+
+  canCreateCodingJobs(definition: JobDefinition): boolean {
+    return definition.status === 'approved' && this.getCreatedJobsCount(definition) === 0;
+  }
+
+  getCreateCodingJobsTooltip(definition: JobDefinition): string {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+
+    if (createdJobsCount === undefined) {
+      return this.translateService.instant(
+        'coding-job-definitions.actions.jobs-count-unavailable'
+      );
+    }
+
+    if (createdJobsCount > 0) {
+      return this.translateService.instant(
+        'coding-job-definitions.actions.jobs-already-created',
+        { count: createdJobsCount }
+      );
+    }
+
+    return this.translateService.instant('coding-job-definitions.actions.create-coding-jobs');
+  }
+
+  getCreateCodingJobsActionLabel(definition: JobDefinition): string {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+
+    if (createdJobsCount === undefined) {
+      return this.translateService.instant(
+        'coding-job-definitions.actions.jobs-count-unavailable-short'
+      );
+    }
+
+    return this.translateService.instant(
+      'coding-job-definitions.actions.jobs-created-short',
+      { count: createdJobsCount }
+    );
   }
 
   createDefinition(): void {
@@ -346,6 +415,8 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
         doubleCodingPercentage: definition.doubleCodingPercentage,
         caseOrderingMode: definition.caseOrderingMode,
+        showScore: definition.showScore,
+        allowComments: definition.allowComments,
         suppressGeneralInstructions: definition.suppressGeneralInstructions,
         created_at: definition.created_at!,
         updated_at: definition.updated_at!
@@ -529,6 +600,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (!this.canCreateCodingJobs(definition)) {
+      this.snackBar.open(
+        this.getCreateCodingJobsTooltip(definition),
+        this.translateService.instant('common.close'),
+        { duration: 4000 }
+      );
+      return;
+    }
+
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.showError(
@@ -554,8 +634,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         caseOrderingMode: definition.caseOrderingMode || 'continuous',
         maxCodingCases: definition.maxCodingCases,
         displayOptions: {
+          showScore: definition.showScore ?? false,
+          allowComments: definition.allowComments ?? true,
           suppressGeneralInstructions: definition.suppressGeneralInstructions ?? false
-        }
+        },
+        displayOptionsLocked: true
       };
       const dialogRef = this.dialog.open(CodingJobBulkCreationDialogComponent, {
         width: '1200px',
@@ -566,9 +649,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
       if (result && result.confirmed) {
         await this.createBulkJobsFromDefinition(
-          dialogData,
           workspaceId,
-          result,
           definition.id
         );
       }
@@ -583,35 +664,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   }
 
   private async createBulkJobsFromDefinition(
-    data: BulkCreationData,
     workspaceId: number,
-    creationResult: BulkCreationResult,
-    jobDefinitionId?: number
+    jobDefinitionId: number
   ): Promise<void> {
     this.isBulkCreating = true;
     try {
-      const mappedCoders = data.selectedCoders.map(coder => ({
-        id: coder.id,
-        name: coder.name,
-        username: coder.name
-      }));
-
       const result = await firstValueFrom(
-        this.distributedCodingService.createDistributedCodingJobs(
+        this.codingJobBackendService.createCodingJobFromDefinition(
           workspaceId,
-          data.selectedVariables,
-          mappedCoders,
-          data.doubleCodingAbsolute,
-          data.doubleCodingPercentage,
-          data.selectedVariableBundles,
-          data.caseOrderingMode,
-          data.maxCodingCases,
-          jobDefinitionId,
-          {
-            showScore: creationResult.showScore,
-            allowComments: creationResult.allowComments,
-            suppressGeneralInstructions: creationResult.suppressGeneralInstructions
-          }
+          jobDefinitionId
         )
       );
 

@@ -11,6 +11,7 @@ import {
   Put,
   Query,
   Req,
+  UnauthorizedException,
   UseGuards
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -46,6 +47,29 @@ export class WsgCodingJobController {
     private readonly codingJobService: CodingJobService,
     private readonly codingReplayService: CodingReplayService
   ) { }
+
+  private getRequestUserId(req: Request): number {
+    const user = (req as Request & { user?: { id?: number | string; userId?: number | string } }).user;
+    const userId = Number(user?.id ?? user?.userId);
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new UnauthorizedException('User ID not found in request');
+    }
+
+    return userId;
+  }
+
+  private async assertCodingJobAccess(
+    workspaceId: number,
+    codingJobId: number,
+    req: Request
+  ): Promise<void> {
+    await this.codingJobService.assertUserCanAccessCodingJob(
+      codingJobId,
+      workspaceId,
+      this.getRequestUserId(req)
+    );
+  }
 
   @Post('transfer-cases')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
@@ -166,8 +190,10 @@ export class WsgCodingJobController {
   })
   async getCodingJob(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
   ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     const result = await this.codingJobService.getCodingJob(id, workspaceId);
     return CodingJobDto.fromEntity(result.codingJob, result.assignedCoders, result.variables, result.variableBundles.map(vb => ({ name: vb.name, variables: vb.variables })));
   }
@@ -196,6 +222,19 @@ export class WsgCodingJobController {
     @WorkspaceId() workspaceId: number,
       @Body() createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJobDto> {
+    if (!createCodingJobDto) {
+      throw new BadRequestException('Request body is required');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(
+      createCodingJobDto as unknown as Record<string, unknown>,
+      'jobDefinitionId'
+    )) {
+      throw new BadRequestException(
+        'jobDefinitionId cannot be set when creating a coding job directly. Use the job definition create-job endpoint.'
+      );
+    }
+
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,
@@ -239,8 +278,10 @@ export class WsgCodingJobController {
   async updateCodingJob(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() updateCodingJobDto: UpdateCodingJobDto
+      @Body() updateCodingJobDto: UpdateCodingJobDto,
+      @Req() req: Request
   ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     return this.codingJobService.updateCodingJob(
       id,
       workspaceId,
@@ -282,12 +323,13 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
     const items = await this.codingJobService.getCodingJobUnits(id, onlyOpen);
 
-    if (job.codingJob.status !== 'results_applied') {
+    if (!['completed', 'results_applied'].includes(job.codingJob.status)) {
       await this.codingJobService.updateCodingJob(id, workspaceId, { status: 'active' });
     }
 
@@ -375,8 +417,10 @@ export class WsgCodingJobController {
   async saveCodingProgress(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() saveCodingProgressDto: SaveCodingProgressDto
+      @Body() saveCodingProgressDto: SaveCodingProgressDto,
+      @Req() req: Request
   ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
     return CodingJobDto.fromEntity(codingJob);
@@ -414,8 +458,10 @@ export class WsgCodingJobController {
   async saveCodingNotes(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() saveCodingNotesDto: SaveCodingNotesDto
+      @Body() saveCodingNotesDto: SaveCodingNotesDto,
+      @Req() req: Request
   ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     const codingJob = await this.codingJobService.saveCodingNotes(id, saveCodingNotesDto);
     return CodingJobDto.fromEntity(codingJob);
@@ -452,8 +498,10 @@ export class WsgCodingJobController {
   })
   async restartCodingJobWithOpenUnits(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
   ): Promise<CodingJobDto> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     const codingJob = await this.codingJobService.restartCodingJobWithOpenUnits(id, workspaceId);
     return CodingJobDto.fromEntity(codingJob);
   }
@@ -489,8 +537,10 @@ export class WsgCodingJobController {
   })
   async getCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Param('id', ParseIntPipe) id: number
+      @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request
   ): Promise<Record<string, unknown>> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingProgress(id);
   }
@@ -529,7 +579,8 @@ export class WsgCodingJobController {
   })
   async getBulkCodingProgress(
     @WorkspaceId() workspaceId: number,
-      @Query('jobIds') jobIdsParam: string
+      @Query('jobIds') jobIdsParam: string,
+      @Req() req: Request
   ): Promise<Record<number, Record<string, unknown>>> {
     const jobIds = jobIdsParam.split(',')
       .map(id => parseInt(id.trim(), 10))
@@ -538,6 +589,8 @@ export class WsgCodingJobController {
     if (jobIds.length === 0) {
       throw new BadRequestException('Invalid job IDs provided');
     }
+
+    await Promise.all(jobIds.map(jobId => this.assertCodingJobAccess(workspaceId, jobId, req)));
 
     return this.codingJobService.getBulkCodingProgress(jobIds, workspaceId);
   }
@@ -592,6 +645,7 @@ export class WsgCodingJobController {
   async getCodingJobUnits(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
+      @Req() req: Request,
       @Query('onlyOpen') onlyOpen?: string
   ): Promise<Array<{
         responseId: number;
@@ -606,6 +660,7 @@ export class WsgCodingJobController {
         isDoubleCoded: boolean;
         otherCoders: string[];
       }>> {
+    await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === 'true');
   }

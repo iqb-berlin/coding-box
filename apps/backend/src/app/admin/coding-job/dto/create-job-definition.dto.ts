@@ -120,6 +120,26 @@ export class CreateJobDefinitionDto {
     caseOrderingMode?: CaseOrderingMode;
 
   @ApiProperty({
+    description: 'Whether to show scores in generated coding jobs',
+    example: false,
+    default: false,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    showScore?: boolean;
+
+  @ApiProperty({
+    description: 'Whether to allow comments in generated coding jobs',
+    example: true,
+    default: true,
+    required: false
+  })
+  @IsBoolean()
+  @IsOptional()
+    allowComments?: boolean;
+
+  @ApiProperty({
     description: 'Whether to suppress general instructions in generated coding jobs',
     example: false,
     default: false,

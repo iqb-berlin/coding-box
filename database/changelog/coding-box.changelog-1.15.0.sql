@@ -143,3 +143,13 @@ ALTER TABLE "public"."coding_job"
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "response_matching_flags";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "aggregation_threshold";
 -- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "aggregation_enabled";
+
+-- changeset jurei733:9
+-- comment: Persist coding display options on job definitions for generated manual coding jobs
+
+ALTER TABLE "public"."job_definitions"
+  ADD COLUMN IF NOT EXISTS "show_score" BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS "allow_comments" BOOLEAN NOT NULL DEFAULT true;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "allow_comments";
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "show_score";

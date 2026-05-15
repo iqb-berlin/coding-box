@@ -71,12 +71,23 @@
               color="primary"
               type="button"
               class="primary-row-action"
-              *ngIf="definition.status === 'approved'"
+              *ngIf="canCreateCodingJobs(definition)"
               (click)="createCodingJobFromDefinition(definition)"
-              [matTooltip]="'coding-job-definitions.actions.create-coding-jobs' | translate"
+              [matTooltip]="getCreateCodingJobsTooltip(definition)"
               [attr.aria-label]="getActionAriaLabel('create-coding-jobs', definition)">
               <mat-icon>play_arrow</mat-icon>
               <span>{{ 'coding-job-definitions.actions.create-coding-jobs-short' | translate }}</span>
+            </button>
+            <button
+              mat-stroked-button
+              type="button"
+              class="primary-row-action"
+              *ngIf="definition.status === 'approved' && !canCreateCodingJobs(definition)"
+              disabled
+              [matTooltip]="getCreateCodingJobsTooltip(definition)"
+              [attr.aria-label]="getActionAriaLabel('jobs-already-created', definition)">
+              <mat-icon>task_alt</mat-icon>
+              <span>{{ getCreateCodingJobsActionLabel(definition) }}</span>
             </button>
             <button
               mat-stroked-button
@@ -157,7 +168,7 @@
             <span class="status-badge" [ngClass]="definition.status">
               {{ getStatusLabel(definition.status) }}
             </span>
-            <span class="status-hint">{{ getStatusHint(definition.status) }}</span>
+            <span class="status-hint">{{ getDefinitionStatusHint(definition) }}</span>
           </div>
         </td>
       </ng-container>

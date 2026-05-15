@@ -279,6 +279,12 @@
   border: 1px solid rgba(33, 150, 243, 0.2);
 }
 
+.status-results-applied {
+  background-color: rgba(76, 175, 80, 0.15);
+  color: #2e7d32;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
 .status-pending {
   background-color: rgba(255, 152, 0, 0.1);
   color: #ef6c00;
@@ -289,6 +295,12 @@
   background-color: rgba(156, 39, 176, 0.1);
   color: #6a1b9a;
   border: 1px solid rgba(156, 39, 176, 0.2);
+}
+
+.status-open {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #c62828;
+  border: 1px solid rgba(244, 67, 54, 0.2);
 }
 
 .status-review {

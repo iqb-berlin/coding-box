@@ -1,5 +1,6 @@
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
+import { JobDefinition } from '../../entities/job-definition.entity';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: class {}
@@ -19,7 +20,7 @@ type SlimResponseForTest = {
 };
 
 const createRepo = () => ({
-  count: jest.fn(),
+  count: jest.fn().mockResolvedValue(0),
   find: jest.fn(),
   findOne: jest.fn(),
   create: jest.fn(value => value),
@@ -29,6 +30,21 @@ const createRepo = () => ({
   remove: jest.fn(),
   createQueryBuilder: jest.fn()
 });
+
+const createJobDefinitionLockQueryBuilder = (
+  jobDefinition: unknown = { id: 1, workspace_id: 5, status: 'approved' }
+) => {
+  const queryBuilder: Record<string, jest.Mock> = {};
+  [
+    'setLock',
+    'where',
+    'andWhere'
+  ].forEach(method => {
+    queryBuilder[method] = jest.fn().mockReturnValue(queryBuilder);
+  });
+  queryBuilder.getOne = jest.fn().mockResolvedValue(jobDefinition);
+  return queryBuilder;
+};
 
 const makeResponse = (
   id: number,
@@ -50,9 +66,11 @@ const makeResponse = (
 describe('CodingJobService distribution from job definitions', () => {
   let service: CodingJobService;
   let workspaceFilesService: { getDerivedVariableMap: jest.Mock };
+  let codingJobRepository: ReturnType<typeof createRepo>;
+  let jobDefinitionRepository: ReturnType<typeof createRepo>;
 
   beforeEach(() => {
-    const codingJobRepository = createRepo();
+    codingJobRepository = createRepo();
     const codingJobCoderRepository = createRepo();
     const codingJobVariableRepository = createRepo();
     const codingJobVariableBundleRepository = createRepo();
@@ -61,10 +79,13 @@ describe('CodingJobService distribution from job definitions', () => {
     const responseRepository = createRepo();
     const fileUploadRepository = createRepo();
     const settingRepository = createRepo();
+    jobDefinitionRepository = createRepo();
+    jobDefinitionRepository.createQueryBuilder.mockReturnValue(createJobDefinitionLockQueryBuilder());
     const connection = {
       transaction: jest.fn(callback => callback({
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
+          if (entity === JobDefinition) return jobDefinitionRepository;
           return createRepo();
         }
       }))
@@ -80,6 +101,10 @@ describe('CodingJobService distribution from job definitions', () => {
         testletIgnoredUnits: []
       })
     };
+    const usersService = {
+      getUserIsAdmin: jest.fn().mockResolvedValue(false),
+      getUserAccessLevel: jest.fn().mockResolvedValue(1)
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -94,7 +119,8 @@ describe('CodingJobService distribution from job definitions', () => {
       connection as never,
       cacheService as never,
       workspaceFilesService as never,
-      workspaceExclusionService as never
+      workspaceExclusionService as never,
+      usersService as never
     );
 
     jest.spyOn(
@@ -318,6 +344,62 @@ describe('CodingJobService distribution from job definitions', () => {
     expect(createdJobCalls).toHaveLength(0);
   });
 
+  it('keeps aggregation groups separate for equal values in different variables of a bundle', async () => {
+    const responses = [
+      makeResponse(1, 'Unit 1', 'Var 1', 'same-value'),
+      makeResponse(2, 'Unit 1', 'Var 1', 'same-value'),
+      makeResponse(3, 'Unit 2', 'Var 2', 'same-value'),
+      makeResponse(4, 'Unit 2', 'Var 2', 'same-value')
+    ];
+    const createdJobCalls: Array<{ subset: SlimResponseForTest[] }> = [];
+    const request = {
+      selectedVariables: [],
+      selectedVariableBundles: [{
+        id: 9,
+        name: 'Bundle A',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous' as const
+    };
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+    jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockImplementation(async (_workspaceId, _dto, subset) => {
+      createdJobCalls.push({ subset: subset as SlimResponseForTest[] });
+      return { id: 400 + createdJobCalls.length } as CodingJob;
+    });
+
+    const preview = await service.calculateDistribution(5, request);
+    const result = await service.createDistributedCodingJobs(5, {
+      ...request,
+      jobDefinitionId: 80
+    });
+
+    expect(preview.aggregationInfo['Bundle A']).toEqual({
+      uniqueCases: 2,
+      totalResponses: 4
+    });
+    expect(preview.distribution['Bundle A']).toEqual({ Ada: 2 });
+    expect(result.distribution).toEqual(preview.distribution);
+    expect(result.aggregationInfo).toEqual(preview.aggregationInfo);
+    expect(createdJobCalls).toHaveLength(1);
+    expect(createdJobCalls[0].subset.map(response => response.id)).toEqual([1, 3]);
+  });
+
   it('does not aggregate derived variables even when their values are empty', async () => {
     const request = {
       selectedVariables: [{ unitName: 'Derived Unit', variableId: 'Derived Var' }],
@@ -347,5 +429,78 @@ describe('CodingJobService distribution from job definitions', () => {
       Ada: 2,
       Bea: 2
     });
+  });
+
+  it('blocks creating jobs from a definition when jobs already exist for it', async () => {
+    const responses = Array.from({ length: 3 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
+    const createCodingJobSpy = jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockResolvedValue({ id: 900 } as CodingJob);
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    codingJobRepository.count.mockResolvedValue(1);
+
+    const result = await service.createDistributedCodingJobs(5, {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 81
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.jobsCreated).toBe(0);
+    expect(result.message).toContain('Coding jobs already exist for job definition 81');
+    expect(createCodingJobSpy).not.toHaveBeenCalled();
+    expect(codingJobRepository.count).toHaveBeenCalledWith({
+      where: {
+        workspace_id: 5,
+        job_definition_id: 81
+      }
+    });
+  });
+
+  it('blocks creating jobs from a definition that is not approved', async () => {
+    const responses = Array.from({ length: 3 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
+    const createCodingJobSpy = jest.spyOn(
+      service as unknown as {
+        createCodingJobWithUnitSubsetInManager: (
+          workspaceId: number,
+          dto: unknown,
+          subset: SlimResponseForTest[]
+        ) => Promise<CodingJob>
+      },
+      'createCodingJobWithUnitSubsetInManager'
+    ).mockResolvedValue({ id: 901 } as CodingJob);
+
+    mockResponses(responses);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([ResponseMatchingFlag.NO_AGGREGATION]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(null);
+    jobDefinitionRepository.createQueryBuilder.mockReturnValue(
+      createJobDefinitionLockQueryBuilder({ id: 82, workspace_id: 5, status: 'draft' })
+    );
+
+    const result = await service.createDistributedCodingJobs(5, {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: [{ id: 1, name: 'Ada', username: 'ada' }],
+      caseOrderingMode: 'continuous',
+      jobDefinitionId: 82
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.jobsCreated).toBe(0);
+    expect(result.message).toContain(
+      'Only approved job definitions can be used to create coding jobs'
+    );
+    expect(createCodingJobSpy).not.toHaveBeenCalled();
+    expect(codingJobRepository.count).not.toHaveBeenCalled();
   });
 });

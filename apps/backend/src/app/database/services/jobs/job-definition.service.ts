@@ -32,6 +32,11 @@ interface JobDefinitionForUsage {
   max_coding_cases?: number;
 }
 
+export type JobDefinitionWithCreatedJobsCount = JobDefinition & {
+  createdJobsCount: number;
+  created_jobs_count: number;
+};
+
 interface JobDefinitionValidationState {
   status?: JobDefinition['status'];
   assignedVariables?: JobDefinitionVariable[];
@@ -335,11 +340,14 @@ export class JobDefinitionService {
     assignedBundles.forEach(bundle => {
       const bundleVariables = bundle.variables || [];
       const quota = getQuotaForCurrentItem();
-      const bundleUsage = quota ?? bundleVariables.reduce((sum, variable) => sum + getAvailableCases(variable), 0);
 
-      if (bundleVariables.length > 0) {
-        const usagePerVariable = Math.ceil(bundleUsage / bundleVariables.length);
-        bundleVariables.forEach(variable => addUsage(variable, usagePerVariable));
+      if (quota === undefined) {
+        bundleVariables.forEach(variable => addUsage(variable, getAvailableCases(variable)));
+      } else {
+        bundleVariables.forEach(variable => {
+          const availableCases = getAvailableCases(variable);
+          addUsage(variable, Math.min(quota, availableCases));
+        });
       }
 
       currentItemIndex += 1;
@@ -347,7 +355,8 @@ export class JobDefinitionService {
 
     assignedVariables.forEach(variable => {
       const quota = getQuotaForCurrentItem();
-      const variableUsage = quota ?? getAvailableCases(variable);
+      const availableCases = getAvailableCases(variable);
+      const variableUsage = quota === undefined ? availableCases : Math.min(quota, availableCases);
 
       addUsage(variable, variableUsage);
 
@@ -400,6 +409,8 @@ export class JobDefinitionService {
       double_coding_absolute: createDto.doubleCodingAbsolute,
       double_coding_percentage: createDto.doubleCodingPercentage,
       case_ordering_mode: createDto.caseOrderingMode,
+      show_score: createDto.showScore ?? false,
+      allow_comments: createDto.allowComments ?? true,
       suppress_general_instructions: createDto.suppressGeneralInstructions ?? false
     });
 
@@ -420,7 +431,58 @@ export class JobDefinitionService {
     return jobDefinition;
   }
 
-  async getJobDefinitions(workspaceId?: number): Promise<JobDefinition[]> {
+  private async attachCreatedJobsCounts(
+    definitions: JobDefinition[]
+  ): Promise<JobDefinitionWithCreatedJobsCount[]> {
+    const definitionsByWorkspaceId = new Map<number, JobDefinition[]>();
+
+    definitions.forEach(definition => {
+      if (definition.id === undefined || definition.workspace_id === undefined) {
+        return;
+      }
+
+      const workspaceDefinitions = definitionsByWorkspaceId.get(definition.workspace_id) || [];
+      workspaceDefinitions.push(definition);
+      definitionsByWorkspaceId.set(definition.workspace_id, workspaceDefinitions);
+    });
+
+    const workspaceEntries = Array.from(definitionsByWorkspaceId.entries());
+
+    await Promise.all(
+      workspaceEntries.map(async ([definitionWorkspaceId, workspaceDefinitions]) => {
+        const definitionIds = workspaceDefinitions
+          .map(definition => definition.id)
+          .filter((definitionId): definitionId is number => definitionId !== undefined);
+        const countsByDefinitionId = await this.codingJobService.getCodingJobCountsByDefinitionIds(
+          definitionWorkspaceId,
+          definitionIds
+        );
+
+        workspaceDefinitions.forEach(definition => {
+          const createdJobsCount = definition.id === undefined ?
+            0 :
+            countsByDefinitionId.get(definition.id) || 0;
+          Object.assign(definition, {
+            createdJobsCount,
+            created_jobs_count: createdJobsCount
+          });
+        });
+      })
+    );
+
+    definitions.forEach(definition => {
+      if (!Object.prototype.hasOwnProperty.call(definition, 'createdJobsCount')) {
+        Object.assign(definition, {
+          createdJobsCount: 0,
+          created_jobs_count: 0
+        });
+      }
+    });
+
+    return definitions as JobDefinitionWithCreatedJobsCount[];
+  }
+
+  async getJobDefinitions(workspaceId?: number): Promise<JobDefinitionWithCreatedJobsCount[]> {
     const whereClause = workspaceId ? {
       workspace_id: workspaceId
     } : {};
@@ -434,7 +496,7 @@ export class JobDefinitionService {
       await this.hydrateAssignedVariableBundles(definition);
     }
 
-    return definitions;
+    return this.attachCreatedJobsCounts(definitions);
   }
 
   async updateJobDefinition(id: number, updateDto: UpdateJobDefinitionDto): Promise<JobDefinition> {
@@ -525,6 +587,12 @@ export class JobDefinitionService {
     }
     if (updateDto.caseOrderingMode !== undefined) {
       jobDefinition.case_ordering_mode = updateDto.caseOrderingMode;
+    }
+    if (updateDto.showScore !== undefined) {
+      jobDefinition.show_score = updateDto.showScore;
+    }
+    if (updateDto.allowComments !== undefined) {
+      jobDefinition.allow_comments = updateDto.allowComments;
     }
     if (updateDto.suppressGeneralInstructions !== undefined) {
       jobDefinition.suppress_general_instructions = updateDto.suppressGeneralInstructions;
@@ -676,6 +744,8 @@ export class JobDefinitionService {
       caseOrderingMode: jobDefinition.case_ordering_mode,
       maxCodingCases: jobDefinition.max_coding_cases,
       jobDefinitionId,
+      showScore: jobDefinition.show_score,
+      allowComments: jobDefinition.allow_comments,
       suppressGeneralInstructions: jobDefinition.suppress_general_instructions
     });
   }

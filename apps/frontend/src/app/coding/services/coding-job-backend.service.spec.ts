@@ -57,7 +57,8 @@ describe('CodingJobBackendService', () => {
           id: 1,
           name: 'Job1',
           created_at: '2023-01-01',
-          assigned_coders: [1]
+          assigned_coders: [1],
+          job_definition_id: 99
         }],
         total: 1
       };
@@ -66,11 +67,78 @@ describe('CodingJobBackendService', () => {
         expect(res.data.length).toBe(1);
         expect(res.data[0].assignedCoders).toEqual([1]);
         expect(res.data[0].assignedVariables).toEqual([]);
+        expect(res.data[0].jobDefinitionId).toBe(99);
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job`);
       expect(req.request.method).toBe('GET');
       req.flush(mockApiResponse);
+    });
+  });
+
+  describe('getJobDefinitions', () => {
+    it('should map created coding job counts from API responses', () => {
+      service.getJobDefinitions(1).subscribe(definitions => {
+        expect(definitions).toEqual([
+          expect.objectContaining({
+            id: 7,
+            createdJobsCount: 3,
+            showScore: true,
+            allowComments: false,
+            suppressGeneralInstructions: true
+          }),
+          expect.objectContaining({
+            id: 8,
+            createdJobsCount: 0,
+            showScore: false,
+            allowComments: true,
+            suppressGeneralInstructions: false
+          })
+        ]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions`);
+      expect(req.request.method).toBe('GET');
+      req.flush([
+        {
+          id: 7,
+          status: 'approved',
+          created_jobs_count: 3,
+          show_score: true,
+          allow_comments: false,
+          suppress_general_instructions: true
+        },
+        {
+          id: 8,
+          status: 'draft',
+          createdJobsCount: 0,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        }
+      ]);
+    });
+
+    it('should create coding jobs through the dedicated job definition endpoint', () => {
+      service.createCodingJobFromDefinition(1, 42).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(3);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/create-job`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      req.flush({
+        success: true,
+        jobsCreated: 3,
+        message: 'created',
+        distribution: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        jobs: []
+      });
     });
   });
 

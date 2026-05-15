@@ -398,9 +398,6 @@
       "subtitle": "Hier finden Sie alle Kodierjobs, die Ihnen zugewiesen wurden",
       "loading-jobs": "Kodierjobs werden geladen...",
       "error-loading-jobs": "Fehler beim Laden der Kodierjobs",
-      "sending-to-review": "Sende Kodierjob \"{{name}}\" zur Überprüfung...",
-      "sent-to-review": "Kodierjob \"{{name}}\" zur Überprüfung gesendet",
-      "error-sending-to-review": "Fehler beim Senden zur Überprüfung",
       "starting-job": "Starte Kodierjob \"{{name}}\"...",
       "no-matching-responses": "Keine passenden Antworten gefunden",
       "preparing-replay": "{{count}} Antworten für Replay vorbereitet",
@@ -414,13 +411,13 @@
       "filter-pending": "Ausstehend",
       "filter-paused": "Pausiert",
       "filter-open": "Offen",
+      "filter-results-applied": "Ergebnisse angewendet",
       "filter-review": "Zur Überprüfung",
       "total-coding-progress": "Gesamter Kodierfortschritt",
       "total-progress-completed": "Abgeschlossene Kodierjobs",
       "total-progress-incomplete": "Nicht abgeschlossene Kodierjobs",
       "actions": "Aktionen",
       "start-coding": "Kodierjob starten",
-      "send-to-review": "Zur Überprüfung senden",
       "job-name": "Name",
       "job-description": "Beschreibung",
       "job-status": "Status",
@@ -431,8 +428,10 @@
       "job-updated-at": "Aktualisiert am",
       "job-status-active": "Aktiv",
       "job-status-completed": "Abgeschlossen",
+      "job-status-results-applied": "Ergebnisse angewendet",
       "job-status-pending": "Ausstehend",
       "job-status-paused": "Pausiert",
+      "job-status-open": "Offen",
       "job-status-review": "Zur Überprüfung",
       "no-variables": "Keine Variablen",
       "no-variable-bundles": "Keine Variablen-Bündel",
@@ -695,6 +694,7 @@
     "submitting-coding-job": "Kodierungsauftrag wird eingereicht...",
     "coding-job-submitted-successfully": "Kodierungsauftrag erfolgreich eingereicht",
     "failed-to-submit-coding-job": "Fehler beim Einreichen des Kodierungsauftrags",
+    "failed-to-save-coding-progress": "Die Kodierung konnte nicht gespeichert werden. Bitte erneut auswählen oder die Verbindung prüfen.",
     "coding-progress-message": "Kodierfortschritt: {{completed}}/{{total}} abgeschlossen ({{percentage}}%)",
     "close": "Schließen",
     "navigate-dialog": {
@@ -1734,6 +1734,10 @@
       "reject": "Ablehnen",
       "create-coding-jobs": "Kodier-Jobs erstellen",
       "create-coding-jobs-short": "Jobs erstellen",
+      "jobs-already-created": "Aus dieser Definition wurden bereits Kodier-Jobs erstellt ({{count}}).",
+      "jobs-created-short": "{{count}} erstellt",
+      "jobs-count-unavailable": "Der Status erzeugter Kodier-Jobs konnte nicht geladen werden.",
+      "jobs-count-unavailable-short": "Status unklar",
       "more": "Weitere Aktionen",
       "delete": "Löschen"
     },
@@ -1747,7 +1751,9 @@
     "status-hints": {
       "draft": "Kann noch bearbeitet und zur Prüfung eingereicht werden.",
       "pending_review": "Wartet auf Freigabe.",
-      "approved": "Aus dieser Definition können Kodierjobs erstellt werden."
+      "approved": "Aus dieser Definition können Kodierjobs erstellt werden.",
+      "approved_created": "Aus dieser Definition wurden bereits Kodier-Jobs erstellt ({{count}}).",
+      "approved_count_unavailable": "Job-Erzeugung ist gesperrt, bis der Status erzeugter Kodier-Jobs geladen wurde."
     },
     "empty": {
       "title": "Planung beginnt mit einer Job-Definition",
@@ -1806,11 +1812,11 @@
     },
     "double-coding-summary": {
       "variable": "Variable",
-      "total-cases": "Gesamt Fälle",
+      "total-cases": "Kodieraufgaben",
       "double-coded": "Doppelt kodiert",
       "single-coded": "Einfach kodiert",
       "title": "Zusammenfassung der Doppelkodierung",
-      "info-text": "Diese Zusammenfassung zeigt die Anzahl der doppelt und einfach kodierten Fälle."
+      "info-text": "Diese Zusammenfassung trennt eindeutige Fälle von zusätzlichen Kodieraufgaben durch Doppelkodierung."
     }
   },
   "kappa": {

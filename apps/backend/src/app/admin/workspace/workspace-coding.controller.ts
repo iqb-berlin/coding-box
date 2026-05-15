@@ -4,8 +4,11 @@ import {
   Param,
   Post,
   Query,
+  Req,
+  UnauthorizedException,
   UseGuards
 } from '@nestjs/common';
+import { Request } from 'express';
 import {
   ApiOkResponse,
   ApiParam,
@@ -33,6 +36,17 @@ export class WorkspaceCodingController {
     private codingResultsService: CodingResultsService,
     private jobQueueService: JobQueueService
   ) { }
+
+  private getRequestUserId(req: Request): number {
+    const user = (req as Request & { user?: { id?: number | string; userId?: number | string } }).user;
+    const userId = Number(user?.id ?? user?.userId);
+
+    if (!Number.isFinite(userId) || userId <= 0) {
+      throw new UnauthorizedException('User ID not found in request');
+    }
+
+    return userId;
+  }
 
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -182,9 +196,16 @@ export class WorkspaceCodingController {
   })
   async getCodingJobNotes(
     @WorkspaceId() workspace_id: number,
-      @Param('codingJobId') codingJobId: number
+      @Param('codingJobId') codingJobId: number,
+      @Req() req: Request
   ): Promise<Record<string, string>> {
-    return this.codingJobService.getCodingNotes(codingJobId);
+    const jobId = Number(codingJobId);
+    await this.codingJobService.assertUserCanAccessCodingJob(
+      jobId,
+      workspace_id,
+      this.getRequestUserId(req)
+    );
+    return this.codingJobService.getCodingNotes(jobId);
   }
 
   @Post(':workspace_id/coding/apply-empty-responses')

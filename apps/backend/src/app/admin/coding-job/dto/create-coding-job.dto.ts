@@ -132,15 +132,6 @@ export class CreateCodingJobDto {
     maxCodingCases?: number;
 
   @ApiProperty({
-    description: 'ID of the job definition this job is created from',
-    example: 1,
-    required: false
-  })
-  @IsNumber()
-  @IsOptional()
-    jobDefinitionId?: number;
-
-  @ApiProperty({
     description: 'Whether to show scores in the coding interface',
     example: false,
     default: false,

@@ -244,11 +244,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               this.codingService.codingJobId = deserializedUnits.id || null;
               if (this.codingService.codingJobId && this.workspaceId) {
                 const jobId = this.codingService.codingJobId;
-                if (!this.isReviewMode) {
+                await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
+                if (!this.isReviewMode &&
+                  !this.codingService.isCompletedJobReview &&
+                  !this.codingService.isCodingJobFinalized) {
                   this.codingService.updateCodingJobStatus(this.workspaceId, jobId, 'active');
                 }
-                await this.codingService.loadSavedCodingProgress(this.workspaceId, jobId);
-                this.codingService.checkCodingJobCompletion(this.unitsData);
+                if (!this.codingService.isCompletedJobReview) {
+                  this.codingService.checkCodingJobCompletion(this.unitsData);
+                }
               }
             }
           }
@@ -687,7 +691,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
-    const savedCode = await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+    let savedCode: { code?: string; score?: number } | null = null;
+    try {
+      savedCode = await this.codingService.handleCodeSelected(event, this.testPerson, this.unitId, this.workspaceId, this.unitsData);
+    } catch (error) {
+      return;
+    }
 
     if (savedCode && window.opener && this.originResponseId) {
       window.opener.postMessage({
@@ -743,7 +752,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   pauseCodingJob(): void {
-    if (this.codingService.codingJobId) {
+    if (
+      this.codingService.codingJobId &&
+      !this.codingService.isCompletedJobReview &&
+      !this.codingService.isCodingJobFinalized
+    ) {
       this.codingService.pauseCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
   }
@@ -756,8 +769,12 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async submitCodingJob(): Promise<void> {
     if (this.codingService.codingJobId) {
+      if (this.codingService.hasSaveError) {
+        await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
+        return;
+      }
       await this.codingService.saveAllCodingProgress(this.workspaceId, this.codingService.codingJobId);
-      this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
+      await this.codingService.submitCodingJob(this.workspaceId, this.codingService.codingJobId);
     }
   }
 
@@ -822,6 +839,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
       // Check for Enter key - navigate to next unit (existing functionality)
       if (keyboardEvent.key === 'Enter' && currentVariableId) {
+        if (this.codingService.hasSaveError) {
+          keyboardEvent.preventDefault();
+          return;
+        }
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, currentUnitName, currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
@@ -834,6 +855,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         }
       } else if (keyboardEvent.key === 'ArrowRight') {
         keyboardEvent.preventDefault();
+        if (this.codingService.hasSaveError) {
+          return;
+        }
         const compositeKey = this.codingService.generateCompositeKey(this.testPerson, currentUnitName, currentVariableId);
         const hasSelection = this.codingService.selectedCodes.has(compositeKey);
 
@@ -870,7 +894,14 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   @HostListener('window:beforeunload')
   onBeforeUnload(): void {
-    if (this.codingService.codingJobId && this.workspaceId && !this.codingService.isCodingJobCompleted && !this.isReviewMode) {
+    if (
+      this.codingService.codingJobId &&
+      this.workspaceId &&
+      !this.codingService.isCodingJobCompleted &&
+      !this.codingService.isCompletedJobReview &&
+      !this.codingService.isCodingJobFinalized &&
+      !this.isReviewMode
+    ) {
       this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
     }
   }
