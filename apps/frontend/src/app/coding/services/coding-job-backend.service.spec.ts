@@ -74,6 +74,31 @@ describe('CodingJobBackendService', () => {
     });
   });
 
+  describe('auth token override', () => {
+    it('should use the supplied auth token when loading coding job units', () => {
+      service.getCodingJobUnits(47, 123, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/units`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush([]);
+    });
+
+    it('should use the supplied auth token when saving coding progress', () => {
+      service.saveCodingProgress(47, 123, {
+        testPerson: 'login@code@booklet',
+        unitId: 'UNIT',
+        variableId: 'VAR',
+        selectedCode: { id: 1, code: '1', label: 'Code 1' }
+      }, 'url-token').subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/progress`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush({});
+    });
+  });
+
   describe('createCodingJob', () => {
     it('should create coding job', () => {
       const job = { name: 'J', workspace_id: 1 } as unknown as Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>;

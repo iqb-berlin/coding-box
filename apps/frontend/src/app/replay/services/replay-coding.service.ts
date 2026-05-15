@@ -26,6 +26,7 @@ export class ReplayCodingService {
   private codingJobBackendService = inject(CodingJobBackendService);
   private translate = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
+  private authToken?: string;
 
   codingScheme: CodingScheme | null = null;
   currentVariableId: string = '';
@@ -47,6 +48,7 @@ export class ReplayCodingService {
     this.codingScheme = null;
     this.currentVariableId = '';
     this.codingJobId = null;
+    this.authToken = undefined;
     this.selectedCodes.clear();
     this.codingJobComment = '';
     this.isPausingJob = false;
@@ -54,9 +56,17 @@ export class ReplayCodingService {
     this.isSubmittingJob = false;
   }
 
+  setAuthToken(authToken?: string): void {
+    this.authToken = authToken || undefined;
+  }
+
+  private get authTokenArg(): [string] | [] {
+    return this.authToken ? [this.authToken] : [];
+  }
+
   async updateCodingJobStatus(workspaceId: number, jobId: number, status: 'active' | 'paused' | 'completed' | 'open') {
     return firstValueFrom(
-      this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status })
+      this.codingJobBackendService.updateCodingJob(workspaceId, jobId, { status }, ...this.authTokenArg)
     );
   }
 
@@ -74,7 +84,7 @@ export class ReplayCodingService {
     try {
       this.selectedCodes.clear();
       const savedProgress = await firstValueFrom(
-        this.codingJobBackendService.getCodingProgress(workspaceId, jobId)
+        this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
       ) as { [key: string]: SavedCode };
 
       Object.keys(savedProgress).forEach(compositeKey => {
@@ -87,7 +97,7 @@ export class ReplayCodingService {
       });
 
       const savedNotes = await firstValueFrom(
-        this.codingJobBackendService.getCodingNotes(workspaceId, jobId)
+        this.codingJobBackendService.getCodingNotes(workspaceId, jobId, ...this.authTokenArg)
       );
       if (savedNotes) {
         this.notes.clear();
@@ -97,7 +107,7 @@ export class ReplayCodingService {
       }
 
       const codingJob = await firstValueFrom(
-        this.codingJobBackendService.getCodingJob(workspaceId, jobId)
+        this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
       );
       this.codingJobComment = codingJob.comment || '';
       this.showScore = codingJob.showScore || false;
@@ -168,7 +178,7 @@ export class ReplayCodingService {
           unitId,
           variableId,
           selectedCode: backendSelectedCode
-        })
+        }, ...this.authTokenArg)
       );
     } catch (error) {
       // Ignore errors when saving coding progress
@@ -339,7 +349,7 @@ export class ReplayCodingService {
           variableId,
           selectedCode: { id: -1, code: '', label: '' },
           notes: notes.trim() || undefined
-        })
+        }, ...this.authTokenArg)
       );
     } catch (error) {
       // Ignore errors when saving notes
@@ -352,7 +362,7 @@ export class ReplayCodingService {
     try {
       this.codingJobComment = comment;
       await firstValueFrom(
-        this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment })
+        this.codingJobBackendService.updateCodingJob(workspaceId, this.codingJobId, { comment }, ...this.authTokenArg)
       );
     } catch (error) {
       // Ignore errors when saving comment

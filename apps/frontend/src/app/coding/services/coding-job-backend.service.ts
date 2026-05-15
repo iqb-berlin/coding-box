@@ -130,8 +130,12 @@ export class CodingJobBackendService {
   private http = inject(HttpClient);
   private validationTaskStateService = inject(ValidationTaskStateService);
 
+  private getAuthHeader(authToken?: string) {
+    return { Authorization: `Bearer ${authToken || localStorage.getItem('id_token')}` };
+  }
+
   private get authHeader() {
-    return { Authorization: `Bearer ${localStorage.getItem('id_token')}` };
+    return this.getAuthHeader();
   }
 
   getVariableBundles(workspaceId: number): Observable<VariableBundle[]> {
@@ -226,11 +230,12 @@ export class CodingJobBackendService {
 
   getCodingJob(
     workspaceId: number,
-    codingJobId: number
+    codingJobId: number,
+    authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
     return this.http
-      .get<unknown>(url, { headers: this.authHeader })
+      .get<unknown>(url, { headers: this.getAuthHeader(authToken) })
       .pipe(map(job => this.mapApiCodingJob(job)));
   }
 
@@ -245,10 +250,11 @@ export class CodingJobBackendService {
   updateCodingJob(
     workspaceId: number,
     codingJobId: number,
-    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>
+    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>,
+    authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
-    return this.http.put<CodingJob>(url, codingJob, { headers: this.authHeader });
+    return this.http.put<CodingJob>(url, codingJob, { headers: this.getAuthHeader(authToken) });
   }
 
   deleteCodingJob(
@@ -350,10 +356,11 @@ export class CodingJobBackendService {
       };
       isOpen?: boolean;
       notes?: string;
-    }
+    },
+    authToken?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
-    return this.http.post<CodingJob>(url, progressData, { headers: this.authHeader });
+    return this.http.post<CodingJob>(url, progressData, { headers: this.getAuthHeader(authToken) });
   }
 
   restartCodingJobWithOpenUnits(
@@ -366,11 +373,12 @@ export class CodingJobBackendService {
 
   getCodingProgress(
     workspaceId: number,
-    codingJobId: number
+    codingJobId: number,
+    authToken?: string
   ): Observable<Record<string, unknown>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.get<Record<string, unknown>>(url, {
-      headers: this.authHeader
+      headers: this.getAuthHeader(authToken)
     });
   }
 
@@ -387,17 +395,19 @@ export class CodingJobBackendService {
 
   getCodingNotes(
     workspaceId: number,
-    codingJobId: number
+    codingJobId: number,
+    authToken?: string
   ): Observable<Record<string, string> | null> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding-job/${codingJobId}/notes`;
     return this.http.get<Record<string, string> | null>(url, {
-      headers: this.authHeader
+      headers: this.getAuthHeader(authToken)
     });
   }
 
   getCodingJobUnits(
     workspaceId: number,
-    codingJobId: number
+    codingJobId: number,
+    authToken?: string
   ): Observable<
     Array<{
       responseId: number;
@@ -428,7 +438,7 @@ export class CodingJobBackendService {
       isDoubleCoded: boolean;
       otherCoders: string[];
     }>
-    >(url, { headers: this.authHeader });
+    >(url, { headers: this.getAuthHeader(authToken) });
   }
 
   applyCodingResults(

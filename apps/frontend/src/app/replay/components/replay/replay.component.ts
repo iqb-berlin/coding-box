@@ -166,6 +166,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         this.resetSnackBars();
         this.resetUnitData();
         this.authToken = await this.getAuthToken();
+        this.codingService.setAuthToken(this.authToken);
         let workspace: string | undefined;
         try {
           const decoded: JwtPayload & { workspace: string } = jwtDecode(this.authToken);
@@ -189,7 +190,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
             const wsId = Number(queryParams.workspaceId);
             try {
               const apiUnits = await firstValueFrom(
-                this.codingJobBackendService.getCodingJobUnits(wsId, jobId)
+                this.codingJobBackendService.getCodingJobUnits(wsId, jobId, this.authToken)
               );
               if (apiUnits && apiUnits.length > 0) {
                 deserializedUnits = {
