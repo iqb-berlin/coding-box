@@ -34,6 +34,7 @@ describe('CodingJobDefinitionsComponent', () => {
             updateJobDefinition: jest.fn().mockReturnValue(of({})),
             approveJobDefinition: jest.fn().mockReturnValue(of({})),
             deleteJobDefinition: jest.fn().mockReturnValue(of({})),
+            createCodingJobFromDefinition: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1, jobs: [] })),
             updateCodingJob: jest.fn().mockReturnValue(of({}))
           }
         },
@@ -107,12 +108,49 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(overlayElement.querySelector('.danger-menu-item')).toBeTruthy();
   });
 
+  it('does not offer job creation again once jobs exist for a definition', () => {
+    component.isLoading = false;
+    component.selectionMode = false;
+    component.jobDefinitions = [{
+      id: 6,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1],
+      createdJobsCount: 2
+    }];
+    fixture.detectChanges();
+
+    const rowAction = fixture.nativeElement.querySelector('.primary-row-action') as HTMLButtonElement;
+
+    expect(rowAction.disabled).toBe(true);
+    expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBe(2);
+    expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
+    expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
+  });
+
+  it('blocks job creation when the created jobs count is missing', () => {
+    component.isLoading = false;
+    component.selectionMode = false;
+    component.jobDefinitions = [{
+      id: 6,
+      status: 'approved',
+      assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      assignedCoders: [1]
+    }];
+    fixture.detectChanges();
+
+    const rowAction = fixture.nativeElement.querySelector('.primary-row-action') as HTMLButtonElement;
+
+    expect(rowAction.disabled).toBe(true);
+    expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBeUndefined();
+    expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
+    expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
+  });
+
   it('creates distributed jobs from an approved definition with all definition settings', async () => {
     const coderService = TestBed.inject(CoderService) as unknown as { getCoders: jest.Mock };
-    const distributedCodingService = TestBed.inject(DistributedCodingService) as unknown as {
-      createDistributedCodingJobs: jest.Mock;
-    };
     const codingJobBackendService = TestBed.inject(CodingJobBackendService) as unknown as {
+      createCodingJobFromDefinition: jest.Mock;
       updateCodingJob: jest.Mock;
     };
     const matDialog = TestBed.inject(MatDialog);
@@ -131,7 +169,7 @@ describe('CodingJobDefinitionsComponent', () => {
       { id: 2, name: 'Bea' },
       { id: 3, name: 'Chris' }
     ]));
-    distributedCodingService.createDistributedCodingJobs.mockReturnValue(of({
+    codingJobBackendService.createCodingJobFromDefinition.mockReturnValue(of({
       success: true,
       jobsCreated: 1,
       message: 'created',
@@ -156,7 +194,10 @@ describe('CodingJobDefinitionsComponent', () => {
       doubleCodingAbsolute: 1,
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
-      suppressGeneralInstructions: true
+      showScore: false,
+      allowComments: false,
+      suppressGeneralInstructions: true,
+      createdJobsCount: 0
     });
 
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
@@ -169,27 +210,18 @@ describe('CodingJobDefinitionsComponent', () => {
         ],
         doubleCodingAbsolute: 1,
         caseOrderingMode: 'continuous',
-        maxCodingCases: 7
+        maxCodingCases: 7,
+        displayOptions: {
+          showScore: false,
+          allowComments: false,
+          suppressGeneralInstructions: true
+        },
+        displayOptionsLocked: true
       })
     }));
-    expect(distributedCodingService.createDistributedCodingJobs).toHaveBeenCalledWith(
+    expect(codingJobBackendService.createCodingJobFromDefinition).toHaveBeenCalledWith(
       1,
-      assignedVariables,
-      [
-        { id: 1, name: 'Ada', username: 'Ada' },
-        { id: 2, name: 'Bea', username: 'Bea' }
-      ],
-      1,
-      undefined,
-      assignedVariableBundles,
-      'continuous',
-      7,
-      42,
-      {
-        showScore: false,
-        allowComments: true,
-        suppressGeneralInstructions: true
-      }
+      42
     );
     expect(codingJobBackendService.updateCodingJob).not.toHaveBeenCalled();
   });
@@ -205,12 +237,16 @@ describe('CodingJobDefinitionsComponent', () => {
       assignedVariables: [{ unitName: 'Unit', variableId: 'Var' }],
       assignedCoders: [1],
       caseOrderingMode: 'continuous',
+      showScore: false,
+      allowComments: false,
       suppressGeneralInstructions: true
     });
 
     expect(matDialog.open).toHaveBeenCalledWith(expect.any(Function), expect.objectContaining({
       data: expect.objectContaining({
         codingJob: expect.objectContaining({
+          showScore: false,
+          allowComments: false,
           suppressGeneralInstructions: true
         })
       })

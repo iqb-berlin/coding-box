@@ -928,6 +928,23 @@
                   </button>
                 </div>
               </div>
+
+              <div *ngIf="hasCompletedJobsBlockedForReview()" class="completed-jobs-apply-list review-required-list">
+                <div *ngFor="let job of completedJobsBlockedForReview" class="completed-job-apply-row">
+                  <div class="completed-job-copy">
+                    <strong>{{ job.name }}</strong>
+                    <span>Review erforderlich: unsichere Code-Vergabe oder neuer Code nötig.</span>
+                  </div>
+                  <button
+                    mat-stroked-button
+                    color="primary"
+                    type="button"
+                    (click)="scrollToSection('manual-execution')">
+                    <mat-icon>visibility</mat-icon>
+                    Zu den Kodierjobs
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>

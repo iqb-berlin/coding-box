@@ -99,6 +99,10 @@ describe('CodingJobService', () => {
     const workspaceFilesService = {
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
     };
+    const usersService = {
+      getUserIsAdmin: jest.fn().mockResolvedValue(false),
+      getUserAccessLevel: jest.fn().mockResolvedValue(1)
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -113,7 +117,8 @@ describe('CodingJobService', () => {
       connection as never,
       cacheService as never,
       workspaceFilesService as never,
-      workspaceExclusionService as never
+      workspaceExclusionService as never,
+      usersService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
@@ -195,6 +200,47 @@ describe('CodingJobService', () => {
       totalUnits: 4,
       openUnits: 1
     });
+  });
+
+  it('counts coding jobs by job definition id', async () => {
+    const queryBuilder = createQueryBuilder([
+      { jobDefinitionId: '3', jobsCount: '2' },
+      { jobDefinitionId: 5, jobsCount: 1 }
+    ]);
+    codingJobRepository.createQueryBuilder.mockReturnValue(queryBuilder);
+
+    await expect(
+      service.getCodingJobCountsByDefinitionIds(7, [3, 3, 5])
+    ).resolves.toEqual(new Map([
+      [3, 2],
+      [5, 1]
+    ]));
+
+    expect(codingJobRepository.createQueryBuilder).toHaveBeenCalledWith('coding_job');
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'coding_job.job_definition_id IN (:...definitionIds)',
+      { definitionIds: [3, 5] }
+    );
+  });
+
+  it('does not query coding job counts without definition ids', async () => {
+    await expect(
+      service.getCodingJobCountsByDefinitionIds(7, [])
+    ).resolves.toEqual(new Map());
+
+    expect(codingJobRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('does not persist jobDefinitionId from direct coding job creates', async () => {
+    await service.createCodingJob(7, {
+      name: 'Direct job',
+      jobDefinitionId: 42
+    } as never);
+
+    expect(codingJobRepository.create).toHaveBeenCalledWith(expect.not.objectContaining({
+      job_definition_id: 42
+    }));
+    expect(codingJobRepository.create.mock.calls[0][0]).not.toHaveProperty('job_definition_id');
   });
 
   it('loads one coding job and expands bundle variables', async () => {
@@ -292,6 +338,73 @@ describe('CodingJobService', () => {
       assignedVariables: [{ unitName: 'UNIT', variableId: 'VAR' }],
       assignedVariableBundles: [{ name: 'Bundle', variables: [{ unitName: 'U2', variableId: 'V2' }] }]
     });
+  });
+
+  it('rejects status changes away from completed coding jobs', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'completed'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.updateCodingJob(1, 3, { status: 'paused' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects unsupported coding job statuses', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.updateCodingJob(1, 3, { status: 'review' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('allows completed coding jobs to be marked as results applied', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'completed'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.updateCodingJob(1, 3, { status: 'results_applied' }))
+      .resolves.toMatchObject({ status: 'results_applied' });
+    expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: 1,
+      status: 'results_applied'
+    }));
+  });
+
+  it('rejects applying results for coding jobs that are not completed', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+
+    await expect(service.updateCodingJob(1, 3, { status: 'results_applied' }))
+      .rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
   });
 
   it('builds response queries for coding job variables and bundles', async () => {

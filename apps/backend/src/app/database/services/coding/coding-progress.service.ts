@@ -50,6 +50,19 @@ interface EffectiveCaseProgress {
   aggregatedDuplicateCases: number;
 }
 
+interface VariableDefinitionReference {
+  id: number;
+  status: string;
+}
+
+interface CrossDefinitionCaseRow {
+  unitName: string;
+  variableId: string;
+  responseId: number | string;
+  definitionId: number | string;
+  definitionStatus: string;
+}
+
 @Injectable()
 export class CodingProgressService {
   private readonly logger = new Logger(CodingProgressService.name);
@@ -727,30 +740,16 @@ export class CodingProgressService {
       // Get cases in jobs map for conflict detection
       const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
 
-      const conflictedVariables = new Map<
-      string,
-      Array<{ id: number; status: string }>
-      >();
+      const crossDefinitionCaseConflicts = await this.getCrossDefinitionCaseConflicts(workspaceId);
+      const conflictedVariables = new Map<string, VariableDefinitionReference[]>();
       variableToDefinitions.forEach((definitions, variableKey) => {
-        if (definitions.length > 1) {
-          // Only report as conflict if there aren't enough available cases
-          const [unitName, variableId] = variableKey.split(':');
-          const variableCaseInfo = variableCaseCounts.find(
-            v => v.unitName === unitName && v.variableId === variableId
-          );
+        if (definitions.length <= 1) {
+          return;
+        }
 
-          if (variableCaseInfo) {
-            const casesInJobs =
-              casesInJobsMap.get(
-                `${variableCaseInfo.unitName}::${variableCaseInfo.variableId}`
-              ) || 0;
-            const availableCases = variableCaseInfo.caseCount - casesInJobs;
-
-            // Only mark as conflict if there are no available cases left
-            if (availableCases <= 0) {
-              conflictedVariables.set(variableKey, definitions);
-            }
-          }
+        const crossDefinitionConflicts = crossDefinitionCaseConflicts.get(variableKey);
+        if (crossDefinitionConflicts && crossDefinitionConflicts.length > 1) {
+          conflictedVariables.set(variableKey, crossDefinitionConflicts);
         }
       });
 
@@ -865,5 +864,84 @@ export class CodingProgressService {
     });
 
     return casesInJobsMap;
+  }
+
+  private async getCrossDefinitionCaseConflicts(
+    workspaceId: number
+  ): Promise<Map<string, VariableDefinitionReference[]>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.response_id', 'responseId')
+      .addSelect('job_definition.id', 'definitionId')
+      .addSelect('job_definition.status', 'definitionStatus')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .innerJoin('coding_job.jobDefinition', 'job_definition')
+      .innerJoin('cju.response', 'response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere('response.status_v1 IN (:...statuses)', {
+        statuses: [
+          statusStringToNumber('CODING_INCOMPLETE'),
+          statusStringToNumber('INTENDED_INCOMPLETE')
+        ]
+      })
+      .andWhere('person.consider = :consider', { consider: true });
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'crossDefinitionCaseConflicts'
+    });
+    const rawResults: CrossDefinitionCaseRow[] = await query.getRawMany();
+    const definitionsByCaseKey = new Map<string, Map<number, VariableDefinitionReference>>();
+    const variableKeyByCaseKey = new Map<string, string>();
+
+    rawResults.forEach(row => {
+      const definitionId = Number(row.definitionId);
+      const responseId = Number(row.responseId);
+
+      if (!Number.isFinite(definitionId) || !Number.isFinite(responseId)) {
+        return;
+      }
+
+      const variableKey = `${row.unitName}:${row.variableId}`;
+      const caseKey = `${row.unitName}::${row.variableId}::${responseId}`;
+      const caseDefinitions = definitionsByCaseKey.get(caseKey) || new Map<number, VariableDefinitionReference>();
+
+      caseDefinitions.set(definitionId, {
+        id: definitionId,
+        status: row.definitionStatus
+      });
+      definitionsByCaseKey.set(caseKey, caseDefinitions);
+      variableKeyByCaseKey.set(caseKey, variableKey);
+    });
+
+    const conflictsByVariable = new Map<string, Map<number, VariableDefinitionReference>>();
+
+    definitionsByCaseKey.forEach((definitions, caseKey) => {
+      if (definitions.size <= 1) {
+        return;
+      }
+
+      const variableKey = variableKeyByCaseKey.get(caseKey);
+      if (!variableKey) {
+        return;
+      }
+
+      const variableDefinitions = conflictsByVariable.get(variableKey) || new Map<number, VariableDefinitionReference>();
+      definitions.forEach(definition => variableDefinitions.set(definition.id, definition));
+      conflictsByVariable.set(variableKey, variableDefinitions);
+    });
+
+    return new Map(Array.from(conflictsByVariable.entries()).map(([variableKey, definitions]) => [
+      variableKey,
+      Array.from(definitions.values()).sort((a, b) => a.id - b.id)
+    ]));
   }
 }

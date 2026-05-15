@@ -41,10 +41,12 @@
         [completedCount]="getCompletedCount()" [totalUnits]="totalUnits" [progressPercentage]="getProgressPercentage()"
         [openCount]="getOpenCount()" [isCodingActive]="!!codingService.codingJobId && !isBookletReplayMode"
         [hasCodingJob]="!!codingService.codingJobId" [isCodingJobCompleted]="codingService.isCodingJobCompleted"
+        [isCompletedJobReview]="codingService.isCompletedJobReview"
         [isPausingJob]="codingService.isPausingJob" [unitsData]="unitsData" [codingService]="codingService"
         [showScore]="codingService.showScore" [allowComments]="codingService.allowComments"
         [suppressGeneralInstructions]="codingService.suppressGeneralInstructions"
-        [isReadOnly]="codingService.isCodingJobFinalized" (codeSelected)="onCodeSelected($event)"
+        [isReadOnly]="codingService.isCodingJobFinalized" [hasSaveError]="codingService.hasSaveError"
+        (codeSelected)="onCodeSelected($event)"
         (notesChanged)="onNotesChanged($event)" (openNavigateDialog)="openNavigateDialog()"
         (openCommentDialog)="openCommentDialog()" (pauseCodingJob)="pauseCodingJob()"
         (unitChanged)="handleUnitChanged($event)">
@@ -66,7 +68,7 @@
 
 
 
-  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode) {
+  @if (codingService.isCodingJobCompleted && !isBookletReplayMode && !isReviewMode && !codingService.isCompletedJobReview) {
   <div class="completion-overlay">
     <div class="completion-dialog">
       <h2>{{ 'replay.CODING_JOB_COMPLETED' | translate }}</h2>

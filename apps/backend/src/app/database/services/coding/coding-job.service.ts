@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Injectable, Logger, NotFoundException
+  BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -14,6 +14,7 @@ import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { JobDefinition } from '../../entities/job-definition.entity';
 import { CreateCodingJobDto } from '../../../admin/coding-job/dto/create-coding-job.dto';
 import { UpdateCodingJobDto } from '../../../admin/coding-job/dto/update-coding-job.dto';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
@@ -23,6 +24,7 @@ import { Setting } from '../../entities/setting.entity';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { UsersService } from '../users';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
@@ -101,6 +103,24 @@ interface DistributableResponses {
   totalResponses: number;
 }
 
+interface CodingJobCountRow {
+  jobDefinitionId: number | string;
+  jobsCount: number | string;
+}
+
+type InternalCreateCodingJobDto = CreateCodingJobDto & {
+  jobDefinitionId?: number;
+};
+
+const UPDATABLE_CODING_JOB_STATUSES = new Set([
+  'pending',
+  'active',
+  'paused',
+  'open',
+  'completed',
+  'results_applied'
+]);
+
 export interface CodingJobAggregationSettings {
   aggregationEnabled: boolean;
   aggregationThreshold: number | null;
@@ -135,8 +155,48 @@ export class CodingJobService {
     private connection: Connection,
     private cacheService: CacheService,
     private workspaceFilesService: WorkspaceFilesService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private usersService: UsersService
   ) { }
+
+  async assertUserCanAccessCodingJob(
+    codingJobId: number,
+    workspaceId: number,
+    userId: number,
+    managerAccessLevel = 2
+  ): Promise<void> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId, workspace_id: workspaceId },
+      select: ['id']
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const isAdmin = await this.usersService.getUserIsAdmin(userId);
+    if (isAdmin) {
+      return;
+    }
+
+    const accessLevel = await this.usersService.getUserAccessLevel(userId, workspaceId);
+    if ((accessLevel ?? 0) >= managerAccessLevel) {
+      return;
+    }
+
+    const assignedCount = await this.codingJobCoderRepository.count({
+      where: {
+        coding_job_id: codingJobId,
+        user_id: userId
+      }
+    });
+
+    if (assignedCount > 0) {
+      return;
+    }
+
+    throw new ForbiddenException('User is not assigned to this coding job');
+  }
 
   private async applyCodingJobUnitExclusions<T>(
     queryBuilder: SelectQueryBuilder<T>,
@@ -212,6 +272,86 @@ export class CodingJobService {
     return {
       progress, coded: codedUnits, total: totalUnits, open: openUnits
     };
+  }
+
+  async getCodingJobCountsByDefinitionIds(
+    workspaceId: number,
+    definitionIds: number[]
+  ): Promise<Map<number, number>> {
+    const uniqueDefinitionIds = Array.from(new Set(
+      definitionIds.filter(definitionId => Number.isFinite(definitionId))
+    ));
+
+    if (uniqueDefinitionIds.length === 0) {
+      return new Map();
+    }
+
+    const rows: CodingJobCountRow[] = await this.codingJobRepository
+      .createQueryBuilder('coding_job')
+      .select('coding_job.job_definition_id', 'jobDefinitionId')
+      .addSelect('COUNT(coding_job.id)', 'jobsCount')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id IN (:...definitionIds)', {
+        definitionIds: uniqueDefinitionIds
+      })
+      .groupBy('coding_job.job_definition_id')
+      .getRawMany();
+
+    return new Map(rows.map(row => [
+      Number(row.jobDefinitionId),
+      Number(row.jobsCount)
+    ]));
+  }
+
+  private async assertApprovedJobDefinitionHasNoCreatedJobs(
+    manager: EntityManager,
+    workspaceId: number,
+    jobDefinitionId?: number
+  ): Promise<void> {
+    if (jobDefinitionId === undefined || jobDefinitionId === null) {
+      return;
+    }
+
+    const normalizedJobDefinitionId = Number(jobDefinitionId);
+
+    if (!Number.isFinite(normalizedJobDefinitionId)) {
+      throw new BadRequestException('Invalid job definition id');
+    }
+
+    const jobDefinition = await manager
+      .getRepository(JobDefinition)
+      .createQueryBuilder('job_definition')
+      .setLock('pessimistic_write')
+      .where('job_definition.id = :jobDefinitionId', {
+        jobDefinitionId: normalizedJobDefinitionId
+      })
+      .andWhere('job_definition.workspace_id = :workspaceId', { workspaceId })
+      .getOne();
+
+    if (!jobDefinition) {
+      throw new NotFoundException(
+        `Job definition with ID ${normalizedJobDefinitionId} not found`
+      );
+    }
+
+    if (jobDefinition.status !== 'approved') {
+      throw new BadRequestException(
+        'Only approved job definitions can be used to create coding jobs'
+      );
+    }
+
+    const existingJobsCount = await manager.getRepository(CodingJob).count({
+      where: {
+        workspace_id: workspaceId,
+        job_definition_id: normalizedJobDefinitionId
+      }
+    });
+
+    if (existingJobsCount > 0) {
+      throw new BadRequestException(
+        `Coding jobs already exist for job definition ${normalizedJobDefinitionId}`
+      );
+    }
   }
 
   async getCodingJobs(
@@ -395,7 +535,6 @@ export class CodingJobService {
         allowComments: createCodingJobDto.allowComments ?? true,
         suppressGeneralInstructions: createCodingJobDto.suppressGeneralInstructions ?? false,
         missings_profile_id: createCodingJobDto.missings_profile_id,
-        job_definition_id: createCodingJobDto.jobDefinitionId,
         aggregation_enabled: aggregationSettings.aggregationEnabled,
         aggregation_threshold: aggregationSettings.aggregationThreshold,
         response_matching_flags: aggregationSettings.responseMatchingFlags,
@@ -450,13 +589,23 @@ export class CodingJobService {
       codingJob.codingJob.description = updateCodingJobDto.description;
     }
     if (updateCodingJobDto.status !== undefined) {
+      const targetStatus = updateCodingJobDto.status;
+      if (!UPDATABLE_CODING_JOB_STATUSES.has(targetStatus)) {
+        throw new BadRequestException(`Unsupported coding job status: ${targetStatus}`);
+      }
       if (codingJob.codingJob.status === 'results_applied') {
         throw new Error(`Cannot change status of coding job ${id} because it has already been applied to results (status: results_applied)`);
       }
-      if (updateCodingJobDto.status === 'completed') {
+      if (codingJob.codingJob.status === 'completed' && !['completed', 'results_applied'].includes(targetStatus)) {
+        throw new BadRequestException(`Cannot change status of completed coding job ${id}`);
+      }
+      if (targetStatus === 'results_applied' && codingJob.codingJob.status !== 'completed') {
+        throw new BadRequestException(`Cannot apply results for coding job ${id} because it is not completed`);
+      }
+      if (codingJob.codingJob.status !== 'completed' && targetStatus === 'completed') {
         await this.assertCodingJobCanBeCompleted(id);
       }
-      codingJob.codingJob.status = updateCodingJobDto.status;
+      codingJob.codingJob.status = targetStatus;
     }
     if (updateCodingJobDto.comment !== undefined) {
       codingJob.codingJob.comment = updateCodingJobDto.comment;
@@ -1447,7 +1596,7 @@ export class CodingJobService {
 
   private async createCodingJobWithUnitSubsetInManager(
     workspaceId: number,
-    createCodingJobDto: CreateCodingJobDto,
+    createCodingJobDto: InternalCreateCodingJobDto,
     unitSubset: SlimResponse[],
     manager: EntityManager
   ): Promise<CodingJob> {
@@ -1777,6 +1926,38 @@ export class CodingJobService {
     }));
   }
 
+  private aggregateResponsesByVariableAndValue(
+    responses: SlimResponse[],
+    flags: ResponseMatchingFlag[],
+    isDerivedResponse: (response: SlimResponse) => boolean
+  ): { normalizedValue: string; responses: SlimResponse[]; totalResponses: number }[] {
+    if (flags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
+      return responses.map(r => ({
+        normalizedValue: r.value || '',
+        responses: [r],
+        totalResponses: 1
+      }));
+    }
+
+    const groups = new Map<string, { normalizedValue: string; responses: SlimResponse[] }>();
+
+    for (const response of responses) {
+      const normalizedValue = this.normalizeValue(response.value, flags);
+      const aggregationKey = isDerivedResponse(response) ?
+        `${response.unitName.toUpperCase()}::${response.variableid}::${response.id}` :
+        `${response.unitName.toUpperCase()}::${response.variableid}::${normalizedValue}`;
+      const existing = groups.get(aggregationKey) || { normalizedValue, responses: [] };
+      existing.responses.push(response);
+      groups.set(aggregationKey, existing);
+    }
+
+    return Array.from(groups.values()).map(group => ({
+      normalizedValue: group.normalizedValue,
+      responses: group.responses,
+      totalResponses: group.responses.length
+    }));
+  }
+
   private async filterSlimResponsesForAggregation(
     workspaceId: number,
     responses: SlimResponse[],
@@ -1952,14 +2133,18 @@ export class CodingJobService {
     assignedResponseIds: Set<number>,
     matchingFlags: ResponseMatchingFlag[],
     aggregationThreshold: number | null,
-    allItemVarsDerived: boolean
+    isDerivedResponse: (response: SlimResponse) => boolean
   ): DistributableResponses {
     const filteredResponses: SlimResponse[] = [];
     let uniqueCases = 0;
     let totalResponses = 0;
 
-    if (!allItemVarsDerived && aggregationThreshold !== null) {
-      const aggregatedGroups = this.aggregateResponsesByValue(allItemResponses, matchingFlags);
+    if (aggregationThreshold !== null) {
+      const aggregatedGroups = this.aggregateResponsesByVariableAndValue(
+        allItemResponses,
+        matchingFlags,
+        isDerivedResponse
+      );
 
       aggregatedGroups.forEach(group => {
         if (group.responses.length >= aggregationThreshold) {
@@ -2004,14 +2189,14 @@ export class CodingJobService {
       new Set(),
       matchingFlags,
       aggregationThreshold,
-      isDerivedVariable
+      () => isDerivedVariable
     ).uniqueCases;
     const availableCases = this.getDistributableResponses(
       allVariableResponses,
       assignedResponseIds,
       matchingFlags,
       aggregationThreshold,
-      isDerivedVariable
+      () => isDerivedVariable
     ).uniqueCases;
     const casesInJobs = Math.max(0, totalCases - availableCases);
 
@@ -2123,16 +2308,12 @@ export class CodingJobService {
       const allItemResponses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
       );
 
-      // Derived variables have null/empty string values and must not be aggregated —
-      // aggregation would collapse all their responses into 1 group.
-      // A bundle item is treated as derived only if ALL its variables are derived.
-      const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
       const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
         allItemResponses,
         assignedResponseIds,
         matchingFlags,
         aggregationThreshold,
-        allItemVarsDerived
+        response => isDerivedVariable(response.unitName, response.variableid)
       );
 
       aggregationInfo[itemKey] = {
@@ -2326,7 +2507,7 @@ export class CodingJobService {
       variable: { unitName: string; variableId: string };
       jobName: string;
       caseCount: number;
-      createCodingJobDto: CreateCodingJobDto;
+      createCodingJobDto: InternalCreateCodingJobDto;
       unitSubset: SlimResponse[];
     }[] = [];
     const warnings: JobCreationWarning[] = [];
@@ -2404,16 +2585,12 @@ export class CodingJobService {
           }
         }
 
-        // Derived variables have null/empty string values and must not be aggregated —
-        // aggregation would collapse all their responses into 1 group.
-        // A bundle item is treated as derived only if ALL its variables are derived.
-        const allItemVarsDerived = itemVariables.every(v => isDerivedVariable(v.unitName, v.variableId));
         const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
           allItemResponses,
           assignedResponseIds,
           matchingFlags,
           aggregationThreshold,
-          allItemVarsDerived
+          response => isDerivedVariable(response.unitName, response.variableid)
         );
 
         aggregationInfo[itemKey] = {
@@ -2579,8 +2756,14 @@ export class CodingJobService {
           .reduce((sum, value) => sum + value, 0);
       }
 
-      if (jobsToCreate.length > 0) {
+      if (jobsToCreate.length > 0 || request.jobDefinitionId !== undefined) {
         await this.connection.transaction(async manager => {
+          await this.assertApprovedJobDefinitionHasNoCreatedJobs(
+            manager,
+            workspaceId,
+            request.jobDefinitionId
+          );
+
           for (const job of jobsToCreate) {
             const codingJob = await this.createCodingJobWithUnitSubsetInManager(
               workspaceId,

@@ -89,6 +89,12 @@ export class JobDefinition {
   @Column({ type: 'boolean', default: false })
     suppress_general_instructions: boolean;
 
+  @Column({ type: 'boolean', default: false })
+    show_score: boolean;
+
+  @Column({ type: 'boolean', default: true })
+    allow_comments: boolean;
+
   @CreateDateColumn()
     created_at: Date;
 

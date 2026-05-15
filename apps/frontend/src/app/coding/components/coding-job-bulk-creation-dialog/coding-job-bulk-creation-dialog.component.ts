@@ -58,6 +58,7 @@ export interface BulkCreationData {
     allowComments?: boolean;
     suppressGeneralInstructions?: boolean;
   };
+  displayOptionsLocked?: boolean;
 }
 
 interface DoubleCodingPreview {
@@ -342,6 +343,24 @@ export class CodingJobBulkCreationDialogComponent {
     return this.distributionMatrix.reduce((total, row) => total + row.totalCases, 0);
   }
 
+  private getActiveDoubleCodingInfo(): BulkCreationData['doubleCodingInfo'] | undefined {
+    return this.data.creationResults?.doubleCodingInfo ||
+      this.doubleCodingPreview?.doubleCodingInfo ||
+      this.data.doubleCodingInfo;
+  }
+
+  getUniqueCaseTotal(): number {
+    const doubleCodingInfo = this.getActiveDoubleCodingInfo();
+    if (!doubleCodingInfo || Object.keys(doubleCodingInfo).length === 0) {
+      return this.getGrandTotal();
+    }
+
+    return Object.values(doubleCodingInfo).reduce(
+      (total, info) => total + info.doubleCodedCases + info.singleCodedCasesAssigned,
+      0
+    );
+  }
+
   getJobCaseCount(job: JobPreview): number {
     if (this.data.creationResults?.jobs) {
       const resultJob = this.data.creationResults.jobs.find(j => {
@@ -398,10 +417,10 @@ export class CodingJobBulkCreationDialogComponent {
 
   onConfirm(): void {
     if (this.data.maxCodingCases !== undefined && this.data.maxCodingCases !== null && this.data.maxCodingCases > 0) {
-      const totalCases = this.getGrandTotal();
-      if (totalCases > this.data.maxCodingCases) {
+      const uniqueCases = this.getUniqueCaseTotal();
+      if (uniqueCases > this.data.maxCodingCases) {
         this.snackBar.open(
-          `Die Gesamtzahl der Kodierfälle (${totalCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
+          `Die Zahl der eindeutigen Kodierfälle (${uniqueCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
           'Schließen',
           { duration: 5000 }
         );

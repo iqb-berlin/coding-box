@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
@@ -136,6 +136,59 @@ describe('ReplayCodingService', () => {
         },
         'replay-token'
       );
+    });
+
+    it('keeps save errors until the failed coding case saves successfully', async () => {
+      codingJobBackendServiceMock.saveCodingProgress
+        .mockReturnValueOnce(throwError(() => new Error('save failed')))
+        .mockReturnValueOnce(of({} as CodingJob))
+        .mockReturnValueOnce(of({} as CodingJob));
+
+      await expect(service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' }))
+        .rejects.toThrow('save failed');
+      expect(service.hasSaveError).toBe(true);
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u2', 'v1', { id: 2, label: 'm' });
+      expect(service.hasSaveError).toBe(true);
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
+      expect(service.hasSaveError).toBe(false);
+    });
+  });
+
+  describe('resetCodingData', () => {
+    it('clears transient coding job state', () => {
+      service.isCodingJobPaused = true;
+      service.isResumingJob = true;
+      service.isCodingJobFinalized = true;
+      service.isCompletedJobReview = true;
+      service.hasSaveError = true;
+      service.lastSaveError = 'failed';
+      service.showScore = true;
+      service.allowComments = false;
+      service.suppressGeneralInstructions = true;
+
+      service.resetCodingData();
+
+      expect(service.isCodingJobPaused).toBe(false);
+      expect(service.isResumingJob).toBe(false);
+      expect(service.isCodingJobFinalized).toBe(false);
+      expect(service.isCompletedJobReview).toBe(false);
+      expect(service.hasSaveError).toBe(false);
+      expect(service.lastSaveError).toBeNull();
+      expect(service.showScore).toBe(false);
+      expect(service.allowComments).toBe(true);
+      expect(service.suppressGeneralInstructions).toBe(false);
+    });
+  });
+
+  describe('pauseCodingJob', () => {
+    it('does not pause completed review jobs', async () => {
+      service.isCompletedJobReview = true;
+
+      await service.pauseCodingJob(1, 100);
+
+      expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
     });
   });
 

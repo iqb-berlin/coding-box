@@ -40,6 +40,11 @@ export class ReplayCodingService {
   isSubmittingJob: boolean = false;
   isResumingJob: boolean = false;
   isCodingJobFinalized: boolean = false;
+  isCompletedJobReview: boolean = false;
+  hasSaveError: boolean = false;
+  lastSaveError: string | null = null;
+  private failedSaveKeys = new Set<string>();
+  currentCodingJobStatus: string | null = null;
   showScore = false;
   allowComments = true;
   suppressGeneralInstructions = false;
@@ -54,7 +59,18 @@ export class ReplayCodingService {
     this.codingJobComment = '';
     this.isPausingJob = false;
     this.isCodingJobCompleted = false;
+    this.isCodingJobPaused = false;
     this.isSubmittingJob = false;
+    this.isResumingJob = false;
+    this.isCodingJobFinalized = false;
+    this.isCompletedJobReview = false;
+    this.hasSaveError = false;
+    this.lastSaveError = null;
+    this.failedSaveKeys.clear();
+    this.currentCodingJobStatus = null;
+    this.showScore = false;
+    this.allowComments = true;
+    this.suppressGeneralInstructions = false;
   }
 
   setAuthToken(authToken?: string): void {
@@ -117,10 +133,12 @@ export class ReplayCodingService {
         this.codingJobBackendService.getCodingJob(workspaceId, jobId, ...this.authTokenArg)
       );
       this.codingJobComment = codingJob.comment || '';
+      this.currentCodingJobStatus = codingJob.status;
       this.showScore = codingJob.showScore || false;
       this.allowComments = codingJob.allowComments !== undefined ? codingJob.allowComments : true;
       this.suppressGeneralInstructions = codingJob.suppressGeneralInstructions || false;
       this.isCodingJobFinalized = codingJob.status === 'results_applied';
+      this.isCompletedJobReview = codingJob.status === 'completed' || codingJob.status === 'results_applied';
     } catch (error) {
       // Ignore errors when loading saved coding progress
     }
@@ -160,6 +178,8 @@ export class ReplayCodingService {
   ): Promise<void> {
     if (!jobId || !workspaceId) return;
 
+    const saveKey = this.generateCompositeKey(testPerson, unitId, variableId);
+
     try {
       const backendSelectedCode: {
         id: number;
@@ -187,8 +207,25 @@ export class ReplayCodingService {
           selectedCode: backendSelectedCode
         }, ...this.authTokenArg)
       );
+      this.failedSaveKeys.delete(saveKey);
+      this.hasSaveError = this.failedSaveKeys.size > 0;
+      if (!this.hasSaveError) {
+        this.lastSaveError = null;
+      }
     } catch (error) {
-      // Ignore errors when saving coding progress
+      this.failedSaveKeys.add(saveKey);
+      this.hasSaveError = true;
+      const saveErrorMessage = this.translate.instant('replay.failed-to-save-coding-progress');
+      this.lastSaveError = saveErrorMessage;
+      this.snackBar.open(
+        saveErrorMessage,
+        this.translate.instant('replay.close'),
+        {
+          duration: 5000,
+          panelClass: ['snackbar-error']
+        }
+      );
+      throw error;
     }
   }
 
@@ -208,7 +245,7 @@ export class ReplayCodingService {
       }
     }
 
-    await Promise.allSettled(savePromises);
+    await Promise.all(savePromises);
   }
 
   async handleCodeSelected(
@@ -243,12 +280,11 @@ export class ReplayCodingService {
         normalizedCode.codingIssueOption = event.codingIssueOption.code;
       }
 
-      this.selectedCodes.set(compositeKey, normalizedCode);
-      this.openUnitKeys.delete(compositeKey);
-
       if (this.codingJobId) {
         await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
       }
+      this.selectedCodes.set(compositeKey, normalizedCode);
+      this.openUnitKeys.delete(compositeKey);
     } else if (event.codingIssueOption) {
       // Handle coding issue option-only case (legacy support)
       const codingIssueOption = event.codingIssueOption;
@@ -260,12 +296,11 @@ export class ReplayCodingService {
         description: codingIssueOption.description,
         codingIssueOption: codingIssueOption.code
       };
-      this.selectedCodes.set(compositeKey, normalizedCode);
-      this.openUnitKeys.delete(compositeKey);
-
       if (this.codingJobId) {
         await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
       }
+      this.selectedCodes.set(compositeKey, normalizedCode);
+      this.openUnitKeys.delete(compositeKey);
     }
 
     this.checkCodingJobCompletion(unitsData);
@@ -401,7 +436,7 @@ export class ReplayCodingService {
 
   async pauseCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
-    if (this.isCodingJobCompleted) return;
+    if (this.isCodingJobCompleted || this.isCompletedJobReview || this.isCodingJobFinalized) return;
     this.isPausingJob = true;
 
     try {
@@ -428,6 +463,18 @@ export class ReplayCodingService {
 
   async submitCodingJob(workspaceId: number, jobId: number): Promise<void> {
     if (!jobId || !workspaceId) return;
+
+    if (this.hasSaveError) {
+      this.snackBar.open(
+        this.lastSaveError || this.translate.instant('replay.failed-to-save-coding-progress'),
+        this.translate.instant('replay.close'),
+        {
+          duration: 5000,
+          panelClass: ['snackbar-error']
+        }
+      );
+      return;
+    }
 
     this.isSubmittingJob = true;
     this.snackBar.open(this.translate.instant('replay.submitting-coding-job'), '', { duration: 2000 });

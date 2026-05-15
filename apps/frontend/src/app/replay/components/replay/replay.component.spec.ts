@@ -520,6 +520,20 @@ describe('ReplayComponent', () => {
       expect(updateStatusSpy).not.toHaveBeenCalled();
     });
 
+    it('should NOT pause completed review jobs on unload', () => {
+      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.isCodingJobCompleted = false;
+      component.codingService.isCompletedJobReview = true;
+      component.isReviewMode = false;
+
+      component.onBeforeUnload();
+
+      expect(updateStatusSpy).not.toHaveBeenCalled();
+    });
+
     it('should pause job on unload if NOT in review mode', () => {
       const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
 
@@ -531,6 +545,22 @@ describe('ReplayComponent', () => {
       component.onBeforeUnload();
 
       expect(updateStatusSpy).toHaveBeenCalledWith(42, 123, 'paused');
+    });
+  });
+
+  describe('Submit Coding Job', () => {
+    it('does not save all progress again while a save error is active', async () => {
+      const saveAllSpy = jest.spyOn(component.codingService, 'saveAllCodingProgress').mockResolvedValue();
+      const submitSpy = jest.spyOn(component.codingService, 'submitCodingJob').mockResolvedValue();
+
+      component.workspaceId = 42;
+      component.codingService.codingJobId = 123;
+      component.codingService.hasSaveError = true;
+
+      await component.submitCodingJob();
+
+      expect(saveAllSpy).not.toHaveBeenCalled();
+      expect(submitSpy).toHaveBeenCalledWith(42, 123);
     });
   });
 });

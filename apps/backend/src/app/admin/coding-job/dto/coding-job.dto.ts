@@ -158,6 +158,13 @@ export class CodingJobDto {
     missings_profile_id?: number;
 
   @ApiProperty({
+    description: 'ID of the job definition this coding job was created from',
+    example: 1,
+    required: false
+  })
+    job_definition_id?: number;
+
+  @ApiProperty({
     description: 'Missings profile assigned to the coding job',
     example: { id: 1, label: 'Default Profile', missings: '...' },
     required: false
@@ -223,6 +230,13 @@ export class CodingJobDto {
     assignedVariableBundles?: { name: string; variables: { unitName: string; variableId: string }[] }[];
 
   @ApiProperty({
+    description: 'ID of the job definition this coding job was created from (camelCase alias)',
+    example: 1,
+    required: false
+  })
+    jobDefinitionId?: number;
+
+  @ApiProperty({
     description: 'Whether response aggregation was enabled when this coding job was created',
     example: true,
     required: false
@@ -280,6 +294,8 @@ export class CodingJobDto {
     dto.created_at = entity.created_at;
     dto.updated_at = entity.updated_at;
     dto.missings_profile_id = entity.missings_profile_id;
+    dto.job_definition_id = entity.job_definition_id;
+    dto.jobDefinitionId = entity.job_definition_id;
     dto.aggregationEnabled = entity.aggregation_enabled;
     dto.aggregationThreshold = entity.aggregation_threshold;
     dto.responseMatchingFlags = entity.response_matching_flags;

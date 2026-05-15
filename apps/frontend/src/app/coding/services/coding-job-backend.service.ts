@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import { map, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
+import type { DistributedCodingJobsResponse } from './distributed-coding.service';
 import {
   CodingJob,
   Variable,
@@ -49,7 +50,14 @@ interface JobDefinitionApiResponse {
   double_coding_absolute?: number;
   double_coding_percentage?: number;
   case_ordering_mode?: 'continuous' | 'alternating';
+  show_score?: boolean;
+  allow_comments?: boolean;
   suppress_general_instructions?: boolean;
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+  createdJobsCount?: number;
+  created_jobs_count?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -65,7 +73,10 @@ export interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  showScore?: boolean;
+  allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  createdJobsCount?: number;
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -203,6 +214,8 @@ export class CodingJobBackendService {
       allowComments: (apiJob.allowComments ?? apiJob.allow_comments) as boolean | undefined,
       suppressGeneralInstructions: (apiJob.suppressGeneralInstructions ??
         apiJob.suppress_general_instructions) as boolean | undefined,
+      jobDefinitionId: (apiJob.jobDefinitionId ??
+        apiJob.job_definition_id) as number | undefined,
       created_at: (apiJob.created_at ?? apiJob.createdAt) as Date,
       updated_at: (apiJob.updated_at ?? apiJob.updatedAt) as Date,
       workspace_id: (apiJob.workspace_id ?? apiJob.workspaceId) as number
@@ -534,7 +547,10 @@ export class CodingJobBackendService {
         doubleCodingAbsolute: def.double_coding_absolute,
         doubleCodingPercentage: def.double_coding_percentage,
         caseOrderingMode: def.case_ordering_mode,
-        suppressGeneralInstructions: def.suppress_general_instructions,
+        showScore: def.showScore ?? def.show_score,
+        allowComments: def.allowComments ?? def.allow_comments,
+        suppressGeneralInstructions: def.suppressGeneralInstructions ?? def.suppress_general_instructions,
+        createdJobsCount: def.createdJobsCount ?? def.created_jobs_count,
         createdAt: def.created_at,
         updatedAt: def.updated_at
       }))
@@ -548,6 +564,14 @@ export class CodingJobBackendService {
   ): Observable<{ success: boolean; message: string }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}`;
     return this.http.delete<{ success: boolean; message: string }>(url, { headers: this.authHeader });
+  }
+
+  createCodingJobFromDefinition(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Observable<DistributedCodingJobsResponse> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/create-job`;
+    return this.http.post<DistributedCodingJobsResponse>(url, {}, { headers: this.authHeader });
   }
 
   startExportJob(

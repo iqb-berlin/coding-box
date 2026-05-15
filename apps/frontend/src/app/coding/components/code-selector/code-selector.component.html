@@ -78,7 +78,7 @@
         matTooltip="{{ 'coding.comment-dialog.title' | translate }}">
         <mat-icon>comment</mat-icon>
       </button>
-      @if (hasCodingJob && !isCodingJobCompleted) {
+      @if (hasCodingJob && !isCodingJobCompleted && !isCompletedJobReview) {
       <button mat-icon-button (click)="onPauseClick()" [disabled]="isPausingJob" class="pause-button"
         matTooltip="{{ isPausingJob ? ('replay.pausing' | translate) : ('replay.pause-coding' | translate) }}">
         <mat-icon>pause</mat-icon>

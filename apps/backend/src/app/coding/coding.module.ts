@@ -49,6 +49,7 @@ import { JobQueueModule } from '../job-queue/job-queue.module';
 import { CacheModule } from '../cache/cache.module';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceModule } from '../workspace/workspace.module';
+import { UserModule } from '../user/user.module';
 
 @Module({
   imports: [
@@ -78,7 +79,8 @@ import { WorkspaceModule } from '../workspace/workspace.module';
     ]),
     forwardRef(() => JobQueueModule),
     forwardRef(() => CacheModule),
-    forwardRef(() => WorkspaceModule)
+    forwardRef(() => WorkspaceModule),
+    UserModule
   ],
   providers: [
     CodingJobService,

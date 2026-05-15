@@ -151,6 +151,19 @@ export class CodingJobController {
     @WorkspaceId() workspaceId: number,
       @Body() createCodingJobDto: CreateCodingJobDto
   ): Promise<CodingJobDto> {
+    if (!createCodingJobDto) {
+      throw new BadRequestException('Request body is required');
+    }
+
+    if (Object.prototype.hasOwnProperty.call(
+      createCodingJobDto as unknown as Record<string, unknown>,
+      'jobDefinitionId'
+    )) {
+      throw new BadRequestException(
+        'jobDefinitionId cannot be set when creating a coding job directly. Use the job definition create-job endpoint.'
+      );
+    }
+
     try {
       const codingJob = await this.codingJobService.createCodingJob(
         workspaceId,

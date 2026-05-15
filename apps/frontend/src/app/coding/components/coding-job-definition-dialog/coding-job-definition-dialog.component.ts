@@ -60,6 +60,8 @@ export interface JobDefinition {
   doubleCodingAbsolute?: number;
   doubleCodingPercentage?: number;
   caseOrderingMode?: 'continuous' | 'alternating';
+  showScore?: boolean;
+  allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
   created_at?: Date;
   updated_at?: Date;
@@ -303,12 +305,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: [this.data.codingJob?.doubleCodingAbsolute ?? 0, [Validators.min(0)]],
       doubleCodingPercentage: [this.data.codingJob?.doubleCodingPercentage ?? 0, [Validators.min(0), Validators.max(100)]],
       caseOrderingMode: [this.data.codingJob?.caseOrderingMode || 'continuous', [Validators.required]],
+      showScore: [this.data.codingJob?.showScore ?? this.data.mode !== 'definition', []],
+      allowComments: [this.data.codingJob?.allowComments ?? true, []],
       suppressGeneralInstructions: [this.data.codingJob?.suppressGeneralInstructions ?? false, []]
     };
 
     if (this.data.mode === 'job') {
-      formFields.showScore = [this.data.codingJob?.showScore ?? true, []];
-      formFields.allowComments = [this.data.codingJob?.allowComments ?? true, []];
       formFields.suppressGeneralInstructions = [this.data.codingJob?.suppressGeneralInstructions ?? false, []];
     }
 
@@ -1080,7 +1082,6 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         data.selectedVariableBundles,
         this.codingJobForm.value.caseOrderingMode,
         this.codingJobForm.value.maxCodingCases,
-        this.data.jobDefinitionId,
         {
           showScore: displayOptions.showScore,
           allowComments: displayOptions.allowComments,
@@ -1202,6 +1203,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
@@ -1240,6 +1243,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 
@@ -1312,6 +1317,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
       doubleCodingPercentage: this.sanitizeNumber(this.codingJobForm.value.doubleCodingPercentage),
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
+      showScore: this.codingJobForm.value.showScore,
+      allowComments: this.codingJobForm.value.allowComments,
       suppressGeneralInstructions: this.codingJobForm.value.suppressGeneralInstructions
     };
 

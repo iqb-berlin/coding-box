@@ -98,6 +98,7 @@ describe('DistributedCodingService', () => {
 
     const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/create-distributed-jobs`);
     expect(req.request.method).toBe('POST');
+    expect(req.request.body).not.toHaveProperty('jobDefinitionId');
     req.flush(mockRes);
   });
 });

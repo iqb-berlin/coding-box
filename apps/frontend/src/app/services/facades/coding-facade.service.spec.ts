@@ -91,7 +91,6 @@ describe('CodingFacadeService', () => {
       undefined,
       'continuous',
       10,
-      20,
       displayOptions
     ).subscribe();
 
@@ -104,7 +103,6 @@ describe('CodingFacadeService', () => {
       undefined,
       'continuous',
       10,
-      20,
       displayOptions
     );
   });

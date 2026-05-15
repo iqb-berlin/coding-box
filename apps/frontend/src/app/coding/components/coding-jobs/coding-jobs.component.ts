@@ -555,6 +555,22 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     return 'start';
   }
 
+  getStartCodingJobLabel(job: CodingJob): string {
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'Review öffnen';
+    }
+
+    return 'Kodierjob starten';
+  }
+
+  getStartCodingJobIcon(job: CodingJob): string {
+    if (job.status === 'completed' || job.status === 'results_applied') {
+      return 'visibility';
+    }
+
+    return 'play_arrow';
+  }
+
   canApplyCodingResults(job: CodingJob): boolean {
     return this.canApplyResults &&
       job.status === 'completed' &&
@@ -573,7 +589,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
     const jobName = this.getDisplayName(job);
     switch (action) {
       case 'start':
-        return `Kodierjob starten: ${jobName}`;
+        return `${this.getStartCodingJobLabel(job)}: ${jobName}`;
       case 'results':
         return `Ergebnisse anzeigen: ${jobName}`;
       case 'restart':

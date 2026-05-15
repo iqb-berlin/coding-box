@@ -154,8 +154,8 @@
                 type="button"
                 (click)="startCodingJob(element)"
                 [attr.aria-label]="getJobActionAriaLabel('start', element)">
-                <mat-icon>play_arrow</mat-icon>
-                <span>Kodierjob starten</span>
+                <mat-icon>{{ getStartCodingJobIcon(element) }}</mat-icon>
+                <span>{{ getStartCodingJobLabel(element) }}</span>
               </button>
             }
             @if (getPrimaryJobAction(element) !== 'results') {

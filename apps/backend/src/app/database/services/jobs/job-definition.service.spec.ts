@@ -21,7 +21,11 @@ describe('JobDefinitionService', () => {
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
   let variableBundleRepository: ReturnType<typeof createRepo>;
   let usersRepository: ReturnType<typeof createRepo>;
-  let codingJobService: { createCodingJob: jest.Mock; createDistributedCodingJobs: jest.Mock };
+  let codingJobService: {
+    createCodingJob: jest.Mock;
+    createDistributedCodingJobs: jest.Mock;
+    getCodingJobCountsByDefinitionIds: jest.Mock;
+  };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let service: JobDefinitionService;
 
@@ -31,7 +35,8 @@ describe('JobDefinitionService', () => {
     usersRepository = createRepo();
     codingJobService = {
       createCodingJob: jest.fn(),
-      createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] })
+      createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
+      getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map())
     };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
@@ -125,6 +130,129 @@ describe('JobDefinitionService', () => {
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
   });
 
+  it('allows capped bundles when variables have uneven available cases', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 9 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 8 }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariableBundles: [{ id: 9, name: 'Bundle' }],
+      assignedCoders: [1],
+      maxCodingCases: 17
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 17
+    });
+  });
+
+  it('rejects overlapping variable definitions when a capped bundle could consume the same variable', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 10 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 10 }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [],
+        assigned_variable_bundles: [{ id: 9, name: 'Bundle' }],
+        max_coding_cases: 5
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 6
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('allows split definitions on the same variable when the requested cap fits the remaining cases', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 2
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 3
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 3
+    });
+  });
+
+  it('persists coding display options on job definitions', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      show_score: true,
+      allow_comments: false,
+      suppress_general_instructions: true
+    });
+  });
+
+  it('updates coding display options on job definitions', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'draft',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      show_score: false,
+      allow_comments: true,
+      suppress_general_instructions: false
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+
+    await expect(service.updateJobDefinition(2, {
+      showScore: true,
+      allowComments: false,
+      suppressGeneralInstructions: true
+    })).resolves.toMatchObject({
+      id: 2,
+      show_score: true,
+      allow_comments: false,
+      suppress_general_instructions: true
+    });
+  });
+
   it('does not count the edited definition against its own availability', async () => {
     const existingDefinition = {
       id: 2,
@@ -171,6 +299,42 @@ describe('JobDefinitionService', () => {
     await expect(service.updateJobDefinition(2, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('attaches created coding job counts to listed definitions', async () => {
+    const definitions = [
+      {
+        id: 3,
+        workspace_id: 7,
+        status: 'approved',
+        assigned_variable_bundles: []
+      },
+      {
+        id: 4,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variable_bundles: []
+      }
+    ];
+
+    jobDefinitionRepository.find.mockResolvedValue(definitions);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[3, 2]]));
+
+    const result = await service.getJobDefinitions(7);
+
+    expect(codingJobService.getCodingJobCountsByDefinitionIds).toHaveBeenCalledWith(7, [3, 4]);
+    expect(result).toEqual([
+      expect.objectContaining({
+        id: 3,
+        createdJobsCount: 2,
+        created_jobs_count: 2
+      }),
+      expect.objectContaining({
+        id: 4,
+        createdJobsCount: 0,
+        created_jobs_count: 0
+      })
+    ]);
   });
 
   it('hydrates bundles for approved definitions while preserving saved ordering mode', async () => {
@@ -243,6 +407,8 @@ describe('JobDefinitionService', () => {
       double_coding_absolute: 2,
       double_coding_percentage: null,
       case_ordering_mode: 'continuous',
+      show_score: true,
+      allow_comments: false,
       suppress_general_instructions: true
     });
     variableBundleRepository.find.mockResolvedValue([
@@ -285,6 +451,8 @@ describe('JobDefinitionService', () => {
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
       jobDefinitionId: 12,
+      showScore: true,
+      allowComments: false,
       suppressGeneralInstructions: true
     });
   });
