@@ -111,6 +111,7 @@ export interface BulkApplyCodingResultsResponse {
     jobName: string;
     hasIssues: boolean;
     skipped: boolean;
+    skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
     result?: {
       success: boolean;
       updatedResponsesCount: number;
@@ -363,6 +364,21 @@ export class CodingJobBackendService {
     return this.http.post<CodingJob>(url, progressData, { headers: this.getAuthHeader(authToken) });
   }
 
+  saveCodingNotes(
+    workspaceId: number,
+    codingJobId: number,
+    notesData: {
+      testPerson: string;
+      unitId: string;
+      variableId: string;
+      notes?: string;
+    },
+    authToken?: string
+  ): Observable<CodingJob> {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/notes`;
+    return this.http.post<CodingJob>(url, notesData, { headers: this.getAuthHeader(authToken) });
+  }
+
   restartCodingJobWithOpenUnits(
     workspaceId: number,
     codingJobId: number
@@ -407,7 +423,8 @@ export class CodingJobBackendService {
   getCodingJobUnits(
     workspaceId: number,
     codingJobId: number,
-    authToken?: string
+    authToken?: string,
+    onlyOpen: boolean = false
   ): Observable<
     Array<{
       responseId: number;
@@ -424,6 +441,10 @@ export class CodingJobBackendService {
     }>
     > {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/units`;
+    let params = new HttpParams();
+    if (onlyOpen) {
+      params = params.set('onlyOpen', 'true');
+    }
     return this.http.get<
     Array<{
       responseId: number;
@@ -438,7 +459,7 @@ export class CodingJobBackendService {
       isDoubleCoded: boolean;
       otherCoders: string[];
     }>
-    >(url, { headers: this.getAuthHeader(authToken) });
+    >(url, { headers: this.getAuthHeader(authToken), params });
   }
 
   applyCodingResults(

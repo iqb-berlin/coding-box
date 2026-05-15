@@ -260,8 +260,21 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   private getCodingProgressKey(unit: CodingJobUnitResult): string {
-    const testPerson = `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
+    const testPerson = this.getCodingTestPerson(unit);
     return `${testPerson}::${unit.bookletName}::${unit.unitName}::${unit.variableId}`;
+  }
+
+  private getCodingTestPerson(unit: {
+    personLogin: string;
+    personCode: string;
+    personGroup?: string | null;
+    bookletName: string;
+  }): string {
+    if (unit.personGroup) {
+      return `${unit.personLogin}@${unit.personCode}@${unit.personGroup}@${unit.bookletName}`;
+    }
+
+    return `${unit.personLogin}@${unit.personCode}@${unit.bookletName}`;
   }
 
   private getTestPersonLabel(unit: CodingJobUnitResult): string {
@@ -668,7 +681,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       next: (token: string) => {
         loadingSnackBar.dismiss();
 
-        const testPerson = `${result.personLogin}@${result.personCode}@${result.personGroup || ''}@${result.bookletName}`;
+        const testPerson = this.getCodingTestPerson(result);
 
         const reviewUnit: UnitsReplayUnit = {
           id: 0, // Not needed for replay

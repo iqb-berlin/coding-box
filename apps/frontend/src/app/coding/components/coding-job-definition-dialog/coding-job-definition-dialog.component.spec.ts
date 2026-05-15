@@ -44,10 +44,10 @@ describe('CodingJobDefinitionDialogComponent', () => {
       unitName: 'Unit 1', variableId: 'Var 1', responseCount: 10, availableCases: 10, uniqueCasesAfterAggregation: 10
     },
     {
-      unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 0, uniqueCasesAfterAggregation: 5
+      unitName: 'Unit 2', variableId: 'Var 2', responseCount: 5, availableCases: 5, uniqueCasesAfterAggregation: 5
     },
     {
-      unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8, availableCases: 4, uniqueCasesAfterAggregation: 8
+      unitName: 'Unit 3', variableId: 'Var 3', responseCount: 8, availableCases: 8, uniqueCasesAfterAggregation: 8
     }
   ];
 
@@ -69,6 +69,12 @@ describe('CodingJobDefinitionDialogComponent', () => {
     { id: 2, name: 'Coder 2' }
   ];
 
+  const cloneVariables = () => mockVariables.map(variable => ({ ...variable }));
+  const cloneBundles = () => mockBundles.map(bundle => ({
+    ...bundle,
+    variables: bundle.variables.map(variable => ({ ...variable }))
+  }));
+
   beforeEach(async () => {
     mockCodingJobBackendService = {
       getJobDefinitions: jest.fn().mockReturnValue(of([
@@ -83,8 +89,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
           maxCodingCases: 4
         }
       ])),
-      getCodingIncompleteVariables: jest.fn().mockReturnValue(of(mockVariables)),
-      getVariableBundles: jest.fn().mockReturnValue(of(mockBundles)),
+      getCodingIncompleteVariables: jest.fn().mockImplementation(() => of(cloneVariables())),
+      getVariableBundles: jest.fn().mockImplementation(() => of(cloneBundles())),
       updateCodingJob: jest.fn(),
       createJobDefinition: jest.fn(),
       createCodingJob: jest.fn(),
@@ -208,6 +214,32 @@ describe('CodingJobDefinitionDialogComponent', () => {
     component.applyAvailabilityFilter();
     expect(component.dataSource.data.length).toBe(1);
     expect(component.dataSource.data[0].unitName).toBe('Unit 3');
+  });
+
+  it('should subtract existing definition usage from backend availability without repeated subtraction', () => {
+    (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockImplementation(() => of([
+      {
+        unitName: 'Unit X',
+        variableId: 'Var X',
+        responseCount: 10,
+        availableCases: 6,
+        uniqueCasesAfterAggregation: 10
+      }
+    ]));
+    (mockCodingJobBackendService.getVariableBundles as jest.Mock).mockImplementation(() => of([]));
+    (mockCodingJobBackendService.getJobDefinitions as jest.Mock).mockImplementation(() => of([
+      {
+        id: 200,
+        assignedVariables: [{ unitName: 'Unit X', variableId: 'Var X', responseCount: 10 }],
+        maxCodingCases: 4
+      }
+    ]));
+
+    createComponent();
+
+    expect(component.variables[0].availableCases).toBe(2);
+    component.applyJobDefinitionUsage();
+    expect(component.variables[0].availableCases).toBe(2);
   });
 
   it('should deselect individual variables if they are covered by a newly selected bundle', () => {
@@ -411,8 +443,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
 
   it('should validate maxCodingCases against selected input', () => {
     createComponent();
-    component.selectedVariables.select(mockVariables[0]); // 10 cases
-    component.selectedVariables.select(mockVariables[2]); // 4 cases
+    component.selectedVariables.select(component.variables[0]); // 10 cases
+    component.selectedVariables.select(component.variables[2]); // 4 cases
     // Total 14
 
     // Set limit

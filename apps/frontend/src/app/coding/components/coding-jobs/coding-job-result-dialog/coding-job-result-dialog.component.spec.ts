@@ -97,16 +97,19 @@ describe('CodingJobResultDialogComponent', () => {
       otherCoders: []
     }]));
     mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
-      'login@@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': { id: 1, score: 2 }
+      'login@@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': { id: 1, score: 2 }
     }));
-    mockCodingJobBackendService.getCodingNotes.mockReturnValue(of({}));
+    mockCodingJobBackendService.getCodingNotes.mockReturnValue(of({
+      'login@@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': 'group note'
+    }));
 
     component.loadCodingResults();
 
     expect(component.dataSource.data[0]).toMatchObject({
       testPerson: 'login / group / BOOKLET_A',
       code: 1,
-      score: 2
+      score: 2,
+      notes: 'group note'
     });
 
     component.testPersonFilter = 'BOOKLET_A';
@@ -130,13 +133,14 @@ describe('CodingJobResultDialogComponent', () => {
       otherCoders: []
     }]));
     mockCodingJobBackendService.getCodingProgress.mockReturnValue(of({
-      'login@code@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': { id: 1, score: 2 }
+      'login@code@group@BOOKLET_A::BOOKLET_A::UNIT_1::VAR_1': { id: 1, score: 2 }
     }));
     mockCodingJobBackendService.getCodingNotes.mockReturnValue(throwError(() => new Error('notes failed')));
 
     component.loadCodingResults();
 
     expect(component.dataSource.data).toHaveLength(1);
+    expect(component.dataSource.data[0].code).toBe(1);
     expect(component.isNotesUnavailable).toBe(true);
   });
 

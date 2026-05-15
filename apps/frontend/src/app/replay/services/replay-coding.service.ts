@@ -7,7 +7,6 @@ import {
   Code, VariableCoding, CodingScheme, CodeSelectedEvent
 } from '../../models/coding-interfaces';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
-import { normalizeTestperson } from '../utils/token-utils';
 
 interface SavedCode {
   id: number;
@@ -32,6 +31,7 @@ export class ReplayCodingService {
   currentVariableId: string = '';
   codingJobId: number | null = null;
   selectedCodes: Map<string, SavedCode> = new Map();
+  openUnitKeys: Set<string> = new Set();
   notes: Map<string, string> = new Map();
   codingJobComment: string = '';
   isPausingJob: boolean = false;
@@ -50,6 +50,7 @@ export class ReplayCodingService {
     this.codingJobId = null;
     this.authToken = undefined;
     this.selectedCodes.clear();
+    this.openUnitKeys.clear();
     this.codingJobComment = '';
     this.isPausingJob = false;
     this.isCodingJobCompleted = false;
@@ -83,16 +84,22 @@ export class ReplayCodingService {
 
     try {
       this.selectedCodes.clear();
+      this.openUnitKeys.clear();
       const savedProgress = await firstValueFrom(
         this.codingJobBackendService.getCodingProgress(workspaceId, jobId, ...this.authTokenArg)
       ) as { [key: string]: SavedCode };
 
       Object.keys(savedProgress).forEach(compositeKey => {
         const partialCode = savedProgress[compositeKey];
+        if (compositeKey.endsWith(':open')) {
+          this.openUnitKeys.add(compositeKey.slice(0, -':open'.length));
+          return;
+        }
         if (partialCode?.id !== null && partialCode?.id !== undefined) {
           const fullCode = this.findCodeById(partialCode.id);
           const toStore: SavedCode = fullCode ? this.convertCodeToSavedCode(fullCode) : partialCode;
           this.selectedCodes.set(compositeKey, toStore);
+          this.openUnitKeys.delete(compositeKey);
         }
       });
 
@@ -215,6 +222,7 @@ export class ReplayCodingService {
 
     if (event.code === null && event.codingIssueOption === null) {
       this.selectedCodes.delete(compositeKey);
+      this.openUnitKeys.delete(compositeKey);
       return null;
     }
 
@@ -236,6 +244,7 @@ export class ReplayCodingService {
       }
 
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.openUnitKeys.delete(compositeKey);
 
       if (this.codingJobId) {
         await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
@@ -252,6 +261,7 @@ export class ReplayCodingService {
         codingIssueOption: codingIssueOption.code
       };
       this.selectedCodes.set(compositeKey, normalizedCode);
+      this.openUnitKeys.delete(compositeKey);
 
       if (this.codingJobId) {
         await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, normalizedCode);
@@ -263,16 +273,27 @@ export class ReplayCodingService {
   }
 
   generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
-    const normalizedTestPerson = normalizeTestperson(testPerson);
+    const normalizedTestPerson = this.normalizeCodingTestPerson(testPerson);
     let bookletId = 'default';
     if (normalizedTestPerson) {
       const parts = normalizedTestPerson.split('@');
       if (parts.length >= 3) {
-        bookletId = parts[2];
+        bookletId = parts[parts.length - 1];
       }
     }
 
     return `${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`;
+  }
+
+  private normalizeCodingTestPerson(testPerson: string): string {
+    const normalizedTestPerson = (testPerson || '').trim();
+    const parts = normalizedTestPerson.split('@');
+
+    if (parts.length === 4 && parts[2] === '') {
+      return `${parts[0]}@${parts[1]}@${parts[3]}`;
+    }
+
+    return normalizedTestPerson;
   }
 
   checkCodingJobCompletion(unitsData: UnitsReplay | null): void {
@@ -299,8 +320,18 @@ export class ReplayCodingService {
     }).length;
   }
 
-  getOpenCount(): number {
-    return 0;
+  getOpenCount(unitsData: UnitsReplay | null = null): number {
+    if (!unitsData) return this.openUnitKeys.size;
+
+    return unitsData.units.filter((unit: UnitsReplayUnit) => {
+      if (!unit.variableId) return false;
+      const compositeKey = this.generateCompositeKey(
+        unit.testPerson || '',
+        unit.name || '',
+        unit.variableId
+      );
+      return this.openUnitKeys.has(compositeKey);
+    }).length;
   }
 
   getProgressPercentage(unitsData: UnitsReplay | null): number {
@@ -343,11 +374,10 @@ export class ReplayCodingService {
       }
 
       await firstValueFrom(
-        this.codingJobBackendService.saveCodingProgress(workspaceId, this.codingJobId, {
+        this.codingJobBackendService.saveCodingNotes(workspaceId, this.codingJobId, {
           testPerson,
           unitId,
           variableId,
-          selectedCode: { id: -1, code: '', label: '' },
           notes: notes.trim() || undefined
         }, ...this.authTokenArg)
       );

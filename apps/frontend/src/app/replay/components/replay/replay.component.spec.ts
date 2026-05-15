@@ -290,7 +290,8 @@ describe('ReplayComponent', () => {
       auth: 'valid-token',
       mode: 'coding',
       codingJobId: '77',
-      workspaceId: '47'
+      workspaceId: '47',
+      onlyOpen: 'true'
     };
     codingJobBackendServiceMock.getCodingJobUnits.mockReturnValue(of([{
       responseId: 1,
@@ -315,7 +316,7 @@ describe('ReplayComponent', () => {
       setTimeout(resolve, 0);
     });
 
-    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token');
+    expect(codingJobBackendServiceMock.getCodingJobUnits).toHaveBeenCalledWith(47, 77, 'valid-token', true);
   });
 
   it('should normalize player ID correctly', () => {

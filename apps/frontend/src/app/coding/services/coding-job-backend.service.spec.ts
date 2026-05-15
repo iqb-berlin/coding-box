@@ -84,6 +84,15 @@ describe('CodingJobBackendService', () => {
       req.flush([]);
     });
 
+    it('should request only open coding job units when requested', () => {
+      service.getCodingJobUnits(47, 123, 'url-token', true).subscribe();
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/47/coding-job/123/units?onlyOpen=true`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe('Bearer url-token');
+      req.flush([]);
+    });
+
     it('should use the supplied auth token when saving coding progress', () => {
       service.saveCodingProgress(47, 123, {
         testPerson: 'login@code@booklet',

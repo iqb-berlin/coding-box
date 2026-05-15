@@ -129,13 +129,13 @@
   </div>
 
   <div class="deselect-container fixed-section">
-    <button mat-button class="deselect-button" (click)="deselectAll()">Auswahl entfernen</button>
+    <button mat-button class="deselect-button" [disabled]="isReadOnly" (click)="deselectAll()">Auswahl entfernen</button>
   </div>
 
   @if (allowComments) {
   <mat-form-field appearance="outline" class="notes-field fixed-section">
     <textarea matInput [(ngModel)]="coderNotes" (input)="onNotesChanged()"
-      placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
+      [disabled]="isReadOnly" placeholder="{{ 'code-selector.coder-notes-placeholder' | translate }}" rows="3"></textarea>
   </mat-form-field>
   }
 </div>
