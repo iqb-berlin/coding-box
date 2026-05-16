@@ -23,10 +23,14 @@ export interface CodingExportConfig {
   | 'by-coder'
   | 'by-variable'
   | 'detailed'
-  | 'coding-times';
+  | 'coding-times'
+  | 'results-by-version';
   userId: number;
+  version?: 'v1' | 'v2' | 'v3';
+  format?: 'csv' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:

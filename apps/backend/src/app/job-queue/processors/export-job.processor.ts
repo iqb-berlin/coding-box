@@ -29,6 +29,19 @@ export class ExportJobProcessor {
     private jobQueueService: JobQueueService
   ) { }
 
+  private validateExportJobData(job: Job<ExportJobData>): void {
+    if (
+      job.data.exportType === 'results-by-version' &&
+      job.data.format !== undefined &&
+      job.data.format !== 'csv' &&
+      job.data.format !== 'excel'
+    ) {
+      throw new Error(
+        'results-by-version exports support only "csv" or "excel" format'
+      );
+    }
+  }
+
   private async checkCancellation(
     job: Job<ExportJobData>,
     filePath?: string
@@ -78,6 +91,8 @@ export class ExportJobProcessor {
       throw new Error(errorMessage);
     }
 
+    this.validateExportJobData(job);
+
     let filePath: string | undefined;
 
     try {
@@ -112,6 +127,7 @@ export class ExportJobProcessor {
       // eslint-disable-next-line default-case
       switch (job.data.exportType) {
         case 'results-by-version': {
+          const version = job.data.version || 'v2';
           const onProgress = async (percentage: number) => {
             // Map 0-100% of sub-task to 20-90% of overall job
             const jobProgress = 20 + Math.round((percentage / 100) * 70);
@@ -122,7 +138,7 @@ export class ExportJobProcessor {
           if (job.data.format === 'excel') {
             buffer = await this.codingExportService.exportCodingResultsByVersionAsExcel(
               job.data.workspaceId,
-              job.data.version,
+              version,
               job.data.authToken || '',
               job.data.serverUrl || '',
               job.data.includeReplayUrl || false,
@@ -133,7 +149,7 @@ export class ExportJobProcessor {
             // CSV Stream
             const stream = await this.codingExportService.exportCodingResultsByVersionAsCsv(
               job.data.workspaceId,
-              job.data.version,
+              version,
               job.data.authToken || '',
               job.data.serverUrl || '',
               job.data.includeReplayUrl || false,

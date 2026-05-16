@@ -9,10 +9,12 @@ import {
   Post,
   Param,
   Delete,
-  Logger
+  Logger,
+  BadRequestException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
+  ApiBadRequestResponse,
   ApiParam,
   ApiQuery,
   ApiTags,
@@ -49,6 +51,21 @@ export class WorkspaceCodingExportController {
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
+
+  private validateBackgroundExportRequest(
+    body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+  ): void {
+    if (
+      body.exportType === 'results-by-version' &&
+      body.format !== undefined &&
+      body.format !== 'csv' &&
+      body.format !== 'excel'
+    ) {
+      throw new BadRequestException(
+        'results-by-version exports support only "csv" or "excel" format'
+      );
+    }
+  }
 
   private pipeExportStream(
     stream: Readable,
@@ -976,6 +993,17 @@ export class WorkspaceCodingExportController {
           type: 'number',
           description: 'ID of the user requesting the export'
         },
+        version: {
+          type: 'string',
+          enum: ['v1', 'v2', 'v3'],
+          description: 'Coding result version for results-by-version exports'
+        },
+        format: {
+          type: 'string',
+          enum: ['csv', 'excel', 'json'],
+          description:
+            'File format for exports that support multiple formats. results-by-version supports csv and excel; coding-list supports csv, excel and json.'
+        },
         outputCommentsInsteadOfCodes: { type: 'boolean' },
         includeReplayUrl: { type: 'boolean' },
         includeResponseValues: { type: 'boolean' },
@@ -1008,11 +1036,16 @@ export class WorkspaceCodingExportController {
       }
     }
   })
+  @ApiBadRequestResponse({
+    description: 'Invalid export format for the selected export type'
+  })
   async startExportJob(
     @WorkspaceId() workspace_id: number,
       @Req() req: Request,
       @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
   ): Promise<{ jobId: string; message: string }> {
+    this.validateBackgroundExportRequest(body);
+
     try {
       const job = await this.jobQueueService.addExportJob({
         ...body,

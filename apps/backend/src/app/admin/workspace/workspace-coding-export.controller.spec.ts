@@ -2,6 +2,7 @@ import { PassThrough, Writable } from 'stream';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { BadRequestException } from '@nestjs/common';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
 import {
   CodingExportService,
@@ -138,5 +139,30 @@ describe('WorkspaceCodingExportController', () => {
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it.each(['json', 'xlsx'])('rejects %s format for background final result exports', async format => {
+    const jobQueueService = {
+      addExportJob: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.startExportJob(
+      5,
+      { user: { id: 2 } } as never,
+      {
+        exportType: 'results-by-version',
+        format: format as never
+      }
+    )).rejects.toThrow(BadRequestException);
+
+    expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
   });
 });

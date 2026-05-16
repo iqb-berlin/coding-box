@@ -219,5 +219,35 @@ describe('CodingManagementService', () => {
         false
       );
     });
+
+    it('should request CSV and save JSON when JSON result export is selected', async () => {
+      exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
+      exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
+      const mockBlob = {
+        text: jest.fn().mockResolvedValue('unitid;variableid;status_v2\nu1;v1;CODING_COMPLETE')
+      } as unknown as Blob;
+      exportServiceMock.downloadExportFile.mockReturnValue(of(mockBlob));
+      const saveBlobSpy = jest.spyOn(
+        service as unknown as { saveBlob: (blob: Blob | null, filename: string, errorMsg?: string) => void },
+        'saveBlob'
+      ).mockImplementation();
+
+      await service.downloadCodingResults('v2', 'json', false, true);
+
+      expect(exportServiceMock.startExportJob).toHaveBeenCalledWith(
+        1,
+        'results-by-version',
+        'v2',
+        'csv',
+        false,
+        undefined,
+        true
+      );
+      expect(saveBlobSpy).toHaveBeenCalledWith(
+        expect.any(Blob),
+        expect.stringMatching(/^coding-results-v2-\d{4}-\d{2}-\d{2}\.json$/)
+      );
+      expect(mockBlob.text).toHaveBeenCalled();
+    });
   });
 });
