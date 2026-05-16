@@ -4,6 +4,7 @@ import { createMock } from '@golevelup/ts-jest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { DataSource } from 'typeorm';
 import { UploadResultsService } from './upload-results.service';
 import { PersonService } from './person.service';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
@@ -48,6 +49,16 @@ describe('UploadResultsService', () => {
           useValue: createMock<WorkspaceTestResultsService>({
             invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
           })
+        },
+        {
+          provide: DataSource,
+          useValue: {
+            createQueryRunner: jest.fn().mockReturnValue({
+              connect: jest.fn().mockResolvedValue(undefined),
+              query: jest.fn().mockResolvedValue([]),
+              release: jest.fn().mockResolvedValue(undefined)
+            })
+          }
         }
       ]
     }).compile();

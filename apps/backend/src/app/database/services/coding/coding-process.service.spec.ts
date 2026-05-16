@@ -398,6 +398,21 @@ describe('CodingProcessService', () => {
       const result = await service.processTestPersonsBatch(workspaceId, personIds, 2);
 
       expect(result.totalResponses).toBe(2);
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.any(Array),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1, 2],
+            autoCoderRun: 2,
+            markCurrentVersion: 'v3'
+          })
+        );
     });
 
     it('should pass v2 code and score to the second autocoder run', async () => {
@@ -478,7 +493,8 @@ describe('CodingProcessService', () => {
           expect.any(Object),
           expect.objectContaining({
             unitIds: [1],
-            autoCoderRun: 1
+            autoCoderRun: 1,
+            markCurrentVersion: 'v1'
           })
         );
     });

@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
@@ -29,7 +29,6 @@ import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { CodingFreshnessService } from './coding-freshness.service';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -57,9 +56,7 @@ export class CodingProcessService {
     private responseManagementService: ResponseManagementService,
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService,
-    @Optional()
-    private codingFreshnessService?: CodingFreshnessService
+    private workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
   private codingSchemeCache: Map<
@@ -568,18 +565,16 @@ export class CodingProcessService {
           this.isJobCancelled.bind(this),
           progressCallback,
           metrics,
-          { unitIds: unitIdsArray, autoCoderRun }
+          {
+            unitIds: unitIdsArray,
+            autoCoderRun,
+            markCurrentVersion: autoCoderRun === 2 ? 'v3' : 'v1'
+          }
         );
 
       if (!updateSuccess) {
         return statistics;
       }
-
-      await this.codingFreshnessService?.markVersionCurrent(
-        workspace_id,
-        unitIdsArray,
-        autoCoderRun === 2 ? 'v3' : 'v1'
-      );
 
       if (progressCallback) {
         progressCallback(100);

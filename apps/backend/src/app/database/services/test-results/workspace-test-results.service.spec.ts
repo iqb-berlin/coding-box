@@ -163,6 +163,11 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as Repository<ChunkEntity>;
 
     dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue({
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([]),
+        release: jest.fn().mockResolvedValue(undefined)
+      }),
       createQueryBuilder: jest.fn(() => mockQueryBuilder()),
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())

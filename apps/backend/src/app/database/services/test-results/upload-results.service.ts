@@ -7,6 +7,7 @@ import { Readable } from 'stream';
 import * as fs from 'fs';
 import { unlink } from 'fs/promises';
 import { Job } from 'bull';
+import { DataSource } from 'typeorm';
 import {
   statusStringToNumber
 } from '../../utils/response-status-converter';
@@ -23,6 +24,7 @@ import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
 
@@ -50,6 +52,7 @@ export class UploadResultsService {
     @Inject(forwardRef(() => JobQueueService))
     private readonly jobQueueService: JobQueueService,
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly connection: DataSource,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService
   ) {
@@ -645,22 +648,24 @@ export class UploadResultsService {
             );
 
             const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
-            const mutationSummary = await this.personService.processPersonBooklets(
-              filteredPersons,
-              workspaceId,
-              overwriteMode,
-              scope === 'workspace' ? 'workspace' : 'person'
-            );
-            await this.codingFreshnessService?.markUnitsPendingAfterImport(
-              workspaceId,
-              mutationSummary.addedUnitIds,
-              mutationSummary.addedResponseCount
-            );
-            await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
-              workspaceId,
-              mutationSummary.changedUnitIds,
-              'RESULT_UPDATED'
-            );
+            await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+              const mutationSummary = await this.personService.processPersonBooklets(
+                filteredPersons,
+                workspaceId,
+                overwriteMode,
+                scope === 'workspace' ? 'workspace' : 'person'
+              );
+              await this.codingFreshnessService?.markUnitsPendingAfterImport(
+                workspaceId,
+                mutationSummary.addedUnitIds,
+                mutationSummary.addedResponseCount
+              );
+              await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+                workspaceId,
+                mutationSummary.changedUnitIds,
+                'RESULT_UPDATED'
+              );
+            });
           });
         }
         // Cleanup temp file
