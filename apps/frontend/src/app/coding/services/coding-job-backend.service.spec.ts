@@ -150,6 +150,59 @@ describe('CodingJobBackendService', () => {
         jobs: []
       });
     });
+
+    it('should preview a job definition refresh', () => {
+      service.previewJobDefinitionRefresh(1, 42).subscribe(response => {
+        expect(response.addedCases).toBe(2);
+        expect(response.canApply).toBe(true);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/refresh-preview`);
+      expect(req.request.method).toBe('GET');
+      req.flush({
+        jobDefinitionId: 42,
+        existingJobsCount: 2,
+        staleJobsCount: 1,
+        existingCases: 5,
+        plannedCases: 7,
+        retainedCases: 5,
+        addedCases: 2,
+        removedCases: 0,
+        addedCodingTasks: 2,
+        removedCodingTasks: 0,
+        canApply: true
+      });
+    });
+
+    it('should apply a job definition refresh and invalidate validation state', () => {
+      service.applyJobDefinitionRefresh(1, 42).subscribe(response => {
+        expect(response.success).toBe(true);
+        expect(response.jobsCreated).toBe(2);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/job-definitions/42/refresh-apply`);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual({});
+      req.flush({
+        success: true,
+        message: 'updated',
+        jobsCreated: 2,
+        preview: {
+          jobDefinitionId: 42,
+          existingJobsCount: 2,
+          staleJobsCount: 1,
+          existingCases: 5,
+          plannedCases: 7,
+          retainedCases: 5,
+          addedCases: 2,
+          removedCases: 0,
+          addedCodingTasks: 2,
+          removedCodingTasks: 0,
+          canApply: true
+        }
+      });
+      expect(validationTaskStateServiceMock.invalidateWorkspace).toHaveBeenCalledWith(1);
+    });
   });
 
   describe('auth token override', () => {

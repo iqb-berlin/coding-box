@@ -5,6 +5,11 @@ import { map, tap } from 'rxjs/operators';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type { DistributedCodingJobsResponse } from './distributed-coding.service';
+import type {
+  CodingJobFreshnessImpactDto,
+  JobDefinitionRefreshApplyResultDto,
+  JobDefinitionRefreshPreviewDto
+} from '../../../../../../api-dto/coding/job-refresh.dto';
 import {
   CodingJob,
   JobDefinitionCoderConfig,
@@ -230,6 +235,16 @@ export class CodingJobBackendService {
         apiJob.response_matching_flags) as string[] | null | undefined,
       aggregationSettingsVersion: (apiJob.aggregationSettingsVersion ??
         apiJob.aggregation_settings_version) as number | null | undefined,
+      freshnessStatus: (apiJob.freshnessStatus ??
+        apiJob.freshness_status) as CodingJob['freshnessStatus'],
+      freshnessReason: (apiJob.freshnessReason ??
+        apiJob.freshness_reason) as string | null | undefined,
+      freshnessUpdatedAt: (apiJob.freshnessUpdatedAt ??
+        apiJob.freshness_updated_at) as string | Date | null | undefined,
+      freshnessAffectedUnits: (apiJob.freshnessAffectedUnits ??
+        apiJob.freshness_affected_units) as number | undefined,
+      freshnessAffectedResponses: (apiJob.freshnessAffectedResponses ??
+        apiJob.freshness_affected_responses) as number | undefined,
       showScore: (apiJob.showScore ?? apiJob.show_score) as boolean | undefined,
       allowComments: (apiJob.allowComments ?? apiJob.allow_comments) as boolean | undefined,
       suppressGeneralInstructions: (apiJob.suppressGeneralInstructions ??
@@ -527,6 +542,14 @@ export class CodingJobBackendService {
     );
   }
 
+  getCodingJobFreshnessImpact(
+    workspaceId: number,
+    codingJobId: number
+  ): Observable<CodingJobFreshnessImpactDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/jobs/${codingJobId}/freshness-impact`;
+    return this.http.get<CodingJobFreshnessImpactDto>(url, { headers: this.authHeader });
+  }
+
   createJobDefinition(
     workspaceId: number,
     jobDefinition: Omit<JobDefinition, 'id'>
@@ -599,6 +622,28 @@ export class CodingJobBackendService {
   ): Observable<DistributedCodingJobsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/create-job`;
     return this.http.post<DistributedCodingJobsResponse>(url, {}, { headers: this.authHeader });
+  }
+
+  previewJobDefinitionRefresh(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Observable<JobDefinitionRefreshPreviewDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/refresh-preview`;
+    return this.http.get<JobDefinitionRefreshPreviewDto>(url, { headers: this.authHeader });
+  }
+
+  applyJobDefinitionRefresh(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Observable<JobDefinitionRefreshApplyResultDto> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/job-definitions/${jobDefinitionId}/refresh-apply`;
+    return this.http.post<JobDefinitionRefreshApplyResultDto>(url, {}, { headers: this.authHeader }).pipe(
+      tap(result => {
+        if (result.success) {
+          this.validationTaskStateService.invalidateWorkspace(workspaceId);
+        }
+      })
+    );
   }
 
   startExportJob(

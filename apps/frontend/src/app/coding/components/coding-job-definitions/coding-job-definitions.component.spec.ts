@@ -15,6 +15,7 @@ import { CodingJobService } from '../../services/coding-job.service';
 import { AppService } from '../../../core/services/app.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
+import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 describe('CodingJobDefinitionsComponent', () => {
   let component: CodingJobDefinitionsComponent;
@@ -35,6 +36,8 @@ describe('CodingJobDefinitionsComponent', () => {
             approveJobDefinition: jest.fn().mockReturnValue(of({})),
             deleteJobDefinition: jest.fn().mockReturnValue(of({})),
             createCodingJobFromDefinition: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1, jobs: [] })),
+            previewJobDefinitionRefresh: jest.fn().mockReturnValue(of({})),
+            applyJobDefinitionRefresh: jest.fn().mockReturnValue(of({ success: true, jobsCreated: 1 })),
             updateCodingJob: jest.fn().mockReturnValue(of({}))
           }
         },
@@ -214,6 +217,32 @@ describe('CodingJobDefinitionsComponent', () => {
     expect(component.getCreatedJobsCount(component.jobDefinitions[0])).toBeUndefined();
     expect(component.canCreateCodingJobs(component.jobDefinitions[0])).toBe(false);
     expect(component.getDefinitionsReadyForJobsCount()).toBe(0);
+  });
+
+  it('shows retained cases as changed when refresh task counts differ', () => {
+    const preview: JobDefinitionRefreshPreviewDto = {
+      jobDefinitionId: 42,
+      existingJobsCount: 2,
+      staleJobsCount: 1,
+      existingCases: 5,
+      plannedCases: 6,
+      retainedCases: 5,
+      addedCases: 1,
+      removedCases: 0,
+      addedCodingTasks: 1,
+      removedCodingTasks: 2,
+      canApply: true
+    };
+    const formatter = component as unknown as {
+      formatRefreshPreview(value: JobDefinitionRefreshPreviewDto): string;
+    };
+
+    const message = formatter.formatRefreshPreview(preview);
+
+    expect(message).toContain('5 behaltene Fälle');
+    expect(message).toContain('1 Kodieraufgabe hinzugefügt');
+    expect(message).toContain('2 Kodieraufgaben entfernt');
+    expect(message).not.toContain('unverändert');
   });
 
   it('creates distributed jobs from an approved definition with all definition settings', async () => {

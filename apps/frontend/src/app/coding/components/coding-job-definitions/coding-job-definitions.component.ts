@@ -24,6 +24,7 @@ import { Subject, firstValueFrom, takeUntil } from 'rxjs';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { Variable, VariableBundle } from '../../models/coding-job.model';
+import { JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { CoderService } from '../../services/coder.service';
 import { CodingJobService } from '../../services/coding-job.service';
 import {
@@ -96,6 +97,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   jobDefinitions: JobDefinition[] = [];
   isLoading = false;
   isBulkCreating = false;
+  refreshingDefinitionIds = new Set<number>();
   coders: Coder[] = [];
   showInfo = false;
   private readonly variablePreviewLimit = 12;
@@ -355,6 +357,15 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
   canDeleteDefinition(definition: JobDefinition): boolean {
     return this.getBlockingCreatedJobsCount(definition) === 0;
+  }
+
+  canRefreshDefinition(definition: JobDefinition): boolean {
+    const createdJobsCount = this.getCreatedJobsCount(definition);
+    return definition.status === 'approved' && createdJobsCount !== undefined && createdJobsCount > 0;
+  }
+
+  isRefreshingDefinition(definition: JobDefinition): boolean {
+    return !!definition.id && this.refreshingDefinitionIds.has(definition.id);
   }
 
   getEditDefinitionLabel(definition: JobDefinition): string {
@@ -661,6 +672,108 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       });
   }
 
+  async refreshDefinition(definition: JobDefinition): Promise<void> {
+    if (!definition.id || !this.canRefreshDefinition(definition)) {
+      return;
+    }
+
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.showError(
+        this.translateService.instant(
+          'coding-job-definitions.messages.snackbar.no-workspace'
+        )
+      );
+      return;
+    }
+
+    this.refreshingDefinitionIds.add(definition.id);
+    try {
+      const preview = await firstValueFrom(
+        this.codingJobBackendService.previewJobDefinitionRefresh(
+          workspaceId,
+          definition.id
+        )
+      );
+      const message = this.formatRefreshPreview(preview);
+      const action = preview.canApply ? 'Aktualisieren' : this.translateService.instant('common.close');
+      const snackBarRef = this.snackBar.open(message, action, {
+        duration: preview.canApply ? 9000 : 6000
+      });
+
+      if (preview.canApply) {
+        snackBarRef.onAction()
+          .pipe(takeUntil(this.destroy$))
+          .subscribe(() => {
+            this.applyDefinitionRefresh(workspaceId, definition.id!);
+          });
+      }
+    } catch (error) {
+      this.showError(
+        `Aktualisierung konnte nicht vorbereitet werden: ${this.getErrorMessage(error)}`
+      );
+    } finally {
+      this.refreshingDefinitionIds.delete(definition.id);
+    }
+  }
+
+  private async applyDefinitionRefresh(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Promise<void> {
+    this.refreshingDefinitionIds.add(jobDefinitionId);
+    try {
+      const result = await firstValueFrom(
+        this.codingJobBackendService.applyJobDefinitionRefresh(
+          workspaceId,
+          jobDefinitionId
+        )
+      );
+      this.snackBar.open(
+        `Job-Definition aktualisiert: ${result.jobsCreated} Kodierjobs erstellt.`,
+        this.translateService.instant('common.close'),
+        { duration: 4000 }
+      );
+      this.loadJobDefinitions();
+      this.jobDefinitionChanged.emit();
+      this.bulkCreationCompleted.emit();
+      this.codingJobService.jobsCreatedEvent.emit();
+    } catch (error) {
+      this.showError(
+        `Aktualisierung fehlgeschlagen: ${this.getErrorMessage(error)}`
+      );
+    } finally {
+      this.refreshingDefinitionIds.delete(jobDefinitionId);
+    }
+  }
+
+  private formatRefreshPreview(preview: JobDefinitionRefreshPreviewDto): string {
+    const retainedLabel = preview.addedCodingTasks === 0 && preview.removedCodingTasks === 0 ?
+      'unverändert' :
+      'behaltene Fälle';
+    const summary = `Aktualisierung: ${preview.addedCases} neue Fälle, ${preview.removedCases} entfernte Fälle, ${preview.retainedCases} ${retainedLabel}.`;
+    const taskChanges = [
+      preview.addedCodingTasks > 0 ?
+        this.formatTaskDelta(preview.addedCodingTasks, 'hinzugefügt') :
+        '',
+      preview.removedCodingTasks > 0 ?
+        this.formatTaskDelta(preview.removedCodingTasks, 'entfernt') :
+        ''
+    ].filter(Boolean);
+    const taskSummary = taskChanges.length > 0 ? ` ${taskChanges.join(', ')}.` : '';
+
+    if (preview.canApply) {
+      return `${summary}${taskSummary}`;
+    }
+
+    return `${summary}${taskSummary} ${preview.blockingReason || 'Die Aktualisierung ist aktuell blockiert.'}`;
+  }
+
+  private formatTaskDelta(count: number, action: string): string {
+    const taskLabel = count === 1 ? 'Kodieraufgabe' : 'Kodieraufgaben';
+    return `${count} ${taskLabel} ${action}`;
+  }
+
   async createCodingJobFromDefinition(
     definition: JobDefinition
   ): Promise<void> {
@@ -803,5 +916,22 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     this.snackBar.open(message, this.translateService.instant('common.close'), {
       duration: 5000
     });
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error && typeof error === 'object' && 'error' in error) {
+      const httpError = error as { error?: { message?: string } | string; message?: string };
+      if (typeof httpError.error === 'string') {
+        return httpError.error;
+      }
+      if (httpError.error?.message) {
+        return httpError.error.message;
+      }
+      if (httpError.message) {
+        return httpError.message;
+      }
+    }
+
+    return error instanceof Error ? error.message : String(error);
   }
 }

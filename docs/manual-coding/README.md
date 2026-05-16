@@ -113,3 +113,24 @@ Konfiguration andert (z. B. andere Kodierer, Variablen oder Bundel). In diesem F
 wird die Fallauswahl mit den aktuellen Regeln erneut durchgefuhrt.
 
 Wenn sich nur Metadaten (z. B. Label) andern, bleiben die bestehenden Jobs unverandert.
+
+## Testergebnisse andern sich nach Auto-Coding 1
+
+Wenn nach dem ersten Autocoder-Lauf neue Testergebnisse importiert, bestehende
+Testergebnisse aktualisiert oder Testergebnisse geloescht werden, muss der
+Kodierstand zuerst wieder aktualisiert werden.
+
+Der empfohlene Ablauf ist:
+
+1. Import- oder Loeschvorgang abschliessen.
+2. Im Kodierung-Management den Kodierstand-Hinweis pruefen.
+3. Falls Auto-Coding 1 als neu oder veraltet markiert ist, Auto-Coding 1 fuer
+   die betroffenen Aufgaben-Ergebnisse aktualisieren.
+4. Danach die manuelle Kodierung pruefen und neue oder erneut offene Faelle
+   kodieren.
+5. Erst wenn Auto-Coding 1 aktuell ist und die manuelle Kodierung geprueft
+   wurde, darf Auto-Coding 2 gestartet werden.
+
+Kodierbox verhindert deshalb den Start von Auto-Coding 2, solange fuer
+Auto-Coding 1 offene oder veraltete Aufgaben-Ergebnisse vorliegen oder die
+manuelle Kodierung als pruefpflichtig markiert ist.

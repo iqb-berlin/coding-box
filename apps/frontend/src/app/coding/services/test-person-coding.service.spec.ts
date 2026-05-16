@@ -66,15 +66,35 @@ describe('TestPersonCodingService', () => {
       req.flush(mockResponse);
     });
 
-    it('should handle errors and return empty statistics', () => {
+    it('should handle errors and return empty statistics with an error message', () => {
       const mockTestPersonIds = '1,2,3';
 
       service.codeTestPersons(mockWorkspaceId, mockTestPersonIds).subscribe(response => {
-        expect(response).toEqual({ totalResponses: 0, statusCounts: {} });
+        expect(response.totalResponses).toBe(0);
+        expect(response.statusCounts).toEqual({});
+        expect(response.message).toContain('Http failure response');
       });
 
       const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '1');
       req.error(new ProgressEvent('error'));
+    });
+
+    it('should surface backend error messages when coding is blocked', () => {
+      const mockTestPersonIds = '1,2,3';
+
+      service.codeTestPersons(mockWorkspaceId, mockTestPersonIds, 2).subscribe(response => {
+        expect(response).toEqual({
+          totalResponses: 0,
+          statusCounts: {},
+          message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.'
+        });
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` && request.params.get('testPersons') === mockTestPersonIds && request.params.get('autoCoderRun') === '2');
+      req.flush(
+        { message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.' },
+        { status: 400, statusText: 'Bad Request' }
+      );
     });
   });
 
