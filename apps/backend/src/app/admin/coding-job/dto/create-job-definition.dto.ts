@@ -15,6 +15,7 @@ import {
   JobDefinitionVariableDto,
   JobDefinitionVariableBundleDto
 } from './job-definition-variable.dto';
+import { JobDefinitionCoderConfigDto } from './job-definition-coder-config.dto';
 
 /**
  * DTO for creating a job definition
@@ -63,6 +64,17 @@ export class CreateJobDefinitionDto {
   @Type(() => Number)
   @IsOptional()
     assignedCoders?: number[];
+
+  @ApiProperty({
+    description: 'Assigned coders with optional capacity percentages. If present, this is the source for assigned coder IDs.',
+    type: [JobDefinitionCoderConfigDto],
+    required: false
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => JobDefinitionCoderConfigDto)
+  @IsOptional()
+    assignedCoderConfigs?: JobDefinitionCoderConfigDto[];
 
   @ApiProperty({
     description: 'Duration in seconds for one coding task',

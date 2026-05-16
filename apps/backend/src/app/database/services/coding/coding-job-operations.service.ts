@@ -207,13 +207,21 @@ export class CodingJobOperationsService {
       selectedVariableBundles?: {
         id: number;
         name: string;
+        caseOrderingMode?: 'continuous' | 'alternating';
         variables: { unitName: string; variableId: string }[];
       }[];
-      selectedCoders: { id: number; name: string; username: string }[];
+      selectedCoders: {
+        id: number;
+        name: string;
+        username: string;
+        weight?: number;
+        capacityPercent?: number;
+      }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      distributionSeed?: string | number;
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;

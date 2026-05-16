@@ -153,3 +153,43 @@ ALTER TABLE "public"."job_definitions"
 
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "allow_comments";
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "show_score";
+
+-- changeset jurei733:10
+-- comment: Persist coder capacity settings for job definitions
+
+ALTER TABLE "public"."job_definitions"
+  ADD COLUMN IF NOT EXISTS "assigned_coder_configs" JSONB NULL;
+
+UPDATE "public"."job_definitions"
+SET "assigned_coder_configs" = (
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'coderId',
+      coder_values.value::integer,
+      'capacityPercent',
+      100
+    )
+    ORDER BY coder_values.ordinality
+  )
+  FROM jsonb_array_elements_text(COALESCE("assigned_coders", '[]'::jsonb))
+    WITH ORDINALITY AS coder_values(value, ordinality)
+)
+WHERE "assigned_coder_configs" IS NULL
+  AND "assigned_coders" IS NOT NULL;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "assigned_coder_configs";
+
+-- changeset jurei733:11
+-- comment: Persist stable distribution seed for job definitions
+
+ALTER TABLE "public"."job_definitions"
+  ADD COLUMN IF NOT EXISTS "distribution_seed" TEXT NULL;
+
+UPDATE "public"."job_definitions"
+SET "distribution_seed" = 'job-definition:' || "id"::text
+WHERE "distribution_seed" IS NULL;
+
+ALTER TABLE "public"."job_definitions"
+  ALTER COLUMN "distribution_seed" SET NOT NULL;
+
+-- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "distribution_seed";

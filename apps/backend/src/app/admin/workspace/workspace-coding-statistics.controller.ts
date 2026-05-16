@@ -46,6 +46,48 @@ type CodingStatisticsJobStatusResponse = {
   error?: string;
 };
 
+type DistributionDoubleCodingInfoResponse = {
+  totalCases: number;
+  distinctCases?: number;
+  codingTasksTotal?: number;
+  doubleCodedCases: number;
+  singleCodedCasesAssigned: number;
+  doubleCodedCasesPerCoder: Record<string, number>;
+};
+
+type DistributionCalculationResponse = {
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, DistributionDoubleCodingInfoResponse>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: string[];
+  warnings: Array<{
+    unitName: string;
+    variableId: string;
+    message: string;
+    casesInJobs: number;
+    availableCases: number;
+  }>;
+  pairDistribution: Record<string, number>;
+  tasksPerCoder: Record<string, number>;
+  coderWeights: Record<string, number>;
+};
+
+type DistributedCodingJobsResponse = DistributionCalculationResponse & {
+  success: boolean;
+  jobsCreated: number;
+  message: string;
+  jobs: Array<{
+    itemKey: string;
+    coderId: number;
+    coderName: string;
+    variable: { unitName: string; variableId: string };
+    jobId: number;
+    jobName: string;
+    caseCount: number;
+  }>;
+};
+
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingStatisticsController {
@@ -1172,6 +1214,7 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
+              caseOrderingMode: { type: 'string', enum: ['continuous', 'alternating'] },
               variables: {
                 type: 'array',
                 items: {
@@ -1192,12 +1235,15 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
-              username: { type: 'string' }
+              username: { type: 'string' },
+              weight: { type: 'number' },
+              capacityPercent: { type: 'number' }
             }
           }
         },
         doubleCodingAbsolute: { type: 'number' },
-        doubleCodingPercentage: { type: 'number' }
+        doubleCodingPercentage: { type: 'number' },
+        distributionSeed: { type: 'string' }
       },
       required: ['selectedVariables', 'selectedCoders']
     }
@@ -1215,6 +1261,14 @@ export class WorkspaceCodingStatisticsController {
             additionalProperties: { type: 'number' }
           }
         },
+        distributionByCoderId: {
+          type: 'object',
+          description: 'Case distribution matrix keyed by coder ID',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
         doubleCodingInfo: {
           type: 'object',
           description: 'Double coding information',
@@ -1222,6 +1276,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               totalCases: { type: 'number' },
+              distinctCases: { type: 'number' },
+              codingTasksTotal: { type: 'number' },
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
@@ -1230,6 +1286,36 @@ export class WorkspaceCodingStatisticsController {
               }
             }
           }
+        },
+        aggregationInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              uniqueCases: { type: 'number' },
+              totalResponses: { type: 'number' }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        warnings: {
+          type: 'array',
+          items: { type: 'object' }
+        },
+        pairDistribution: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        tasksPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        coderWeights: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
         }
       }
     }
@@ -1242,26 +1328,23 @@ export class WorkspaceCodingStatisticsController {
                      selectedVariableBundles?: {
                        id: number;
                        name: string;
+                       caseOrderingMode?: 'continuous' | 'alternating';
                        variables: { unitName: string; variableId: string }[];
                      }[];
-                     selectedCoders: { id: number; name: string; username: string }[];
+                     selectedCoders: {
+                       id: number;
+                       name: string;
+                       username: string;
+                       weight?: number;
+                       capacityPercent?: number;
+                     }[];
                      doubleCodingAbsolute?: number;
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
+                     distributionSeed?: string | number;
                    }
-  ): Promise<{
-        distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<
-        string,
-        {
-          totalCases: number;
-          doubleCodedCases: number;
-          singleCodedCasesAssigned: number;
-          doubleCodedCasesPerCoder: Record<string, number>;
-        }
-        >;
-      }> {
+  ): Promise<DistributionCalculationResponse> {
     return this.codingJobService.calculateDistribution(workspace_id, body);
   }
 
@@ -1312,12 +1395,15 @@ export class WorkspaceCodingStatisticsController {
             properties: {
               id: { type: 'number' },
               name: { type: 'string' },
-              username: { type: 'string' }
+              username: { type: 'string' },
+              weight: { type: 'number' },
+              capacityPercent: { type: 'number' }
             }
           }
         },
         doubleCodingAbsolute: { type: 'number' },
         doubleCodingPercentage: { type: 'number' },
+        distributionSeed: { type: 'string' },
         showScore: { type: 'boolean' },
         allowComments: { type: 'boolean' },
         suppressGeneralInstructions: { type: 'boolean' }
@@ -1341,6 +1427,14 @@ export class WorkspaceCodingStatisticsController {
             additionalProperties: { type: 'number' }
           }
         },
+        distributionByCoderId: {
+          type: 'object',
+          description: 'Case distribution matrix keyed by coder ID',
+          additionalProperties: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          }
+        },
         doubleCodingInfo: {
           type: 'object',
           description: 'Double coding information',
@@ -1348,6 +1442,8 @@ export class WorkspaceCodingStatisticsController {
             type: 'object',
             properties: {
               totalCases: { type: 'number' },
+              distinctCases: { type: 'number' },
+              codingTasksTotal: { type: 'number' },
               doubleCodedCases: { type: 'number' },
               singleCodedCasesAssigned: { type: 'number' },
               doubleCodedCasesPerCoder: {
@@ -1357,11 +1453,42 @@ export class WorkspaceCodingStatisticsController {
             }
           }
         },
+        aggregationInfo: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              uniqueCases: { type: 'number' },
+              totalResponses: { type: 'number' }
+            }
+          }
+        },
+        matchingFlags: {
+          type: 'array',
+          items: { type: 'string' }
+        },
+        warnings: {
+          type: 'array',
+          items: { type: 'object' }
+        },
+        pairDistribution: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        tasksPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        coderWeights: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
         jobs: {
           type: 'array',
           items: {
             type: 'object',
             properties: {
+              itemKey: { type: 'string' },
               coderId: { type: 'number' },
               coderName: { type: 'string' },
               variable: {
@@ -1391,38 +1518,23 @@ export class WorkspaceCodingStatisticsController {
                        caseOrderingMode?: 'continuous' | 'alternating';
                        variables: { unitName: string; variableId: string }[];
                      }[];
-                     selectedCoders: { id: number; name: string; username: string }[];
+                     selectedCoders: {
+                       id: number;
+                       name: string;
+                       username: string;
+                       weight?: number;
+                       capacityPercent?: number;
+                     }[];
                      doubleCodingAbsolute?: number;
                      doubleCodingPercentage?: number;
                      caseOrderingMode?: 'continuous' | 'alternating';
                      maxCodingCases?: number;
+                     distributionSeed?: string | number;
                      showScore?: boolean;
                      allowComments?: boolean;
                      suppressGeneralInstructions?: boolean;
                    }
-  ): Promise<{
-        success: boolean;
-        jobsCreated: number;
-        message: string;
-        distribution: Record<string, Record<string, number>>;
-        doubleCodingInfo: Record<
-        string,
-        {
-          totalCases: number;
-          doubleCodedCases: number;
-          singleCodedCasesAssigned: number;
-          doubleCodedCasesPerCoder: Record<string, number>;
-        }
-        >;
-        jobs: Array<{
-          coderId: number;
-          coderName: string;
-          variable: { unitName: string; variableId: string };
-          jobId: number;
-          jobName: string;
-          caseCount: number;
-        }>;
-      }> {
+  ): Promise<DistributedCodingJobsResponse> {
     if (!body) {
       throw new BadRequestException('Request body is required');
     }
