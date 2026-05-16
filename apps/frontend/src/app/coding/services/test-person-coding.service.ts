@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   Observable,
   Subject,
@@ -183,7 +183,11 @@ export class TestPersonCodingService {
       { headers: this.authHeader, params }
     )
       .pipe(
-        catchError(() => of({ totalResponses: 0, statusCounts: {} }))
+        catchError(error => of({
+          totalResponses: 0,
+          statusCounts: {},
+          message: this.extractBackendErrorMessage(error)
+        }))
       );
   }
 
@@ -240,6 +244,27 @@ export class TestPersonCodingService {
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
+  }
+
+  private extractBackendErrorMessage(error: unknown): string {
+    if (error instanceof HttpErrorResponse) {
+      const responseMessage = error.error?.message;
+      if (Array.isArray(responseMessage)) {
+        return responseMessage.join(' ');
+      }
+      if (typeof responseMessage === 'string' && responseMessage.trim() !== '') {
+        return responseMessage;
+      }
+      if (typeof error.error === 'string' && error.error.trim() !== '') {
+        return error.error;
+      }
+    }
+
+    if (error instanceof Error && error.message.trim() !== '') {
+      return error.message;
+    }
+
+    return 'Failed to start test persons coding';
   }
 
   getJobStatus(workspaceId: number, jobId: string): Observable<JobStatus | { error: string }> {

@@ -249,6 +249,15 @@ export class TestPersonCodingComponent implements OnInit {
               { duration: 5000 }
             );
           } else if (result) {
+            if (result.message && result.totalResponses === 0) {
+              this.snackBar.open(
+                this.backendMessageTranslator.translateMessage(result.message),
+                this.translateService.instant('close'),
+                { duration: 7000 }
+              );
+              return;
+            }
+
             this.snackBar.open(
               this.translateService.instant(
                 'test-person-coding.responses-coded',
