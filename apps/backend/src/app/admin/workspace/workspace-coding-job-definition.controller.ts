@@ -71,6 +71,8 @@ export class WorkspaceCodingJobDefinitionController {
           assigned_variables: { type: 'array' },
           assigned_variable_bundles: { type: 'array' },
           assigned_coders: { type: 'array' },
+          assigned_coder_configs: { type: 'array' },
+          distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },
@@ -84,6 +86,14 @@ export class WorkspaceCodingJobDefinitionController {
           blocking_created_jobs_count: { type: 'number' },
           openCreatedJobsCount: { type: 'number' },
           open_created_jobs_count: { type: 'number' },
+          plannedVariableUsage: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          },
+          planned_variable_usage: {
+            type: 'object',
+            additionalProperties: { type: 'number' }
+          },
           created_at: { type: 'string', format: 'date-time' },
           updated_at: { type: 'string', format: 'date-time' }
         }
@@ -111,6 +121,8 @@ export class WorkspaceCodingJobDefinitionController {
           assigned_variables: { type: 'array' },
           assigned_variable_bundles: { type: 'array' },
           assigned_coders: { type: 'array' },
+          assigned_coder_configs: { type: 'array' },
+          distribution_seed: { type: 'string' },
           duration_seconds: { type: 'number' },
           max_coding_cases: { type: 'number' },
           double_coding_absolute: { type: 'number' },

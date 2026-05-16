@@ -29,6 +29,11 @@ export interface JobDefinitionVariableBundle {
   caseOrderingMode?: CaseOrderingMode;
 }
 
+export interface JobDefinitionCoderConfig {
+  coderId: number;
+  capacityPercent: number;
+}
+
 @Entity({ name: 'job_definitions' })
 export class JobDefinition {
   @PrimaryGeneratedColumn()
@@ -64,6 +69,12 @@ export class JobDefinition {
 
   @Column({ type: 'jsonb', nullable: true })
     assigned_coders?: number[];
+
+  @Column({ type: 'jsonb', nullable: true })
+    assigned_coder_configs?: JobDefinitionCoderConfig[];
+
+  @Column({ type: 'text' })
+    distribution_seed?: string;
 
   @Column({ type: 'int', nullable: true })
     duration_seconds?: number;

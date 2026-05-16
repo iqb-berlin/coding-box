@@ -83,6 +83,111 @@ export interface TransferCodingCasesResult {
 type VariableReference = { unitName: string; variableId: string };
 type BundleItem = { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: VariableReference[] };
 type DistributionItem = { type: 'bundle' | 'variable'; item: BundleItem | VariableReference };
+type DistributionCoderInput = {
+  id: number;
+  name: string;
+  username: string;
+  weight?: number;
+  capacityPercent?: number;
+};
+
+type NormalizedDistributionCoder = {
+  id: number;
+  name: string;
+  username: string;
+  weight: number;
+  displayKey: string;
+  tieBreaker: number;
+};
+
+type DistributionDoubleCodingInfo = {
+  totalCases: number;
+  distinctCases: number;
+  codingTasksTotal: number;
+  doubleCodedCases: number;
+  singleCodedCasesAssigned: number;
+  doubleCodedCasesPerCoder: Record<string, number>;
+};
+
+type DistributionPlanRequest = {
+  selectedVariables: VariableReference[];
+  selectedVariableBundles?: BundleItem[];
+  selectedCoders: DistributionCoderInput[];
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  caseOrderingMode?: 'continuous' | 'alternating';
+  maxCodingCases?: number;
+  jobDefinitionId?: number;
+  distributionSeed?: string | number;
+  showScore?: boolean;
+  allowComments?: boolean;
+  suppressGeneralInstructions?: boolean;
+};
+
+type DistributionVariableUsageRequest = {
+  selectedVariables: VariableReference[];
+  selectedVariableBundles?: BundleItem[];
+  caseOrderingMode?: 'continuous' | 'alternating';
+  maxCodingCases?: number;
+  jobDefinitionId?: number;
+  distributionSeed?: string | number;
+};
+
+type DistributionVariableUsageBatchRequest = DistributionVariableUsageRequest & {
+  key: string | number;
+};
+
+type DistributionVariableUsageContext = {
+  matchingFlags: ResponseMatchingFlag[];
+  aggregationThreshold: number | null;
+  derivedVariableSets: Map<string, Set<string>>;
+  allResponses: SlimResponse[];
+  assignedResponseIds: Set<number>;
+};
+
+type DistributionPlanItem = {
+  type: 'bundle' | 'variable';
+  item: BundleItem | VariableReference;
+  itemKey: string;
+  itemLabel: string;
+  itemVariables: VariableReference[];
+  itemCaseOrderingMode: 'continuous' | 'alternating';
+  uniqueCases: number;
+  totalResponses: number;
+  availableResponses: SlimResponse[];
+  selectedResponses: SlimResponse[];
+};
+
+type DistributionPlanCase = {
+  item: DistributionPlanItem;
+  response: SlimResponse;
+  isDoubleCoded: boolean;
+  assignedCoderIds: number[];
+};
+
+type DistributionPlanJob = {
+  coder: NormalizedDistributionCoder;
+  item: DistributionPlanItem;
+  unitSubset: SlimResponse[];
+};
+
+type DistributionPlan = {
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: ResponseMatchingFlag[];
+  warnings: JobCreationWarning[];
+  jobsToCreate: DistributionPlanJob[];
+  plannedCases: DistributionPlanCase[];
+  pairDistribution: Record<string, number>;
+  tasksPerCoder: Record<string, number>;
+  coderWeights: Record<string, number>;
+};
+
+const DEFAULT_DISTRIBUTION_CODER_WEIGHT = 1;
+const MIN_DISTRIBUTION_CODER_CAPACITY_PERCENT = 10;
+const MAX_DISTRIBUTION_CODER_CAPACITY_PERCENT = 300;
 
 interface SlimResponse {
   id: number;
@@ -1759,80 +1864,6 @@ export class CodingJobService {
     }
   }
 
-  private distributeDoubleCodingEvenly(
-    doubleCodingResponses: SlimResponse[],
-    sortedCoders: { id: number; name: string; username: string }[]
-  ): { response: SlimResponse; coders: { id: number; name: string }[] }[] {
-    const assignments: { response: SlimResponse; coders: { id: number; name: string }[] }[] = [];
-    const numCoders = sortedCoders.length;
-
-    // Track how many double-coding assignments each coder has received
-    const doubleCodingCounts = new Map(sortedCoders.map(c => [c.id, 0]));
-
-    for (const response of doubleCodingResponses) {
-      const coderCounts = sortedCoders.map(coder => ({
-        id: coder.id,
-        name: coder.name,
-        count: doubleCodingCounts.get(coder.id) || 0
-      }));
-
-      coderCounts.sort((a, b) => a.count - b.count);
-
-      const selectedCoders = coderCounts
-        .slice(0, Math.min(2, numCoders))
-        .sort((a, b) => a.name.localeCompare(b.name));
-
-      assignments.push({
-        response,
-        coders: selectedCoders.map(c => ({ id: c.id, name: c.name }))
-      });
-
-      // Update counts
-      selectedCoders.forEach(coder => {
-        doubleCodingCounts.set(coder.id, (doubleCodingCounts.get(coder.id) || 0) + 1);
-      });
-    }
-
-    return assignments;
-  }
-
-  private distributeCasesForVariable(
-    responses: SlimResponse[],
-    doubleCodingResponses: SlimResponse[],
-    sortedCoders: { id: number; name: string; username: string }[]
-  ): SlimResponse[][] {
-    const numCoders = sortedCoders.length;
-    const coderCases: SlimResponse[][] = sortedCoders.map(() => []);
-
-    const singleCodingResponses = responses.filter(r => !doubleCodingResponses.some(dc => dc.id === r.id));
-
-    sortedCoders.forEach((coder, coderIndex) => {
-      doubleCodingResponses.forEach(doubleCodingResponse => {
-        coderCases[coderIndex].push(doubleCodingResponse);
-      });
-    });
-
-    const totalSingleCases = singleCodingResponses.length;
-    const baseCasesPerCoder = Math.floor(totalSingleCases / numCoders);
-    const remainder = totalSingleCases % numCoders;
-
-    // Distribute single cases equally among coders
-    sortedCoders.forEach((coder, index) => {
-      let casesForCoder = baseCasesPerCoder;
-      if (index < remainder) {
-        casesForCoder += 1;
-      }
-
-      // Simple round-robin distribution
-      const startIndex = index * baseCasesPerCoder + Math.min(index, remainder);
-      const endIndex = startIndex + casesForCoder;
-      const casesSlice = singleCodingResponses.slice(startIndex, endIndex);
-      coderCases[index].push(...casesSlice);
-    });
-
-    return coderCases;
-  }
-
   async getCurrentAggregationSettingsSnapshot(workspaceId: number): Promise<CodingJobAggregationSettings> {
     const [aggregationThreshold, responseMatchingFlags] = await Promise.all([
       this.getAggregationThreshold(workspaceId),
@@ -2266,63 +2297,512 @@ export class CodingJobService {
     };
   }
 
-  async calculateDistribution(
+  private getDistributionSeed(
     workspaceId: number,
-    request: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
-      selectedCoders: { id: number; name: string; username: string }[];
-      doubleCodingAbsolute?: number;
-      doubleCodingPercentage?: number;
-      caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
+    request: Pick<DistributionPlanRequest, 'distributionSeed' | 'jobDefinitionId'>
+  ): string {
+    if (request.distributionSeed !== undefined && request.distributionSeed !== null && request.distributionSeed !== '') {
+      return String(request.distributionSeed);
     }
-  ): Promise<{
-      distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: ResponseMatchingFlag[];
-      warnings: JobCreationWarning[];
-    }> {
-    const {
-      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, caseOrderingMode = 'continuous', maxCodingCases
-    } = request;
-    const distribution: Record<string, Record<string, number>> = {};
-    const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
-    const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
-    const warnings: JobCreationWarning[] = [];
 
-    // Get response matching mode and aggregation threshold for this workspace
-    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
-    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    if (request.jobDefinitionId !== undefined && request.jobDefinitionId !== null) {
+      return `job-definition:${request.jobDefinitionId}`;
+    }
 
+    return `workspace:${workspaceId}:distributed-coding`;
+  }
+
+  private stableHash(value: string): number {
+    let hash = 0;
+
+    for (let i = 0; i < value.length; i += 1) {
+      hash = (hash * 31 + value.charCodeAt(i)) % 4294967291;
+    }
+
+    return hash;
+  }
+
+  private compareResponsesByMode(
+    mode: 'continuous' | 'alternating',
+    a: SlimResponse,
+    b: SlimResponse
+  ): number {
+    if (mode === 'alternating') {
+      if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+      if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+      if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+      if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+      if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
+      return a.id - b.id;
+    }
+
+    if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
+    if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
+    if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
+    if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
+    if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
+    if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
+    return a.id - b.id;
+  }
+
+  private getResponseStratumKey(
+    response: SlimResponse,
+    mode: 'continuous' | 'alternating'
+  ): string {
+    if (mode === 'alternating') {
+      return [
+        response.personGroup,
+        response.bookletName,
+        response.unitName,
+        response.variableid
+      ].join('::');
+    }
+
+    return [
+      response.unitName,
+      response.variableid,
+      response.bookletName,
+      response.personGroup
+    ].join('::');
+  }
+
+  private sortResponsesForDistribution(
+    responses: SlimResponse[],
+    mode: 'continuous' | 'alternating',
+    seed: string,
+    itemKey: string
+  ): SlimResponse[] {
+    const groups = new Map<string, SlimResponse[]>();
+
+    for (const response of responses) {
+      const key = this.getResponseStratumKey(response, mode);
+      const group = groups.get(key) || [];
+      group.push(response);
+      groups.set(key, group);
+    }
+
+    const groupEntries = Array.from(groups.entries())
+      .map(([key, group]) => ({
+        key,
+        group: group.sort((a, b) => this.compareResponsesByMode(mode, a, b))
+      }))
+      .sort((a, b) => {
+        const hashA = this.stableHash(`${seed}:${itemKey}:stratum:${a.key}`);
+        const hashB = this.stableHash(`${seed}:${itemKey}:stratum:${b.key}`);
+        return hashA - hashB || a.key.localeCompare(b.key);
+      });
+
+    const result: SlimResponse[] = [];
+    let remaining = true;
+
+    while (remaining) {
+      remaining = false;
+      for (const entry of groupEntries) {
+        const response = entry.group.shift();
+        if (response) {
+          result.push(response);
+          remaining = true;
+        }
+      }
+    }
+
+    return result;
+  }
+
+  private normalizeDistributionCoders(
+    selectedCoders: DistributionCoderInput[],
+    seed: string
+  ): NormalizedDistributionCoder[] {
+    if (!selectedCoders || selectedCoders.length === 0) {
+      throw new BadRequestException('At least one coder must be selected.');
+    }
+
+    const seenCoderIds = new Set<number>();
+    const nameCounts = new Map<string, number>();
+
+    for (const coder of selectedCoders) {
+      const coderId = Number(coder.id);
+      if (!Number.isInteger(coderId) || coderId < 1) {
+        throw new BadRequestException('Selected coders must have positive integer IDs.');
+      }
+      if (seenCoderIds.has(coderId)) {
+        throw new BadRequestException(`Duplicate coder ID ${coderId} is not allowed.`);
+      }
+      seenCoderIds.add(coderId);
+      nameCounts.set(coder.name, (nameCounts.get(coder.name) || 0) + 1);
+    }
+
+    return selectedCoders
+      .map(coder => {
+        let weight = DEFAULT_DISTRIBUTION_CODER_WEIGHT;
+
+        if (coder.capacityPercent !== undefined) {
+          const capacityPercent = Number(coder.capacityPercent);
+          if (
+            !Number.isFinite(capacityPercent) ||
+            capacityPercent < MIN_DISTRIBUTION_CODER_CAPACITY_PERCENT ||
+            capacityPercent > MAX_DISTRIBUTION_CODER_CAPACITY_PERCENT
+          ) {
+            throw new BadRequestException(
+              `selectedCoders.capacityPercent must be between ${MIN_DISTRIBUTION_CODER_CAPACITY_PERCENT} and ${MAX_DISTRIBUTION_CODER_CAPACITY_PERCENT}.`
+            );
+          }
+          weight = capacityPercent / 100;
+        } else if (coder.weight !== undefined) {
+          const explicitWeight = Number(coder.weight);
+          if (!Number.isFinite(explicitWeight) || explicitWeight <= 0) {
+            throw new BadRequestException('selectedCoders.weight must be greater than 0.');
+          }
+          weight = explicitWeight;
+        }
+
+        const displayKey = (nameCounts.get(coder.name) || 0) > 1 || !isSafeKey(coder.name) ?
+          `${coder.name} (#${coder.id})` :
+          coder.name;
+
+        return {
+          id: Number(coder.id),
+          name: coder.name,
+          username: coder.username,
+          weight,
+          displayKey,
+          tieBreaker: this.stableHash(`${seed}:coder:${coder.id}`)
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+  }
+
+  private buildDistributionItems(
+    request: Pick<DistributionPlanRequest, 'selectedVariables' | 'selectedVariableBundles'>
+  ): DistributionItem[] {
     const items: DistributionItem[] = [];
-    const allVariables: VariableReference[] = [];
 
     if (request.selectedVariableBundles) {
       for (const bundle of request.selectedVariableBundles) {
         items.push({ type: 'bundle', item: bundle });
-        allVariables.push(...bundle.variables);
       }
     }
 
-    for (const variable of selectedVariables) {
+    for (const variable of request.selectedVariables || []) {
       items.push({ type: 'variable', item: variable });
-      allVariables.push(variable);
     }
 
-    const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
-    const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, allVariables);
+    return items;
+  }
 
-    // Build derived variable lookup for this workspace to skip aggregation for derived vars
-    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+  private getBundleNameCounts(items: DistributionItem[]): Map<string, number> {
+    const bundleNameCounts = new Map<string, number>();
+    items.forEach(itemObj => {
+      if (itemObj.type === 'bundle') {
+        const bundle = itemObj.item as BundleItem;
+        bundleNameCounts.set(bundle.name, (bundleNameCounts.get(bundle.name) || 0) + 1);
+      }
+    });
+
+    return bundleNameCounts;
+  }
+
+  private getBundleDistributionKey(bundle: Pick<BundleItem, 'id'>): string {
+    return `bundle:${bundle.id}`;
+  }
+
+  private getItemDetails(
+    itemObj: DistributionItem,
+    caseOrderingMode: 'continuous' | 'alternating',
+    bundleNameCounts = new Map<string, number>()
+  ): {
+      itemVariables: VariableReference[];
+      itemKey: string;
+      itemLabel: string;
+      itemCaseOrderingMode: 'continuous' | 'alternating';
+    } {
+    if (itemObj.type === 'bundle') {
+      const bundleItem = itemObj.item as BundleItem;
+      return {
+        itemVariables: bundleItem.variables,
+        itemKey: this.getBundleDistributionKey(bundleItem),
+        itemLabel: (bundleNameCounts.get(bundleItem.name) || 0) > 1 ?
+          `${bundleItem.name} (#${bundleItem.id})` :
+          bundleItem.name,
+        itemCaseOrderingMode: bundleItem.caseOrderingMode || caseOrderingMode
+      };
+    }
+
+    const variableItem = itemObj.item as VariableReference;
+    return {
+      itemVariables: [variableItem],
+      itemKey: `${variableItem.unitName}::${variableItem.variableId}`,
+      itemLabel: `${variableItem.unitName}::${variableItem.variableId}`,
+      itemCaseOrderingMode: caseOrderingMode
+    };
+  }
+
+  private getVariableUsageRequestVariables(
+    request: DistributionVariableUsageRequest
+  ): VariableReference[] {
+    const caseOrderingMode = request.caseOrderingMode || 'continuous';
+    const items = this.buildDistributionItems(request);
+    const bundleNameCounts = this.getBundleNameCounts(items);
+
+    return items.flatMap(
+      itemObj => this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts).itemVariables
+    );
+  }
+
+  private deduplicateVariableReferences(variables: VariableReference[]): VariableReference[] {
+    const uniqueVariables = new Map<string, VariableReference>();
+
+    variables.forEach(variable => {
+      uniqueVariables.set(`${variable.unitName}::${variable.variableId}`, variable);
+    });
+
+    return Array.from(uniqueVariables.values());
+  }
+
+  private buildDerivedVariableSets(
+    derivedVariableMap: Map<string, Set<string>>
+  ): Map<string, Set<string>> {
     const derivedVariableSets = new Map<string, Set<string>>();
     derivedVariableMap.forEach((vars, unitNameKey) => {
       derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
     });
-    const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
+
+    return derivedVariableSets;
+  }
+
+  private isDerivedVariable(
+    derivedVariableSets: Map<string, Set<string>>,
+    unitName: string,
+    variableId: string
+  ): boolean {
+    return derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
+  }
+
+  private selectCasesWithGlobalCap(
+    planItems: DistributionPlanItem[],
+    maxCodingCases?: number
+  ): { item: DistributionPlanItem; response: SlimResponse }[] {
+    const totalAvailable = planItems.reduce((sum, item) => sum + item.availableResponses.length, 0);
+    const targetCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ?
+      Math.min(maxCodingCases, totalAvailable) :
+      totalAvailable;
+    const queues = planItems.map(item => ({
+      item,
+      responses: [...item.availableResponses]
+    }));
+    const selected: { item: DistributionPlanItem; response: SlimResponse }[] = [];
+    const selectedResponseIds = new Set<number>();
+
+    while (selected.length < targetCases) {
+      let progressed = false;
+
+      for (const queue of queues) {
+        if (selected.length >= targetCases) {
+          break;
+        }
+
+        while (queue.responses.length > 0) {
+          const response = queue.responses.shift();
+          if (!response || selectedResponseIds.has(response.id)) {
+            continue;
+          }
+
+          selected.push({ item: queue.item, response });
+          queue.item.selectedResponses.push(response);
+          selectedResponseIds.add(response.id);
+          progressed = true;
+          break;
+        }
+      }
+
+      if (!progressed) {
+        break;
+      }
+    }
+
+    return selected;
+  }
+
+  private getDoubleCodingCount(
+    request: DistributionPlanRequest,
+    totalCases: number
+  ): number {
+    const doubleCodingAbsolute = Number(request.doubleCodingAbsolute || 0);
+    const doubleCodingPercentage = Number(request.doubleCodingPercentage || 0);
+
+    if (doubleCodingAbsolute > 0 && doubleCodingPercentage > 0) {
+      throw new BadRequestException('Use either doubleCodingAbsolute or doubleCodingPercentage, not both.');
+    }
+
+    if (doubleCodingAbsolute > 0) {
+      return Math.min(doubleCodingAbsolute, totalCases);
+    }
+
+    if (doubleCodingPercentage > 0) {
+      return Math.min(Math.floor((doubleCodingPercentage / 100) * totalCases), totalCases);
+    }
+
+    return 0;
+  }
+
+  private getCoderLoadRatio(
+    coder: NormalizedDistributionCoder,
+    load: { tasks: number; doubleTasks: number }
+  ): number {
+    return load.tasks / coder.weight;
+  }
+
+  private chooseSingleCoder(
+    coders: NormalizedDistributionCoder[],
+    coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
+    seed: string,
+    response: SlimResponse
+  ): NormalizedDistributionCoder {
+    return [...coders].sort((a, b) => {
+      const loadA = coderLoads.get(a.id) || { tasks: 0, doubleTasks: 0 };
+      const loadB = coderLoads.get(b.id) || { tasks: 0, doubleTasks: 0 };
+      const ratioA = this.getCoderLoadRatio(a, loadA);
+      const ratioB = this.getCoderLoadRatio(b, loadB);
+      const tieA = this.stableHash(`${seed}:single:${response.id}:${a.id}`);
+      const tieB = this.stableHash(`${seed}:single:${response.id}:${b.id}`);
+
+      return ratioA - ratioB ||
+        loadA.tasks - loadB.tasks ||
+        tieA - tieB ||
+        a.tieBreaker - b.tieBreaker;
+    })[0];
+  }
+
+  private getCoderCombinations(
+    coders: NormalizedDistributionCoder[],
+    size: number,
+    startIndex = 0,
+    prefix: NormalizedDistributionCoder[] = []
+  ): NormalizedDistributionCoder[][] {
+    if (prefix.length === size) {
+      return [prefix];
+    }
+
+    const combinations: NormalizedDistributionCoder[][] = [];
+
+    for (let i = startIndex; i < coders.length; i += 1) {
+      combinations.push(...this.getCoderCombinations(coders, size, i + 1, [...prefix, coders[i]]));
+    }
+
+    return combinations;
+  }
+
+  private chooseDoubleCodingCoders(
+    coderCombinations: NormalizedDistributionCoder[][],
+    coderLoads: Map<number, { tasks: number; doubleTasks: number }>,
+    pairCounts: Map<string, number>,
+    seed: string,
+    response: SlimResponse
+  ): NormalizedDistributionCoder[] {
+    return [...coderCombinations].sort((a, b) => {
+      const score = (combination: NormalizedDistributionCoder[]) => {
+        const projectedRatios = combination.map(coder => {
+          const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
+          return (load.tasks + 1) / coder.weight;
+        });
+        const projectedDoubleRatios = combination.map(coder => {
+          const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
+          return (load.doubleTasks + 1) / coder.weight;
+        });
+        const pairKey = combination.map(coder => coder.id).sort((x, y) => x - y).join('-');
+
+        return {
+          maxLoad: Math.max(...projectedRatios),
+          totalLoad: projectedRatios.reduce((sum, value) => sum + value, 0),
+          maxDoubleLoad: Math.max(...projectedDoubleRatios),
+          pairCount: pairCounts.get(pairKey) || 0,
+          tie: this.stableHash(`${seed}:double:${response.id}:${pairKey}`)
+        };
+      };
+      const scoreA = score(a);
+      const scoreB = score(b);
+
+      return scoreA.maxLoad - scoreB.maxLoad ||
+        scoreA.pairCount - scoreB.pairCount ||
+        scoreA.maxDoubleLoad - scoreB.maxDoubleLoad ||
+        scoreA.totalLoad - scoreB.totalLoad ||
+        scoreA.tie - scoreB.tie;
+    })[0];
+  }
+
+  private buildEmptyDoubleCodingInfo(coders: NormalizedDistributionCoder[]): DistributionDoubleCodingInfo {
+    const doubleCodedCasesPerCoder: Record<string, number> = {};
+
+    coders.forEach(coder => {
+      if (isSafeKey(coder.displayKey)) {
+        doubleCodedCasesPerCoder[coder.displayKey] = 0;
+      }
+    });
+
+    return {
+      totalCases: 0,
+      distinctCases: 0,
+      codingTasksTotal: 0,
+      doubleCodedCases: 0,
+      singleCodedCasesAssigned: 0,
+      doubleCodedCasesPerCoder
+    };
+  }
+
+  private async buildDistributionPlan(
+    workspaceId: number,
+    request: DistributionPlanRequest
+  ): Promise<DistributionPlan> {
+    const caseOrderingMode = request.caseOrderingMode || 'continuous';
+    const distributionSeed = this.getDistributionSeed(workspaceId, request);
+    const coders = this.normalizeDistributionCoders(request.selectedCoders, distributionSeed);
+    const codersPerDoubleCodedCase = 2;
+
+    const items = this.buildDistributionItems(request);
+    const bundleNameCounts = this.getBundleNameCounts(items);
+
+    if (items.length === 0) {
+      return {
+        distribution: {},
+        distributionByCoderId: {},
+        doubleCodingInfo: {},
+        aggregationInfo: {},
+        matchingFlags: [],
+        warnings: [],
+        jobsToCreate: [],
+        plannedCases: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {}
+      };
+    }
+
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
+    const derivedVariableSets = this.buildDerivedVariableSets(derivedVariableMap);
+    const isDerivedVariable = (unitName: string, variableId: string): boolean => this.isDerivedVariable(
+      derivedVariableSets,
+      unitName,
+      variableId
+    );
+
+    const allVariables = items.flatMap(
+      itemObj => this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts).itemVariables
+    );
+    const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
+    const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, allVariables);
+    const warnings: JobCreationWarning[] = [];
+    const warnedVariables = new Set<string>();
 
     for (const variable of allVariables) {
+      const variableKey = `${variable.unitName}::${variable.variableId}`;
+      if (warnedVariables.has(variableKey)) {
+        continue;
+      }
+
+      warnedVariables.add(variableKey);
       const variableResponses = allResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId);
       const warning = this.buildAvailabilityWarning(
         variable,
@@ -2338,29 +2818,26 @@ export class CodingJobService {
       }
     }
 
-    const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
+    const planItems: DistributionPlanItem[] = [];
+    const distribution: Record<string, Record<string, number>> = {};
+    const distributionByCoderId: Record<string, Record<string, number>> = {};
+    const doubleCodingInfo: Record<string, DistributionDoubleCodingInfo> = {};
+    const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
 
     for (const itemObj of items) {
-      let itemVariables: { unitName: string; variableId: string }[];
-      let itemKey = '';
-      let itemCaseOrderingMode: 'continuous' | 'alternating';
+      const {
+        itemVariables,
+        itemKey,
+        itemLabel,
+        itemCaseOrderingMode
+      } = this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts);
 
-      if (itemObj.type === 'bundle') {
-        const bundleItem = itemObj.item as BundleItem;
-        itemVariables = bundleItem.variables;
-        itemKey = bundleItem.name;
-        // Use bundle-specific caseOrderingMode if available, otherwise use global
-        itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
-      } else {
-        const variableItem = itemObj.item as VariableReference;
-        itemVariables = [variableItem];
-        itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
-        itemCaseOrderingMode = caseOrderingMode;
+      if (!isSafeKey(itemKey)) {
+        continue;
       }
 
       const allItemResponses = allResponses.filter(response => itemVariables.some(v => v.unitName === response.unitName && v.variableId === response.variableid)
       );
-
       const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
         allItemResponses,
         assignedResponseIds,
@@ -2368,165 +2845,367 @@ export class CodingJobService {
         aggregationThreshold,
         response => isDerivedVariable(response.unitName, response.variableid)
       );
+      const availableResponses = this.sortResponsesForDistribution(
+        filteredResponses,
+        itemCaseOrderingMode,
+        distributionSeed,
+        itemKey
+      );
+      const planItem: DistributionPlanItem = {
+        type: itemObj.type,
+        item: itemObj.item,
+        itemKey,
+        itemLabel,
+        itemVariables,
+        itemCaseOrderingMode,
+        uniqueCases,
+        totalResponses,
+        availableResponses,
+        selectedResponses: []
+      };
 
+      planItems.push(planItem);
       aggregationInfo[itemKey] = {
         uniqueCases,
         totalResponses
       };
-
-      // Use unique cases count for distribution when aggregating
-      const totalCases = uniqueCases;
-
-      if (!isSafeKey(itemKey)) continue;
       distribution[itemKey] = {};
-      doubleCodingInfo[itemKey] = {
-        totalCases: totalCases,
-        doubleCodedCases: 0,
-        singleCodedCasesAssigned: 0,
-        doubleCodedCasesPerCoder: {}
-      };
+      distributionByCoderId[itemKey] = {};
+      doubleCodingInfo[itemKey] = this.buildEmptyDoubleCodingInfo(coders);
 
-      if (totalCases === 0) {
-        sortedCoders.forEach(coder => {
-          if (isSafeKey(coder.name)) {
-            distribution[itemKey][coder.name] = 0;
-          }
-        });
+      for (const coder of coders) {
+        if (isSafeKey(coder.displayKey)) {
+          distribution[itemKey][coder.displayKey] = 0;
+        }
+        distributionByCoderId[itemKey][String(coder.id)] = 0;
+      }
+    }
+
+    const selectedCases = this.selectCasesWithGlobalCap(planItems, request.maxCodingCases);
+    const doubleCodingCount = this.getDoubleCodingCount(request, selectedCases.length);
+
+    if (doubleCodingCount > 0 && coders.length < codersPerDoubleCodedCase) {
+      throw new BadRequestException(
+        `Double coding requires at least ${codersPerDoubleCodedCase} selected coders.`
+      );
+    }
+
+    const coderLoads = new Map<number, { tasks: number; doubleTasks: number }>(
+      coders.map(coder => [coder.id, { tasks: 0, doubleTasks: 0 }])
+    );
+    const pairCounts = new Map<string, number>();
+    const coderById = new Map(coders.map(coder => [coder.id, coder]));
+    const jobsByItemAndCoder = new Map<string, Map<number, SlimResponse[]>>();
+    const plannedCases: DistributionPlanCase[] = [];
+    const doubleCodingCoderCombinations = doubleCodingCount > 0 ?
+      this.getCoderCombinations(coders, codersPerDoubleCodedCase) :
+      [];
+
+    selectedCases.forEach((selectedCase, index) => {
+      const isDoubleCoded = index < doubleCodingCount;
+      const assignedCoders = isDoubleCoded ?
+        this.chooseDoubleCodingCoders(
+          doubleCodingCoderCombinations,
+          coderLoads,
+          pairCounts,
+          distributionSeed,
+          selectedCase.response
+        ) :
+        [this.chooseSingleCoder(coders, coderLoads, distributionSeed, selectedCase.response)];
+      const assignedCoderIds = assignedCoders.map(coder => coder.id);
+
+      if (isDoubleCoded) {
+        const pairKey = [...assignedCoderIds].sort((a, b) => a - b).join('-');
+        pairCounts.set(pairKey, (pairCounts.get(pairKey) || 0) + 1);
+      }
+
+      assignedCoders.forEach(coder => {
+        const load = coderLoads.get(coder.id) || { tasks: 0, doubleTasks: 0 };
+        load.tasks += 1;
+        if (isDoubleCoded) {
+          load.doubleTasks += 1;
+        }
+        coderLoads.set(coder.id, load);
+
+        if (isSafeKey(coder.displayKey)) {
+          distribution[selectedCase.item.itemKey][coder.displayKey] += 1;
+        }
+        distributionByCoderId[selectedCase.item.itemKey][String(coder.id)] += 1;
+        if (isDoubleCoded && isSafeKey(coder.displayKey)) {
+          doubleCodingInfo[selectedCase.item.itemKey].doubleCodedCasesPerCoder[coder.displayKey] += 1;
+        }
+
+        const itemJobs = jobsByItemAndCoder.get(selectedCase.item.itemKey) || new Map<number, SlimResponse[]>();
+        const coderResponses = itemJobs.get(coder.id) || [];
+        coderResponses.push(selectedCase.response);
+        itemJobs.set(coder.id, coderResponses);
+        jobsByItemAndCoder.set(selectedCase.item.itemKey, itemJobs);
+      });
+
+      plannedCases.push({
+        item: selectedCase.item,
+        response: selectedCase.response,
+        isDoubleCoded,
+        assignedCoderIds
+      });
+    });
+
+    for (const planItem of planItems) {
+      const itemCases = plannedCases.filter(plannedCase => plannedCase.item.itemKey === planItem.itemKey);
+      const doubleCases = itemCases.filter(plannedCase => plannedCase.isDoubleCoded).length;
+      const singleCases = itemCases.length - doubleCases;
+      const codingTasksTotal = Object.values(distributionByCoderId[planItem.itemKey])
+        .reduce((sum, value) => sum + value, 0);
+
+      doubleCodingInfo[planItem.itemKey].distinctCases = itemCases.length;
+      doubleCodingInfo[planItem.itemKey].codingTasksTotal = codingTasksTotal;
+      doubleCodingInfo[planItem.itemKey].totalCases = codingTasksTotal;
+      doubleCodingInfo[planItem.itemKey].doubleCodedCases = doubleCases;
+      doubleCodingInfo[planItem.itemKey].singleCodedCasesAssigned = singleCases;
+    }
+
+    const jobsToCreate: DistributionPlanJob[] = [];
+    for (const planItem of planItems) {
+      const itemJobs = jobsByItemAndCoder.get(planItem.itemKey);
+      if (!itemJobs) {
         continue;
       }
 
-      // Calculate distinct quota for this item to ensure equal distribution
-      let itemQuota;
-      if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-        const itemsCount = items.length;
-        const baseQuota = Math.floor(maxCodingCases / itemsCount);
-        const remainder = maxCodingCases % itemsCount;
-        // Distribute remainder to the first few items
-        // We need the index of the current item in the items array
-        const currentIndex = items.indexOf(itemObj);
-        itemQuota = baseQuota + (currentIndex < remainder ? 1 : 0);
-      }
-
-      let doubleCodingCount = 0;
-      if (doubleCodingAbsolute && doubleCodingAbsolute > 0) {
-        doubleCodingCount = Math.min(doubleCodingAbsolute, totalCases);
-      } else if (doubleCodingPercentage && doubleCodingPercentage > 0) {
-        doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
-      }
-
-      // Apply item quota to double coding count if defined
-      if (itemQuota !== undefined) {
-        doubleCodingCount = Math.min(doubleCodingCount, itemQuota);
-      }
-
-      const sortedResponses = [...filteredResponses].sort((a, b) => {
-        if (itemCaseOrderingMode === 'alternating') {
-          if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
-          if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
-          if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
-          if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
-          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-          if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-          return a.id - b.id;
-        }
-        if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-        if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-        if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
-        if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
-        if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
-        if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
-        return a.id - b.id;
-      });
-      const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
-      const singleCodingResponses = sortedResponses.slice(doubleCodingCount);
-
-      // Update remaining quota to account for double coding cases
-      let remainingItemQuota = itemQuota;
-      if (remainingItemQuota !== undefined) {
-        remainingItemQuota -= doubleCodingCount;
-      }
-
-      doubleCodingInfo[itemKey].doubleCodedCases = doubleCodingCount;
-
-      // Calculate actual single coding cases after quota cap
-      let actualSingleCodingCases = singleCodingResponses.length;
-      if (remainingItemQuota !== undefined && remainingItemQuota < actualSingleCodingCases) {
-        actualSingleCodingCases = remainingItemQuota;
-      }
-      doubleCodingInfo[itemKey].singleCodedCasesAssigned = actualSingleCodingCases;
-
-      sortedCoders.forEach(coder => {
-        if (isSafeKey(coder.name)) {
-          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
-        }
-      });
-
-      const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
-        doubleCodingResponses,
-        sortedCoders
-      );
-      for (const { coders: assignedCoders } of doubleCodingAssignments) {
-        for (const coder of assignedCoders) {
-          doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
+      for (const [coderId, unitSubset] of itemJobs.entries()) {
+        const coder = coderById.get(coderId);
+        if (coder && unitSubset.length > 0) {
+          jobsToCreate.push({
+            coder,
+            item: planItem,
+            unitSubset
+          });
         }
       }
-
-      const effectiveSingleCodingResponses = remainingItemQuota !== undefined ?
-        singleCodingResponses.slice(0, Math.max(0, remainingItemQuota)) :
-        singleCodingResponses;
-
-      const effectiveResponses = [...doubleCodingResponses, ...effectiveSingleCodingResponses];
-
-      const caseDistribution = this.distributeCasesForVariable(
-        effectiveResponses,
-        doubleCodingResponses,
-        sortedCoders
-      );
-
-      for (let i = 0; i < sortedCoders.length; i++) {
-        const coder = sortedCoders[i];
-        const coderCases = caseDistribution[i];
-
-        if (isSafeKey(coder.name)) {
-          distribution[itemKey][coder.name] = coderCases.length;
-        }
-      }
-
-      // After applying the global cap, update totalCases in the doubleCodingInfo
-      // so that the summary reflects the actually distributed (capped) cases
-      doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey]).reduce((sum, value) => sum + value, 0);
     }
 
+    const tasksPerCoder: Record<string, number> = {};
+    const coderWeights: Record<string, number> = {};
+    coders.forEach(coder => {
+      tasksPerCoder[String(coder.id)] = coderLoads.get(coder.id)?.tasks || 0;
+      coderWeights[String(coder.id)] = coder.weight;
+    });
+
     return {
-      distribution, doubleCodingInfo, aggregationInfo, matchingFlags, warnings
+      distribution,
+      distributionByCoderId,
+      doubleCodingInfo,
+      aggregationInfo,
+      matchingFlags,
+      warnings,
+      jobsToCreate,
+      plannedCases,
+      pairDistribution: Object.fromEntries(pairCounts.entries()),
+      tasksPerCoder,
+      coderWeights
+    };
+  }
+
+  async calculateDistributionVariableUsage(
+    workspaceId: number,
+    request: DistributionVariableUsageRequest
+  ): Promise<Map<string, number>> {
+    const context = await this.createDistributionVariableUsageContext(workspaceId, [request]);
+    return this.calculateDistributionVariableUsageFromContext(workspaceId, request, context);
+  }
+
+  async calculateDistributionVariableUsageBatch(
+    workspaceId: number,
+    requests: DistributionVariableUsageBatchRequest[]
+  ): Promise<Map<string | number, Map<string, number>>> {
+    const usageByRequestKey = new Map<string | number, Map<string, number>>();
+
+    if (requests.length === 0) {
+      return usageByRequestKey;
+    }
+
+    const context = await this.createDistributionVariableUsageContext(workspaceId, requests);
+    requests.forEach(request => {
+      usageByRequestKey.set(
+        request.key,
+        this.calculateDistributionVariableUsageFromContext(workspaceId, request, context)
+      );
+    });
+
+    return usageByRequestKey;
+  }
+
+  private async createDistributionVariableUsageContext(
+    workspaceId: number,
+    requests: DistributionVariableUsageRequest[]
+  ): Promise<DistributionVariableUsageContext> {
+    const allVariables = this.deduplicateVariableReferences(
+      requests.flatMap(request => this.getVariableUsageRequestVariables(request))
+    );
+
+    if (allVariables.length === 0) {
+      return {
+        matchingFlags: [],
+        aggregationThreshold: null,
+        derivedVariableSets: new Map(),
+        allResponses: [],
+        assignedResponseIds: new Set()
+      };
+    }
+
+    const [
+      matchingFlags,
+      aggregationThreshold,
+      derivedVariableMap,
+      allResponses,
+      assignedResponseIds
+    ] = await Promise.all([
+      this.getResponseMatchingMode(workspaceId),
+      this.getAggregationThreshold(workspaceId),
+      this.workspaceFilesService.getDerivedVariableMap(workspaceId),
+      this.getSlimResponsesForVariables(workspaceId, allVariables),
+      this.getAssignedResponseIdsForVariables(workspaceId, allVariables)
+    ]);
+
+    return {
+      matchingFlags,
+      aggregationThreshold,
+      derivedVariableSets: this.buildDerivedVariableSets(derivedVariableMap),
+      allResponses,
+      assignedResponseIds
+    };
+  }
+
+  private calculateDistributionVariableUsageFromContext(
+    workspaceId: number,
+    request: DistributionVariableUsageRequest,
+    context: DistributionVariableUsageContext
+  ): Map<string, number> {
+    const caseOrderingMode = request.caseOrderingMode || 'continuous';
+    const distributionSeed = this.getDistributionSeed(workspaceId, request);
+    const items = this.buildDistributionItems(request);
+    const bundleNameCounts = this.getBundleNameCounts(items);
+
+    if (items.length === 0) {
+      return new Map();
+    }
+
+    const isDerivedVariable = (unitName: string, variableId: string): boolean => this.isDerivedVariable(
+      context.derivedVariableSets,
+      unitName,
+      variableId
+    );
+    const planItems: DistributionPlanItem[] = [];
+
+    for (const itemObj of items) {
+      const {
+        itemVariables,
+        itemKey,
+        itemLabel,
+        itemCaseOrderingMode
+      } = this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts);
+
+      if (!isSafeKey(itemKey)) {
+        continue;
+      }
+
+      const allItemResponses = context.allResponses.filter(response => itemVariables.some(v => (
+        v.unitName === response.unitName &&
+        v.variableId === response.variableid
+      )));
+      const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
+        allItemResponses,
+        context.assignedResponseIds,
+        context.matchingFlags,
+        context.aggregationThreshold,
+        response => isDerivedVariable(response.unitName, response.variableid)
+      );
+      const availableResponses = this.sortResponsesForDistribution(
+        filteredResponses,
+        itemCaseOrderingMode,
+        distributionSeed,
+        itemKey
+      );
+
+      planItems.push({
+        type: itemObj.type,
+        item: itemObj.item,
+        itemKey,
+        itemLabel,
+        itemVariables,
+        itemCaseOrderingMode,
+        uniqueCases,
+        totalResponses,
+        availableResponses,
+        selectedResponses: []
+      });
+    }
+
+    const selectedCases = this.selectCasesWithGlobalCap(planItems, request.maxCodingCases);
+    const usageByVariable = new Map<string, number>();
+
+    selectedCases.forEach(({ response }) => {
+      const variableKey = `${response.unitName}::${response.variableid}`;
+      usageByVariable.set(variableKey, (usageByVariable.get(variableKey) || 0) + 1);
+    });
+
+    return usageByVariable;
+  }
+
+  async calculateDistribution(
+    workspaceId: number,
+    request: {
+      selectedVariables: { unitName: string; variableId: string }[];
+      selectedVariableBundles?: BundleItem[];
+      selectedCoders: DistributionCoderInput[];
+      doubleCodingAbsolute?: number;
+      doubleCodingPercentage?: number;
+      caseOrderingMode?: 'continuous' | 'alternating';
+      maxCodingCases?: number;
+      distributionSeed?: string | number;
+    }
+  ): Promise<{
+      distribution: Record<string, Record<string, number>>;
+      distributionByCoderId: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
+      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+      matchingFlags: ResponseMatchingFlag[];
+      warnings: JobCreationWarning[];
+      pairDistribution: Record<string, number>;
+      tasksPerCoder: Record<string, number>;
+      coderWeights: Record<string, number>;
+    }> {
+    const plan = await this.buildDistributionPlan(workspaceId, request);
+    return {
+      distribution: plan.distribution,
+      distributionByCoderId: plan.distributionByCoderId,
+      doubleCodingInfo: plan.doubleCodingInfo,
+      aggregationInfo: plan.aggregationInfo,
+      matchingFlags: plan.matchingFlags,
+      warnings: plan.warnings,
+      pairDistribution: plan.pairDistribution,
+      tasksPerCoder: plan.tasksPerCoder,
+      coderWeights: plan.coderWeights
     };
   }
 
   async createDistributedCodingJobs(
     workspaceId: number,
-    request: {
-      selectedVariables: { unitName: string; variableId: string }[];
-      selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
-      selectedCoders: { id: number; name: string; username: string }[];
-      doubleCodingAbsolute?: number;
-      doubleCodingPercentage?: number;
-      caseOrderingMode?: 'continuous' | 'alternating';
-      maxCodingCases?: number;
-      jobDefinitionId?: number;
-      showScore?: boolean;
-      allowComments?: boolean;
-      suppressGeneralInstructions?: boolean;
-    }
+    request: DistributionPlanRequest
   ): Promise<{
       success: boolean;
       jobsCreated: number;
       message: string;
       distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      distributionByCoderId: Record<string, Record<string, number>>;
+      doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: ResponseMatchingFlag[];
       warnings: JobCreationWarning[];
+      pairDistribution: Record<string, number>;
+      tasksPerCoder: Record<string, number>;
+      coderWeights: Record<string, number>;
       jobs: {
+        itemKey: string;
         coderId: number;
         coderName: string;
         variable: { unitName: string; variableId: string };
@@ -2537,16 +3216,8 @@ export class CodingJobService {
     }> {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
-    const {
-      selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, maxCodingCases, caseOrderingMode
-    } = request;
-
-    // We now use per-item quota instead of global decrementing cap
-    // let remainingCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ? maxCodingCases : undefined;
-    const distribution: Record<string, Record<string, number>> = {};
-    const doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }> = {};
-    const aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }> = {};
     const createdJobs: {
+      itemKey: string;
       coderId: number;
       coderName: string;
       variable: { unitName: string; variableId: string };
@@ -2554,262 +3225,11 @@ export class CodingJobService {
       jobName: string;
       caseCount: number;
     }[] = [];
-    const jobsToCreate: {
-      coderId: number;
-      coderName: string;
-      variable: { unitName: string; variableId: string };
-      jobName: string;
-      caseCount: number;
-      createCodingJobDto: InternalCreateCodingJobDto;
-      unitSubset: SlimResponse[];
-    }[] = [];
-    const warnings: JobCreationWarning[] = [];
-
-    // Get response matching mode for this workspace
-    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
 
     try {
-      // Determine items to process
-      const items: DistributionItem[] = [];
-      const allVariables: VariableReference[] = [];
+      const plan = await this.buildDistributionPlan(workspaceId, request);
 
-      if (request.selectedVariableBundles) {
-        for (const bundle of request.selectedVariableBundles) {
-          items.push({ type: 'bundle', item: bundle });
-          allVariables.push(...bundle.variables);
-        }
-      }
-
-      for (const variable of selectedVariables) {
-        items.push({ type: 'variable', item: variable });
-        allVariables.push(variable);
-      }
-
-      // Hoist aggregation threshold — same for all items in this workspace
-      const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
-
-      // Build derived variable lookup to skip aggregation for derived vars
-      const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
-      const derivedVariableSets = new Map<string, Set<string>>();
-      derivedVariableMap.forEach((vars, unitNameKey) => {
-        derivedVariableSets.set(unitNameKey.toUpperCase(), vars);
-      });
-      const isDerivedVariable = (unitName: string, variableId: string): boolean => derivedVariableSets.get(unitName.toUpperCase())?.has(variableId) ?? false;
-
-      // Sort coders alphabetically for deterministic distribution
-      const sortedCoders = [...selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
-
-      // Create distribution matrix and jobs with double coding support
-      for (const itemObj of items) {
-        let itemVariables: { unitName: string; variableId: string }[];
-        let itemKey = '';
-        let itemCaseOrderingMode: 'continuous' | 'alternating';
-
-        if (itemObj.type === 'bundle') {
-          const bundleItem = itemObj.item as BundleItem;
-          itemVariables = bundleItem.variables;
-          itemKey = bundleItem.name;
-          // Use bundle-specific caseOrderingMode if available, otherwise use global
-          itemCaseOrderingMode = bundleItem.caseOrderingMode || caseOrderingMode;
-        } else {
-          const variableItem = itemObj.item as VariableReference;
-          itemVariables = [variableItem];
-          itemKey = `${variableItem.unitName}::${variableItem.variableId}`;
-          itemCaseOrderingMode = caseOrderingMode;
-        }
-
-        // Fetch responses only for this item to limit peak memory usage
-        const allItemResponses = await this.getSlimResponsesForVariables(workspaceId, itemVariables);
-        const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, itemVariables);
-
-        for (const variable of itemVariables) {
-          const variableResponses = allItemResponses.filter(r => r.unitName === variable.unitName && r.variableid === variable.variableId);
-          const warning = this.buildAvailabilityWarning(
-            variable,
-            variableResponses,
-            assignedResponseIds,
-            matchingFlags,
-            aggregationThreshold,
-            isDerivedVariable(variable.unitName, variable.variableId)
-          );
-
-          if (warning) {
-            warnings.push(warning);
-          }
-        }
-
-        const { filteredResponses, uniqueCases, totalResponses } = this.getDistributableResponses(
-          allItemResponses,
-          assignedResponseIds,
-          matchingFlags,
-          aggregationThreshold,
-          response => isDerivedVariable(response.unitName, response.variableid)
-        );
-
-        aggregationInfo[itemKey] = {
-          uniqueCases,
-          totalResponses
-        };
-
-        // Use unique cases count for distribution when aggregating
-        const totalCases = uniqueCases;
-
-        if (!isSafeKey(itemKey)) continue;
-        distribution[itemKey] = {};
-        doubleCodingInfo[itemKey] = {
-          totalCases: totalCases,
-          doubleCodedCases: 0,
-          singleCodedCasesAssigned: 0,
-          doubleCodedCasesPerCoder: {}
-        };
-
-        // Calculate distinct quota for this item to ensure equal distribution
-        let itemQuota;
-        if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-          const itemsCount = items.length;
-          const baseQuota = Math.floor(maxCodingCases / itemsCount);
-          const remainder = maxCodingCases % itemsCount;
-          // Distribute remainder to the first few items
-          // We need the index of the current item in the items array
-          const currentIndex = items.indexOf(itemObj);
-          itemQuota = baseQuota + (currentIndex < remainder ? 1 : 0);
-        }
-
-        if (totalCases === 0) {
-          for (const coder of sortedCoders) {
-            if (isSafeKey(coder.name)) {
-              distribution[itemKey][coder.name] = 0;
-              doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
-            }
-          }
-          continue;
-        }
-
-        let doubleCodingCount = 0;
-        if (doubleCodingAbsolute && doubleCodingAbsolute > 0) {
-          doubleCodingCount = Math.min(doubleCodingAbsolute, totalCases);
-        } else if (doubleCodingPercentage && doubleCodingPercentage > 0) {
-          doubleCodingCount = Math.floor((doubleCodingPercentage / 100) * totalCases);
-        }
-
-        // Apply item quota to double coding count if defined
-        if (itemQuota !== undefined) {
-          doubleCodingCount = Math.min(doubleCodingCount, itemQuota);
-        }
-
-        const sortedResponses = [...filteredResponses].sort((a, b) => {
-          if (itemCaseOrderingMode === 'alternating') {
-            if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
-            if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
-            if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
-            if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
-            if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-            if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-            return a.id - b.id;
-          }
-          if (a.variableid !== b.variableid) return a.variableid.localeCompare(b.variableid);
-          if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-          if (a.personLogin !== b.personLogin) return a.personLogin.localeCompare(b.personLogin);
-          if (a.personCode !== b.personCode) return a.personCode.localeCompare(b.personCode);
-          if (a.personGroup !== b.personGroup) return a.personGroup.localeCompare(b.personGroup);
-          if (a.bookletName !== b.bookletName) return a.bookletName.localeCompare(b.bookletName);
-          return a.id - b.id;
-        });
-
-        const doubleCodingResponses = sortedResponses.slice(0, doubleCodingCount);
-        const singleCodingResponses = sortedResponses.slice(doubleCodingCount);
-
-        // Update quota
-        let remainingItemQuota = itemQuota;
-        if (remainingItemQuota !== undefined) {
-          remainingItemQuota -= doubleCodingCount;
-        }
-
-        doubleCodingInfo[itemKey].doubleCodedCases = doubleCodingCount;
-
-        // Calculate actual single coding cases after cap
-        let actualSingleCodingCases = singleCodingResponses.length;
-        if (remainingItemQuota !== undefined && remainingItemQuota < actualSingleCodingCases) {
-          actualSingleCodingCases = remainingItemQuota;
-        }
-        doubleCodingInfo[itemKey].singleCodedCasesAssigned = actualSingleCodingCases;
-
-        // Prepare effective responses for distribution
-        const effectiveSingleCodingResponses = remainingItemQuota !== undefined ?
-          singleCodingResponses.slice(0, Math.max(0, remainingItemQuota)) :
-          singleCodingResponses;
-
-        const effectiveResponses = [...doubleCodingResponses, ...effectiveSingleCodingResponses];
-
-        sortedCoders.forEach(coder => {
-          if (isSafeKey(coder.name)) {
-            doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] = 0;
-          }
-        });
-
-        const caseDistribution = this.distributeCasesForVariable(
-          effectiveResponses,
-          doubleCodingResponses,
-          sortedCoders
-        );
-
-        const doubleCodingAssignments = this.distributeDoubleCodingEvenly(
-          doubleCodingResponses,
-          sortedCoders
-        );
-        for (const { coders: assignedCoders } of doubleCodingAssignments) {
-          for (const coder of assignedCoders) {
-            if (isSafeKey(coder.name)) {
-              doubleCodingInfo[itemKey].doubleCodedCasesPerCoder[coder.name] += 1;
-            }
-          }
-        }
-
-        for (let i = 0; i < sortedCoders.length; i++) {
-          const coder = sortedCoders[i];
-          const coderCases = caseDistribution[i];
-          const caseCountForCoder = coderCases.length;
-
-          if (isSafeKey(coder.name)) {
-            distribution[itemKey][coder.name] = caseCountForCoder;
-          }
-
-          if (caseCountForCoder > 0) {
-            const jobName = itemObj.type === 'bundle' ?
-              `Job ${itemKey} (${coder.name})` :
-              `Job ${(itemObj.item as { unitName: string }).unitName} - ${(itemObj.item as { variableId: string }).variableId} (${coder.name})`;
-
-            jobsToCreate.push({
-              coderId: coder.id,
-              coderName: coder.name,
-              variable: itemObj.type === 'bundle' ?
-                { unitName: itemKey, variableId: '' } :
-                { unitName: (itemObj.item as { unitName: string }).unitName, variableId: (itemObj.item as { variableId: string }).variableId },
-              jobName,
-              caseCount: caseCountForCoder,
-              createCodingJobDto: {
-                name: jobName,
-                assignedCoders: [coder.id],
-                caseOrderingMode: itemCaseOrderingMode,
-                jobDefinitionId: request.jobDefinitionId,
-                showScore: request.showScore,
-                allowComments: request.allowComments,
-                suppressGeneralInstructions: request.suppressGeneralInstructions,
-                ...(itemObj.type === 'bundle' ?
-                  { variableBundleIds: [(itemObj.item as { id: number }).id] } :
-                  { variables: itemVariables }
-                )
-              },
-              unitSubset: coderCases
-            });
-          }
-        }
-
-        doubleCodingInfo[itemKey].totalCases = Object.values(distribution[itemKey])
-          .reduce((sum, value) => sum + value, 0);
-      }
-
-      if (jobsToCreate.length > 0 || request.jobDefinitionId !== undefined) {
+      if (plan.jobsToCreate.length > 0 || request.jobDefinitionId !== undefined) {
         await this.connection.transaction(async manager => {
           await this.assertApprovedJobDefinitionHasNoCreatedJobs(
             manager,
@@ -2817,21 +3237,40 @@ export class CodingJobService {
             request.jobDefinitionId
           );
 
-          for (const job of jobsToCreate) {
+          for (const job of plan.jobsToCreate) {
+            const jobName = job.item.type === 'bundle' ?
+              `Job ${job.item.itemLabel} (${job.coder.name})` :
+              `Job ${(job.item.item as VariableReference).unitName} - ${(job.item.item as VariableReference).variableId} (${job.coder.name})`;
+            const createCodingJobDto: InternalCreateCodingJobDto = {
+              name: jobName,
+              assignedCoders: [job.coder.id],
+              caseOrderingMode: job.item.itemCaseOrderingMode,
+              jobDefinitionId: request.jobDefinitionId,
+              showScore: request.showScore,
+              allowComments: request.allowComments,
+              suppressGeneralInstructions: request.suppressGeneralInstructions,
+              ...(job.item.type === 'bundle' ?
+                { variableBundleIds: [(job.item.item as BundleItem).id] } :
+                { variables: job.item.itemVariables }
+              )
+            };
             const codingJob = await this.createCodingJobWithUnitSubsetInManager(
               workspaceId,
-              job.createCodingJobDto,
+              createCodingJobDto,
               job.unitSubset,
               manager
             );
 
             createdJobs.push({
-              coderId: job.coderId,
-              coderName: job.coderName,
-              variable: job.variable,
+              itemKey: job.item.itemKey,
+              coderId: job.coder.id,
+              coderName: job.coder.name,
+              variable: job.item.type === 'bundle' ?
+                { unitName: job.item.itemLabel, variableId: '' } :
+                { unitName: (job.item.item as VariableReference).unitName, variableId: (job.item.item as VariableReference).variableId },
               jobId: codingJob.id,
-              jobName: job.jobName,
-              caseCount: job.caseCount
+              jobName,
+              caseCount: job.unitSubset.length
             });
           }
         });
@@ -2843,11 +3282,15 @@ export class CodingJobService {
         success: true,
         jobsCreated: createdJobs.length,
         message: `Created ${createdJobs.length} distributed coding jobs`,
-        distribution,
-        doubleCodingInfo,
-        aggregationInfo,
-        matchingFlags,
-        warnings,
+        distribution: plan.distribution,
+        distributionByCoderId: plan.distributionByCoderId,
+        doubleCodingInfo: plan.doubleCodingInfo,
+        aggregationInfo: plan.aggregationInfo,
+        matchingFlags: plan.matchingFlags,
+        warnings: plan.warnings,
+        pairDistribution: plan.pairDistribution,
+        tasksPerCoder: plan.tasksPerCoder,
+        coderWeights: plan.coderWeights,
         jobs: createdJobs
       };
     } catch (error) {
@@ -2857,10 +3300,14 @@ export class CodingJobService {
         jobsCreated: 0,
         message: `Failed to create distributed jobs: ${error.message}`,
         distribution: {},
+        distributionByCoderId: {},
         doubleCodingInfo: {},
         aggregationInfo: {},
         matchingFlags: [],
         warnings: [],
+        pairDistribution: {},
+        tasksPerCoder: {},
+        coderWeights: {},
         jobs: []
       };
     }

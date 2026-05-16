@@ -24,6 +24,8 @@ describe('JobDefinitionService', () => {
   let codingJobService: {
     createCodingJob: jest.Mock;
     createDistributedCodingJobs: jest.Mock;
+    calculateDistributionVariableUsage: jest.Mock;
+    calculateDistributionVariableUsageBatch: jest.Mock;
     getCodingJobCountsByDefinitionIds: jest.Mock;
     getBlockingCodingJobCountsByDefinitionIds: jest.Mock;
   };
@@ -37,6 +39,8 @@ describe('JobDefinitionService', () => {
     codingJobService = {
       createCodingJob: jest.fn(),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
+      calculateDistributionVariableUsage: jest.fn(),
+      calculateDistributionVariableUsageBatch: jest.fn(),
       getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
       getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map())
     };
@@ -50,6 +54,116 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.find.mockResolvedValue([]);
     variableBundleRepository.find.mockResolvedValue([]);
     usersRepository.find.mockResolvedValue([]);
+    const calculateUsageForRequest = async (request: {
+      selectedVariableBundles?: {
+        variables?: { unitName: string; variableId: string }[];
+      }[];
+      selectedVariables?: { unitName: string; variableId: string }[];
+      maxCodingCases?: number;
+    }) => {
+      const incompleteVariables = await codingValidationService.getCodingIncompleteVariables() as Array<{
+        unitName: string;
+        variableId: string;
+        availableCases: number;
+      }>;
+      const availableCasesByVariable = new Map<string, number>(
+        incompleteVariables.map(variable => [
+          `${variable.unitName}::${variable.variableId}`,
+          variable.availableCases
+        ])
+      );
+      const addUsage = (
+        usageByVariable: Map<string, number>,
+        variable: { unitName: string; variableId: string },
+        usage: number
+      ) => {
+        const key = `${variable.unitName}::${variable.variableId}`;
+        usageByVariable.set(key, (usageByVariable.get(key) || 0) + usage);
+      };
+      const reserveAcrossVariables = (
+        usageByVariable: Map<string, number>,
+        variables: { unitName: string; variableId: string }[],
+        selectedCases: number
+      ) => {
+        const entries = variables
+          .map(variable => ({
+            variable,
+            availableCases: availableCasesByVariable.get(`${variable.unitName}::${variable.variableId}`) || 0,
+            usage: 0
+          }))
+          .filter(entry => entry.availableCases > 0);
+        let remainingCases = Math.min(
+          selectedCases,
+          entries.reduce((sum, entry) => sum + entry.availableCases, 0)
+        );
+
+        while (remainingCases > 0) {
+          const activeEntries = entries.filter(entry => entry.usage < entry.availableCases);
+          const share = Math.max(1, Math.floor(remainingCases / activeEntries.length));
+
+          for (const entry of activeEntries) {
+            if (remainingCases <= 0) break;
+            const assigned = Math.min(share, entry.availableCases - entry.usage, remainingCases);
+            entry.usage += assigned;
+            remainingCases -= assigned;
+          }
+        }
+
+        entries.forEach(entry => addUsage(usageByVariable, entry.variable, entry.usage));
+      };
+      const items = [
+        ...(request.selectedVariableBundles || []).map(bundle => ({
+          availableCases: (bundle.variables || []).reduce(
+            (sum, variable) => sum + (availableCasesByVariable.get(`${variable.unitName}::${variable.variableId}`) || 0),
+            0
+          ),
+          reserve: (usageByVariable: Map<string, number>, selectedCases: number) => reserveAcrossVariables(
+            usageByVariable,
+            bundle.variables || [],
+            selectedCases
+          )
+        })),
+        ...(request.selectedVariables || []).map(variable => ({
+          availableCases: availableCasesByVariable.get(`${variable.unitName}::${variable.variableId}`) || 0,
+          reserve: (usageByVariable: Map<string, number>, selectedCases: number) => addUsage(
+            usageByVariable,
+            variable,
+            Math.min(selectedCases, availableCasesByVariable.get(`${variable.unitName}::${variable.variableId}`) || 0)
+          )
+        }))
+      ].filter(item => item.availableCases > 0);
+      const maxCodingCases = request.maxCodingCases;
+      const selectedByItem = items.map(() => 0);
+      const remainingByItem = items.map(item => item.availableCases);
+      const targetCases = typeof maxCodingCases === 'number' && maxCodingCases > 0 ?
+        Math.min(maxCodingCases, remainingByItem.reduce((sum, availableCases) => sum + availableCases, 0)) :
+        remainingByItem.reduce((sum, availableCases) => sum + availableCases, 0);
+      let selectedCases = 0;
+
+      while (selectedCases < targetCases) {
+        for (let index = 0; index < items.length && selectedCases < targetCases; index += 1) {
+          if (remainingByItem[index] <= 0) continue;
+          remainingByItem[index] -= 1;
+          selectedByItem[index] += 1;
+          selectedCases += 1;
+        }
+      }
+
+      const usageByVariable = new Map<string, number>();
+      items.forEach((item, index) => item.reserve(usageByVariable, selectedByItem[index]));
+      return usageByVariable;
+    };
+    codingJobService.calculateDistributionVariableUsage.mockImplementation(async (_workspaceId, request) => calculateUsageForRequest(request));
+    codingJobService.calculateDistributionVariableUsageBatch.mockImplementation(async (_workspaceId, requests) => {
+      const usageByKey = new Map();
+      for (const request of requests) {
+        usageByKey.set(
+          request.key,
+          await calculateUsageForRequest(request)
+        );
+      }
+      return usageByKey;
+    });
 
     service = new JobDefinitionService(
       jobDefinitionRepository as never,
@@ -86,6 +200,88 @@ describe('JobDefinitionService', () => {
       assignedCoders: [1],
       doubleCodingPercentage: 101
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects double coding with fewer than two coders', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      doubleCodingAbsolute: 1
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('uses the persisted distribution seed when checking and saving new definitions', async () => {
+    const result = await service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 2
+    }, 7);
+
+    expect(result.distribution_seed).toMatch(/^job-definition:7:/);
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 2,
+        distributionSeed: result.distribution_seed
+      })
+    ]);
+  });
+
+  it('batches planned variable usage when checking conflicts', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 1,
+        case_ordering_mode: 'continuous',
+        distribution_seed: 'seed-1'
+      },
+      {
+        id: 2,
+        assigned_variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 1,
+        case_ordering_mode: 'alternating',
+        distribution_seed: 'seed-2'
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 1
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 1
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledTimes(1);
+    expect(codingJobService.calculateDistributionVariableUsage).not.toHaveBeenCalled();
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 1
+      }),
+      expect.objectContaining({
+        key: 1,
+        selectedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        caseOrderingMode: 'continuous',
+        maxCodingCases: 1,
+        jobDefinitionId: 1,
+        distributionSeed: 'seed-1'
+      }),
+      expect.objectContaining({
+        key: 2,
+        selectedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        caseOrderingMode: 'alternating',
+        maxCodingCases: 1,
+        jobDefinitionId: 2,
+        distributionSeed: 'seed-2'
+      })
+    ]);
   });
 
   it('rejects variables whose available cases are already reserved by another definition', async () => {
@@ -158,7 +354,7 @@ describe('JobDefinitionService', () => {
     });
   });
 
-  it('rejects overlapping variable definitions when a capped bundle could consume the same variable', async () => {
+  it('allows overlapping variable definitions when precise bundle reservation leaves enough cases', async () => {
     codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
       { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 10 },
       { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 10 }
@@ -186,7 +382,128 @@ describe('JobDefinitionService', () => {
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
       assignedCoders: [1],
       maxCodingCases: 6
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 6
+    });
+  });
+
+  it('rejects overlapping variable definitions when precise bundle reservation leaves too few cases', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 10 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 10 }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [],
+        assigned_variable_bundles: [{ id: 9, name: 'Bundle' }],
+        max_coding_cases: 5
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 8
     }, 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('does not reserve the full global bundle cap against every bundle variable', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 100 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 100 }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [],
+        assigned_variable_bundles: [{ id: 9, name: 'Bundle' }],
+        max_coding_cases: 50
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 75
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 75
+    });
+  });
+
+  it('uses planned bundle variable usage when checking conflicts', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 10 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 10 }
+    ]);
+    variableBundleRepository.find.mockResolvedValue([
+      {
+        id: 9,
+        name: 'Bundle',
+        variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ]
+      }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [],
+        assigned_variable_bundles: [{ id: 9, name: 'Bundle' }],
+        max_coding_cases: 6
+      }
+    ]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map<string | number, Map<string, number>>([
+      ['requested', new Map([['Unit 1::Var 1', 6]])],
+      [1, new Map([['Unit 1::Var 1', 5], ['Unit 2::Var 2', 1]])]
+    ]));
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 6
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }),
+      expect.objectContaining({
+        key: 1,
+        selectedVariableBundles: [expect.objectContaining({
+          id: 9,
+          variables: [
+            { unitName: 'Unit 1', variableId: 'Var 1' },
+            { unitName: 'Unit 2', variableId: 'Var 2' }
+          ]
+        })],
+        jobDefinitionId: 1
+      })
+    ]);
   });
 
   it('allows split definitions on the same variable when the requested cap fits the remaining cases', async () => {
@@ -209,6 +526,61 @@ describe('JobDefinitionService', () => {
     });
   });
 
+  it('does not reserve planned cases again for definitions that already have created jobs', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 5 }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 5
+      }
+    ]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map([[1, 1]]));
+    codingJobService.calculateDistributionVariableUsageBatch.mockClear();
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [1],
+      maxCodingCases: 5
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      max_coding_cases: 5
+    });
+
+    expect(codingJobService.getCodingJobCountsByDefinitionIds).toHaveBeenCalledWith(7, [1]);
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledTimes(1);
+    expect(codingJobService.calculateDistributionVariableUsageBatch.mock.calls[0][1].some(
+      (usageRequest: { jobDefinitionId?: number }) => usageRequest.jobDefinitionId === 1
+    )).toBe(false);
+  });
+
+  it('reserves global maxCodingCases across uneven variable items', async () => {
+    codingValidationService.getCodingIncompleteVariables.mockResolvedValue([
+      { unitName: 'Unit 1', variableId: 'Var 1', availableCases: 1 },
+      { unitName: 'Unit 2', variableId: 'Var 2', availableCases: 100 }
+    ]);
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 1,
+        assigned_variables: [
+          { unitName: 'Unit 1', variableId: 'Var 1' },
+          { unitName: 'Unit 2', variableId: 'Var 2' }
+        ],
+        assigned_variable_bundles: [],
+        max_coding_cases: 50
+      }
+    ]);
+
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+      assignedCoders: [1],
+      maxCodingCases: 60
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
   it('persists coding display options on job definitions', async () => {
     await expect(service.createJobDefinition({
       assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
@@ -222,6 +594,97 @@ describe('JobDefinitionService', () => {
       allow_comments: false,
       suppress_general_instructions: true
     });
+  });
+
+  it('persists coder capacity configs and derives assigned coder ids from them', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoders: [99],
+      assignedCoderConfigs: [
+        { coderId: 1, capacityPercent: 50 },
+        { coderId: 2, capacityPercent: 150 }
+      ]
+    }, 7)).resolves.toMatchObject({
+      workspace_id: 7,
+      assigned_coders: [1, 2],
+      assigned_coder_configs: [
+        { coderId: 1, capacityPercent: 50 },
+        { coderId: 2, capacityPercent: 150 }
+      ]
+    });
+  });
+
+  it('preserves existing coder capacities when only assigned coder ids are updated', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'draft',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1, 2],
+      assigned_coder_configs: [
+        { coderId: 1, capacityPercent: 50 },
+        { coderId: 2, capacityPercent: 150 }
+      ],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+
+    await expect(service.updateJobDefinition(2, {
+      assignedCoders: [2, 3]
+    })).resolves.toMatchObject({
+      id: 2,
+      assigned_coders: [2, 3],
+      assigned_coder_configs: [
+        { coderId: 2, capacityPercent: 150 },
+        { coderId: 3, capacityPercent: 100 }
+      ]
+    });
+  });
+
+  it('checks conflicts with the next caseOrderingMode when only ordering changes', async () => {
+    const existingDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'draft',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 5,
+      case_ordering_mode: 'continuous',
+      distribution_seed: 'seed-2'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
+    jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
+    codingJobService.calculateDistributionVariableUsageBatch.mockClear();
+
+    await service.updateJobDefinition(2, {
+      caseOrderingMode: 'alternating'
+    });
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 'requested',
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        caseOrderingMode: 'alternating',
+        maxCodingCases: 5,
+        jobDefinitionId: 2,
+        distributionSeed: 'seed-2'
+      })
+    ]);
+  });
+
+  it('rejects invalid coder capacity configs', async () => {
+    await expect(service.createJobDefinition({
+      assignedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assignedCoderConfigs: [{ coderId: 1, capacityPercent: 0 }]
+    }, 7)).rejects.toBeInstanceOf(BadRequestException);
   });
 
   it('updates coding display options on job definitions', async () => {
@@ -346,6 +809,93 @@ describe('JobDefinitionService', () => {
         openCreatedJobsCount: 0,
         open_created_jobs_count: 0
       })
+    ]);
+  });
+
+  it('attaches planned variable usage for listed definitions without created jobs', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 4,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 2,
+        case_ordering_mode: 'continuous',
+        distribution_seed: 'seed-4'
+      }
+    ]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      [4, new Map([['Unit 1::Var 1', 2]])]
+    ]));
+
+    const result = await service.getJobDefinitions(7);
+
+    expect(result[0]).toMatchObject({
+      id: 4,
+      plannedVariableUsage: { 'Unit 1::Var 1': 2 },
+      planned_variable_usage: { 'Unit 1::Var 1': 2 }
+    });
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 4,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        maxCodingCases: 2,
+        caseOrderingMode: 'continuous',
+        jobDefinitionId: 4,
+        distributionSeed: 'seed-4'
+      })
+    ]);
+  });
+
+  it('batches planned variable usage for listed definitions in the same workspace', async () => {
+    jobDefinitionRepository.find.mockResolvedValue([
+      {
+        id: 4,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 2,
+        case_ordering_mode: 'continuous',
+        distribution_seed: 'seed-4'
+      },
+      {
+        id: 5,
+        workspace_id: 7,
+        status: 'draft',
+        assigned_variables: [{ unitName: 'Unit 2', variableId: 'Var 2' }],
+        assigned_variable_bundles: [],
+        max_coding_cases: 3,
+        case_ordering_mode: 'alternating',
+        distribution_seed: 'seed-5'
+      }
+    ]);
+    codingJobService.getCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.getBlockingCodingJobCountsByDefinitionIds.mockResolvedValue(new Map());
+    codingJobService.calculateDistributionVariableUsageBatch.mockResolvedValueOnce(new Map([
+      [4, new Map([['Unit 1::Var 1', 2]])],
+      [5, new Map([['Unit 2::Var 2', 3]])]
+    ]));
+
+    const result = await service.getJobDefinitions(7);
+
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledTimes(1);
+    expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
+      expect.objectContaining({
+        key: 4,
+        selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }]
+      }),
+      expect.objectContaining({
+        key: 5,
+        selectedVariables: [{ unitName: 'Unit 2', variableId: 'Var 2' }]
+      })
+    ]);
+    expect(result.map(definition => definition.plannedVariableUsage)).toEqual([
+      { 'Unit 1::Var 1': 2 },
+      { 'Unit 2::Var 2': 3 }
     ]);
   });
 
@@ -476,6 +1026,11 @@ describe('JobDefinitionService', () => {
       double_coding_absolute: 2,
       double_coding_percentage: null,
       case_ordering_mode: 'continuous',
+      assigned_coder_configs: [
+        { coderId: 3, capacityPercent: 50 },
+        { coderId: 1, capacityPercent: 150 }
+      ],
+      distribution_seed: 'seed-12',
       show_score: true,
       allow_comments: false,
       suppress_general_instructions: true
@@ -512,14 +1067,19 @@ describe('JobDefinitionService', () => {
         caseOrderingMode: 'alternating'
       }],
       selectedCoders: [
-        { id: 3, name: 'Chris', username: 'Chris' },
-        { id: 1, name: 'Ada', username: 'Ada' }
+        {
+          id: 3, name: 'Chris', username: 'Chris', capacityPercent: 50
+        },
+        {
+          id: 1, name: 'Ada', username: 'Ada', capacityPercent: 150
+        }
       ],
       doubleCodingAbsolute: 2,
       doubleCodingPercentage: undefined,
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
       jobDefinitionId: 12,
+      distributionSeed: 'seed-12',
       showScore: true,
       allowComments: false,
       suppressGeneralInstructions: true
