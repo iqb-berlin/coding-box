@@ -5,6 +5,7 @@ import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
 import { CodingJobVariable } from '../../entities/coding-job-variable.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
+import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 
@@ -38,6 +39,7 @@ const createQueryBuilder = (result: unknown = []) => {
     'groupBy',
     'addGroupBy',
     'orderBy',
+    'setLock',
     'update',
     'set',
     'whereInIds'
@@ -46,6 +48,7 @@ const createQueryBuilder = (result: unknown = []) => {
   });
   qb.getMany = jest.fn().mockResolvedValue(result);
   qb.getRawMany = jest.fn().mockResolvedValue(result);
+  qb.getRawOne = jest.fn().mockResolvedValue(result);
   qb.getCount = jest.fn().mockResolvedValue(typeof result === 'number' ? result : 0);
   qb.execute = jest.fn().mockResolvedValue(result);
   return qb;
@@ -58,6 +61,7 @@ describe('CodingJobService', () => {
   let codingJobVariableRepository: ReturnType<typeof createRepo>;
   let codingJobVariableBundleRepository: ReturnType<typeof createRepo>;
   let codingJobUnitRepository: ReturnType<typeof createRepo>;
+  let jobDefinitionRepository: ReturnType<typeof createRepo>;
   let variableBundleRepository: ReturnType<typeof createRepo>;
   let responseRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
@@ -70,18 +74,21 @@ describe('CodingJobService', () => {
     codingJobVariableRepository = createRepo();
     codingJobVariableBundleRepository = createRepo();
     codingJobUnitRepository = createRepo();
+    jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
     responseRepository = createRepo();
     const fileUploadRepository = createRepo();
     settingRepository = createRepo();
     connection = {
       transaction: jest.fn(callback => callback({
+        query: jest.fn().mockResolvedValue([]),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === CodingJobCoder) return codingJobCoderRepository;
           if (entity === CodingJobVariable) return codingJobVariableRepository;
           if (entity === CodingJobVariableBundle) return codingJobVariableBundleRepository;
           if (entity === CodingJobUnit) return codingJobUnitRepository;
+          if (entity === JobDefinition) return jobDefinitionRepository;
           if (entity === VariableBundle) return variableBundleRepository;
           if (entity === ResponseEntity) return responseRepository;
           return createRepo();
@@ -89,6 +96,16 @@ describe('CodingJobService', () => {
       }))
     };
     cacheService = { delete: jest.fn().mockResolvedValue(undefined) };
+    jobDefinitionRepository.createQueryBuilder.mockReturnValue({
+      setLock: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getOne: jest.fn().mockResolvedValue({
+        id: 1,
+        workspace_id: 3,
+        status: 'approved'
+      })
+    });
     const workspaceExclusionService = {
       resolveExclusionsForQueries: jest.fn().mockResolvedValue({
         globalIgnoredUnits: [],
@@ -245,6 +262,284 @@ describe('CodingJobService', () => {
       'coding_job.status NOT IN (:...deleteReadyStatuses)',
       { deleteReadyStatuses: ['results_applied', 'review'] }
     );
+  });
+
+  it('counts task deltas for retained cases in job definition refresh previews', async () => {
+    jest.spyOn(
+      service as unknown as { buildDistributionPlan: jest.Mock },
+      'buildDistributionPlan'
+    ).mockResolvedValue({
+      plannedCases: [
+        { response: { id: 10 }, assignedCoderIds: [1, 2] },
+        { response: { id: 20 }, assignedCoderIds: [1] }
+      ],
+      jobsToCreate: [],
+      distribution: {},
+      distributionByCoderId: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {}
+    });
+
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        { responseId: 10, taskCount: '1' },
+        { responseId: 30, taskCount: '2' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder(0));
+    codingJobRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder({
+      existingJobsCount: '2',
+      staleJobsCount: '1'
+    }));
+
+    await expect(service.previewJobDefinitionRefresh(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [],
+      selectedCoders: []
+    })).resolves.toMatchObject({
+      retainedCases: 1,
+      addedCases: 1,
+      removedCases: 1,
+      addedCodingTasks: 2,
+      removedCodingTasks: 2,
+      canApply: true
+    });
+  });
+
+  it('blocks job definition refresh when any coding work exists, including excluded units', async () => {
+    jest.spyOn(
+      service as unknown as { buildDistributionPlan: jest.Mock },
+      'buildDistributionPlan'
+    ).mockResolvedValue({
+      plannedCases: [
+        { response: { id: 10 }, assignedCoderIds: [1] }
+      ],
+      jobsToCreate: [],
+      distribution: {},
+      distributionByCoderId: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {}
+    });
+    const applyExclusionsSpy = jest.spyOn(
+      service as unknown as {
+        applyCodingJobUnitExclusions: (...args: unknown[]) => Promise<void>;
+      },
+      'applyCodingJobUnitExclusions'
+    );
+
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        { responseId: 10, taskCount: '1' }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder(1));
+    codingJobRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder({
+      existingJobsCount: '1',
+      staleJobsCount: '1'
+    }));
+
+    await expect(service.previewJobDefinitionRefresh(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [],
+      selectedCoders: []
+    })).resolves.toMatchObject({
+      canApply: false,
+      blockingReason: expect.stringContaining('Kodierarbeit')
+    });
+    expect(applyExclusionsSpy.mock.calls.some(call => call[2] === 'jobDefinitionCodingWork'))
+      .toBe(false);
+  });
+
+  it('builds the refresh distribution plan inside the locked transaction context', async () => {
+    const callOrder: string[] = [];
+    const transactionManager = {
+      getRepository: jest.fn(),
+      query: jest.fn().mockImplementation(async () => {
+        callOrder.push('advisory-lock');
+      })
+    };
+    const plan = {
+      plannedCases: [],
+      jobsToCreate: [],
+      distribution: {},
+      distributionByCoderId: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {}
+    };
+
+    connection.transaction.mockImplementationOnce(callback => callback(transactionManager));
+    jest.spyOn(
+      service as unknown as { assertApprovedJobDefinitionCanBeUsed: (...args: unknown[]) => Promise<number> },
+      'assertApprovedJobDefinitionCanBeUsed'
+    ).mockImplementation(async () => {
+      callOrder.push('assert');
+      return 9;
+    });
+    jest.spyOn(
+      service as unknown as { lockCodingJobUnitsForDefinition: (...args: unknown[]) => Promise<void> },
+      'lockCodingJobUnitsForDefinition'
+    ).mockImplementation(async () => {
+      callOrder.push('lock');
+    });
+    jest.spyOn(
+      service as unknown as { getJobDefinitionExistingTaskRows: (...args: unknown[]) => Promise<[]> },
+      'getJobDefinitionExistingTaskRows'
+    ).mockImplementation(async (_workspaceId, _jobDefinitionId, manager) => {
+      callOrder.push('existing');
+      expect(manager).toBe(transactionManager);
+      return [];
+    });
+    jest.spyOn(
+      service as unknown as {
+        getJobDefinitionJobCounts: (...args: unknown[]) => Promise<{ existingJobsCount: number; staleJobsCount: number }>
+      },
+      'getJobDefinitionJobCounts'
+    ).mockImplementation(async (_workspaceId, _jobDefinitionId, manager) => {
+      callOrder.push('counts');
+      expect(manager).toBe(transactionManager);
+      return { existingJobsCount: 1, staleJobsCount: 1 };
+    });
+    jest.spyOn(
+      service as unknown as { jobDefinitionHasAnyCodingWork: (...args: unknown[]) => Promise<boolean> },
+      'jobDefinitionHasAnyCodingWork'
+    ).mockImplementation(async (_workspaceId, _jobDefinitionId, manager) => {
+      callOrder.push('work');
+      expect(manager).toBe(transactionManager);
+      return false;
+    });
+    const buildPlanSpy = jest.spyOn(
+      service as unknown as { buildDistributionPlan: (...args: unknown[]) => Promise<typeof plan> },
+      'buildDistributionPlan'
+    ).mockImplementation(async (_workspaceId, _request, manager) => {
+      callOrder.push('plan');
+      expect(manager).toBe(transactionManager);
+      return plan;
+    });
+    const deleteSpy = jest.spyOn(
+      service as unknown as { deleteCodingJobsByDefinitionInManager: (...args: unknown[]) => Promise<number> },
+      'deleteCodingJobsByDefinitionInManager'
+    ).mockImplementation(async manager => {
+      callOrder.push('delete');
+      expect(manager).toBe(transactionManager);
+      return 1;
+    });
+    const createSpy = jest.spyOn(
+      service as unknown as { createDistributedCodingJobsFromPlanInManager: (...args: unknown[]) => Promise<[]> },
+      'createDistributedCodingJobsFromPlanInManager'
+    ).mockImplementation(async (_workspaceId, _request, _plan, manager) => {
+      callOrder.push('create');
+      expect(manager).toBe(transactionManager);
+      return [];
+    });
+
+    await expect(service.refreshDistributedCodingJobs(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [],
+      selectedCoders: []
+    })).resolves.toMatchObject({
+      success: true,
+      preview: {
+        canApply: true,
+        existingJobsCount: 1
+      }
+    });
+
+    expect(buildPlanSpy).toHaveBeenCalledWith(
+      3,
+      expect.objectContaining({ jobDefinitionId: 9 }),
+      transactionManager
+    );
+    expect(callOrder).toEqual([
+      'advisory-lock',
+      'assert',
+      'lock',
+      'existing',
+      'counts',
+      'work',
+      'plan',
+      'delete',
+      'create'
+    ]);
+    expect(deleteSpy).toHaveBeenCalledTimes(1);
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not delete or recreate refresh jobs when the locked recheck finds coding work', async () => {
+    const transactionManager = {
+      getRepository: jest.fn(),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const plan = {
+      plannedCases: [],
+      jobsToCreate: [],
+      distribution: {},
+      distributionByCoderId: {},
+      doubleCodingInfo: {},
+      aggregationInfo: {},
+      matchingFlags: [],
+      warnings: [],
+      pairDistribution: {},
+      tasksPerCoder: {},
+      coderWeights: {}
+    };
+
+    connection.transaction.mockImplementationOnce(callback => callback(transactionManager));
+    jest.spyOn(
+      service as unknown as { assertApprovedJobDefinitionCanBeUsed: (...args: unknown[]) => Promise<number> },
+      'assertApprovedJobDefinitionCanBeUsed'
+    ).mockResolvedValue(9);
+    jest.spyOn(
+      service as unknown as { lockCodingJobUnitsForDefinition: (...args: unknown[]) => Promise<void> },
+      'lockCodingJobUnitsForDefinition'
+    ).mockResolvedValue();
+    jest.spyOn(
+      service as unknown as { getJobDefinitionExistingTaskRows: (...args: unknown[]) => Promise<[]> },
+      'getJobDefinitionExistingTaskRows'
+    ).mockResolvedValue([]);
+    jest.spyOn(
+      service as unknown as {
+        getJobDefinitionJobCounts: (...args: unknown[]) => Promise<{ existingJobsCount: number; staleJobsCount: number }>
+      },
+      'getJobDefinitionJobCounts'
+    ).mockResolvedValue({ existingJobsCount: 1, staleJobsCount: 1 });
+    jest.spyOn(
+      service as unknown as { jobDefinitionHasAnyCodingWork: (...args: unknown[]) => Promise<boolean> },
+      'jobDefinitionHasAnyCodingWork'
+    ).mockResolvedValue(true);
+    jest.spyOn(
+      service as unknown as { buildDistributionPlan: (...args: unknown[]) => Promise<typeof plan> },
+      'buildDistributionPlan'
+    ).mockResolvedValue(plan);
+    const deleteSpy = jest.spyOn(
+      service as unknown as { deleteCodingJobsByDefinitionInManager: (...args: unknown[]) => Promise<number> },
+      'deleteCodingJobsByDefinitionInManager'
+    ).mockResolvedValue(1);
+    const createSpy = jest.spyOn(
+      service as unknown as { createDistributedCodingJobsFromPlanInManager: (...args: unknown[]) => Promise<[]> },
+      'createDistributedCodingJobsFromPlanInManager'
+    ).mockResolvedValue([]);
+
+    await expect(service.refreshDistributedCodingJobs(3, {
+      jobDefinitionId: 9,
+      selectedVariables: [],
+      selectedCoders: []
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(deleteSpy).not.toHaveBeenCalled();
+    expect(createSpy).not.toHaveBeenCalled();
   });
 
   it('does not persist jobDefinitionId from direct coding job creates', async () => {

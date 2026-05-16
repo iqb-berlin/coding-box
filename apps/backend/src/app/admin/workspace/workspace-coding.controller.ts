@@ -21,7 +21,11 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
-  CodingJobService, CodingProcessService, CodingResponseQueryService, CodingResultsService
+  CodingFreshnessService,
+  CodingJobService,
+  CodingProcessService,
+  CodingResponseQueryService,
+  CodingResultsService
 } from '../../database/services/coding';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { JobQueueService } from '../../job-queue/job-queue.service';
@@ -34,6 +38,7 @@ export class WorkspaceCodingController {
     private codingResponseQueryService: CodingResponseQueryService,
     private codingJobService: CodingJobService,
     private codingResultsService: CodingResultsService,
+    private codingFreshnessService: CodingFreshnessService,
     private jobQueueService: JobQueueService
   ) { }
 
@@ -73,6 +78,11 @@ export class WorkspaceCodingController {
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
 
     const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
+    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+      workspace_id,
+      autoCoderRunNumber
+    );
+
     return this.codingProcessService.codeTestPersons(
       workspace_id,
       testPersons,

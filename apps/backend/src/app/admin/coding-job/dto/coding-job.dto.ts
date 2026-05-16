@@ -2,6 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../../../database/entities/coding-job.entity';
 import { MissingsProfile } from '../../../database/entities/missings-profile.entity';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
+import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 /**
  * DTO for a coding job
@@ -267,6 +268,43 @@ export class CodingJobDto {
   })
     aggregationSettingsVersion?: number | null;
 
+  @ApiProperty({
+    description: 'Whether this coding job still matches the current test-result source state',
+    example: 'current',
+    enum: ['current', 'stale_source', 'review_required'],
+    required: false
+  })
+    freshnessStatus?: CodingJobFreshnessStatus;
+
+  @ApiProperty({
+    description: 'Reason why this coding job was marked stale or review-required',
+    example: 'RESULT_UPDATED',
+    required: false,
+    nullable: true
+  })
+    freshnessReason?: string | null;
+
+  @ApiProperty({
+    description: 'When freshness status was last updated',
+    required: false,
+    nullable: true
+  })
+    freshnessUpdatedAt?: Date | null;
+
+  @ApiProperty({
+    description: 'Number of affected task results for this coding job',
+    example: 2,
+    required: false
+  })
+    freshnessAffectedUnits?: number;
+
+  @ApiProperty({
+    description: 'Number of affected responses for this coding job',
+    example: 6,
+    required: false
+  })
+    freshnessAffectedResponses?: number;
+
   /**
    * Create a CodingJobDto from a CodingJob entity
    * @param entity The CodingJob entity
@@ -300,6 +338,11 @@ export class CodingJobDto {
     dto.aggregationThreshold = entity.aggregation_threshold;
     dto.responseMatchingFlags = entity.response_matching_flags;
     dto.aggregationSettingsVersion = entity.aggregation_settings_version;
+    dto.freshnessStatus = entity.freshness_status;
+    dto.freshnessReason = entity.freshness_reason;
+    dto.freshnessUpdatedAt = entity.freshness_updated_at;
+    dto.freshnessAffectedUnits = entity.freshness_affected_units;
+    dto.freshnessAffectedResponses = entity.freshness_affected_responses;
 
     // Map progress data if available
     if (entity.progress !== undefined) {

@@ -19,6 +19,7 @@ import { CodingJobCoder } from './coding-job-coder.entity';
 import { JobDefinition, CaseOrderingMode } from './job-definition.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
+import { CodingJobFreshnessStatus } from '../../../../../../api-dto/coding/job-refresh.dto';
 
 export interface Variable {
   unitName: string;
@@ -99,6 +100,31 @@ export class CodingJob {
 
   @Column({ name: 'aggregation_settings_version', nullable: true })
     aggregation_settings_version: number | null;
+
+  @Column({
+    name: 'freshness_status',
+    type: 'varchar',
+    length: 32,
+    default: 'current'
+  })
+    freshness_status: CodingJobFreshnessStatus;
+
+  @Column({
+    name: 'freshness_reason',
+    type: 'varchar',
+    length: 64,
+    nullable: true
+  })
+    freshness_reason: string | null;
+
+  @Column({ name: 'freshness_updated_at', type: 'timestamp with time zone', nullable: true })
+    freshness_updated_at: Date | null;
+
+  @Column({ name: 'freshness_affected_units', type: 'int', default: 0 })
+    freshness_affected_units: number;
+
+  @Column({ name: 'freshness_affected_responses', type: 'int', default: 0 })
+    freshness_affected_responses: number;
 
   @CreateDateColumn()
     created_at: Date;

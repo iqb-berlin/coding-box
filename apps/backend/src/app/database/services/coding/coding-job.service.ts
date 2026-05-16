@@ -36,6 +36,11 @@ import {
   generateCodingProgressKey,
   parseCodingTestPerson
 } from './coding-progress-key.util';
+import {
+  CodingJobFreshnessImpactDto,
+  JobDefinitionRefreshPreviewDto
+} from '../../../../../../../api-dto/coding/job-refresh.dto';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -183,6 +188,36 @@ type DistributionPlan = {
   pairDistribution: Record<string, number>;
   tasksPerCoder: Record<string, number>;
   coderWeights: Record<string, number>;
+};
+
+type DistributionCreatedJob = {
+  itemKey: string;
+  coderId: number;
+  coderName: string;
+  variable: { unitName: string; variableId: string };
+  jobId: number;
+  jobName: string;
+  caseCount: number;
+};
+
+type DistributedCodingJobsResult = {
+  success: boolean;
+  jobsCreated: number;
+  message: string;
+  distribution: Record<string, Record<string, number>>;
+  distributionByCoderId: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
+  aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
+  matchingFlags: ResponseMatchingFlag[];
+  warnings: JobCreationWarning[];
+  pairDistribution: Record<string, number>;
+  tasksPerCoder: Record<string, number>;
+  coderWeights: Record<string, number>;
+  jobs: DistributionCreatedJob[];
+};
+
+type JobDefinitionRefreshCodingJobsResult = DistributedCodingJobsResult & {
+  preview: JobDefinitionRefreshPreviewDto;
 };
 
 const DEFAULT_DISTRIBUTION_CODER_WEIGHT = 1;
@@ -444,6 +479,277 @@ export class CodingJobService {
     ]));
   }
 
+  async getCodingJobFreshnessImpact(
+    workspaceId: number,
+    codingJobId: number
+  ): Promise<CodingJobFreshnessImpactDto> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId, workspace_id: workspaceId }
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const countsQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('COUNT(DISTINCT cju.response_id)', 'totalResponses')
+      .addSelect(
+        'COUNT(DISTINCT CASE WHEN cju.code IS NOT NULL OR cju.score IS NOT NULL THEN cju.response_id END)',
+        'codedResponses'
+      )
+      .addSelect(
+        'COUNT(DISTINCT CASE WHEN cju.is_open = true THEN cju.response_id END)',
+        'openResponses'
+      )
+      .where('cju.coding_job_id = :codingJobId', { codingJobId });
+
+    await this.applyCodingJobUnitExclusions(countsQuery, workspaceId, 'codingJobFreshnessImpact');
+    const counts = await countsQuery.getRawOne<{
+      totalResponses?: string | number;
+      codedResponses?: string | number;
+      openResponses?: string | number;
+    }>();
+
+    return {
+      codingJobId,
+      freshnessStatus: codingJob.freshness_status || 'current',
+      freshnessReason: codingJob.freshness_reason || null,
+      freshnessUpdatedAt: codingJob.freshness_updated_at?.toISOString() || null,
+      affectedUnits: Number(codingJob.freshness_affected_units || 0),
+      affectedResponses: Number(codingJob.freshness_affected_responses || 0),
+      totalResponses: Number(counts?.totalResponses || 0),
+      codedResponses: Number(counts?.codedResponses || 0),
+      openResponses: Number(counts?.openResponses || 0)
+    };
+  }
+
+  async previewJobDefinitionRefresh(
+    workspaceId: number,
+    request: DistributionPlanRequest
+  ): Promise<JobDefinitionRefreshPreviewDto> {
+    const jobDefinitionId = Number(request.jobDefinitionId);
+    if (!Number.isInteger(jobDefinitionId) || jobDefinitionId < 1) {
+      throw new BadRequestException('A valid job definition id is required.');
+    }
+
+    const [
+      plan,
+      existingRows,
+      jobsRow,
+      hasCodingWork
+    ] = await Promise.all([
+      this.buildDistributionPlan(workspaceId, request),
+      this.getJobDefinitionExistingTaskRows(workspaceId, jobDefinitionId),
+      this.getJobDefinitionJobCounts(workspaceId, jobDefinitionId),
+      this.jobDefinitionHasAnyCodingWork(workspaceId, jobDefinitionId)
+    ]);
+
+    return this.buildJobDefinitionRefreshPreview(
+      jobDefinitionId,
+      plan,
+      existingRows,
+      jobsRow,
+      hasCodingWork
+    );
+  }
+
+  private buildJobDefinitionRefreshPreview(
+    jobDefinitionId: number,
+    plan: DistributionPlan,
+    existingRows: Array<{ responseId: number; taskCount: number }>,
+    jobsRow: { existingJobsCount: number; staleJobsCount: number },
+    hasCodingWork: boolean
+  ): JobDefinitionRefreshPreviewDto {
+    const existingResponseIds = new Set(existingRows.map(row => row.responseId));
+    const plannedResponseIds = new Set(plan.plannedCases.map(plannedCase => plannedCase.response.id));
+    const existingTaskCountByResponseId = new Map(existingRows.map(row => [row.responseId, row.taskCount]));
+    const plannedTaskCountByResponseId = new Map<number, number>();
+
+    plan.plannedCases.forEach(plannedCase => {
+      plannedTaskCountByResponseId.set(
+        plannedCase.response.id,
+        (plannedTaskCountByResponseId.get(plannedCase.response.id) || 0) +
+        plannedCase.assignedCoderIds.length
+      );
+    });
+
+    const retainedCases = [...plannedResponseIds]
+      .filter(responseId => existingResponseIds.has(responseId))
+      .length;
+    const addedCases = [...plannedResponseIds]
+      .filter(responseId => !existingResponseIds.has(responseId))
+      .length;
+    const removedCases = [...existingResponseIds]
+      .filter(responseId => !plannedResponseIds.has(responseId))
+      .length;
+    let addedCodingTasks = 0;
+    let removedCodingTasks = 0;
+    const responseIdsForTaskDelta = new Set([
+      ...existingTaskCountByResponseId.keys(),
+      ...plannedTaskCountByResponseId.keys()
+    ]);
+
+    responseIdsForTaskDelta.forEach(responseId => {
+      const taskDelta = (plannedTaskCountByResponseId.get(responseId) || 0) -
+        (existingTaskCountByResponseId.get(responseId) || 0);
+      if (taskDelta > 0) {
+        addedCodingTasks += taskDelta;
+      } else {
+        removedCodingTasks += Math.abs(taskDelta);
+      }
+    });
+    const existingJobsCount = Number(jobsRow.existingJobsCount || 0);
+    const canApply = existingJobsCount === 0 || !hasCodingWork;
+
+    return {
+      jobDefinitionId,
+      existingJobsCount,
+      staleJobsCount: Number(jobsRow.staleJobsCount || 0),
+      existingCases: existingResponseIds.size,
+      plannedCases: plannedResponseIds.size,
+      retainedCases,
+      addedCases,
+      removedCases,
+      addedCodingTasks,
+      removedCodingTasks,
+      canApply,
+      ...(canApply ? {} : {
+        blockingReason: 'Bestehende Kodierjobs enthalten bereits Kodierarbeit. Bitte pruefen Sie die betroffenen Jobs, bevor die Definition neu verteilt wird.'
+      })
+    };
+  }
+
+  async deleteCodingJobsByDefinition(
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Promise<number> {
+    const deletedJobs = await this.deleteCodingJobsByDefinitionInManager(
+      undefined,
+      workspaceId,
+      jobDefinitionId
+    );
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+    return deletedJobs;
+  }
+
+  private async deleteCodingJobsByDefinitionInManager(
+    manager: EntityManager | undefined,
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Promise<number> {
+    const repository = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
+    const result = await repository.delete({
+      workspace_id: workspaceId,
+      job_definition_id: jobDefinitionId
+    });
+    return result.affected || 0;
+  }
+
+  private async getJobDefinitionExistingTaskRows(
+    workspaceId: number,
+    jobDefinitionId: number,
+    manager?: EntityManager
+  ): Promise<Array<{ responseId: number; taskCount: number }>> {
+    const repository = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
+    const query = repository
+      .createQueryBuilder('cju')
+      .select('cju.response_id', 'responseId')
+      .addSelect('COUNT(cju.id)', 'taskCount')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id = :jobDefinitionId', { jobDefinitionId })
+      .andWhere('coding_job.training_id IS NULL')
+      .groupBy('cju.response_id');
+
+    await this.applyCodingJobUnitExclusions(query, workspaceId, 'jobDefinitionExistingTasks');
+    const rows = await query.getRawMany<{ responseId: string | number; taskCount: string | number }>();
+    return rows.map(row => ({
+      responseId: Number(row.responseId),
+      taskCount: Number(row.taskCount)
+    })).filter(row => Number.isFinite(row.responseId) && Number.isFinite(row.taskCount));
+  }
+
+  private async getJobDefinitionJobCounts(
+    workspaceId: number,
+    jobDefinitionId: number,
+    manager?: EntityManager
+  ): Promise<{ existingJobsCount: number; staleJobsCount: number }> {
+    const repository = manager ? manager.getRepository(CodingJob) : this.codingJobRepository;
+    const row = await repository
+      .createQueryBuilder('coding_job')
+      .select('COUNT(coding_job.id)', 'existingJobsCount')
+      .addSelect(
+        "COUNT(CASE WHEN coding_job.freshness_status <> 'current' THEN 1 END)",
+        'staleJobsCount'
+      )
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id = :jobDefinitionId', { jobDefinitionId })
+      .getRawOne<{ existingJobsCount?: string | number; staleJobsCount?: string | number }>();
+
+    return {
+      existingJobsCount: Number(row?.existingJobsCount || 0),
+      staleJobsCount: Number(row?.staleJobsCount || 0)
+    };
+  }
+
+  private async jobDefinitionHasCodingWork(
+    workspaceId: number,
+    jobDefinitionId: number,
+    manager?: EntityManager,
+    applyExclusions = true
+  ): Promise<boolean> {
+    const repository = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
+    const query = repository
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id = :jobDefinitionId', { jobDefinitionId })
+      .andWhere('coding_job.training_id IS NULL')
+      .andWhere(
+        `(cju.code IS NOT NULL
+          OR cju.score IS NOT NULL
+          OR cju.is_open = true
+          OR cju.notes IS NOT NULL
+          OR cju.supervisor_comment IS NOT NULL
+          OR cju.coding_issue_option IS NOT NULL)`
+      );
+
+    if (applyExclusions) {
+      await this.applyCodingJobUnitExclusions(query, workspaceId, 'jobDefinitionCodingWork');
+    }
+    return (await query.getCount()) > 0;
+  }
+
+  private async jobDefinitionHasAnyCodingWork(
+    workspaceId: number,
+    jobDefinitionId: number,
+    manager?: EntityManager
+  ): Promise<boolean> {
+    return this.jobDefinitionHasCodingWork(
+      workspaceId,
+      jobDefinitionId,
+      manager,
+      false
+    );
+  }
+
+  private async lockCodingJobUnitsForDefinition(
+    manager: EntityManager,
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Promise<void> {
+    await manager.getRepository(CodingJobUnit)
+      .createQueryBuilder('cju')
+      .select('cju.id', 'id')
+      .innerJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.job_definition_id = :jobDefinitionId', { jobDefinitionId })
+      .andWhere('coding_job.training_id IS NULL')
+      .setLock('pessimistic_write')
+      .getRawMany();
+  }
+
   private async assertApprovedJobDefinitionHasNoCreatedJobs(
     manager: EntityManager,
     workspaceId: number,
@@ -453,6 +759,31 @@ export class CodingJobService {
       return;
     }
 
+    const normalizedJobDefinitionId = await this.assertApprovedJobDefinitionCanBeUsed(
+      manager,
+      workspaceId,
+      jobDefinitionId
+    );
+
+    const existingJobsCount = await manager.getRepository(CodingJob).count({
+      where: {
+        workspace_id: workspaceId,
+        job_definition_id: normalizedJobDefinitionId
+      }
+    });
+
+    if (existingJobsCount > 0) {
+      throw new BadRequestException(
+        `Coding jobs already exist for job definition ${normalizedJobDefinitionId}`
+      );
+    }
+  }
+
+  private async assertApprovedJobDefinitionCanBeUsed(
+    manager: EntityManager,
+    workspaceId: number,
+    jobDefinitionId: number
+  ): Promise<number> {
     const normalizedJobDefinitionId = Number(jobDefinitionId);
 
     if (!Number.isFinite(normalizedJobDefinitionId)) {
@@ -481,18 +812,7 @@ export class CodingJobService {
       );
     }
 
-    const existingJobsCount = await manager.getRepository(CodingJob).count({
-      where: {
-        workspace_id: workspaceId,
-        job_definition_id: normalizedJobDefinitionId
-      }
-    });
-
-    if (existingJobsCount > 0) {
-      throw new BadRequestException(
-        `Coding jobs already exist for job definition ${normalizedJobDefinitionId}`
-      );
-    }
+    return normalizedJobDefinitionId;
   }
 
   async getCodingJobs(
@@ -1914,11 +2234,12 @@ export class CodingJobService {
     return derivedVariableSets;
   }
 
-  async getResponseMatchingMode(workspaceId: number): Promise<ResponseMatchingFlag[]> {
+  async getResponseMatchingMode(workspaceId: number, manager?: EntityManager): Promise<ResponseMatchingFlag[]> {
     const settingKey = `workspace-${workspaceId}-response-matching-mode`;
+    const repository = manager ? manager.getRepository(Setting) : this.settingRepository;
     const [setting, aggregationThreshold] = await Promise.all([
-      this.settingRepository.findOne({ where: { key: settingKey } }),
-      this.getAggregationThreshold(workspaceId)
+      repository.findOne({ where: { key: settingKey } }),
+      this.getAggregationThreshold(workspaceId, manager)
     ]);
 
     let flags: ResponseMatchingFlag[] = [];
@@ -2115,12 +2436,17 @@ export class CodingJobService {
       .getMany();
   }
 
-  async getSlimResponsesForVariables(workspaceId: number, variables: { unitName: string; variableId: string }[]): Promise<SlimResponse[]> {
+  async getSlimResponsesForVariables(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string }[],
+    manager?: EntityManager
+  ): Promise<SlimResponse[]> {
     if (variables.length === 0) {
       return [];
     }
 
-    const queryBuilder = this.responseRepository.createQueryBuilder('response')
+    const repository = manager ? manager.getRepository(ResponseEntity) : this.responseRepository;
+    const queryBuilder = repository.createQueryBuilder('response')
       .select('response.id', 'id')
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
@@ -2180,17 +2506,27 @@ export class CodingJobService {
 
   private async getAssignedResponseIdsForVariables(
     workspaceId: number,
-    variables: { unitName: string; variableId: string }[]
+    variables: { unitName: string; variableId: string }[],
+    excludeJobDefinitionId?: number,
+    manager?: EntityManager
   ): Promise<Set<number>> {
     if (variables.length === 0) {
       return new Set();
     }
 
-    const query = this.codingJobUnitRepository.createQueryBuilder('cju')
+    const repository = manager ? manager.getRepository(CodingJobUnit) : this.codingJobUnitRepository;
+    const query = repository.createQueryBuilder('cju')
       .select('DISTINCT cju.response_id', 'responseId')
       .leftJoin('cju.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('coding_job.training_id IS NULL');
+
+    if (excludeJobDefinitionId !== undefined && excludeJobDefinitionId !== null) {
+      query.andWhere(
+        '(coding_job.job_definition_id IS NULL OR coding_job.job_definition_id != :excludeJobDefinitionId)',
+        { excludeJobDefinitionId }
+      );
+    }
 
     const conditions: string[] = [];
     const parameters: Record<string, string> = {};
@@ -2752,7 +3088,8 @@ export class CodingJobService {
 
   private async buildDistributionPlan(
     workspaceId: number,
-    request: DistributionPlanRequest
+    request: DistributionPlanRequest,
+    manager?: EntityManager
   ): Promise<DistributionPlan> {
     const caseOrderingMode = request.caseOrderingMode || 'continuous';
     const distributionSeed = this.getDistributionSeed(workspaceId, request);
@@ -2778,8 +3115,8 @@ export class CodingJobService {
       };
     }
 
-    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
-    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
+    const matchingFlags = await this.getResponseMatchingMode(workspaceId, manager);
+    const aggregationThreshold = await this.getAggregationThreshold(workspaceId, manager);
     const derivedVariableMap = await this.workspaceFilesService.getDerivedVariableMap(workspaceId);
     const derivedVariableSets = this.buildDerivedVariableSets(derivedVariableMap);
     const isDerivedVariable = (unitName: string, variableId: string): boolean => this.isDerivedVariable(
@@ -2791,8 +3128,13 @@ export class CodingJobService {
     const allVariables = items.flatMap(
       itemObj => this.getItemDetails(itemObj, caseOrderingMode, bundleNameCounts).itemVariables
     );
-    const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables);
-    const assignedResponseIds = await this.getAssignedResponseIdsForVariables(workspaceId, allVariables);
+    const allResponses = await this.getSlimResponsesForVariables(workspaceId, allVariables, manager);
+    const assignedResponseIds = await this.getAssignedResponseIdsForVariables(
+      workspaceId,
+      allVariables,
+      request.jobDefinitionId,
+      manager
+    );
     const warnings: JobCreationWarning[] = [];
     const warnedVariables = new Set<string>();
 
@@ -3188,43 +3530,158 @@ export class CodingJobService {
     };
   }
 
+  async refreshDistributedCodingJobs(
+    workspaceId: number,
+    request: DistributionPlanRequest
+  ): Promise<JobDefinitionRefreshCodingJobsResult> {
+    const jobDefinitionId = Number(request.jobDefinitionId);
+    if (!Number.isInteger(jobDefinitionId) || jobDefinitionId < 1) {
+      throw new BadRequestException('A valid job definition id is required.');
+    }
+
+    let plan: DistributionPlan | null = null;
+    let preview: JobDefinitionRefreshPreviewDto | null = null;
+    const createdJobs: DistributionCreatedJob[] = [];
+
+    await this.connection.transaction(async manager => {
+      await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+      await this.assertApprovedJobDefinitionCanBeUsed(
+        manager,
+        workspaceId,
+        jobDefinitionId
+      );
+      await this.lockCodingJobUnitsForDefinition(manager, workspaceId, jobDefinitionId);
+
+      const [
+        existingRows,
+        jobsRow,
+        hasCodingWork
+      ] = await Promise.all([
+        this.getJobDefinitionExistingTaskRows(workspaceId, jobDefinitionId, manager),
+        this.getJobDefinitionJobCounts(workspaceId, jobDefinitionId, manager),
+        this.jobDefinitionHasAnyCodingWork(workspaceId, jobDefinitionId, manager)
+      ]);
+
+      const transactionPlan = await this.buildDistributionPlan(workspaceId, request, manager);
+      plan = transactionPlan;
+
+      preview = this.buildJobDefinitionRefreshPreview(
+        jobDefinitionId,
+        transactionPlan,
+        existingRows,
+        jobsRow,
+        hasCodingWork
+      );
+
+      if (!preview.canApply) {
+        throw new BadRequestException(
+          preview.blockingReason || 'Job definition refresh cannot be applied.'
+        );
+      }
+
+      if (preview.existingJobsCount > 0) {
+        await this.deleteCodingJobsByDefinitionInManager(
+          manager,
+          workspaceId,
+          jobDefinitionId
+        );
+      }
+
+      createdJobs.push(...await this.createDistributedCodingJobsFromPlanInManager(
+        workspaceId,
+        request,
+        transactionPlan,
+        manager
+      ));
+    });
+
+    await this.invalidateIncompleteVariablesCache(workspaceId);
+    if (!plan || !preview) {
+      throw new BadRequestException('Job definition refresh could not be planned.');
+    }
+
+    return {
+      ...this.buildDistributedCodingJobsResult(plan, createdJobs),
+      preview
+    };
+  }
+
+  private async createDistributedCodingJobsFromPlanInManager(
+    workspaceId: number,
+    request: DistributionPlanRequest,
+    plan: DistributionPlan,
+    manager: EntityManager
+  ): Promise<DistributionCreatedJob[]> {
+    const createdJobs: DistributionCreatedJob[] = [];
+
+    for (const job of plan.jobsToCreate) {
+      const jobName = job.item.type === 'bundle' ?
+        `Job ${job.item.itemLabel} (${job.coder.name})` :
+        `Job ${(job.item.item as VariableReference).unitName} - ${(job.item.item as VariableReference).variableId} (${job.coder.name})`;
+      const createCodingJobDto: InternalCreateCodingJobDto = {
+        name: jobName,
+        assignedCoders: [job.coder.id],
+        caseOrderingMode: job.item.itemCaseOrderingMode,
+        jobDefinitionId: request.jobDefinitionId,
+        showScore: request.showScore,
+        allowComments: request.allowComments,
+        suppressGeneralInstructions: request.suppressGeneralInstructions,
+        ...(job.item.type === 'bundle' ?
+          { variableBundleIds: [(job.item.item as BundleItem).id] } :
+          { variables: job.item.itemVariables }
+        )
+      };
+      const codingJob = await this.createCodingJobWithUnitSubsetInManager(
+        workspaceId,
+        createCodingJobDto,
+        job.unitSubset,
+        manager
+      );
+
+      createdJobs.push({
+        itemKey: job.item.itemKey,
+        coderId: job.coder.id,
+        coderName: job.coder.name,
+        variable: job.item.type === 'bundle' ?
+          { unitName: job.item.itemLabel, variableId: '' } :
+          { unitName: (job.item.item as VariableReference).unitName, variableId: (job.item.item as VariableReference).variableId },
+        jobId: codingJob.id,
+        jobName,
+        caseCount: job.unitSubset.length
+      });
+    }
+
+    return createdJobs;
+  }
+
+  private buildDistributedCodingJobsResult(
+    plan: DistributionPlan,
+    createdJobs: DistributionCreatedJob[]
+  ): DistributedCodingJobsResult {
+    return {
+      success: true,
+      jobsCreated: createdJobs.length,
+      message: `Created ${createdJobs.length} distributed coding jobs`,
+      distribution: plan.distribution,
+      distributionByCoderId: plan.distributionByCoderId,
+      doubleCodingInfo: plan.doubleCodingInfo,
+      aggregationInfo: plan.aggregationInfo,
+      matchingFlags: plan.matchingFlags,
+      warnings: plan.warnings,
+      pairDistribution: plan.pairDistribution,
+      tasksPerCoder: plan.tasksPerCoder,
+      coderWeights: plan.coderWeights,
+      jobs: createdJobs
+    };
+  }
+
   async createDistributedCodingJobs(
     workspaceId: number,
     request: DistributionPlanRequest
-  ): Promise<{
-      success: boolean;
-      jobsCreated: number;
-      message: string;
-      distribution: Record<string, Record<string, number>>;
-      distributionByCoderId: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, DistributionDoubleCodingInfo>;
-      aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
-      matchingFlags: ResponseMatchingFlag[];
-      warnings: JobCreationWarning[];
-      pairDistribution: Record<string, number>;
-      tasksPerCoder: Record<string, number>;
-      coderWeights: Record<string, number>;
-      jobs: {
-        itemKey: string;
-        coderId: number;
-        coderName: string;
-        variable: { unitName: string; variableId: string };
-        jobId: number;
-        jobName: string;
-        caseCount: number;
-      }[];
-    }> {
+  ): Promise<DistributedCodingJobsResult> {
     this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
-    const createdJobs: {
-      itemKey: string;
-      coderId: number;
-      coderName: string;
-      variable: { unitName: string; variableId: string };
-      jobId: number;
-      jobName: string;
-      caseCount: number;
-    }[] = [];
+    const createdJobs: DistributionCreatedJob[] = [];
 
     try {
       const plan = await this.buildDistributionPlan(workspaceId, request);
@@ -3237,62 +3694,18 @@ export class CodingJobService {
             request.jobDefinitionId
           );
 
-          for (const job of plan.jobsToCreate) {
-            const jobName = job.item.type === 'bundle' ?
-              `Job ${job.item.itemLabel} (${job.coder.name})` :
-              `Job ${(job.item.item as VariableReference).unitName} - ${(job.item.item as VariableReference).variableId} (${job.coder.name})`;
-            const createCodingJobDto: InternalCreateCodingJobDto = {
-              name: jobName,
-              assignedCoders: [job.coder.id],
-              caseOrderingMode: job.item.itemCaseOrderingMode,
-              jobDefinitionId: request.jobDefinitionId,
-              showScore: request.showScore,
-              allowComments: request.allowComments,
-              suppressGeneralInstructions: request.suppressGeneralInstructions,
-              ...(job.item.type === 'bundle' ?
-                { variableBundleIds: [(job.item.item as BundleItem).id] } :
-                { variables: job.item.itemVariables }
-              )
-            };
-            const codingJob = await this.createCodingJobWithUnitSubsetInManager(
-              workspaceId,
-              createCodingJobDto,
-              job.unitSubset,
-              manager
-            );
-
-            createdJobs.push({
-              itemKey: job.item.itemKey,
-              coderId: job.coder.id,
-              coderName: job.coder.name,
-              variable: job.item.type === 'bundle' ?
-                { unitName: job.item.itemLabel, variableId: '' } :
-                { unitName: (job.item.item as VariableReference).unitName, variableId: (job.item.item as VariableReference).variableId },
-              jobId: codingJob.id,
-              jobName,
-              caseCount: job.unitSubset.length
-            });
-          }
+          createdJobs.push(...await this.createDistributedCodingJobsFromPlanInManager(
+            workspaceId,
+            request,
+            plan,
+            manager
+          ));
         });
       }
 
       this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);
 
-      return {
-        success: true,
-        jobsCreated: createdJobs.length,
-        message: `Created ${createdJobs.length} distributed coding jobs`,
-        distribution: plan.distribution,
-        distributionByCoderId: plan.distributionByCoderId,
-        doubleCodingInfo: plan.doubleCodingInfo,
-        aggregationInfo: plan.aggregationInfo,
-        matchingFlags: plan.matchingFlags,
-        warnings: plan.warnings,
-        pairDistribution: plan.pairDistribution,
-        tasksPerCoder: plan.tasksPerCoder,
-        coderWeights: plan.coderWeights,
-        jobs: createdJobs
-      };
+      return this.buildDistributedCodingJobsResult(plan, createdJobs);
     } catch (error) {
       this.logger.error(`Error creating distributed coding jobs: ${error.message}`, error.stack);
       return {
@@ -3388,9 +3801,10 @@ export class CodingJobService {
    * Get the duplicate aggregation threshold for a workspace
    * Returns 2 as default (aggregation enabled by default)
    */
-  async getAggregationThreshold(workspaceId: number): Promise<number | null> {
+  async getAggregationThreshold(workspaceId: number, manager?: EntityManager): Promise<number | null> {
     const settingKey = `workspace-${workspaceId}-duplicate-aggregation-threshold`;
-    const setting = await this.settingRepository.findOne({
+    const repository = manager ? manager.getRepository(Setting) : this.settingRepository;
+    const setting = await repository.findOne({
       where: { key: settingKey }
     });
 
