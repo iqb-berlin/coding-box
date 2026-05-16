@@ -8,6 +8,17 @@ import { statusStringToNumber } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import {
+  lockWorkspaceTestResultsMutationInTransaction,
+  withWorkspaceTestResultsMutationLock
+} from '../shared/workspace-test-results-lock.util';
+import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+
+type AutocoderCleanup = {
+  unitIds: number[];
+  autoCoderRun: number;
+  markCurrentVersion?: Extract<CodingFreshnessVersion, 'v1' | 'v3'>;
+};
 
 @Injectable()
 export class ResponseManagementService {
@@ -30,10 +41,25 @@ export class ResponseManagementService {
     isJobCancelled?: (jobId: string) => Promise<boolean>,
     progressCallback?: (progress: number) => void,
     metrics?: { [key: string]: number },
-    autocoderCleanup?: { unitIds: number[]; autoCoderRun: number }
+    autocoderCleanup?: AutocoderCleanup
   ): Promise<boolean> {
     const updateStart = Date.now();
     try {
+      if (allCodedResponses.length === 0 && !autocoderCleanup) {
+        await queryRunner.release();
+
+        if (workspaceId) {
+          await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+        }
+
+        return true;
+      }
+
+      await lockWorkspaceTestResultsMutationInTransaction(
+        queryRunner.manager,
+        workspaceId
+      );
+
       if (autocoderCleanup) {
         await this.cleanupStaleAutocoderGeneratedResponses(
           queryRunner,
@@ -43,12 +69,16 @@ export class ResponseManagementService {
       }
 
       if (allCodedResponses.length === 0) {
+        await this.markAutocoderVersionCurrent(
+          workspaceId,
+          autocoderCleanup,
+          queryRunner
+        );
+        await queryRunner.commitTransaction();
         await queryRunner.release();
-
         if (workspaceId) {
           await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
         }
-
         return true;
       }
 
@@ -196,6 +226,11 @@ export class ResponseManagementService {
         }
       }
 
+      await this.markAutocoderVersionCurrent(
+        workspaceId,
+        autocoderCleanup,
+        queryRunner
+      );
       await queryRunner.commitTransaction();
       this.logger.log(
         `${allCodedResponses.length} Responses wurden erfolgreich aktualisiert.`
@@ -228,6 +263,23 @@ export class ResponseManagementService {
       await queryRunner.release();
       return false;
     }
+  }
+
+  private async markAutocoderVersionCurrent(
+    workspaceId: number,
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner
+  ): Promise<void> {
+    if (!autocoderCleanup?.markCurrentVersion) {
+      return;
+    }
+
+    await this.codingFreshnessService?.markVersionCurrent(
+      workspaceId,
+      autocoderCleanup.unitIds,
+      autocoderCleanup.markCurrentVersion,
+      queryRunner.manager
+    );
   }
 
   private async upsertAutocoderGeneratedResponse(
@@ -381,117 +433,127 @@ export class ResponseManagementService {
       return { resolvedCount: 0, success: true };
     }
 
-    const affectedUnitIds: number[] = [];
-    return this.connection.transaction(async manager => {
-      let resolvedCount = 0;
+    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+      const affectedUnitIds: number[] = [];
+      return this.connection.transaction(async manager => {
+        let resolvedCount = 0;
 
-      for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
-        if (!selectedResponseId) {
-          continue;
-        }
-
-        const parts = key.split('|');
-        if (parts.length !== 6) {
-          this.logger.warn(`Invalid duplicate resolution key: ${key}`);
-          continue;
-        }
-
-        const unitName = decodeURIComponent(parts[0] || '');
-        const variableId = decodeURIComponent(parts[1] || '');
-        const subform = decodeURIComponent(parts[2] || '');
-        const testTakerLogin = decodeURIComponent(parts[3] || '');
-        const testTakerCode = decodeURIComponent(parts[4] || '');
-        const testTakerGroup = decodeURIComponent(parts[5] || '');
-
-        if (!unitName || !variableId || !testTakerLogin) {
-          this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
-          continue;
-        }
-
-        const responses = await manager
-          .createQueryBuilder(ResponseEntity, 'response')
-          .innerJoin('response.unit', 'unit')
-          .innerJoin('unit.booklet', 'booklet')
-          .innerJoin('booklet.person', 'person')
-          .where('person.workspace_id = :workspaceId', { workspaceId })
-          .andWhere('person.consider = :consider', { consider: true })
-          .andWhere('person.login = :testTakerLogin', { testTakerLogin })
-          .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
-            testTakerCode: testTakerCode || ''
-          })
-          .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
-            testTakerGroup: testTakerGroup || ''
-          })
-          .andWhere('unit.name = :unitName', { unitName })
-          .andWhere('response.variableid = :variableId', { variableId })
-          .andWhere("COALESCE(response.subform, '') = :subform", {
-            subform: subform || ''
-          })
-          .select(['response.id', 'response.unitid'])
-          .getMany();
-
-        const ids = (responses || []).map(r => r.id);
-        if (ids.length <= 1) {
-          continue;
-        }
-
-        if (!ids.includes(selectedResponseId)) {
-          this.logger.warn(
-            `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
-          );
-          continue;
-        }
-
-        const deleteIds = ids.filter(id => id !== selectedResponseId);
-        if (deleteIds.length === 0) {
-          continue;
-        }
-
-        const unitId = responses[0]?.unitid;
-        if (unitId) {
-          affectedUnitIds.push(unitId);
-        }
-
-        const deleteResult = await manager
-          .createQueryBuilder()
-          .delete()
-          .from(ResponseEntity)
-          .where('id IN (:...deleteIds)', { deleteIds })
-          .execute();
-
-        resolvedCount += deleteResult.affected || 0;
-
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'response',
-          selectedResponseId,
-          {
-            duplicateGroupKey: key,
-            keptResponseId: selectedResponseId,
-            deletedResponseIds: deleteIds
+        for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
+          if (!selectedResponseId) {
+            continue;
           }
-        );
-      }
 
-      return {
-        resolvedCount,
-        success: true
-      };
-    }).then(async result => {
-      if (result.success) {
-        await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
-          workspaceId,
-          affectedUnitIds,
-          'RESULT_DELETED'
-        );
-        await Promise.all([
-          this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
-          this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
-        ]);
-      }
-      return result;
+          const parts = key.split('|');
+          if (parts.length !== 6) {
+            this.logger.warn(`Invalid duplicate resolution key: ${key}`);
+            continue;
+          }
+
+          const unitName = decodeURIComponent(parts[0] || '');
+          const variableId = decodeURIComponent(parts[1] || '');
+          const subform = decodeURIComponent(parts[2] || '');
+          const testTakerLogin = decodeURIComponent(parts[3] || '');
+          const testTakerCode = decodeURIComponent(parts[4] || '');
+          const testTakerGroup = decodeURIComponent(parts[5] || '');
+
+          if (!unitName || !variableId || !testTakerLogin) {
+            this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
+            continue;
+          }
+
+          const responses = await manager
+            .createQueryBuilder(ResponseEntity, 'response')
+            .innerJoin('response.unit', 'unit')
+            .innerJoin('unit.booklet', 'booklet')
+            .innerJoin('booklet.person', 'person')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('person.login = :testTakerLogin', { testTakerLogin })
+            .andWhere('COALESCE(person.code, \'\') = :testTakerCode', {
+              testTakerCode: testTakerCode || ''
+            })
+            .andWhere('COALESCE(person.group, \'\') = :testTakerGroup', {
+              testTakerGroup: testTakerGroup || ''
+            })
+            .andWhere('unit.name = :unitName', { unitName })
+            .andWhere('response.variableid = :variableId', { variableId })
+            .andWhere("COALESCE(response.subform, '') = :subform", {
+              subform: subform || ''
+            })
+            .select(['response.id', 'response.unitid'])
+            .getMany();
+
+          const ids = (responses || []).map(r => r.id);
+          if (ids.length <= 1) {
+            continue;
+          }
+
+          if (!ids.includes(selectedResponseId)) {
+            this.logger.warn(
+              `Selected responseId ${selectedResponseId} not part of duplicate group ${key}`
+            );
+            continue;
+          }
+
+          const deleteIds = ids.filter(id => id !== selectedResponseId);
+          if (deleteIds.length === 0) {
+            continue;
+          }
+
+          const unitId = responses[0]?.unitid;
+          if (unitId) {
+            affectedUnitIds.push(unitId);
+          }
+
+          await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+            workspaceId,
+            deleteIds,
+            'RESULT_DELETED',
+            'review_required',
+            manager
+          );
+
+          const deleteResult = await manager
+            .createQueryBuilder()
+            .delete()
+            .from(ResponseEntity)
+            .where('id IN (:...deleteIds)', { deleteIds })
+            .execute();
+
+          resolvedCount += deleteResult.affected || 0;
+
+          await this.journalService.createEntry(
+            userId,
+            workspaceId,
+            'delete',
+            'response',
+            selectedResponseId,
+            {
+              duplicateGroupKey: key,
+              keptResponseId: selectedResponseId,
+              deletedResponseIds: deleteIds
+            }
+          );
+        }
+
+        return {
+          resolvedCount,
+          success: true
+        };
+      }).then(async result => {
+        if (result.success) {
+          await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+            workspaceId,
+            affectedUnitIds,
+            'RESULT_DELETED'
+          );
+          await Promise.all([
+            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+          ]);
+        }
+        return result;
+      });
     });
   }
 
@@ -506,76 +568,86 @@ export class ResponseManagementService {
         warnings: string[];
       };
     }> {
-    let affectedUnitId: number | null = null;
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedResponse: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+      let affectedUnitId: number | null = null;
+      return this.connection.transaction(async manager => {
+        const report = {
+          deletedResponse: null,
+          warnings: []
+        };
 
-      const response = await manager
-        .createQueryBuilder(ResponseEntity, 'response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('response.id = :responseId', { responseId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+        const response = await manager
+          .createQueryBuilder(ResponseEntity, 'response')
+          .leftJoinAndSelect('response.unit', 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .where('response.id = :responseId', { responseId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .getOne();
 
-      if (!response) {
-        const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
+        if (!response) {
+          const warningMessage = `Keine Antwort mit ID ${responseId} im Workspace ${workspaceId} gefunden`;
+          this.logger.warn(warningMessage);
+          report.warnings.push(warningMessage);
+          return { success: false, report };
+        }
 
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(ResponseEntity)
-        .where('id = :responseId', { responseId })
-        .execute();
-
-      report.deletedResponse = responseId;
-      affectedUnitId = response.unit.id;
-
-      try {
-        await this.journalService.createEntry(
-          userId,
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
           workspaceId,
-          'delete',
-          'response',
-          responseId,
-          {
+          [responseId],
+          'RESULT_DELETED',
+          'review_required',
+          manager
+        );
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(ResponseEntity)
+          .where('id = :responseId', { responseId })
+          .execute();
+
+        report.deletedResponse = responseId;
+        affectedUnitId = response.unit.id;
+
+        try {
+          await this.journalService.createEntry(
+            userId,
+            workspaceId,
+            'delete',
+            'response',
             responseId,
-            unitId: response.unit.id,
-            unitName: response.unit.name,
-            variableId: response.variableid,
-            value: response.value,
-            bookletId: response.unit.booklet?.id,
-            personId: response.unit.booklet?.person?.id
-          }
-        );
-      } catch (e) {
-        this.logger.error(
-          `Failed to create journal entry for response deletion: ${e.message}`
-        );
-      }
+            {
+              responseId,
+              unitId: response.unit.id,
+              unitName: response.unit.name,
+              variableId: response.variableid,
+              value: response.value,
+              bookletId: response.unit.booklet?.id,
+              personId: response.unit.booklet?.person?.id
+            }
+          );
+        } catch (e) {
+          this.logger.error(
+            `Failed to create journal entry for response deletion: ${e.message}`
+          );
+        }
 
-      return { success: true, report };
-    }).then(async result => {
-      if (result.success) {
-        await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
-          workspaceId,
-          affectedUnitId ? [affectedUnitId] : [],
-          'RESULT_DELETED'
-        );
-        await Promise.all([
-          this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
-          this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
-        ]);
-      }
-      return result;
+        return { success: true, report };
+      }).then(async result => {
+        if (result.success) {
+          await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+            workspaceId,
+            affectedUnitId ? [affectedUnitId] : [],
+            'RESULT_DELETED'
+          );
+          await Promise.all([
+            this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+          ]);
+        }
+        return result;
+      });
     });
   }
 }

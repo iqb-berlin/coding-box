@@ -56,6 +56,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { FLAT_FREQUENCIES_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX } from '../workspace/workspace-constants';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
@@ -4120,77 +4121,81 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const ids = testPersonIds.split(',').map(id => id.trim());
-      const report = {
-        deletedPersons: [],
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.connection.transaction(async manager => {
+        const ids = testPersonIds.split(',').map(id => id.trim());
+        const report = {
+          deletedPersons: [],
+          warnings: []
+        };
 
-      const existingPersons = await manager
-        .createQueryBuilder(Persons, 'persons')
-        .select([
-          'persons.id',
-          'persons.login',
-          'persons.code',
-          'persons.group',
-          'persons.workspace_id',
-          'persons.uploaded_at',
-          'persons.source'
-        ])
-        .where('persons.id IN (:...ids)', { ids })
-        .getMany();
+        const existingPersons = await manager
+          .createQueryBuilder(Persons, 'persons')
+          .select([
+            'persons.id',
+            'persons.login',
+            'persons.code',
+            'persons.group',
+            'persons.workspace_id',
+            'persons.uploaded_at',
+            'persons.source'
+          ])
+          .where('persons.id IN (:...ids)', { ids })
+          .getMany();
 
-      if (!existingPersons.length) {
-        const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
-
-      const existingIds = existingPersons.map(person => person.id);
-
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(Persons)
-        .where('id IN (:...ids)', { ids: existingIds })
-        .execute();
-
-      report.deletedPersons = existingIds;
-
-      for (const person of existingPersons) {
-        try {
-          await this.journalService.createEntry(
-            userId,
-            workspaceId,
-            'delete',
-            'test-person',
-            person.id,
-            {
-              personId: person.id,
-              personLogin: person.login,
-              personCode: person.code,
-              personGroup: person.group,
-              personSource: person.source,
-              personUploadedAt: person.uploaded_at,
-              message: 'Test person deleted'
-            }
-          );
-        } catch (error) {
-          this.logger.error(
-            `Failed to create journal entry for deleting test person ${person.id}: ${error.message}`
-          );
+        if (!existingPersons.length) {
+          const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
+          this.logger.warn(warningMessage);
+          report.warnings.push(warningMessage);
+          return { success: false, report };
         }
-      }
 
-      return { success: true, report };
-    }).then(async result => {
-      if (result.success) {
-        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-      }
-      return result;
-    });
+        const existingIds = existingPersons.map(person => person.id);
+
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Persons)
+          .where('id IN (:...ids)', { ids: existingIds })
+          .execute();
+
+        report.deletedPersons = existingIds;
+
+        for (const person of existingPersons) {
+          try {
+            await this.journalService.createEntry(
+              userId,
+              workspaceId,
+              'delete',
+              'test-person',
+              person.id,
+              {
+                personId: person.id,
+                personLogin: person.login,
+                personCode: person.code,
+                personGroup: person.group,
+                personSource: person.source,
+                personUploadedAt: person.uploaded_at,
+                message: 'Test person deleted'
+              }
+            );
+          } catch (error) {
+            this.logger.error(
+              `Failed to create journal entry for deleting test person ${person.id}: ${error.message}`
+            );
+          }
+        }
+
+        return { success: true, report };
+      }).then(async result => {
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+        }
+        return result;
+      })
+    );
   }
 
   async previewDeleteTestResults(
@@ -4209,6 +4214,24 @@ export class WorkspaceTestResultsService {
   }
 
   async deleteTestResultsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestResultsByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestResultsByRequestLocked(
     workspaceId: number,
     request: TestResultsDeleteRequestDto,
     userId: string,
@@ -4249,6 +4272,14 @@ export class WorkspaceTestResultsService {
       );
 
       const deleteResult = await this.connection.transaction(async manager => {
+        await this.codingFreshnessService?.markCodingJobsStaleForResponseIds?.(
+          workspaceId,
+          chunkSnapshot.responseIds,
+          'RESULT_DELETED',
+          'review_required',
+          manager
+        );
+
         await this.deleteKnownDeleteDependents(
           manager,
           targets.kind,
@@ -4343,6 +4374,24 @@ export class WorkspaceTestResultsService {
   }
 
   async deleteTestLogsByRequest(
+    workspaceId: number,
+    request: TestResultsDeleteRequestDto,
+    userId: string,
+    onProgress?: (progress: number, message?: string) => Promise<void>
+  ): Promise<TestResultsDeleteResultDto> {
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.deleteTestLogsByRequestLocked(
+        workspaceId,
+        request,
+        userId,
+        onProgress
+      )
+    );
+  }
+
+  private async deleteTestLogsByRequestLocked(
     workspaceId: number,
     request: TestResultsDeleteRequestDto,
     userId: string,
@@ -5341,70 +5390,74 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedUnit: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.connection.transaction(async manager => {
+        const report = {
+          deletedUnit: null,
+          warnings: []
+        };
 
-      const unit = await manager
-        .createQueryBuilder(Unit, 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('unit.id = :unitId', { unitId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+        const unit = await manager
+          .createQueryBuilder(Unit, 'unit')
+          .leftJoinAndSelect('unit.booklet', 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .where('unit.id = :unitId', { unitId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .getOne();
 
-      if (!unit) {
-        const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
+        if (!unit) {
+          const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
+          this.logger.warn(warningMessage);
+          report.warnings.push(warningMessage);
+          return { success: false, report };
+        }
 
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(Unit)
-        .where('id = :unitId', { unitId })
-        .execute();
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Unit)
+          .where('id = :unitId', { unitId })
+          .execute();
 
-      report.deletedUnit = unitId;
+        report.deletedUnit = unitId;
 
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'unit',
-          unitId,
-          {
+        try {
+          await this.journalService.createEntry(
+            userId,
+            workspaceId,
+            'delete',
+            'unit',
             unitId,
-            unitName: unit.name,
-            unitAlias: unit.alias,
-            bookletId: unit.booklet?.id,
-            personId: unit.booklet?.person?.id,
-            personLogin: unit.booklet?.person?.login,
-            personCode: unit.booklet?.person?.code,
-            personGroup: unit.booklet?.person?.group,
-            personSource: unit.booklet?.person?.source,
-            personUploadedAt: unit.booklet?.person?.uploaded_at,
-            message: 'Unit deleted'
-          }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for deleting unit ${unitId}: ${error.message}`
-        );
-      }
+            {
+              unitId,
+              unitName: unit.name,
+              unitAlias: unit.alias,
+              bookletId: unit.booklet?.id,
+              personId: unit.booklet?.person?.id,
+              personLogin: unit.booklet?.person?.login,
+              personCode: unit.booklet?.person?.code,
+              personGroup: unit.booklet?.person?.group,
+              personSource: unit.booklet?.person?.source,
+              personUploadedAt: unit.booklet?.person?.uploaded_at,
+              message: 'Unit deleted'
+            }
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to create journal entry for deleting unit ${unitId}: ${error.message}`
+          );
+        }
 
-      return { success: true, report };
-    }).then(async result => {
-      if (result.success) {
-        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-      }
-      return result;
-    });
+        return { success: true, report };
+      }).then(async result => {
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+        }
+        return result;
+      })
+    );
   }
 
   async deleteResponse(
@@ -5443,68 +5496,72 @@ export class WorkspaceTestResultsService {
         warnings: string[];
       };
     }> {
-    return this.connection.transaction(async manager => {
-      const report = {
-        deletedBooklet: null,
-        warnings: []
-      };
+    return withWorkspaceTestResultsMutationLock(
+      this.connection,
+      workspaceId,
+      async () => this.connection.transaction(async manager => {
+        const report = {
+          deletedBooklet: null,
+          warnings: []
+        };
 
-      const booklet = await manager
-        .createQueryBuilder(Booklet, 'booklet')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .where('booklet.id = :bookletId', { bookletId })
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .getOne();
+        const booklet = await manager
+          .createQueryBuilder(Booklet, 'booklet')
+          .leftJoinAndSelect('booklet.person', 'person')
+          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .where('booklet.id = :bookletId', { bookletId })
+          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+          .getOne();
 
-      if (!booklet) {
-        const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
-        this.logger.warn(warningMessage);
-        report.warnings.push(warningMessage);
-        return { success: false, report };
-      }
+        if (!booklet) {
+          const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
+          this.logger.warn(warningMessage);
+          report.warnings.push(warningMessage);
+          return { success: false, report };
+        }
 
-      await manager
-        .createQueryBuilder()
-        .delete()
-        .from(Booklet)
-        .where('id = :bookletId', { bookletId })
-        .execute();
+        await manager
+          .createQueryBuilder()
+          .delete()
+          .from(Booklet)
+          .where('id = :bookletId', { bookletId })
+          .execute();
 
-      report.deletedBooklet = bookletId;
+        report.deletedBooklet = bookletId;
 
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'booklet',
-          bookletId,
-          {
+        try {
+          await this.journalService.createEntry(
+            userId,
+            workspaceId,
+            'delete',
+            'booklet',
             bookletId,
-            bookletName: booklet.bookletinfo?.name || 'Unknown',
-            personId: booklet.personid,
-            personLogin: booklet.person?.login || 'Unknown',
-            personCode: booklet.person?.code,
-            personGroup: booklet.person?.group,
-            personSource: booklet.person?.source,
-            personUploadedAt: booklet.person?.uploaded_at,
-            message: 'Booklet deleted'
-          }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`
-        );
-      }
+            {
+              bookletId,
+              bookletName: booklet.bookletinfo?.name || 'Unknown',
+              personId: booklet.personid,
+              personLogin: booklet.person?.login || 'Unknown',
+              personCode: booklet.person?.code,
+              personGroup: booklet.person?.group,
+              personSource: booklet.person?.source,
+              personUploadedAt: booklet.person?.uploaded_at,
+              message: 'Booklet deleted'
+            }
+          );
+        } catch (error) {
+          this.logger.error(
+            `Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`
+          );
+        }
 
-      return { success: true, report };
-    }).then(async result => {
-      if (result.success) {
-        await this.invalidateCachesAfterTestResultDeletion(workspaceId);
-      }
-      return result;
-    });
+        return { success: true, report };
+      }).then(async result => {
+        if (result.success) {
+          await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+        }
+        return result;
+      })
+    );
   }
 
   async searchResponses(

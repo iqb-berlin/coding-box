@@ -1,5 +1,6 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { DataSource } from 'typeorm';
 import * as https from 'https';
 import { catchError, firstValueFrom } from 'rxjs';
 import { logger } from 'nx/src/utils/logger';
@@ -24,6 +25,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { TestResultsMutationSummary } from './person-persistence.service';
+import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export { Result };
 
@@ -60,6 +62,7 @@ export class TestcenterService {
     private workspaceFilesService: WorkspaceFilesService,
     private cacheService: CacheService,
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly connection: DataSource,
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService
   ) {}
@@ -175,8 +178,6 @@ export class TestcenterService {
         try {
           const PERSON_BATCH_SIZE = 50;
 
-          const mutationSummary = this.createMutationSummary();
-
           for (const chunk of chunks) {
             const endpoint = url ?
               `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
@@ -218,6 +219,7 @@ export class TestcenterService {
             });
 
             let personList: Person[] = [];
+            const personBatches: Person[][] = [];
             for (const person of this.persons) {
               const personKey = `${person.group || ''}@@${person.login || ''}@@${person.code || ''}`;
               const personRows = responsesByPerson.get(personKey) || [];
@@ -237,35 +239,37 @@ export class TestcenterService {
               personList.push(personWithUnits);
 
               if (personList.length >= PERSON_BATCH_SIZE) {
+                personBatches.push(personList);
+                personList = [];
+              }
+            }
+
+            if (personList.length > 0) {
+              personBatches.push(personList);
+            }
+
+            if (personBatches.length === 0) continue;
+
+            await withWorkspaceTestResultsMutationLock(this.connection, Number(workspace_id), async () => {
+              const mutationSummary = this.createMutationSummary();
+              for (const personBatch of personBatches) {
                 const batchSummary = await this.personService.processPersonBooklets(
-                  personList,
+                  personBatch,
                   Number(workspace_id),
                   'skip',
                   'person',
                   issues
                 );
                 this.mergeMutationSummary(mutationSummary, batchSummary);
-                personList = [];
               }
-            }
 
-            if (personList.length > 0) {
-              const batchSummary = await this.personService.processPersonBooklets(
-                personList,
+              await this.updateCodingFreshnessAfterResponseImport(
                 Number(workspace_id),
-                'skip',
-                'person',
+                mutationSummary,
                 issues
               );
-              this.mergeMutationSummary(mutationSummary, batchSummary);
-            }
+            });
           }
-
-          await this.updateCodingFreshnessAfterResponseImport(
-            Number(workspace_id),
-            mutationSummary,
-            issues
-          );
 
           return { issues };
         } catch (error) {

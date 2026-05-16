@@ -26,6 +26,7 @@ import { JournalService, Person } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import {
@@ -262,6 +263,11 @@ describe('test results export/import roundtrip', () => {
     } as unknown as Repository<Session>;
 
     const dataSource = {
+      createQueryRunner: jest.fn().mockReturnValue({
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([]),
+        release: jest.fn().mockResolvedValue(undefined)
+      }),
       getRepository: jest.fn(() => ({
         createQueryBuilder: jest.fn(() => queryBuilder<UnitLastState>({
           getMany: jest.fn().mockResolvedValue([
@@ -306,6 +312,11 @@ describe('test results export/import roundtrip', () => {
     const persistenceService = createMock<PersonPersistenceService>({
       processPersonBooklets: jest.fn().mockImplementation(async persons => {
         capturedResponsePersons = persons;
+        return {
+          addedUnitIds: [],
+          addedResponseCount: 0,
+          changedUnitIds: []
+        };
       }),
       processPersonLogs: jest.fn().mockImplementation(async persons => {
         capturedLogPersons = persons;
@@ -323,6 +334,17 @@ describe('test results export/import roundtrip', () => {
       createMock<JobQueueService>(),
       createMock<WorkspaceTestResultsService>({
         invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+      }),
+      {
+        createQueryRunner: jest.fn().mockReturnValue({
+          connect: jest.fn().mockResolvedValue(undefined),
+          query: jest.fn().mockResolvedValue([]),
+          release: jest.fn().mockResolvedValue(undefined)
+        })
+      } as unknown as DataSource,
+      createMock<CodingFreshnessService>({
+        markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+        markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
       })
     );
   };

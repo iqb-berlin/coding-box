@@ -16,10 +16,11 @@ describe('ResponseManagementService', () => {
     execute: jest.fn().mockResolvedValue(executeResult)
   });
 
-  const createService = () => new ResponseManagementService(
+  const createService = (codingFreshnessService?: unknown) => new ResponseManagementService(
     {} as never,
     {} as never,
-    workspaceTestResultsService as never
+    workspaceTestResultsService as never,
+    codingFreshnessService as never
   );
 
   beforeEach(() => {
@@ -59,14 +60,19 @@ describe('ResponseManagementService', () => {
       update: jest.fn().mockResolvedValue({}),
       query: jest.fn().mockResolvedValue([])
     };
+    const commitTransaction = jest.fn().mockResolvedValue(undefined);
+    const release = jest.fn().mockResolvedValue(undefined);
     const queryRunner = {
       manager,
-      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      commitTransaction,
       rollbackTransaction: jest.fn().mockResolvedValue(undefined),
-      release: jest.fn().mockResolvedValue(undefined)
+      release
     } as unknown as QueryRunner;
 
-    const service = createService();
+    const codingFreshnessService = {
+      markVersionCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = createService(codingFreshnessService);
 
     await service.updateResponsesInDatabase(
       1,
@@ -96,7 +102,7 @@ describe('ResponseManagementService', () => {
       undefined,
       undefined,
       undefined,
-      { unitIds: [1], autoCoderRun: 1 }
+      { unitIds: [1], autoCoderRun: 1, markCurrentVersion: 'v1' }
     );
 
     expect(cleanupUpdateQueryBuilder.set).toHaveBeenCalledWith(
@@ -126,6 +132,12 @@ describe('ResponseManagementService', () => {
       { generated: true }
     );
     expect(manager.insert).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markVersionCurrent)
+      .toHaveBeenCalledWith(1, [1], 'v1', manager);
+    expect(codingFreshnessService.markVersionCurrent.mock.invocationCallOrder[0])
+      .toBeLessThan(commitTransaction.mock.invocationCallOrder[0]);
+    expect(codingFreshnessService.markVersionCurrent.mock.invocationCallOrder[0])
+      .toBeLessThan(release.mock.invocationCallOrder[0]);
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
@@ -161,13 +173,19 @@ describe('ResponseManagementService', () => {
         .mockReturnValueOnce(deleteQueryBuilder)
     };
     const connection = {
-      transaction: jest.fn(cb => cb(manager))
+      transaction: jest.fn(cb => cb(manager)),
+      createQueryRunner: jest.fn().mockReturnValue({
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([]),
+        release: jest.fn().mockResolvedValue(undefined)
+      })
     };
     const journalService = {
       createEntry: jest.fn().mockResolvedValue(undefined)
     };
     const codingFreshnessService = {
-      markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
+      markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
+      markCodingJobsStaleForResponseIds: jest.fn().mockResolvedValue(undefined)
     };
     const service = new ResponseManagementService(
       connection as never,
@@ -179,6 +197,8 @@ describe('ResponseManagementService', () => {
     const result = await service.deleteResponse(1, 50, 'user-1');
 
     expect(result.success).toBe(true);
+    expect(codingFreshnessService.markCodingJobsStaleForResponseIds)
+      .toHaveBeenCalledWith(1, [50], 'RESULT_DELETED', 'review_required', manager);
     expect(codingFreshnessService.markUnitsStaleAfterResultChange)
       .toHaveBeenCalledWith(1, [7], 'RESULT_DELETED');
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)

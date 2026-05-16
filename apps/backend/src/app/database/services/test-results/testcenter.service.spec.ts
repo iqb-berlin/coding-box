@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { createMock, DeepMocked } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
 import { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { DataSource } from 'typeorm';
 import { of, throwError } from 'rxjs';
 import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-groups-info.dto';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
@@ -53,6 +54,16 @@ describe('TestCenterService', () => {
           useValue: createMock<WorkspaceTestResultsService>({
             invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
           })
+        },
+        {
+          provide: DataSource,
+          useValue: {
+            createQueryRunner: jest.fn().mockReturnValue({
+              connect: jest.fn().mockResolvedValue(undefined),
+              query: jest.fn().mockResolvedValue([]),
+              release: jest.fn().mockResolvedValue(undefined)
+            })
+          }
         },
         {
           provide: CodingFreshnessService,
