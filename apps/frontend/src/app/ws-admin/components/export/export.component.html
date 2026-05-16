@@ -9,16 +9,19 @@
 
       <div class="format-options">
         <mat-radio-group [(ngModel)]="selectedFormat" (ngModelChange)="onFormatChange()">
-          <div class="format-option" *ngFor="let format of exportFormats">
-            <mat-radio-button [value]="format.value">
-              <div class="format-label">{{ format.label }}</div>
-              <div class="format-description">{{ format.description }}</div>
-            </mat-radio-button>
+          <div class="format-group" *ngFor="let group of exportFormatGroups">
+            <h3>{{ group.label }}</h3>
+            <div class="format-option" *ngFor="let format of group.formats">
+              <mat-radio-button [value]="format.value">
+                <div class="format-label">{{ format.label }}</div>
+                <div class="format-description">{{ format.description }}</div>
+              </mat-radio-button>
+            </div>
           </div>
         </mat-radio-group>
       </div>
 
-      <div class="filter-section">
+      <div class="filter-section" *ngIf="supportsJobFilters()">
         <h3>{{ 'ws-admin.export-options.filter-jobs-trainings' | translate }}</h3>
         <div class="filter-fields-container">
           <div class="selection-trigger">
@@ -37,16 +40,42 @@
           <mat-form-field appearance="outline">
             <mat-label>{{ 'ws-admin.export-options.coders' | translate }}</mat-label>
             <mat-select [(ngModel)]="selectedCoderIds" multiple>
+              <mat-select-trigger>{{ getCoderSelectionLabel() }}</mat-select-trigger>
               <mat-option *ngFor="let coder of coders" [value]="coder.id">
                 {{ coder.name }}
               </mat-option>
             </mat-select>
+            <mat-hint>{{ 'ws-admin.export-options.coders-empty-means-all' | translate }}</mat-hint>
           </mat-form-field>
         </div>
       </div>
 
       <div class="export-options-section">
         <h3>{{ 'ws-admin.export-options-title' | translate }}</h3>
+
+        <div *ngIf="selectedFormat === 'results-by-version'" class="results-options">
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'ws-admin.export-options.results-version' | translate }}</mat-label>
+            <mat-select [(ngModel)]="resultsVersion">
+              <mat-option value="v1">{{ 'ws-admin.export-options.results-version-v1' | translate }}</mat-option>
+              <mat-option value="v2">{{ 'ws-admin.export-options.results-version-v2' | translate }}</mat-option>
+              <mat-option value="v3">{{ 'ws-admin.export-options.results-version-v3' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-form-field appearance="outline">
+            <mat-label>{{ 'ws-admin.export-options.results-format' | translate }}</mat-label>
+            <mat-select [(ngModel)]="resultsFormat">
+              <mat-option value="csv">{{ 'ws-admin.export-options.results-format-csv' | translate }}</mat-option>
+              <mat-option value="excel">{{ 'ws-admin.export-options.results-format-excel' | translate }}</mat-option>
+            </mat-select>
+          </mat-form-field>
+
+          <mat-checkbox [(ngModel)]="includeResponseValues" color="primary"
+            [matTooltip]="'ws-admin.export-options.include-response-values-tooltip' | translate">
+            {{ 'ws-admin.export-options.include-response-values' | translate }}
+          </mat-checkbox>
+        </div>
 
         <!-- Double-coding method section for aggregated export -->
         <div *ngIf="selectedFormat === 'aggregated'" class="double-coding-section">
@@ -105,7 +134,7 @@
           [matTooltip]="'ws-admin.export-options.output-comments-instead-of-codes-tooltip' | translate">
           {{ 'ws-admin.export-options.output-comments-instead-of-codes' | translate }}
         </mat-checkbox>
-        <mat-checkbox [(ngModel)]="anonymizeCoders" color="primary"
+        <mat-checkbox *ngIf="supportsCoderOptions()" [(ngModel)]="anonymizeCoders" color="primary"
           [matTooltip]="'ws-admin.export-options.anonymize-coders-tooltip' | translate">
           {{ 'ws-admin.export-options.anonymize-coders' | translate }}
         </mat-checkbox>
@@ -117,7 +146,7 @@
         </div>
       </div>
 
-      <mat-checkbox [(ngModel)]="excludeAutoCoded" color="primary"
+      <mat-checkbox *ngIf="supportsManualVariableFilter()" [(ngModel)]="excludeAutoCoded" color="primary"
         [matTooltip]="'ws-admin.export-options.exclude-auto-coded-tooltip' | translate">
         {{ 'ws-admin.export-options.exclude-auto-coded' | translate }}
       </mat-checkbox>

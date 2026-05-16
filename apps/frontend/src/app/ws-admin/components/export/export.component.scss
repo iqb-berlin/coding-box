@@ -48,6 +48,17 @@
   .format-options {
     margin-top: 20px;
 
+    .format-group {
+      margin-bottom: 20px;
+
+      h3 {
+        margin: 0 0 12px 0;
+        font-size: 1em;
+        font-weight: 500;
+        color: #333;
+      }
+    }
+
     .format-option {
       margin-bottom: 16px;
 
@@ -92,6 +103,18 @@
     .sub-option {
       margin-left: clamp(12px, 4vw, 32px);
       margin-top: 8px;
+    }
+
+    .results-options {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 8px;
+
+      mat-form-field {
+        width: 100%;
+        min-width: 0;
+      }
     }
   }
 

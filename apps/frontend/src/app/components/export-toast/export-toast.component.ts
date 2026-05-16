@@ -7,7 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ExportJob, ExportJobService } from '../../shared/services/file/export-job.service';
@@ -29,7 +29,16 @@ import { ExportJob, ExportJobService } from '../../shared/services/file/export-j
 })
 export class ExportToastComponent implements OnInit, OnDestroy {
   private exportJobService = inject(ExportJobService);
+  private translateService = inject(TranslateService);
   private destroy$ = new Subject<void>();
+  private readonly exportTypeLabelKeys: Record<string, string> = {
+    aggregated: 'export-toast.types.aggregated',
+    'by-coder': 'export-toast.types.by-coder',
+    'by-variable': 'export-toast.types.by-variable',
+    detailed: 'export-toast.types.detailed',
+    'coding-times': 'export-toast.types.coding-times',
+    'results-by-version': 'export-toast.types.results-by-version'
+  };
 
   jobs: ExportJob[] = [];
   isCollapsed = false;
@@ -89,18 +98,12 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   }
 
   getExportTypeLabel(exportType: string): string {
-    const labels: Record<string, string> = {
-      aggregated: 'Aggregiert',
-      'by-coder': 'Nach Kodierer',
-      'by-variable': 'Nach Variable',
-      detailed: 'Detailliert',
-      'coding-times': 'Kodierzeiten'
-    };
-    return labels[exportType] || exportType;
+    const translationKey = this.exportTypeLabelKeys[exportType];
+    return translationKey ? this.translateService.instant(translationKey) : exportType;
   }
 
   downloadFile(job: ExportJob): void {
-    this.exportJobService.downloadFile(job.workspaceId, job.jobId, job.exportType);
+    this.exportJobService.downloadFile(job.workspaceId, job.jobId, job.exportType, job.result?.fileName);
   }
 
   removeJob(job: ExportJob): void {

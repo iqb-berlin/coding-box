@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BehaviorSubject } from 'rxjs';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ExportToastComponent } from './export-toast.component';
 import { ExportJob, ExportJobService } from '../../shared/services/file/export-job.service';
 
@@ -17,7 +17,11 @@ describe('ExportToastComponent', () => {
 
   const jobs = [
     {
-      jobId: 'waiting', workspaceId: 1, exportType: 'aggregated', status: 'waiting'
+      jobId: 'waiting',
+      workspaceId: 1,
+      exportType: 'aggregated',
+      status: 'waiting',
+      result: { fileName: 'export.csv', fileSize: 100 }
     },
     {
       jobId: 'active', workspaceId: 1, exportType: 'by-coder', status: 'active'
@@ -47,6 +51,21 @@ describe('ExportToastComponent', () => {
       providers: [{ provide: ExportJobService, useValue: exportJobService }]
     }).compileComponents();
 
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'export-toast': {
+        types: {
+          aggregated: 'Aggregierte Ansicht',
+          'by-coder': 'Nach Kodierer',
+          'by-variable': 'Nach Variable',
+          detailed: 'Detailliertes Kodierprotokoll',
+          'coding-times': 'Kodierzeiten-Bericht',
+          'results-by-version': 'Finale Ergebnisdaten'
+        }
+      }
+    });
+    translateService.use('de');
+
     fixture = TestBed.createComponent(ExportToastComponent);
     component = fixture.componentInstance;
   });
@@ -65,7 +84,9 @@ describe('ExportToastComponent', () => {
     expect(component.getStatusIcon('cancelled')).toBe('cancel');
     expect(component.getStatusIcon('unknown' as never)).toBe('help');
     expect(component.getStatusClass('failed')).toBe('status-failed');
-    expect(component.getExportTypeLabel('aggregated')).toBe('Aggregiert');
+    expect(component.getExportTypeLabel('aggregated')).toBe('Aggregierte Ansicht');
+    expect(component.getExportTypeLabel('detailed')).toBe('Detailliertes Kodierprotokoll');
+    expect(component.getExportTypeLabel('results-by-version')).toBe('Finale Ergebnisdaten');
     expect(component.getExportTypeLabel('custom')).toBe('custom');
 
     component.toggleCollapse();
@@ -75,7 +96,7 @@ describe('ExportToastComponent', () => {
     component.cancelJob(jobs[1]);
     component.clearCompleted();
 
-    expect(exportJobService.downloadFile).toHaveBeenCalledWith(1, 'waiting', 'aggregated');
+    expect(exportJobService.downloadFile).toHaveBeenCalledWith(1, 'waiting', 'aggregated', 'export.csv');
     expect(exportJobService.removeJob).toHaveBeenCalledWith('waiting');
     expect(exportJobService.cancelJob).toHaveBeenCalledWith(jobs[1]);
     expect(exportJobService.removeJob).toHaveBeenCalledWith('done');

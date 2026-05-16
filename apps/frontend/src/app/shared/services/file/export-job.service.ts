@@ -1,8 +1,17 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import {
-  BehaviorSubject, Subject, Subscription, interval
+  BehaviorSubject,
+  Observable,
+  Subject,
+  Subscription,
+  interval
 } from 'rxjs';
-import { switchMap, takeUntil } from 'rxjs/operators';
+import {
+  map,
+  switchMap,
+  takeUntil,
+  tap
+} from 'rxjs/operators';
 import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 
 export interface ExportJob {
@@ -25,10 +34,14 @@ export interface ExportJobConfig {
   | 'by-coder'
   | 'by-variable'
   | 'detailed'
-  | 'coding-times';
+  | 'coding-times'
+  | 'results-by-version';
   userId: number;
+  version?: 'v1' | 'v2' | 'v3';
+  format?: 'csv' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
   includeReplayUrl?: boolean;
+  includeResponseValues?: boolean;
   anonymizeCoders?: boolean;
   usePseudoCoders?: boolean;
   doubleCodingMethod?:
@@ -75,23 +88,21 @@ export class ExportJobService implements OnDestroy {
     return this.jobsSubject.value.filter(job => job.status === 'cancelled');
   }
 
-  startJob(workspaceId: number, config: ExportJobConfig): void {
-    this.codingJobBackendService.startExportJob(workspaceId, config).subscribe({
-      next: (response: { jobId: string }) => {
-        const newJob: ExportJob = {
-          jobId: response.jobId,
-          workspaceId,
-          status: 'waiting',
-          progress: 0,
-          exportType: config.exportType,
-          createdAt: Date.now()
-        };
-
-        this.addJob(newJob);
-        this.startPollingForJob(workspaceId, response.jobId);
-      },
-      error: () => { }
-    });
+  startJob(workspaceId: number, config: ExportJobConfig): Observable<ExportJob> {
+    return this.codingJobBackendService.startExportJob(workspaceId, config).pipe(
+      map((response: { jobId: string }) => ({
+        jobId: response.jobId,
+        workspaceId,
+        status: 'waiting' as const,
+        progress: 0,
+        exportType: config.exportType,
+        createdAt: Date.now()
+      })),
+      tap(job => {
+        this.addJob(job);
+        this.startPollingForJob(workspaceId, job.jobId);
+      })
+    );
   }
 
   private addJob(job: ExportJob): void {
@@ -229,13 +240,13 @@ export class ExportJobService implements OnDestroy {
     });
   }
 
-  downloadFile(workspaceId: number, jobId: string, exportType: string): void {
+  downloadFile(workspaceId: number, jobId: string, exportType: string, fileName?: string): void {
     this.codingJobBackendService.downloadExportFile(workspaceId, jobId).subscribe({
       next: (blob: Blob) => {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const ext = exportType === 'detailed' ? 'csv' : 'xlsx';
+        const ext = this.getDownloadExtension(exportType, fileName);
         const date = new Date().toISOString().slice(0, 10);
         a.download = `export-${exportType}-${date}.${ext}`;
         document.body.appendChild(a);
@@ -245,6 +256,14 @@ export class ExportJobService implements OnDestroy {
       },
       error: () => { }
     });
+  }
+
+  private getDownloadExtension(exportType: string, fileName?: string): string {
+    const fileExtension = fileName?.split('.').pop()?.toLowerCase();
+    if (fileExtension && ['csv', 'xlsx', 'json'].includes(fileExtension)) {
+      return fileExtension;
+    }
+    return exportType === 'detailed' ? 'csv' : 'xlsx';
   }
 
   ngOnDestroy(): void {

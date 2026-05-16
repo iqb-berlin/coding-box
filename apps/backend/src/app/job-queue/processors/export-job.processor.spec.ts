@@ -22,7 +22,9 @@ describe('ExportJobProcessor', () => {
   const createProcessor = () => {
     const codingExportService = {
       exportCodingListForJobAsExcel: jest.fn(),
-      exportCodingListForJobAsJson: jest.fn()
+      exportCodingListForJobAsJson: jest.fn(),
+      exportCodingResultsByVersionAsCsv: jest.fn(),
+      exportCodingResultsByVersionAsExcel: jest.fn()
     };
     const cacheService = {
       set: jest.fn().mockResolvedValue(undefined)
@@ -102,5 +104,47 @@ describe('ExportJobProcessor', () => {
     } finally {
       cleanup(filePath);
     }
+  });
+
+  it('defaults final result exports to v2 CSV when no version or format is provided', async () => {
+    const { processor, codingExportService } = createProcessor();
+    codingExportService.exportCodingResultsByVersionAsCsv.mockResolvedValue(Readable.from(['csv']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'results-by-version',
+        includeReplayUrl: true,
+        includeResponseValues: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example'
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsByVersionAsCsv).toHaveBeenCalledWith(
+        7,
+        'v2',
+        'auth-token',
+        'http://app.example',
+        true,
+        expect.any(Function),
+        true
+      );
+      expect(result.fileName).toMatch(/\.csv$/);
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it.each(['json', 'xlsx'])('rejects %s format for final result exports', async format => {
+    const { processor, codingExportService } = createProcessor();
+
+    await expect(processor.process(createJob({
+      exportType: 'results-by-version',
+      format: format as never
+    }))).rejects.toThrow('results-by-version exports support only "csv" or "excel" format');
+
+    expect(codingExportService.exportCodingResultsByVersionAsCsv).not.toHaveBeenCalled();
+    expect(codingExportService.exportCodingResultsByVersionAsExcel).not.toHaveBeenCalled();
   });
 });

@@ -370,12 +370,14 @@ export class CodingManagementService {
     this.downloadProgress$.next(0);
 
     try {
+      const jobFormat = format === 'json' ? 'csv' : format;
+
       // Start the job
       const jobStartResult = await this.exportService.startExportJob(
         workspaceId,
         'results-by-version',
         version,
-        format,
+        jobFormat,
         includeReplayUrls,
         undefined,
         includeResponseValues

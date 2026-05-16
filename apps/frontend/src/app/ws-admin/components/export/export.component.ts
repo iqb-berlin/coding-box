@@ -16,7 +16,7 @@ import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { AppService } from '../../../core/services/app.service';
-import { ExportJobService } from '../../../shared/services/file/export-job.service';
+import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
 import { CoderService } from '../../../coding/services/coder.service';
 import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
@@ -27,7 +27,26 @@ import {
   ExportSelectionDialogResult
 } from './export-selection-dialog.component';
 
-export type ExportFormat = 'aggregated' | 'by-coder' | 'by-variable' | 'detailed' | 'coding-times';
+export type ExportFormat =
+  | 'results-by-version'
+  | 'aggregated'
+  | 'by-coder'
+  | 'by-variable'
+  | 'detailed'
+  | 'coding-times';
+type ResultsVersion = 'v1' | 'v2' | 'v3';
+type ResultsExportFormat = 'csv' | 'excel';
+
+interface ExportFormatOption {
+  value: ExportFormat;
+  label: string;
+  description: string;
+}
+
+interface ExportFormatGroup {
+  label: string;
+  formats: ExportFormatOption[];
+}
 
 @Component({
   selector: 'coding-box-export',
@@ -60,17 +79,20 @@ export class ExportComponent {
   private coderService = inject(CoderService);
   private dialog = inject(MatDialog);
 
-  selectedFormat: ExportFormat = 'aggregated';
+  selectedFormat: ExportFormat = 'results-by-version';
   isStartingExport = false;
   includeModalValue = false;
   includeDoubleCoded = false;
   includeComments = false;
   includeReplayUrl = false;
+  includeResponseValues = true;
   outputCommentsInsteadOfCodes = false;
   anonymizeCoders = false;
   usePseudoCoders = false;
   doubleCodingMethod: 'new-row-per-variable' | 'new-column-per-coder' | 'most-frequent' = 'most-frequent';
   excludeAutoCoded = false;
+  resultsVersion: ResultsVersion = 'v2';
+  resultsFormat: ResultsExportFormat = 'csv';
 
   jobDefinitions: JobDefinition[] = [];
   coderTrainings: CoderTraining[] = [];
@@ -81,31 +103,46 @@ export class ExportComponent {
   selectedCoderIds: number[] = [];
   selectedCombinedJobIds: string[] = [];
 
-  exportFormats = [
+  exportFormatGroups: ExportFormatGroup[] = [
     {
-      value: 'aggregated' as ExportFormat,
-      label: this.translateService.instant('ws-admin.export-formats.aggregated'),
-      description: this.translateService.instant('ws-admin.export-formats.aggregated-description')
+      label: this.translateService.instant('ws-admin.export-format-groups.result-data'),
+      formats: [
+        {
+          value: 'results-by-version',
+          label: this.translateService.instant('ws-admin.export-formats.final-results'),
+          description: this.translateService.instant('ws-admin.export-formats.final-results-description')
+        },
+        {
+          value: 'aggregated',
+          label: this.translateService.instant('ws-admin.export-formats.aggregated'),
+          description: this.translateService.instant('ws-admin.export-formats.aggregated-description')
+        }
+      ]
     },
     {
-      value: 'by-coder' as ExportFormat,
-      label: this.translateService.instant('ws-admin.export-formats.by-coder'),
-      description: this.translateService.instant('ws-admin.export-formats.by-coder-description')
-    },
-    {
-      value: 'by-variable' as ExportFormat,
-      label: this.translateService.instant('ws-admin.export-formats.by-variable'),
-      description: this.translateService.instant('ws-admin.export-formats.by-variable-description')
-    },
-    {
-      value: 'detailed' as ExportFormat,
-      label: this.translateService.instant('ws-admin.export-formats.detailed'),
-      description: this.translateService.instant('ws-admin.export-formats.detailed-description')
-    },
-    {
-      value: 'coding-times' as ExportFormat,
-      label: this.translateService.instant('ws-admin.export-formats.coding-times'),
-      description: this.translateService.instant('ws-admin.export-formats.coding-times-description')
+      label: this.translateService.instant('ws-admin.export-format-groups.audit-quality'),
+      formats: [
+        {
+          value: 'by-coder',
+          label: this.translateService.instant('ws-admin.export-formats.by-coder'),
+          description: this.translateService.instant('ws-admin.export-formats.by-coder-description')
+        },
+        {
+          value: 'by-variable',
+          label: this.translateService.instant('ws-admin.export-formats.by-variable'),
+          description: this.translateService.instant('ws-admin.export-formats.by-variable-description')
+        },
+        {
+          value: 'detailed',
+          label: this.translateService.instant('ws-admin.export-formats.detailed'),
+          description: this.translateService.instant('ws-admin.export-formats.detailed-description')
+        },
+        {
+          value: 'coding-times',
+          label: this.translateService.instant('ws-admin.export-formats.coding-times'),
+          description: this.translateService.instant('ws-admin.export-formats.coding-times-description')
+        }
+      ]
     }
   ];
 
@@ -141,6 +178,21 @@ export class ExportComponent {
     if (jobCount > 0) parts.push(`${jobCount} Definition${jobCount === 1 ? '' : 'en'}`);
     if (trainingCount > 0) parts.push(`${trainingCount} Training${trainingCount === 1 ? '' : 's'}`);
     return parts.join(', ');
+  }
+
+  getCoderSelectionLabel(): string {
+    if (this.selectedCoderIds.length === 0) {
+      return this.translateService.instant('ws-admin.export-options.all-coders');
+    }
+
+    if (this.selectedCoderIds.length === 1) {
+      const selectedCoder = this.coders.find(coder => coder.id === this.selectedCoderIds[0]);
+      return selectedCoder?.displayName || selectedCoder?.name || `${this.selectedCoderIds[0]}`;
+    }
+
+    return this.translateService.instant('ws-admin.export-options.selected-coders', {
+      count: this.selectedCoderIds.length
+    });
   }
 
   getJobDefinitionLabel(def: JobDefinition): string {
@@ -183,7 +235,19 @@ export class ExportComponent {
   }
 
   supportsCommentsInsteadOfCodes(): boolean {
-    return this.selectedFormat !== 'coding-times';
+    return this.selectedFormat !== 'coding-times' && this.selectedFormat !== 'results-by-version';
+  }
+
+  supportsJobFilters(): boolean {
+    return this.selectedFormat !== 'results-by-version';
+  }
+
+  supportsCoderOptions(): boolean {
+    return this.selectedFormat !== 'results-by-version';
+  }
+
+  supportsManualVariableFilter(): boolean {
+    return this.selectedFormat !== 'results-by-version';
   }
 
   private clearUnsupportedOptions(): void {
@@ -193,6 +257,15 @@ export class ExportComponent {
 
     if (!this.supportsCommentsInsteadOfCodes()) {
       this.outputCommentsInsteadOfCodes = false;
+    }
+
+    if (!this.supportsCoderOptions()) {
+      this.anonymizeCoders = false;
+      this.usePseudoCoders = false;
+    }
+
+    if (!this.supportsManualVariableFilter()) {
+      this.excludeAutoCoded = false;
     }
   }
 
@@ -243,35 +316,65 @@ export class ExportComponent {
         subscriber.complete();
       });
 
-    tokenObservable.subscribe(authToken => {
-      // Prepare export configuration
-      const exportConfig = {
-        exportType: this.selectedFormat,
-        userId: this.appService.userId,
-        outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
-        includeReplayUrl: this.includeReplayUrl,
-        anonymizeCoders: this.anonymizeCoders,
-        usePseudoCoders: this.usePseudoCoders,
-        doubleCodingMethod: this.doubleCodingMethod,
-        includeComments: this.includeComments,
-        includeModalValue: this.includeModalValue,
-        includeDoubleCoded: this.includeDoubleCoded,
-        excludeAutoCoded: this.excludeAutoCoded,
-        jobDefinitionIds: this.finalJobDefinitionIds,
-        coderTrainingIds: this.finalCoderTrainingIds,
-        coderIds: this.selectedCoderIds,
-        authToken
-      };
+    tokenObservable.subscribe({
+      next: authToken => {
+        const exportConfig = this.buildExportConfig(authToken);
 
-      this.exportJobService.startJob(workspaceId, exportConfig);
-
-      this.snackBar.open(
-        this.translateService.instant('ws-admin.export.job-started'),
-        this.translateService.instant('close'),
-        { duration: 3000 }
-      );
-
-      this.isStartingExport = false;
+        this.exportJobService.startJob(workspaceId, exportConfig).subscribe({
+          next: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-admin.export.job-started'),
+              this.translateService.instant('close'),
+              { duration: 3000 }
+            );
+            this.isStartingExport = false;
+          },
+          error: () => {
+            this.snackBar.open(
+              this.translateService.instant('ws-admin.export.errors.start-failed'),
+              this.translateService.instant('close'),
+              { duration: 5000 }
+            );
+            this.isStartingExport = false;
+          }
+        });
+      },
+      error: () => {
+        this.isStartingExport = false;
+      }
     });
+  }
+
+  private buildExportConfig(authToken: string): ExportJobConfig {
+    const exportConfig = {
+      exportType: this.selectedFormat,
+      userId: this.appService.userId,
+      includeReplayUrl: this.includeReplayUrl,
+      authToken
+    };
+
+    if (this.selectedFormat === 'results-by-version') {
+      return {
+        ...exportConfig,
+        version: this.resultsVersion,
+        format: this.resultsFormat,
+        includeResponseValues: this.includeResponseValues
+      };
+    }
+
+    return {
+      ...exportConfig,
+      outputCommentsInsteadOfCodes: this.outputCommentsInsteadOfCodes,
+      anonymizeCoders: this.anonymizeCoders,
+      usePseudoCoders: this.usePseudoCoders,
+      doubleCodingMethod: this.doubleCodingMethod,
+      includeComments: this.includeComments,
+      includeModalValue: this.includeModalValue,
+      includeDoubleCoded: this.includeDoubleCoded,
+      excludeAutoCoded: this.excludeAutoCoded,
+      jobDefinitionIds: this.finalJobDefinitionIds,
+      coderTrainingIds: this.finalCoderTrainingIds,
+      coderIds: this.selectedCoderIds
+    };
   }
 }
