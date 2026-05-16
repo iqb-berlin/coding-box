@@ -86,7 +86,10 @@ describe('CodingJobBackendService', () => {
             blockingCreatedJobsCount: 1,
             showScore: true,
             allowComments: false,
-            suppressGeneralInstructions: true
+            suppressGeneralInstructions: true,
+            assignedCoderConfigs: [{ coderId: 1, capacityPercent: 50 }],
+            distributionSeed: 'seed-7',
+            plannedVariableUsage: { 'Unit 1::Var 1': 2 }
           }),
           expect.objectContaining({
             id: 8,
@@ -107,6 +110,9 @@ describe('CodingJobBackendService', () => {
           status: 'approved',
           created_jobs_count: 3,
           blocking_created_jobs_count: 1,
+          assigned_coder_configs: [{ coderId: 1, capacityPercent: 50 }],
+          distribution_seed: 'seed-7',
+          planned_variable_usage: { 'Unit 1::Var 1': 2 },
           show_score: true,
           allow_comments: false,
           suppress_general_instructions: true

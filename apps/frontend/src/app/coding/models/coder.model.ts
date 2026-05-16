@@ -4,4 +4,5 @@ export interface Coder {
   displayName?: string;
   email?: string;
   assignedJobs?: number[];
+  capacityPercent?: number;
 }

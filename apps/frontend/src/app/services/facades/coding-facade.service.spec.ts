@@ -103,7 +103,8 @@ describe('CodingFacadeService', () => {
       undefined,
       'continuous',
       10,
-      displayOptions
+      displayOptions,
+      undefined
     );
   });
 

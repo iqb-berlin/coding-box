@@ -260,9 +260,14 @@ describe('CodingJobDefinitionsComponent', () => {
       assignedVariables,
       assignedVariableBundles,
       assignedCoders: [2, 1],
+      assignedCoderConfigs: [
+        { coderId: 2, capacityPercent: 50 },
+        { coderId: 1, capacityPercent: 150 }
+      ],
       doubleCodingAbsolute: 1,
       caseOrderingMode: 'continuous',
       maxCodingCases: 7,
+      distributionSeed: 'seed-42',
       showScore: false,
       allowComments: false,
       suppressGeneralInstructions: true,
@@ -274,12 +279,13 @@ describe('CodingJobDefinitionsComponent', () => {
         selectedVariables: assignedVariables,
         selectedVariableBundles: assignedVariableBundles,
         selectedCoders: [
-          { id: 1, name: 'Ada' },
-          { id: 2, name: 'Bea' }
+          { id: 1, name: 'Ada', capacityPercent: 150 },
+          { id: 2, name: 'Bea', capacityPercent: 50 }
         ],
         doubleCodingAbsolute: 1,
         caseOrderingMode: 'continuous',
         maxCodingCases: 7,
+        distributionSeed: 'seed-42',
         displayOptions: {
           showScore: false,
           allowComments: false,
@@ -305,6 +311,7 @@ describe('CodingJobDefinitionsComponent', () => {
       status: 'draft',
       assignedVariables: [{ unitName: 'Unit', variableId: 'Var' }],
       assignedCoders: [1],
+      assignedCoderConfigs: [{ coderId: 1, capacityPercent: 75 }],
       caseOrderingMode: 'continuous',
       showScore: false,
       allowComments: false,
@@ -317,7 +324,8 @@ describe('CodingJobDefinitionsComponent', () => {
         codingJob: expect.objectContaining({
           showScore: false,
           allowComments: false,
-          suppressGeneralInstructions: true
+          suppressGeneralInstructions: true,
+          assignedCoderConfigs: [{ coderId: 1, capacityPercent: 75 }]
         })
       })
     }));
