@@ -8,10 +8,22 @@ export interface DistributedCodingJobsResponse {
   jobsCreated: number;
   message: string;
   distribution: Record<string, Record<string, number>>;
-  doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
+  doubleCodingInfo: Record<string, {
+    totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
+    doubleCodedCases: number;
+    singleCodedCasesAssigned: number;
+    doubleCodedCasesPerCoder: Record<string, number>;
+  }>;
   aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
   matchingFlags: string[];
+  pairDistribution?: Record<string, number>;
+  tasksPerCoder?: Record<string, number>;
+  coderWeights?: Record<string, number>;
   jobs: {
+    itemKey?: string;
     coderId: number;
     coderName: string;
     variable: { unitName: string; variableId: string };
@@ -31,7 +43,7 @@ export class DistributedCodingService {
   createDistributedCodingJobs(
     workspaceId: number,
     selectedVariables: { unitName: string; variableId: string }[],
-    selectedCoders: { id: number; name: string; username: string }[],
+    selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
     selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
@@ -41,7 +53,8 @@ export class DistributedCodingService {
       showScore?: boolean;
       allowComments?: boolean;
       suppressGeneralInstructions?: boolean;
-    }
+    },
+    distributionSeed?: string
   ): Observable<DistributedCodingJobsResponse> {
     return this.http
       .post<DistributedCodingJobsResponse>(
@@ -54,6 +67,7 @@ export class DistributedCodingService {
         selectedVariableBundles,
         caseOrderingMode,
         maxCodingCases,
+        distributionSeed,
         showScore: displayOptions?.showScore,
         allowComments: displayOptions?.allowComments,
         suppressGeneralInstructions: displayOptions?.suppressGeneralInstructions
@@ -66,9 +80,13 @@ export class DistributedCodingService {
           jobsCreated: 0,
           message: 'Failed to create distributed jobs',
           distribution: {},
+          distributionByCoderId: {},
           doubleCodingInfo: {},
           aggregationInfo: {},
           matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
           jobs: []
         }))
       );
@@ -77,34 +95,41 @@ export class DistributedCodingService {
   calculateDistribution(
     workspaceId: number,
     selectedVariables: { unitName: string; variableId: string }[],
-    selectedCoders: { id: number; name: string; username: string }[],
+    selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[],
     doubleCodingAbsolute?: number,
     doubleCodingPercentage?: number,
     selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[],
     caseOrderingMode?: 'continuous' | 'alternating',
-    maxCodingCases?: number
+    maxCodingCases?: number,
+    distributionSeed?: string
   ): Observable<{
       distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      distributionByCoderId?: Record<string, Record<string, number>>;
+      doubleCodingInfo: DistributedCodingJobsResponse['doubleCodingInfo'];
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: string[];
+      pairDistribution?: Record<string, number>;
+      tasksPerCoder?: Record<string, number>;
+      coderWeights?: Record<string, number>;
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }> {
     const body: {
       selectedVariables: { unitName: string; variableId: string }[];
       selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[];
-      selectedCoders: { id: number; name: string; username: string }[];
+      selectedCoders: { id: number; name: string; username: string; weight?: number; capacityPercent?: number }[];
       doubleCodingAbsolute?: number;
       doubleCodingPercentage?: number;
       caseOrderingMode?: 'continuous' | 'alternating';
       maxCodingCases?: number;
+      distributionSeed?: string;
     } = {
       selectedVariables,
       selectedVariableBundles,
       selectedCoders,
       doubleCodingAbsolute,
       doubleCodingPercentage,
-      caseOrderingMode
+      caseOrderingMode,
+      distributionSeed
     };
 
     if (maxCodingCases !== undefined && maxCodingCases !== null) {
@@ -114,9 +139,13 @@ export class DistributedCodingService {
     return this.http
       .post<{
       distribution: Record<string, Record<string, number>>;
-      doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+      distributionByCoderId?: Record<string, Record<string, number>>;
+      doubleCodingInfo: DistributedCodingJobsResponse['doubleCodingInfo'];
       aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
       matchingFlags: string[];
+      pairDistribution?: Record<string, number>;
+      tasksPerCoder?: Record<string, number>;
+      coderWeights?: Record<string, number>;
       warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/calculate-distribution`,
@@ -126,9 +155,13 @@ export class DistributedCodingService {
       .pipe(
         catchError(() => of({
           distribution: {},
+          distributionByCoderId: {},
           doubleCodingInfo: {},
           aggregationInfo: {},
           matchingFlags: [],
+          pairDistribution: {},
+          tasksPerCoder: {},
+          coderWeights: {},
           warnings: []
         }))
       );

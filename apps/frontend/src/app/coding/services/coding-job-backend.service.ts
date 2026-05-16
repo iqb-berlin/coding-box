@@ -7,6 +7,7 @@ import { ValidationTaskStateService } from '../../shared/services/validation/val
 import type { DistributedCodingJobsResponse } from './distributed-coding.service';
 import {
   CodingJob,
+  JobDefinitionCoderConfig,
   Variable,
   VariableBundle
 } from '../models/coding-job.model';
@@ -45,6 +46,12 @@ interface JobDefinitionApiResponse {
   assigned_variables?: import('../models/coding-job.model').Variable[];
   assigned_variable_bundles?: import('../models/coding-job.model').VariableBundle[];
   assigned_coders?: number[];
+  assigned_coder_configs?: JobDefinitionCoderConfig[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distribution_seed?: string;
+  distributionSeed?: string;
+  planned_variable_usage?: Record<string, number>;
+  plannedVariableUsage?: Record<string, number>;
   duration_seconds?: number;
   max_coding_cases?: number;
   double_coding_absolute?: number;
@@ -72,6 +79,9 @@ export interface JobDefinition {
   assignedVariables?: import('../models/coding-job.model').Variable[];
   assignedVariableBundles?: import('../models/coding-job.model').VariableBundle[];
   assignedCoders?: number[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
@@ -170,12 +180,17 @@ export class CodingJobBackendService {
     }
 
     const apiJob = job as Record<string, unknown>;
+    const distributionSeed = apiJob.distributionSeed ?? apiJob.distribution_seed;
 
     const mapped: Partial<CodingJob> = {
       ...apiJob,
       assignedCoders: (apiJob.assignedCoders ??
         apiJob.assigned_coders ??
         []) as number[],
+      assignedCoderConfigs: (apiJob.assignedCoderConfigs ??
+        apiJob.assigned_coder_configs ??
+        []) as JobDefinitionCoderConfig[],
+      distributionSeed: typeof distributionSeed === 'string' ? distributionSeed : undefined,
       assignedVariables: (apiJob.assignedVariables ??
         apiJob.assigned_variables ??
         apiJob.variables ??
@@ -547,6 +562,9 @@ export class CodingJobBackendService {
         assignedVariables: def.assigned_variables,
         assignedVariableBundles: def.assigned_variable_bundles,
         assignedCoders: def.assigned_coders,
+        assignedCoderConfigs: def.assignedCoderConfigs ?? def.assigned_coder_configs,
+        distributionSeed: def.distributionSeed ?? def.distribution_seed,
+        plannedVariableUsage: def.plannedVariableUsage ?? def.planned_variable_usage,
         durationSeconds: def.duration_seconds,
         maxCodingCases: def.max_coding_cases,
         doubleCodingAbsolute: def.double_coding_absolute,

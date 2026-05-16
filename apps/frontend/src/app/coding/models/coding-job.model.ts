@@ -11,6 +11,9 @@ export interface CodingJob {
   created_at: Date;
   updated_at: Date;
   assignedCoders: number[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   variables?: Variable[];
@@ -38,6 +41,11 @@ export interface CodingJob {
   aggregationThreshold?: number | null;
   responseMatchingFlags?: string[] | null;
   aggregationSettingsVersion?: number | null;
+}
+
+export interface JobDefinitionCoderConfig {
+  coderId: number;
+  capacityPercent: number;
 }
 
 export interface Variable {

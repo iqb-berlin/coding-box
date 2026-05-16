@@ -17,7 +17,10 @@ import { CodingExecutionService } from '../../coding/services/coding-execution.s
 import { CodingExportService } from '../../coding/services/coding-export.service';
 import { CodingStatisticsService } from '../../coding/services/coding-statistics.service';
 import { CodingVersionService } from '../../coding/services/coding-version.service';
-import { DistributedCodingService } from '../../coding/services/distributed-coding.service';
+import {
+  DistributedCodingJobsResponse,
+  DistributedCodingService
+} from '../../coding/services/distributed-coding.service';
 import { MissingsProfileService } from '../../coding/services/missings-profile.service';
 import { VariableAnalysisService, VariableAnalysisResultDto, JobCancelResult } from '../../shared/services/response/variable-analysis.service';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
@@ -104,6 +107,14 @@ interface DistributedCodingDisplayOptions {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+}
+
+interface DistributedCodingCoderSelection {
+  id: number;
+  name: string;
+  username: string;
+  weight?: number;
+  capacityPercent?: number;
 }
 
 interface CoderTrainingDisplayOptions {
@@ -390,18 +401,22 @@ export class CodingFacadeService {
     return this.codingStatisticsService.getVariableAnalysis(workspaceId, page, limit, unitId, variableId, derivation);
   }
 
-  createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, displayOptions?: DistributedCodingDisplayOptions): Observable<{ success: boolean; jobsCreated: number; message: string; distribution: Record<string, Record<string, number>>; doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>; aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>; matchingFlags: string[]; jobs: { coderId: number; coderName: string; variable: { unitName: string; variableId: string }; jobId: number; jobName: string; caseCount: number; }[]; }> {
-    return this.distributedCodingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases, displayOptions);
+  createDistributedCodingJobs(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: DistributedCodingCoderSelection[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, displayOptions?: DistributedCodingDisplayOptions, distributionSeed?: string): Observable<DistributedCodingJobsResponse> {
+    return this.distributedCodingService.createDistributedCodingJobs(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases, displayOptions, distributionSeed);
   }
 
-  calculateDistribution(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: { id: number; name: string; username: string }[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number): Observable<{
+  calculateDistribution(workspaceId: number, selectedVariables: { unitName: string; variableId: string }[], selectedCoders: DistributedCodingCoderSelection[], doubleCodingAbsolute?: number, doubleCodingPercentage?: number, selectedVariableBundles?: { id: number; name: string; caseOrderingMode?: 'continuous' | 'alternating'; variables: { unitName: string; variableId: string }[] }[], caseOrderingMode?: 'continuous' | 'alternating', maxCodingCases?: number, distributionSeed?: string): Observable<{
     distribution: Record<string, Record<string, number>>;
-    doubleCodingInfo: Record<string, { totalCases: number; doubleCodedCases: number; singleCodedCasesAssigned: number; doubleCodedCasesPerCoder: Record<string, number> }>;
+    distributionByCoderId?: Record<string, Record<number, number>>;
+    pairDistribution?: Record<string, number>;
+    tasksPerCoder?: Record<number, number>;
+    coderWeights?: Record<number, number>;
+    doubleCodingInfo: DistributedCodingJobsResponse['doubleCodingInfo'];
     aggregationInfo: Record<string, { uniqueCases: number; totalResponses: number }>;
     matchingFlags: string[];
     warnings: Array<{ unitName: string; variableId: string; message: string; casesInJobs: number; availableCases: number }>;
   }> {
-    return this.distributedCodingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases);
+    return this.distributedCodingService.calculateDistribution(workspaceId, selectedVariables, selectedCoders, doubleCodingAbsolute, doubleCodingPercentage, selectedVariableBundles, caseOrderingMode, maxCodingCases, distributionSeed);
   }
 
   resetCodingVersion(workspaceId: number, version: 'v1' | 'v2' | 'v3', unitFilters?: string[], variableFilters?: string[]): Observable<{ jobId: string; message: string }> {

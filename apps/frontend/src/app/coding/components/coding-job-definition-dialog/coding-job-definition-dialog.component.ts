@@ -31,7 +31,12 @@ import { MatTooltip } from '@angular/material/tooltip';
 import {
   forkJoin, Subject, takeUntil, firstValueFrom
 } from 'rxjs';
-import { CodingJob, VariableBundle, Variable } from '../../models/coding-job.model';
+import {
+  CodingJob,
+  JobDefinitionCoderConfig,
+  VariableBundle,
+  Variable
+} from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
@@ -56,6 +61,9 @@ export interface JobDefinition {
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
+  assignedCoderConfigs?: JobDefinitionCoderConfig[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
@@ -64,6 +72,7 @@ export interface JobDefinition {
   showScore?: boolean;
   allowComments?: boolean;
   suppressGeneralInstructions?: boolean;
+  createdJobsCount?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -71,11 +80,15 @@ export interface JobDefinition {
 interface CreationResults {
   doubleCodingInfo: Record<string, {
     totalCases: number;
+    distinctCases?: number;
+    codingTasksTotal?: number;
     doubleCodedCases: number;
     singleCodedCasesAssigned: number;
     doubleCodedCasesPerCoder: Record<string, number>;
   }>;
+  distributionByCoderId?: Record<string, Record<string, number>>;
   jobs: {
+    itemKey?: string;
     coderId: number;
     coderName: string;
     variable: { unitName: string; variableId: string };
@@ -151,6 +164,9 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   availableCoders: Coder[] = [];
   selectedCoders = new SelectionModel<Coder>(true, []);
   isLoadingAvailableCoders = false;
+  private readonly defaultCoderCapacityPercent = 100;
+  private readonly minCoderCapacityPercent = 10;
+  private readonly maxCoderCapacityPercent = 300;
 
   // Variable bundles
   variableBundles: VariableBundle[] = [];
@@ -235,7 +251,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     this.coderService.getCoders().subscribe({
       next: coders => {
-        this.availableCoders = coders;
+        this.availableCoders = coders.map(coder => ({
+          ...coder,
+          capacityPercent: this.getInitialCoderCapacityPercent(coder.id)
+        }));
         this.isLoadingAvailableCoders = false;
         let assignedIds: number[] = [];
         if (this.data.isEdit && this.data.codingJob?.assignedCoders) {
@@ -255,6 +274,67 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         this.isLoadingAvailableCoders = false;
       }
     });
+  }
+
+  private getInitialCoderCapacityPercent(coderId: number): number {
+    const configuredCapacity = this.data.codingJob?.assignedCoderConfigs
+      ?.find(config => config.coderId === coderId)
+      ?.capacityPercent;
+
+    return this.normalizeCoderCapacityPercent(configuredCapacity);
+  }
+
+  private normalizeCoderCapacityPercent(value: unknown): number {
+    const numericValue = Number(value);
+
+    if (!Number.isFinite(numericValue)) {
+      return this.defaultCoderCapacityPercent;
+    }
+
+    return Math.min(
+      this.maxCoderCapacityPercent,
+      Math.max(this.minCoderCapacityPercent, numericValue)
+    );
+  }
+
+  getCoderCapacityPercent(coder: Coder): number {
+    return this.normalizeCoderCapacityPercent(coder.capacityPercent);
+  }
+
+  updateCoderCapacityPercent(coder: Coder, value: unknown): void {
+    if (this.isReadOnly) {
+      return;
+    }
+
+    coder.capacityPercent = this.normalizeCoderCapacityPercent(value);
+  }
+
+  getSelectedCoderConfigs(): JobDefinitionCoderConfig[] {
+    return this.selectedCoders.selected.map(coder => ({
+      coderId: coder.id,
+      capacityPercent: this.getCoderCapacityPercent(coder)
+    }));
+  }
+
+  private getSelectedCodersForDistribution(): Coder[] {
+    return this.selectedCoders.selected.map(coder => ({
+      ...coder,
+      capacityPercent: this.getCoderCapacityPercent(coder)
+    }));
+  }
+
+  private mapCodersForDistribution(coders: Coder[]): {
+    id: number;
+    name: string;
+    username: string;
+    capacityPercent: number;
+  }[] {
+    return coders.map(coder => ({
+      id: coder.id,
+      name: coder.name,
+      username: coder.name,
+      capacityPercent: this.normalizeCoderCapacityPercent(coder.capacityPercent)
+    }));
   }
 
   loadExistingJobDefinitions(): void {
@@ -467,11 +547,11 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
     const casesUsedInDefinitions = new Map<string, number>();
     const makeKey = (u?: string | null, v?: string | null) => this.getVariableUsageKey(u, v);
-
-    const getTotalCases = (unitName?: string, variableId?: string) => {
-      const key = makeKey(unitName, variableId);
-      const loadedVar = this.variables.find(v => makeKey(v.unitName, v.variableId) === key);
-      return loadedVar?.uniqueCasesAfterAggregation ?? loadedVar?.responseCount ?? 0;
+    const makeKeyFromUsageKey = (variableKey: string): string => {
+      const [unitName, variableId] = variableKey.split('::');
+      return variableId === undefined ?
+        variableKey.trim().toLowerCase() :
+        makeKey(unitName, variableId);
     };
 
     // Count cases used in each job definition (excluding the current one being edited)
@@ -482,48 +562,20 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           return;
         }
 
-        const itemsCount = (def.assignedVariables?.length || 0) + (def.assignedVariableBundles?.length || 0);
-        const maxCodingCases = def.maxCodingCases;
-        let currentItemIndex = 0;
+        if ((def.createdJobsCount ?? 0) > 0) {
+          return;
+        }
 
-        // 1. Process Variable Bundles (Backend processes bundles first)
-        def.assignedVariableBundles?.forEach(bundle => {
-          let bundleUsage: number;
-          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-            const baseQuota = Math.floor(maxCodingCases / itemsCount);
-            const remainder = maxCodingCases % itemsCount;
-            bundleUsage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
-          } else {
-            // Unlimited: sum of all variables in bundle
-            bundleUsage = bundle.variables?.reduce((sum, v) => sum + getTotalCases(v.unitName, v.variableId), 0) || 0;
+        Object.entries(def.plannedVariableUsage || {}).forEach(([variableKey, usage]) => {
+          if (!Number.isFinite(usage) || usage <= 0) {
+            return;
           }
 
-          const varsInBundle = bundle.variables?.length || 0;
-          if (varsInBundle > 0) {
-            const usagePerVar = Math.ceil(bundleUsage / varsInBundle);
-            bundle.variables?.forEach(v => {
-              const key = makeKey(v.unitName, v.variableId);
-              casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usagePerVar);
-            });
-          }
-          currentItemIndex += 1;
-        });
-
-        // 2. Process Variables
-        def.assignedVariables?.forEach(v => {
-          let usage: number;
-          if (typeof maxCodingCases === 'number' && maxCodingCases > 0) {
-            const baseQuota = Math.floor(maxCodingCases / itemsCount);
-            const remainder = maxCodingCases % itemsCount;
-            // Note: index continues incrementing from bundles
-            usage = baseQuota + (currentItemIndex < remainder ? 1 : 0);
-          } else {
-            usage = getTotalCases(v.unitName, v.variableId);
-          }
-
-          const key = makeKey(v.unitName, v.variableId);
-          casesUsedInDefinitions.set(key, (casesUsedInDefinitions.get(key) || 0) + usage);
-          currentItemIndex += 1;
+          const normalizedKey = makeKeyFromUsageKey(variableKey);
+          casesUsedInDefinitions.set(
+            normalizedKey,
+            (casesUsedInDefinitions.get(normalizedKey) || 0) + usage
+          );
         });
       });
     }
@@ -778,9 +830,17 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
   getTimePerCoderInSeconds(): number {
     const totalTime = this.getTotalTimeInSeconds();
-    const numCoders = this.selectedCoders.selected.length;
-    if (numCoders === 0) return totalTime;
-    return Math.ceil(totalTime / numCoders);
+    const capacityWeights = this.selectedCoders.selected.map(
+      coder => this.getCoderCapacityPercent(coder) / 100
+    );
+    if (capacityWeights.length === 0) return totalTime;
+
+    const totalCapacityWeight = capacityWeights.reduce((sum, weight) => sum + weight, 0);
+    if (totalCapacityWeight <= 0) return totalTime;
+
+    const normalizedLoadSeconds = totalTime / totalCapacityWeight;
+    const highestCapacityWeight = Math.max(...capacityWeights);
+    return Math.ceil(normalizedLoadSeconds * highestCapacityWeight);
   }
 
   getFormattedTotalTime(): string {
@@ -1032,11 +1092,12 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     const baseData: BulkCreationData = {
       selectedVariables: this.selectedVariables.selected,
       selectedVariableBundles: this.selectedVariableBundles.selected,
-      selectedCoders: this.selectedCoders.selected,
+      selectedCoders: this.getSelectedCodersForDistribution(),
       doubleCodingAbsolute: this.codingJobForm.value.doubleCodingAbsolute,
       doubleCodingPercentage: this.codingJobForm.value.doubleCodingPercentage,
       caseOrderingMode: this.codingJobForm.value.caseOrderingMode,
       maxCodingCases: this.codingJobForm.value.maxCodingCases,
+      distributionSeed: this.data.codingJob?.distributionSeed,
       displayOptions: {
         showScore: this.codingJobForm.value.showScore ?? true,
         allowComments: this.codingJobForm.value.allowComments ?? true,
@@ -1090,11 +1151,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     try {
-      const mappedCoders = data.selectedCoders.map(coder => ({
-        id: coder.id,
-        name: coder.name,
-        username: coder.name
-      }));
+      const mappedCoders = this.mapCodersForDistribution(data.selectedCoders);
       const result = await firstValueFrom(this.distributedCodingService.createDistributedCodingJobs(
         workspaceId,
         data.selectedVariables,
@@ -1108,7 +1165,8 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
           showScore: displayOptions.showScore,
           allowComments: displayOptions.allowComments,
           suppressGeneralInstructions: displayOptions.suppressGeneralInstructions
-        }
+        },
+        data.distributionSeed
       ));
 
       if (result && result.success) {
@@ -1116,6 +1174,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
 
         await this.openBulkCreationResultsDialog({
           doubleCodingInfo: result.doubleCodingInfo,
+          distributionByCoderId: result.distributionByCoderId,
           jobs: result.jobs
         });
 
@@ -1226,12 +1285,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
       status: 'draft',
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
@@ -1267,11 +1328,13 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: Partial<JobDefinition> = {
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),
@@ -1345,12 +1408,14 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     }
 
     const selectedCoderIds = this.selectedCoders.selected.map(c => c.id);
+    const selectedCoderConfigs = this.getSelectedCoderConfigs();
 
     const jobDefinition: JobDefinition = {
       status: 'pending_review', // Submit for review
       assignedVariables: this.selectedVariables.selected.map(v => ({ unitName: v.unitName, variableId: v.variableId })),
       assignedVariableBundles: this.selectedVariableBundles.selected.map(b => ({ id: b.id, name: b.name, caseOrderingMode: b.caseOrderingMode })) as unknown as VariableBundle[],
       assignedCoders: selectedCoderIds,
+      assignedCoderConfigs: selectedCoderConfigs,
       durationSeconds: this.sanitizeNumber(this.codingJobForm.value.durationSeconds),
       maxCodingCases: this.sanitizeNumber(this.codingJobForm.value.maxCodingCases),
       doubleCodingAbsolute: this.sanitizeNumber(this.codingJobForm.value.doubleCodingAbsolute),

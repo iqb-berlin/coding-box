@@ -41,6 +41,9 @@ interface JobDefinition {
   assignedVariables?: Variable[];
   assignedVariableBundles?: VariableBundle[];
   assignedCoders?: number[];
+  assignedCoderConfigs?: { coderId: number; capacityPercent: number }[];
+  distributionSeed?: string;
+  plannedVariableUsage?: Record<string, number>;
   durationSeconds?: number;
   maxCodingCases?: number;
   doubleCodingAbsolute?: number;
@@ -58,6 +61,7 @@ interface JobDefinition {
 interface Coder {
   id: number;
   name: string;
+  capacityPercent?: number;
 }
 
 @Component({
@@ -468,6 +472,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         assignedVariables: definition.assignedVariables,
         assignedVariableBundles: definition.assignedVariableBundles,
         assignedCoders: definition.assignedCoders!,
+        assignedCoderConfigs: definition.assignedCoderConfigs,
         durationSeconds: definition.durationSeconds,
         maxCodingCases: definition.maxCodingCases,
         doubleCodingAbsolute: definition.doubleCodingAbsolute,
@@ -684,9 +689,17 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
 
     try {
       const allCoders = await firstValueFrom(this.coderService.getCoders());
+      const capacityByCoderId = new Map(
+        (definition.assignedCoderConfigs || [])
+          .map(config => [config.coderId, config.capacityPercent])
+      );
       const selectedCoders =
         allCoders?.filter(coder => definition.assignedCoders!.includes(coder.id)
-        ) || [];
+        )
+          .map(coder => ({
+            ...coder,
+            capacityPercent: capacityByCoderId.get(coder.id) ?? 100
+          })) || [];
 
       const dialogData: BulkCreationData = {
         selectedVariables: definition.assignedVariables || [],
@@ -696,6 +709,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
         doubleCodingPercentage: definition.doubleCodingPercentage,
         caseOrderingMode: definition.caseOrderingMode || 'continuous',
         maxCodingCases: definition.maxCodingCases,
+        distributionSeed: definition.distributionSeed,
         displayOptions: {
           showScore: definition.showScore ?? false,
           allowComments: definition.allowComments ?? true,

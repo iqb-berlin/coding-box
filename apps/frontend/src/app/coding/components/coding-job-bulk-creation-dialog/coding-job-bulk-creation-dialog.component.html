@@ -64,7 +64,7 @@
                 </div>
                 @for (coder of data.selectedCoders; track coder.id) {
                   <div class="matrix-cell data-cell">
-                    {{ (data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey].doubleCodedCasesPerCoder[coder.name] || 0 }}
+                    {{ getDoubleCodedCasesForCoder((data.creationResults?.doubleCodingInfo || doubleCodingPreview?.doubleCodingInfo)![variableKey], coder) }}
                   </div>
                 }
               </div>
@@ -137,12 +137,12 @@
             @for (row of distributionMatrix; track row.variableKey) {
               <div class="matrix-row" [style.grid-template-columns]="getDistributionGridTemplate()">
                 <div class="matrix-cell variable-cell">
-                  <div class="variable-name">{{ row.variable ? getVariableDisplayName(row.variable) : row.bundle?.name }}</div>
+                  <div class="variable-name">{{ row.variable ? getVariableDisplayName(row.variable) : getVariableDisplayNameFromKey(row.variableKey) }}</div>
                   <div class="variable-data">({{ row.totalCases }} {{ 'coding-job-bulk-creation-dialog.distribution-summary.cases' | translate }})</div>
                 </div>
                 @for (coder of data.selectedCoders; track coder.id) {
                   <div class="matrix-cell data-cell">
-                    {{ row.coderCases[coder.name] || 0 }}
+                    {{ getCaseCountForCoderInRow(row, coder) }}
                   </div>
                 }
                 <div class="matrix-cell total-cell">
@@ -156,7 +156,7 @@
               <div class="matrix-cell variable-cell total-cell">{{ 'coding-job-bulk-creation-dialog.distribution-summary.grand-total' | translate }}</div>
               @for (coder of data.selectedCoders; track coder.id) {
                 <div class="matrix-cell data-cell total-cell">
-                  <strong>{{ getCoderTotal(coder.name) }}</strong>
+                  <strong>{{ getCoderTotalById(coder) }}</strong>
                 </div>
               }
               <div class="matrix-cell total-cell grand-total">
@@ -196,7 +196,7 @@
               } @else if (job.bundle) {
                 <div class="job-details">
                   <mat-icon>inventory_2</mat-icon>
-                  {{ job.bundle.name }} (Bundle)
+                  {{ getBundleDisplayName(job.bundle) }} (Bundle)
                 </div>
               }
             </div>

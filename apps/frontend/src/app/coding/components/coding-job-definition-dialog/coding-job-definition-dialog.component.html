@@ -279,6 +279,17 @@
                       @if (coder.email) {
                       <p class="coder-email">{{ coder.email }}</p>
                       }
+                      @if (data.mode === 'definition' && selectedCoders.isSelected(coder)) {
+                      <mat-form-field appearance="outline" class="coder-capacity-field"
+                        (click)="$event.stopPropagation()">
+                        <mat-label>Kapazität</mat-label>
+                        <input matInput type="number" min="10" max="300" step="10"
+                          [(ngModel)]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
+                          [disabled]="isReadOnly" (blur)="updateCoderCapacityPercent(coder, coder.capacityPercent)"
+                          matTooltip="100 % = normale Last">
+                        <span matSuffix>%</span>
+                      </mat-form-field>
+                      }
                     </div>
                   </div>
                   }
