@@ -18,6 +18,10 @@ import { CodingValidationService } from '../coding/coding-validation.service';
 import { CreateJobDefinitionDto } from '../../../admin/coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../../../admin/coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../../../admin/coding-job/dto/approve-job-definition.dto';
+import {
+  JobDefinitionRefreshApplyResultDto,
+  JobDefinitionRefreshPreviewDto
+} from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 type JobDefinitionBundleForUsage = JobDefinitionVariableBundle & {
   variables?: JobDefinitionVariable[];
@@ -96,6 +100,31 @@ type PlannedVariableUsageBatchRequest = {
   caseOrderingMode?: CaseOrderingMode;
   jobDefinitionId?: number;
   distributionSeed?: string;
+};
+
+type DefinitionDistributionRequest = {
+  selectedVariables: JobDefinitionVariable[];
+  selectedVariableBundles: {
+    id: number;
+    name: string;
+    caseOrderingMode?: CaseOrderingMode;
+    variables: JobDefinitionVariable[];
+  }[];
+  selectedCoders: {
+    id: number;
+    name: string;
+    username: string;
+    capacityPercent: number;
+  }[];
+  doubleCodingAbsolute?: number;
+  doubleCodingPercentage?: number;
+  caseOrderingMode?: CaseOrderingMode;
+  maxCodingCases?: number;
+  jobDefinitionId: number;
+  distributionSeed: string;
+  showScore: boolean;
+  allowComments: boolean;
+  suppressGeneralInstructions: boolean;
 };
 
 const DEFAULT_CODER_CAPACITY_PERCENT = 100;
@@ -970,7 +999,10 @@ export class JobDefinitionService {
     return definitions;
   }
 
-  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
+  private async buildDistributionRequestFromDefinition(
+    jobDefinitionId: number,
+    workspaceId: number
+  ): Promise<DefinitionDistributionRequest> {
     const jobDefinition = await this.getJobDefinition(jobDefinitionId);
 
     if (jobDefinition.status !== 'approved') {
@@ -1023,7 +1055,7 @@ export class JobDefinitionService {
       };
     });
 
-    return this.codingJobService.createDistributedCodingJobs(workspaceId, {
+    return {
       selectedVariables: filteredVariables,
       selectedVariableBundles,
       selectedCoders,
@@ -1036,6 +1068,37 @@ export class JobDefinitionService {
       showScore: jobDefinition.show_score,
       allowComments: jobDefinition.allow_comments,
       suppressGeneralInstructions: jobDefinition.suppress_general_instructions
-    });
+    };
+  }
+
+  async createCodingJobFromDefinition(jobDefinitionId: number, workspaceId: number) {
+    const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
+    return this.codingJobService.createDistributedCodingJobs(workspaceId, request);
+  }
+
+  async previewJobDefinitionRefresh(
+    jobDefinitionId: number,
+    workspaceId: number
+  ): Promise<JobDefinitionRefreshPreviewDto> {
+    const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
+    return this.codingJobService.previewJobDefinitionRefresh(workspaceId, request);
+  }
+
+  async refreshCodingJobFromDefinition(
+    jobDefinitionId: number,
+    workspaceId: number
+  ): Promise<JobDefinitionRefreshApplyResultDto> {
+    const request = await this.buildDistributionRequestFromDefinition(jobDefinitionId, workspaceId);
+    const result = await this.codingJobService.refreshDistributedCodingJobs(workspaceId, request);
+    if (!result.success) {
+      throw new BadRequestException(result.message);
+    }
+
+    return {
+      success: true,
+      message: `Updated job definition ${jobDefinitionId}: created ${result.jobsCreated} coding jobs.`,
+      preview: result.preview,
+      jobsCreated: result.jobsCreated
+    };
   }
 }

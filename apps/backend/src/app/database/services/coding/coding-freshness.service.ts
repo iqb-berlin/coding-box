@@ -1,6 +1,16 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  Optional
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import {
+  DataSource,
+  EntityManager,
+  Repository,
+  SelectQueryBuilder
+} from 'typeorm';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 // eslint-disable-next-line import/no-cycle
@@ -11,12 +21,14 @@ import {
 import {
   CodingFreshnessImpactDto,
   CodingFreshnessGroupDto,
+  CodingFreshnessSummaryItemDto,
   CodingFreshnessReason,
   CodingFreshnessScopeDto,
   CodingFreshnessState,
   CodingFreshnessSummaryDto,
   CodingFreshnessVersion
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 type UnitCodingPresence = Record<CodingFreshnessVersion, boolean>;
 
@@ -41,6 +53,12 @@ type DeleteImpactRow = {
   autoCodingV1: string;
   manualCodingV2: string;
   autoCodingV3: string;
+};
+
+type ManualJobFreshnessRow = {
+  jobCount?: string | number;
+  affectedUnits?: string | number;
+  affectedResponses?: string | number;
 };
 
 type FreshnessUpsert = {
@@ -194,6 +212,55 @@ export class CodingFreshnessService {
     };
   }
 
+  async assertAutoCodingRunCanStart(
+    workspaceId: number,
+    autoCoderRun: number
+  ): Promise<void> {
+    if (autoCoderRun !== 2) {
+      return;
+    }
+
+    const workspacePresence = await this.getWorkspaceCodingPresence(workspaceId);
+    if (!workspacePresence.v1) {
+      throw new BadRequestException(
+        'Der 2. Autocoder-Lauf kann nicht gestartet werden, weil Auto-Coding 1 noch nicht ausgeführt wurde.'
+      );
+    }
+
+    const blockers = await this.getAutoCodingRunBlockers(workspaceId, autoCoderRun);
+    if (blockers.length === 0) {
+      return;
+    }
+
+    throw new BadRequestException(this.buildAutoCodingRunBlockedMessage(blockers));
+  }
+
+  async getAutoCodingRunBlockers(
+    workspaceId: number,
+    autoCoderRun: number
+  ): Promise<CodingFreshnessSummaryItemDto[]> {
+    if (autoCoderRun !== 2) {
+      return [];
+    }
+
+    const summary = await this.getSummary(workspaceId);
+    const blockers = summary.items.filter(item => (
+      item.state !== 'CURRENT' &&
+      item.unitCount > 0 &&
+      (
+        (item.version === 'v1' && (item.state === 'PENDING' || item.state === 'STALE')) ||
+        (item.version === 'v2' && item.state === 'MANUAL_REVIEW_REQUIRED')
+      )
+    ));
+    const manualJobBlocker = await this.getManualCodingJobFreshnessBlocker(workspaceId);
+
+    if (manualJobBlocker) {
+      this.mergeFreshnessBlocker(blockers, manualJobBlocker);
+    }
+
+    return blockers;
+  }
+
   async markUnitsPendingAfterImport(
     workspaceId: number,
     unitIds: number[],
@@ -226,6 +293,18 @@ export class CodingFreshnessService {
     });
 
     await this.upsertRows(rows);
+    await this.markCodingJobsStaleForUnitIds(
+      workspaceId,
+      ids,
+      'RESULT_ADDED',
+      'review_required'
+    );
+    await this.markCodingJobsStaleForAddedUnitIds(
+      workspaceId,
+      ids,
+      'RESULT_ADDED',
+      'review_required'
+    );
   }
 
   async markUnitsStaleAfterResultChange(
@@ -280,20 +359,27 @@ export class CodingFreshnessService {
     });
 
     await this.upsertRows(rows);
+    await this.markCodingJobsStaleForUnitIds(
+      workspaceId,
+      ids,
+      reason,
+      'review_required'
+    );
   }
 
   async markVersionCurrent(
     workspaceId: number,
     unitIds: number[],
-    version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>
+    version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>,
+    manager?: EntityManager
   ): Promise<void> {
     const ids = this.uniquePositiveIds(unitIds);
     if (ids.length === 0) {
       return;
     }
 
-    const revision = await this.getCurrentRevision(workspaceId);
-    const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids);
+    const revision = await this.getCurrentRevision(workspaceId, manager);
+    const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids, manager);
     await this.upsertRows(ids.map(unitId => this.buildRow(
       workspaceId,
       unitId,
@@ -303,7 +389,7 @@ export class CodingFreshnessService {
       responseCounts.get(unitId) || 0,
       revision,
       revision
-    )));
+    )), manager);
   }
 
   async markVersionsPendingAfterReset(
@@ -354,6 +440,20 @@ export class CodingFreshnessService {
     });
 
     await this.upsertRows(rows);
+
+    const manualReviewUnitIds = this.uniquePositiveIds(entries
+      .filter(entry => entry.version === 'v1' || entry.version === 'v2')
+      .flatMap(entry => entry.unitIds)
+      .filter(unitId => includedUnitIdSet.has(unitId)));
+
+    if (manualReviewUnitIds.length > 0) {
+      await this.markCodingJobsStaleForUnitIds(
+        workspaceId,
+        manualReviewUnitIds,
+        'RESET',
+        'review_required'
+      );
+    }
   }
 
   async clearVersionsAfterReset(
@@ -392,6 +492,206 @@ export class CodingFreshnessService {
     await query.execute();
   }
 
+  async markCodingJobsStaleForUnitIds(
+    workspaceId: number,
+    unitIds: number[],
+    reason: CodingFreshnessReason,
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required',
+    manager?: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(unitIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    const queryRunner = manager ?? this.connection;
+    await queryRunner.query(
+      `
+        WITH affected_jobs AS (
+          SELECT
+            cju.coding_job_id,
+            COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name)) AS affected_units,
+            COUNT(DISTINCT cju.response_id) AS affected_responses
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          INNER JOIN response resp ON resp.id = cju.response_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND resp.unitid = ANY($2::int[])
+          GROUP BY cju.coding_job_id
+        )
+        UPDATE coding_job cj
+        SET freshness_status = CASE
+              WHEN cj.freshness_status = 'review_required' OR $3 = 'review_required'
+                THEN 'review_required'
+              ELSE $3
+            END,
+            freshness_reason = $4,
+            freshness_updated_at = now(),
+            freshness_affected_units = GREATEST(
+              COALESCE(cj.freshness_affected_units, 0),
+              affected_jobs.affected_units::int
+            ),
+            freshness_affected_responses = GREATEST(
+              COALESCE(cj.freshness_affected_responses, 0),
+              affected_jobs.affected_responses::int
+            ),
+            updated_at = now()
+        FROM affected_jobs
+        WHERE cj.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids, status, reason]
+    );
+  }
+
+  async markCodingJobsStaleForResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    reason: CodingFreshnessReason,
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required',
+    manager?: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    const queryRunner = manager ?? this.connection;
+    await queryRunner.query(
+      `
+        WITH affected_jobs AS (
+          SELECT
+            cju.coding_job_id,
+            COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name)) AS affected_units,
+            COUNT(DISTINCT cju.response_id) AS affected_responses
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND cju.response_id = ANY($2::int[])
+          GROUP BY cju.coding_job_id
+        )
+        UPDATE coding_job cj
+        SET freshness_status = CASE
+              WHEN cj.freshness_status = 'review_required' OR $3 = 'review_required'
+                THEN 'review_required'
+              ELSE $3
+            END,
+            freshness_reason = $4,
+            freshness_updated_at = now(),
+            freshness_affected_units = GREATEST(
+              COALESCE(cj.freshness_affected_units, 0),
+              affected_jobs.affected_units::int
+            ),
+            freshness_affected_responses = GREATEST(
+              COALESCE(cj.freshness_affected_responses, 0),
+              affected_jobs.affected_responses::int
+            ),
+            updated_at = now()
+        FROM affected_jobs
+        WHERE cj.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids, status, reason]
+    );
+  }
+
+  private async markCodingJobsStaleForAddedUnitIds(
+    workspaceId: number,
+    unitIds: number[],
+    reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required'
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(unitIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    await this.connection.query(
+      `
+        WITH added_responses AS (
+          SELECT
+            response.id AS response_id,
+            unit.name AS unit_name,
+            response.variableid AS variable_id,
+            CONCAT_WS('|', person.login, COALESCE(bookletinfo.name, ''), unit.name) AS unit_key
+          FROM response
+          INNER JOIN unit ON unit.id = response.unitid
+          INNER JOIN booklet ON booklet.id = unit.bookletid
+          LEFT JOIN bookletinfo ON bookletinfo.id = booklet.infoid
+          INNER JOIN persons person ON person.id = booklet.personid
+          WHERE person.workspace_id = $1
+            AND person.consider = true
+            AND response.unitid = ANY($2::int[])
+            AND response.is_autocoder_generated IS NOT TRUE
+        ),
+        matched_job_responses AS (
+          SELECT
+            coding_job.id AS coding_job_id,
+            added_responses.unit_key,
+            added_responses.response_id
+          FROM added_responses
+          INNER JOIN coding_job_variable
+            ON coding_job_variable.unit_name = added_responses.unit_name
+            AND coding_job_variable.variable_id = added_responses.variable_id
+          INNER JOIN coding_job
+            ON coding_job.id = coding_job_variable.coding_job_id
+          WHERE coding_job.workspace_id = $1
+            AND coding_job.training_id IS NULL
+          UNION
+          SELECT
+            coding_job.id AS coding_job_id,
+            added_responses.unit_key,
+            added_responses.response_id
+          FROM added_responses
+          INNER JOIN variable_bundle
+            ON variable_bundle.workspace_id = $1
+            AND variable_bundle.variables @> jsonb_build_array(
+              jsonb_build_object(
+                'unitName', added_responses.unit_name,
+                'variableId', added_responses.variable_id
+              )
+            )
+          INNER JOIN coding_job_variable_bundle
+            ON coding_job_variable_bundle.variable_bundle_id = variable_bundle.id
+          INNER JOIN coding_job
+            ON coding_job.id = coding_job_variable_bundle.coding_job_id
+          WHERE coding_job.workspace_id = $1
+            AND coding_job.training_id IS NULL
+        ),
+        affected_jobs AS (
+          SELECT
+            coding_job_id,
+            COUNT(DISTINCT unit_key) AS affected_units,
+            COUNT(DISTINCT response_id) AS affected_responses
+          FROM matched_job_responses
+          GROUP BY coding_job_id
+        )
+        UPDATE coding_job
+        SET freshness_status = CASE
+              WHEN coding_job.freshness_status = 'review_required' OR $3 = 'review_required'
+                THEN 'review_required'
+              ELSE $3
+            END,
+            freshness_reason = $4,
+            freshness_updated_at = now(),
+            freshness_affected_units = GREATEST(
+              COALESCE(coding_job.freshness_affected_units, 0),
+              affected_jobs.affected_units::int
+            ),
+            freshness_affected_responses = GREATEST(
+              COALESCE(coding_job.freshness_affected_responses, 0),
+              affected_jobs.affected_responses::int
+            ),
+            updated_at = now()
+        FROM affected_jobs
+        WHERE coding_job.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids, status, reason]
+    );
+  }
+
   private countVersionExpression(version: CodingFreshnessVersion): string {
     return [
       `COUNT(DISTINCT CASE WHEN response.status_${version} IS NOT NULL`,
@@ -401,8 +701,12 @@ export class CodingFreshnessService {
     ].join(' ');
   }
 
-  private async getCurrentRevision(workspaceId: number): Promise<number> {
-    const raw = await this.connection.query(
+  private async getCurrentRevision(
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<number> {
+    const queryRunner = manager ?? this.connection;
+    const raw = await queryRunner.query(
       'SELECT revision FROM workspace_test_results_revision WHERE workspace_id = $1',
       [workspaceId]
     ) as Array<{ revision: number | string }>;
@@ -647,7 +951,8 @@ export class CodingFreshnessService {
 
   private async getResponseCountsByUnit(
     workspaceId: number,
-    unitIds: number[]
+    unitIds: number[],
+    manager?: EntityManager
   ): Promise<Map<number, number>> {
     const ids = this.uniquePositiveIds(unitIds);
     const result = new Map<number, number>();
@@ -656,7 +961,10 @@ export class CodingFreshnessService {
       return result;
     }
 
-    const rows = await this.responseRepository
+    const responseRepository = manager ?
+      manager.getRepository(ResponseEntity) :
+      this.responseRepository;
+    const rows = await responseRepository
       .createQueryBuilder('response')
       .select('response.unitid', 'unitId')
       .addSelect('COUNT(response.id)', 'count')
@@ -699,12 +1007,18 @@ export class CodingFreshnessService {
     };
   }
 
-  private async upsertRows(rows: FreshnessUpsert[]): Promise<void> {
+  private async upsertRows(
+    rows: FreshnessUpsert[],
+    manager?: EntityManager
+  ): Promise<void> {
     if (rows.length === 0) {
       return;
     }
 
-    await this.freshnessRepository.upsert(rows, [
+    const freshnessRepository = manager ?
+      manager.getRepository(CodingUnitFreshness) :
+      this.freshnessRepository;
+    await freshnessRepository.upsert(rows, [
       'workspace_id',
       'unit_id',
       'version'
@@ -754,5 +1068,106 @@ export class CodingFreshnessService {
       groupNames: [],
       groups: []
     };
+  }
+
+  private buildAutoCodingRunBlockedMessage(
+    blockers: CodingFreshnessSummaryItemDto[]
+  ): string {
+    const descriptions = blockers
+      .map(item => {
+        const versionLabel = this.getFreshnessVersionLabel(item.version);
+        const stateLabel = this.getFreshnessStateLabel(item.state);
+        const unitLabel = item.unitCount === 1 ?
+          '1 Aufgaben-Ergebnis' :
+          `${item.unitCount} Aufgaben-Ergebnisse`;
+        return `${versionLabel}: ${unitLabel} ${stateLabel}`;
+      })
+      .join('; ');
+
+    return 'Der 2. Autocoder-Lauf kann nicht gestartet werden, weil der Kodierstand nicht aktuell ist. ' +
+      `Offen: ${descriptions}. ` +
+      'Aktualisieren Sie zuerst Auto-Coding 1 und prüfen Sie anschließend die manuelle Kodierung.';
+  }
+
+  private async getManualCodingJobFreshnessBlocker(
+    workspaceId: number
+  ): Promise<CodingFreshnessSummaryItemDto | null> {
+    const raw = await this.connection.query(
+      `
+        SELECT
+          COUNT(DISTINCT cj.id) AS "jobCount",
+          COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name)) AS "affectedUnits",
+          COUNT(DISTINCT cju.response_id) AS "affectedResponses"
+        FROM coding_job cj
+        LEFT JOIN coding_job_unit cju
+          ON cju.coding_job_id = cj.id
+          AND COALESCE(cju.workspace_id, cj.workspace_id) = cj.workspace_id
+        WHERE cj.workspace_id = $1
+          AND cj.training_id IS NULL
+          AND cj.freshness_status = 'review_required'
+      `,
+      [workspaceId]
+    ) as ManualJobFreshnessRow[] | undefined;
+
+    const row = Array.isArray(raw) ? raw[0] : undefined;
+    const jobCount = Number(row?.jobCount || 0);
+    if (jobCount === 0) {
+      return null;
+    }
+
+    const affectedUnits = Number(row?.affectedUnits || 0);
+    const affectedResponses = Number(row?.affectedResponses || 0);
+
+    return {
+      version: 'v2',
+      state: 'MANUAL_REVIEW_REQUIRED',
+      unitCount: affectedUnits > 0 ? affectedUnits : jobCount,
+      affectedResponseCount: affectedResponses
+    };
+  }
+
+  private mergeFreshnessBlocker(
+    blockers: CodingFreshnessSummaryItemDto[],
+    blocker: CodingFreshnessSummaryItemDto
+  ): void {
+    const existing = blockers.find(item => (
+      item.version === blocker.version &&
+      item.state === blocker.state
+    ));
+
+    if (!existing) {
+      blockers.push(blocker);
+      return;
+    }
+
+    existing.unitCount = Math.max(existing.unitCount, blocker.unitCount);
+    existing.affectedResponseCount = Math.max(
+      existing.affectedResponseCount,
+      blocker.affectedResponseCount
+    );
+  }
+
+  private getFreshnessVersionLabel(version: CodingFreshnessVersion): string {
+    if (version === 'v1') {
+      return 'Auto-Coding 1';
+    }
+
+    if (version === 'v3') {
+      return 'Auto-Coding 2';
+    }
+
+    return 'manuelle Kodierung';
+  }
+
+  private getFreshnessStateLabel(state: CodingFreshnessState): string {
+    if (state === 'PENDING') {
+      return 'neu zu kodieren';
+    }
+
+    if (state === 'STALE') {
+      return 'veraltet';
+    }
+
+    return 'manuell zu prüfen';
   }
 }

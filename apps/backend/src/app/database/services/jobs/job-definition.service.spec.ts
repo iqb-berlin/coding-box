@@ -24,6 +24,7 @@ describe('JobDefinitionService', () => {
   let codingJobService: {
     createCodingJob: jest.Mock;
     createDistributedCodingJobs: jest.Mock;
+    refreshDistributedCodingJobs: jest.Mock;
     calculateDistributionVariableUsage: jest.Mock;
     calculateDistributionVariableUsageBatch: jest.Mock;
     getCodingJobCountsByDefinitionIds: jest.Mock;
@@ -39,6 +40,24 @@ describe('JobDefinitionService', () => {
     codingJobService = {
       createCodingJob: jest.fn(),
       createDistributedCodingJobs: jest.fn().mockResolvedValue({ success: true, jobsCreated: 0, jobs: [] }),
+      refreshDistributedCodingJobs: jest.fn().mockResolvedValue({
+        success: true,
+        jobsCreated: 0,
+        jobs: [],
+        preview: {
+          jobDefinitionId: 1,
+          existingJobsCount: 0,
+          staleJobsCount: 0,
+          existingCases: 0,
+          plannedCases: 0,
+          retainedCases: 0,
+          addedCases: 0,
+          removedCases: 0,
+          addedCodingTasks: 0,
+          removedCodingTasks: 0,
+          canApply: true
+        }
+      }),
       calculateDistributionVariableUsage: jest.fn(),
       calculateDistributionVariableUsageBatch: jest.fn(),
       getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),

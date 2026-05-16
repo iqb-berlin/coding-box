@@ -120,6 +120,25 @@ CREATE INDEX IF NOT EXISTS "idx_coding_unit_freshness_workspace_version_state"
 
 -- rollback DROP TABLE IF EXISTS "public"."coding_unit_freshness";
 
+-- changeset jurei733:12
+-- comment: Track whether manual coding jobs need review after test result changes
+ALTER TABLE "public"."coding_job"
+  ADD COLUMN IF NOT EXISTS "freshness_status" VARCHAR(32) NOT NULL DEFAULT 'current',
+  ADD COLUMN IF NOT EXISTS "freshness_reason" VARCHAR(64),
+  ADD COLUMN IF NOT EXISTS "freshness_updated_at" TIMESTAMP WITH TIME ZONE,
+  ADD COLUMN IF NOT EXISTS "freshness_affected_units" INTEGER NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS "freshness_affected_responses" INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS "idx_coding_job_workspace_freshness"
+  ON "public"."coding_job" ("workspace_id", "freshness_status");
+
+-- rollback DROP INDEX IF EXISTS "public"."idx_coding_job_workspace_freshness";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "freshness_affected_responses";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "freshness_affected_units";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "freshness_updated_at";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "freshness_reason";
+-- rollback ALTER TABLE "public"."coding_job" DROP COLUMN IF EXISTS "freshness_status";
+
 -- changeset jurei733:7
 -- comment: Store monotonically increasing test-result revisions per workspace
 CREATE TABLE IF NOT EXISTS "public"."workspace_test_results_revision" (

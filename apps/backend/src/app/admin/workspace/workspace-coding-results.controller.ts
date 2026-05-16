@@ -1,6 +1,7 @@
 import {
   Controller,
   Body,
+  Get,
   Param,
   Post,
   UseGuards
@@ -14,15 +15,39 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
-import { CodingJobOperationsService } from '../../database/services/coding';
+import { CodingJobOperationsService, CodingJobService } from '../../database/services/coding';
 import { ApplyCodingResultsResult } from '../../database/services/coding/coding-results.service';
+import { CodingJobFreshnessImpactDto } from '../../../../../../api-dto/coding/job-refresh.dto';
 
 @ApiTags('Admin Workspace Coding Results')
 @Controller('admin/workspace')
 export class WorkspaceCodingResultsController {
   constructor(
-    private codingJobOperationsService: CodingJobOperationsService
+    private codingJobOperationsService: CodingJobOperationsService,
+    private codingJobService: CodingJobService
   ) { }
+
+  @Get(':workspace_id/coding/jobs/:jobId/freshness-impact')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'jobId',
+    type: Number,
+    description: 'Coding job ID to inspect for source freshness impact'
+  })
+  @ApiOkResponse({
+    description: 'Freshness impact retrieved successfully.'
+  })
+  async getCodingJobFreshnessImpact(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: number
+  ): Promise<CodingJobFreshnessImpactDto> {
+    return this.codingJobService.getCodingJobFreshnessImpact(
+      workspace_id,
+      jobId
+    );
+  }
 
   @Post(':workspace_id/coding/jobs/:jobId/apply-results')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)

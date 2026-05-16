@@ -216,6 +216,11 @@ export class WorkspaceCodingStatisticsController {
       };
     }
 
+    await this.codingFreshnessService.assertAutoCodingRunCanStart(
+      workspace_id,
+      version === 'v3' ? 2 : 1
+    );
+
     const result = await this.codingProcessService.codeUnitIds(
       workspace_id,
       scope.unitIds,

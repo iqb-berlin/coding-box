@@ -25,6 +25,10 @@ import { JobDefinition } from '../../database/entities/job-definition.entity';
 import { CreateJobDefinitionDto } from '../coding-job/dto/create-job-definition.dto';
 import { UpdateJobDefinitionDto } from '../coding-job/dto/update-job-definition.dto';
 import { ApproveJobDefinitionDto } from '../coding-job/dto/approve-job-definition.dto';
+import {
+  JobDefinitionRefreshApplyResultDto,
+  JobDefinitionRefreshPreviewDto
+} from '../../../../../../api-dto/coding/job-refresh.dto';
 
 @ApiTags('Admin Workspace Job Definition')
 @Controller('admin/workspace')
@@ -237,6 +241,43 @@ export class WorkspaceCodingJobDefinitionController {
       @Param('id') id: number
   ): Promise<Awaited<ReturnType<JobDefinitionService['createCodingJobFromDefinition']>>> {
     return this.jobDefinitionService.createCodingJobFromDefinition(
+      id,
+      workspace_id
+    );
+  }
+
+  @Get(':workspace_id/coding/job-definitions/:id/refresh-preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Preview how an approved job definition would change when regenerated.'
+  })
+  async previewJobDefinitionRefresh(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<JobDefinitionRefreshPreviewDto> {
+    return this.jobDefinitionService.previewJobDefinitionRefresh(
+      id,
+      workspace_id
+    );
+  }
+
+  @Post(':workspace_id/coding/job-definitions/:id/refresh-apply')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(2)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
+  @ApiOkResponse({
+    description: 'Regenerate coding jobs from an approved job definition.'
+  })
+  async applyJobDefinitionRefresh(
+    @WorkspaceId() workspace_id: number,
+      @Param('id') id: number
+  ): Promise<JobDefinitionRefreshApplyResultDto> {
+    return this.jobDefinitionService.refreshCodingJobFromDefinition(
       id,
       workspace_id
     );

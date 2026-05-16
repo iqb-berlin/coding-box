@@ -1,4 +1,5 @@
 import { DataSource, Repository } from 'typeorm';
+import { BadRequestException } from '@nestjs/common';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -362,6 +363,48 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
+  it('marks only v1/v2 reset units as manual-job review required', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitId: 10, count: '2' },
+        { unitId: 20, count: '5' }
+      ])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markVersionsPendingAfterReset(1, {
+      v1: [10],
+      v3: [20]
+    });
+
+    const queryCalls = (connection.query as jest.Mock).mock.calls;
+    expect(queryCalls[queryCalls.length - 1]).toEqual([
+      expect.stringContaining('resp.unitid = ANY($2::int[])'),
+      [1, [10], 'review_required', 'RESET']
+    ]);
+  });
+
+  it('marks manual coding jobs review-required by response ids before source deletion', async () => {
+    await service.markCodingJobsStaleForResponseIds(1, [100, 100, 0], 'RESULT_DELETED');
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('cju.response_id = ANY($2::int[])'),
+      [1, [100], 'review_required', 'RESULT_DELETED']
+    );
+  });
+
+  it('marks manual coding jobs review-required by unit ids after source changes', async () => {
+    await service.markCodingJobsStaleForUnitIds(1, [10, 10, -1], 'RESULT_UPDATED');
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('resp.unitid = ANY($2::int[])'),
+      [1, [10], 'review_required', 'RESULT_UPDATED']
+    );
+  });
+
   it('does not apply the aggregate import count to imported units with zero responses', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 6 }]);
 
@@ -418,6 +461,125 @@ describe('CodingFreshnessService', () => {
       })],
       ['workspace_id', 'unit_id', 'version']
     );
+  });
+
+  it('marks existing manual jobs matching newly imported variables as review-required', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 7 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '3' }])
+    });
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: false })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await service.markUnitsPendingAfterImport(1, [10], 3);
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('coding_job_variable'),
+      [1, [10], 'review_required', 'RESULT_ADDED']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('variable_bundle.variables @>'),
+      [1, [10], 'review_required', 'RESULT_ADDED']
+    );
+  });
+
+  it('blocks the second auto-coding run when auto-coding 1 has not run yet', async () => {
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: false, v2: false, v3: false })
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(workspacePresenceQb);
+
+    await expect(service.assertAutoCodingRunCanStart(1, 2))
+      .rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('blocks the second auto-coding run while v1 or manual coding freshness is open', async () => {
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: false })
+    });
+    const summaryQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          version: 'v1',
+          state: 'STALE',
+          unitCount: '2',
+          affectedResponseCount: '6'
+        },
+        {
+          version: 'v2',
+          state: 'MANUAL_REVIEW_REQUIRED',
+          unitCount: '1',
+          affectedResponseCount: '3'
+        },
+        {
+          version: 'v3',
+          state: 'STALE',
+          unitCount: '4',
+          affectedResponseCount: '8'
+        }
+      ])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(workspacePresenceQb);
+    (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 10 }]);
+
+    await expect(service.assertAutoCodingRunCanStart(1, 2))
+      .rejects.toThrow('Auto-Coding 1');
+  });
+
+  it('blocks the second auto-coding run while manual coding jobs require review', async () => {
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: false })
+    });
+    const summaryQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(workspacePresenceQb);
+    (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
+    (connection.query as jest.Mock)
+      .mockResolvedValueOnce([{ revision: 12 }])
+      .mockResolvedValueOnce([{
+        jobCount: '2',
+        affectedUnits: '5',
+        affectedResponses: '7'
+      }]);
+
+    await expect(service.assertAutoCodingRunCanStart(1, 2))
+      .rejects.toThrow('manuelle Kodierung');
+  });
+
+  it('allows the second auto-coding run when only v3 freshness is open', async () => {
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: true })
+    });
+    const summaryQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([
+        {
+          version: 'v3',
+          state: 'STALE',
+          unitCount: '4',
+          affectedResponseCount: '8'
+        }
+      ])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(workspacePresenceQb);
+    (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 11 }]);
+
+    await expect(service.assertAutoCodingRunCanStart(1, 2))
+      .resolves.toBeUndefined();
   });
 
   it('keeps changed uncoded units pending for the first auto-coding run', async () => {
