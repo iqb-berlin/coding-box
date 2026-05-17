@@ -410,6 +410,9 @@ export class ResponseManagementService {
       status: response.status,
       is_autocoder_generated: true
     };
+    if (response.subform) {
+      generatedUpdateData.subform = response.subform;
+    }
 
     const updateResult = await queryRunner.manager
       .createQueryBuilder()
@@ -426,6 +429,36 @@ export class ResponseManagementService {
 
     if ((updateResult.affected || 0) > 0) {
       return this.getReturnedResponseId(updateResult.raw);
+    }
+
+    if (response.subform) {
+      const legacySubformUpdateResult = await queryRunner.manager
+        .createQueryBuilder()
+        .update(ResponseEntity)
+        .set(generatedUpdateData)
+        .where(
+          `id = (
+            SELECT id
+            FROM response
+            WHERE unitid = :unitid
+              AND variableid = :variableid
+              AND COALESCE(subform, '') = ''
+              AND is_autocoder_generated = :generated
+            ORDER BY id DESC
+            LIMIT 1
+          )`,
+          {
+            unitid: response.unitid,
+            variableid: response.variableid,
+            generated: true
+          }
+        )
+        .returning('id')
+        .execute();
+
+      if ((legacySubformUpdateResult.affected || 0) > 0) {
+        return this.getReturnedResponseId(legacySubformUpdateResult.raw);
+      }
     }
 
     await queryRunner.manager.insert(ResponseEntity, {

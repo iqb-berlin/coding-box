@@ -20,6 +20,7 @@ import {
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -289,18 +290,6 @@ export class WorkspaceTestResultsService {
     } catch {
       return [];
     }
-  }
-
-  private static getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3' = 'v1'): string {
-    if (version === 'v2') {
-      return 'COALESCE(response.status_v2, response.status_v1)';
-    }
-
-    if (version === 'v3') {
-      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
-    }
-
-    return 'response.status_v1';
   }
 
   private static nonAutocoderGeneratedResponseCondition(responseAlias = 'response'): string {
@@ -4050,7 +4039,7 @@ export class WorkspaceTestResultsService {
     );
 
     try {
-      const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(version);
+      const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
         .leftJoinAndSelect('response.unit', 'unit')
@@ -5664,7 +5653,7 @@ export class WorkspaceTestResultsService {
       }
 
       if (searchParams.codedStatus) {
-        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
           searchParams.version || 'v1'
         );
         query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
@@ -5699,7 +5688,7 @@ export class WorkspaceTestResultsService {
       const responseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
 
       if (responseSource === 'derived') {
-        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
           searchParams.version || 'v1'
         );
         query.andWhere('response.is_autocoder_generated = :derivedOnly', {
@@ -5710,7 +5699,7 @@ export class WorkspaceTestResultsService {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
         });
       } else if (responseSource === 'all') {
-        const effectiveStatusExpression = WorkspaceTestResultsService.getEffectiveCodingStatusExpression(
+        const effectiveStatusExpression = getEffectiveCodingStatusExpression(
           searchParams.version || 'v1'
         );
         query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);

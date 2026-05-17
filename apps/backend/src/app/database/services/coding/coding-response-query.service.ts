@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   applyResolvedExclusionsToQuery,
@@ -64,7 +65,7 @@ export class CodingResponseQueryService {
       applyResolvedExclusionsToQuery(queryBuilder, exclusions);
 
       queryBuilder.andWhere(
-        `${this.getEffectiveCodingStatusExpression(version)} = :status`,
+        `${getEffectiveCodingStatusExpression(version)} = :status`,
         { status: statusNumber }
       );
 
@@ -155,17 +156,5 @@ export class CodingResponseQueryService {
         'Could not retrieve responses. Please check the database connection or query.'
       );
     }
-  }
-
-  private getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3' = 'v1'): string {
-    if (version === 'v2') {
-      return 'COALESCE(response.status_v2, response.status_v1)';
-    }
-
-    if (version === 'v3') {
-      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
-    }
-
-    return 'response.status_v1';
   }
 }

@@ -606,12 +606,12 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE(CASE WHEN response.status_v3'),
+        expect.stringContaining('WHEN response.is_autocoder_generated = TRUE THEN'),
         { codedStatus: '5' }
       );
     });
 
-    it('should apply the v3 fallback status expression for derived-only searches', async () => {
+    it('should apply the v3 generated-row status expression for derived-only searches', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
       qb.getCount.mockResolvedValue(0);
@@ -623,7 +623,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE(CASE WHEN response.status_v3')
+        expect.stringContaining('WHEN response.is_autocoder_generated = TRUE THEN')
       );
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('NOT IN (:...ignoredDerivedCodingStatuses)'),
@@ -669,7 +669,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE(CASE WHEN response.status_v3'),
+        expect.stringContaining('WHEN response.is_autocoder_generated = TRUE THEN'),
         { statusParam: 5 }
       );
     });

@@ -514,6 +514,108 @@ describe('CodingProcessService', () => {
       }));
     });
 
+    it('should pass generated manual v2 responses to the second autocoder run', async () => {
+      const baseResponse = createMockResponse(1, 1, 'var1');
+      const generatedManualResponse = createMockResponse(2, 1, 'derived_var', '1_0');
+      generatedManualResponse.is_autocoder_generated = true;
+      generatedManualResponse.status_v1 = 8;
+      generatedManualResponse.code_v1 = null;
+      generatedManualResponse.score_v1 = null;
+      generatedManualResponse.status_v2 = 5;
+      generatedManualResponse.code_v2 = 0;
+      generatedManualResponse.score_v2 = 0;
+      generatedManualResponse.subform = null as unknown as string;
+
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['var1', 'derived_var'])]
+        ])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([baseResponse, generatedManualResponse]);
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      expect(mockQueryBuilder.andWhere).not.toHaveBeenCalledWith(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      );
+      expect(Autocoder.CodingSchemeFactory.code).toHaveBeenCalled();
+      const [inputResponses] = (Autocoder.CodingSchemeFactory.code as jest.Mock).mock.calls[0];
+      expect(inputResponses).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          id: 'derived_var',
+          value: '1_0',
+          status: 'CODING_COMPLETE',
+          code: 0,
+          score: 0,
+          subform: null
+        })
+      ]));
+    });
+
+    it('should keep existing generated rows marked during repeated second autocoder runs', async () => {
+      const generatedResponse = createMockResponse(88, 1, 'derived_var', '1_0');
+      generatedResponse.is_autocoder_generated = true;
+      generatedResponse.status_v1 = 8;
+      generatedResponse.status_v2 = 5;
+      generatedResponse.status_v3 = 5;
+      generatedResponse.code_v2 = 0;
+      generatedResponse.score_v2 = 0;
+      generatedResponse.code_v3 = 1;
+      generatedResponse.score_v3 = 1;
+      generatedResponse.subform = 'elementCodes';
+
+      (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
+        {
+          id: 'derived_var',
+          value: '1_0',
+          status: 'CODING_COMPLETE',
+          code: 0,
+          score: 0,
+          subform: 'elementCodes'
+        }
+      ]);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([
+          ['TEST_UNIT_1', new Set(['derived_var'])]
+        ])
+      );
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([generatedResponse]);
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 2);
+
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.arrayContaining([
+            expect.objectContaining({
+              id: 88,
+              isAutocoderGenerated: true,
+              unitid: 1,
+              variableid: 'derived_var',
+              subform: 'elementCodes',
+              code_v3: 0,
+              status_v3: 'CODING_COMPLETE',
+              score_v3: 0
+            })
+          ]),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 2,
+            markCurrentVersion: 'v3'
+          })
+        );
+    });
+
     it('should scope coding scheme cache entries by workspace', async () => {
       const getCodingSchemesWithCache = (
         service as unknown as {
@@ -600,7 +702,7 @@ describe('CodingProcessService', () => {
       expect(fileFindArgs.where.file_id.value).toContain('TEST_UNIT_1');
     });
 
-    it('should mark generated autocoder outputs and exclude generated rows from the next input query', async () => {
+    it('should mark generated autocoder outputs and exclude generated rows from the first run input query', async () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([
         {
           id: 'derived_var',

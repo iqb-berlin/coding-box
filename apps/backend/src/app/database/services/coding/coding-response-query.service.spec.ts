@@ -4,6 +4,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { CodingResponseQueryService } from './coding-response-query.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import * as statusConverter from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { Unit } from '../../entities/unit.entity';
 import { Booklet } from '../../entities/booklet.entity';
 import Persons from '../../entities/persons.entity';
@@ -150,7 +151,7 @@ describe('CodingResponseQueryService', () => {
         limit: 100
       });
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1) = :status",
+        `${getEffectiveCodingStatusExpression('v3')} = :status`,
         { status: 3 }
       );
     });

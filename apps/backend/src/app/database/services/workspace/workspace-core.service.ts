@@ -15,6 +15,10 @@ import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
+import {
+  CODING_STATISTICS_CACHE_VERSIONS,
+  getCodingStatisticsCacheKey
+} from '../coding/coding-statistics-cache-key.util';
 
 @Injectable()
 export class WorkspaceCoreService {
@@ -179,9 +183,9 @@ export class WorkspaceCoreService {
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {
     await Promise.all([
-      this.cacheService.delete(`coding-statistics:${workspaceId}:v1`),
-      this.cacheService.delete(`coding-statistics:${workspaceId}:v2`),
-      this.cacheService.delete(`coding-statistics:${workspaceId}:v3`),
+      ...CODING_STATISTICS_CACHE_VERSIONS.map(version => (
+        this.cacheService.delete(getCodingStatisticsCacheKey(workspaceId, version))
+      )),
       this.cacheService.delete(`coding_incomplete_variables_v3:${workspaceId}`),
       this.cacheService.delete(`flat_response_filter_options:version:${workspaceId}`),
       this.cacheService.deleteByPattern(`response-analysis:${workspaceId}_*`),

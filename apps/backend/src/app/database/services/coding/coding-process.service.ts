@@ -391,7 +391,11 @@ export class CodingProcessService {
 
       // Step 5: Get responses - 50% progress
       const responseQueryStart = Date.now();
-      const allResponses = await this.fetchResponses(unitIdsArray, queryRunner);
+      const allResponses = await this.fetchResponses(
+        unitIdsArray,
+        queryRunner,
+        resolvedAutoCoderRun
+      );
       metrics.responseQuery = Date.now() - responseQueryStart;
 
       if (!allResponses || allResponses.length === 0) {
@@ -667,10 +671,11 @@ export class CodingProcessService {
 
   private async fetchResponses(
     unitIds: number[],
-    queryRunner: QueryRunner
+    queryRunner: QueryRunner,
+    autoCoderRun: number
   ): Promise<ResponseEntity[]> {
     const responseRepo = queryRunner.manager.getRepository(ResponseEntity);
-    return responseRepo
+    const query = responseRepo
       .createQueryBuilder('ResponseEntity')
       .select([
         'ResponseEntity.id',
@@ -691,10 +696,6 @@ export class CodingProcessService {
         unitIds
       })
       .andWhere(
-        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
-        { isAutocoderGenerated: false }
-      )
-      .andWhere(
         new Brackets(qb => {
           qb.where('ResponseEntity.status IN (:...statuses)', {
             statuses: [3, 2, 1]
@@ -702,8 +703,16 @@ export class CodingProcessService {
             derivePending: statusStringToNumber('DERIVE_PENDING') as number
           });
         })
-      )
-      .getMany();
+      );
+
+    if (autoCoderRun === 1) {
+      query.andWhere(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      );
+    }
+
+    return query.getMany();
   }
 
   private async filterResponsesValidVariables(
@@ -1001,7 +1010,12 @@ export class CodingProcessService {
             id: existingResponse ? existingResponse.id : -1
           };
 
-          if (!existingResponse) {
+          if (existingResponse?.is_autocoder_generated) {
+            codedResponse.isAutocoderGenerated = true;
+            codedResponse.unitid = existingResponse.unitid;
+            codedResponse.variableid = existingResponse.variableid;
+            codedResponse.subform = existingResponse.subform;
+          } else if (!existingResponse) {
             codedResponse.isNew = true;
             codedResponse.unitid = unit.id;
             codedResponse.variableid = codedResult.id;
