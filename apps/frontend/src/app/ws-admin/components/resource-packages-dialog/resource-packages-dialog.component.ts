@@ -424,7 +424,10 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
           error: (error: unknown) => {
             this.finishResourcePackageOperation();
             this.snackBar.open(
-              this.getResourcePackageErrorMessage(error, 'GeoGebra konnte nicht installiert werden.'),
+              this.getResourcePackageErrorMessage(
+                error,
+                'GeoGebra konnte nicht installiert werden. Bitte Download-Link und ZIP-Format prüfen.'
+              ),
               this.translate.instant('error'),
               { duration: 3000 }
             );

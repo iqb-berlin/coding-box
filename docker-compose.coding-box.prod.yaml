@@ -27,6 +27,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PREFIX: ${REDIS_PREFIX:-coding-box}
+      GEOGEBRA_BUNDLE_DOWNLOAD_URL: ${GEOGEBRA_BUNDLE_DOWNLOAD_URL:-}
     volumes:
       - "backend_vol:/usr/src/coding-box-backend/packages"
     restart: always

@@ -8,8 +8,11 @@ import { UsersService } from '../../database/services/users';
 
 describe('ResourcePackageController', () => {
   let controller: ResourcePackageController;
+  let resourcePackageService: jest.Mocked<ResourcePackageService>;
 
   beforeEach(async () => {
+    resourcePackageService = createMock<ResourcePackageService>();
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ResourcePackageController],
       providers: [
@@ -19,7 +22,7 @@ describe('ResourcePackageController', () => {
         },
         {
           provide: ResourcePackageService,
-          useValue: createMock<ResourcePackageService>()
+          useValue: resourcePackageService
         },
         AccessLevelGuard,
         {
@@ -36,5 +39,11 @@ describe('ResourcePackageController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
+  });
+
+  it('should return an empty list when no resource packages exist', async () => {
+    resourcePackageService.findResourcePackages.mockResolvedValue([]);
+
+    await expect(controller.findResourcePackages(5)).resolves.toEqual([]);
   });
 });

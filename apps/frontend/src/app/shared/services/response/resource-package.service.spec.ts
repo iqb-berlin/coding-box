@@ -40,6 +40,18 @@ describe('ResourcePackageService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('getResourcePackages', () => {
+    it('should return an empty list when the backend has no resource packages', () => {
+      service.getResourcePackages(mockWorkspaceId).subscribe(res => {
+        expect(res).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/resource-packages`);
+      expect(req.request.method).toBe('GET');
+      req.flush([]);
+    });
+  });
+
   describe('deleteResourcePackages', () => {
     it('should send delete request with ids', () => {
       service.deleteResourcePackages(mockWorkspaceId, [1, 2]).subscribe(res => {
