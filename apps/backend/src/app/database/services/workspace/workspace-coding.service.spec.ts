@@ -325,6 +325,7 @@ describe('WorkspaceCodingService', () => {
         autoCoderRun,
         undefined,
         jobId,
+        undefined,
         undefined
       );
       expect(result).toEqual(expectedResult);

@@ -5,6 +5,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
+import { CodingFreshnessService } from './coding-freshness.service';
 
 jest.mock('../workspace/workspace-files.service', () => ({
   WorkspaceFilesService: jest.fn()
@@ -20,11 +21,13 @@ describe('CodingResultsService', () => {
     rollbackTransaction: jest.Mock;
     release: jest.Mock;
     manager: {
+      query: jest.Mock;
       update: jest.Mock;
     };
   };
   let codingJobService: jest.Mocked<CodingJobService>;
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
+  let codingFreshnessService: jest.Mocked<Pick<CodingFreshnessService, 'markManualCodingCurrent'>>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
     leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -43,6 +46,7 @@ describe('CodingResultsService', () => {
       rollbackTransaction: jest.fn().mockResolvedValue(undefined),
       release: jest.fn().mockResolvedValue(undefined),
       manager: {
+        query: jest.fn().mockResolvedValue([]),
         update: jest.fn().mockResolvedValue({ affected: 1 })
       }
     };
@@ -59,6 +63,7 @@ describe('CodingResultsService', () => {
 
     codingJobService = {
       getCodingJobById: jest.fn().mockResolvedValue({ id: 10, status: 'completed' }),
+      getCodingJobByIdForWorkspace: jest.fn().mockResolvedValue({ id: 10, status: 'completed' }),
       getCodingJobUnits: jest.fn().mockResolvedValue([
         {
           responseId: 99,
@@ -90,12 +95,17 @@ describe('CodingResultsService', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     } as unknown as jest.Mocked<CodingStatisticsService>;
 
+    codingFreshnessService = {
+      markManualCodingCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+
     service = new CodingResultsService(
       responseRepository,
       { delete: jest.fn().mockResolvedValue(undefined) } as unknown as CacheService,
       codingStatisticsService,
       codingJobService,
-      {} as CodingAnalysisService
+      {} as CodingAnalysisService,
+      codingFreshnessService as unknown as CodingFreshnessService
     );
   });
 
@@ -117,8 +127,125 @@ describe('CodingResultsService', () => {
         status_v2: 5
       }
     );
-    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(10, 17);
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
+      10,
+      17,
+      queryRunner.manager
+    );
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      17,
+      [99],
+      { codingJobId: 10, manager: queryRunner.manager }
+    );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
+  });
+
+  it('rolls back response updates when manual freshness cannot be finalized', async () => {
+    codingFreshnessService.markManualCodingCurrent.mockRejectedValueOnce(new Error('freshness failed'));
+
+    await expect(service.applyCodingResults(17, 10))
+      .rejects.toThrow('freshness failed');
+
+    expect(queryRunner.manager.update).toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+    expect(codingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+  });
+
+  it('blocks applying a completed coding job when its source freshness is stale', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      freshness_status: 'stale_source',
+      freshness_affected_units: 2,
+      freshness_affected_responses: 3
+    } as never);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result).toEqual({
+      success: false,
+      updatedResponsesCount: 0,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.error.freshness-review-required',
+      messageParams: {
+        status: 'stale_source',
+        affectedUnits: 2,
+        affectedResponses: 3
+      }
+    });
+    expect(codingJobService.getCodingJobUnits).not.toHaveBeenCalled();
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+  });
+
+  it('blocks applying when freshness becomes stale after the initial check', async () => {
+    codingJobService.getCodingJobByIdForWorkspace.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      freshness_status: 'stale_source',
+      freshness_affected_units: 4,
+      freshness_affected_responses: 7
+    } as never);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result).toEqual({
+      success: false,
+      updatedResponsesCount: 0,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.error.freshness-review-required',
+      messageParams: {
+        status: 'stale_source',
+        affectedUnits: 4,
+        affectedResponses: 7
+      }
+    });
+    expect(queryRunner.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('pg_advisory_xact_lock'),
+      [expect.any(Number), 17]
+    );
+    expect(queryRunner.manager.update).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markManualCodingCurrent).not.toHaveBeenCalled();
+    expect(codingJobService.markCodingJobResultsApplied).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('allows applying a completed coding job when its freshness requires manual review', async () => {
+    codingJobService.getCodingJobById.mockResolvedValueOnce({
+      id: 10,
+      status: 'completed',
+      freshness_status: 'review_required'
+    } as never);
+
+    const result = await service.applyCodingResults(17, 10);
+
+    expect(result.success).toBe(true);
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      99,
+      {
+        code_v2: 0,
+        score_v2: 0,
+        status_v2: 5
+      }
+    );
+    expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
+      17,
+      [99],
+      { codingJobId: 10, manager: queryRunner.manager }
+    );
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
+      10,
+      17,
+      queryRunner.manager
+    );
   });
 
   it('blocks applying unresolved double-coding conflicts', async () => {
@@ -180,7 +307,11 @@ describe('CodingResultsService', () => {
     expect(result.updatedResponsesCount).toBe(0);
     expect(result.skippedAlreadyCodedCount).toBe(1);
     expect(queryRunner.manager.update).not.toHaveBeenCalled();
-    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(10, 17);
+    expect(codingJobService.markCodingJobResultsApplied).toHaveBeenCalledWith(
+      10,
+      17,
+      queryRunner.manager
+    );
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
   });
 

@@ -13,11 +13,13 @@ import {
   withWorkspaceTestResultsMutationLock
 } from '../shared/workspace-test-results-lock.util';
 import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocoderSourceRevisionStaleError } from './autocoder-source-revision-stale.error';
 
 type AutocoderCleanup = {
   unitIds: number[];
   autoCoderRun: number;
   markCurrentVersion?: Extract<CodingFreshnessVersion, 'v1' | 'v3'>;
+  expectedSourceRevision?: number;
 };
 
 @Injectable()
@@ -59,6 +61,17 @@ export class ResponseManagementService {
         queryRunner.manager,
         workspaceId
       );
+
+      if (!(await this.isAutocoderSourceRevisionCurrent(
+        workspaceId,
+        autocoderCleanup,
+        queryRunner
+      ))) {
+        throw new AutocoderSourceRevisionStaleError(
+          workspaceId,
+          autocoderCleanup?.expectedSourceRevision
+        );
+      }
 
       if (autocoderCleanup) {
         await this.cleanupStaleAutocoderGeneratedResponses(
@@ -248,6 +261,20 @@ export class ResponseManagementService {
 
       return true;
     } catch (error) {
+      if (error instanceof AutocoderSourceRevisionStaleError) {
+        this.logger.warn(error.message);
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch (rollbackError) {
+          this.logger.error(
+            'Fehler beim Rollback der Transaktion:',
+            rollbackError.message
+          );
+        }
+        await queryRunner.release();
+        throw error;
+      }
+
       this.logger.error(
         'Fehler beim Aktualisieren der Responses:',
         error.message
@@ -274,12 +301,48 @@ export class ResponseManagementService {
       return;
     }
 
+    if (autocoderCleanup.expectedSourceRevision === undefined) {
+      await this.codingFreshnessService?.markVersionCurrent(
+        workspaceId,
+        autocoderCleanup.unitIds,
+        autocoderCleanup.markCurrentVersion,
+        queryRunner.manager
+      );
+      return;
+    }
+
     await this.codingFreshnessService?.markVersionCurrent(
       workspaceId,
       autocoderCleanup.unitIds,
       autocoderCleanup.markCurrentVersion,
+      queryRunner.manager,
+      autocoderCleanup.expectedSourceRevision
+    );
+  }
+
+  private async isAutocoderSourceRevisionCurrent(
+    workspaceId: number,
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner
+  ): Promise<boolean> {
+    if (autocoderCleanup?.expectedSourceRevision === undefined || !this.codingFreshnessService) {
+      return true;
+    }
+
+    const isCurrent = await this.codingFreshnessService.isRevisionCurrent(
+      workspaceId,
+      autocoderCleanup.expectedSourceRevision,
       queryRunner.manager
     );
+
+    if (!isCurrent) {
+      this.logger.warn(
+        `Skipping auto-coding update for workspace ${workspaceId}: ` +
+        'test results revision changed after the job was planned.'
+      );
+    }
+
+    return isCurrent;
   }
 
   private async upsertAutocoderGeneratedResponse(
@@ -509,7 +572,7 @@ export class ResponseManagementService {
             workspaceId,
             deleteIds,
             'RESULT_DELETED',
-            'review_required',
+            'stale_source',
             manager
           );
 
@@ -596,7 +659,7 @@ export class ResponseManagementService {
           workspaceId,
           [responseId],
           'RESULT_DELETED',
-          'review_required',
+          'stale_source',
           manager
         );
 

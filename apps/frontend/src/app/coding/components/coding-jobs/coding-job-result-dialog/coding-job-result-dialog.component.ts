@@ -432,6 +432,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   canApplyCodingResults(): boolean {
     return !this.isLoading &&
       this.data.codingJob.status !== 'results_applied' &&
+      this.isCodingJobFreshnessApplyable() &&
       !this.data.codingJob.training?.id &&
       !this.data.codingJob.training_id &&
       this.getCodedResultCount() > 0;
@@ -440,6 +441,9 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   getApplyButtonTooltip(): string {
     if (this.data.codingJob.status === 'results_applied') {
       return 'Kodierergebnisse wurden bereits angewendet';
+    }
+    if (!this.isCodingJobFreshnessApplyable()) {
+      return 'Die Antwortdaten haben sich geändert. Aktualisieren Sie zuerst den Kodierungsauftrag.';
     }
     if (this.data.codingJob.training?.id || this.data.codingJob.training_id) {
       return 'Trainingsergebnisse können nicht auf Antwortdaten angewendet werden';
@@ -451,6 +455,11 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       return `${this.getReviewIssueCount()} Ergebnis(se) benötigen vorher eine manuelle Prüfung und werden übersprungen`;
     }
     return 'Geprüfte Kodierergebnisse auf Datenbank anwenden';
+  }
+
+  private isCodingJobFreshnessApplyable(): boolean {
+    const freshnessStatus = this.data.codingJob.freshnessStatus;
+    return freshnessStatus !== 'stale_source';
   }
 
   getOtherCodersTooltip(result: CodingResult): string {

@@ -180,4 +180,58 @@ describe('CodingJobResultDialogComponent', () => {
 
     windowOpenSpy.mockRestore();
   });
+
+  it('should allow applying results when the coding job freshness requires manual review', () => {
+    component.isLoading = false;
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      freshnessStatus: 'review_required'
+    };
+    component.dataSource.data = [{
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      testPerson: 'login / code / group / BOOKLET_A',
+      testPersonSearch: 'login code group BOOKLET_A',
+      code: 1,
+      score: 2
+    }];
+
+    expect(component.canApplyCodingResults()).toBe(true);
+    expect(component.getApplyButtonTooltip())
+      .toBe('Geprüfte Kodierergebnisse auf Datenbank anwenden');
+  });
+
+  it('should block applying results when the coding job source freshness is stale', () => {
+    component.isLoading = false;
+    component.data.codingJob = {
+      ...component.data.codingJob,
+      status: 'completed',
+      freshnessStatus: 'stale_source'
+    };
+    component.dataSource.data = [{
+      unitName: 'UNIT_1',
+      unitAlias: 'UNIT_1',
+      variableId: 'VAR_1',
+      variableAnchor: 'VAR_1',
+      bookletName: 'BOOKLET_A',
+      personLogin: 'login',
+      personCode: 'code',
+      personGroup: 'group',
+      testPerson: 'login / code / group / BOOKLET_A',
+      testPersonSearch: 'login code group BOOKLET_A',
+      code: 1,
+      score: 2
+    }];
+
+    expect(component.canApplyCodingResults()).toBe(false);
+    expect(component.getApplyButtonTooltip())
+      .toContain('Antwortdaten haben sich geändert');
+  });
 });

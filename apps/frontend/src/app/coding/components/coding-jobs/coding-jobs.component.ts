@@ -56,7 +56,7 @@ interface BulkApplyResultItem {
   jobName: string;
   hasIssues: boolean;
   skipped: boolean;
-  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
+  skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
   result?: {
     success: boolean;
     updatedResponsesCount: number;
@@ -574,8 +574,13 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
   canApplyCodingResults(job: CodingJob): boolean {
     return this.canApplyResults &&
       job.status === 'completed' &&
+      this.isCodingJobFreshnessApplyable(job) &&
       !job.training?.id &&
       !job.training_id;
+  }
+
+  private isCodingJobFreshnessApplyable(job: CodingJob): boolean {
+    return job.freshnessStatus !== 'stale_source';
   }
 
   canRestartCodingJob(job: CodingJob): boolean {

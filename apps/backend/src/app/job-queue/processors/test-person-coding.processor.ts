@@ -63,7 +63,8 @@ export class TestPersonCodingProcessor {
           job.data.autoCoderRun || 1,
           progressCallback,
           job.id.toString(),
-          job.data.unitIds
+          job.data.unitIds,
+          job.data.freshnessSourceRevision
         );
 
         combinedResult.totalResponses += batchResult.totalResponses;

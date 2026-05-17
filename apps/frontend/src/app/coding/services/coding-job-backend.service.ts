@@ -148,7 +148,7 @@ export interface BulkApplyCodingResultsResponse {
     jobName: string;
     hasIssues: boolean;
     skipped: boolean;
-    skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
+    skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
     result?: {
       success: boolean;
       updatedResponsesCount: number;

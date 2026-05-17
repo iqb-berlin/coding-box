@@ -2001,6 +2001,7 @@
       "error": {
         "not-completed": "Der Kodierungsauftrag muss abgeschlossen sein, bevor Ergebnisse angewendet werden können. Aktueller Status: {{status}}",
         "training-job": "Trainingsergebnisse können nicht als produktive Kodierergebnisse angewendet werden.",
+        "freshness-review-required": "Ergebnisse können nicht angewendet werden, weil sich die zugrunde liegenden Antwortdaten geändert haben. Aktualisieren Sie zuerst den Kodierungsauftrag.",
         "uncertain-issues-present": "Ergebnisse können nicht angewendet werden, da {{count}} ungewisse Kodierreaktionen (Typ -1 oder -2) vorhanden sind. Bitte überprüfen Sie diese manuell zuerst.",
         "double-coding-conflicts-present": "Ergebnisse können nicht angewendet werden, da {{count}} abweichende Doppelkodierungen vorhanden sind. Bitte lösen Sie diese zuerst in der Doppelkodierungsprüfung auf."
       },

@@ -1,5 +1,6 @@
 import { QueryRunner } from 'typeorm';
 import { ResponseManagementService } from './response-management.service';
+import { AutocoderSourceRevisionStaleError } from './autocoder-source-revision-stale.error';
 import { ResponseEntity } from '../../entities/response.entity';
 
 describe('ResponseManagementService', () => {
@@ -142,6 +143,46 @@ describe('ResponseManagementService', () => {
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
   });
 
+  it('skips autocoder updates when the planned source revision is stale', async () => {
+    const manager = {
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined),
+      commitTransaction: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const codingFreshnessService = {
+      isRevisionCurrent: jest.fn().mockResolvedValue(false),
+      markVersionCurrent: jest.fn()
+    };
+    const service = createService(codingFreshnessService);
+
+    await expect(service.updateResponsesInDatabase(
+      1,
+      [],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        unitIds: [1],
+        autoCoderRun: 1,
+        markCurrentVersion: 'v1',
+        expectedSourceRevision: 5
+      }
+    )).rejects.toBeInstanceOf(AutocoderSourceRevisionStaleError);
+
+    expect(codingFreshnessService.isRevisionCurrent)
+      .toHaveBeenCalledWith(1, 5, manager);
+    expect(codingFreshnessService.markVersionCurrent).not.toHaveBeenCalled();
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
+    expect(queryRunner.release).toHaveBeenCalled();
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
   it('invalidates coding statistics after deleting a response directly', async () => {
     const selectQueryBuilder = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
@@ -198,7 +239,7 @@ describe('ResponseManagementService', () => {
 
     expect(result.success).toBe(true);
     expect(codingFreshnessService.markCodingJobsStaleForResponseIds)
-      .toHaveBeenCalledWith(1, [50], 'RESULT_DELETED', 'review_required', manager);
+      .toHaveBeenCalledWith(1, [50], 'RESULT_DELETED', 'stale_source', manager);
     expect(codingFreshnessService.markUnitsStaleAfterResultChange)
       .toHaveBeenCalledWith(1, [7], 'RESULT_DELETED');
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache)

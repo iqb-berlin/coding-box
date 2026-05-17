@@ -10,6 +10,8 @@ import {
 import { CodingJobService } from './coding-job.service';
 import { CodingValidationService } from './coding-validation.service';
 
+type BulkApplySkippedReason = 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
+
 @Injectable()
 export class CodingJobOperationsService {
   private readonly logger = new Logger(CodingJobOperationsService.name);
@@ -56,7 +58,7 @@ export class CodingJobOperationsService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
-      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
+      skippedReason?: BulkApplySkippedReason;
       result?: {
         success: boolean;
         updatedResponsesCount: number;
@@ -73,7 +75,7 @@ export class CodingJobOperationsService {
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'name', 'status', 'training_id']
+      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
     });
 
     const results: Array<{
@@ -81,7 +83,7 @@ export class CodingJobOperationsService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
-      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed';
+      skippedReason?: BulkApplySkippedReason;
       result?: {
         success: boolean;
         updatedResponsesCount: number;
@@ -99,19 +101,6 @@ export class CodingJobOperationsService {
     let jobsProcessed = 0;
 
     for (const job of codingJobs) {
-      const hasIssues = await this.codingJobService.hasCodingIssues(job.id);
-
-      if (hasIssues) {
-        results.push({
-          jobId: job.id,
-          jobName: job.name,
-          hasIssues: true,
-          skipped: true,
-          skippedReason: 'coding-issues'
-        });
-        continue;
-      }
-
       if (job.training_id !== null && job.training_id !== undefined) {
         results.push({
           jobId: job.id,
@@ -130,6 +119,30 @@ export class CodingJobOperationsService {
           hasIssues: false,
           skipped: true,
           skippedReason: 'not-completed'
+        });
+        continue;
+      }
+
+      if (job.freshness_status === 'stale_source') {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: false,
+          skipped: true,
+          skippedReason: 'freshness-stale'
+        });
+        continue;
+      }
+
+      const hasIssues = await this.codingJobService.hasCodingIssues(job.id);
+
+      if (hasIssues) {
+        results.push({
+          jobId: job.id,
+          jobName: job.name,
+          hasIssues: true,
+          skipped: true,
+          skippedReason: 'coding-issues'
         });
         continue;
       }
@@ -182,9 +195,10 @@ export class CodingJobOperationsService {
     const codingIssueJobs = results.filter(result => result.skippedReason === 'coding-issues').length;
     const trainingJobs = results.filter(result => result.skippedReason === 'training-job').length;
     const notCompletedJobs = results.filter(result => result.skippedReason === 'not-completed').length;
+    const freshnessStaleJobs = results.filter(result => result.skippedReason === 'freshness-stale').length;
     const failedJobs = results.filter(result => !result.skipped && result.result && !result.result.success).length;
     const message = `Bulk apply completed. Processed ${jobsProcessed} jobs, updated ${totalUpdatedResponses} responses, skipped ${totalSkippedReview} for review. ${codingIssueJobs
-    } jobs skipped due to coding issues.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
+    } jobs skipped due to coding issues.${trainingJobs > 0 ? ` ${trainingJobs} training jobs skipped.` : ''}${notCompletedJobs > 0 ? ` ${notCompletedJobs} jobs skipped because they are not completed.` : ''}${freshnessStaleJobs > 0 ? ` ${freshnessStaleJobs} jobs skipped because their source responses changed.` : ''}${failedJobs > 0 ? ` ${failedJobs} jobs could not be applied due to conflicts or errors.` : ''}`;
 
     this.logger.log(message);
 

@@ -229,6 +229,7 @@ export class WorkspaceCodingStatisticsController {
         source: 'coding-freshness',
         freshnessVersion: version,
         freshnessStates: states,
+        freshnessSourceRevision: scope.currentRevision,
         groupNames: scope.groupNames.join(',')
       }
     );

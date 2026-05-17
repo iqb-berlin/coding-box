@@ -8,6 +8,7 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { ResponseManagementService } from '../test-results/response-management.service';
+import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { CodingStatisticsService } from './coding-statistics.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
@@ -413,6 +414,59 @@ describe('CodingProcessService', () => {
             markCurrentVersion: 'v3'
           })
         );
+    });
+
+    it('passes the planned freshness revision into autocoder result updates', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      await service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2,
+        undefined,
+        undefined,
+        undefined,
+        42
+      );
+
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.any(Array),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1, 2],
+            autoCoderRun: 2,
+            markCurrentVersion: 'v3',
+            expectedSourceRevision: 42
+          })
+        );
+    });
+
+    it('propagates stale planned freshness revisions as job failures', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      const staleRevisionError = new AutocoderSourceRevisionStaleError(workspaceId, 42);
+      mockResponseManagementService.updateResponsesInDatabase
+        .mockRejectedValueOnce(staleRevisionError);
+
+      await expect(service.processTestPersonsBatch(
+        workspaceId,
+        personIds,
+        2,
+        undefined,
+        undefined,
+        undefined,
+        42
+      )).rejects.toBe(staleRevisionError);
     });
 
     it('should pass v2 code and score to the second autocoder run', async () => {
