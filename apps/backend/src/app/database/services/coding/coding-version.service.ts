@@ -111,6 +111,12 @@ export class CodingVersionService {
             unitFilters,
             variableFilters
           );
+        await this.reconcileAppliedCodingJobsAfterReset(
+          workspaceId,
+          version,
+          unitFilters,
+          variableFilters
+        );
         await this.invalidateStatisticsCaches(workspaceId, version);
         if (progressCallback) await progressCallback(100);
         return {
@@ -200,7 +206,9 @@ export class CodingVersionService {
       await this.markAppliedCodingJobsResultsClearedAfterReset(
         workspaceId,
         version,
-        resetResponseIdsByVersion
+        resetResponseIdsByVersion,
+        unitFilters,
+        variableFilters
       );
       await this.invalidateStatisticsCaches(workspaceId, version);
 
@@ -392,22 +400,51 @@ export class CodingVersionService {
   private async markAppliedCodingJobsResultsClearedAfterReset(
     workspaceId: number,
     version: ResetCodingVersion,
-    resetResponseIdsByVersion: ResetResponseIdsByVersion
+    resetResponseIdsByVersion: ResetResponseIdsByVersion,
+    unitFilters?: string[],
+    variableFilters?: string[]
   ): Promise<void> {
     if (version === 'v3' || !this.codingFreshnessService) {
       return;
     }
 
+    const status = version === 'v1' ? 'stale_source' : 'current';
     const manualResultResponseIds = Array.from(resetResponseIdsByVersion.v2);
-    if (manualResultResponseIds.length === 0) {
+    if (manualResultResponseIds.length > 0) {
+      await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+        workspaceId,
+        manualResultResponseIds,
+        'RESET',
+        status
+      );
+    }
+
+    await this.reconcileAppliedCodingJobsAfterReset(
+      workspaceId,
+      version,
+      unitFilters,
+      variableFilters
+    );
+  }
+
+  private async reconcileAppliedCodingJobsAfterReset(
+    workspaceId: number,
+    version: ResetCodingVersion,
+    unitFilters?: string[],
+    variableFilters?: string[]
+  ): Promise<void> {
+    if (version === 'v3' || !this.codingFreshnessService) {
       return;
     }
 
-    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+    await this.codingFreshnessService.reconcileAppliedManualCodingJobs(
       workspaceId,
-      manualResultResponseIds,
       'RESET',
-      version === 'v1' ? 'stale_source' : 'current'
+      version === 'v1' ? 'stale_source' : 'current',
+      {
+        unitNames: unitFilters,
+        variableIds: variableFilters
+      }
     );
   }
 

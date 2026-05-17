@@ -464,6 +464,50 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('reconciles applied manual jobs whose v2 response results are missing', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ id: 7 }, { id: 8 }]);
+
+    await expect(service.reconcileAppliedManualCodingJobs(
+      1,
+      'RESET',
+      'current'
+    )).resolves.toBe(2);
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("cj.status = 'results_applied'"),
+      [1, 'current', 'RESET']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('resp.status_v2 IS NULL'),
+      [1, 'current', 'RESET']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'completed'"),
+      [1, 'current', 'RESET']
+    );
+  });
+
+  it('scopes applied manual job reconciliation by unit and variable filters', async () => {
+    await service.reconcileAppliedManualCodingJobs(
+      1,
+      'RESET',
+      'stale_source',
+      {
+        unitNames: ['UNIT_A', 'UNIT_A', ''],
+        variableIds: ['VAR_1']
+      }
+    );
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('cju.unit_name = ANY($4::text[])'),
+      [1, 'stale_source', 'RESET', ['UNIT_A'], ['VAR_1']]
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('cju.variable_id = ANY($5::text[])'),
+      [1, 'stale_source', 'RESET', ['UNIT_A'], ['VAR_1']]
+    );
+  });
+
   it('marks manual coding freshness current after applying a coding job', async () => {
     (connection.query as jest.Mock)
       .mockResolvedValueOnce([])

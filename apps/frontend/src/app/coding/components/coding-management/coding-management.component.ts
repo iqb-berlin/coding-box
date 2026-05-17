@@ -54,11 +54,15 @@ import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessAutoCodingButtonLabel,
   getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
+  getCodingFreshnessManualReviewWarnings,
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
-  getCodingFreshnessVersionLabel
+  getCodingFreshnessVersionLabel,
+  hasOnlyManualCodingFreshnessWarnings
 } from '../../../shared/utils/coding-freshness-text.util';
 
 @Component({
@@ -482,16 +486,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return this.codingFreshnessWarnings.filter(item => (
-      (item.version === 'v1' || item.version === 'v3') &&
-      (item.state === 'PENDING' || item.state === 'STALE')
-    ));
+    return getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return this.codingFreshnessWarnings.filter(item => (
-      item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED'
-    ));
+    return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
+  }
+
+  get hasOnlyManualCodingFreshnessWarnings(): boolean {
+    return hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessAffectedUnits(): number {
@@ -508,6 +511,24 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   get codingFreshnessExplanationText(): string {
     return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  get codingFreshnessPanelTitle(): string {
+    if (this.hasImportedResultsWithoutCoding) {
+      return 'Kodierung noch nicht gestartet';
+    }
+
+    if (this.hasOnlyManualCodingFreshnessWarnings) {
+      return 'Manuelle Kodierung prüfen';
+    }
+
+    return this.hasCodingFreshnessWarnings ?
+      'Kodierstand nicht vollständig aktuell' :
+      'Kodierstand aktuell';
+  }
+
+  get manualCodingFreshnessGuidanceText(): string {
+    return getCodingFreshnessManualReviewGuidanceText(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessGroupPreview(): string {
