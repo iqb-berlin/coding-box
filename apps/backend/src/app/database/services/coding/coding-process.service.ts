@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, In, Repository, QueryRunner
@@ -80,6 +80,8 @@ export class CodingProcessService {
     testPersonIdsOrGroups: string,
     autoCoderRun: number = 1
   ): Promise<CodingStatisticsWithJob> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
+
     if (
       !workspace_id ||
       !testPersonIdsOrGroups ||
@@ -159,7 +161,7 @@ export class CodingProcessService {
       workspaceId: workspace_id,
       personIds,
       groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
-      autoCoderRun
+      autoCoderRun: resolvedAutoCoderRun
     });
 
     this.logger.log(`Added job to Redis queue with ID ${bullJob.id}`);
@@ -178,6 +180,7 @@ export class CodingProcessService {
     autoCoderRun: number = 1,
     metadata: UnitCodingJobMetadata = {}
   ): Promise<CodingStatisticsWithJob> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
     const ids = this.uniquePositiveIds(unitIds);
     if (!workspace_id || ids.length === 0) {
       this.logger.warn('Ungültige Eingabeparameter: workspace_id oder unitIds fehlen.');
@@ -218,7 +221,7 @@ export class CodingProcessService {
       personIds,
       unitIds: includedUnitIds,
       groupNames: metadata.groupNames || groupNames.join(','),
-      autoCoderRun,
+      autoCoderRun: resolvedAutoCoderRun,
       source: metadata.source || 'manual-selection',
       freshnessVersion: metadata.freshnessVersion,
       freshnessStates: metadata.freshnessStates,
@@ -246,6 +249,7 @@ export class CodingProcessService {
     targetUnitIds?: number[],
     freshnessSourceRevision?: number
   ): Promise<CodingStatistics> {
+    const resolvedAutoCoderRun = this.normalizeAutoCoderRun(autoCoderRun);
     this.cleanupCaches();
 
     const startTime = Date.now();
@@ -362,7 +366,10 @@ export class CodingProcessService {
 
       for (const unit of units) {
         unitIds.add(unit.id);
-        unitAliasesSet.add(unit.alias.toUpperCase());
+        const unitFileId = this.getUnitFileId(unit);
+        if (unitFileId) {
+          unitAliasesSet.add(unitFileId);
+        }
       }
 
       const unitIdsArray = Array.from(unitIds);
@@ -505,6 +512,7 @@ export class CodingProcessService {
       // Step 10: Get coding scheme files - 85% progress
       const schemeQueryStart = Date.now();
       const fileIdToCodingSchemeMap = await this.getCodingSchemeFiles(
+        workspace_id,
         codingSchemeRefs,
         jobId,
         queryRunner
@@ -542,7 +550,7 @@ export class CodingProcessService {
         fileIdToCodingSchemeMap,
         filteredResponses,
         statistics,
-        autoCoderRun,
+        resolvedAutoCoderRun,
         jobId,
         queryRunner,
         progressCallback
@@ -571,8 +579,8 @@ export class CodingProcessService {
           metrics,
           {
             unitIds: unitIdsArray,
-            autoCoderRun,
-            markCurrentVersion: autoCoderRun === 2 ? 'v3' : 'v1',
+            autoCoderRun: resolvedAutoCoderRun,
+            markCurrentVersion: resolvedAutoCoderRun === 2 ? 'v3' : 'v1',
             expectedSourceRevision: freshnessSourceRevision
           }
         );
@@ -670,9 +678,14 @@ export class CodingProcessService {
         'ResponseEntity.variableid',
         'ResponseEntity.value',
         'ResponseEntity.status',
+        'ResponseEntity.subform',
         'ResponseEntity.is_autocoder_generated',
         'ResponseEntity.status_v1',
-        'ResponseEntity.status_v2'
+        'ResponseEntity.code_v1',
+        'ResponseEntity.score_v1',
+        'ResponseEntity.status_v2',
+        'ResponseEntity.code_v2',
+        'ResponseEntity.score_v2'
       ])
       .where('ResponseEntity.unitid = ANY(:unitIds)', {
         unitIds
@@ -770,6 +783,7 @@ export class CodingProcessService {
   }
 
   private async getCodingSchemesWithCache(
+    workspaceId: number,
     codingSchemeRefs: string[]
   ): Promise<Map<string, CodingScheme>> {
     const now = Date.now();
@@ -777,7 +791,9 @@ export class CodingProcessService {
     const emptyScheme = new CodingScheme({});
 
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
-      const cacheEntry = this.codingSchemeCache.get(ref);
+      const cacheEntry = this.codingSchemeCache.get(
+        this.codingSchemeCacheKey(workspaceId, ref)
+      );
       if (cacheEntry && now - cacheEntry.timestamp < this.SCHEME_CACHE_TTL_MS) {
         result.set(ref, cacheEntry.scheme);
         return false;
@@ -794,7 +810,7 @@ export class CodingProcessService {
       `Fetching ${missingSchemeRefs.length} missing coding schemes`
     );
     const codingSchemeFiles = await this.fileUploadRepository.find({
-      where: { file_id: In(missingSchemeRefs) },
+      where: { workspace_id: workspaceId, file_id: In(missingSchemeRefs) },
       select: ['file_id', 'data', 'filename']
     });
 
@@ -804,7 +820,10 @@ export class CodingProcessService {
           typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
         const scheme = new CodingScheme(data);
         result.set(file.file_id, scheme);
-        this.codingSchemeCache.set(file.file_id, { scheme, timestamp: now });
+        this.codingSchemeCache.set(
+          this.codingSchemeCacheKey(workspaceId, file.file_id),
+          { scheme, timestamp: now }
+        );
       } catch (error) {
         this.logger.error(
           `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${error.message}`
@@ -814,6 +833,23 @@ export class CodingProcessService {
     });
 
     return result;
+  }
+
+  private normalizeAutoCoderRun(autoCoderRun: number): 1 | 2 {
+    if (autoCoderRun === 1 || autoCoderRun === 2) {
+      return autoCoderRun;
+    }
+
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
+  private getUnitFileId(unit: Unit): string | null {
+    const candidate = unit.alias?.trim() || unit.name?.trim() || '';
+    return candidate ? candidate.toUpperCase() : null;
+  }
+
+  private codingSchemeCacheKey(workspaceId: number, fileId: string): string {
+    return `${workspaceId}:${fileId}`;
   }
 
   private cleanupCaches(): void {
@@ -1019,13 +1055,15 @@ export class CodingProcessService {
   }
 
   private async getCodingSchemeFiles(
+    workspaceId: number,
     codingSchemeRefs: Set<string>,
     jobId?: string,
     queryRunner?: import('typeorm').QueryRunner
   ): Promise<Map<string, CodingScheme>> {
-    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache([
-      ...codingSchemeRefs
-    ]);
+    const fileIdToCodingSchemeMap = await this.getCodingSchemesWithCache(
+      workspaceId,
+      [...codingSchemeRefs]
+    );
     if (jobId && (await this.isJobCancelled(jobId))) {
       this.logger.log(
         `Job ${jobId} was cancelled or paused after getting coding scheme files`
@@ -1056,7 +1094,15 @@ export class CodingProcessService {
       const unitBatch = units.slice(i, i + batchSize);
 
       for (const unit of unitBatch) {
-        const testFile = fileIdToTestFileMap.get(unit.alias.toUpperCase());
+        const unitFileId = this.getUnitFileId(unit);
+        if (!unitFileId) {
+          this.logger.warn(
+            `Skipping coding scheme lookup for unit ${unit.id}: missing unit alias and name.`
+          );
+          continue;
+        }
+
+        const testFile = fileIdToTestFileMap.get(unitFileId);
         if (!testFile) continue;
 
         try {
@@ -1068,7 +1114,7 @@ export class CodingProcessService {
             unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
             this.logger.debug(
               `Extracted coding scheme mapping: unitId=${unit.id
-              }, unitAlias=${unit.alias.toUpperCase()}, codingSchemeRef=${codingSchemeRefUpper}`
+              }, unitFileId=${unitFileId}, codingSchemeRef=${codingSchemeRefUpper}`
             );
           }
         } catch (error) {

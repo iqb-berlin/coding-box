@@ -4,6 +4,7 @@ import {
   Param,
   Post,
   Query,
+  BadRequestException,
   Req,
   UnauthorizedException,
   UseGuards
@@ -53,6 +54,32 @@ export class WorkspaceCodingController {
     return userId;
   }
 
+  private parseAutoCoderRun(autoCoderRun?: string | string[]): 1 | 2 {
+    if (autoCoderRun === undefined) {
+      return 1;
+    }
+
+    if (Array.isArray(autoCoderRun)) {
+      if (autoCoderRun.length === 1) {
+        return this.parseAutoCoderRun(autoCoderRun[0]);
+      }
+
+      throw new BadRequestException('autoCoderRun must be 1 or 2');
+    }
+
+    const trimmedAutoCoderRun = autoCoderRun.trim();
+    if (trimmedAutoCoderRun === '') {
+      return 1;
+    }
+
+    const parsed = Number(trimmedAutoCoderRun);
+    if (Number.isInteger(parsed) && (parsed === 1 || parsed === 2)) {
+      return parsed;
+    }
+
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
   @Get(':workspace_id/coding')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
@@ -73,11 +100,10 @@ export class WorkspaceCodingController {
   async codeTestPersons(
     @Query('testPersons') testPersons: string,
       @WorkspaceId() workspace_id: number,
-      @Query('autoCoderRun') autoCoderRun: string
+      @Query('autoCoderRun') autoCoderRun: string | string[] | undefined
   ): Promise<CodingStatistics> {
+    const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
     await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
-
-    const autoCoderRunNumber = parseInt(autoCoderRun, 10) || 1;
     await this.codingFreshnessService.assertAutoCodingRunCanStart(
       workspace_id,
       autoCoderRunNumber

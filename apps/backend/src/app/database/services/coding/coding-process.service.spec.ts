@@ -416,6 +416,24 @@ describe('CodingProcessService', () => {
         );
     });
 
+    it('should select v2 code, score, and subform fields for the second autocoder run', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockUnits)
+        .mockResolvedValueOnce(mockResponses);
+
+      await service.processTestPersonsBatch(workspaceId, personIds, 2);
+
+      expect(mockQueryBuilder.select).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          'ResponseEntity.subform',
+          'ResponseEntity.code_v1',
+          'ResponseEntity.score_v1',
+          'ResponseEntity.code_v2',
+          'ResponseEntity.score_v2'
+        ])
+      );
+    });
+
     it('passes the planned freshness revision into autocoder result updates', async () => {
       mockQueryBuilder.getMany
         .mockResolvedValueOnce(mockUnits)
@@ -494,6 +512,92 @@ describe('CodingProcessService', () => {
         code: 0,
         score: 0
       }));
+    });
+
+    it('should scope coding scheme cache entries by workspace', async () => {
+      const getCodingSchemesWithCache = (
+        service as unknown as {
+          getCodingSchemesWithCache: (
+            workspaceId: number,
+            codingSchemeRefs: string[]
+          ) => Promise<Map<string, unknown>>;
+        }
+      ).getCodingSchemesWithCache.bind(service);
+
+      (fileUploadRepository.find as jest.Mock)
+        .mockReset()
+        .mockResolvedValueOnce([
+          createMockFileUpload('SHARED_SCHEME', JSON.stringify({ variableCodings: [] }))
+        ])
+        .mockResolvedValueOnce([
+          createMockFileUpload('SHARED_SCHEME', JSON.stringify({ variableCodings: [] }))
+        ]);
+
+      await getCodingSchemesWithCache(1, ['SHARED_SCHEME']);
+      await getCodingSchemesWithCache(2, ['SHARED_SCHEME']);
+      await getCodingSchemesWithCache(1, ['SHARED_SCHEME']);
+
+      expect(fileUploadRepository.find).toHaveBeenCalledTimes(2);
+      expect(fileUploadRepository.find).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: expect.objectContaining({ workspace_id: 1 })
+        })
+      );
+      expect(fileUploadRepository.find).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: expect.objectContaining({ workspace_id: 2 })
+        })
+      );
+    });
+
+    it('should reject unsupported autocoder runs before starting processing', async () => {
+      await expect(
+        service.processTestPersonsBatch(workspaceId, personIds, 3)
+      ).rejects.toThrow('autoCoderRun must be 1 or 2');
+    });
+
+    it('should use the unit name as file id fallback when alias is missing', async () => {
+      const unitWithoutAlias = createMockUnit(1, 1, 'TEST_UNIT_1', null as unknown as string);
+      (fileUploadRepository.find as jest.Mock).mockReset().mockResolvedValue([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([unitWithoutAlias])
+        .mockResolvedValueOnce([mockResponses[0]]);
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 1);
+
+      const fileFindArgs = (fileUploadRepository.find as jest.Mock).mock.calls[0][0];
+      expect(fileFindArgs.where.workspace_id).toBe(workspaceId);
+      expect(fileFindArgs.where.file_id.value).toContain('TEST_UNIT_1');
+      expect(mockResponseManagementService.updateResponsesInDatabase)
+        .toHaveBeenCalledWith(
+          workspaceId,
+          expect.any(Array),
+          expect.anything(),
+          undefined,
+          expect.any(Function),
+          undefined,
+          expect.any(Object),
+          expect.objectContaining({
+            unitIds: [1],
+            autoCoderRun: 1
+          })
+        );
+    });
+
+    it('should use the unit name as file id fallback when alias is blank', async () => {
+      const unitWithBlankAlias = createMockUnit(1, 1, 'TEST_UNIT_1', '   ');
+      (fileUploadRepository.find as jest.Mock).mockReset().mockResolvedValue([]);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([unitWithBlankAlias])
+        .mockResolvedValueOnce([mockResponses[0]]);
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 1);
+
+      const fileFindArgs = (fileUploadRepository.find as jest.Mock).mock.calls[0][0];
+      expect(fileFindArgs.where.workspace_id).toBe(workspaceId);
+      expect(fileFindArgs.where.file_id.value).toContain('TEST_UNIT_1');
     });
 
     it('should mark generated autocoder outputs and exclude generated rows from the next input query', async () => {
