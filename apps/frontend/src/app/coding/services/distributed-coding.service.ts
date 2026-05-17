@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, of } from 'rxjs';
+import { Observable, catchError, throwError } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 
 export interface DistributedCodingJobsResponse {
@@ -40,6 +40,24 @@ export class DistributedCodingService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
+  private getErrorMessage(error: unknown): string {
+    const httpError = error as {
+      error?: { message?: string | string[] } | string;
+      message?: string;
+    };
+
+    if (typeof httpError.error === 'string' && httpError.error.trim()) {
+      return httpError.error;
+    }
+
+    if (httpError.error && typeof httpError.error === 'object' && 'message' in httpError.error) {
+      const message = httpError.error.message;
+      return Array.isArray(message) ? message.join(', ') : message || 'Unbekannter Fehler';
+    }
+
+    return httpError.message || 'Unbekannter Fehler';
+  }
+
   createDistributedCodingJobs(
     workspaceId: number,
     selectedVariables: { unitName: string; variableId: string }[],
@@ -75,20 +93,7 @@ export class DistributedCodingService {
       {}
     )
       .pipe(
-        catchError(() => of({
-          success: false,
-          jobsCreated: 0,
-          message: 'Failed to create distributed jobs',
-          distribution: {},
-          distributionByCoderId: {},
-          doubleCodingInfo: {},
-          aggregationInfo: {},
-          matchingFlags: [],
-          pairDistribution: {},
-          tasksPerCoder: {},
-          coderWeights: {},
-          jobs: []
-        }))
+        catchError(error => throwError(() => new Error(this.getErrorMessage(error))))
       );
   }
 
@@ -153,17 +158,7 @@ export class DistributedCodingService {
       {}
     )
       .pipe(
-        catchError(() => of({
-          distribution: {},
-          distributionByCoderId: {},
-          doubleCodingInfo: {},
-          aggregationInfo: {},
-          matchingFlags: [],
-          pairDistribution: {},
-          tasksPerCoder: {},
-          coderWeights: {},
-          warnings: []
-        }))
+        catchError(error => throwError(() => new Error(this.getErrorMessage(error))))
       );
   }
 }

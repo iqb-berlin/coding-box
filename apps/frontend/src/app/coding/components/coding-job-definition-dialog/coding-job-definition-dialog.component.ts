@@ -971,7 +971,25 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      if (this.selectedVariables.selected.length > 1) {
+      if (this.selectedCoders.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.coder-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      if (this.selectedVariables.selected.length === 0 && this.selectedVariableBundles.selected.length === 0) {
+        this.snackBar.open(
+          this.translateService.instant('coding-job-definition-dialog.validation.variable-or-bundle-required'),
+          this.translateService.instant('common.close'),
+          { duration: 5000 }
+        );
+        return;
+      }
+
+      if (this.getCodingJobCount() > 1) {
         await this.openBulkCreationDialog();
         return;
       }

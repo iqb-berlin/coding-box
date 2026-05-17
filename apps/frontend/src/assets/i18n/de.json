@@ -1812,7 +1812,8 @@
   },
   "coding-job-bulk-creation-dialog": {
     "title": "Verteilte Erstellung von Kodieraufträgen",
-    "description": "Die ausgewählten Variablen werden gleichmäßig auf die ausgewählten Kodierer verteilt:",
+    "description": "Die ausgewählten Fälle werden anhand der Vorschau auf die ausgewählten Kodierer verteilt:",
+    "results-description": "Die Kodieraufträge wurden erstellt. Die Übersicht zeigt die tatsächlich angelegten Aufträge:",
     "distribution-summary": {
       "title": "Verteilungsübersicht",
       "variable": "Variable",
@@ -1820,7 +1821,7 @@
       "cases": "Fälle",
       "grand-total": "GESAMT:",
       "notice": "Hinweis:",
-      "notice-text": "Fälle werden gleichmäßig auf die Kodierer verteilt. Bei ungeraden Zahlen bekommen die ersten Kodierer (alphabetisch) einen zusätzlichen Fall."
+      "notice-text": "Die Verteilung berücksichtigt Kodierer-Kapazitäten, Doppelkodierung, Obergrenzen und die gewählte Fallreihenfolge. Angelegt werden nur Aufträge mit mindestens einem Fall."
     },
     "jobs-summary": {
       "title": "Zu erstellende Aufträge",
@@ -1836,8 +1837,9 @@
     },
     "buttons": {
       "cancel": "Abbrechen",
-      "confirm": "{{count}} kodierer-spezifische Aufträge erstellen",
-      "continue": "Trotzdem fortfahren"
+      "confirm": "{{count}} Aufträge erstellen",
+      "continue": "Trotzdem fortfahren",
+      "close": "Schließen"
     },
     "warnings": {
       "title": "Warnungen",

@@ -573,7 +573,8 @@
     }
 
     @if (data.mode === 'job' && !isReadOnly) {
-    <button mat-raised-button color="primary" (click)="onSubmit()" [disabled]="isSaving || codingJobForm.invalid">
+    <button mat-raised-button color="primary" (click)="onSubmit()"
+      [disabled]="isSaving || codingJobForm.invalid || (!data.isEdit && (selectedCoders.selected.length === 0 || (selectedVariables.selected.length === 0 && selectedVariableBundles.selected.length === 0)))">
       {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
     </button>
     }
