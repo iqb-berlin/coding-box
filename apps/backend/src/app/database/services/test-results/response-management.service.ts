@@ -46,6 +46,7 @@ export class ResponseManagementService {
     autocoderCleanup?: AutocoderCleanup
   ): Promise<boolean> {
     const updateStart = Date.now();
+    const updatedAutocoderGeneratedResponseIds = new Set<number>();
     try {
       if (allCodedResponses.length === 0 && !autocoderCleanup) {
         await queryRunner.release();
@@ -76,12 +77,20 @@ export class ResponseManagementService {
       if (autocoderCleanup) {
         await this.cleanupStaleAutocoderGeneratedResponses(
           queryRunner,
+          workspaceId,
           autocoderCleanup,
           allCodedResponses
         );
       }
 
       if (allCodedResponses.length === 0) {
+        await this.markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+          workspaceId,
+          allCodedResponses,
+          autocoderCleanup,
+          queryRunner,
+          updatedAutocoderGeneratedResponseIds
+        );
         await this.markAutocoderVersionCurrent(
           workspaceId,
           autocoderCleanup,
@@ -199,7 +208,11 @@ export class ResponseManagementService {
                     response,
                     newEntity,
                     updateData
-                  );
+                  ).then(updatedResponseId => {
+                    if (updatedResponseId !== null) {
+                      updatedAutocoderGeneratedResponseIds.add(updatedResponseId);
+                    }
+                  });
                 }
 
                 return queryRunner.manager.insert(ResponseEntity, newEntity);
@@ -239,6 +252,13 @@ export class ResponseManagementService {
         }
       }
 
+      await this.markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+        workspaceId,
+        allCodedResponses,
+        autocoderCleanup,
+        queryRunner,
+        updatedAutocoderGeneratedResponseIds
+      );
       await this.markAutocoderVersionCurrent(
         workspaceId,
         autocoderCleanup,
@@ -320,6 +340,39 @@ export class ResponseManagementService {
     );
   }
 
+  private async markAppliedCodingJobsResultsClearedAfterAutocoderRun(
+    workspaceId: number,
+    allCodedResponses: CodedResponse[],
+    autocoderCleanup: AutocoderCleanup | undefined,
+    queryRunner: QueryRunner,
+    updatedAutocoderGeneratedResponseIds: Set<number> = new Set<number>()
+  ): Promise<void> {
+    if (autocoderCleanup?.autoCoderRun !== 1 || !this.codingFreshnessService) {
+      return;
+    }
+
+    const responseIds = Array.from(new Set(
+      [
+        ...allCodedResponses
+          .filter(response => !response.isNew)
+          .map(response => Number(response.id)),
+        ...updatedAutocoderGeneratedResponseIds
+      ]
+        .filter(id => Number.isInteger(id) && id > 0)
+    ));
+    if (responseIds.length === 0) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      responseIds,
+      'AUTOCODE_RUN',
+      'stale_source',
+      queryRunner.manager
+    );
+  }
+
   private async isAutocoderSourceRevisionCurrent(
     workspaceId: number,
     autocoderCleanup: AutocoderCleanup | undefined,
@@ -350,7 +403,7 @@ export class ResponseManagementService {
     response: CodedResponse,
     newEntity: Partial<ResponseEntity>,
     updateData: Partial<ResponseEntity>
-  ): Promise<void> {
+  ): Promise<number | null> {
     const generatedUpdateData: Partial<ResponseEntity> = {
       ...updateData,
       value: response.value,
@@ -368,18 +421,37 @@ export class ResponseManagementService {
         subform: response.subform || ''
       })
       .andWhere('is_autocoder_generated = :generated', { generated: true })
+      .returning('id')
       .execute();
 
-    if ((updateResult.affected || 0) === 0) {
-      await queryRunner.manager.insert(ResponseEntity, {
-        ...newEntity,
-        is_autocoder_generated: true
-      });
+    if ((updateResult.affected || 0) > 0) {
+      return this.getReturnedResponseId(updateResult.raw);
     }
+
+    await queryRunner.manager.insert(ResponseEntity, {
+      ...newEntity,
+      is_autocoder_generated: true
+    });
+    return null;
+  }
+
+  private getReturnedResponseId(raw: unknown): number | null {
+    if (!Array.isArray(raw) || raw.length === 0) {
+      return null;
+    }
+
+    const [row] = raw;
+    if (!row || typeof row !== 'object') {
+      return null;
+    }
+
+    const id = Number((row as { id?: unknown }).id);
+    return Number.isInteger(id) && id > 0 ? id : null;
   }
 
   private async cleanupStaleAutocoderGeneratedResponses(
     queryRunner: QueryRunner,
+    workspaceId: number,
     cleanup: { unitIds: number[]; autoCoderRun: number },
     allCodedResponses: CodedResponse[]
   ): Promise<void> {
@@ -427,6 +499,13 @@ export class ResponseManagementService {
       return;
     }
 
+    await this.markAppliedCodingJobsResultsClearedBeforeAutocoderGeneratedCleanup(
+      workspaceId,
+      cleanup,
+      staleIds,
+      queryRunner
+    );
+
     const clearData: Partial<ResponseEntity> = cleanup.autoCoderRun === 1 ?
       {
         code_v1: null,
@@ -468,6 +547,25 @@ export class ResponseManagementService {
           AND score_v3 IS NULL
       `,
       [staleIds]
+    );
+  }
+
+  private async markAppliedCodingJobsResultsClearedBeforeAutocoderGeneratedCleanup(
+    workspaceId: number,
+    cleanup: { autoCoderRun: number },
+    responseIds: number[],
+    queryRunner: QueryRunner
+  ): Promise<void> {
+    if (cleanup.autoCoderRun !== 1 || !this.codingFreshnessService) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      responseIds,
+      'AUTOCODE_RUN',
+      'stale_source',
+      queryRunner.manager
     );
   }
 

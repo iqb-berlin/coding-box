@@ -8,6 +8,11 @@ import { CodingManagementManualComponent } from './coding-management-manual.comp
 import { SERVER_URL } from '../../../injection-tokens';
 import { environment } from '../../../../environments/environment';
 
+type VariableCoverageOverview = NonNullable<CodingManagementManualComponent['variableCoverageOverview']>;
+type CaseCoverageOverview = NonNullable<CodingManagementManualComponent['caseCoverageOverview']>;
+type CodingProgressOverview = NonNullable<CodingManagementManualComponent['codingProgressOverview']>;
+type ManualAppliedResultsOverview = NonNullable<CodingManagementManualComponent['appliedResultsOverview']>;
+
 describe('CodingManagementManualComponent', () => {
   let component: CodingManagementManualComponent;
   let fixture: ComponentFixture<CodingManagementManualComponent>;
@@ -123,6 +128,67 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getCodingJobResultSummary(component.completedJobsReadyForApply[0])).toBe('5/5 Ergebnisse kodiert');
   });
 
+  it('should describe complete planning with open coding work as ready for execution', () => {
+    setCompletePlanningState();
+    setCodingProgress(10, 4);
+    setAppliedResults(10, 0, 10);
+
+    expect(component.getPlanningStatusClass()).toBe('status-ready');
+    expect(component.getPlanningStatusIcon()).toBe('play_circle');
+    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Durchführung');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.'
+    );
+  });
+
+  it('should describe loading planning data as an updating status', () => {
+    setCompletePlanningState();
+    setCodingProgress(10, 4);
+    component.isLoadingCodingProgress = true;
+
+    expect(component.getPlanningStatusClass()).toBe('status-ready');
+    expect(component.getPlanningStatusIcon()).toBe('sync');
+    expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Die Planungs- und Kodierfortschritte werden geladen.'
+    );
+  });
+
+  it('should not describe remaining applied results as open execution work without coding progress', () => {
+    setCompletePlanningState();
+    setAppliedResults(10, 0, 10);
+
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('sync_problem');
+    expect(component.getPlanningStatusTitle()).toBe('Kodierfortschritt nicht verfügbar');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.'
+    );
+  });
+
+  it('should describe completed coding with pending applied results as ready for completion', () => {
+    setCompletePlanningState();
+    setCodingProgress(582, 582);
+    setAppliedResults(581, 0, 581);
+
+    expect(component.getPlanningStatusClass()).toBe('status-attention');
+    expect(component.getPlanningStatusIcon()).toBe('published_with_changes');
+    expect(component.getPlanningStatusTitle()).toBe('Bereit für den Abschluss');
+    expect(component.getPlanningStatusDescription()).toBe(
+      'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.'
+    );
+  });
+
+  it('should describe applied results as complete', () => {
+    setCompletePlanningState();
+    setCodingProgress(582, 582);
+    setAppliedResults(581, 581, 0);
+
+    expect(component.getPlanningStatusClass()).toBe('status-complete');
+    expect(component.getPlanningStatusIcon()).toBe('check_circle');
+    expect(component.getPlanningStatusTitle()).toBe('Manuelle Kodierung abgeschlossen');
+  });
+
   it('should not treat stale-source coding jobs as ready to apply', () => {
     const isCodingJobReadyForApply = (component as unknown as {
       isCodingJobReadyForApply(job: {
@@ -142,4 +208,90 @@ describe('CodingManagementManualComponent', () => {
       freshnessStatus: 'stale_source'
     })).toBe(false);
   });
+
+  function setCompletePlanningState(): void {
+    component.variableCoverageOverview = {
+      totalVariables: 2,
+      coveredVariables: 2,
+      coveredByDraft: 0,
+      coveredByPendingReview: 0,
+      coveredByApproved: 2,
+      conflictedVariables: 0,
+      missingVariables: 0,
+      partiallyAbgedeckteVariablen: 0,
+      fullyAbgedeckteVariablen: 2,
+      coveragePercentage: 100,
+      variableCaseCounts: [],
+      coverageByStatus: {
+        draft: [],
+        pending_review: [],
+        approved: ['unit:variable'],
+        conflicted: []
+      }
+    } satisfies VariableCoverageOverview;
+
+    component.caseCoverageOverview = {
+      totalCasesToCode: 10,
+      effectiveTotalCasesToCode: 10,
+      casesInJobs: 10,
+      effectiveCasesInJobs: 10,
+      doubleCodedCases: 0,
+      singleCodedCases: 10,
+      unassignedCases: 0,
+      effectiveUnassignedCases: 0,
+      coveragePercentage: 100,
+      rawCoveragePercentage: 100,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CaseCoverageOverview;
+  }
+
+  function setCodingProgress(totalCases: number, completedCases: number): void {
+    const completionPercentage = totalCases > 0 ?
+      (completedCases / totalCases) * 100 :
+      100;
+
+    component.codingProgressOverview = {
+      totalCasesToCode: totalCases,
+      completedCases,
+      completionPercentage,
+      rawTotalCasesToCode: totalCases,
+      rawCompletedCases: completedCases,
+      rawCompletionPercentage: completionPercentage,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    } satisfies CodingProgressOverview;
+  }
+
+  function setAppliedResults(
+    totalResponses: number,
+    appliedResponses: number,
+    remainingResponses: number
+  ): void {
+    const completionPercentage = totalResponses > 0 ?
+      (appliedResponses / totalResponses) * 100 :
+      100;
+
+    component.appliedResultsOverview = {
+      totalIncompleteResponses: totalResponses,
+      appliedResponses,
+      remainingResponses,
+      completionPercentage,
+      rawTotalIncompleteResponses: totalResponses,
+      rawAppliedResponses: appliedResponses,
+      rawCompletionPercentage: completionPercentage,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0,
+      totalIncompleteVariables: 1,
+      finalStatusBreakdown: {
+        codingComplete: appliedResponses,
+        invalid: 0,
+        codingError: 0,
+        other: 0
+      }
+    } satisfies ManualAppliedResultsOverview;
+  }
 });

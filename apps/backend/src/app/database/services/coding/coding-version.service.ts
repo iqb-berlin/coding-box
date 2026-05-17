@@ -10,6 +10,7 @@ import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/codi
 
 type ResetCodingVersion = 'v1' | 'v2' | 'v3';
 type ResetUnitIdsByVersion = Record<ResetCodingVersion, Set<number>>;
+type ResetResponseIdsByVersion = Record<ResetCodingVersion, Set<number>>;
 
 @Injectable()
 export class CodingVersionService {
@@ -48,6 +49,7 @@ export class CodingVersionService {
       // Determine which versions to reset and build the appropriate WHERE clause
       const versionsToReset: ResetCodingVersion[] = [version];
       const resetUnitIdsByVersion = this.createResetUnitIdsByVersion();
+      const resetResponseIdsByVersion = this.createResetResponseIdsByVersion();
 
       const baseQueryBuilder = this.responseRepository
         .createQueryBuilder('response')
@@ -150,6 +152,7 @@ export class CodingVersionService {
         }
 
         this.collectResetUnitIds(batchResponses, versionsToReset, resetUnitIdsByVersion);
+        this.collectResetResponseIds(batchResponses, versionsToReset, resetResponseIdsByVersion);
 
         const batchIds = batchResponses.map(r => r.id);
         await this.responseRepository.update(
@@ -193,6 +196,11 @@ export class CodingVersionService {
       await this.codingFreshnessService?.markVersionsPendingAfterReset(
         workspaceId,
         this.toResetUnitIdsByVersion(resetUnitIdsByVersion)
+      );
+      await this.markAppliedCodingJobsResultsClearedAfterReset(
+        workspaceId,
+        version,
+        resetResponseIdsByVersion
       );
       await this.invalidateStatisticsCaches(workspaceId, version);
 
@@ -265,6 +273,11 @@ export class CodingVersionService {
       }
 
       const responseIds = responses.map(response => response.id);
+      await this.markAppliedCodingJobsResultsClearedBeforeGeneratedResponseDelete(
+        workspaceId,
+        responseIds
+      );
+
       const deleteResult = await this.responseRepository.delete({
         id: In(responseIds)
       });
@@ -315,6 +328,14 @@ export class CodingVersionService {
     };
   }
 
+  private createResetResponseIdsByVersion(): ResetResponseIdsByVersion {
+    return {
+      v1: new Set<number>(),
+      v2: new Set<number>(),
+      v3: new Set<number>()
+    };
+  }
+
   private getVersionCodingColumns(versions: ResetCodingVersion[]): string[] {
     const fields = ['status', 'code', 'score'];
     return versions.flatMap(version => fields.map(
@@ -341,12 +362,69 @@ export class CodingVersionService {
     });
   }
 
+  private collectResetResponseIds(
+    responses: ResponseEntity[],
+    versions: ResetCodingVersion[],
+    resetResponseIdsByVersion: ResetResponseIdsByVersion
+  ): void {
+    responses.forEach(response => {
+      const responseId = Number(response.id);
+      if (!Number.isInteger(responseId) || responseId <= 0) {
+        return;
+      }
+
+      versions.forEach(version => {
+        if (this.hasVersionCoding(response, version)) {
+          resetResponseIdsByVersion[version].add(responseId);
+        }
+      });
+    });
+  }
+
   private hasVersionCoding(response: ResponseEntity, version: ResetCodingVersion): boolean {
     const fields = ['status', 'code', 'score'];
     return fields.some(field => {
       const key = `${field}_${version}` as keyof ResponseEntity;
       return response[key] !== null && response[key] !== undefined;
     });
+  }
+
+  private async markAppliedCodingJobsResultsClearedAfterReset(
+    workspaceId: number,
+    version: ResetCodingVersion,
+    resetResponseIdsByVersion: ResetResponseIdsByVersion
+  ): Promise<void> {
+    if (version === 'v3' || !this.codingFreshnessService) {
+      return;
+    }
+
+    const manualResultResponseIds = Array.from(resetResponseIdsByVersion.v2);
+    if (manualResultResponseIds.length === 0) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      manualResultResponseIds,
+      'RESET',
+      version === 'v1' ? 'stale_source' : 'current'
+    );
+  }
+
+  private async markAppliedCodingJobsResultsClearedBeforeGeneratedResponseDelete(
+    workspaceId: number,
+    responseIds: number[]
+  ): Promise<void> {
+    if (!this.codingFreshnessService || responseIds.length === 0) {
+      return;
+    }
+
+    await this.codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds(
+      workspaceId,
+      responseIds,
+      'RESET',
+      'stale_source'
+    );
   }
 
   private toResetUnitIdsByVersion(

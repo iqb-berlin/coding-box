@@ -32,7 +32,9 @@ describe('CodingVersionService', () => {
   };
 
   const mockCodingFreshnessService = {
-    markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined)
+    markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined),
+    markAppliedCodingJobsResultsClearedForUnitIds: jest.fn().mockResolvedValue(undefined),
+    markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined)
   };
 
   beforeAll(() => {
@@ -77,6 +79,8 @@ describe('CodingVersionService', () => {
     mockResponseRepository.update.mockResolvedValue({ affected: 0 });
     mockResponseRepository.delete.mockResolvedValue({ affected: 0 });
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
+    mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds.mockClear();
+    mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds.mockClear();
   });
 
   it('should be defined', () => {
@@ -244,6 +248,135 @@ describe('CodingVersionService', () => {
         });
     });
 
+    it('should move applied jobs back to completed/current when v2 results are reset', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 10,
+          status_v2: 2,
+          code_v2: null,
+          score_v2: null,
+          status_v3: null,
+          code_v3: null,
+          score_v3: null
+        }
+      ];
+
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .toHaveBeenCalledWith(1, [1], 'RESET', 'current');
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
+        .not.toHaveBeenCalled();
+    });
+
+    it('should move applied jobs back to completed/stale-source when v1 reset cascades v2 results', async () => {
+      const workspaceId = 1;
+      const version = 'v1';
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 10,
+          status_v1: 2,
+          code_v1: null,
+          score_v1: null,
+          status_v2: 2,
+          code_v2: null,
+          score_v2: null,
+          status_v3: null,
+          code_v3: null,
+          score_v3: null
+        }
+      ];
+
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .toHaveBeenCalledWith(1, [1], 'RESET', 'stale_source');
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
+        .not.toHaveBeenCalled();
+    });
+
+    it('should not change applied manual jobs when only v3 is reset', async () => {
+      const workspaceId = 1;
+      const version = 'v3';
+      const mockResponses = [
+        {
+          id: 1,
+          unitid: 10,
+          status_v3: 2,
+          code_v3: null,
+          score_v3: null
+        }
+      ];
+
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.resetCodingVersion(workspaceId, version);
+
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .not.toHaveBeenCalled();
+    });
+
+    it('should mark applied jobs by response ids so variable filters do not reset whole units', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+      const variableFilters = ['VAR_A'];
+      const mockResponses = [
+        {
+          id: 101,
+          unitid: 10,
+          variableid: 'VAR_A',
+          status_v2: 2,
+          code_v2: null,
+          score_v2: null,
+          status_v3: null,
+          code_v3: null,
+          score_v3: null
+        }
+      ];
+
+      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce(mockResponses)
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockResponseRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.resetCodingVersion(
+        workspaceId,
+        version,
+        undefined,
+        variableFilters
+      );
+
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .toHaveBeenCalledWith(1, [101], 'RESET', 'current');
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
+        .not.toHaveBeenCalled();
+    });
+
     it('should target v1 rows when only code or score values remain', async () => {
       const workspaceId = 1;
       const version = 'v1';
@@ -409,6 +542,15 @@ describe('CodingVersionService', () => {
       expect(mockResponseRepository.delete).toHaveBeenCalledWith({
         id: expect.anything()
       });
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .toHaveBeenCalledWith(1, [100, 101], 'RESET', 'stale_source');
+      expect(
+        mockCodingFreshnessService
+          .markAppliedCodingJobsResultsClearedForResponseIds
+          .mock
+          .invocationCallOrder[0]
+      )
+        .toBeLessThan(mockResponseRepository.delete.mock.invocationCallOrder[0]);
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
         'response.is_autocoder_generated = :generated',
         { generated: true }
@@ -441,6 +583,8 @@ describe('CodingVersionService', () => {
       expect(mockResponseRepository.delete).toHaveBeenCalledWith({
         id: expect.anything()
       });
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .toHaveBeenCalledWith(1, [200], 'RESET', 'stale_source');
     });
 
     it('should apply unit and variable filters when deleting empty generated responses', async () => {

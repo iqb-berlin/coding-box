@@ -212,3 +212,48 @@ ALTER TABLE "public"."job_definitions"
   ALTER COLUMN "distribution_seed" SET NOT NULL;
 
 -- rollback ALTER TABLE "public"."job_definitions" DROP COLUMN IF EXISTS "distribution_seed";
+
+-- changeset jurei733:13
+-- comment: Repair applied manual coding jobs whose v2 results were cleared after application
+-- Historical rows cannot reliably distinguish reset from autocoder cleanup, so affected jobs are conservatively marked stale.
+WITH affected_jobs AS (
+  SELECT
+    cj."id" AS "coding_job_id",
+    COUNT(DISTINCT CONCAT_WS('|', cju."person_login", cju."booklet_name", cju."unit_name")) AS "affected_units",
+    COUNT(DISTINCT cju."response_id") AS "affected_responses"
+  FROM "public"."coding_job" cj
+  INNER JOIN "public"."coding_job_unit" cju
+    ON cju."coding_job_id" = cj."id"
+    AND COALESCE(cju."workspace_id", cj."workspace_id") = cj."workspace_id"
+  LEFT JOIN "public"."response" resp
+    ON resp."id" = cju."response_id"
+  WHERE cj."training_id" IS NULL
+    AND cj."status" = 'results_applied'
+    AND (
+      resp."id" IS NULL
+      OR (
+        resp."status_v2" IS NULL
+        AND resp."code_v2" IS NULL
+        AND resp."score_v2" IS NULL
+      )
+    )
+  GROUP BY cj."id"
+)
+UPDATE "public"."coding_job" cj
+SET "status" = 'completed',
+    "freshness_status" = 'stale_source',
+    "freshness_reason" = 'AUTOCODE_RUN',
+    "freshness_updated_at" = now(),
+    "freshness_affected_units" = GREATEST(
+      COALESCE(cj."freshness_affected_units", 0),
+      affected_jobs."affected_units"::int
+    ),
+    "freshness_affected_responses" = GREATEST(
+      COALESCE(cj."freshness_affected_responses", 0),
+      affected_jobs."affected_responses"::int
+    ),
+    "updated_at" = now()
+FROM affected_jobs
+WHERE cj."id" = affected_jobs."coding_job_id";
+
+-- rollback SELECT 1;

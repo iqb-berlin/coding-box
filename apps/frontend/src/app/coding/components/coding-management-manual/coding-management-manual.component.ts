@@ -85,6 +85,16 @@ interface SavedCodeProgress {
   [key: string]: unknown;
 }
 
+type PlanningStatusState =
+  'loading' |
+  'warning' |
+  'planning-incomplete' |
+  'planning-ready' |
+  'execution-ready' |
+  'completion-ready' |
+  'progress-unavailable' |
+  'complete';
+
 @Component({
   selector: 'coding-box-coding-management-manual',
   templateUrl: './coding-management-manual.component.html',
@@ -1163,29 +1173,76 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getPlanningStatusClass(): string {
+    switch (this.getPlanningStatusState()) {
+      case 'warning':
+        return 'status-warning';
+      case 'planning-incomplete':
+      case 'completion-ready':
+      case 'progress-unavailable':
+        return 'status-attention';
+      case 'complete':
+        return 'status-complete';
+      case 'loading':
+      case 'planning-ready':
+      case 'execution-ready':
+      default:
+        return 'status-ready';
+    }
+  }
+
+  private getPlanningStatusState(): PlanningStatusState {
+    if (this.isAnyPlanningDataLoading()) {
+      return 'loading';
+    }
+
     if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
-      return 'status-warning';
+      return 'warning';
     }
 
     if ((this.variableCoverageOverview?.missingVariables || 0) > 0 ||
         (this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
-      return 'status-attention';
+      return 'planning-incomplete';
     }
 
-    if (this.getOpenCodingCases() === 0 && this.getAppliedResultsPercentage() >= 100) {
-      return 'status-complete';
+    if (this.isCompletionComplete()) {
+      return 'complete';
     }
 
-    return 'status-ready';
+    if (this.isPlanningReady() &&
+        !!this.codingProgressOverview &&
+        this.hasExecutionOpenWork()) {
+      return 'execution-ready';
+    }
+
+    if (this.isPlanningReady() &&
+        !!this.codingProgressOverview &&
+        !!this.appliedResultsOverview &&
+        !this.hasExecutionOpenWork()) {
+      return 'completion-ready';
+    }
+
+    if (this.isPlanningReady() && !this.codingProgressOverview) {
+      return 'progress-unavailable';
+    }
+
+    return 'planning-ready';
   }
 
   getPlanningStatusIcon(): string {
-    switch (this.getPlanningStatusClass()) {
-      case 'status-warning':
+    switch (this.getPlanningStatusState()) {
+      case 'loading':
+        return 'sync';
+      case 'warning':
         return 'warning';
-      case 'status-attention':
+      case 'planning-incomplete':
         return 'assignment_late';
-      case 'status-complete':
+      case 'execution-ready':
+        return 'play_circle';
+      case 'completion-ready':
+        return 'published_with_changes';
+      case 'progress-unavailable':
+        return 'sync_problem';
+      case 'complete':
         return 'check_circle';
       default:
         return 'route';
@@ -1193,12 +1250,20 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getPlanningStatusTitle(): string {
-    switch (this.getPlanningStatusClass()) {
-      case 'status-warning':
+    switch (this.getPlanningStatusState()) {
+      case 'loading':
+        return 'Status wird aktualisiert';
+      case 'warning':
         return 'Konflikte prüfen';
-      case 'status-attention':
+      case 'planning-incomplete':
         return 'Planung noch unvollständig';
-      case 'status-complete':
+      case 'execution-ready':
+        return 'Bereit für die Durchführung';
+      case 'completion-ready':
+        return 'Bereit für den Abschluss';
+      case 'progress-unavailable':
+        return 'Kodierfortschritt nicht verfügbar';
+      case 'complete':
         return 'Manuelle Kodierung abgeschlossen';
       default:
         return 'Bereit für die Planung';
@@ -1206,6 +1271,16 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getPlanningStatusDescription(): string {
+    const planningStatusState = this.getPlanningStatusState();
+
+    if (planningStatusState === 'loading') {
+      return 'Die Planungs- und Kodierfortschritte werden geladen.';
+    }
+
+    if (planningStatusState === 'progress-unavailable') {
+      return 'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.';
+    }
+
     if ((this.variableCoverageOverview?.conflictedVariables || 0) > 0) {
       return `${this.variableCoverageOverview?.conflictedVariables || 0} Variablenkonflikte müssen vor der verlässlichen Jobplanung geklärt werden.`;
     }
@@ -1220,6 +1295,19 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
     if (this.getOpenCodingCases() === 0 && this.getAppliedResultsPercentage() >= 100) {
       return 'Alle manuellen Kodierungen sind abgeschlossen und final übernommen.';
+    }
+
+    if (this.isPlanningReady() &&
+        !!this.codingProgressOverview &&
+        this.hasExecutionOpenWork()) {
+      return 'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.';
+    }
+
+    if (this.isPlanningReady() &&
+        !!this.codingProgressOverview &&
+        !!this.appliedResultsOverview &&
+        !this.hasExecutionOpenWork()) {
+      return 'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.';
     }
 
     return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
