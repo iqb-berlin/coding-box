@@ -363,7 +363,7 @@ describe('CodingFreshnessService', () => {
     expect((freshnessRepository.upsert as jest.Mock).mock.calls[0][0]).toHaveLength(4);
   });
 
-  it('marks only v1/v2 reset units as stale source for manual jobs', async () => {
+  it('marks only v1 reset units as stale source for manual jobs', async () => {
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
 
     const responseCountsQb = queryBuilder({
@@ -387,6 +387,25 @@ describe('CodingFreshnessService', () => {
     ]);
   });
 
+  it('does not mark v2 reset units as stale source for manual jobs', async () => {
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 9 }]);
+
+    const responseCountsQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([{ unitId: 10, count: '2' }])
+    });
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(responseCountsQb);
+
+    await service.markVersionsPendingAfterReset(1, {
+      v2: [10]
+    });
+
+    expect(connection.query).not.toHaveBeenCalledWith(
+      expect.stringContaining('resp.unitid = ANY($2::int[])'),
+      [1, [10], 'stale_source', 'RESET']
+    );
+  });
+
   it('marks manual coding jobs stale-source by response ids before source deletion', async () => {
     await service.markCodingJobsStaleForResponseIds(1, [100, 100, 0], 'RESULT_DELETED');
 
@@ -402,6 +421,46 @@ describe('CodingFreshnessService', () => {
     expect(connection.query).toHaveBeenCalledWith(
       expect.stringContaining('resp.unitid = ANY($2::int[])'),
       [1, [10], 'stale_source', 'RESULT_UPDATED']
+    );
+  });
+
+  it('moves applied jobs back to completed when cleared manual results can be reapplied', async () => {
+    await service.markAppliedCodingJobsResultsClearedForUnitIds(
+      1,
+      [10, 10, -1],
+      'RESET',
+      'current'
+    );
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'completed'"),
+      [1, [10], 'current', 'RESET']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("cj.status = 'results_applied'"),
+      [1, [10], 'current', 'RESET']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('resp.unitid = ANY($2::int[])'),
+      [1, [10], 'current', 'RESET']
+    );
+  });
+
+  it('moves applied jobs back to completed and stale-source when source responses are recoded', async () => {
+    await service.markAppliedCodingJobsResultsClearedForResponseIds(
+      1,
+      [100, 100, 0],
+      'AUTOCODE_RUN',
+      'stale_source'
+    );
+
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining("SET status = 'completed'"),
+      [1, [100], 'stale_source', 'AUTOCODE_RUN']
+    );
+    expect(connection.query).toHaveBeenCalledWith(
+      expect.stringContaining('cju.response_id = ANY($2::int[])'),
+      [1, [100], 'stale_source', 'AUTOCODE_RUN']
     );
   });
 

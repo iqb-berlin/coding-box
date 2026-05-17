@@ -9,11 +9,14 @@ describe('ResponseManagementService', () => {
     invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
   };
 
-  const createQueryBuilder = (executeResult: { affected?: number } = { affected: 1 }) => ({
+  const createQueryBuilder = (
+    executeResult: { affected?: number; raw?: unknown } = { affected: 1 }
+  ) => ({
     update: jest.fn().mockReturnThis(),
     set: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    returning: jest.fn().mockReturnThis(),
     execute: jest.fn().mockResolvedValue(executeResult)
   });
 
@@ -49,7 +52,10 @@ describe('ResponseManagementService', () => {
       ])
     };
     const cleanupUpdateQueryBuilder = createQueryBuilder();
-    const upsertUpdateQueryBuilder = createQueryBuilder({ affected: 1 });
+    const upsertUpdateQueryBuilder = createQueryBuilder({
+      affected: 1,
+      raw: [{ id: 10 }]
+    });
     const manager = {
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn().mockReturnValue(cleanupSelectQueryBuilder)
@@ -71,6 +77,7 @@ describe('ResponseManagementService', () => {
     } as unknown as QueryRunner;
 
     const codingFreshnessService = {
+      markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
       markVersionCurrent: jest.fn().mockResolvedValue(undefined)
     };
     const service = createService(codingFreshnessService);
@@ -132,7 +139,24 @@ describe('ResponseManagementService', () => {
       'is_autocoder_generated = :generated',
       { generated: true }
     );
+    expect(upsertUpdateQueryBuilder.returning).toHaveBeenCalledWith('id');
     expect(manager.insert).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+      .toHaveBeenCalledWith(1, [11], 'AUTOCODE_RUN', 'stale_source', manager);
+    expect(codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+      .toHaveBeenCalledWith(1, [10], 'AUTOCODE_RUN', 'stale_source', manager);
+    expect(codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+      .toHaveBeenCalledTimes(2);
+    const deleteCallIndex = manager.query.mock.calls.findIndex(
+      ([sql]) => String(sql).includes('DELETE FROM response')
+    );
+    expect(
+      codingFreshnessService
+        .markAppliedCodingJobsResultsClearedForResponseIds
+        .mock
+        .invocationCallOrder[0]
+    )
+      .toBeLessThan(manager.query.mock.invocationCallOrder[deleteCallIndex]);
     expect(codingFreshnessService.markVersionCurrent)
       .toHaveBeenCalledWith(1, [1], 'v1', manager);
     expect(codingFreshnessService.markVersionCurrent.mock.invocationCallOrder[0])
@@ -141,6 +165,81 @@ describe('ResponseManagementService', () => {
       .toBeLessThan(release.mock.invocationCallOrder[0]);
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+  });
+
+  it('marks applied jobs stale when generated autocoder upsert updates an existing row', async () => {
+    const cleanupSelectQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 77,
+          unitid: 1,
+          variableid: 'derived_var',
+          subform: ''
+        } as ResponseEntity
+      ])
+    };
+    const upsertUpdateQueryBuilder = createQueryBuilder({
+      affected: 1,
+      raw: [{ id: 77 }]
+    });
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(cleanupSelectQueryBuilder)
+      }),
+      createQueryBuilder: jest.fn().mockReturnValue(upsertUpdateQueryBuilder),
+      insert: jest.fn().mockResolvedValue({}),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const codingFreshnessService = {
+      markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
+      markVersionCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = createService(codingFreshnessService);
+
+    await service.updateResponsesInDatabase(
+      1,
+      [
+        {
+          id: -1,
+          isNew: true,
+          isAutocoderGenerated: true,
+          unitid: 1,
+          variableid: 'derived_var',
+          value: 'updated derived value',
+          status: 3,
+          subform: '',
+          code_v1: 2,
+          status_v1: 'VALUE_CHANGED',
+          score_v1: 2,
+          code_v2: null,
+          status_v2: null,
+          score_v2: null,
+          code_v3: null,
+          status_v3: null,
+          score_v3: null
+        }
+      ],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { unitIds: [1], autoCoderRun: 1, markCurrentVersion: 'v1' }
+    );
+
+    expect(upsertUpdateQueryBuilder.returning).toHaveBeenCalledWith('id');
+    expect(manager.insert).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+      .toHaveBeenCalledWith(1, [77], 'AUTOCODE_RUN', 'stale_source', manager);
   });
 
   it('skips autocoder updates when the planned source revision is stale', async () => {
@@ -181,6 +280,76 @@ describe('ResponseManagementService', () => {
     expect(queryRunner.rollbackTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();
     expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+  });
+
+  it('moves applied jobs back to completed/stale-source after auto-coding run 1 clears manual results', async () => {
+    const cleanupSelectQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([])
+    };
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(cleanupSelectQueryBuilder)
+      }),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const codingFreshnessService = {
+      markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
+      markVersionCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = createService(codingFreshnessService);
+
+    await service.updateResponsesInDatabase(
+      1,
+      [
+        {
+          id: 42,
+          unitid: 1,
+          variableid: 'VAR_1',
+          code_v1: 1,
+          status_v1: 'VALUE_CHANGED',
+          score_v1: 1,
+          code_v2: null,
+          status_v2: null,
+          score_v2: null,
+          code_v3: null,
+          status_v3: null,
+          score_v3: null
+        }
+      ],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { unitIds: [1], autoCoderRun: 1, markCurrentVersion: 'v1' }
+    );
+
+    expect(manager.update).toHaveBeenCalledWith(
+      ResponseEntity,
+      42,
+      expect.objectContaining({
+        code_v2: null,
+        status_v2: null,
+        score_v2: null,
+        code_v3: null,
+        status_v3: null,
+        score_v3: null
+      })
+    );
+    expect(codingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+      .toHaveBeenCalledWith(1, [42], 'AUTOCODE_RUN', 'stale_source', manager);
+    expect(codingFreshnessService.markVersionCurrent)
+      .toHaveBeenCalledWith(1, [1], 'v1', manager);
   });
 
   it('invalidates coding statistics after deleting a response directly', async () => {

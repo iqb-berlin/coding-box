@@ -541,7 +541,7 @@ export class CodingFreshnessService {
     await this.upsertRows(rows);
 
     const manualReviewUnitIds = this.uniquePositiveIds(entries
-      .filter(entry => entry.version === 'v1' || entry.version === 'v2')
+      .filter(entry => entry.version === 'v1')
       .flatMap(entry => entry.unitIds)
       .filter(unitId => includedUnitIdSet.has(unitId)));
 
@@ -700,6 +700,50 @@ export class CodingFreshnessService {
     );
   }
 
+  async markAppliedCodingJobsResultsClearedForUnitIds(
+    workspaceId: number,
+    unitIds: number[],
+    reason: CodingFreshnessReason,
+    status: CodingJobFreshnessStatus,
+    manager?: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(unitIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    await this.markAppliedCodingJobsResultsCleared(
+      workspaceId,
+      'unit',
+      ids,
+      reason,
+      status,
+      manager
+    );
+  }
+
+  async markAppliedCodingJobsResultsClearedForResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    reason: CodingFreshnessReason,
+    status: CodingJobFreshnessStatus,
+    manager?: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    await this.markAppliedCodingJobsResultsCleared(
+      workspaceId,
+      'response',
+      ids,
+      reason,
+      status,
+      manager
+    );
+  }
+
   private async markCodingJobsCurrent(
     workspaceId: number,
     codingJobIds: number[],
@@ -726,6 +770,75 @@ export class CodingFreshnessService {
           AND COALESCE(freshness_status, 'current') <> 'stale_source'
       `,
       [workspaceId, ids]
+    );
+  }
+
+  private async markAppliedCodingJobsResultsCleared(
+    workspaceId: number,
+    scope: 'unit' | 'response',
+    ids: number[],
+    reason: CodingFreshnessReason,
+    status: CodingJobFreshnessStatus,
+    manager?: EntityManager
+  ): Promise<void> {
+    const queryRunner = manager ?? this.connection;
+    const scopeCondition = scope === 'unit' ?
+      'resp.unitid = ANY($2::int[])' :
+      'cju.response_id = ANY($2::int[])';
+
+    await queryRunner.query(
+      `
+        WITH affected_jobs AS (
+          SELECT
+            cju.coding_job_id,
+            COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name)) AS affected_units,
+            COUNT(DISTINCT cju.response_id) AS affected_responses
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          LEFT JOIN response resp ON resp.id = cju.response_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND cj.status = 'results_applied'
+            AND ${scopeCondition}
+          GROUP BY cju.coding_job_id
+        )
+        UPDATE coding_job cj
+        SET status = 'completed',
+            freshness_status = CASE
+              WHEN $3 = 'current' AND COALESCE(cj.freshness_status, 'current') = 'stale_source'
+                THEN 'stale_source'
+              ELSE $3
+            END,
+            freshness_reason = CASE
+              WHEN $3 = 'current' AND COALESCE(cj.freshness_status, 'current') = 'stale_source'
+                THEN cj.freshness_reason
+              WHEN $3 = 'current'
+                THEN NULL
+              ELSE $4
+            END,
+            freshness_updated_at = now(),
+            freshness_affected_units = CASE
+              WHEN $3 = 'current' AND COALESCE(cj.freshness_status, 'current') <> 'stale_source'
+                THEN 0
+              ELSE GREATEST(
+                COALESCE(cj.freshness_affected_units, 0),
+                affected_jobs.affected_units::int
+              )
+            END,
+            freshness_affected_responses = CASE
+              WHEN $3 = 'current' AND COALESCE(cj.freshness_status, 'current') <> 'stale_source'
+                THEN 0
+              ELSE GREATEST(
+                COALESCE(cj.freshness_affected_responses, 0),
+                affected_jobs.affected_responses::int
+              )
+            END,
+            updated_at = now()
+        FROM affected_jobs
+        WHERE cj.id = affected_jobs.coding_job_id
+      `,
+      [workspaceId, ids, status, reason]
     );
   }
 
