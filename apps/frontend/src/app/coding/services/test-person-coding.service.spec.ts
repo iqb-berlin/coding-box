@@ -253,6 +253,44 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('getCodingProgressOverview', () => {
+    it('should request coding progress overview', () => {
+      const mockResponse = {
+        totalCasesToCode: 12,
+        completedCases: 7,
+        completionPercentage: 58.33,
+        rawTotalCasesToCode: 14,
+        rawCompletedCases: 8,
+        rawCompletionPercentage: 57.14,
+        aggregationActive: true,
+        aggregationThreshold: 2,
+        aggregatedDuplicateCases: 2
+      };
+
+      service.getCodingProgressOverview(mockWorkspaceId).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
+      );
+      expect(req.request.method).toBe('GET');
+      expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
+      req.flush(mockResponse);
+    });
+
+    it('should return null when coding progress overview is unavailable', () => {
+      service.getCodingProgressOverview(mockWorkspaceId).subscribe(response => {
+        expect(response).toBeNull();
+      });
+
+      const req = httpMock.expectOne(
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/progress-overview`
+      );
+      req.error(new ProgressEvent('error'));
+    });
+  });
+
   describe('aggregation settings', () => {
     it('should fetch aggregation settings through the authenticated coding endpoint', () => {
       const mockResponse = {
