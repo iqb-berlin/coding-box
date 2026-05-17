@@ -70,7 +70,7 @@ describe('CodingResponseFilterService', () => {
     );
   });
 
-  it('uses the same v3 fallback expression as coding statistics', async () => {
+  it('uses the same v3 generated-row expression as coding statistics', async () => {
     const { service, queryBuilder } = createService();
 
     await service.countResponses(1, {
@@ -86,8 +86,11 @@ describe('CodingResponseFilterService', () => {
 
     expect(whereCondition).toContain("response.status_v3 ~ '^-?[0-9]+$'");
     expect(whereCondition).toContain('response.status_v3::smallint');
+    expect(whereCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
+    expect(whereCondition).toContain('ELSE COALESCE(CASE WHEN response.status_v3');
     expect(whereCondition).toContain('response.status_v2, response.status_v1');
     expect(ignoredStatusCondition).toContain("response.status_v3 ~ '^-?[0-9]+$'");
+    expect(ignoredStatusCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
     expect(ignoredStatusCondition).toContain('NOT IN (:...statisticsIgnoredStatuses)');
   });
 });

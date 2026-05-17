@@ -242,6 +242,100 @@ describe('ResponseManagementService', () => {
       .toHaveBeenCalledWith(1, [77], 'AUTOCODE_RUN', 'stale_source', manager);
   });
 
+  it('updates legacy generated rows with empty subform when the second autocoder run emits a subform', async () => {
+    const cleanupSelectQueryBuilder = {
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        {
+          id: 88,
+          unitid: 1,
+          variableid: 'derived_var',
+          subform: null
+        } as ResponseEntity
+      ])
+    };
+    const cleanupUpdateQueryBuilder = createQueryBuilder();
+    const exactSubformUpdateQueryBuilder = createQueryBuilder({
+      affected: 0,
+      raw: []
+    });
+    const legacySubformUpdateQueryBuilder = createQueryBuilder({
+      affected: 1,
+      raw: [{ id: 88 }]
+    });
+    const manager = {
+      getRepository: jest.fn().mockReturnValue({
+        createQueryBuilder: jest.fn().mockReturnValue(cleanupSelectQueryBuilder)
+      }),
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(cleanupUpdateQueryBuilder)
+        .mockReturnValueOnce(exactSubformUpdateQueryBuilder)
+        .mockReturnValueOnce(legacySubformUpdateQueryBuilder),
+      insert: jest.fn().mockResolvedValue({}),
+      query: jest.fn().mockResolvedValue([])
+    };
+    const queryRunner = {
+      manager,
+      commitTransaction: jest.fn().mockResolvedValue(undefined),
+      rollbackTransaction: jest.fn().mockResolvedValue(undefined),
+      release: jest.fn().mockResolvedValue(undefined)
+    } as unknown as QueryRunner;
+    const codingFreshnessService = {
+      markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
+      markVersionCurrent: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = createService(codingFreshnessService);
+
+    await service.updateResponsesInDatabase(
+      1,
+      [
+        {
+          id: -1,
+          isNew: true,
+          isAutocoderGenerated: true,
+          unitid: 1,
+          variableid: 'derived_var',
+          value: '1_0',
+          status: 3,
+          subform: 'elementCodes',
+          code_v3: null,
+          status_v3: 'CODING_COMPLETE',
+          score_v3: 0
+        }
+      ],
+      queryRunner,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { unitIds: [1], autoCoderRun: 2, markCurrentVersion: 'v3' }
+    );
+
+    expect(exactSubformUpdateQueryBuilder.andWhere).toHaveBeenCalledWith(
+      "COALESCE(subform, '') = :subform",
+      { subform: 'elementCodes' }
+    );
+    expect(legacySubformUpdateQueryBuilder.where).toHaveBeenCalledWith(
+      expect.stringContaining("COALESCE(subform, '') = ''"),
+      {
+        unitid: 1,
+        variableid: 'derived_var',
+        generated: true
+      }
+    );
+    expect(legacySubformUpdateQueryBuilder.set).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status_v3: 5,
+        subform: 'elementCodes'
+      })
+    );
+    expect(manager.insert).not.toHaveBeenCalled();
+    expect(codingFreshnessService.markVersionCurrent)
+      .toHaveBeenCalledWith(1, [1], 'v3', manager);
+  });
+
   it('skips autocoder updates when the planned source revision is stale', async () => {
     const manager = {
       query: jest.fn().mockResolvedValue([])

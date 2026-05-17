@@ -6,6 +6,7 @@ import {
   statusStringToNumber,
   STATISTICS_IGNORED_STATUSES
 } from '../../utils/response-status-converter';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -117,7 +118,7 @@ export class CodingResponseFilterService {
 
     // Establish base conditions
     if (version) {
-      const effectiveStatusExpression = this.getEffectiveCodingStatusExpression(version);
+      const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
       queryBuilder.where(`${effectiveStatusExpression} IS NOT NULL`)
         .andWhere(
           `${effectiveStatusExpression} NOT IN (:...statisticsIgnoredStatuses)`,
@@ -173,18 +174,6 @@ export class CodingResponseFilterService {
 
   private toVariablePairKey(unitName: string, variableId: string): string {
     return `${unitName}\u001F${variableId}`;
-  }
-
-  private getEffectiveCodingStatusExpression(version: 'v1' | 'v2' | 'v3'): string {
-    if (version === 'v2') {
-      return 'COALESCE(response.status_v2, response.status_v1)';
-    }
-
-    if (version === 'v3') {
-      return "COALESCE(CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END, response.status_v2, response.status_v1)";
-    }
-
-    return 'response.status_v1';
   }
 
   /**

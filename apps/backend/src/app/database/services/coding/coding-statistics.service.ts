@@ -18,11 +18,16 @@ import {
 } from '../workspace/workspace-exclusion.service';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import {
+  CODING_STATISTICS_CACHE_VERSIONS,
+  getCodingStatisticsCacheKey,
+  type CodingStatisticsVersion
+} from './coding-statistics-cache-key.util';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 
 @Injectable()
 export class CodingStatisticsService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CodingStatisticsService.name);
-  private readonly CACHE_KEY_PREFIX = 'coding-statistics';
   private readonly CACHE_TTL_SECONDS = 0; // No expiration (TTL=0 means no EX flag in Redis) - persist until explicitly invalidated
 
   constructor(
@@ -70,10 +75,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     return result.map(row => parseInt(row.workspace_id, 10)).filter(id => !Number.isNaN(id));
   }
 
-  async getCodingStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
+  async getCodingStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1', skipCache: boolean = false): Promise<CodingStatistics> {
     this.logger.log(`Getting coding statistics for workspace ${workspace_id} (version: ${version})${skipCache ? ' (skipping cache)' : ''}`);
 
-    const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
+    const cacheKey = getCodingStatisticsCacheKey(workspace_id, version);
     if (!skipCache) {
       const cachedResult = await this.cacheService.get<CodingStatistics>(cacheKey);
       if (cachedResult) {
@@ -126,17 +131,8 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
       const codedStatuses = [statusStringToNumber('NOT_REACHED') || 1, statusStringToNumber('DISPLAYED') || 2, statusStringToNumber('VALUE_CHANGED') || 3];
 
-      let statusColumn = 'response.status_v1';
-      let whereCondition = 'response.status_v1 IS NOT NULL';
-      const statusV3Column = "CASE WHEN response.status_v3 ~ '^-?[0-9]+$' THEN response.status_v3::smallint ELSE NULL END";
-
-      if (version === 'v2') {
-        statusColumn = 'COALESCE(response.status_v2, response.status_v1)';
-        whereCondition = '(COALESCE(response.status_v2, response.status_v1)) IS NOT NULL';
-      } else if (version === 'v3') {
-        statusColumn = `COALESCE(${statusV3Column}, response.status_v2, response.status_v1)`;
-        whereCondition = `(COALESCE(${statusV3Column}, response.status_v2, response.status_v1)) IS NOT NULL`;
-      }
+      const statusColumn = getEffectiveCodingStatusExpression(version);
+      let whereCondition = `(${statusColumn}) IS NOT NULL`;
 
       const variablePairExpression = "(unit.name || E'\\u001F' || response.variableid)";
       const derivedExpression = 'CASE WHEN response.is_autocoder_generated = TRUE THEN true ELSE false END';
@@ -260,16 +256,14 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     };
   }
 
-  async invalidateCache(workspace_id: number, version?: 'v1' | 'v2' | 'v3'): Promise<void> {
+  async invalidateCache(workspace_id: number, version?: CodingStatisticsVersion): Promise<void> {
     if (version) {
-      const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${version}`;
+      const cacheKey = getCodingStatisticsCacheKey(workspace_id, version);
       await this.cacheService.delete(cacheKey);
       this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id} (version: ${version})`);
     } else {
-      // Invalidate all versions
-      const versions: ('v1' | 'v2' | 'v3')[] = ['v1', 'v2', 'v3'];
-      const deletePromises = versions.map(v => {
-        const cacheKey = `${this.CACHE_KEY_PREFIX}:${workspace_id}:${v}`;
+      const deletePromises = CODING_STATISTICS_CACHE_VERSIONS.map(v => {
+        const cacheKey = getCodingStatisticsCacheKey(workspace_id, v);
         return this.cacheService.delete(cacheKey);
       });
       await Promise.all(deletePromises);
@@ -283,7 +277,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
   }
 
-  async refreshStatistics(workspace_id: number, version: 'v1' | 'v2' | 'v3' = 'v1'): Promise<CodingStatistics> {
+  async refreshStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1'): Promise<CodingStatistics> {
     this.logger.log(`Refreshing coding statistics for workspace ${workspace_id}`);
     return this.getCodingStatistics(workspace_id, version, true); // skipCache = true
   }
@@ -380,10 +374,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   async createCodingStatisticsJob(
     workspaceId: number,
-    version: 'v1' | 'v2' | 'v3' = 'v1'
+    version: CodingStatisticsVersion = 'v1'
   ): Promise<{ jobId: string; message: string }> {
     try {
-      const cacheKey = `coding-statistics:${workspaceId}:${version}`;
+      const cacheKey = getCodingStatisticsCacheKey(workspaceId, version);
       const cachedResult = await this.cacheService.get<CodingStatistics>(
         cacheKey
       );
