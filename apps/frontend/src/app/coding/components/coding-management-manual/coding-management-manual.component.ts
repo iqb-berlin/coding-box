@@ -1619,6 +1619,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private isCodingJobReadyForApply(job: CodingJob): boolean {
     return job.status === 'completed' &&
+      job.freshnessStatus !== 'stale_source' &&
       !job.training?.id &&
       !job.training_id;
   }

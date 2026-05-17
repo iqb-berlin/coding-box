@@ -159,6 +159,11 @@ export class WorkspaceCodingResultsController {
                 type: 'boolean',
                 description: 'Whether the job was skipped'
               },
+              skippedReason: {
+                type: 'string',
+                enum: ['coding-issues', 'training-job', 'not-completed', 'freshness-stale'],
+                description: 'Reason why the job was skipped'
+              },
               result: {
                 type: 'object',
                 description: 'Apply result (only present if not skipped)',
@@ -190,6 +195,7 @@ export class WorkspaceCodingResultsController {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;

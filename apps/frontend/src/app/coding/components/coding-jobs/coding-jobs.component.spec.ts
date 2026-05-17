@@ -329,6 +329,14 @@ describe('CodingJobsComponent', () => {
       ...mockCodingJobs[1],
       training_id: 1
     } as CodingJob)).toBe(false);
+    expect(component.canApplyCodingResults({
+      ...mockCodingJobs[1],
+      freshnessStatus: 'review_required'
+    } as CodingJob)).toBe(true);
+    expect(component.canApplyCodingResults({
+      ...mockCodingJobs[1],
+      freshnessStatus: 'stale_source'
+    } as CodingJob)).toBe(false);
   });
 
   it('should only show restart for non-training jobs with open units', () => {

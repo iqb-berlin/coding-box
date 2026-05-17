@@ -122,4 +122,24 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getCompletionActionTitle()).toContain('1 abgeschlossene');
     expect(component.getCodingJobResultSummary(component.completedJobsReadyForApply[0])).toBe('5/5 Ergebnisse kodiert');
   });
+
+  it('should not treat stale-source coding jobs as ready to apply', () => {
+    const isCodingJobReadyForApply = (component as unknown as {
+      isCodingJobReadyForApply(job: {
+        status: string;
+        freshnessStatus?: string;
+        training?: { id?: number };
+        training_id?: number;
+      }): boolean;
+    }).isCodingJobReadyForApply.bind(component);
+
+    expect(isCodingJobReadyForApply({
+      status: 'completed',
+      freshnessStatus: 'review_required'
+    })).toBe(true);
+    expect(isCodingJobReadyForApply({
+      status: 'completed',
+      freshnessStatus: 'stale_source'
+    })).toBe(false);
+  });
 });

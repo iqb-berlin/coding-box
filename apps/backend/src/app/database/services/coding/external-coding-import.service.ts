@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, QueryRunner, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
 import * as ExcelJS from 'exceljs';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
@@ -12,6 +12,8 @@ import { Booklet } from '../../entities/booklet.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { statusStringToNumber, statusNumberToString } from '../../utils/response-status-converter';
 import FileUpload from '../../entities/file_upload.entity';
+import { CodingFreshnessService } from './coding-freshness.service';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 
 interface ExternalCodingRow {
   unit_key?: string;
@@ -107,7 +109,9 @@ export class ExternalCodingImportService {
     private bookletRepository: Repository<Booklet>,
     @InjectRepository(FileUpload)
     private fileUploadRepository: Repository<FileUpload>,
-    private cacheService: CacheService
+    private cacheService: CacheService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) {}
 
   async importExternalCodingWithProgress(
@@ -169,6 +173,9 @@ export class ExternalCodingImportService {
         hasConflict?: boolean;
       }>;
     }> {
+    let queryRunner: QueryRunner | undefined;
+    let transactionCommitted = false;
+
     try {
       this.logger.log(`Starting external coding import for workspace ${workspaceId}`);
       progressCallback?.(5, 'Starting external coding import...');
@@ -233,6 +240,7 @@ export class ExternalCodingImportService {
         hasExistingCoding?: boolean;
         hasConflict?: boolean;
       }> = [];
+      const updatedResponseIds: number[] = [];
 
       // Process data in batches for better performance
       const batchSize = 1000;
@@ -240,6 +248,17 @@ export class ExternalCodingImportService {
 
       this.logger.log(`Processing ${parsedData.length} rows in ${totalBatches} batches of ${batchSize}`);
       progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
+
+      if (!body.previewOnly) {
+        queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+        await queryRunner.connect();
+        await queryRunner.startTransaction('READ COMMITTED');
+        await lockWorkspaceTestResultsMutationInTransaction(queryRunner.manager, workspaceId);
+      }
+
+      const responseRepository = queryRunner ?
+        queryRunner.manager.getRepository(ResponseEntity) :
+        this.responseRepository;
 
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const batchStart = batchIndex * batchSize;
@@ -297,7 +316,7 @@ export class ExternalCodingImportService {
               continue;
             }
 
-            const queryBuilder = this.responseRepository
+            const queryBuilder = responseRepository
               .createQueryBuilder('response')
               .leftJoinAndSelect('response.unit', 'unit')
               .leftJoinAndSelect('unit.booklet', 'booklet')
@@ -401,7 +420,7 @@ export class ExternalCodingImportService {
               if (!body.previewOnly) {
                 // Update each response with validated status and score
                 for (const validation of validationResults.filter(result => result.decision.action === 'update')) {
-                  await this.responseRepository
+                  await responseRepository
                     .createQueryBuilder()
                     .update(ResponseEntity)
                     .set({
@@ -411,6 +430,7 @@ export class ExternalCodingImportService {
                     })
                     .where('id = :responseId', { responseId: validation.responseId })
                     .execute();
+                  updatedResponseIds.push(validation.responseId);
                 }
               }
               updatedRows += validationResults.filter(result => result.decision.action === 'update').length;
@@ -488,6 +508,19 @@ export class ExternalCodingImportService {
 
       // Invalidate cache if rows were actually updated (not preview mode)
       if (updatedRows > 0 && !body.previewOnly) {
+        await this.markManualFreshnessCurrent(
+          workspaceId,
+          updatedResponseIds,
+          queryRunner?.manager
+        );
+      }
+
+      if (queryRunner) {
+        await queryRunner.commitTransaction();
+        transactionCommitted = true;
+      }
+
+      if (updatedRows > 0 && !body.previewOnly) {
         await this.invalidateIncompleteVariablesCache(workspaceId);
       }
 
@@ -499,9 +532,23 @@ export class ExternalCodingImportService {
         affectedRows
       };
     } catch (error) {
+      if (queryRunner && !transactionCommitted) {
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch (rollbackError) {
+          this.logger.error(
+            `Error rolling back external coding import: ${rollbackError.message}`,
+            rollbackError.stack
+          );
+        }
+      }
       this.logger.error(`Error importing external coding: ${error.message}`, error.stack);
       progressCallback?.(0, `Import failed: ${error.message}`);
       throw new Error(`Could not import external coding data: ${error.message}`);
+    } finally {
+      if (queryRunner) {
+        await queryRunner.release();
+      }
     }
   }
 
@@ -535,6 +582,22 @@ export class ExternalCodingImportService {
     }> {
     // Set previewOnly to false for actual application
     return this.importExternalCoding(workspaceId, { ...body, previewOnly: false }, progressCallback);
+  }
+
+  private async markManualFreshnessCurrent(
+    workspaceId: number,
+    responseIds: number[],
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!this.codingFreshnessService || responseIds.length === 0) {
+      return;
+    }
+
+    await this.codingFreshnessService.markManualCodingCurrent(
+      workspaceId,
+      responseIds,
+      { clearCoveredReviewJobs: true, manager }
+    );
   }
 
   private createImportContext(

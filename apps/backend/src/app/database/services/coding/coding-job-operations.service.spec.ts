@@ -60,6 +60,13 @@ describe('CodingJobOperationsService', () => {
         name: 'Completed regular job',
         status: 'completed',
         training_id: null
+      },
+      {
+        id: 4,
+        name: 'Stale completed job',
+        status: 'completed',
+        training_id: null,
+        freshness_status: 'stale_source'
       }
     ] as CodingJob[]);
 
@@ -77,7 +84,7 @@ describe('CodingJobOperationsService', () => {
 
     expect(codingJobRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 5 },
-      select: ['id', 'name', 'status', 'training_id']
+      select: ['id', 'name', 'status', 'training_id', 'freshness_status']
     });
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, {});
@@ -111,10 +118,18 @@ describe('CodingJobOperationsService', () => {
           overwrittenExistingCount: 0,
           message: 'coding-results.apply.error.double-coding-conflicts-present'
         }
+      },
+      {
+        jobId: 4,
+        jobName: 'Stale completed job',
+        hasIssues: false,
+        skipped: true,
+        skippedReason: 'freshness-stale'
       }
     ]);
     expect(result.message).toContain('1 training jobs skipped');
     expect(result.message).toContain('1 jobs skipped because they are not completed');
+    expect(result.message).toContain('1 jobs skipped because their source responses changed');
     expect(result.message).toContain('1 jobs could not be applied due to conflicts or errors');
   });
 });

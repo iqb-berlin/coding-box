@@ -4276,7 +4276,7 @@ export class WorkspaceTestResultsService {
           workspaceId,
           chunkSnapshot.responseIds,
           'RESULT_DELETED',
-          'review_required',
+          'stale_source',
           manager
         );
 

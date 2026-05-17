@@ -11,6 +11,7 @@ export type CodingFreshnessReason =
   | 'RESULT_UPDATED'
   | 'RESULT_DELETED'
   | 'AUTOCODE_RUN'
+  | 'MANUAL_CODING_APPLIED'
   | 'RESET';
 
 export interface CodingFreshnessSummaryItemDto {

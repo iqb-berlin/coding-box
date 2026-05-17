@@ -1128,22 +1128,53 @@ export class CodingJobService {
 
   async markCodingJobResultsApplied(
     id: number,
-    workspaceId: number
+    workspaceId: number,
+    manager?: EntityManager
   ): Promise<CodingJob> {
-    const codingJob = await this.getCodingJob(id, workspaceId);
+    const codingJobRepository = this.getCodingJobRepository(manager);
+    const codingJob = await this.getCodingJobByIdForWorkspace(id, workspaceId, manager);
 
-    if (codingJob.codingJob.status === 'results_applied') {
-      return codingJob.codingJob;
+    if (codingJob.status === 'results_applied') {
+      return codingJob;
     }
 
-    if (codingJob.codingJob.status !== 'completed') {
+    if (codingJob.freshness_status === 'stale_source') {
+      throw new BadRequestException(
+        `Cannot apply results for coding job ${id} because its source responses changed`
+      );
+    }
+
+    if (codingJob.status !== 'completed') {
       throw new BadRequestException(
         `Cannot apply results for coding job ${id} because it is not completed`
       );
     }
 
-    codingJob.codingJob.status = 'results_applied';
-    return this.codingJobRepository.save(codingJob.codingJob);
+    codingJob.status = 'results_applied';
+    return codingJobRepository.save(codingJob);
+  }
+
+  async getCodingJobByIdForWorkspace(
+    id: number,
+    workspaceId: number,
+    manager?: EntityManager
+  ): Promise<CodingJob> {
+    const codingJob = await this.getCodingJobRepository(manager).findOne({
+      where: { id, workspace_id: workspaceId },
+      relations: ['training']
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${id} not found in workspace ${workspaceId}`);
+    }
+
+    return codingJob;
+  }
+
+  private getCodingJobRepository(manager?: EntityManager): Repository<CodingJob> {
+    return manager ?
+      manager.getRepository(CodingJob) :
+      this.codingJobRepository;
   }
 
   async deleteCodingJob(id: number, workspaceId: number): Promise<{ success: boolean }> {
@@ -1481,13 +1512,11 @@ export class CodingJobService {
       throw new NotFoundException('Coding job unit not found for progress entry');
     }
 
-    if (progress.isOpen !== undefined) {
-      codingJobUnit.is_open = progress.isOpen;
-      if (progress.isOpen) {
-        codingJobUnit.code = null;
-        codingJobUnit.score = null;
-        codingJobUnit.coding_issue_option = null;
-      }
+    if (progress.isOpen === true) {
+      codingJobUnit.is_open = true;
+      codingJobUnit.code = null;
+      codingJobUnit.score = null;
+      codingJobUnit.coding_issue_option = null;
     } else {
       codingJobUnit.code = progress.selectedCode.id;
       codingJobUnit.is_open = false;

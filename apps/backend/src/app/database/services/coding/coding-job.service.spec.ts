@@ -718,6 +718,28 @@ describe('CodingJobService', () => {
     }));
   });
 
+  it('uses the provided transaction manager when marking coding job results applied', async () => {
+    const transactionalCodingJobRepository = createRepo();
+    transactionalCodingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'completed'
+    });
+    const manager = {
+      getRepository: jest.fn().mockReturnValue(transactionalCodingJobRepository)
+    };
+
+    await expect(service.markCodingJobResultsApplied(1, 3, manager as never))
+      .resolves.toMatchObject({ status: 'results_applied' });
+
+    expect(manager.getRepository).toHaveBeenCalledWith(CodingJob);
+    expect(transactionalCodingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: 1,
+      status: 'results_applied'
+    }));
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
   it('rejects applying results for coding jobs that are not completed', async () => {
     codingJobRepository.findOne.mockResolvedValue({
       id: 1,
@@ -803,6 +825,40 @@ describe('CodingJobService', () => {
       score: null,
       coding_issue_option: null,
       is_open: true
+    }));
+  });
+
+  it('saves a selected code when clients explicitly send isOpen false', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: true,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7, score: 2 },
+      isOpen: false
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: 7,
+      score: 2,
+      is_open: false
     }));
   });
 

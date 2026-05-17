@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -12,6 +12,8 @@ import {
   formatCodingTestPerson,
   generateCodingProgressKey
 } from './coding-progress-key.util';
+import { CodingFreshnessService } from './coding-freshness.service';
+import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
 
 export interface ApplyCodingResultsOptions {
   overwriteExisting?: boolean;
@@ -37,7 +39,9 @@ export class CodingResultsService {
     private cacheService: CacheService,
     private codingStatisticsService: CodingStatisticsService,
     private codingJobService: CodingJobService,
-    private codingAnalysisService: CodingAnalysisService
+    private codingAnalysisService: CodingAnalysisService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) { }
 
   async applyCodingResults(
@@ -51,6 +55,11 @@ export class CodingResultsService {
 
     // Check if coding job is completed before allowing application
     const codingJob = await this.codingJobService.getCodingJobById(codingJobId);
+    const initialFreshnessBlocker = this.getFreshnessApplyBlocker(codingJob);
+    if (initialFreshnessBlocker) {
+      return initialFreshnessBlocker;
+    }
+
     if (codingJob.training_id !== null && codingJob.training_id !== undefined) {
       return {
         success: false,
@@ -329,7 +338,41 @@ export class CodingResultsService {
 
       if (responsesToUpdate.length === 0) {
         if (skippedReviewCount === 0) {
-          await this.codingJobService.markCodingJobResultsApplied(codingJobId, workspaceId);
+          const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+          await queryRunner.connect();
+          await queryRunner.startTransaction('READ COMMITTED');
+
+          try {
+            const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
+              workspaceId,
+              codingJobId,
+              queryRunner.manager
+            );
+            if (freshnessBlocker) {
+              await queryRunner.rollbackTransaction();
+              return freshnessBlocker;
+            }
+
+            await this.markManualFreshnessCurrent(
+              workspaceId,
+              directResponseIds,
+              codingJobId,
+              queryRunner.manager
+            );
+            await this.codingJobService.markCodingJobResultsApplied(
+              codingJobId,
+              workspaceId,
+              queryRunner.manager
+            );
+            await queryRunner.commitTransaction();
+          } catch (error) {
+            await queryRunner.rollbackTransaction();
+            this.logger.error(`Error finalizing coding results: ${error.message}`, error.stack);
+            throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
+          } finally {
+            await queryRunner.release();
+          }
+
           await this.invalidateIncompleteVariablesCache(workspaceId);
           await this.codingStatisticsService.invalidateCache(workspaceId);
         }
@@ -349,6 +392,16 @@ export class CodingResultsService {
       await queryRunner.startTransaction('READ COMMITTED');
 
       try {
+        const freshnessBlocker = await this.getFreshnessApplyBlockerInTransaction(
+          workspaceId,
+          codingJobId,
+          queryRunner.manager
+        );
+        if (freshnessBlocker) {
+          await queryRunner.rollbackTransaction();
+          return freshnessBlocker;
+        }
+
         const batchSize = 500;
         let totalUpdated = 0;
 
@@ -372,9 +425,23 @@ export class CodingResultsService {
           this.logger.log(`Updated batch of ${batch.length} responses (${totalUpdated}/${responsesToUpdate.length})`);
         }
 
-        await queryRunner.commitTransaction();
+        await this.markManualFreshnessCurrent(
+          workspaceId,
+          Array.from(new Set([
+            ...directResponseIds,
+            ...responsesToUpdate.map(response => response.responseId)
+          ])),
+          codingJobId,
+          queryRunner.manager
+        );
 
-        await this.codingJobService.markCodingJobResultsApplied(codingJobId, workspaceId);
+        await this.codingJobService.markCodingJobResultsApplied(
+          codingJobId,
+          workspaceId,
+          queryRunner.manager
+        );
+
+        await queryRunner.commitTransaction();
 
         await this.invalidateIncompleteVariablesCache(workspaceId);
         await this.codingStatisticsService.invalidateCache(workspaceId);
@@ -404,6 +471,61 @@ export class CodingResultsService {
       this.logger.error(`Error applying coding results: ${error.message}`, error.stack);
       throw new Error(`Fehler beim Anwenden der Kodierungsergebnisse: ${error.message}`);
     }
+  }
+
+  private async markManualFreshnessCurrent(
+    workspaceId: number,
+    responseIds: number[],
+    codingJobId: number,
+    manager?: EntityManager
+  ): Promise<void> {
+    if (!this.codingFreshnessService) {
+      return;
+    }
+
+    await this.codingFreshnessService.markManualCodingCurrent(
+      workspaceId,
+      responseIds,
+      { codingJobId, manager }
+    );
+  }
+
+  private async getFreshnessApplyBlockerInTransaction(
+    workspaceId: number,
+    codingJobId: number,
+    manager: EntityManager
+  ): Promise<ApplyCodingResultsResult | null> {
+    await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+    const codingJob = await this.codingJobService.getCodingJobByIdForWorkspace(
+      codingJobId,
+      workspaceId,
+      manager
+    );
+    return this.getFreshnessApplyBlocker(codingJob);
+  }
+
+  private getFreshnessApplyBlocker(codingJob: {
+    freshness_status?: string | null;
+    freshness_affected_units?: number | null;
+    freshness_affected_responses?: number | null;
+  }): ApplyCodingResultsResult | null {
+    if (codingJob.freshness_status !== 'stale_source') {
+      return null;
+    }
+
+    return {
+      success: false,
+      updatedResponsesCount: 0,
+      skippedReviewCount: 0,
+      skippedAlreadyCodedCount: 0,
+      overwrittenExistingCount: 0,
+      messageKey: 'coding-results.apply.error.freshness-review-required',
+      messageParams: {
+        status: codingJob.freshness_status,
+        affectedUnits: codingJob.freshness_affected_units || 0,
+        affectedResponses: codingJob.freshness_affected_responses || 0
+      }
+    };
   }
 
   private async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {

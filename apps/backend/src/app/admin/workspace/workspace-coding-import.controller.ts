@@ -137,6 +137,8 @@ export class WorkspaceCodingImportController {
       throw new BadRequestException('File data is required.');
     }
 
+    await this.jobQueueService.assertNoDependencyConflicts('external-coding-import', workspace_id);
+
     // Write base64 file to temp location to avoid bloating Redis
     if (!fs.existsSync(TEMP_DIR)) {
       fs.mkdirSync(TEMP_DIR, { recursive: true });
@@ -302,6 +304,16 @@ export class WorkspaceCodingImportController {
           hasConflict?: boolean;
         }>;
       }> {
-    return this.externalCodingImportService.importExternalCoding(workspace_id, body);
+    if (body.previewOnly !== true) {
+      throw new BadRequestException(
+        'Use the /apply endpoint for applying changes. This endpoint is only for preview mode.'
+      );
+    }
+
+    await this.jobQueueService.assertNoDependencyConflicts('external-coding-import', workspace_id);
+    return this.externalCodingImportService.importExternalCoding(
+      workspace_id,
+      { ...body, previewOnly: true }
+    );
   }
 }

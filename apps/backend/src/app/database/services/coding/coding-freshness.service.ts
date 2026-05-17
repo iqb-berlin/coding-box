@@ -74,6 +74,12 @@ type FreshnessUpsert = {
 
 type ResetFreshnessUnitMap = Partial<Record<CodingFreshnessVersion, number[]>>;
 
+type MarkManualCodingCurrentOptions = {
+  codingJobId?: number;
+  clearCoveredReviewJobs?: boolean;
+  manager?: EntityManager;
+};
+
 @Injectable()
 export class CodingFreshnessService {
   private readonly logger = new Logger(CodingFreshnessService.name);
@@ -212,6 +218,23 @@ export class CodingFreshnessService {
     };
   }
 
+  async isRevisionCurrent(
+    workspaceId: number,
+    expectedRevision: number | null | undefined,
+    manager?: EntityManager
+  ): Promise<boolean> {
+    if (expectedRevision === null || expectedRevision === undefined) {
+      return true;
+    }
+
+    const expected = Number(expectedRevision);
+    if (!Number.isFinite(expected)) {
+      return true;
+    }
+
+    return (await this.getCurrentRevision(workspaceId, manager)) === expected;
+  }
+
   async assertAutoCodingRunCanStart(
     workspaceId: number,
     autoCoderRun: number
@@ -297,13 +320,13 @@ export class CodingFreshnessService {
       workspaceId,
       ids,
       'RESULT_ADDED',
-      'review_required'
+      'stale_source'
     );
     await this.markCodingJobsStaleForAddedUnitIds(
       workspaceId,
       ids,
       'RESULT_ADDED',
-      'review_required'
+      'stale_source'
     );
   }
 
@@ -363,7 +386,7 @@ export class CodingFreshnessService {
       workspaceId,
       ids,
       reason,
-      'review_required'
+      'stale_source'
     );
   }
 
@@ -371,7 +394,8 @@ export class CodingFreshnessService {
     workspaceId: number,
     unitIds: number[],
     version: Extract<CodingFreshnessVersion, 'v1' | 'v3'>,
-    manager?: EntityManager
+    manager?: EntityManager,
+    expectedSourceRevision?: number
   ): Promise<void> {
     const ids = this.uniquePositiveIds(unitIds);
     if (ids.length === 0) {
@@ -379,6 +403,14 @@ export class CodingFreshnessService {
     }
 
     const revision = await this.getCurrentRevision(workspaceId, manager);
+    if (expectedSourceRevision !== undefined && revision !== Number(expectedSourceRevision)) {
+      this.logger.warn(
+        `Skipped marking ${version} current for workspace ${workspaceId}: ` +
+        `expected revision ${expectedSourceRevision}, current revision ${revision}.`
+      );
+      return;
+    }
+
     const responseCounts = await this.getResponseCountsByUnit(workspaceId, ids, manager);
     await this.upsertRows(ids.map(unitId => this.buildRow(
       workspaceId,
@@ -390,6 +422,73 @@ export class CodingFreshnessService {
       revision,
       revision
     )), manager);
+  }
+
+  async markManualCodingCurrent(
+    workspaceId: number,
+    responseIds: number[],
+    options: MarkManualCodingCurrentOptions = {}
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(responseIds);
+    const codingJobIdsToClear = this.uniquePositiveIds([
+      options.codingJobId || 0,
+      ...(
+        options.clearCoveredReviewJobs ?
+          await this.getReviewRequiredCodingJobIdsCoveredByResponseIds(
+            workspaceId,
+            ids,
+            options.manager
+          ) :
+          []
+      )
+    ]);
+
+    if (ids.length === 0) {
+      if (codingJobIdsToClear.length > 0) {
+        await this.markCodingJobsCurrent(workspaceId, codingJobIdsToClear, options.manager);
+      }
+      return;
+    }
+
+    const unitIds = await this.getUnitIdsForResponseIds(workspaceId, ids, options.manager);
+    if (unitIds.length === 0) {
+      if (codingJobIdsToClear.length > 0) {
+        await this.markCodingJobsCurrent(workspaceId, codingJobIdsToClear, options.manager);
+      }
+      return;
+    }
+
+    const blockedUnitIds = await this.getReviewRequiredUnitIds(
+      workspaceId,
+      unitIds,
+      codingJobIdsToClear,
+      options.manager
+    );
+    const blockedUnitIdSet = new Set(blockedUnitIds);
+    const clearableUnitIds = unitIds.filter(unitId => !blockedUnitIdSet.has(unitId));
+
+    if (clearableUnitIds.length > 0) {
+      const revision = await this.getCurrentRevision(workspaceId, options.manager);
+      const responseCounts = await this.getResponseCountsByUnit(
+        workspaceId,
+        clearableUnitIds,
+        options.manager
+      );
+      await this.upsertRows(clearableUnitIds.map(unitId => this.buildRow(
+        workspaceId,
+        unitId,
+        'v2',
+        'CURRENT',
+        'MANUAL_CODING_APPLIED',
+        responseCounts.get(unitId) || 0,
+        revision,
+        revision
+      )), options.manager);
+    }
+
+    if (codingJobIdsToClear.length > 0) {
+      await this.markCodingJobsCurrent(workspaceId, codingJobIdsToClear, options.manager);
+    }
   }
 
   async markVersionsPendingAfterReset(
@@ -451,7 +550,7 @@ export class CodingFreshnessService {
         workspaceId,
         manualReviewUnitIds,
         'RESET',
-        'review_required'
+        'stale_source'
       );
     }
   }
@@ -496,7 +595,7 @@ export class CodingFreshnessService {
     workspaceId: number,
     unitIds: number[],
     reason: CodingFreshnessReason,
-    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required',
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source',
     manager?: EntityManager
   ): Promise<void> {
     const ids = this.uniquePositiveIds(unitIds);
@@ -523,6 +622,8 @@ export class CodingFreshnessService {
         )
         UPDATE coding_job cj
         SET freshness_status = CASE
+              WHEN $3 = 'stale_source' OR cj.freshness_status = 'stale_source'
+                THEN 'stale_source'
               WHEN cj.freshness_status = 'review_required' OR $3 = 'review_required'
                 THEN 'review_required'
               ELSE $3
@@ -549,7 +650,7 @@ export class CodingFreshnessService {
     workspaceId: number,
     responseIds: number[],
     reason: CodingFreshnessReason,
-    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required',
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source',
     manager?: EntityManager
   ): Promise<void> {
     const ids = this.uniquePositiveIds(responseIds);
@@ -575,6 +676,8 @@ export class CodingFreshnessService {
         )
         UPDATE coding_job cj
         SET freshness_status = CASE
+              WHEN $3 = 'stale_source' OR cj.freshness_status = 'stale_source'
+                THEN 'stale_source'
               WHEN cj.freshness_status = 'review_required' OR $3 = 'review_required'
                 THEN 'review_required'
               ELSE $3
@@ -597,11 +700,40 @@ export class CodingFreshnessService {
     );
   }
 
+  private async markCodingJobsCurrent(
+    workspaceId: number,
+    codingJobIds: number[],
+    manager?: EntityManager
+  ): Promise<void> {
+    const ids = this.uniquePositiveIds(codingJobIds);
+    if (ids.length === 0) {
+      return;
+    }
+
+    const queryRunner = manager ?? this.connection;
+    await queryRunner.query(
+      `
+        UPDATE coding_job
+        SET freshness_status = 'current',
+            freshness_reason = NULL,
+            freshness_updated_at = now(),
+            freshness_affected_units = 0,
+            freshness_affected_responses = 0,
+            updated_at = now()
+        WHERE workspace_id = $1
+          AND id = ANY($2::int[])
+          AND training_id IS NULL
+          AND COALESCE(freshness_status, 'current') <> 'stale_source'
+      `,
+      [workspaceId, ids]
+    );
+  }
+
   private async markCodingJobsStaleForAddedUnitIds(
     workspaceId: number,
     unitIds: number[],
     reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
-    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'review_required'
+    status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source'
   ): Promise<void> {
     const ids = this.uniquePositiveIds(unitIds);
     if (ids.length === 0) {
@@ -670,6 +802,8 @@ export class CodingFreshnessService {
         )
         UPDATE coding_job
         SET freshness_status = CASE
+              WHEN $3 = 'stale_source' OR coding_job.freshness_status = 'stale_source'
+                THEN 'stale_source'
               WHEN coding_job.freshness_status = 'review_required' OR $3 = 'review_required'
                 THEN 'review_required'
               ELSE $3
@@ -690,6 +824,111 @@ export class CodingFreshnessService {
       `,
       [workspaceId, ids, status, reason]
     );
+  }
+
+  private async getUnitIdsForResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    manager?: EntityManager
+  ): Promise<number[]> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const responseRepository = manager ?
+      manager.getRepository(ResponseEntity) :
+      this.responseRepository;
+    const query = responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .select('DISTINCT response.unitid', 'unitId')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('response.id IN (:...responseIds)', { responseIds: ids });
+
+    await this.applyWorkspaceExclusions(workspaceId, query);
+
+    const rows = await query.getRawMany<{ unitId: number | string }>();
+    return this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
+  }
+
+  private async getReviewRequiredUnitIds(
+    workspaceId: number,
+    unitIds: number[],
+    excludedCodingJobIds: number[] = [],
+    manager?: EntityManager
+  ): Promise<number[]> {
+    const ids = this.uniquePositiveIds(unitIds);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const excludedIds = this.uniquePositiveIds(excludedCodingJobIds);
+    const queryRunner = manager ?? this.connection;
+    const rows = await queryRunner.query(
+      `
+        SELECT DISTINCT resp.unitid AS "unitId"
+        FROM coding_job_unit cju
+        INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+        INNER JOIN response resp ON resp.id = cju.response_id
+        WHERE cj.workspace_id = $1
+          AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+          AND cj.training_id IS NULL
+          AND cj.freshness_status IN ('review_required', 'stale_source')
+          AND resp.unitid = ANY($2::int[])
+          AND (
+            cardinality($3::int[]) = 0
+            OR cj.id <> ALL($3::int[])
+          )
+      `,
+      [workspaceId, ids, excludedIds]
+    ) as Array<{ unitId: number | string }>;
+
+    return this.uniquePositiveIds(rows.map(row => Number(row.unitId)));
+  }
+
+  private async getReviewRequiredCodingJobIdsCoveredByResponseIds(
+    workspaceId: number,
+    responseIds: number[],
+    manager?: EntityManager
+  ): Promise<number[]> {
+    const ids = this.uniquePositiveIds(responseIds);
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const queryRunner = manager ?? this.connection;
+    const rows = await queryRunner.query(
+      `
+        WITH candidate_jobs AS (
+          SELECT DISTINCT cju.coding_job_id
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND cj.freshness_status = 'review_required'
+            AND cju.response_id = ANY($2::int[])
+        )
+        SELECT cj.id AS "jobId"
+        FROM coding_job cj
+        INNER JOIN candidate_jobs candidate ON candidate.coding_job_id = cj.id
+        INNER JOIN coding_job_unit cju ON cju.coding_job_id = cj.id
+        WHERE cj.workspace_id = $1
+          AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+          AND cj.training_id IS NULL
+          AND cj.freshness_status = 'review_required'
+        GROUP BY cj.id
+        HAVING BOOL_AND(cju.response_id = ANY($2::int[]))
+      `,
+      [workspaceId, ids]
+    ) as Array<{ jobId: number | string }>;
+
+    return this.uniquePositiveIds(rows.map(row => Number(row.jobId)));
   }
 
   private countVersionExpression(version: CodingFreshnessVersion): string {
@@ -895,14 +1134,19 @@ export class CodingFreshnessService {
       .addSelect(this.existsVersionExpression('v3'), 'v3')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .getRawOne<{ v1: boolean; v2: boolean; v3: boolean }>();
+      .andWhere('person.consider = :consider', { consider: true });
+
+    await this.applyWorkspaceExclusions(workspaceId, raw);
+
+    const result = await raw.getRawOne<{ v1: boolean; v2: boolean; v3: boolean }>();
 
     return {
-      v1: this.toBoolean(raw?.v1),
-      v2: this.toBoolean(raw?.v2),
-      v3: this.toBoolean(raw?.v3)
+      v1: this.toBoolean(result?.v1),
+      v2: this.toBoolean(result?.v2),
+      v3: this.toBoolean(result?.v3)
     };
   }
 
@@ -920,10 +1164,10 @@ export class CodingFreshnessService {
     unitIds: number[]
   ): Promise<Map<number, UnitCodingPresence>> {
     const ids = this.uniquePositiveIds(unitIds);
-    const result = new Map<number, UnitCodingPresence>();
-    ids.forEach(id => result.set(id, { v1: false, v2: false, v3: false }));
+    const presenceByUnit = new Map<number, UnitCodingPresence>();
+    ids.forEach(id => presenceByUnit.set(id, { v1: false, v2: false, v3: false }));
     if (ids.length === 0) {
-      return result;
+      return presenceByUnit;
     }
 
     const rows = await this.responseRepository
@@ -934,19 +1178,29 @@ export class CodingFreshnessService {
       .addSelect(this.existsVersionExpression('v3'), 'v3')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.unitid IN (:...unitIds)', { unitIds: ids })
-      .groupBy('response.unitid')
-      .getRawMany<{ unitId: number | string; v1: boolean; v2: boolean; v3: boolean }>();
+      .groupBy('response.unitid');
 
-    rows.forEach(row => result.set(Number(row.unitId), {
+    await this.applyWorkspaceExclusions(workspaceId, rows);
+
+    const presenceRows = await rows.getRawMany<{
+      unitId: number | string;
+      v1: boolean;
+      v2: boolean;
+      v3: boolean
+    }>();
+
+    presenceRows.forEach(row => presenceByUnit.set(Number(row.unitId), {
       v1: this.toBoolean(row.v1),
       v2: this.toBoolean(row.v2),
       v3: this.toBoolean(row.v3)
     }));
 
-    return result;
+    return presenceByUnit;
   }
 
   private async getResponseCountsByUnit(
@@ -970,14 +1224,19 @@ export class CodingFreshnessService {
       .addSelect('COUNT(response.id)', 'count')
       .innerJoin('response.unit', 'unit')
       .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
       .andWhere('response.unitid IN (:...unitIds)', { unitIds: ids })
       .andWhere('response.is_autocoder_generated IS NOT TRUE')
-      .groupBy('response.unitid')
-      .getRawMany<{ unitId: number | string; count: string }>();
+      .groupBy('response.unitid');
 
-    rows.forEach(row => result.set(Number(row.unitId), Number(row.count || 0)));
+    await this.applyWorkspaceExclusions(workspaceId, rows);
+
+    const countRows = await rows.getRawMany<{ unitId: number | string; count: string }>();
+
+    countRows.forEach(row => result.set(Number(row.unitId), Number(row.count || 0)));
     return result;
   }
 
@@ -1104,7 +1363,7 @@ export class CodingFreshnessService {
           AND COALESCE(cju.workspace_id, cj.workspace_id) = cj.workspace_id
         WHERE cj.workspace_id = $1
           AND cj.training_id IS NULL
-          AND cj.freshness_status = 'review_required'
+          AND cj.freshness_status IN ('review_required', 'stale_source')
       `,
       [workspaceId]
     ) as ManualJobFreshnessRow[] | undefined;

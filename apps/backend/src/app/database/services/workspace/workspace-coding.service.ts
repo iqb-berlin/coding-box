@@ -50,7 +50,8 @@ export class WorkspaceCodingService {
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
     jobId?: string,
-    unitIds?: number[]
+    unitIds?: number[],
+    freshnessSourceRevision?: number
   ): Promise<CodingStatistics> {
     const statistics = await this.codingProcessService.processTestPersonsBatch(
       workspace_id,
@@ -58,7 +59,8 @@ export class WorkspaceCodingService {
       autoCoderRun,
       progressCallback,
       jobId,
-      unitIds
+      unitIds,
+      freshnessSourceRevision
     );
 
     await this.invalidateIncompleteVariablesCache(workspace_id);
@@ -489,6 +491,7 @@ export class WorkspaceCodingService {
       jobName: string;
       hasIssues: boolean;
       skipped: boolean;
+      skippedReason?: 'coding-issues' | 'training-job' | 'not-completed' | 'freshness-stale';
       result?: {
         success: boolean;
         updatedResponsesCount: number;

@@ -22,6 +22,7 @@ import {
   CodingStatisticsWithJob
 } from '../shared';
 import { ResponseManagementService } from '../test-results/response-management.service';
+import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -34,6 +35,7 @@ type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
   freshnessVersion?: 'v1' | 'v3';
   freshnessStates?: ('PENDING' | 'STALE')[];
+  freshnessSourceRevision?: number;
   groupNames?: string;
 };
 
@@ -219,7 +221,8 @@ export class CodingProcessService {
       autoCoderRun,
       source: metadata.source || 'manual-selection',
       freshnessVersion: metadata.freshnessVersion,
-      freshnessStates: metadata.freshnessStates
+      freshnessStates: metadata.freshnessStates,
+      freshnessSourceRevision: metadata.freshnessSourceRevision
     });
 
     this.logger.log(
@@ -240,7 +243,8 @@ export class CodingProcessService {
     autoCoderRun: number = 1,
     progressCallback?: (progress: number) => void,
     jobId?: string,
-    targetUnitIds?: number[]
+    targetUnitIds?: number[],
+    freshnessSourceRevision?: number
   ): Promise<CodingStatistics> {
     this.cleanupCaches();
 
@@ -568,7 +572,8 @@ export class CodingProcessService {
           {
             unitIds: unitIdsArray,
             autoCoderRun,
-            markCurrentVersion: autoCoderRun === 2 ? 'v3' : 'v1'
+            markCurrentVersion: autoCoderRun === 2 ? 'v3' : 'v1',
+            expectedSourceRevision: freshnessSourceRevision
           }
         );
 
@@ -596,13 +601,20 @@ export class CodingProcessService {
 
       return statistics;
     } catch (error) {
+      if (error instanceof AutocoderSourceRevisionStaleError) {
+        this.logger.warn(error.message);
+        throw error;
+      }
+
       this.logger.error(
         `Error while processing test persons in batch: ${error.message} \n ${error.stack}`
       );
       await queryRunner.rollbackTransaction();
       return statistics;
     } finally {
-      await queryRunner.release();
+      if (!queryRunner.isReleased) {
+        await queryRunner.release();
+      }
     }
   }
 
