@@ -262,14 +262,19 @@ Für GeoGebra-Aufgaben benötigt die Kodierbox kein Desktop-Installationspaket,
 sondern das **GeoGebra Math Apps Bundle** für selbst gehostete Web-Einbettungen.
 GeoGebra dokumentiert dieses Paket unter
 [GeoGebra Apps Embedding](https://geogebra.github.io/docs/reference/en/GeoGebra_Apps_Embedding/)
-als "GeoGebra Math Apps Bundle"; der aktuelle Download liegt unter
-<https://download.geogebra.org/package/geogebra-math-apps-bundle>.
+als "GeoGebra Math Apps Bundle"; der Standard-Download liegt unter
+<https://download.geogebra.org/package/geogebra-math-apps-bundle>. Falls
+GeoGebra diese Adresse ändert, kann der Backend-Download per
+`GEOGEBRA_BUNDLE_DOWNLOAD_URL` überschrieben werden.
 
-Das heruntergeladene ZIP enthält bereits den benötigten Ordner `GeoGebra/`
-mit Dateien wie `GeoGebra/deployggb.js` und `GeoGebra/HTML5/5.0/...`.
-Damit Kodierbox das Paket als Ressourcen-Paket akzeptiert, muss die Datei
-die Endung `.itcr.zip` haben. Für die vorhandenen GeoGebra-Pfade wird der
-Dateiname `Geogebra.itcr.zip` empfohlen:
+Das heruntergeladene ZIP enthält üblicherweise den benötigten Ordner
+`GeoGebra/` mit Dateien wie `GeoGebra/deployggb.js` und
+`GeoGebra/HTML5/5.0/...`. Kodierbox akzeptiert auch ZIPs, in denen dieser
+Bundle-Ordner unter einem zusätzlichen obersten Ordner liegt, und normalisiert
+die Dateien serverseitig wieder auf `GeoGebra/...`. Damit Kodierbox das Paket
+als Ressourcen-Paket akzeptiert, muss die Datei die Endung `.itcr.zip` haben.
+Für die vorhandenen GeoGebra-Pfade wird der Dateiname `Geogebra.itcr.zip`
+empfohlen:
 
 ```bash
 curl -L -o geogebra-math-apps-bundle.zip \
@@ -278,8 +283,9 @@ cp geogebra-math-apps-bundle.zip Geogebra.itcr.zip
 unzip -l Geogebra.itcr.zip | head
 ```
 
-Falls das Paket vorher entpackt und neu gepackt wird, muss der Ordner
-`GeoGebra/` im ZIP ganz oben liegen:
+Falls das Paket vorher entpackt und neu gepackt wird, sollte der Ordner
+`GeoGebra/` im ZIP ganz oben liegen. Das ist weiterhin die klarste Struktur,
+auch wenn Kodierbox zusätzlich verschachtelte Bundle-Ordner erkennt:
 
 ```bash
 zip -r Geogebra.itcr.zip GeoGebra

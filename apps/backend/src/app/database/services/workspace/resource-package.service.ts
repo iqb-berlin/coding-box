@@ -5,6 +5,7 @@ import {
   Logger
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import 'multer';
@@ -18,10 +19,29 @@ import { ResourcePackageDto } from '../../../../../../../api-dto/resource-packag
 import { GeoGebraPackageStatus } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResourcePackageNotFoundException } from '../../../exceptions/resource-package-not-found.exception';
 
+type SafeZipEntry = {
+  entry: AdmZip.IZipEntry;
+  entryName: string;
+};
+
+type GeoGebraPackageLayout = {
+  bundleRoot: string;
+  packageFiles: string[];
+  geoGebraHtmlEntryName: string;
+};
+
 @Injectable()
 export class ResourcePackageService {
   private static readonly geogebraPackageName = 'Geogebra';
-  private static readonly geogebraBundleDownloadUrl = 'https://download.geogebra.org/package/geogebra-math-apps-bundle';
+  private static readonly geogebraDirectoryName = 'GeoGebra';
+  private static readonly geogebraBundleDownloadUrlConfigKey = 'GEOGEBRA_BUNDLE_DOWNLOAD_URL';
+  private static readonly defaultGeogebraBundleDownloadUrl = 'https://download.geogebra.org/package/geogebra-math-apps-bundle';
+  private static readonly geogebraDeployFileName = 'deployggb.js';
+  private static readonly geogebraHtmlRelativePath = 'HTML5/5.0/GeoGebra.html';
+  private static readonly requiredGeoGebraPackageFiles = [
+    'GeoGebra/deployggb.js',
+    'GeoGebra/HTML5/5.0/GeoGebra.html'
+  ];
 
   private readonly logger = new Logger(ResourcePackageService.name);
   private resourcePackagesPath = './packages';
@@ -29,7 +49,8 @@ export class ResourcePackageService {
   constructor(
     @InjectRepository(ResourcePackage)
     private resourcePackageRepository: Repository<ResourcePackage>,
-    private httpService: HttpService
+    private httpService: HttpService,
+    private configService: ConfigService
   ) {
   }
 
@@ -79,19 +100,25 @@ export class ResourcePackageService {
   async create(workspaceId: number, zippedResourcePackage: Express.Multer.File): Promise<number> {
     this.logger.log(`Creating resource package for workspace ${workspaceId}.`);
     this.ensurePackagesDirectoryExists();
-    const zip = new AdmZip(zippedResourcePackage.buffer);
+    const zip = this.readZip(zippedResourcePackage.buffer);
     const packageName = this.getPackageNameFromFilename(zippedResourcePackage.originalname);
     this.assertSafePackageName(packageName);
-    const packageFiles = this.getSafeZipEntryNames(zip);
+    const safeZipEntries = this.getSafeZipEntries(zip);
+    const originalPackageFiles = safeZipEntries.map(entry => entry.entryName);
+    const geoGebraPackageLayout = this.detectGeoGebraPackageLayout(originalPackageFiles);
     const contentHash = this.getContentHash(zippedResourcePackage.buffer);
     const isGlobalGeoGebraPackage = this.isGlobalGeoGebraPackage(packageName);
-    const packageType = this.isGeoGebraPackage(packageFiles) ? 'geogebra' : 'resource';
+    const normalizedGeoGebraPackageLayout = isGlobalGeoGebraPackage ? geoGebraPackageLayout : null;
+    const packageType = geoGebraPackageLayout ? 'geogebra' : 'resource';
     if (isGlobalGeoGebraPackage) {
-      this.assertGeoGebraPackage(packageFiles);
+      this.assertGeoGebraPackage(geoGebraPackageLayout, originalPackageFiles);
     }
     const detectedVersion = packageType === 'geogebra' ?
-      this.detectGeoGebraVersion(zip) :
+      this.detectGeoGebraVersion(zip, geoGebraPackageLayout) :
       null;
+    const packageFiles = normalizedGeoGebraPackageLayout ?
+      normalizedGeoGebraPackageLayout.packageFiles :
+      originalPackageFiles;
 
     const existingPackages = await this.findPackagesByName(packageName);
     const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, contentHash);
@@ -114,7 +141,13 @@ export class ResourcePackageService {
       );
     }
 
-    await this.extractAndStorePackage(packageName, zip, zippedResourcePackage);
+    await this.extractAndStorePackage(
+      packageName,
+      zip,
+      zippedResourcePackage,
+      safeZipEntries,
+      normalizedGeoGebraPackageLayout
+    );
     const newResourcePackage = await this.saveResourcePackageReference(
       isGlobalGeoGebraPackage ? 0 : workspaceId,
       packageName,
@@ -156,14 +189,25 @@ export class ResourcePackageService {
       return existingGeoGebraPackage;
     }
 
-    this.logger.log('Downloading GeoGebra Math Apps Bundle.');
-    const response = await this.httpService.axiosRef.get<ArrayBuffer>(
-      ResourcePackageService.geogebraBundleDownloadUrl,
-      {
-        responseType: 'arraybuffer',
-        timeout: 120000
-      }
-    );
+    const downloadUrl = this.getGeoGebraBundleDownloadUrl();
+    this.logger.log(`Downloading GeoGebra Math Apps Bundle from ${downloadUrl}.`);
+    let response;
+    try {
+      response = await this.httpService.axiosRef.get<ArrayBuffer>(
+        downloadUrl,
+        {
+          responseType: 'arraybuffer',
+          timeout: 120000
+        }
+      );
+    } catch (error) {
+      this.logger.error(
+        `GeoGebra Math Apps Bundle download failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      throw new BadRequestException(
+        `GeoGebra Math Apps Bundle konnte nicht von ${downloadUrl} heruntergeladen werden.`
+      );
+    }
     const buffer = Buffer.from(response.data);
     const uploadedFile = {
       originalname: `${ResourcePackageService.geogebraPackageName}.itcr.zip`,
@@ -303,15 +347,35 @@ export class ResourcePackageService {
   private async extractAndStorePackage(
     packageName: string,
     zip: AdmZip,
-    zippedResourcePackage: Express.Multer.File
+    zippedResourcePackage: Express.Multer.File,
+    safeZipEntries: SafeZipEntry[],
+    geoGebraPackageLayout: GeoGebraPackageLayout | null
   ): Promise<void> {
     const packageDirectoryPath = this.getPackageDirectoryPath(packageName);
+    const tempPackageDirectoryPath = `${packageDirectoryPath}.tmp-${process.pid}-${Date.now()}`;
     const zipExtractAllToAsync = util.promisify(zip.extractAllToAsync.bind(zip));
-    await zipExtractAllToAsync(packageDirectoryPath, true, true);
-    fs.writeFileSync(
-      path.join(packageDirectoryPath, `${packageName}.itcr.zip`),
-      zippedResourcePackage.buffer
-    );
+    fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
+
+    try {
+      if (geoGebraPackageLayout) {
+        this.extractNormalizedGeoGebraPackage(
+          tempPackageDirectoryPath,
+          safeZipEntries,
+          geoGebraPackageLayout
+        );
+      } else {
+        await zipExtractAllToAsync(tempPackageDirectoryPath, true, true);
+      }
+      fs.writeFileSync(
+        path.join(tempPackageDirectoryPath, `${packageName}.itcr.zip`),
+        zippedResourcePackage.buffer
+      );
+      fs.rmSync(packageDirectoryPath, { recursive: true, force: true });
+      fs.renameSync(tempPackageDirectoryPath, packageDirectoryPath);
+    } catch (error) {
+      fs.rmSync(tempPackageDirectoryPath, { recursive: true, force: true });
+      throw error;
+    }
   }
 
   private async findPackagesByName(packageName: string): Promise<ResourcePackage[]> {
@@ -363,13 +427,33 @@ export class ResourcePackageService {
     }
   }
 
-  private getSafeZipEntryNames(zip: AdmZip): string[] {
-    return zip.getEntries()
-      .map(entry => entry.entryName.replace(/\\/g, '/'))
+  private readZip(buffer: Buffer): AdmZip {
+    try {
+      return new AdmZip(buffer);
+    } catch {
+      throw new BadRequestException('Die hochgeladene Datei ist kein lesbares ZIP-Archiv.');
+    }
+  }
+
+  private getSafeZipEntries(zip: AdmZip): SafeZipEntry[] {
+    let zipEntries: AdmZip.IZipEntry[];
+    try {
+      zipEntries = zip.getEntries();
+    } catch {
+      throw new BadRequestException('Die hochgeladene Datei ist kein lesbares ZIP-Archiv.');
+    }
+    if (zipEntries.length === 0) {
+      throw new BadRequestException('Das ZIP-Archiv enthält keine Dateien.');
+    }
+    return zipEntries
+      .map(entry => ({
+        entry,
+        entryName: entry.entryName.replace(/\\/g, '/')
+      }))
       .map(entryName => {
         if (
-          path.posix.isAbsolute(entryName) ||
-          entryName.split('/').includes('..')
+          path.posix.isAbsolute(entryName.entryName) ||
+          entryName.entryName.split('/').includes('..')
         ) {
           throw new BadRequestException('Das ZIP enthält unsichere Dateipfade.');
         }
@@ -377,17 +461,37 @@ export class ResourcePackageService {
       });
   }
 
-  private assertGeoGebraPackage(packageFiles: string[]): void {
-    if (
-      !packageFiles.includes('GeoGebra/deployggb.js') ||
-      !packageFiles.includes('GeoGebra/HTML5/5.0/GeoGebra.html')
-    ) {
-      throw new BadRequestException('Das GeoGebra-Paket muss GeoGebra/deployggb.js und GeoGebra/HTML5/5.0/GeoGebra.html enthalten.');
+  private assertGeoGebraPackage(
+    geoGebraPackageLayout: GeoGebraPackageLayout | null,
+    packageFiles: string[]
+  ): void {
+    if (!geoGebraPackageLayout) {
+      const foundDeployFile = packageFiles
+        .find(packageFile => this.hasLastPathSegment(packageFile, ResourcePackageService.geogebraDeployFileName));
+      const foundHtmlFile = packageFiles
+        .find(packageFile => packageFile.endsWith(ResourcePackageService.geogebraHtmlRelativePath));
+      const foundFilesMessage = [
+        foundDeployFile ? `Gefunden: ${foundDeployFile}.` : 'deployggb.js wurde nicht gefunden.',
+        foundHtmlFile ? `Gefunden: ${foundHtmlFile}.` : 'GeoGebra.html wurde nicht gefunden.'
+      ].join(' ');
+      const requiredBundleFilesMessage = [
+        `Das GeoGebra-Paket muss ${ResourcePackageService.geogebraDeployFileName} und`,
+        `${ResourcePackageService.geogebraHtmlRelativePath} im selben Bundle-Ordner enthalten.`
+      ].join(' ');
+      throw new BadRequestException(
+        `${requiredBundleFilesMessage} ${foundFilesMessage}`
+      );
     }
   }
 
-  private detectGeoGebraVersion(zip: AdmZip): string | null {
-    const geoGebraHtml = zip.getEntry('GeoGebra/HTML5/5.0/GeoGebra.html');
+  private detectGeoGebraVersion(
+    zip: AdmZip,
+    geoGebraPackageLayout: GeoGebraPackageLayout | null
+  ): string | null {
+    if (!geoGebraPackageLayout) {
+      return null;
+    }
+    const geoGebraHtml = zip.getEntry(geoGebraPackageLayout.geoGebraHtmlEntryName);
     if (!geoGebraHtml) {
       return null;
     }
@@ -396,25 +500,107 @@ export class ResourcePackageService {
     return versionMatch?.[1] || null;
   }
 
-  private isGeoGebraPackage(packageFiles: string[]): boolean {
-    return packageFiles.includes('GeoGebra/deployggb.js');
+  private detectGeoGebraPackageLayout(packageFiles: string[]): GeoGebraPackageLayout | null {
+    const packageFileSet = new Set(packageFiles);
+    const deployFileCandidates = packageFiles
+      .filter(packageFile => this.hasLastPathSegment(packageFile, ResourcePackageService.geogebraDeployFileName));
+
+    for (const deployFile of deployFileCandidates) {
+      const bundleRoot = this.getParentPath(deployFile);
+      const geoGebraHtmlEntryName = bundleRoot ?
+        `${bundleRoot}/${ResourcePackageService.geogebraHtmlRelativePath}` :
+        ResourcePackageService.geogebraHtmlRelativePath;
+      if (packageFileSet.has(geoGebraHtmlEntryName)) {
+        return {
+          bundleRoot,
+          packageFiles: this.normalizeGeoGebraPackageFiles(packageFiles, bundleRoot),
+          geoGebraHtmlEntryName
+        };
+      }
+    }
+    return null;
+  }
+
+  private normalizeGeoGebraPackageFiles(packageFiles: string[], bundleRoot: string): string[] {
+    const normalizedPackageFiles = packageFiles
+      .filter(packageFile => this.isInsideBundleRoot(packageFile, bundleRoot))
+      .map(packageFile => this.toGeoGebraPackagePath(packageFile, bundleRoot));
+    return Array.from(new Set(normalizedPackageFiles));
+  }
+
+  private extractNormalizedGeoGebraPackage(
+    packageDirectoryPath: string,
+    safeZipEntries: SafeZipEntry[],
+    geoGebraPackageLayout: GeoGebraPackageLayout
+  ): void {
+    safeZipEntries
+      .filter(safeZipEntry => !safeZipEntry.entry.isDirectory)
+      .filter(safeZipEntry => this.isInsideBundleRoot(
+        safeZipEntry.entryName,
+        geoGebraPackageLayout.bundleRoot
+      ))
+      .forEach(safeZipEntry => {
+        const normalizedEntryName = this.toGeoGebraPackagePath(
+          safeZipEntry.entryName,
+          geoGebraPackageLayout.bundleRoot
+        );
+        const targetPath = path.join(packageDirectoryPath, normalizedEntryName);
+        this.assertPathIsInsideDirectory(packageDirectoryPath, targetPath);
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+        fs.writeFileSync(targetPath, safeZipEntry.entry.getData());
+      });
+  }
+
+  private toGeoGebraPackagePath(packageFile: string, bundleRoot: string): string {
+    const relativePackageFile = bundleRoot ?
+      packageFile.slice(bundleRoot.length + 1) :
+      packageFile;
+    return path.posix.join(
+      ResourcePackageService.geogebraDirectoryName,
+      relativePackageFile
+    );
+  }
+
+  private isInsideBundleRoot(packageFile: string, bundleRoot: string): boolean {
+    return bundleRoot === '' ||
+      packageFile === bundleRoot ||
+      packageFile.startsWith(`${bundleRoot}/`);
+  }
+
+  private getParentPath(packageFile: string): string {
+    const lastSeparatorIndex = packageFile.lastIndexOf('/');
+    return lastSeparatorIndex === -1 ?
+      '' :
+      packageFile.slice(0, lastSeparatorIndex);
+  }
+
+  private hasLastPathSegment(packageFile: string, segment: string): boolean {
+    const pathSegments = packageFile.split('/');
+    return pathSegments[pathSegments.length - 1] === segment;
+  }
+
+  private assertPathIsInsideDirectory(directoryPath: string, targetPath: string): void {
+    const resolvedDirectoryPath = path.resolve(directoryPath);
+    const resolvedTargetPath = path.resolve(targetPath);
+    if (
+      resolvedTargetPath !== resolvedDirectoryPath &&
+      !resolvedTargetPath.startsWith(`${resolvedDirectoryPath}${path.sep}`)
+    ) {
+      throw new BadRequestException('Das ZIP enthält unsichere Dateipfade.');
+    }
   }
 
   private validateGeoGebraPackageReference(
     resourcePackage: ResourcePackage
   ): string[] {
     const errors: string[] = [];
-    const requiredFiles = [
-      'GeoGebra/deployggb.js',
-      'GeoGebra/HTML5/5.0/GeoGebra.html'
-    ];
 
     if (resourcePackage.packageType !== 'geogebra') {
       errors.push('Das Ressourcenpaket ist nicht als GeoGebra-Paket registriert.');
     }
 
     const packageFiles = resourcePackage.elements || [];
-    requiredFiles.forEach(requiredFile => {
+    ResourcePackageService.requiredGeoGebraPackageFiles.forEach(requiredFile => {
       if (!packageFiles.includes(requiredFile)) {
         errors.push(`Im Ressourcenpaket fehlt ${requiredFile}.`);
       }
@@ -423,7 +609,7 @@ export class ResourcePackageService {
     const packageDirectoryPath = this.getExistingPackageDirectoryPath(
       resourcePackage.name
     );
-    requiredFiles.forEach(requiredFile => {
+    ResourcePackageService.requiredGeoGebraPackageFiles.forEach(requiredFile => {
       const absolutePath = path.join(packageDirectoryPath, requiredFile);
       if (!fs.existsSync(absolutePath)) {
         errors.push(`Im entpackten GeoGebra-Paket fehlt ${requiredFile}.`);
@@ -485,6 +671,13 @@ export class ResourcePackageService {
       .createHash('sha256')
       .update(buffer)
       .digest('hex');
+  }
+
+  private getGeoGebraBundleDownloadUrl(): string {
+    const configuredDownloadUrl = this.configService
+      .get<string>(ResourcePackageService.geogebraBundleDownloadUrlConfigKey)
+      ?.trim();
+    return configuredDownloadUrl || ResourcePackageService.defaultGeogebraBundleDownloadUrl;
   }
 
   private getPackageDirectoryPath(packageName: string): string {

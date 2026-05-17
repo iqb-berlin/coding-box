@@ -1,7 +1,7 @@
 import {
   Controller,
   Delete,
-  Get, Header, NotFoundException,
+  Get, Header,
   Param,
   ParseArrayPipe,
   ParseIntPipe,
@@ -48,23 +48,14 @@ export class ResourcePackageController {
     required: true
   })
   @ApiOkResponse({
-    description: 'Resource Packages retrieved successfully.',
+    description: 'Resource packages retrieved successfully. Returns an empty list if no resource packages exist.',
     type: [ResourcePackageDto]
-  })
-  @ApiNotFoundResponse({
-    description: 'No resource packages found.'
   })
   @ApiBadRequestResponse({ description: 'Failed to retrieve resource packages' })
   async findResourcePackages(
     @Param('workspace_id', ParseIntPipe) workspaceId: number
   ): Promise<ResourcePackageDto[]> {
-    const resourcePackages = await this.resourcePackageService.findResourcePackages(workspaceId);
-
-    if (!resourcePackages || resourcePackages.length === 0) {
-      throw new NotFoundException(`No resource packages found for workspace ${workspaceId}.`);
-    }
-
-    return resourcePackages;
+    return this.resourcePackageService.findResourcePackages(workspaceId);
   }
 
   @Delete(':workspace_id/resource-packages/:id')
