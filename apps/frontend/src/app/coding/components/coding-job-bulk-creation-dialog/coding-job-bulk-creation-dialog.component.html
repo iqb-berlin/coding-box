@@ -199,6 +199,12 @@
                   {{ getBundleDisplayName(job.bundle) }} (Bundle)
                 </div>
               }
+              @if (job.coderName) {
+                <div class="job-details">
+                  <mat-icon>person</mat-icon>
+                  {{ job.coderName }}
+                </div>
+              }
             </div>
             <span class="case-count">{{ getJobCaseCount(job) }}</span>
           </div>
@@ -207,7 +213,7 @@
     </div>
     }
 
-    @if (!isLoading && !data.displayOptionsLocked) {
+    @if (!isLoading && !data.creationResults && !data.displayOptionsLocked) {
     <div class="display-options-section">
       <h3 class="section-title">
         <mat-icon>settings</mat-icon>
@@ -234,15 +240,21 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-button (click)="onCancel()">{{ 'coding-job-bulk-creation-dialog.buttons.cancel' | translate }}</button>
-    @if (warnings.length > 0 && !warningsConfirmed) {
+    @if (data.creationResults) {
+      <button mat-raised-button color="primary" (click)="onCancel()">
+        {{ 'coding-job-bulk-creation-dialog.buttons.close' | translate }}
+      </button>
+    } @else {
+      <button mat-button (click)="onCancel()">{{ 'coding-job-bulk-creation-dialog.buttons.cancel' | translate }}</button>
+      @if (warnings.length > 0 && !warningsConfirmed) {
       <button mat-raised-button color="warn" [disabled]="isLoading" (click)="onConfirm()">
         {{ 'coding-job-bulk-creation-dialog.buttons.continue' | translate }}
       </button>
-    } @else {
-      <button mat-raised-button color="primary" [disabled]="isLoading" (click)="onConfirm()">
+      } @else {
+      <button mat-raised-button color="primary" [disabled]="isLoading || jobPreviews.length === 0" (click)="onConfirm()">
         {{ 'coding-job-bulk-creation-dialog.buttons.confirm' | translate:{count: jobPreviews.length} }}
       </button>
+      }
     }
   </div>
 </div>

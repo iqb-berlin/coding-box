@@ -89,6 +89,9 @@ export interface JobPreview {
   name: string;
   variable?: Variable;
   bundle?: VariableBundle;
+  caseCount?: number;
+  coderName?: string;
+  jobId?: number;
 }
 
 export interface BulkCreationResult {
@@ -289,6 +292,22 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   private createJobPreviews(): JobPreview[] {
+    if (this.data.creationResults?.jobs) {
+      return this.data.creationResults.jobs
+        .filter(job => job.caseCount > 0)
+        .map(job => {
+          const bundle = job.itemKey ? this.findBundleForItemKey(job.itemKey) : undefined;
+          return {
+            name: job.jobName,
+            variable: bundle ? undefined : job.variable,
+            bundle,
+            caseCount: job.caseCount,
+            coderName: job.coderName,
+            jobId: job.jobId
+          };
+        });
+    }
+
     const previews: JobPreview[] = [];
     // Sort coders alphabetically for deterministic job naming
     const sortedCoders = [...this.data.selectedCoders].sort((a, b) => a.name.localeCompare(b.name));
@@ -302,15 +321,23 @@ export class CodingJobBulkCreationDialogComponent {
     for (const item of items) {
       for (const coder of sortedCoders) {
         const caseCount = this.getCaseCountForCoder(item, coder);
+        if (caseCount <= 0) {
+          continue;
+        }
+
         let jobName = '';
         let preview: JobPreview;
 
         if ('variables' in item) { // bundle
-          jobName = this.generateJobName(coder.name, this.getBundleDisplayName(item), '', caseCount);
-          preview = { name: jobName, bundle: item };
+          jobName = this.generateJobName(coder.name, this.getBundleDisplayName(item), '');
+          preview = {
+            name: jobName, bundle: item, caseCount, coderName: coder.name
+          };
         } else { // variable
-          jobName = this.generateJobName(coder.name, item.unitName, item.variableId, caseCount);
-          preview = { name: jobName, variable: item };
+          jobName = this.generateJobName(coder.name, item.unitName, item.variableId);
+          preview = {
+            name: jobName, variable: item, caseCount, coderName: coder.name
+          };
         }
 
         previews.push(preview);
@@ -320,13 +347,12 @@ export class CodingJobBulkCreationDialogComponent {
     return previews;
   }
 
-  private generateJobName(coderName: string, unitName: string, variableId: string, caseCount: number): string {
-    // Clean names to avoid issues with special characters
-    const cleanCoderName = coderName.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const cleanUnitName = unitName.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const cleanVariableId = variableId.replace(/[^a-zA-Z0-9-_]/g, '_');
+  private generateJobName(coderName: string, unitName: string, variableId: string): string {
+    if (variableId) {
+      return `Job ${unitName} - ${variableId} (${coderName})`;
+    }
 
-    return `${cleanCoderName}_${cleanUnitName}_${cleanVariableId}_${caseCount}`;
+    return `Job ${unitName} (${coderName})`;
   }
 
   private getBundleItemKey(bundle: Pick<VariableBundle, 'id'>): string {
@@ -461,6 +487,10 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   getJobCaseCount(job: JobPreview): number {
+    if (job.caseCount !== undefined) {
+      return job.caseCount;
+    }
+
     if (this.data.creationResults?.jobs) {
       const resultJob = this.data.creationResults.jobs.find(j => {
         if (job.variable) {
@@ -496,13 +526,13 @@ export class CodingJobBulkCreationDialogComponent {
   }
 
   getDoubleCodingGridTemplate(): string {
-    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
-    return `200px 80px 80px 80px ${coderColumns}`.trim();
+    const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
+    return `minmax(180px, 1.6fr) minmax(88px, 1fr) minmax(88px, 1fr) minmax(88px, 1fr) ${coderColumns}`.trim();
   }
 
   getDistributionGridTemplate(): string {
-    const coderColumns = '80px '.repeat(this.data.selectedCoders.length);
-    return `200px ${coderColumns}60px`.trim();
+    const coderColumns = 'minmax(88px, 1fr) '.repeat(this.data.selectedCoders.length);
+    return `minmax(180px, 1.6fr) ${coderColumns}minmax(70px, .8fr)`.trim();
   }
 
   getVariableDisplayNameFromKey(variableKey: string): string {

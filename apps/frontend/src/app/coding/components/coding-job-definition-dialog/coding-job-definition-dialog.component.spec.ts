@@ -417,6 +417,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
       createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
 
       component.selectedCoders.select(mockCoders[1]); // Change coder
+      component.selectedVariables.select(mockVariables[0]);
 
       (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
 
@@ -430,6 +431,34 @@ describe('CodingJobDefinitionDialogComponent', () => {
       );
       expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(202, 2);
       expect(mockDialogRef.close).toHaveBeenCalled();
+    }));
+
+    it('should allow editing a job when its assigned variables are not in the current incomplete list', fakeAsync(() => {
+      (mockCodingJobBackendService.getCodingIncompleteVariables as jest.Mock).mockReturnValue(of([]));
+      (mockCoderService.getCodersByJobId as jest.Mock).mockReturnValue(of([mockCoders[0]]));
+      const existingJob: Partial<CodingJob> = {
+        id: 303,
+        name: 'Existing Job',
+        assignedCoders: [1],
+        assignedVariables: [{ unitName: 'Finished Unit', variableId: 'Finished Var' }]
+      };
+      createComponent({ mode: 'job', isEdit: true, codingJob: existingJob as CodingJob });
+
+      (mockCodingJobBackendService.updateCodingJob as jest.Mock).mockReturnValue(of(existingJob));
+
+      component.onSubmit();
+      tick();
+
+      expect(mockCodingJobBackendService.updateCodingJob).toHaveBeenCalledWith(
+        1,
+        303,
+        expect.objectContaining({ assignedCoders: [1] })
+      );
+      expect(mockSnackBar.open).not.toHaveBeenCalledWith(
+        'coding-job-definition-dialog.validation.variable-or-bundle-required',
+        'common.close',
+        expect.anything()
+      );
     }));
 
     it('should update definition when in definition mode and editing', fakeAsync(() => {
@@ -575,6 +604,81 @@ describe('CodingJobDefinitionDialogComponent', () => {
         expect.objectContaining({ id: 1, capacityPercent: 300 })
       ]);
       expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ bulkJobCreation: true }));
+    });
+
+    it('should open bulk creation dialog when one variable has multiple coders selected', async () => {
+      createComponent({ mode: 'job', isEdit: false });
+
+      component.selectedCoders.select(mockCoders[0], mockCoders[1]);
+      component.selectedVariables.select(mockVariables[0]);
+
+      const dialogRefMock = {
+        afterClosed: () => of({
+          confirmed: true,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        })
+      };
+      (mockMatDialog.open as jest.Mock).mockReturnValue(dialogRefMock);
+      (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({
+        success: true,
+        doubleCodingInfo: {},
+        distributionByCoderId: {},
+        jobs: []
+      }));
+
+      await component.onSubmit();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      expect(mockCodingJobBackendService.createCodingJob).not.toHaveBeenCalled();
+      const createCall = (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mock.calls[0];
+      expect(createCall[0]).toBe(1);
+      expect(createCall[1]).toEqual([mockVariables[0]]);
+      expect(createCall[2]).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 1 }),
+        expect.objectContaining({ id: 2 })
+      ]));
+      expect(createCall[5]).toEqual([]);
+    });
+
+    it('should open bulk creation dialog when a bundle has multiple coders selected', async () => {
+      createComponent({ mode: 'job', isEdit: false });
+
+      const bundle = component.variableBundles.find(b => b.name === 'Bundle 1');
+      expect(bundle).toBeDefined();
+
+      component.selectedCoders.select(mockCoders[0], mockCoders[1]);
+      component.selectedVariableBundles.select(bundle!);
+
+      const dialogRefMock = {
+        afterClosed: () => of({
+          confirmed: true,
+          showScore: false,
+          allowComments: true,
+          suppressGeneralInstructions: false
+        })
+      };
+      (mockMatDialog.open as jest.Mock).mockReturnValue(dialogRefMock);
+      (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mockReturnValue(of({
+        success: true,
+        doubleCodingInfo: {},
+        distributionByCoderId: {},
+        jobs: []
+      }));
+
+      await component.onSubmit();
+
+      expect(mockMatDialog.open).toHaveBeenCalled();
+      expect(mockCodingJobBackendService.createCodingJob).not.toHaveBeenCalled();
+      const createCall = (mockDistributedCodingService.createDistributedCodingJobs as jest.Mock).mock.calls[0];
+      expect(createCall[0]).toBe(1);
+      expect(createCall[1]).toEqual([]);
+      expect(createCall[2]).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 1 }),
+        expect.objectContaining({ id: 2 })
+      ]));
+      expect(createCall[5]).toEqual([bundle]);
     });
   });
 

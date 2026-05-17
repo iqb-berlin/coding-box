@@ -101,4 +101,20 @@ describe('DistributedCodingService', () => {
     expect(req.request.body).not.toHaveProperty('jobDefinitionId');
     req.flush(mockRes);
   });
+
+  it('should propagate backend error messages for distribution calculation', done => {
+    service.calculateDistribution(1, [], []).subscribe({
+      next: () => done(new Error('Expected request to fail')),
+      error: error => {
+        expect(error.message).toBe('Double coding requires at least 2 selected coders.');
+        done();
+      }
+    });
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/calculate-distribution`);
+    req.flush(
+      { message: 'Double coding requires at least 2 selected coders.' },
+      { status: 400, statusText: 'Bad Request' }
+    );
+  });
 });
