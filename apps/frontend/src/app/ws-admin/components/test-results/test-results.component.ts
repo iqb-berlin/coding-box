@@ -133,10 +133,14 @@ import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
+  getCodingFreshnessManualReviewWarnings,
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
-  getCodingFreshnessVersionLabel
+  getCodingFreshnessVersionLabel,
+  hasOnlyManualCodingFreshnessWarnings
 } from '../../../shared/utils/coding-freshness-text.util';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
@@ -1302,6 +1306,18 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return this.codingFreshnessWarnings.length > 0;
   }
 
+  get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
+  }
+
+  get hasOnlyManualCodingFreshnessWarnings(): boolean {
+    return hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings);
+  }
+
   get codingFreshnessAffectedUnitVersions(): number {
     return getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings);
   }
@@ -1315,7 +1331,30 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessExplanationText(): string {
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+      this.codingFreshnessWarnings
+    );
+    if (guidanceText) {
+      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+    }
+
     return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  get codingFreshnessBannerTitle(): string {
+    return this.hasOnlyManualCodingFreshnessWarnings ?
+      'Manuelle Kodierung prüfen' :
+      'Kodierung nicht mehr vollständig aktuell';
+  }
+
+  get codingFreshnessActionLabel(): string {
+    return this.hasOnlyManualCodingFreshnessWarnings ?
+      'Manuelle Kodierung öffnen' :
+      'Kodierung öffnen';
+  }
+
+  get codingFreshnessActionIcon(): string {
+    return this.hasOnlyManualCodingFreshnessWarnings ? 'keyboard' : 'rule';
   }
 
   getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
@@ -1330,12 +1369,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     return getCodingFreshnessChipLabel(item);
   }
 
-  openCodingManagement(): void {
+  openCodingFreshnessTarget(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       return;
     }
-    this.router.navigate([`/workspace-admin/${workspaceId}/coding/management`]);
+
+    const target = this.hasOnlyManualCodingFreshnessWarnings ?
+      'manual' :
+      'management';
+    this.router.navigate([`/workspace-admin/${workspaceId}/coding/${target}`]);
   }
 
   onFlatTableResponseDeleted(): void {

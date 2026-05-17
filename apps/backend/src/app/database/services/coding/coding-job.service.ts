@@ -1,5 +1,5 @@
 import {
-  BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException
+  BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException, Optional
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -42,6 +42,7 @@ import {
   JobDefinitionRefreshPreviewDto
 } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import { CodingFreshnessService } from './coding-freshness.service';
 
 function isSafeKey(key: string): boolean {
   return key !== '__proto__' && key !== 'constructor' && key !== 'prototype';
@@ -302,7 +303,9 @@ export class CodingJobService {
     private cacheService: CacheService,
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
-    private usersService: UsersService
+    private usersService: UsersService,
+    @Optional()
+    private codingFreshnessService?: CodingFreshnessService
   ) { }
 
   async assertUserCanAccessCodingJob(
@@ -832,6 +835,12 @@ export class CodingJobService {
         openUnits?: number;
       })[]; total: number; totalOpenUnits?: number; page: number; limit?: number
     }> {
+    await this.codingFreshnessService?.reconcileAppliedManualCodingJobs(
+      workspaceId,
+      'RESET',
+      'current'
+    );
+
     const validPage = page > 0 ? page : 1;
     const shouldPaginate = limit !== undefined && limit > 0;
     const skip = shouldPaginate ? (validPage - 1) * limit : undefined;

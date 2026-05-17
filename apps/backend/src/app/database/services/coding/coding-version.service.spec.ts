@@ -34,7 +34,8 @@ describe('CodingVersionService', () => {
   const mockCodingFreshnessService = {
     markVersionsPendingAfterReset: jest.fn().mockResolvedValue(undefined),
     markAppliedCodingJobsResultsClearedForUnitIds: jest.fn().mockResolvedValue(undefined),
-    markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined)
+    markAppliedCodingJobsResultsClearedForResponseIds: jest.fn().mockResolvedValue(undefined),
+    reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
   };
 
   beforeAll(() => {
@@ -81,6 +82,7 @@ describe('CodingVersionService', () => {
     mockCodingFreshnessService.markVersionsPendingAfterReset.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds.mockClear();
     mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds.mockClear();
+    mockCodingFreshnessService.reconcileAppliedManualCodingJobs.mockClear();
   });
 
   it('should be defined', () => {
@@ -275,6 +277,11 @@ describe('CodingVersionService', () => {
 
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
         .toHaveBeenCalledWith(1, [1], 'RESET', 'current');
+      expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
+        .toHaveBeenCalledWith(1, 'RESET', 'current', {
+          unitNames: undefined,
+          variableIds: undefined
+        });
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
         .not.toHaveBeenCalled();
     });
@@ -309,6 +316,11 @@ describe('CodingVersionService', () => {
 
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
         .toHaveBeenCalledWith(1, [1], 'RESET', 'stale_source');
+      expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
+        .toHaveBeenCalledWith(1, 'RESET', 'stale_source', {
+          unitNames: undefined,
+          variableIds: undefined
+        });
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
         .not.toHaveBeenCalled();
     });
@@ -336,6 +348,8 @@ describe('CodingVersionService', () => {
       await service.resetCodingVersion(workspaceId, version);
 
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
+        .not.toHaveBeenCalled();
+      expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
         .not.toHaveBeenCalled();
     });
 
@@ -373,7 +387,31 @@ describe('CodingVersionService', () => {
 
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
         .toHaveBeenCalledWith(1, [101], 'RESET', 'current');
+      expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
+        .toHaveBeenCalledWith(1, 'RESET', 'current', {
+          unitNames: undefined,
+          variableIds: ['VAR_A']
+        });
       expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForUnitIds)
+        .not.toHaveBeenCalled();
+    });
+
+    it('should reconcile already-inconsistent applied jobs even when reset finds no response targets', async () => {
+      const workspaceId = 1;
+      const version = 'v2';
+      const unitFilters = ['UNIT_A'];
+
+      mockQueryBuilder.getCount.mockResolvedValue(0);
+      mockQueryBuilder.getMany.mockResolvedValueOnce([]);
+
+      await service.resetCodingVersion(workspaceId, version, unitFilters);
+
+      expect(mockCodingFreshnessService.reconcileAppliedManualCodingJobs)
+        .toHaveBeenCalledWith(1, 'RESET', 'current', {
+          unitNames: ['UNIT_A'],
+          variableIds: undefined
+        });
+      expect(mockCodingFreshnessService.markAppliedCodingJobsResultsClearedForResponseIds)
         .not.toHaveBeenCalled();
     });
 

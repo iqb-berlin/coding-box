@@ -80,6 +80,12 @@ type MarkManualCodingCurrentOptions = {
   manager?: EntityManager;
 };
 
+type ReconcileAppliedManualCodingJobsOptions = {
+  unitNames?: string[];
+  variableIds?: string[];
+  manager?: EntityManager;
+};
+
 @Injectable()
 export class CodingFreshnessService {
   private readonly logger = new Logger(CodingFreshnessService.name);
@@ -744,6 +750,105 @@ export class CodingFreshnessService {
     );
   }
 
+  async reconcileAppliedManualCodingJobs(
+    workspaceId: number,
+    reason: CodingFreshnessReason,
+    status: CodingJobFreshnessStatus,
+    options: ReconcileAppliedManualCodingJobsOptions = {}
+  ): Promise<number> {
+    const queryRunner = options.manager ?? this.connection;
+    const params: unknown[] = [workspaceId, status, reason];
+    const scopeConditions: string[] = [];
+
+    const unitNames = this.uniqueStrings(options.unitNames || []);
+    if (unitNames.length > 0) {
+      params.push(unitNames);
+      scopeConditions.push(`AND cju.unit_name = ANY($${params.length}::text[])`);
+    }
+
+    const variableIds = this.uniqueStrings(options.variableIds || []);
+    if (variableIds.length > 0) {
+      params.push(variableIds);
+      scopeConditions.push(`AND cju.variable_id = ANY($${params.length}::text[])`);
+    }
+
+    const missingManualResultCondition = `
+      resp.id IS NULL OR (
+        resp.status_v2 IS NULL
+        AND resp.code_v2 IS NULL
+        AND resp.score_v2 IS NULL
+      )
+    `;
+
+    const rows = await queryRunner.query(
+      `
+        WITH affected_jobs AS (
+          SELECT
+            cju.coding_job_id,
+            COUNT(DISTINCT CONCAT_WS('|', cju.person_login, cju.booklet_name, cju.unit_name))
+              FILTER (WHERE ${missingManualResultCondition}) AS affected_units,
+            COUNT(DISTINCT cju.response_id)
+              FILTER (WHERE ${missingManualResultCondition}) AS affected_responses
+          FROM coding_job_unit cju
+          INNER JOIN coding_job cj ON cj.id = cju.coding_job_id
+          LEFT JOIN response resp ON resp.id = cju.response_id
+          WHERE cj.workspace_id = $1
+            AND COALESCE(cju.workspace_id, cj.workspace_id) = $1
+            AND cj.training_id IS NULL
+            AND cj.status = 'results_applied'
+            ${scopeConditions.join('\n            ')}
+          GROUP BY cju.coding_job_id
+          HAVING COUNT(*) FILTER (WHERE ${missingManualResultCondition}) > 0
+        )
+        UPDATE coding_job cj
+        SET status = 'completed',
+            freshness_status = CASE
+              WHEN $2 = 'current' AND COALESCE(cj.freshness_status, 'current') = 'stale_source'
+                THEN 'stale_source'
+              ELSE $2
+            END,
+            freshness_reason = CASE
+              WHEN $2 = 'current' AND COALESCE(cj.freshness_status, 'current') = 'stale_source'
+                THEN cj.freshness_reason
+              WHEN $2 = 'current'
+                THEN NULL
+              ELSE $3
+            END,
+            freshness_updated_at = now(),
+            freshness_affected_units = CASE
+              WHEN $2 = 'current' AND COALESCE(cj.freshness_status, 'current') <> 'stale_source'
+                THEN 0
+              ELSE GREATEST(
+                COALESCE(cj.freshness_affected_units, 0),
+                affected_jobs.affected_units::int
+              )
+            END,
+            freshness_affected_responses = CASE
+              WHEN $2 = 'current' AND COALESCE(cj.freshness_status, 'current') <> 'stale_source'
+                THEN 0
+              ELSE GREATEST(
+                COALESCE(cj.freshness_affected_responses, 0),
+                affected_jobs.affected_responses::int
+              )
+            END,
+            updated_at = now()
+        FROM affected_jobs
+        WHERE cj.id = affected_jobs.coding_job_id
+        RETURNING cj.id
+      `,
+      params
+    );
+
+    const reconciledCount = Array.isArray(rows) ? rows.length : 0;
+    if (reconciledCount > 0) {
+      this.logger.log(
+        `Reconciled ${reconciledCount} applied manual coding jobs in workspace ${workspaceId}`
+      );
+    }
+
+    return reconciledCount;
+  }
+
   private async markCodingJobsCurrent(
     workspaceId: number,
     codingJobIds: number[],
@@ -840,6 +945,12 @@ export class CodingFreshnessService {
       `,
       [workspaceId, ids, status, reason]
     );
+  }
+
+  private uniqueStrings(values: string[]): string[] {
+    return Array.from(new Set(values
+      .map(value => value?.trim())
+      .filter((value): value is string => Boolean(value))));
   }
 
   private async markCodingJobsStaleForAddedUnitIds(

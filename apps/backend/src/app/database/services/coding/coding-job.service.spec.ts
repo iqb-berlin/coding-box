@@ -68,6 +68,7 @@ describe('CodingJobService', () => {
   let settingRepository: ReturnType<typeof createRepo>;
   let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock };
+  let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
 
   const mockCodingScheme = (
     {
@@ -162,6 +163,9 @@ describe('CodingJobService', () => {
       getUserIsAdmin: jest.fn().mockResolvedValue(false),
       getUserAccessLevel: jest.fn().mockResolvedValue(1)
     };
+    codingFreshnessService = {
+      reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
+    };
 
     service = new CodingJobService(
       codingJobRepository as never,
@@ -177,7 +181,8 @@ describe('CodingJobService', () => {
       cacheService as never,
       workspaceFilesService as never,
       workspaceExclusionService as never,
-      usersService as never
+      usersService as never,
+      codingFreshnessService as never
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
@@ -246,6 +251,8 @@ describe('CodingJobService', () => {
 
     const result = await service.getCodingJobs(3, 0, 25);
 
+    expect(codingFreshnessService.reconcileAppliedManualCodingJobs)
+      .toHaveBeenCalledWith(3, 'RESET', 'current');
     expect(result.page).toBe(1);
     expect(result.total).toBe(1);
     expect(result.totalOpenUnits).toBe(9);

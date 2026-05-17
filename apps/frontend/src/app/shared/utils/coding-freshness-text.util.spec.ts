@@ -1,6 +1,9 @@
 import {
   getCodingFreshnessAutoCodingButtonLabel,
+  getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
+  getCodingFreshnessManualReviewWarnings,
   getCodingFreshnessSummaryText
 } from './coding-freshness-text.util';
 
@@ -95,6 +98,85 @@ describe('coding freshness text utils', () => {
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
       '2 Aufgaben-Ergebnisse mit Auto-Coding 1 neu kodieren'
+    );
+  });
+
+  it('separates auto-coding warnings from manual review warnings', () => {
+    const items = [
+      {
+        version: 'v1' as const,
+        state: 'PENDING' as const,
+        unitCount: 1,
+        affectedResponseCount: 2
+      },
+      {
+        version: 'v2' as const,
+        state: 'MANUAL_REVIEW_REQUIRED' as const,
+        unitCount: 1,
+        affectedResponseCount: 2
+      }
+    ];
+
+    expect(getCodingFreshnessAutoCodingWarnings(items)).toEqual([items[0]]);
+    expect(getCodingFreshnessManualReviewWarnings(items)).toEqual([items[1]]);
+  });
+
+  it('ignores current and empty manual coding freshness rows', () => {
+    const items = [
+      {
+        version: 'v2' as const,
+        state: 'CURRENT' as const,
+        unitCount: 1,
+        affectedResponseCount: 2
+      },
+      {
+        version: 'v2' as const,
+        state: 'MANUAL_REVIEW_REQUIRED' as const,
+        unitCount: 0,
+        affectedResponseCount: 2
+      },
+      {
+        version: 'v2' as const,
+        state: 'MANUAL_REVIEW_REQUIRED' as const,
+        unitCount: 1,
+        affectedResponseCount: 2
+      }
+    ];
+
+    expect(getCodingFreshnessManualReviewWarnings(items)).toEqual([items[2]]);
+  });
+
+  it('gives direct guidance for manual review only', () => {
+    expect(getCodingFreshnessManualReviewGuidanceText([
+      {
+        version: 'v2',
+        state: 'MANUAL_REVIEW_REQUIRED',
+        unitCount: 1,
+        affectedResponseCount: 10
+      }
+    ])).toBe(
+      'Öffnen Sie die manuelle Prüfung und wenden Sie abgeschlossene Job-Ergebnisse erneut an ' +
+      'oder kodieren Sie offene Fälle neu.'
+    );
+  });
+
+  it('keeps the workflow order when auto-coding and manual review are both open', () => {
+    expect(getCodingFreshnessManualReviewGuidanceText([
+      {
+        version: 'v1',
+        state: 'STALE',
+        unitCount: 1,
+        affectedResponseCount: 4
+      },
+      {
+        version: 'v2',
+        state: 'MANUAL_REVIEW_REQUIRED',
+        unitCount: 1,
+        affectedResponseCount: 4
+      }
+    ])).toBe(
+      'Aktualisieren Sie zuerst die offenen Auto-Coding-Schritte. ' +
+      'Prüfen Sie danach die manuelle Kodierung.'
     );
   });
 });

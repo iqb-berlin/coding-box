@@ -78,7 +78,7 @@
       <mat-icon>warning</mat-icon>
     </div>
     <div class="coding-freshness-copy">
-      <div class="coding-freshness-title">Kodierung nicht mehr vollständig aktuell</div>
+      <div class="coding-freshness-title">{{ codingFreshnessBannerTitle }}</div>
       <div class="coding-freshness-text">
         <div>{{ codingFreshnessSummaryText }}</div>
         <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
@@ -91,9 +91,9 @@
         }
       </div>
     </div>
-    <button mat-stroked-button type="button" (click)="openCodingManagement()">
-      <mat-icon>rule</mat-icon>
-      Kodierung öffnen
+    <button mat-stroked-button type="button" (click)="openCodingFreshnessTarget()">
+      <mat-icon>{{ codingFreshnessActionIcon }}</mat-icon>
+      {{ codingFreshnessActionLabel }}
     </button>
   </div>
   }

@@ -47,17 +47,16 @@
       <mat-icon>{{ hasCodingFreshnessAttention ? 'warning' : 'check_circle' }}</mat-icon>
       <div class="coding-freshness-copy">
         <div class="coding-freshness-title">
-          @if (hasImportedResultsWithoutCoding) {
-          Kodierung noch nicht gestartet
-          } @else {
-          {{ hasCodingFreshnessWarnings ? 'Kodierstand nicht vollständig aktuell' : 'Kodierstand aktuell' }}
-          }
+          {{ codingFreshnessPanelTitle }}
         </div>
         <div class="coding-freshness-text">
           @if (isLoadingCodingFreshness) {
           Zustand wird geprüft...
           } @else if (hasCodingFreshnessWarnings) {
           <div>{{ codingFreshnessSummaryText }}</div>
+          @if (manualCodingFreshnessGuidanceText) {
+          <div>{{ manualCodingFreshnessGuidanceText }}</div>
+          }
           <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
           @if (codingFreshnessGroupPreview) {
           <div>Betroffene Gruppen: {{ codingFreshnessGroupPreview }}.</div>

@@ -44,6 +44,46 @@ export function getCodingFreshnessAffectedResponseCount(items: CodingFreshnessSu
   return items.reduce((sum, item) => sum + normalizeCount(item.affectedResponseCount), 0);
 }
 
+export function getCodingFreshnessAutoCodingWarnings(
+  items: CodingFreshnessSummaryItemDto[]
+): CodingFreshnessSummaryItemDto[] {
+  return items.filter(item => (
+    (item.version === 'v1' || item.version === 'v3') &&
+    (item.state === 'PENDING' || item.state === 'STALE')
+  ));
+}
+
+export function getCodingFreshnessManualReviewWarnings(
+  items: CodingFreshnessSummaryItemDto[]
+): CodingFreshnessSummaryItemDto[] {
+  return items.filter(item => (
+    item.state !== 'CURRENT' &&
+    normalizeCount(item.unitCount) > 0 &&
+    (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED')
+  ));
+}
+
+export function hasOnlyManualCodingFreshnessWarnings(
+  items: CodingFreshnessSummaryItemDto[]
+): boolean {
+  return getCodingFreshnessManualReviewWarnings(items).length > 0 &&
+    getCodingFreshnessAutoCodingWarnings(items).length === 0;
+}
+
+export function getCodingFreshnessManualReviewGuidanceText(
+  items: CodingFreshnessSummaryItemDto[]
+): string {
+  if (getCodingFreshnessManualReviewWarnings(items).length === 0) {
+    return '';
+  }
+
+  if (getCodingFreshnessAutoCodingWarnings(items).length > 0) {
+    return 'Aktualisieren Sie zuerst die offenen Auto-Coding-Schritte. Prüfen Sie danach die manuelle Kodierung.';
+  }
+
+  return 'Öffnen Sie die manuelle Prüfung und wenden Sie abgeschlossene Job-Ergebnisse erneut an oder kodieren Sie offene Fälle neu.';
+}
+
 export function getCodingFreshnessSummaryText(items: CodingFreshnessSummaryItemDto[]): string {
   const warnings = items.filter(item => item.state !== 'CURRENT' && normalizeCount(item.unitCount) > 0);
   if (warnings.length === 0) {
