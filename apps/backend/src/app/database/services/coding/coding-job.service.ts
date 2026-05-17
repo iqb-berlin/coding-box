@@ -5,6 +5,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository, In, Not, Connection, EntityManager, SelectQueryBuilder
 } from 'typeorm';
+import * as cheerio from 'cheerio';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { SaveCodingNotesDto } from '../../../admin/coding-job/dto/save-coding-notes.dto';
@@ -61,6 +62,7 @@ interface CodingSchemeCode {
 
 interface CodingSchemeVariableCoding {
   id: string;
+  alias?: string;
   codes?: CodingSchemeCode[];
 }
 
@@ -1512,19 +1514,28 @@ export class CodingJobService {
       throw new NotFoundException('Coding job unit not found for progress entry');
     }
 
+    const selectedCode = await this.validateProgressSelectedCode(progress, codingJobUnit, codingJob.workspace_id);
+
     if (progress.isOpen === true) {
       codingJobUnit.is_open = true;
       codingJobUnit.code = null;
       codingJobUnit.score = null;
       codingJobUnit.coding_issue_option = null;
-    } else {
-      codingJobUnit.code = progress.selectedCode.id;
+    } else if (selectedCode === null) {
+      codingJobUnit.code = null;
+      codingJobUnit.score = null;
+      codingJobUnit.coding_issue_option = null;
       codingJobUnit.is_open = false;
-      const score = progress.selectedCode.score;
-      if (score !== undefined) {
+    } else {
+      codingJobUnit.code = selectedCode.id;
+      codingJobUnit.is_open = false;
+      const score = selectedCode.score;
+      if (score !== undefined && score !== null) {
         codingJobUnit.score = score;
+      } else {
+        codingJobUnit.score = null;
       }
-      codingJobUnit.coding_issue_option = (progress.selectedCode).codingIssueOption || null;
+      codingJobUnit.coding_issue_option = selectedCode.codingIssueOption ?? null;
     }
 
     if (progress.notes !== undefined) {
@@ -1536,6 +1547,232 @@ export class CodingJobService {
     await this.checkAndUpdateCodingJobCompletion(codingJobId);
 
     return codingJob;
+  }
+
+  private async validateProgressSelectedCode(
+    progress: SaveCodingProgressDto,
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number
+  ): Promise<NonNullable<SaveCodingProgressDto['selectedCode']> | null> {
+    if (progress.isOpen === true) {
+      return null;
+    }
+
+    const selectedCode = progress.selectedCode;
+    if (selectedCode === null) {
+      return null;
+    }
+
+    if (!selectedCode || typeof selectedCode !== 'object') {
+      throw new BadRequestException('selectedCode must be an object, null, or omitted only when isOpen is true');
+    }
+
+    if (!Number.isInteger(selectedCode.id)) {
+      throw new BadRequestException('selectedCode.id must be an integer');
+    }
+
+    const allowedIssueCodes = new Set([-1, -2, -3, -4]);
+    if (selectedCode.id < 0 && !allowedIssueCodes.has(selectedCode.id)) {
+      throw new BadRequestException(`Unsupported coding issue code: ${selectedCode.id}`);
+    }
+
+    if (
+      selectedCode.codingIssueOption !== undefined &&
+      selectedCode.codingIssueOption !== null &&
+      !allowedIssueCodes.has(selectedCode.codingIssueOption)
+    ) {
+      throw new BadRequestException(`Unsupported coding issue option: ${selectedCode.codingIssueOption}`);
+    }
+
+    if (selectedCode.id < 0) {
+      selectedCode.score = null;
+      return selectedCode;
+    }
+
+    const schemeCode = await this.getCodingSchemeCodeForUnit(codingJobUnit, workspaceId, selectedCode.id);
+    selectedCode.score = schemeCode.score ?? null;
+
+    if (
+      selectedCode.score !== undefined &&
+      selectedCode.score !== null &&
+      !Number.isFinite(selectedCode.score)
+    ) {
+      throw new BadRequestException('selectedCode.score must be a finite number');
+    }
+
+    return selectedCode;
+  }
+
+  private async getCodingSchemeCodeForUnit(
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number,
+    codeId: number
+  ): Promise<CodingSchemeCode> {
+    const codingScheme = await this.getRequiredCodingSchemeForUnit(codingJobUnit, workspaceId);
+    const variableCoding = this.findVariableCoding(codingScheme, codingJobUnit.variable_id);
+    if (!variableCoding?.codes) {
+      throw new BadRequestException(`Coding scheme variable not found: ${codingJobUnit.variable_id}`);
+    }
+
+    const schemeCode = variableCoding.codes.find(code => Number(code.id) === codeId);
+    if (!schemeCode) {
+      throw new BadRequestException(`Unsupported code for variable ${codingJobUnit.variable_id}: ${codeId}`);
+    }
+
+    return schemeCode;
+  }
+
+  private findVariableCoding(
+    codingScheme: CodingScheme,
+    variableId: string
+  ): CodingSchemeVariableCoding | undefined {
+    return codingScheme.variableCodings?.find(vc => vc.id === variableId || vc.alias === variableId);
+  }
+
+  private async getCodingSchemeForUnit(
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number
+  ): Promise<CodingScheme | undefined> {
+    const codingSchemesByUnit = await this.getCodingSchemesForUnits([codingJobUnit], workspaceId);
+    return codingSchemesByUnit.get(codingJobUnit);
+  }
+
+  private async getCodingSchemesForUnits(
+    codingJobUnits: CodingJobUnit[],
+    workspaceId: number
+  ): Promise<Map<CodingJobUnit, CodingScheme>> {
+    const codingSchemesByUnit = new Map<CodingJobUnit, CodingScheme>();
+    const unitFileCandidatesByUnit = new Map<CodingJobUnit, string[]>();
+    const unitFileIds = new Set<string>();
+
+    codingJobUnits.forEach(unit => {
+      const candidates = this.getUnitFileIdCandidates(unit);
+      if (candidates.length > 0) {
+        unitFileCandidatesByUnit.set(unit, candidates);
+        candidates.forEach(candidate => unitFileIds.add(candidate));
+      }
+    });
+
+    if (unitFileIds.size === 0) {
+      return codingSchemesByUnit;
+    }
+
+    const unitFiles = await this.fileUploadRepository.find({
+      where: {
+        workspace_id: workspaceId,
+        file_id: In([...unitFileIds])
+      },
+      select: ['file_id', 'data']
+    });
+    const unitFileById = new Map(unitFiles.map(file => [file.file_id, file]));
+    const codingSchemeRefsByUnit = new Map<CodingJobUnit, string[]>();
+    const codingSchemeRefs = new Set<string>();
+
+    codingJobUnits.forEach(unit => {
+      const unitFile = this.findFileByCandidates(unitFileById, unitFileCandidatesByUnit.get(unit) ?? []);
+      if (!unitFile) {
+        return;
+      }
+
+      const codingSchemeRef = this.extractCodingSchemeRef(unitFile);
+      if (!codingSchemeRef) {
+        return;
+      }
+
+      const refs = this.getCodingSchemeFileIdCandidates(codingSchemeRef);
+      codingSchemeRefsByUnit.set(unit, refs);
+      refs.forEach(ref => codingSchemeRefs.add(ref));
+    });
+
+    if (codingSchemeRefs.size === 0) {
+      return codingSchemesByUnit;
+    }
+
+    const codingSchemes = await this.getCodingSchemes([...codingSchemeRefs], workspaceId);
+    codingSchemeRefsByUnit.forEach((refs, unit) => {
+      const scheme = refs
+        .map(ref => codingSchemes.get(ref))
+        .find((candidate): candidate is CodingScheme => candidate !== undefined);
+      if (scheme) {
+        codingSchemesByUnit.set(unit, scheme);
+      }
+    });
+
+    return codingSchemesByUnit;
+  }
+
+  private async getRequiredCodingSchemeForUnit(
+    codingJobUnit: CodingJobUnit,
+    workspaceId: number
+  ): Promise<CodingScheme> {
+    const codingScheme = await this.getCodingSchemeForUnit(codingJobUnit, workspaceId);
+    if (!codingScheme) {
+      throw new BadRequestException('Coding scheme not found for coding job unit');
+    }
+
+    return codingScheme;
+  }
+
+  private getUnitFileIdCandidates(codingJobUnit: CodingJobUnit): string[] {
+    return this.getFileIdCandidates(codingJobUnit.unit_alias, codingJobUnit.unit_name, '.XML');
+  }
+
+  private getCodingSchemeFileIdCandidates(codingSchemeRef: string): string[] {
+    return this.getFileIdCandidates(codingSchemeRef, null, '.VOCS');
+  }
+
+  private getFileIdCandidates(
+    primaryRef: string | null | undefined,
+    fallbackRef: string | null | undefined,
+    extension: '.XML' | '.VOCS'
+  ): string[] {
+    const candidates = new Set<string>();
+
+    [primaryRef, fallbackRef].forEach(ref => {
+      const trimmedRef = ref?.trim();
+      if (!trimmedRef) {
+        return;
+      }
+
+      const upperRef = trimmedRef.toUpperCase();
+      const withoutExtension = upperRef.endsWith(extension) ?
+        upperRef.slice(0, -extension.length) :
+        upperRef;
+      const basename = withoutExtension.split('/').pop();
+
+      candidates.add(trimmedRef);
+      candidates.add(upperRef);
+      candidates.add(withoutExtension);
+      candidates.add(`${withoutExtension}${extension}`);
+
+      if (basename) {
+        candidates.add(basename);
+        candidates.add(`${basename}${extension}`);
+      }
+    });
+
+    return [...candidates];
+  }
+
+  private findFileByCandidates(
+    fileById: Map<string, FileUpload>,
+    candidates: string[]
+  ): FileUpload | undefined {
+    return candidates
+      .map(candidate => fileById.get(candidate))
+      .find((file): file is FileUpload => file !== undefined);
+  }
+
+  private extractCodingSchemeRef(unitFile: FileUpload): string | null {
+    try {
+      const $ = cheerio.load(String(unitFile.data ?? ''));
+      return $('codingSchemeRef').first().text().trim() ||
+        $('CodingSchemeRef').first().text().trim() ||
+        null;
+    } catch (error) {
+      this.logger.warn(`Could not parse unit file ${unitFile.file_id}: ${error.message}`);
+      return null;
+    }
   }
 
   async saveCodingNotes(
@@ -1608,8 +1845,8 @@ export class CodingJobService {
       return {};
     }
 
-    const unitAliases = [...new Set(codingJobUnits.map(unit => unit.unit_alias).filter(alias => alias !== null))];
-    const codingSchemes = await this.getCodingSchemes(unitAliases, codingJob.workspace_id);
+    const codedUnits = codingJobUnits.filter(unit => !unit.is_open && unit.code !== null && unit.code >= 0);
+    const codingSchemesByUnit = await this.getCodingSchemesForUnits(codedUnits, codingJob.workspace_id);
 
     const progressMap: Record<string, SaveCodingProgressDto['selectedCode']> = {};
 
@@ -1627,14 +1864,14 @@ export class CodingJobService {
           label: 'OPEN'
         };
       } else if (unit.code !== null) {
-        const codingScheme = unit.unit_alias ? codingSchemes.get(unit.unit_alias) : undefined;
+        const codingScheme = codingSchemesByUnit.get(unit);
         let code: string | undefined;
         let label: string | undefined;
 
         if (codingScheme) {
-          const variableCoding = codingScheme.variableCodings?.find(vc => vc.id === unit.variable_id);
+          const variableCoding = this.findVariableCoding(codingScheme, unit.variable_id);
           if (variableCoding?.codes) {
-            const codeEntry = variableCoding.codes.find(c => c.id === unit.code);
+            const codeEntry = variableCoding.codes.find(c => Number(c.id) === unit.code);
             if (codeEntry) {
               code = codeEntry.code;
               label = codeEntry.label;

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { of, throwError } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import { ReplayCodingService } from './replay-coding.service';
 import { CodingJob } from '../../coding/models/coding-job.model';
@@ -19,7 +19,8 @@ describe('ReplayCodingService', () => {
       getCodingNotes: jest.fn(),
       getCodingJob: jest.fn(),
       saveCodingProgress: jest.fn(),
-      saveCodingNotes: jest.fn()
+      saveCodingNotes: jest.fn(),
+      updateCodingJobKeepalive: jest.fn()
     } as unknown as jest.Mocked<CodingJobBackendService>;
 
     translateServiceMock = {
@@ -154,6 +155,94 @@ describe('ReplayCodingService', () => {
       await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', { id: 1, label: 'l' });
       expect(service.hasSaveError).toBe(false);
     });
+
+    it('persists clearing a selected code with null selectedCode', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+
+      await service.saveCodingProgress(1, 100, 'p1', 'u1', 'v1', null);
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: null
+        }
+      );
+    });
+  });
+
+  describe('handleCodeSelected', () => {
+    it('persists deselection before clearing local progress', async () => {
+      codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+      service.codingJobId = 100;
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      service.selectedCodes.set(key, { id: 1, label: 'l' });
+
+      await service.handleCodeSelected(
+        { variableId: 'v1', code: null, codingIssueOption: null },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+
+      expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(
+        1,
+        100,
+        {
+          testPerson: 'p1',
+          unitId: 'u1',
+          variableId: 'v1',
+          selectedCode: null
+        }
+      );
+      expect(service.selectedCodes.has(key)).toBe(false);
+    });
+
+    it('keeps the latest local selection when queued saves complete in order', async () => {
+      const subjects: Subject<CodingJob>[] = [];
+      codingJobBackendServiceMock.saveCodingProgress.mockImplementation(() => {
+        const subject = new Subject<CodingJob>();
+        subjects.push(subject);
+        return subject.asObservable();
+      });
+      service.codingJobId = 100;
+
+      const first = service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 1, label: 'one', score: 1 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+      const second = service.handleCodeSelected(
+        { variableId: 'v1', code: { id: 2, label: 'two', score: 2 } as never },
+        'p1',
+        'u1',
+        1,
+        null
+      );
+
+      await Promise.resolve();
+      expect(subjects.length).toBe(1);
+      subjects[0].next({} as CodingJob);
+      subjects[0].complete();
+      await expect(first).resolves.toBeNull();
+      await Promise.resolve();
+      expect(service.selectedCodes.size).toBe(0);
+      await Promise.resolve();
+      expect(subjects.length).toBe(2);
+
+      subjects[1].next({} as CodingJob);
+      subjects[1].complete();
+      await expect(second).resolves.toMatchObject({ id: 2 });
+
+      const key = service.generateCompositeKey('p1', 'u1', 'v1');
+      expect(service.selectedCodes.get(key)?.id).toBe(2);
+    });
   });
 
   describe('resetCodingData', () => {
@@ -189,6 +278,19 @@ describe('ReplayCodingService', () => {
       await service.pauseCodingJob(1, 100);
 
       expect(codingJobBackendServiceMock.updateCodingJob).not.toHaveBeenCalled();
+    });
+
+    it('uses keepalive status update for unload pauses', () => {
+      service.setAuthToken('replay-token');
+
+      service.pauseCodingJobOnUnload(1, 100);
+
+      expect(codingJobBackendServiceMock.updateCodingJobKeepalive).toHaveBeenCalledWith(
+        1,
+        100,
+        { status: 'paused' },
+        'replay-token'
+      );
     });
   });
 

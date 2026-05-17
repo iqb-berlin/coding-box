@@ -91,6 +91,7 @@ describe('ReplayComponent', () => {
     getCodingNotes: jest.Mock;
     getCodingJob: jest.Mock;
     saveCodingProgress: jest.Mock;
+    updateCodingJobKeepalive: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -112,7 +113,8 @@ describe('ReplayComponent', () => {
       getCodingProgress: jest.fn().mockReturnValue(of({})),
       getCodingNotes: jest.fn().mockReturnValue(of({})),
       getCodingJob: jest.fn().mockReturnValue(of({})),
-      saveCodingProgress: jest.fn().mockReturnValue(of({}))
+      saveCodingProgress: jest.fn().mockReturnValue(of({})),
+      updateCodingJobKeepalive: jest.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -209,6 +211,26 @@ describe('ReplayComponent', () => {
       score: 2,
       responseId: 99
     }, '*');
+  });
+
+  it('should handle rejected note saves in the component boundary', async () => {
+    const saveNotesSpy = jest.spyOn(component.codingService, 'saveNotes')
+      .mockRejectedValue(new Error('save failed'));
+    component.workspaceId = 5;
+    component.testPerson = 'valid@test@person';
+    component.unitId = 'unit-123';
+    component.codingService.currentVariableId = 'VAR1';
+
+    component.onNotesChanged('note');
+    await Promise.resolve();
+
+    expect(saveNotesSpy).toHaveBeenCalledWith(
+      5,
+      'valid@test@person',
+      'unit-123',
+      'VAR1',
+      'note'
+    );
   });
 
   it('should dismiss page error when null is passed', () => {
@@ -508,7 +530,7 @@ describe('ReplayComponent', () => {
     });
 
     it('should NOT pause job on unload if in review mode', () => {
-      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
       component.workspaceId = 42;
       component.codingService.codingJobId = 123;
@@ -517,11 +539,11 @@ describe('ReplayComponent', () => {
 
       component.onBeforeUnload();
 
-      expect(updateStatusSpy).not.toHaveBeenCalled();
+      expect(pauseOnUnloadSpy).not.toHaveBeenCalled();
     });
 
     it('should NOT pause completed review jobs on unload', () => {
-      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
       component.workspaceId = 42;
       component.codingService.codingJobId = 123;
@@ -531,11 +553,11 @@ describe('ReplayComponent', () => {
 
       component.onBeforeUnload();
 
-      expect(updateStatusSpy).not.toHaveBeenCalled();
+      expect(pauseOnUnloadSpy).not.toHaveBeenCalled();
     });
 
     it('should pause job on unload if NOT in review mode', () => {
-      const updateStatusSpy = jest.spyOn(component.codingService, 'updateCodingJobStatus').mockReturnValue(Promise.resolve({} as CodingJob));
+      const pauseOnUnloadSpy = jest.spyOn(component.codingService, 'pauseCodingJobOnUnload');
 
       component.workspaceId = 42;
       component.codingService.codingJobId = 123;
@@ -544,7 +566,7 @@ describe('ReplayComponent', () => {
 
       component.onBeforeUnload();
 
-      expect(updateStatusSpy).toHaveBeenCalledWith(42, 123, 'paused');
+      expect(pauseOnUnloadSpy).toHaveBeenCalledWith(42, 123);
     });
   });
 

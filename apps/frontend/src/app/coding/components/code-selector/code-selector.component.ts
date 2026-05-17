@@ -1,5 +1,6 @@
 import {
-  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SimpleChanges, ViewChild
+  Component, ElementRef, EventEmitter, HostListener, Input, OnChanges, Output, SecurityContext, SimpleChanges,
+  ViewChild
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,7 +13,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { DomSanitizer } from '@angular/platform-browser';
 import { UnitsReplay, UnitsReplayUnit } from '../../../replay/services/units-replay.service';
 import { ReplayCodingService } from '../../../replay/services/replay-coding.service';
 import {
@@ -180,8 +181,8 @@ export class CodeSelectorComponent implements OnChanges {
     }
   }
 
-  getSafeHtml(instructions: string): SafeHtml {
-    return this.sanitizer.bypassSecurityTrustHtml(instructions);
+  getSafeHtml(instructions: string): string {
+    return this.sanitizer.sanitize(SecurityContext.HTML, instructions) || '';
   }
 
   private createCodeOrCodingIssueOption(item: SelectableItem): Code | CodingIssueDto {

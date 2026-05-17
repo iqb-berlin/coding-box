@@ -64,9 +64,51 @@ describe('CodingJobService', () => {
   let jobDefinitionRepository: ReturnType<typeof createRepo>;
   let variableBundleRepository: ReturnType<typeof createRepo>;
   let responseRepository: ReturnType<typeof createRepo>;
+  let fileUploadRepository: ReturnType<typeof createRepo>;
   let settingRepository: ReturnType<typeof createRepo>;
   let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock };
+
+  const mockCodingScheme = (
+    {
+      unitFileId = 'ALIAS',
+      schemeRef = 'SCHEME',
+      fileId = schemeRef,
+      variableId = 'VAR',
+      variableAlias,
+      codeId = 7,
+      score = 2
+    }: {
+      unitFileId?: string;
+      schemeRef?: string;
+      fileId?: string;
+      variableId?: string;
+      variableAlias?: string;
+      codeId?: number;
+      score?: number | null;
+    } = {}
+  ) => {
+    fileUploadRepository.find
+      .mockResolvedValueOnce([{
+        file_id: unitFileId,
+        data: `<Unit><CodingSchemeRef>${schemeRef}</CodingSchemeRef></Unit>`
+      }])
+      .mockResolvedValueOnce([{
+        file_id: fileId,
+        data: {
+          variableCodings: [{
+            id: variableId,
+            ...(variableAlias !== undefined ? { alias: variableAlias } : {}),
+            codes: [{
+              id: codeId,
+              code: String(codeId),
+              label: `Code ${codeId}`,
+              score
+            }]
+          }]
+        }
+      }]);
+  };
 
   beforeEach(() => {
     codingJobRepository = createRepo();
@@ -77,7 +119,7 @@ describe('CodingJobService', () => {
     jobDefinitionRepository = createRepo();
     variableBundleRepository = createRepo();
     responseRepository = createRepo();
-    const fileUploadRepository = createRepo();
+    fileUploadRepository = createRepo();
     settingRepository = createRepo();
     connection = {
       transaction: jest.fn(callback => callback({
@@ -782,6 +824,7 @@ describe('CodingJobService', () => {
     const unit = {
       coding_job_id: 1,
       unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
       variable_id: 'VAR',
       person_login: 'login',
       person_code: 'code',
@@ -794,6 +837,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(job);
     codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme();
     (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
 
     await service.saveCodingProgress(1, {
@@ -833,6 +877,7 @@ describe('CodingJobService', () => {
     const unit = {
       coding_job_id: 1,
       unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
       variable_id: 'VAR',
       person_login: 'login',
       person_code: 'code',
@@ -845,6 +890,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(job);
     codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme();
     (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
 
     await service.saveCodingProgress(1, {
@@ -862,11 +908,224 @@ describe('CodingJobService', () => {
     }));
   });
 
+  it('clears saved progress when selectedCode is null', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: true,
+      code: 7,
+      score: 2,
+      coding_issue_option: -1,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: null
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      is_open: false
+    }));
+  });
+
+  it('rejects unsupported negative coding issue codes', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+
+    await expect(service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: -99 }
+    } as never)).rejects.toThrow('Unsupported coding issue code');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects unknown positive code ids for the coding scheme variable', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme({ codeId: 7, score: 2 });
+
+    await expect(service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 999 }
+    } as never)).rejects.toThrow('Unsupported code for variable VAR: 999');
+
+    expect(codingJobUnitRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('uses the coding scheme score instead of a client-provided score', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme({ codeId: 7, score: 2 });
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7, score: 999 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: 7,
+      score: 2,
+      is_open: false
+    }));
+  });
+
+  it('validates selected codes through the unit CodingSchemeRef instead of unit_alias', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      unit_alias: 'UNIT_FILE',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme({
+      unitFileId: 'UNIT_FILE',
+      schemeRef: 'SEPARATE_SCHEME',
+      fileId: 'SEPARATE_SCHEME.VOCS',
+      codeId: 7,
+      score: 3
+    });
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR',
+      selectedCode: { id: 7, score: 999 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: 7,
+      score: 3,
+      is_open: false
+    }));
+  });
+
+  it('validates selected codes through coding scheme variable aliases', async () => {
+    const job = { id: 1, workspace_id: 3 };
+    const unit = {
+      coding_job_id: 1,
+      unit_name: 'UNIT',
+      unit_alias: 'UNIT_FILE',
+      variable_id: 'VAR_ALIAS',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      code: null,
+      score: null,
+      coding_issue_option: null,
+      notes: null
+    };
+    codingJobRepository.findOne.mockResolvedValue(job);
+    codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme({
+      unitFileId: 'UNIT_FILE',
+      schemeRef: 'SEPARATE_SCHEME',
+      fileId: 'SEPARATE_SCHEME.VOCS',
+      variableId: 'SCHEME_VAR',
+      variableAlias: 'VAR_ALIAS',
+      codeId: 7,
+      score: 5
+    });
+    (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
+
+    await service.saveCodingProgress(1, {
+      testPerson: 'login@code@booklet',
+      unitId: 'UNIT',
+      variableId: 'VAR_ALIAS',
+      selectedCode: { id: 7, score: 999 }
+    } as never);
+
+    expect(codingJobUnitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      code: 7,
+      score: 5,
+      is_open: false
+    }));
+  });
+
   it('uses the group segment when saving grouped test person progress', async () => {
     const job = { id: 1, workspace_id: 3 };
     const unit = {
       coding_job_id: 1,
       unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
       variable_id: 'VAR',
       person_login: 'login',
       person_code: 'code',
@@ -880,6 +1139,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(job);
     codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme();
     (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
 
     await service.saveCodingProgress(1, {
@@ -940,6 +1200,7 @@ describe('CodingJobService', () => {
       coding_job_id: 1,
       response_id: 99,
       unit_name: 'UNIT',
+      unit_alias: 'ALIAS',
       variable_id: 'VAR',
       person_login: 'login',
       person_code: 'code',
@@ -952,6 +1213,7 @@ describe('CodingJobService', () => {
     };
     codingJobRepository.findOne.mockResolvedValue(trainingJob);
     codingJobUnitRepository.findOne.mockResolvedValue(unit);
+    mockCodingScheme();
     (service as unknown as { checkAndUpdateCodingJobCompletion: jest.Mock }).checkAndUpdateCodingJobCompletion = jest.fn();
 
     await service.saveCodingProgress(1, {
@@ -1010,9 +1272,15 @@ describe('CodingJobService', () => {
         coding_issue_option: null
       }
     ]);
-    (service as unknown as { getCodingSchemes: jest.Mock }).getCodingSchemes = jest.fn().mockResolvedValue(new Map([
-      ['ALIAS', { variableCodings: [{ id: 'VAR', codes: [{ id: 1, code: 'A', label: 'Alpha' }] }] }]
-    ]));
+    fileUploadRepository.find
+      .mockResolvedValueOnce([{
+        file_id: 'ALIAS',
+        data: '<Unit><CodingSchemeRef>SCHEME</CodingSchemeRef></Unit>'
+      }])
+      .mockResolvedValueOnce([{
+        file_id: 'SCHEME',
+        data: { variableCodings: [{ id: 'VAR', codes: [{ id: 1, code: 'A', label: 'Alpha' }] }] }
+      }]);
 
     const progress = await service.getCodingProgress(1);
 
@@ -1047,6 +1315,120 @@ describe('CodingJobService', () => {
 
     await expect(service.getCodingNotes(1)).resolves.toEqual({
       'login@code@group@booklet::booklet::UNIT::VAR': 'remember'
+    });
+  });
+
+  it('enriches saved progress through the unit CodingSchemeRef instead of unit_alias', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      {
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        unit_name: 'UNIT',
+        variable_id: 'VAR',
+        unit_alias: 'UNIT_FILE',
+        is_open: false,
+        code: 7,
+        score: 3,
+        coding_issue_option: null
+      }
+    ]);
+    fileUploadRepository.find
+      .mockResolvedValueOnce([{
+        file_id: 'UNIT_FILE',
+        data: '<Unit><CodingSchemeRef>SEPARATE_SCHEME</CodingSchemeRef></Unit>'
+      }])
+      .mockResolvedValueOnce([{
+        file_id: 'SEPARATE_SCHEME.VOCS',
+        data: { variableCodings: [{ id: 'VAR', codes: [{ id: '7', code: 'S7', label: 'Scheme 7' }] }] }
+      }]);
+
+    const progress = await service.getCodingProgress(1);
+
+    expect(progress['login@code@booklet::booklet::UNIT::VAR']).toEqual({
+      id: 7,
+      code: 'S7',
+      label: 'Scheme 7',
+      score: 3
+    });
+  });
+
+  it('enriches saved progress through coding scheme variable aliases', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      {
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        unit_name: 'UNIT',
+        variable_id: 'VAR_ALIAS',
+        unit_alias: 'UNIT_FILE',
+        is_open: false,
+        code: 7,
+        score: 5,
+        coding_issue_option: null
+      }
+    ]);
+    fileUploadRepository.find
+      .mockResolvedValueOnce([{
+        file_id: 'UNIT_FILE',
+        data: '<Unit><CodingSchemeRef>SEPARATE_SCHEME</CodingSchemeRef></Unit>'
+      }])
+      .mockResolvedValueOnce([{
+        file_id: 'SEPARATE_SCHEME.VOCS',
+        data: {
+          variableCodings: [{
+            id: 'SCHEME_VAR',
+            alias: 'VAR_ALIAS',
+            codes: [{ id: '7', code: 'S7', label: 'Scheme Alias 7' }]
+          }]
+        }
+      }]);
+
+    const progress = await service.getCodingProgress(1);
+
+    expect(progress['login@code@booklet::booklet::UNIT::VAR_ALIAS']).toEqual({
+      id: 7,
+      code: 'S7',
+      label: 'Scheme Alias 7',
+      score: 5
+    });
+  });
+
+  it('enriches saved progress for regular code id zero', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobUnitRepository.find.mockResolvedValueOnce([
+      {
+        person_login: 'login',
+        person_code: 'code',
+        booklet_name: 'booklet',
+        unit_name: 'UNIT',
+        variable_id: 'VAR',
+        unit_alias: 'UNIT_FILE',
+        is_open: false,
+        code: 0,
+        score: 0,
+        coding_issue_option: null
+      }
+    ]);
+    fileUploadRepository.find
+      .mockResolvedValueOnce([{
+        file_id: 'UNIT_FILE',
+        data: '<Unit><CodingSchemeRef>SEPARATE_SCHEME</CodingSchemeRef></Unit>'
+      }])
+      .mockResolvedValueOnce([{
+        file_id: 'SEPARATE_SCHEME.VOCS',
+        data: { variableCodings: [{ id: 'VAR', codes: [{ id: 0, code: 'S0', label: 'Scheme 0' }] }] }
+      }]);
+
+    const progress = await service.getCodingProgress(1);
+
+    expect(progress['login@code@booklet::booklet::UNIT::VAR']).toEqual({
+      id: 0,
+      code: 'S0',
+      label: 'Scheme 0',
+      score: 0
     });
   });
 
