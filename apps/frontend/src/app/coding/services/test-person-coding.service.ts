@@ -661,24 +661,14 @@ export class TestPersonCodingService {
     );
   }
 
-  getCodingProgressOverview(workspaceId: number): Observable<CodingProgressOverview> {
+  getCodingProgressOverview(workspaceId: number): Observable<CodingProgressOverview | null> {
     return this.http
       .get<CodingProgressOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/progress-overview`,
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of({
-          totalCasesToCode: 0,
-          completedCases: 0,
-          completionPercentage: 0,
-          rawTotalCasesToCode: 0,
-          rawCompletedCases: 0,
-          rawCompletionPercentage: 0,
-          aggregationActive: false,
-          aggregationThreshold: null,
-          aggregatedDuplicateCases: 0
-        }))
+        catchError(() => of(null))
       );
   }
 
