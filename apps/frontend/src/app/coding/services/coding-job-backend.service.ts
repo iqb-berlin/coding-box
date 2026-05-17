@@ -412,7 +412,7 @@ export class CodingJobBackendService {
         code: string;
         label: string;
         [key: string]: unknown;
-      };
+      } | null;
       isOpen?: boolean;
       notes?: string;
     },
@@ -420,6 +420,24 @@ export class CodingJobBackendService {
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}/progress`;
     return this.http.post<CodingJob>(url, progressData, { headers: this.getAuthHeader(authToken) });
+  }
+
+  updateCodingJobKeepalive(
+    workspaceId: number,
+    codingJobId: number,
+    codingJob: Partial<Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>>,
+    authToken?: string
+  ): void {
+    const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job/${codingJobId}`;
+    fetch(url, {
+      method: 'PUT',
+      keepalive: true,
+      headers: {
+        ...this.getAuthHeader(authToken),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(codingJob)
+    }).catch(() => undefined);
   }
 
   saveCodingNotes(

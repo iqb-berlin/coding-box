@@ -728,7 +728,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId,
       this.codingService.currentVariableId,
       notes
-    );
+    ).catch(() => undefined);
   }
 
   getCompletedCount(): number {
@@ -873,11 +873,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         if (prevIndex >= 0) {
           this.handleUnitChanged(this.unitsData.units[prevIndex]);
         }
-      } else if (['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) && this.codingService.currentVariableId) {
+      } else if (
+        ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) &&
+        this.codingService.currentVariableId &&
+        !this.codingService.isCodingJobFinalized
+      ) {
         keyboardEvent.preventDefault();
         const codeId = parseInt(keyboardEvent.key, 10);
         if (this.codingService.codingScheme) {
-          const variableCoding = this.codingService.codingScheme.variableCodings.find((v: any) => v.alias === this.codingService.currentVariableId);
+          const variableCoding = this.codingService.codingScheme.variableCodings.find(
+            (v: any) => v.alias === this.codingService.currentVariableId || v.id === this.codingService.currentVariableId
+          );
           if (variableCoding) {
             const code = variableCoding.codes.find((c: any) => c.id === codeId);
             if (code) {
@@ -902,7 +908,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       !this.codingService.isCodingJobFinalized &&
       !this.isReviewMode
     ) {
-      this.codingService.updateCodingJobStatus(this.workspaceId, this.codingService.codingJobId, 'paused');
+      this.codingService.pauseCodingJobOnUnload(this.workspaceId, this.codingService.codingJobId);
     }
   }
 

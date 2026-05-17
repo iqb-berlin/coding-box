@@ -270,7 +270,7 @@ export class CodingFacadeService {
     return this.codingTrainingBackendService.getCodingJobsForTraining(workspaceId, trainingId);
   }
 
-  saveCodingProgress(workspaceId: number, codingJobId: number, progressData: { testPerson: string; unitId: string; variableId: string; selectedCode: { id: number; code: string; label: string;[key: string]: unknown }; isOpen?: boolean; notes?: string }): Observable<CodingJob> {
+  saveCodingProgress(workspaceId: number, codingJobId: number, progressData: { testPerson: string; unitId: string; variableId: string; selectedCode: { id: number; code: string; label: string;[key: string]: unknown } | null; isOpen?: boolean; notes?: string }): Observable<CodingJob> {
     return this.codingJobBackendService.saveCodingProgress(workspaceId, codingJobId, progressData);
   }
 

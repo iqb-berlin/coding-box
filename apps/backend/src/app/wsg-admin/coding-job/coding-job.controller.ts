@@ -12,7 +12,8 @@ import {
   Query,
   Req,
   UnauthorizedException,
-  UseGuards
+  UseGuards,
+  ValidationPipe
 } from '@nestjs/common';
 import { Request } from 'express';
 
@@ -417,7 +418,7 @@ export class WsgCodingJobController {
   async saveCodingProgress(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() saveCodingProgressDto: SaveCodingProgressDto,
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingProgressDto: SaveCodingProgressDto,
       @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);
@@ -458,7 +459,7 @@ export class WsgCodingJobController {
   async saveCodingNotes(
     @WorkspaceId() workspaceId: number,
       @Param('id', ParseIntPipe) id: number,
-      @Body() saveCodingNotesDto: SaveCodingNotesDto,
+      @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingNotesDto: SaveCodingNotesDto,
       @Req() req: Request
   ): Promise<CodingJobDto> {
     await this.assertCodingJobAccess(workspaceId, id, req);

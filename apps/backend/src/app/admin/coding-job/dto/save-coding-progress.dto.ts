@@ -1,8 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsString,
-  IsObject
+  IsObject,
+  IsOptional,
+  IsBoolean,
+  ValidateIf,
+  ValidateNested
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { SaveCodingProgressSelectedCodeDto } from './save-coding-progress-selected-code.dto';
 
 /**
  * DTO for saving partial coding progress
@@ -30,26 +36,24 @@ export class SaveCodingProgressDto {
     variableId: string;
 
   @ApiProperty({
-    description: 'Selected code object',
+    description: 'Selected code object. Send null to clear the saved coding for this unit-variable combination.',
     example: {
       id: 1, code: 'A1', label: 'Answer 1', score: 1
     }
   })
+  @ValidateIf(o => o.selectedCode !== null && o.selectedCode !== undefined)
   @IsObject()
-    selectedCode: {
-    id: number;
-    code?: string;
-    label?: string;
-    score?: number;
-    codingIssueOption?: number | null;
-    [key: string]: unknown;
-  };
+  @ValidateNested()
+  @Type(() => SaveCodingProgressSelectedCodeDto)
+    selectedCode?: SaveCodingProgressSelectedCodeDto | null;
 
   @ApiProperty({
     description: 'Whether the unit is marked as open',
     example: false,
     required: false
   })
+  @IsBoolean()
+  @IsOptional()
     isOpen?: boolean;
 
   @ApiProperty({
@@ -57,5 +61,7 @@ export class SaveCodingProgressDto {
     example: 'This unit needs manual coding due to ambiguity.',
     required: false
   })
+  @IsString()
+  @IsOptional()
     notes?: string;
 }
