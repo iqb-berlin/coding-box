@@ -492,7 +492,7 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
     return jobs.find(job => matchFn(job.data));
   }
 
@@ -500,6 +500,15 @@ export class JobQueueService {
     data: TestPersonCodingJobData,
     options?: JobOptions
   ): Promise<Job<TestPersonCodingJobData>> {
+    const existing = await this.findActiveJob<TestPersonCodingJobData>(
+      this.testPersonCodingQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A test person coding job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding test person coding job for workspace ${data.workspaceId}`
     );
@@ -844,6 +853,15 @@ export class JobQueueService {
     data: ResetCodingVersionJobData,
     options?: JobOptions
   ): Promise<Job<ResetCodingVersionJobData>> {
+    const existing = await this.findActiveJob<ResetCodingVersionJobData>(
+      this.resetCodingVersionQueue,
+      d => d.workspaceId === data.workspaceId
+    );
+    if (existing) {
+      throw new ConflictException(
+        `A reset coding version job is already running for workspace ${data.workspaceId} (job ${existing.id})`
+      );
+    }
     this.logger.log(
       `Adding reset coding version job for workspace ${data.workspaceId}, version ${data.version}`
     );
