@@ -322,6 +322,7 @@ describe('ResponseManagementService', () => {
       {
         unitid: 1,
         variableid: 'derived_var',
+        value: '1_0',
         generated: true
       }
     );

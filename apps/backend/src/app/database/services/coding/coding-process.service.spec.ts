@@ -616,6 +616,63 @@ describe('CodingProcessService', () => {
         );
     });
 
+    it('should exclude v3-only generated outputs from the second autocoder input query', async () => {
+      mockQueryBuilder.getMany
+        .mockResolvedValueOnce([mockUnits[0]])
+        .mockResolvedValueOnce([mockResponses[0]]);
+
+      await service.processTestPersonsBatch(workspaceId, ['1'], 2);
+
+      type TestBracket = {
+        whereFactory: (qb: { where: jest.Mock; orWhere: jest.Mock }) => void;
+      };
+      const createGeneratedFilterProbe = () => ({
+        where: jest.fn().mockReturnThis(),
+        orWhere: jest.fn().mockReturnThis()
+      });
+      const generatedInputFilter = mockQueryBuilder.andWhere.mock.calls
+        .map(([condition]) => condition)
+        .find((condition): condition is TestBracket => {
+          if (
+            typeof condition !== 'object' ||
+            condition === null ||
+            !('whereFactory' in condition) ||
+            typeof condition.whereFactory !== 'function'
+          ) {
+            return false;
+          }
+
+          const probe = createGeneratedFilterProbe();
+          condition.whereFactory(probe);
+          return probe.orWhere.mock.calls.some(
+            ([, params]) => (
+              params as { generatedWithSourceCoding?: boolean } | undefined
+            )?.generatedWithSourceCoding === true
+          );
+        });
+      expect(generatedInputFilter).toBeDefined();
+      const generatedFilterQueryBuilder = createGeneratedFilterProbe();
+
+      generatedInputFilter!.whereFactory(generatedFilterQueryBuilder);
+
+      expect(generatedFilterQueryBuilder.where).toHaveBeenCalledWith(
+        '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+        { isAutocoderGenerated: false }
+      );
+      const generatedSourceCondition = String(generatedFilterQueryBuilder.orWhere.mock.calls[0][0]);
+      expect(generatedSourceCondition).toContain('ResponseEntity.status_v1 IS NOT NULL');
+      expect(generatedSourceCondition).toContain('ResponseEntity.status_v2 IS NOT NULL');
+      expect(generatedSourceCondition).not.toContain('ResponseEntity.status_v3 IS NOT NULL');
+      expect(generatedSourceCondition).not.toContain('ResponseEntity.code_v1 IS NOT NULL');
+      expect(generatedSourceCondition).not.toContain('ResponseEntity.code_v2 IS NOT NULL');
+      expect(generatedSourceCondition).not.toContain('ResponseEntity.score_v1 IS NOT NULL');
+      expect(generatedSourceCondition).not.toContain('ResponseEntity.score_v2 IS NOT NULL');
+      expect(generatedFilterQueryBuilder.orWhere).toHaveBeenCalledWith(
+        expect.any(String),
+        { generatedWithSourceCoding: true }
+      );
+    });
+
     it('should scope coding scheme cache entries by workspace', async () => {
       const getCodingSchemesWithCache = (
         service as unknown as {

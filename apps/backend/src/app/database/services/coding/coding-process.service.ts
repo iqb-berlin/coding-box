@@ -710,6 +710,22 @@ export class CodingProcessService {
         '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
         { isAutocoderGenerated: false }
       );
+    } else {
+      query.andWhere(
+        new Brackets(qb => {
+          qb.where(
+            '(ResponseEntity.is_autocoder_generated = :isAutocoderGenerated OR ResponseEntity.is_autocoder_generated IS NULL)',
+            { isAutocoderGenerated: false }
+          ).orWhere(
+            `ResponseEntity.is_autocoder_generated = :generatedWithSourceCoding
+              AND (
+                ResponseEntity.status_v1 IS NOT NULL
+                OR ResponseEntity.status_v2 IS NOT NULL
+              )`,
+            { generatedWithSourceCoding: true }
+          );
+        })
+      );
     }
 
     return query.getMany();
