@@ -6,6 +6,7 @@ import {
 import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statistics';
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variable-analysis-item.dto';
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { CodingFreshnessSummaryDto } from '../../../../../../api-dto/coding/coding-freshness.dto';
@@ -30,7 +31,10 @@ export class CodingStatisticsService {
     return this.http
       .get<CodingStatistics>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics`,
-      { params })
+      {
+        params,
+        context: suppressGlobalHttpErrorContext()
+      })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );
@@ -39,7 +43,8 @@ export class CodingStatisticsService {
   getCodingFreshness(workspace_id: number): Observable<CodingFreshnessSummaryDto> {
     return this.http
       .get<CodingFreshnessSummaryDto>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`
+      `${this.serverUrl}admin/workspace/${workspace_id}/coding/freshness`,
+      { context: suppressGlobalHttpErrorContext() }
     )
       .pipe(
         catchError(() => of({

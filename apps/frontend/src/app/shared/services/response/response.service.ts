@@ -13,6 +13,7 @@ import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultService } from '../test-result/test-result.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -285,7 +286,10 @@ export class ResponseService {
   hasGeogebraResponses(workspaceId: number): Observable<boolean> {
     return this.http.get<boolean>(
       `${this.serverUrl}admin/workspace/${workspaceId}/responses/geogebra-existence`,
-      { headers: this.authHeader }
+      {
+        headers: this.authHeader,
+        context: suppressGlobalHttpErrorContext()
+      }
     ).pipe(
       catchError(() => of(false))
     );

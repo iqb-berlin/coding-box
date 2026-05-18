@@ -7,6 +7,7 @@ import {
   of
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expected-combination.dto';
 import {
   ValidateCodingCompletenessResponseDto
@@ -366,7 +367,10 @@ export class TestPersonCodingService {
     return this.http
       .get<CodingFreshnessSummaryDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness`,
-      { headers: this.authHeader }
+      {
+        headers: this.authHeader,
+        context: suppressGlobalHttpErrorContext()
+      }
     )
       .pipe(
         catchError(() => of({
@@ -393,7 +397,11 @@ export class TestPersonCodingService {
     return this.http
       .get<CodingFreshnessScopeDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/freshness/scope`,
-      { headers: this.authHeader, params }
+      {
+        headers: this.authHeader,
+        params,
+        context: suppressGlobalHttpErrorContext()
+      }
     )
       .pipe(
         catchError(() => {

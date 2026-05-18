@@ -74,11 +74,28 @@
 }
 
 .error-details {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-size: 11px;
   opacity: 0.7;
-  margin-top: 4px;
+  margin-top: 6px;
   word-break: break-all;
+}
+
+.error-summary {
+  display: block;
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 4px;
+}
+
+.details-toggle {
+  min-width: auto;
+  padding: 0;
+  height: 28px;
+  line-height: 28px;
+  font-size: 12px;
 }
 
 .error-actions {

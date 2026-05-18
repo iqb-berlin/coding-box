@@ -12,7 +12,11 @@ import {
 import { KeycloakProfile, KeycloakTokenParsed } from 'keycloak-js';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../interceptors/app-http-error.class';
+import {
+  AppHttpError,
+  BACKEND_CONNECTIVITY_ERROR_MESSAGE,
+  isBackendConnectivityStatus
+} from '../interceptors/app-http-error.class';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
@@ -167,23 +171,28 @@ export class AppService {
     }
   }
 
-  addErrorMessage(error: AppHttpError) {
-    if (!this.errorMessagesDisabled) {
-      const alikeErrors = this.errorMessages.filter(e => (
-        e.status === error.status &&
-        e.method === error.method &&
-        e.urlWithParams === error.urlWithParams
-      ));
-      if (alikeErrors.length > 0) {
-        if (!alikeErrors[0].message.includes(error.message)) {
-          alikeErrors[0].message += `; ${error.message}`;
-        }
-      } else {
-        this.errorMessageCounter += 1;
-        error.id = this.errorMessageCounter;
-        this.errorMessages.push(error);
-      }
+  addErrorMessage(error: AppHttpError): void {
+    if (this.errorMessagesDisabled) {
+      return;
     }
+
+    this.normalizeError(error);
+    const alikeError = this.errorMessages.find(existingError => this.isSameErrorGroup(existingError, error));
+
+    if (alikeError) {
+      this.normalizeError(alikeError);
+      alikeError.requestCount = (alikeError.requestCount || 1) + 1;
+      this.addAffectedRequest(alikeError, error);
+      if (!alikeError.isBackendConnectivityError && !alikeError.message.includes(error.message)) {
+        alikeError.message += `; ${error.message}`;
+      }
+      return;
+    }
+
+    this.errorMessageCounter += 1;
+    error.id = this.errorMessageCounter;
+    this.addAffectedRequest(error, error);
+    this.errorMessages.push(error);
   }
 
   setBackendUnavailable(unavailable: boolean): void {
@@ -277,6 +286,47 @@ export class AppService {
     this.reAuthenticationReturnUrl = normalizedReturnUrl;
     this.setNeedsReAuthentication(true);
     this.setAuthBootstrapStatus('session-expired');
+  }
+
+  private normalizeError(error: AppHttpError): void {
+    error.requestCount = error.requestCount || 1;
+    error.affectedRequests = error.affectedRequests || [];
+    error.isBackendConnectivityError = isBackendConnectivityStatus(error.status);
+
+    if (error.isBackendConnectivityError) {
+      error.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
+    }
+  }
+
+  private isSameErrorGroup(existingError: AppHttpError, newError: AppHttpError): boolean {
+    if (isBackendConnectivityStatus(existingError.status) && isBackendConnectivityStatus(newError.status)) {
+      return true;
+    }
+
+    return existingError.status === newError.status &&
+      existingError.method === newError.method &&
+      existingError.urlWithParams === newError.urlWithParams;
+  }
+
+  private addAffectedRequest(target: AppHttpError, source: AppHttpError): void {
+    if (!source.method && !source.urlWithParams) {
+      return;
+    }
+
+    target.affectedRequests = target.affectedRequests || [];
+
+    const request = {
+      method: source.method,
+      urlWithParams: source.urlWithParams
+    };
+    const isKnownRequest = target.affectedRequests.some(knownRequest => (
+      knownRequest.method === request.method &&
+      knownRequest.urlWithParams === request.urlWithParams
+    ));
+
+    if (!isKnownRequest) {
+      target.affectedRequests.push(request);
+    }
   }
 }
 

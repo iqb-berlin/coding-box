@@ -14,6 +14,7 @@ import {
 } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { AppHttpError } from './app-http-error.class';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
 import { AppService } from '../services/app.service';
 
 /**
@@ -27,7 +28,7 @@ export const authInterceptor: HttpInterceptorFn = (
   const snackBar = inject(MatSnackBar);
   const router = inject(Router);
   let httpErrorInfo: AppHttpError | null = null;
-  let suppressErrorMessage = false;
+  let suppressGlobalErrorMessage = false;
 
   let modifiedReq = req;
 
@@ -44,8 +45,11 @@ export const authInterceptor: HttpInterceptorFn = (
       tap({
         error: error => {
           httpErrorInfo = new AppHttpError(error);
-          suppressErrorMessage = shouldSuppressBackendLoginAuthDataError(req, error, appService);
-          if (suppressErrorMessage) {
+          const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
+          suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
+            suppressBackendLoginAuthDataError;
+
+          if (suppressBackendLoginAuthDataError) {
             return;
           }
 
@@ -77,7 +81,7 @@ export const authInterceptor: HttpInterceptorFn = (
         }
       }),
       finalize(() => {
-        if (httpErrorInfo && !suppressErrorMessage) {
+        if (httpErrorInfo && !suppressGlobalErrorMessage) {
           httpErrorInfo.method = req.method;
           httpErrorInfo.urlWithParams = req.urlWithParams;
           appService.addErrorMessage(httpErrorInfo);

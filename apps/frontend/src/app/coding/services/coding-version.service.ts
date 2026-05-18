@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export interface ResetVersionJobStatus {
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'not_found';
@@ -52,7 +53,8 @@ export class CodingVersionService {
   ): Observable<ResetVersionJobStatus> {
     return this.http
       .get<ResetVersionJobStatus>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/job/${jobId}`
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/job/${jobId}`,
+      { context: suppressGlobalHttpErrorContext() }
     )
       .pipe(
         catchError(() => of({
@@ -68,7 +70,8 @@ export class CodingVersionService {
   ): Observable<ActiveResetJob> {
     return this.http
       .get<ActiveResetJob>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/active`
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/active`,
+      { context: suppressGlobalHttpErrorContext() }
     )
       .pipe(
         catchError(() => of({ hasActiveJob: false }))
