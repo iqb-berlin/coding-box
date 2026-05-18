@@ -797,6 +797,37 @@ describe('CodingJobService distribution from job definitions', () => {
     });
   });
 
+  it('does not aggregate empty manual responses when distributing coding jobs', async () => {
+    const request = {
+      selectedVariables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      selectedCoders: [
+        { id: 1, name: 'Ada', username: 'ada' },
+        { id: 2, name: 'Bea', username: 'bea' }
+      ],
+      caseOrderingMode: 'continuous' as const
+    };
+
+    mockResponses([
+      makeResponse(1, 'Unit 1', 'Var 1', ''),
+      makeResponse(2, 'Unit 1', 'Var 1', ''),
+      makeResponse(3, 'Unit 1', 'Var 1', null),
+      makeResponse(4, 'Unit 1', 'Var 1', '[]')
+    ]);
+    jest.spyOn(service, 'getResponseMatchingMode').mockResolvedValue([]);
+    jest.spyOn(service, 'getAggregationThreshold').mockResolvedValue(2);
+
+    const preview = await service.calculateDistribution(5, request);
+
+    expect(preview.aggregationInfo['Unit 1::Var 1']).toEqual({
+      uniqueCases: 4,
+      totalResponses: 4
+    });
+    expect(
+      Object.values(preview.distribution['Unit 1::Var 1'])
+        .reduce((sum, value) => sum + value, 0)
+    ).toBe(4);
+  });
+
   it('blocks creating jobs from a definition when jobs already exist for it', async () => {
     const responses = Array.from({ length: 3 }, (_, index) => makeResponse(index + 1, 'Unit 1', 'Var 1'));
     const createCodingJobSpy = jest.spyOn(

@@ -571,6 +571,110 @@ describe('CodingValidationService', () => {
       );
     });
 
+    it('should not collapse empty responses when counting unique cases after aggregation', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: ''
+        },
+        {
+          id: 2,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: ''
+        },
+        {
+          id: 3,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: null
+        },
+        {
+          id: 4,
+          unitName: 'unit1',
+          variableid: 'var1',
+          value: '[]'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 4,
+          availableCases: 4,
+          uniqueCasesAfterAggregation: 4
+        })
+      ]);
+    });
+
+    it('should keep derived variables at their raw case count when aggregation is active', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'derived-var', responseCount: '4' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(casesInJobsQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['derived-var'])]])
+      );
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(2);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([]);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'derived-var',
+          responseCount: 4,
+          availableCases: 4,
+          uniqueCasesAfterAggregation: 4,
+          isDerived: true
+        })
+      ]);
+      expect(mockCodingJobService.getSlimResponsesForVariables).toHaveBeenCalledWith(
+        1,
+        []
+      );
+    });
+
     it.skip('should fetch from database on cache miss', async () => {
       const rawResults = [
         { unitName: 'unit1', variableId: 'var1', responseCount: '5' }

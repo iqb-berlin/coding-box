@@ -20,6 +20,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
+import { buildAggregationGroups } from './aggregation-metrics.util';
 
 interface NormalizedExpectedCombination {
   unitKey: string;
@@ -579,12 +580,22 @@ export class CodingValidationService {
       baseVariables.map(v => ({ unitName: v.unitName, variableId: v.variableId }))
     );
 
-    // Group by variable key and apply aggregation
+    const derivedVariableMap = new Map<string, Set<string>>();
+    variables
+      .filter(variable => variable.isDerived)
+      .forEach(variable => {
+        const unitKey = variable.unitName.toUpperCase();
+        const derivedVariables = derivedVariableMap.get(unitKey) || new Set<string>();
+        derivedVariables.add(variable.variableId);
+        derivedVariableMap.set(unitKey, derivedVariables);
+      });
+
+    // Group by variable key and apply the same aggregation rules as progress/job coverage.
     for (const variable of variables) {
       const key = `${variable.unitName}::${variable.variableId}`;
 
-      // Derived variables don't have user string responses, so aggregation would falsely
-      // group all of their empty/null values into 1 case. We always use raw responseCount.
+      // Derived variables are not fetched as base response values here. Keep their
+      // effective case count at the raw response count, matching job distribution.
       if (variable.isDerived) {
         result.set(key, variable.responseCount);
         continue;
@@ -594,7 +605,16 @@ export class CodingValidationService {
         r => r.unitName === variable.unitName && r.variableid === variable.variableId
       );
 
-      const aggregatedGroups = this.codingJobService.aggregateResponsesByValue(varResponses, matchingFlags);
+      const aggregatedGroups = buildAggregationGroups(
+        varResponses.map(response => ({
+          ...response,
+          responseId: response.id,
+          variableId: response.variableid
+        })),
+        matchingFlags,
+        aggregationThreshold,
+        derivedVariableMap
+      );
 
       let uniqueCases = 0;
       for (const group of aggregatedGroups) {
