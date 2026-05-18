@@ -2,7 +2,8 @@ import {
   Injectable, Logger, forwardRef, Inject
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
+import { parseStringPromise } from 'xml2js';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CacheService } from '../../../cache/cache.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -13,11 +14,24 @@ import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
+
+interface NormalizedExpectedCombination {
+  unitKey: string;
+  unitAlias: string;
+  loginName: string;
+  loginCode: string;
+  personGroup: string;
+  bookletId: string;
+  variableId: string;
+  variablePage: string;
+  variableAnchor: string;
+}
 
 @Injectable()
 export class CodingValidationService {
@@ -32,7 +46,8 @@ export class CodingValidationService {
     private workspaceFilesService: WorkspaceFilesService,
     private workspaceExclusionService: WorkspaceExclusionService,
     @Inject(forwardRef(() => CodingJobService))
-    private codingJobService: CodingJobService
+    private codingJobService: CodingJobService,
+    private workspacePlayerService: WorkspacePlayerService
   ) { }
 
   async validateCodingCompleteness(
@@ -79,6 +94,8 @@ export class CodingValidationService {
 
       const allResults: ValidationResultDto[] = [];
       let totalMissingCount = 0;
+      const replayAssetIssueCache = new Map<string, Promise<string[]>>();
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
       const batchSize = 100;
       for (let i = 0; i < expectedCombinations.length; i += batchSize) {
@@ -90,37 +107,67 @@ export class CodingValidationService {
         );
 
         for (const expected of batch) {
-          const responseExists = await this.responseRepository
-            .createQueryBuilder('response')
-            .innerJoin('response.unit', 'unit')
-            .innerJoin('unit.booklet', 'booklet')
-            .innerJoin('booklet.person', 'person')
-            .innerJoin('booklet.bookletinfo', 'bookletinfo')
-            .where('unit.alias = :unitKey', { unitKey: expected.unit_key })
-            .andWhere('person.login = :loginName', {
-              loginName: expected.login_name
-            })
-            .andWhere('person.code = :loginCode', {
-              loginCode: expected.login_code
-            })
-            .andWhere('bookletinfo.name = :bookletId', {
-              bookletId: expected.booklet_id
-            })
-            .andWhere('response.variableid = :variableId', {
-              variableId: expected.variable_id
-            })
-            .andWhere('response.value IS NOT NULL')
-            .andWhere('response.value != :empty', { empty: '' })
-            .getCount();
+          const normalizedExpected = this.normalizeExpectedCombination(expected);
+          const safeCombination = this.buildSafeExpectedCombination(
+            normalizedExpected
+          );
+          const inputIssues = this.getExpectedCombinationInputIssues(
+            normalizedExpected
+          );
 
-          const status = responseExists > 0 ? 'EXISTS' : 'MISSING';
+          if (inputIssues.length > 0) {
+            totalMissingCount += 1;
+            allResults.push({
+              combination: safeCombination,
+              status: 'MISSING',
+              responseFound: false,
+              issues: inputIssues
+            });
+            continue;
+          }
+
+          const queryBuilder = this.responseRepository
+            .createQueryBuilder('response')
+            .leftJoinAndSelect('response.unit', 'unit')
+            .leftJoinAndSelect('unit.booklet', 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+            .where('person.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('person.consider = :consider', { consider: true })
+            .andWhere('response.value IS NOT NULL')
+            .andWhere('response.value != :empty', { empty: '' });
+
+          this.applyExpectedCombinationFilters(queryBuilder, normalizedExpected);
+          applyResolvedExclusionsToQuery(queryBuilder, exclusions);
+
+          const response = await queryBuilder.getOne();
+          const responseFound = Boolean(response);
+          const issues: string[] = [];
+          if (!response) {
+            issues.push('Keine passende Antwort gefunden.');
+          } else {
+            const unitName = response.unit?.name ||
+              normalizedExpected.unitKey ||
+              normalizedExpected.unitAlias;
+            issues.push(
+              ...await this.getReplayAssetIssues(
+                workspaceId,
+                unitName,
+                replayAssetIssueCache
+              )
+            );
+          }
+
+          const status = issues.length > 0 ? 'MISSING' : 'EXISTS';
           if (status === 'MISSING') {
             totalMissingCount += 1;
           }
 
           allResults.push({
-            combination: expected,
-            status
+            combination: safeCombination,
+            status,
+            responseFound,
+            ...(issues.length > 0 ? { issues } : {})
           });
         }
       }
@@ -201,6 +248,183 @@ export class CodingValidationService {
         'Could not validate coding completeness. Please check the database connection or query.'
       );
     }
+  }
+
+  private normalizeExpectedCombination(
+    expected: ExpectedCombinationDto
+  ): NormalizedExpectedCombination {
+    return {
+      unitKey: this.cleanExpectedValue(expected.unit_key),
+      unitAlias: this.cleanExpectedValue(expected.unit_alias),
+      loginName: this.cleanExpectedValue(expected.login_name),
+      loginCode: this.cleanExpectedValue(expected.login_code),
+      personGroup: this.cleanExpectedValue(expected.person_group),
+      bookletId: this.cleanExpectedValue(expected.booklet_id),
+      variableId: this.cleanExpectedValue(expected.variable_id),
+      variablePage: this.cleanExpectedValue(expected.variable_page),
+      variableAnchor: this.cleanExpectedValue(expected.variable_anchor)
+    };
+  }
+
+  private cleanExpectedValue(value: unknown): string {
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private getExpectedCombinationInputIssues(
+    expected: NormalizedExpectedCombination
+  ): string[] {
+    const missingFields: string[] = [];
+    if (!expected.unitKey && !expected.unitAlias) missingFields.push('unit_key/unit_alias');
+    if (!expected.loginName) missingFields.push('login_name/person_login');
+    if (!expected.loginCode) missingFields.push('login_code/person_code');
+    if (!expected.bookletId) missingFields.push('booklet_id/booklet_name');
+    if (!expected.variableId) missingFields.push('variable_id');
+
+    return missingFields.length > 0 ?
+      [`Pflichtfelder fehlen: ${missingFields.join(', ')}.`] :
+      [];
+  }
+
+  private buildSafeExpectedCombination(
+    expected: NormalizedExpectedCombination
+  ): ExpectedCombinationDto {
+    return {
+      unit_key: expected.unitKey || expected.unitAlias,
+      ...(expected.unitAlias ? { unit_alias: expected.unitAlias } : {}),
+      login_name: expected.loginName,
+      login_code: expected.loginCode,
+      ...(expected.personGroup ? { person_group: expected.personGroup } : {}),
+      booklet_id: expected.bookletId,
+      variable_id: expected.variableId,
+      ...(expected.variablePage ? { variable_page: expected.variablePage } : {}),
+      ...(expected.variableAnchor ? { variable_anchor: expected.variableAnchor } : {})
+    };
+  }
+
+  private applyExpectedCombinationFilters(
+    queryBuilder: SelectQueryBuilder<ResponseEntity>,
+    expected: NormalizedExpectedCombination
+  ): void {
+    const unitCandidates = Array.from(
+      new Set([expected.unitKey, expected.unitAlias].filter(Boolean))
+    ) as string[];
+
+    queryBuilder
+      .andWhere(new Brackets(qb => {
+        unitCandidates.forEach((unitCandidate, index) => {
+          const parameterName = `unitCandidate${index}`;
+          const condition = `(unit.name = :${parameterName} OR unit.alias = :${parameterName})`;
+          if (index === 0) {
+            qb.where(condition, { [parameterName]: unitCandidate });
+          } else {
+            qb.orWhere(condition, { [parameterName]: unitCandidate });
+          }
+        });
+      }))
+      .andWhere('person.login = :loginName', {
+        loginName: expected.loginName
+      })
+      .andWhere('person.code = :loginCode', {
+        loginCode: expected.loginCode
+      })
+      .andWhere('bookletinfo.name = :bookletId', {
+        bookletId: expected.bookletId
+      })
+      .andWhere('response.variableid = :variableId', {
+        variableId: expected.variableId
+      });
+
+    if (expected.personGroup) {
+      queryBuilder.andWhere('person.group = :personGroup', {
+        personGroup: expected.personGroup
+      });
+    }
+  }
+
+  private async getReplayAssetIssues(
+    workspaceId: number,
+    unitName: string,
+    cache: Map<string, Promise<string[]>>
+  ): Promise<string[]> {
+    const normalizedUnitName = unitName.trim().toUpperCase();
+    if (!normalizedUnitName) {
+      return [];
+    }
+
+    if (!cache.has(normalizedUnitName)) {
+      cache.set(
+        normalizedUnitName,
+        this.validateReplayAssetsForUnit(workspaceId, normalizedUnitName)
+      );
+    }
+
+    return cache.get(normalizedUnitName)!;
+  }
+
+  private async validateReplayAssetsForUnit(
+    workspaceId: number,
+    normalizedUnitName: string
+  ): Promise<string[]> {
+    const issues: string[] = [];
+
+    try {
+      const [unitDef, unitFile] = await Promise.all([
+        this.workspacePlayerService.findUnitDef(workspaceId, normalizedUnitName),
+        this.workspacePlayerService.findUnit(workspaceId, normalizedUnitName)
+      ]);
+
+      if (!unitDef?.length) {
+        issues.push(`Unit-Definition fehlt: ${normalizedUnitName}.VOUD.`);
+      }
+
+      if (!unitFile?.length) {
+        issues.push(`Unit-Datei fehlt: ${normalizedUnitName}.`);
+        return issues;
+      }
+
+      const playerName = await this.extractNormalizedPlayerIdFromUnitData(
+        unitFile[0].data
+      );
+      const player = await this.workspacePlayerService.findPlayer(
+        workspaceId,
+        playerName
+      );
+
+      if (!player?.length) {
+        issues.push(`Player fehlt: ${playerName}.`);
+      }
+    } catch (error) {
+      issues.push(
+        `Replay-Dateien konnten nicht geprüft werden: ${error.message}.`
+      );
+    }
+
+    return issues;
+  }
+
+  private async extractNormalizedPlayerIdFromUnitData(
+    unitData: string
+  ): Promise<string> {
+    const parsed = await parseStringPromise(unitData);
+    const playerRef = parsed?.Unit?.DefinitionRef?.[0]?.$?.player;
+    if (!playerRef || typeof playerRef !== 'string') {
+      throw new Error('Player-Referenz fehlt in der Unit-Datei');
+    }
+    return this.normalizePlayerId(playerRef);
+  }
+
+  private normalizePlayerId(name: string): string {
+    const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
+    const matches = name.match(reg);
+    if (!matches) {
+      throw new Error(`Ungültiges Player-ID-Format: ${name}`);
+    }
+
+    const module = matches[1] || '';
+    const major = parseInt(matches[3], 10) || 0;
+    const minor = typeof matches[4] === 'string' ? parseInt(matches[4].substring(1), 10) : 0;
+    const patch = typeof matches[5] === 'string' ? parseInt(matches[5].substring(1), 10) : 0;
+    return `${module}-${major}.${minor}.${patch}`.toUpperCase();
   }
 
   async getCodingIncompleteVariables(

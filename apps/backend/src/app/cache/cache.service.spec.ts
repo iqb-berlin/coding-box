@@ -41,7 +41,7 @@ describe('CacheService', () => {
     expect(service.generateFlatResponseFilterOptionsVersionKey(3)).toBe('flat_response_filter_options:version:3');
     expect(service.generateFlatResponseFilterOptionsCacheKey(3, 4, 500)).toBe('flat_response_filter_options:3:v4:thr500');
     expect(service.generateUnitResponseCacheKey(1, 'person', 'unit')).toBe('responses:1:person:unit');
-    expect(service.generateValidationCacheKey(2, 'hash')).toBe('validation:2:hash');
+    expect(service.generateValidationCacheKey(2, 'hash')).toBe('validation:v2:2:hash');
   });
 
   it('gets, sets, deletes and checks cache values', async () => {

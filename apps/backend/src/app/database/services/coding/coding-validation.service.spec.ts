@@ -7,6 +7,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
+import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { CodingJobService } from './coding-job.service';
 
@@ -16,15 +17,18 @@ describe('CodingValidationService', () => {
   let mockCodingJobUnitRepository: jest.Mocked<Repository<CodingJobUnit>>;
   let mockCacheService: jest.Mocked<CacheService>;
   let mockWorkspaceFilesService: jest.Mocked<WorkspaceFilesService>;
+  let mockWorkspacePlayerService: jest.Mocked<WorkspacePlayerService>;
   let mockCodingJobService: jest.Mocked<CodingJobService>;
 
   const mockQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn(),
+    getOne: jest.fn(),
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
@@ -43,13 +47,39 @@ describe('CodingValidationService', () => {
     ...overrides
   });
 
+  const createMockResponse = (
+    overrides: Partial<ResponseEntity> = {}
+  ): ResponseEntity => ({
+    id: 1,
+    value: 'response-value',
+    variableid: 'var1',
+    unit: {
+      name: 'unit1',
+      alias: 'unit-alias',
+      booklet: {
+        person: {
+          login: 'user1',
+          code: 'code1',
+          group: 'group1',
+          workspace_id: 1
+        },
+        bookletinfo: {
+          name: 'booklet1'
+        }
+      }
+    },
+    ...overrides
+  } as unknown as ResponseEntity);
+
   const createQueryBuilderMock = <T extends Record<string, unknown>>(rawResults: T[] = []) => ({
     innerJoin: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     orWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn(),
+    getOne: jest.fn(),
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
@@ -83,6 +113,15 @@ describe('CodingValidationService', () => {
       getCoderTrainingRequiredVariableMap: jest.fn()
     } as unknown as jest.Mocked<WorkspaceFilesService>;
 
+    mockWorkspacePlayerService = {
+      findUnitDef: jest.fn().mockResolvedValue([{ file_id: 'UNIT1.VOUD' }]),
+      findUnit: jest.fn().mockResolvedValue([{
+        file_id: 'UNIT1',
+        data: '<Unit><DefinitionRef player="VERONA-1.0.0"/></Unit>'
+      }]),
+      findPlayer: jest.fn().mockResolvedValue([{ file_id: 'VERONA-1.0.0' }])
+    } as unknown as jest.Mocked<WorkspacePlayerService>;
+
     mockCodingJobService = {
       getResponseMatchingMode: jest.fn().mockResolvedValue([]),
       getAggregationThreshold: jest.fn().mockResolvedValue(2),
@@ -108,6 +147,10 @@ describe('CodingValidationService', () => {
         {
           provide: WorkspaceFilesService,
           useValue: mockWorkspaceFilesService
+        },
+        {
+          provide: WorkspacePlayerService,
+          useValue: mockWorkspacePlayerService
         },
         {
           provide: WorkspaceExclusionService,
@@ -175,7 +218,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
       mockCacheService.getPaginatedValidationResults
         .mockResolvedValueOnce(null)
@@ -201,7 +244,7 @@ describe('CodingValidationService', () => {
       );
 
       expect(result.results[0].status).toBe('EXISTS');
-      expect(mockQueryBuilder.getCount).toHaveBeenCalled();
+      expect(mockQueryBuilder.getOne).toHaveBeenCalled();
     });
 
     it('should return MISSING status when response not found', async () => {
@@ -209,7 +252,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(0);
+      mockQueryBuilder.getOne.mockResolvedValue(null);
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -218,6 +261,27 @@ describe('CodingValidationService', () => {
       );
 
       expect(result.results[0].status).toBe('MISSING');
+      expect(result.results[0].responseFound).toBe(false);
+      expect(result.missing).toBe(1);
+    });
+
+    it('should return MISSING status when replay unit file is missing', async () => {
+      const expectedCombinations = [createMockExpectedCombination()];
+
+      mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
+      mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
+      mockWorkspacePlayerService.findUnit.mockResolvedValueOnce([]);
+      mockCacheService.storeValidationResults.mockResolvedValue(true);
+
+      const result = await service.validateCodingCompleteness(
+        1,
+        expectedCombinations
+      );
+
+      expect(result.results[0].status).toBe('MISSING');
+      expect(result.results[0].responseFound).toBe(true);
+      expect(result.results[0].issues).toContain('Unit-Datei fehlt: UNIT1.');
       expect(result.missing).toBe(1);
     });
 
@@ -245,12 +309,12 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
 
-      expect(mockQueryBuilder.getCount).toHaveBeenCalledTimes(150);
+      expect(mockQueryBuilder.getOne).toHaveBeenCalledTimes(150);
     });
 
     it('should build correct query with all combination fields', async () => {
@@ -266,7 +330,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
@@ -274,21 +338,39 @@ describe('CodingValidationService', () => {
       expect(mockResponseRepository.createQueryBuilder).toHaveBeenCalledWith(
         'response'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'response.unit',
         'unit'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'unit.booklet',
         'booklet'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'booklet.person',
         'person'
       );
-      expect(mockQueryBuilder.innerJoin).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
         'booklet.bookletinfo',
         'bookletinfo'
+      );
+    });
+
+    it('should filter by person group when supplied by the coding list', async () => {
+      const expectedCombinations = [
+        createMockExpectedCombination({ person_group: 'group-a' })
+      ];
+
+      mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
+      mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
+      mockCacheService.storeValidationResults.mockResolvedValue(true);
+
+      await service.validateCodingCompleteness(1, expectedCombinations);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        'person.group = :personGroup',
+        { personGroup: 'group-a' }
       );
     });
   });
@@ -300,7 +382,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -319,7 +401,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const result = await service.validateCodingCompleteness(
@@ -340,7 +422,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       const firstPage = await service.validateCodingCompleteness(
@@ -366,11 +448,16 @@ describe('CodingValidationService', () => {
 
   describe('validateCodingCompleteness - Cache management', () => {
     it('should store results in cache after processing', async () => {
-      const expectedCombinations = [createMockExpectedCombination()];
+      const expectedCombinations = [
+        {
+          ...createMockExpectedCombination(),
+          url: 'https://example.test/#/replay/person/unit?auth=secret-token'
+        } as ExpectedCombinationDto & { url: string }
+      ];
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(true);
 
       await service.validateCodingCompleteness(1, expectedCombinations);
@@ -384,6 +471,12 @@ describe('CodingValidationService', () => {
           timestamp: expect.any(Number)
         })
       );
+      expect(
+        mockCacheService.storeValidationResults.mock.calls[0][1][0].combination
+      ).not.toHaveProperty('url');
+      expect(
+        mockCacheService.storeValidationResults.mock.calls[0][1][0].responseFound
+      ).toBe(true);
     });
 
     it('should continue without error if cache storage fails', async () => {
@@ -391,7 +484,7 @@ describe('CodingValidationService', () => {
 
       mockCacheService.generateValidationCacheKey.mockReturnValue('cache-key');
       mockCacheService.getPaginatedValidationResults.mockResolvedValue(null);
-      mockQueryBuilder.getCount.mockResolvedValue(1);
+      mockQueryBuilder.getOne.mockResolvedValue(createMockResponse());
       mockCacheService.storeValidationResults.mockResolvedValue(false);
 
       const result = await service.validateCodingCompleteness(

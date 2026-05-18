@@ -1543,6 +1543,7 @@
       "error-title": "Fehler bei der Validierung",
       "retry-button": "Erneut versuchen",
       "download-button": "Validierungsliste herunterladen",
+      "invalid-file-type": "Bitte wählen Sie eine Excel-Datei im Format .xlsx aus.",
       "file-loading": "Excel-Datei wird geladen...",
       "file-processing": "Excel-Datei wird verarbeitet...",
       "data-extraction-general": "Daten werden extrahiert...",
@@ -1992,7 +1993,8 @@
         "login-code": "Login-Code",
         "booklet-id": "Testheft",
         "variable-id": "Variable",
-        "status": "Status"
+        "status": "Status",
+        "issues": "Hinweis"
       },
       "status": {
         "missing": "Fehlend",
