@@ -267,7 +267,7 @@ export class JobQueueService {
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
-      if (state === 'waiting' || state === 'delayed' || state === 'completed' || state === 'failed') {
+      if (state === 'waiting' || state === 'delayed' || state === 'paused' || state === 'completed' || state === 'failed') {
         await job.remove();
         return true;
       }
