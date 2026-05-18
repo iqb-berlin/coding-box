@@ -193,6 +193,21 @@
               }
             </div>
 
+            @if (getUnavailableSelectedCodingCases() > 0 || getMaxCasesLimitReduction() > 0) {
+            <div class="selection-availability-note">
+              <mat-icon>info</mat-icon>
+              <span>
+                {{ getTotalCodingCases() }} Fälle werden in neue Jobs übernommen.
+                @if (getUnavailableSelectedCodingCases() > 0) {
+                {{ getUnavailableSelectedCodingCases() }} ausgewählte Fälle sind bereits verteilt oder durch eine andere Definition reserviert.
+                }
+                @if (getMaxCasesLimitReduction() > 0) {
+                {{ getMaxCasesLimitReduction() }} verfügbare Fälle werden durch die maximale Fallzahl begrenzt.
+                }
+              </span>
+            </div>
+            }
+
             @if (selectedVariables.selected.length > 0 || selectedVariableBundles.selected.length > 0) {
             <mat-expansion-panel class="selection-details">
               <mat-expansion-panel-header>

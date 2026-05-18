@@ -353,6 +353,27 @@ describe('CodingJobDefinitionDialogComponent', () => {
     expect(component.getCodingJobCount()).toBe(4);
   });
 
+  it('should distinguish selected effective cases from cases available for new jobs', () => {
+    createComponent();
+
+    const unit2 = component.variables.find(variable => variable.unitName === 'Unit 2');
+    const unit3 = component.variables.find(variable => variable.unitName === 'Unit 3');
+    expect(unit2).toBeDefined();
+    expect(unit3).toBeDefined();
+
+    component.selectedVariables.select(unit2!, unit3!);
+
+    expect(component.getSelectedEffectiveCodingCases()).toBe(13);
+    expect(component.getDistributableCodingCasesBeforeLimit()).toBe(4);
+    expect(component.getUnavailableSelectedCodingCases()).toBe(9);
+    expect(component.getTotalCodingCases()).toBe(4);
+
+    component.codingJobForm.patchValue({ maxCodingCases: 3 });
+
+    expect(component.getMaxCasesLimitReduction()).toBe(1);
+    expect(component.getTotalCodingCases()).toBe(3);
+  });
+
   it('should ignore duplicate definition submits while saving', () => {
     createComponent();
     const saveSubject = new Subject<unknown>();

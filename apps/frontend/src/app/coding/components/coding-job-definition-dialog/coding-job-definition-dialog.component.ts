@@ -777,22 +777,66 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     return itemCount * coderCount;
   }
 
+  private getVariableEffectiveCases(variable: Variable): number {
+    return variable.uniqueCasesAfterAggregation ?? variable.responseCount ?? variable.availableCases ?? 0;
+  }
+
+  private getVariableAvailableCases(variable: Variable): number {
+    return variable.availableCases ?? this.getVariableEffectiveCases(variable);
+  }
+
+  getSelectedEffectiveCodingCases(): number {
+    let total = this.selectedVariables.selected
+      .reduce((sum, variable) => sum + this.getVariableEffectiveCases(variable), 0);
+
+    this.selectedVariableBundles.selected.forEach(bundle => {
+      bundle.variables.forEach(variable => {
+        total += this.getVariableEffectiveCases(variable as unknown as Variable);
+      });
+    });
+
+    return total;
+  }
+
+  getDistributableCodingCasesBeforeLimit(): number {
+    let total = this.selectedVariables.selected
+      .reduce((sum, variable) => sum + this.getVariableAvailableCases(variable), 0);
+
+    this.selectedVariableBundles.selected.forEach(bundle => {
+      bundle.variables.forEach(variable => {
+        total += this.getVariableAvailableCases(variable as unknown as Variable);
+      });
+    });
+
+    return total;
+  }
+
+  getUnavailableSelectedCodingCases(): number {
+    return Math.max(
+      0,
+      this.getSelectedEffectiveCodingCases() - this.getDistributableCodingCasesBeforeLimit()
+    );
+  }
+
+  getMaxCasesLimitReduction(): number {
+    const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
+    const total = this.getDistributableCodingCasesBeforeLimit();
+
+    if (
+      this.data.mode === 'definition' &&
+      typeof maxCases === 'number' &&
+      maxCases > 0
+    ) {
+      return Math.max(0, total - Math.min(total, maxCases));
+    }
+
+    return 0;
+  }
+
   getTotalCodingCases(): number {
     const maxCases = this.codingJobForm.getRawValue().maxCodingCases;
     const isDefinitionMode = this.data.mode === 'definition';
-
-    const getAvailableCases = (v: Variable): number => (
-      v.availableCases ?? v.uniqueCasesAfterAggregation ?? v.responseCount ?? 0
-    );
-
-    let total = this.selectedVariables.selected
-      .reduce((sum, v) => sum + getAvailableCases(v), 0);
-
-    this.selectedVariableBundles.selected.forEach(bundle => {
-      bundle.variables.forEach(v => {
-        total += getAvailableCases(v as unknown as Variable);
-      });
-    });
+    let total = this.getDistributableCodingCasesBeforeLimit();
 
     // Apply global cap per job definition (only in definition mode)
     if (

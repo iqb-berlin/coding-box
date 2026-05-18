@@ -2609,30 +2609,32 @@ export class CodingJobService {
   private aggregateResponsesByVariableAndValue(
     responses: SlimResponse[],
     flags: ResponseMatchingFlag[],
+    threshold: number | null,
     isDerivedResponse: (response: SlimResponse) => boolean
   ): { normalizedValue: string; responses: SlimResponse[]; totalResponses: number }[] {
-    if (flags.includes(ResponseMatchingFlag.NO_AGGREGATION)) {
-      return responses.map(r => ({
-        normalizedValue: r.value || '',
-        responses: [r],
-        totalResponses: 1
-      }));
-    }
+    const derivedVariableMap = new Map<string, Set<string>>();
+    responses.forEach(response => {
+      if (!isDerivedResponse(response)) {
+        return;
+      }
 
-    const groups = new Map<string, { normalizedValue: string; responses: SlimResponse[] }>();
+      const unitKey = response.unitName.toUpperCase();
+      const derivedVariables = derivedVariableMap.get(unitKey) || new Set<string>();
+      derivedVariables.add(response.variableid);
+      derivedVariableMap.set(unitKey, derivedVariables);
+    });
 
-    for (const response of responses) {
-      const normalizedValue = this.normalizeValue(response.value, flags);
-      const aggregationKey = isDerivedResponse(response) ?
-        `${response.unitName.toUpperCase()}::${response.variableid}::${response.id}` :
-        `${response.unitName.toUpperCase()}::${response.variableid}::${normalizedValue}`;
-      const existing = groups.get(aggregationKey) || { normalizedValue, responses: [] };
-      existing.responses.push(response);
-      groups.set(aggregationKey, existing);
-    }
-
-    return Array.from(groups.values()).map(group => ({
-      normalizedValue: group.normalizedValue,
+    return buildAggregationGroups(
+      responses.map(response => ({
+        ...response,
+        responseId: response.id,
+        variableId: response.variableid
+      })),
+      flags,
+      threshold,
+      derivedVariableMap
+    ).map(group => ({
+      normalizedValue: group.key,
       responses: group.responses,
       totalResponses: group.responses.length
     }));
@@ -2838,6 +2840,7 @@ export class CodingJobService {
       const aggregatedGroups = this.aggregateResponsesByVariableAndValue(
         allItemResponses,
         matchingFlags,
+        aggregationThreshold,
         isDerivedResponse
       );
 
