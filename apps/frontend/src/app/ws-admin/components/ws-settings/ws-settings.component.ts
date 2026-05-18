@@ -85,6 +85,8 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
 
   authToken: string | null = null;
   duration = 60;
+  readonly minTokenDurationDays = 1;
+  readonly maxTokenDurationDays = 90;
   autoFetchCodingStatistics = true;
   isExporting = false;
   databaseExportProgress = 0;
@@ -132,22 +134,46 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   createToken(): void {
+    if (!this.isTokenDurationValid()) {
+      this.snackBar.open(
+        this.translateService.instant('ws-settings.token-duration-invalid'),
+        this.translateService.instant('close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
     this.appService
-      .createToken(
+      .createOwnToken(
         this.appService.selectedWorkspaceId,
-        this.appService.loggedUser?.sub || '',
-        this.duration
+        Number(this.duration)
       )
-      .subscribe((authToken: string) => {
-        this.authToken = authToken;
-        this.snackBar.open(
-          this.translateService.instant(
-            'ws-settings.token-generated-successfully'
-          ),
-          this.translateService.instant('close'),
-          { duration: 3000 }
-        );
+      .subscribe({
+        next: (authToken: string) => {
+          this.authToken = authToken;
+          this.snackBar.open(
+            this.translateService.instant(
+              'ws-settings.token-generated-successfully'
+            ),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        },
+        error: () => {
+          this.snackBar.open(
+            this.translateService.instant('ws-settings.token-generation-failed'),
+            this.translateService.instant('close'),
+            { duration: 3000 }
+          );
+        }
       });
+  }
+
+  isTokenDurationValid(): boolean {
+    const duration = Number(this.duration);
+    return Number.isInteger(duration) &&
+      duration >= this.minTokenDurationDays &&
+      duration <= this.maxTokenDurationDays;
   }
 
   copyToken(): void {

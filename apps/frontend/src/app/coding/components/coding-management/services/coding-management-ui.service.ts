@@ -36,7 +36,7 @@ export class CodingManagementUiService {
     }
 
     return this.appService
-      .createToken(workspaceId, this.appService.loggedUser?.sub || '', 3600)
+      .createOwnToken(workspaceId, 1)
       .pipe(
         catchError(() => {
           this.snackBar.open(

@@ -803,9 +803,8 @@ export class CodingResultsComparisonComponent implements OnInit {
     }
 
     const workspaceId = this.data.workspaceId;
-    const identity = this.appService.loggedUser?.sub || '';
 
-    this.appService.createToken(workspaceId, identity, 3600).subscribe({
+    this.appService.createOwnToken(workspaceId, 1).subscribe({
       next: token => {
         this.codingStatisticsService.getReplayUrl(workspaceId, responseId, token).subscribe({
           next: result => {

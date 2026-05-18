@@ -686,7 +686,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
 
     const loadingSnackBar = this.snackBar.open('Öffne Kodierungs-Interface...', '', { duration: 3000 });
 
-    this.appService.createToken(this.data.workspaceId, this.appService.loggedUser?.sub || '', 3600).subscribe({
+    this.appService.createOwnToken(this.data.workspaceId, 1).subscribe({
       next: (token: string) => {
         loadingSnackBar.dismiss();
 

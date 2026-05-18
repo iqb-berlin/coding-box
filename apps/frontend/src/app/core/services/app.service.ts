@@ -66,9 +66,16 @@ export class AppService {
     this.loadLogoSettings();
   }
 
-  createToken(workspace_id: number, identity: string, duration: number): Observable<string> {
+  createOwnToken(workspace_id: number, duration: number): Observable<string> {
     return this.http.get<string>(
-      `${this.serverUrl}admin/workspace/${workspace_id}/${identity}/token/${duration}`
+      `${this.serverUrl}admin/workspace/${workspace_id}/token/${duration}`
+    );
+  }
+
+  createTokenForIdentity(workspace_id: number, identity: string, duration: number): Observable<string> {
+    const encodedIdentity = encodeURIComponent(identity);
+    return this.http.get<string>(
+      `${this.serverUrl}admin/workspace/${workspace_id}/${encodedIdentity}/token/${duration}`
     );
   }
 

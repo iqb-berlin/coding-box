@@ -97,8 +97,7 @@ export class CodingStatisticsService {
     variableId?: string,
     derivation?: string
   ): Observable<PaginatedResponse<VariableAnalysisItemDto>> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()

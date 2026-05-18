@@ -39,7 +39,7 @@ describe('CodingJobResultDialogComponent', () => {
   };
 
   const mockAppService = {
-    createToken: jest.fn(() => of('test-token')),
+    createOwnToken: jest.fn(() => of('test-token')),
     loggedUser: { sub: 'test-user' }
   };
 

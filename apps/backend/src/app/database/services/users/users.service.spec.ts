@@ -54,17 +54,21 @@ describe('UsersService', () => {
     await expect(service.canAccessWorkSpace(3, 2)).resolves.toBe(true);
   });
 
-  it('returns access levels, workspace ids and users by identity', async () => {
+  it('returns access levels, workspace ids and users by identity or id', async () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce({ accessLevel: 2 });
     workspaceUserRepository.find.mockResolvedValueOnce([{ workspaceId: 3 }, { workspaceId: 4 }]);
     usersRepository.findOne
       .mockResolvedValueOnce({ id: 5, username: 'user', isAdmin: false })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 6, username: 'by-id', isAdmin: true })
       .mockResolvedValueOnce(null);
 
     await expect(service.getUserAccessLevel(1, 2)).resolves.toBe(2);
     await expect(service.getUserWorkspaces(1)).resolves.toEqual([3, 4]);
     await expect(service.findUserByIdentity('id')).resolves.toEqual({ id: 5, username: 'user', isAdmin: false });
     await expect(service.findUserByIdentity('missing')).resolves.toBeNull();
+    await expect(service.findUserById(6)).resolves.toEqual({ id: 6, username: 'by-id', isAdmin: true });
+    await expect(service.findUserById(999)).resolves.toBeNull();
   });
 
   it('updates, creates and removes users', async () => {

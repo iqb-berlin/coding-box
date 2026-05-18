@@ -41,7 +41,7 @@ describe('MyCodingJobsComponent', () => {
               workspaces: []
             }),
             loggedUser: { sub: 'user-7' },
-            createToken: jest.fn().mockReturnValue(of('token'))
+            createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
         },
         {

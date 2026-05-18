@@ -300,9 +300,8 @@ export class ExportComponent {
 
     this.isStartingExport = true;
 
-    const loggedUser = this.appService.loggedUser;
-    const tokenObservable = this.includeReplayUrl && loggedUser?.sub ?
-      this.appService.createToken(workspaceId, loggedUser.sub, 60).pipe(catchError(() => {
+    const tokenObservable = this.includeReplayUrl ?
+      this.appService.createOwnToken(workspaceId, 60).pipe(catchError(() => {
         this.snackBar.open(
           this.translateService.instant('ws-admin.export.errors.token-failed'),
           this.translateService.instant('close'),

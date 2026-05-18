@@ -791,11 +791,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           const firstUnit = bookletReplay.units[0];
 
           this.appService
-            .createToken(
-              this.appService.selectedWorkspaceId,
-              this.appService.loggedUser?.sub || '',
-              1
-            )
+            .createOwnToken(this.appService.selectedWorkspaceId, 1)
             .subscribe(token => {
               const queryParams = {
                 auth: token,
@@ -859,11 +855,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     const firstResponse = this.responses[0];
 
     this.appService
-      .createToken(
-        this.appService.selectedWorkspaceId,
-        this.appService.loggedUser?.sub || '',
-        1
-      )
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe({
         next: token => {
           if (!token) {

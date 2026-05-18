@@ -56,6 +56,30 @@ describe('AppService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('createOwnToken', () => {
+    it('should request a self-service workspace token', () => {
+      service.createOwnToken(7, 1).subscribe(token => {
+        expect(token).toBe('signed-token');
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/7/token/1`);
+      expect(req.request.method).toBe('GET');
+      req.flush('signed-token');
+    });
+  });
+
+  describe('createTokenForIdentity', () => {
+    it('should request a workspace admin token for an encoded target identity', () => {
+      service.createTokenForIdentity(7, 'issuer/user@example.test', 30).subscribe(token => {
+        expect(token).toBe('admin-token');
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/7/issuer%2Fuser%40example.test/token/30`);
+      expect(req.request.method).toBe('GET');
+      req.flush('admin-token');
+    });
+  });
+
   describe('keycloakLogin', () => {
     it('should login and fetch auth data on success', () => {
       const mockToken = 'new-token';

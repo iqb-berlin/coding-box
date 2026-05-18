@@ -366,7 +366,6 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   openReplay(responseId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
-    const identity = this.appService.loggedUser?.sub || '';
 
     if (!workspaceId || !responseId) {
       this.showError(this.translateService.instant('coding-management.descriptions.missing-replay-info'));
@@ -374,7 +373,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
 
     this.replayLoadingByResponseId[responseId] = true;
-    this.appService.createToken(workspaceId, identity, 3600).pipe(
+    this.appService.createOwnToken(workspaceId, 1).pipe(
       take(1),
       switchMap(token => {
         if (!token) {

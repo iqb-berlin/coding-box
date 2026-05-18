@@ -49,7 +49,7 @@ describe('WsSettingsComponent', () => {
     mockAppService = {
       selectedWorkspaceId: 1,
       loggedUser: { sub: 'test-user' },
-      createToken: jest.fn().mockReturnValue(of('test-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('test-token'))
     } as unknown as jest.Mocked<AppService>;
 
     mockWorkspaceSettingsService = {
@@ -125,10 +125,28 @@ describe('WsSettingsComponent', () => {
   });
 
   describe('createToken', () => {
-    it('should call appService.createToken and show snackbar', () => {
+    it('should call appService.createOwnToken and show snackbar', () => {
       component.createToken();
-      expect(mockAppService.createToken).toHaveBeenCalledWith(1, 'test-user', component.duration);
+      expect(mockAppService.createOwnToken).toHaveBeenCalledWith(1, component.duration);
       expect(component.authToken).toBe('test-token');
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should reject decimal durations before requesting a token', () => {
+      component.duration = 1.5;
+
+      component.createToken();
+
+      expect(mockAppService.createOwnToken).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalled();
+    });
+
+    it('should show an error when token generation fails', () => {
+      mockAppService.createOwnToken.mockReturnValue(throwError(() => new Error('failed')));
+
+      component.createToken();
+
+      expect(component.authToken).toBeNull();
       expect(mockSnackBar.open).toHaveBeenCalled();
     });
   });

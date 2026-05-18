@@ -1467,11 +1467,7 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
     });
 
     this.appService
-      .createToken(
-        this.appService.selectedWorkspaceId,
-        this.appService.loggedUser?.sub || '',
-        1
-      )
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe({
         next: token => {
           loadingSnackBar.dismiss();
