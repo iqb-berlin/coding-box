@@ -30,7 +30,8 @@ describe('ExportJobProcessor', () => {
   const createProcessor = () => {
     const codingExportService = {
       exportCodingListForJobAsExcel: jest.fn(),
-      exportCodingListForJobAsJson: jest.fn()
+      exportCodingListForJobAsJson: jest.fn(),
+      exportCodingResultsByVariableCompactAsCsvStream: jest.fn()
     };
     const codingExportOrchestratorService = {
       exportResultsByVersionAsCsv: jest.fn(),
@@ -191,6 +192,55 @@ describe('ExportJobProcessor', () => {
         serverUrl: 'http://app.example'
       });
       expect(result.fileName).toMatch(/\.csv$/);
+    } finally {
+      cleanup(filePath);
+    }
+  });
+
+  it('routes compact by-variable export jobs to CSV generation', async () => {
+    const { processor, codingExportService } = createProcessor();
+    codingExportService.exportCodingResultsByVariableCompactAsCsvStream.mockReturnValue(Readable.from(['csv']));
+    let filePath: string | undefined;
+
+    try {
+      const result = await processor.process(createJob({
+        exportType: 'by-variable-compact',
+        includeModalValue: true,
+        includeDoubleCoded: true,
+        includeComments: true,
+        outputCommentsInsteadOfCodes: false,
+        includeReplayUrl: true,
+        anonymizeCoders: true,
+        usePseudoCoders: true,
+        excludeAutoCoded: true,
+        authToken: 'auth-token',
+        serverUrl: 'http://app.example',
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }));
+      filePath = result.filePath;
+
+      expect(codingExportService.exportCodingResultsByVariableCompactAsCsvStream).toHaveBeenCalledWith(
+        7,
+        true,
+        true,
+        true,
+        false,
+        true,
+        true,
+        true,
+        'auth-token',
+        undefined,
+        true,
+        expect.any(Function),
+        [1],
+        [2],
+        [3],
+        'http://app.example'
+      );
+      expect(result.fileName).toMatch(/\.csv$/);
+      expect(fs.readFileSync(filePath as string).toString('utf-8')).toBe('\uFEFFcsv');
     } finally {
       cleanup(filePath);
     }

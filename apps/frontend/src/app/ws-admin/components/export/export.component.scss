@@ -118,6 +118,43 @@
     }
   }
 
+  .export-warning {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    gap: 12px;
+    margin: 16px 0 0;
+    padding: 12px 14px;
+    border: 1px solid #f0c36d;
+    border-left: 4px solid #f5a623;
+    border-radius: 8px;
+    background: #fff8e1;
+
+    mat-icon {
+      color: #a86800;
+      margin-top: 2px;
+    }
+
+    .warning-title {
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    p {
+      margin: 0 0 10px;
+      color: #4f4f4f;
+      line-height: 1.4;
+    }
+
+    button {
+      border-radius: 8px;
+      min-height: 36px;
+      height: auto;
+      line-height: 1.2;
+      white-space: normal;
+    }
+  }
+
   .filter-section {
     margin: 24px 0;
     padding: clamp(12px, 2vw, 16px);

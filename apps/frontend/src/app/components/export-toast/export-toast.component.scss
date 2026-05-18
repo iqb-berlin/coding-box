@@ -3,7 +3,7 @@
   bottom: 20px;
   right: 20px;
   z-index: 1000;
-  max-width: 360px;
+  width: min(460px, calc(100vw - 40px));
   min-width: 300px;
 }
 
@@ -140,9 +140,35 @@
   .job-error {
     margin-top: 4px;
 
+    .error-title {
+      color: #b71c1c;
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
     .error-text {
       font-size: 12px;
-      color: #f44336;
+      color: #b71c1c;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .error-details {
+      margin-top: 6px;
+      font-size: 12px;
+      color: #666;
+
+      summary {
+        cursor: pointer;
+      }
+
+      code {
+        display: block;
+        margin-top: 4px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
     }
   }
 

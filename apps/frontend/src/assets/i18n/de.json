@@ -42,10 +42,17 @@
     "remove": "Entfernen",
     "clear-all": "Alle löschen",
     "cancel": "Abbrechen",
+    "error-details": "Technische Details",
+    "errors": {
+      "too-many-worksheets-title": "Export zu groß",
+      "too-many-worksheets-message": "Dieser Export würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie „Nach Variable, kompakt“ oder schränken Sie die Auswahl ein.",
+      "generic-title": "Export fehlgeschlagen"
+    },
     "types": {
       "aggregated": "Aggregierte Ansicht",
       "by-coder": "Nach Kodierer",
       "by-variable": "Nach Variable",
+      "by-variable-compact": "Nach Variable, kompakt",
       "detailed": "Detailliertes Kodierprotokoll",
       "coding-times": "Kodierzeiten-Bericht",
       "results-by-version": "Finale Ergebnisdaten"
@@ -216,6 +223,7 @@
     "export.errors.no-workspace": "Kein Arbeitsbereich ausgewählt",
     "export.errors.export-failed": "Datenexport fehlgeschlagen",
     "export.errors.start-failed": "Datenexport konnte nicht gestartet werden",
+    "export.errors.too-many-worksheets-short": "Der Export ist zu groß für einzelne Tabellenblätter.",
     "export.errors.token-failed": "Replay-Token konnte nicht erzeugt werden",
     "export.job-started": "Datenexport gestartet",
     "export-format-groups": {
@@ -230,7 +238,9 @@
       "by-coder": "Nach Kodierer",
       "by-coder-description": " Separate Tabellen für jeden Kodierer mit seinen Variablen und Testpersonen",
       "by-variable": "Nach Variable",
-      "by-variable-description": " Separate Tabellen für jede Variable mit allen Kodierern und Testpersonen",
+      "by-variable-description": "Separate Tabellen für jede Unit-Variable-Kombination. Für kleinere Audit-Exporte geeignet.",
+      "by-variable-compact": "Nach Variable, kompakt",
+      "by-variable-compact-description": "Eine CSV-Tabelle mit Unit, Variable, Testperson, Kodierer und Code. Für große Exporte geeignet.",
       "detailed": "Detailliertes Kodierprotokoll",
       "detailed-description": "Einzelne Kodierauftrags-Zeilen mit Kodierer, Zeitstempel, Kommentar und Code als CSV",
       "coding-times": "Kodierzeiten-Bericht",
@@ -275,6 +285,9 @@
       "most-frequent-random": "Kodierer: häufigster/Zufall",
       "most-frequent-random-tooltip": "Es wird der häufigste Code genommen. Bei Gleichverteilung wird ein Code zufällig ausgewählt.",
       "filter-jobs-trainings": "Enthaltene Job-Definitionen und Schulungen",
+      "by-variable-too-large-title": "Dieser Export ist für einzelne Tabellenblätter zu groß",
+      "by-variable-too-large-message": "Die aktuelle Auswahl würde {{actual}} Tabellenblätter erzeugen. Erlaubt sind aktuell {{max}}. Wählen Sie den kompakten Variablenexport oder schränken Sie die Auswahl über Job-Definitionen, Schulungen oder Kodierer ein.",
+      "select-compact-variable-export": "Kompakten Export auswählen",
       "filter-coders": "Enthaltene Kodierer",
       "job-definitions": "Job-Definitionen",
       "coder-trainings": "Schulungen",

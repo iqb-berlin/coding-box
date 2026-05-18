@@ -30,7 +30,12 @@
           </div>
 
           <div class="job-error" *ngIf="job.status === 'failed' && job.error">
-            <span class="error-text">{{ job.error }}</span>
+            <div class="error-title">{{ getErrorTitle(job) }}</div>
+            <div class="error-text">{{ getErrorMessage(job) }}</div>
+            <details *ngIf="hasTechnicalDetails(job)" class="error-details">
+              <summary>{{ 'export-toast.error-details' | translate }}</summary>
+              <code>{{ job.error }}</code>
+            </details>
           </div>
 
           <div class="job-actions">

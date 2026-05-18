@@ -46,9 +46,17 @@ type PublicExportJobStatus =
     progress: number;
     result?: PublicExportJobResult;
     error?: string;
+    errorCode?: string;
+    errorDetails?: Record<string, number | string | boolean>;
   }
   | { error: string };
 type RequestUser = { id?: number | string; userId?: number | string };
+type ByVariableExportEstimateResponse = {
+  exportType: 'by-variable' | 'by-variable-compact';
+  unitVariableCount: number;
+  worksheetLimit: number | null;
+  exceedsWorksheetLimit: boolean;
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -89,6 +97,24 @@ export class WorkspaceCodingExportController {
     }
 
     return userId;
+  }
+
+  private getPublicExportErrorDetails(error?: string): {
+    errorCode?: string;
+    errorDetails?: Record<string, number | string | boolean>;
+  } {
+    const worksheetLimitMatch = error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+    if (!worksheetLimitMatch) {
+      return {};
+    }
+
+    return {
+      errorCode: 'EXPORT_TOO_MANY_WORKSHEETS',
+      errorDetails: {
+        actual: Number(worksheetLimitMatch[1]),
+        max: Number(worksheetLimitMatch[2])
+      }
+    };
   }
 
   private pipeExportStream(
@@ -988,6 +1014,31 @@ export class WorkspaceCodingExportController {
     res.send(buffer);
   }
 
+  @Post(':workspace_id/coding/export/estimate')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  async estimateExportJob(
+    @WorkspaceId() workspace_id: number,
+      @Body() body: Omit<ExportJobData, 'workspaceId' | 'userId'>
+  ): Promise<ByVariableExportEstimateResponse> {
+    if (body.exportType !== 'by-variable' && body.exportType !== 'by-variable-compact') {
+      throw new BadRequestException(
+        'Export estimates are only supported for by-variable exports'
+      );
+    }
+
+    const exportType = body.exportType;
+    return this.codingExportService.estimateCodingResultsByVariableExport(
+      workspace_id,
+      exportType,
+      body.excludeAutoCoded || false,
+      body.jobDefinitionIds,
+      body.coderTrainingIds,
+      body.coderIds
+    );
+  }
+
   @Post(':workspace_id/coding/export/start')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
@@ -1004,6 +1055,7 @@ export class WorkspaceCodingExportController {
             'aggregated',
             'by-coder',
             'by-variable',
+            'by-variable-compact',
             'detailed',
             'coding-times',
             'coding-list',
@@ -1169,7 +1221,10 @@ export class WorkspaceCodingExportController {
         ...(status === 'completed' && job.returnvalue ?
           { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
           {}),
-        ...(status === 'failed' && failedReason ? { error: failedReason } : {})
+        ...(status === 'failed' && failedReason ? {
+          error: failedReason,
+          ...this.getPublicExportErrorDetails(failedReason)
+        } : {})
       };
     } catch (error) {
       this.logger.error(
