@@ -466,6 +466,85 @@ describe('TestPersonCodingService', () => {
     });
   });
 
+  describe('getDoubleCodedVariablesForReview', () => {
+    it('should request double-coded review data with agreement and scope filters', () => {
+      const mockResponse = {
+        data: [{
+          responseId: 10,
+          unitName: 'UNIT_1',
+          variableId: 'VAR_1',
+          personLogin: 'person-1',
+          personCode: 'P001',
+          bookletName: 'BOOKLET_1',
+          givenAnswer: 'answer',
+          isResolved: false,
+          coderResults: [{
+            coderId: 1,
+            coderName: 'Coder 1',
+            jobId: 100,
+            jobName: 'Job A',
+            code: 1,
+            score: 1,
+            notes: null,
+            supervisorComment: null,
+            codedAt: '2026-05-18T00:00:00.000Z'
+          }]
+        }],
+        total: 1,
+        page: 2,
+        limit: 25
+      };
+
+      service.getDoubleCodedVariablesForReview(
+        mockWorkspaceId,
+        2,
+        25,
+        true,
+        false,
+        'VAR_1',
+        9,
+        'done',
+        'unresolved',
+        'differ',
+        [11, 12],
+        [21]
+      ).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(request => request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review`);
+      expect(req.request.method).toBe('GET');
+      expect(req.request.params.get('page')).toBe('2');
+      expect(req.request.params.get('limit')).toBe('25');
+      expect(req.request.params.get('onlyConflicts')).toBe('true');
+      expect(req.request.params.get('excludeTrainings')).toBe('false');
+      expect(req.request.params.get('search')).toBe('VAR_1');
+      expect(req.request.params.get('coderId')).toBe('9');
+      expect(req.request.params.get('statusFilter')).toBe('done');
+      expect(req.request.params.get('resolvedFilter')).toBe('unresolved');
+      expect(req.request.params.get('agreementFilter')).toBe('differ');
+      expect(req.request.params.get('jobDefinitionIds')).toBe('11,12');
+      expect(req.request.params.get('coderTrainingIds')).toBe('21');
+      req.flush(mockResponse);
+    });
+
+    it('should propagate double-coded review errors to the component', done => {
+      service.getDoubleCodedVariablesForReview(mockWorkspaceId).subscribe({
+        next: () => done.fail('expected double-coded review request to fail'),
+        error: error => {
+          expect(error.status).toBe(500);
+          done();
+        }
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/double-coded-review?page=1&limit=50&onlyConflicts=false&excludeTrainings=false`);
+      req.flush(
+        { message: 'review query failed' },
+        { status: 500, statusText: 'Server Error' }
+      );
+    });
+  });
+
   describe('coding freshness', () => {
     it('should request the freshness scope with version and states', () => {
       const mockResponse = {
