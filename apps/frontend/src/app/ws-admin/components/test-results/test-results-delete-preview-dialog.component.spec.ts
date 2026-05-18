@@ -58,7 +58,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     expect(component.canConfirm).toBe(false);
     expect(component.hasCodingImpact).toBe(true);
     expect(component.codingImpactMetrics).toEqual([
-      { label: 'Aufgaben-Ergebnisse', value: 12, hint: 'mit Kodierung' },
+      { label: 'Aufgabenbearbeitungen', value: 12, hint: 'mit Kodierung' },
       { label: 'Auto-Coding 1', value: 120, hint: 'Antwort-Kodierungen' },
       { label: 'Manuelle Kodierung', value: 40, hint: 'Antwort-Kodierungen' },
       { label: 'Auto-Coding 2', value: 15, hint: 'Antwort-Kodierungen' }

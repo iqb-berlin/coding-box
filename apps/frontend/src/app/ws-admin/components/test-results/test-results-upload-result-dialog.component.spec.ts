@@ -59,6 +59,24 @@ describe('TestResultsUploadResultDialogComponent', () => {
           other: 1
         }
       },
+      codingFreshness: {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 1,
+            affectedResponseCount: 3
+          },
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 1,
+            affectedResponseCount: 3
+          }
+        ]
+      },
       logMetrics: {
         bookletsWithLogs: 1,
         totalBooklets: 2,
@@ -104,6 +122,14 @@ describe('TestResultsUploadResultDialogComponent', () => {
       { category: 'other', label: 'Sonstiges', count: 1 },
       { category: 'unit_not_found', label: 'Unit nicht gefunden', count: 1 }
     ]);
+    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessSummaryText).toBe(
+      'Je betroffenem Auto-Coding-Lauf sind 3 Antwortwerte in 1 Aufgabenbearbeitung zu bearbeiten. ' +
+      'Auto-Coding 1 und Auto-Coding 2 müssen ausgeführt werden.'
+    );
+    expect(component.getCodingFreshnessChipLabel(data.result.codingFreshness!.items[0])).toBe(
+      'Auto-Coding 1: 1 Aufgabenbearbeitung kodieren'
+    );
     expect(component.filteredIssues).toBe(component.filteredIssues);
     expect(component.issueExportButtonLabel).toBe('Probleme exportieren (2)');
     expect(component.buildIssueExportCsv()).toContain(
@@ -139,5 +165,30 @@ describe('TestResultsUploadResultDialogComponent', () => {
     component.onCategoryChange();
     component.close();
     expect(dialogRef.close).toHaveBeenCalled();
+  });
+
+  it('ignores zero-count coding freshness rows', () => {
+    component.data = {
+      resultType: 'responses',
+      result: {
+        ...data.result,
+        codingFreshness: {
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [
+            {
+              version: 'v1',
+              state: 'PENDING',
+              unitCount: 0,
+              affectedResponseCount: 0
+            }
+          ]
+        }
+      } as never
+    };
+
+    expect(component.codingFreshnessWarnings).toEqual([]);
+    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.codingFreshnessDialogTitle).toBe('Kodierstand aktuell');
   });
 });

@@ -89,11 +89,35 @@
         </div>
       </div>
 
+      <div *ngIf="hasCodingFreshnessWarnings" class="manual-freshness-banner">
+        <mat-icon>warning</mat-icon>
+        <div class="manual-freshness-copy">
+          <strong>{{ manualCodingFreshnessPanelTitle }}</strong>
+          <span>{{ manualCodingFreshnessSummaryText }}</span>
+          <span class="manual-freshness-help">{{ manualCodingFreshnessExplanationText }}</span>
+          <div class="manual-freshness-chip-row">
+            <span *ngFor="let item of codingFreshnessWarnings" class="manual-freshness-chip">
+              {{ getManualFreshnessChipLabel(item) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div class="planning-overview-grid" aria-label="Übersicht zur manuellen Kodierungsplanung">
         <div class="overview-metric">
-          <span class="metric-label">Offene Fälle</span>
+          <span class="metric-label">Noch offen</span>
           <span class="metric-value">{{ getOpenCodingCases() }}</span>
-          <span class="metric-hint">noch zu kodieren</span>
+          <span class="metric-hint">nicht abgeschlossen</span>
+        </div>
+        <div class="overview-metric">
+          <span class="metric-label">Für neue Jobs verfügbar</span>
+          <span class="metric-value">{{ getAvailableCasesForNewJobs() }}</span>
+          <span class="metric-hint">
+            <ng-container *ngIf="getUnavailableCasesForNewJobs() > 0; else allCasesAvailable">
+              {{ getUnavailableCasesForNewJobs() }} reserviert oder verteilt
+            </ng-container>
+            <ng-template #allCasesAvailable>aus aktueller Variablenauswahl</ng-template>
+          </span>
         </div>
         <div class="overview-metric">
           <span class="metric-label">Variablenabdeckung</span>
@@ -101,7 +125,7 @@
           <span class="metric-hint">{{ variableCoverageOverview?.missingVariables || 0 }} fehlend</span>
         </div>
         <div class="overview-metric">
-          <span class="metric-label">Fälle in Jobs</span>
+          <span class="metric-label">In Jobs verteilt</span>
           <span class="metric-value">{{ caseCoverageOverview?.effectiveCasesInJobs || 0 }}</span>
           <span class="metric-hint">{{ caseCoverageOverview?.effectiveUnassignedCases || 0 }} nicht zugewiesen</span>
         </div>
@@ -110,6 +134,21 @@
           <span class="metric-value">{{ getAppliedResultsPercentage() | number:'1.0-0' }}%</span>
           <span class="metric-hint">{{ appliedResultsOverview?.remainingResponses || 0 }} verbleibend</span>
         </div>
+      </div>
+
+      <div class="planning-next-step" [ngClass]="getPlanningStatusClass()">
+        <mat-icon>{{ getPlanningNextStepIcon() }}</mat-icon>
+        <div class="next-step-copy">
+          <strong>{{ getPlanningNextStepTitle() }}</strong>
+          <span>{{ getPlanningNextStepDescription() }}</span>
+        </div>
+        <button
+          mat-stroked-button
+          color="primary"
+          type="button"
+          (click)="performPlanningNextStep()">
+          {{ getPlanningNextStepActionLabel() }}
+        </button>
       </div>
 
       <nav class="planning-section-nav" aria-label="Abschnitte der manuellen Kodierungsplanung">

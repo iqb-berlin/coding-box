@@ -26,7 +26,7 @@
       <div class="freshness-header">
         <mat-icon>warning</mat-icon>
         <div>
-          <div class="section-title">Kodierung nicht mehr vollständig aktuell</div>
+          <div class="section-title">{{ codingFreshnessDialogTitle }}</div>
           <div class="warning-text">
             <div>{{ codingFreshnessSummaryText }}</div>
             <div class="freshness-explanation">{{ codingFreshnessExplanationText }}</div>
@@ -84,12 +84,16 @@
     }
     @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
-      <div class="section-title">Datenbankänderungen</div>
+      <div class="section-title">Import und Arbeitsbereich</div>
+      <div class="db-change-note">
+        Aus Import zeigt, was die Upload-Jobs in der Datei erkannt haben. Vorher und Nachher zeigen den
+        Gesamtbestand im Arbeitsbereich. Delta zeigt die Veränderung im Arbeitsbereich durch diesen Import.
+      </div>
       <table class="db-changes-table">
         <thead>
           <tr>
             <th class="col-metric">Metrik</th>
-            <th class="col-number">Erwartet</th>
+            <th class="col-number">Aus Import</th>
             <th class="col-number">Vorher</th>
             <th class="col-number">Nachher</th>
             <th class="col-number">Delta</th>
@@ -137,7 +141,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Antworten (einzigartig)</td>
+            <td class="row-label">Antwortwerte (einzigartig)</td>
             <td class="num">{{ result.expected.uniqueResponses }}</td>
             <td class="num">{{ result.before.uniqueResponses }}</td>
             <td class="num">{{ result.after.uniqueResponses }}</td>

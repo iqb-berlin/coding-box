@@ -133,6 +133,7 @@ import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAttentionTitle,
   getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessChipLabel,
   getCodingFreshnessManualReviewGuidanceText,
@@ -140,7 +141,8 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
-  hasOnlyManualCodingFreshnessWarnings
+  hasOnlyManualCodingFreshnessWarnings,
+  isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import { TestResultsUploadResultDialogComponent } from './test-results-upload-result-dialog.component';
@@ -1290,7 +1292,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.codingFreshnessSummary?.items || [])
-      .filter(item => item.state !== 'CURRENT')
+      .filter(isCodingFreshnessOpenWarning)
       .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
   }
 
@@ -1334,14 +1336,16 @@ export class TestResultsComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessBannerTitle(): string {
-    return this.hasOnlyManualCodingFreshnessWarnings ?
-      'Manuelle Kodierung prüfen' :
-      'Kodierung nicht mehr vollständig aktuell';
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessActionLabel(): string {
-    return this.hasOnlyManualCodingFreshnessWarnings ?
-      'Manuelle Kodierung öffnen' :
+    if (this.hasOnlyManualCodingFreshnessWarnings) {
+      return 'Manuelle Kodierung öffnen';
+    }
+
+    return this.autoCodingFreshnessWarnings.length > 0 ?
+      'Auto-Coding öffnen' :
       'Kodierung öffnen';
   }
 

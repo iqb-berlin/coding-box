@@ -399,4 +399,23 @@ describe('TestResultsComponent', () => {
       })
     }));
   });
+
+  it('should ignore zero-count coding freshness rows in the overview banner', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v1',
+          state: 'PENDING',
+          unitCount: 0,
+          affectedResponseCount: 0
+        }
+      ]
+    };
+
+    expect(component.codingFreshnessWarnings).toEqual([]);
+    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
+  });
 });

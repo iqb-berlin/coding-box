@@ -21,10 +21,13 @@ import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAttentionTitle,
   getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
-  getCodingFreshnessVersionLabel
+  getCodingFreshnessVersionLabel,
+  isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
 
 export type TestResultsUploadResultDialogData = {
@@ -183,7 +186,7 @@ export class TestResultsUploadResultDialogComponent {
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.result.codingFreshness?.items || [])
-      .filter(item => item.state !== 'CURRENT')
+      .filter(isCodingFreshnessOpenWarning)
       .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
   }
 
@@ -203,7 +206,18 @@ export class TestResultsUploadResultDialogComponent {
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
   }
 
+  get codingFreshnessDialogTitle(): string {
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+  }
+
   get codingFreshnessExplanationText(): string {
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+      this.codingFreshnessWarnings
+    );
+    if (guidanceText) {
+      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+    }
+
     return CODING_FRESHNESS_TASK_RESULT_HELP;
   }
 

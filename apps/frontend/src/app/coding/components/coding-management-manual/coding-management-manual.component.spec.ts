@@ -189,6 +189,79 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Manuelle Kodierung abgeschlossen');
   });
 
+  it('should explain open auto-coding work separately from completed manual coding', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v1',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        },
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+
+    expect(component.hasCodingFreshnessWarnings).toBe(true);
+    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.manualCodingFreshnessSummaryText).toBe(
+      'Je betroffenem Auto-Coding-Lauf sind 5098 Antwortwerte in 671 Aufgabenbearbeitungen zu bearbeiten. ' +
+      'Auto-Coding 1 und Auto-Coding 2 müssen ausgeführt werden.'
+    );
+    expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
+      'Auto-Coding 1: 671 Aufgabenbearbeitungen kodieren'
+    );
+  });
+
+  it('should ignore zero-count freshness warnings in the manual banner', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v1',
+          state: 'PENDING',
+          unitCount: 0,
+          affectedResponseCount: 0
+        }
+      ]
+    };
+
+    expect(component.hasCodingFreshnessWarnings).toBe(false);
+    expect(component.manualCodingFreshnessPanelTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('should refresh coding freshness after applying coding results', () => {
+    const componentInternals = component as unknown as {
+      refreshAfterApplyingCodingResults(): void;
+      loadCodingFreshness(): void;
+      refreshAllStatistics(): void;
+      reloadCodingJobsList(): void;
+    };
+    const loadCodingFreshnessSpy = jest
+      .spyOn(componentInternals, 'loadCodingFreshness')
+      .mockImplementation();
+    const refreshAllStatisticsSpy = jest
+      .spyOn(componentInternals, 'refreshAllStatistics')
+      .mockImplementation();
+    const reloadCodingJobsListSpy = jest
+      .spyOn(componentInternals, 'reloadCodingJobsList')
+      .mockImplementation();
+
+    componentInternals.refreshAfterApplyingCodingResults();
+
+    expect(refreshAllStatisticsSpy).toHaveBeenCalled();
+    expect(loadCodingFreshnessSpy).toHaveBeenCalled();
+    expect(reloadCodingJobsListSpy).toHaveBeenCalled();
+  });
+
   it('should not treat stale-source coding jobs as ready to apply', () => {
     const isCodingJobReadyForApply = (component as unknown as {
       isCodingJobReadyForApply(job: {
@@ -207,6 +280,56 @@ describe('CodingManagementManualComponent', () => {
       status: 'completed',
       freshnessStatus: 'stale_source'
     })).toBe(false);
+  });
+
+  it('should calculate cases available for new job definitions separately from effective open cases', () => {
+    component.codingIncompleteVariables = [
+      {
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        responseCount: 100,
+        uniqueCasesAfterAggregation: 80,
+        availableCases: 78
+      },
+      {
+        unitName: 'Unit 2',
+        variableId: 'Var 2',
+        responseCount: 5,
+        uniqueCasesAfterAggregation: 5,
+        availableCases: 0
+      }
+    ];
+
+    expect(component.getAvailableCasesForNewJobs()).toBe(78);
+    expect(component.getUnavailableCasesForNewJobs()).toBe(7);
+  });
+
+  it('should guide users from incomplete planning to job definitions with available-case context', () => {
+    setCompletePlanningState();
+    component.caseCoverageOverview = {
+      ...component.caseCoverageOverview!,
+      effectiveCasesInJobs: 7,
+      effectiveUnassignedCases: 3,
+      coveragePercentage: 70
+    };
+    component.codingIncompleteVariables = [
+      {
+        unitName: 'Unit 1',
+        variableId: 'Var 1',
+        responseCount: 10,
+        uniqueCasesAfterAggregation: 10,
+        availableCases: 8
+      }
+    ];
+
+    expect(component.getPlanningNextStepTitle()).toBe('Kodierfälle in Jobs verteilen');
+    expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Jobdefinitionen');
+    expect(component.getPlanningNextStepTargetSection()).toBe('manual-planning');
+    expect(component.getPlanningNextStepDescription()).toContain('3 Fälle sind noch nicht in Kodierjobs');
+    expect(component.getPlanningNextStepDescription()).toContain('8 Fälle verfügbar');
+    expect(component.getPlanningNextStepDescription()).toContain(
+      '2 Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert'
+    );
   });
 
   function setCompletePlanningState(): void {
