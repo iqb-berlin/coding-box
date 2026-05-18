@@ -59,6 +59,7 @@ import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
+  getCodingFreshnessAttentionTitle,
   getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessAutoCodingButtonLabel,
   getCodingFreshnessChipLabel,
@@ -67,7 +68,8 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
-  hasOnlyManualCodingFreshnessWarnings
+  hasOnlyManualCodingFreshnessWarnings,
+  isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
 
 @Component({
@@ -474,7 +476,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.codingFreshnessSummary?.items || [])
-      .filter(item => item.state !== 'CURRENT' && item.unitCount > 0);
+      .filter(isCodingFreshnessOpenWarning);
   }
 
   get hasCodingFreshnessWarnings(): boolean {
@@ -525,13 +527,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return 'Kodierung noch nicht gestartet';
     }
 
-    if (this.hasOnlyManualCodingFreshnessWarnings) {
-      return 'Manuelle Kodierung prüfen';
-    }
-
-    return this.hasCodingFreshnessWarnings ?
-      'Kodierstand nicht vollständig aktuell' :
-      'Kodierstand aktuell';
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessGuidanceText(): string {

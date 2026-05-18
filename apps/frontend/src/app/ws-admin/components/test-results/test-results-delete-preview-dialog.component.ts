@@ -96,7 +96,7 @@ export class TestResultsDeletePreviewDialogComponent {
 
     return [
       {
-        label: 'Aufgaben-Ergebnisse',
+        label: 'Aufgabenbearbeitungen',
         value: impact.affectedUnits || 0,
         hint: 'mit Kodierung'
       },

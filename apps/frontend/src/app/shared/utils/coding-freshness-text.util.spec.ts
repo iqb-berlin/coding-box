@@ -1,14 +1,16 @@
 import {
+  getCodingFreshnessAttentionTitle,
   getCodingFreshnessAutoCodingButtonLabel,
   getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessChipLabel,
   getCodingFreshnessManualReviewGuidanceText,
   getCodingFreshnessManualReviewWarnings,
-  getCodingFreshnessSummaryText
+  getCodingFreshnessSummaryText,
+  isCodingFreshnessOpenWarning
 } from './coding-freshness-text.util';
 
 describe('coding freshness text utils', () => {
-  it('explains a single auto-coding refresh with task results and responses', () => {
+  it('explains a single auto-coding refresh with tasks and response values', () => {
     expect(getCodingFreshnessSummaryText([
       {
         version: 'v1',
@@ -17,8 +19,28 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 5397
       }
     ])).toBe(
-      'Für 704 Aufgaben-Ergebnisse muss Auto-Coding 1 ausgeführt werden. ' +
-      'Das betrifft 5397 einzelne Antworten.'
+      'Auto-Coding 1 muss für 704 Aufgabenbearbeitungen ausgeführt werden. ' +
+      'Das betrifft 5397 Antwortwerte.'
+    );
+  });
+
+  it('does not double count the same imported responses across two auto-coding runs', () => {
+    expect(getCodingFreshnessSummaryText([
+      {
+        version: 'v1',
+        state: 'PENDING',
+        unitCount: 671,
+        affectedResponseCount: 5098
+      },
+      {
+        version: 'v3',
+        state: 'PENDING',
+        unitCount: 671,
+        affectedResponseCount: 5098
+      }
+    ])).toBe(
+      'Je betroffenem Auto-Coding-Lauf sind 5098 Antwortwerte in 671 Aufgabenbearbeitungen zu bearbeiten. ' +
+      'Auto-Coding 1 und Auto-Coding 2 müssen ausgeführt werden.'
     );
   });
 
@@ -37,8 +59,8 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 3
       }
     ])).toBe(
-      'Für 3 Aufgaben-Ergebnisse muss die Kodierung geprüft oder aktualisiert werden. ' +
-      'Das betrifft 9 einzelne Antworten.'
+      'Es sind mehrere Kodierschritte offen. ' +
+      'Die Chips zeigen je Kodierschritt, wie viele Aufgabenbearbeitungen betroffen sind.'
     );
   });
 
@@ -57,8 +79,8 @@ describe('coding freshness text utils', () => {
         affectedResponseCount: 3
       }
     ])).toBe(
-      'Für 3 Aufgaben-Ergebnisse muss Auto-Coding 1 ausgeführt oder aktualisiert werden. ' +
-      'Das betrifft 9 einzelne Antworten.'
+      'Auto-Coding 1 muss für 3 Aufgabenbearbeitungen ausgeführt oder aktualisiert werden. ' +
+      'Das betrifft 9 Antwortwerte.'
     );
   });
 
@@ -68,7 +90,7 @@ describe('coding freshness text utils', () => {
     );
   });
 
-  it('formats chip and action labels with task result wording', () => {
+  it('formats chip and action labels with task wording', () => {
     const item = {
       version: 'v1' as const,
       state: 'PENDING' as const,
@@ -77,10 +99,10 @@ describe('coding freshness text utils', () => {
     };
 
     expect(getCodingFreshnessChipLabel(item)).toBe(
-      'Auto-Coding 1: neu zu kodieren (1 Aufgaben-Ergebnis)'
+      'Auto-Coding 1: 1 Aufgabenbearbeitung kodieren'
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
-      '1 Aufgaben-Ergebnis mit Auto-Coding 1 kodieren'
+      'Auto-Coding 1 für 1 Aufgabenbearbeitung starten'
     );
   });
 
@@ -93,12 +115,32 @@ describe('coding freshness text utils', () => {
     };
 
     expect(getCodingFreshnessSummaryText([item])).toBe(
-      'Für 2 Aufgaben-Ergebnisse muss Auto-Coding 1 erneut ausgeführt werden. ' +
-      'Das betrifft 4 einzelne Antworten.'
+      'Auto-Coding 1 muss für 2 Aufgabenbearbeitungen aktualisiert werden. ' +
+      'Das betrifft 4 Antwortwerte.'
     );
     expect(getCodingFreshnessAutoCodingButtonLabel([item], 'v1')).toBe(
-      '2 Aufgaben-Ergebnisse mit Auto-Coding 1 neu kodieren'
+      'Auto-Coding 1 für 2 Aufgabenbearbeitungen aktualisieren'
     );
+  });
+
+  it('summarizes the attention title by affected coding area', () => {
+    expect(getCodingFreshnessAttentionTitle([
+      {
+        version: 'v1',
+        state: 'PENDING',
+        unitCount: 1,
+        affectedResponseCount: 2
+      }
+    ])).toBe('Auto-Coding aktualisieren');
+
+    expect(getCodingFreshnessAttentionTitle([
+      {
+        version: 'v2',
+        state: 'MANUAL_REVIEW_REQUIRED',
+        unitCount: 1,
+        affectedResponseCount: 2
+      }
+    ])).toBe('Manuelle Kodierung prüfen');
   });
 
   it('separates auto-coding warnings from manual review warnings', () => {
@@ -144,6 +186,21 @@ describe('coding freshness text utils', () => {
     ];
 
     expect(getCodingFreshnessManualReviewWarnings(items)).toEqual([items[2]]);
+  });
+
+  it('ignores empty auto-coding freshness rows', () => {
+    const item = {
+      version: 'v1' as const,
+      state: 'PENDING' as const,
+      unitCount: 0,
+      affectedResponseCount: 2
+    };
+
+    expect(isCodingFreshnessOpenWarning(item)).toBe(false);
+    expect(getCodingFreshnessAutoCodingWarnings([item])).toEqual([]);
+    expect(getCodingFreshnessSummaryText([item])).toBe(
+      'Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.'
+    );
   });
 
   it('gives direct guidance for manual review only', () => {

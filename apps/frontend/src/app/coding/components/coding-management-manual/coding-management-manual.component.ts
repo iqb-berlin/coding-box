@@ -78,6 +78,20 @@ import {
 } from '../../../ws-admin/services/workspace-settings.service';
 import { CodingStatistics } from '../../../../../../../api-dto/coding/coding-statistics';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
+import {
+  CodingFreshnessSummaryDto,
+  CodingFreshnessSummaryItemDto
+} from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  CODING_FRESHNESS_TASK_RESULT_HELP,
+  getCodingFreshnessAttentionTitle,
+  getCodingFreshnessAutoCodingWarnings,
+  getCodingFreshnessChipLabel,
+  getCodingFreshnessManualReviewGuidanceText,
+  getCodingFreshnessManualReviewWarnings,
+  getCodingFreshnessSummaryText,
+  isCodingFreshnessOpenWarning
+} from '../../../shared/utils/coding-freshness-text.util';
 
 interface SavedCodeProgress {
   id?: number;
@@ -251,6 +265,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     unitName: string;
     variableId: string;
     responseCount: number;
+    availableCases?: number;
     uniqueCasesAfterAggregation?: number;
   }[] = [];
 
@@ -268,8 +283,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   completedJobsReadyForApply: CodingJob[] = [];
   completedJobsBlockedForReview: CodingJob[] = [];
+  codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
 
   isLoadingCompletedJobsReadyForApply = false;
+  isLoadingCodingFreshness = false;
 
   isApplyingCodingResults = false;
 
@@ -359,6 +376,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(() => {
         this.refreshAllStatistics();
+        this.loadCodingFreshness();
         this.loadResponseAnalysis();
         this.reloadCodingJobsList();
         if (this.codingJobDefinitionsComponent) {
@@ -367,6 +385,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       });
 
     this.loadInitialManualCodingState();
+    this.loadCodingFreshness();
   }
 
   ngOnDestroy(): void {
@@ -903,6 +922,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   refreshManualCodingPlanning(): void {
     this.refreshAllStatistics();
+    this.loadCodingFreshness();
     this.loadResponseAnalysis();
     this.reloadCodingJobsList();
 
@@ -929,6 +949,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     }
 
     return this.appliedResultsOverview?.remainingResponses || 0;
+  }
+
+  getAvailableCasesForNewJobs(): number {
+    return this.codingIncompleteVariables.reduce(
+      (sum, variable) => sum + (
+        variable.availableCases ??
+        variable.uniqueCasesAfterAggregation ??
+        variable.responseCount ??
+        0
+      ),
+      0
+    );
+  }
+
+  getUnavailableCasesForNewJobs(): number {
+    const totalEffectiveCases = this.codingIncompleteVariables.reduce(
+      (sum, variable) => sum + this.getVariableEffectiveCaseCount(variable),
+      0
+    );
+
+    return Math.max(0, totalEffectiveCases - this.getAvailableCasesForNewJobs());
   }
 
   getVariableCoveragePercentage(): number {
@@ -1313,6 +1354,153 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     return 'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.';
   }
 
+  getPlanningNextStepTitle(): string {
+    switch (this.getPlanningStatusState()) {
+      case 'loading':
+        return 'Planungsstand wird geladen';
+      case 'warning':
+        return 'Konflikte zuerst klären';
+      case 'planning-incomplete':
+        return 'Kodierfälle in Jobs verteilen';
+      case 'execution-ready':
+        return 'Kodierjobs bearbeiten lassen';
+      case 'completion-ready':
+        return 'Ergebnisse übernehmen';
+      case 'complete':
+        return 'Workflow abgeschlossen';
+      case 'progress-unavailable':
+        return 'Kodierfortschritt prüfen';
+      default:
+        return 'Jobdefinition erstellen';
+    }
+  }
+
+  getPlanningNextStepDescription(): string {
+    const availableCases = this.getAvailableCasesForNewJobs();
+    const unavailableCases = this.getUnavailableCasesForNewJobs();
+
+    switch (this.getPlanningStatusState()) {
+      case 'loading':
+        return 'Warten Sie kurz, bis die Planungsdaten aktualisiert sind.';
+      case 'warning':
+        return 'Prüfen Sie Variablen, die von mehreren Definitionen mit überlappenden Fällen verwendet werden.';
+      case 'planning-incomplete':
+        if ((this.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
+          const unavailableHint = unavailableCases > 0 ?
+            ` ${unavailableCases} Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert.` :
+            '';
+          return `${this.caseCoverageOverview?.effectiveUnassignedCases || 0} Fälle sind noch nicht in Kodierjobs. Für neue Jobdefinitionen sind aktuell ${availableCases} Fälle verfügbar.${unavailableHint} Danach Definition freigeben und Jobs erstellen.`;
+        }
+        return 'Ordnen Sie die fehlenden Variablen einer Jobdefinition zu. Danach Definition freigeben und Jobs erstellen.';
+      case 'execution-ready':
+        return 'Die Fälle sind verteilt. Kodierer können nun ihre zugewiesenen Kodierjobs bearbeiten.';
+      case 'completion-ready':
+        return 'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.';
+      case 'complete':
+        return 'Alle manuellen Kodierungen wurden abgeschlossen und übernommen.';
+      case 'progress-unavailable':
+        return 'Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs, bevor Sie fortfahren.';
+      default:
+        return 'Wählen Sie Variablen oder Bündel sowie Kodierer aus. Eine Definition verteilt noch keine Fälle; erst "Jobs erstellen" legt die Kodierjobs an.';
+    }
+  }
+
+  getPlanningNextStepActionLabel(): string {
+    switch (this.getPlanningStatusState()) {
+      case 'execution-ready':
+        return 'Zu den Kodierjobs';
+      case 'completion-ready':
+        return 'Zum Abschluss';
+      case 'complete':
+        return 'Abschluss ansehen';
+      case 'loading':
+      case 'progress-unavailable':
+        return 'Aktualisieren';
+      default:
+        return 'Zu den Jobdefinitionen';
+    }
+  }
+
+  getPlanningNextStepTargetSection(): string {
+    switch (this.getPlanningStatusState()) {
+      case 'execution-ready':
+        return 'manual-execution';
+      case 'completion-ready':
+      case 'complete':
+        return 'manual-completion';
+      default:
+        return 'manual-planning';
+    }
+  }
+
+  performPlanningNextStep(): void {
+    const planningStatusState = this.getPlanningStatusState();
+    if (planningStatusState === 'loading' || planningStatusState === 'progress-unavailable') {
+      this.refreshManualCodingPlanning();
+      return;
+    }
+
+    this.scrollToSection(this.getPlanningNextStepTargetSection());
+  }
+
+  getPlanningNextStepIcon(): string {
+    switch (this.getPlanningStatusState()) {
+      case 'warning':
+        return 'warning';
+      case 'execution-ready':
+        return 'play_circle';
+      case 'completion-ready':
+      case 'complete':
+        return 'published_with_changes';
+      case 'loading':
+      case 'progress-unavailable':
+        return 'sync';
+      default:
+        return 'route';
+    }
+  }
+
+  get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.codingFreshnessSummary?.items || [])
+      .filter(isCodingFreshnessOpenWarning)
+      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
+  }
+
+  get hasCodingFreshnessWarnings(): boolean {
+    return this.codingFreshnessWarnings.length > 0;
+  }
+
+  get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessAutoCodingWarnings(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessPanelTitle(): string {
+    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessSummaryText(): string {
+    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+  }
+
+  get manualCodingFreshnessExplanationText(): string {
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+      this.codingFreshnessWarnings
+    );
+    if (guidanceText) {
+      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+    }
+
+    return CODING_FRESHNESS_TASK_RESULT_HELP;
+  }
+
+  getManualFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    return getCodingFreshnessChipLabel(item);
+  }
+
   private refreshAggregationDependentViews(): void {
     this.loadResponseAnalysis();
     this.loadVariableCoverageOverview();
@@ -1359,6 +1547,27 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           this.refreshAllStatistics();
           this.loadResponseAnalysis();
         }
+      });
+  }
+
+  private loadCodingFreshness(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.codingFreshnessSummary = null;
+      return;
+    }
+
+    this.isLoadingCodingFreshness = true;
+    this.testPersonCodingService
+      .getCodingFreshness(workspaceId)
+      .pipe(
+        takeUntil(this.destroy$),
+        finalize(() => {
+          this.isLoadingCodingFreshness = false;
+        })
+      )
+      .subscribe(summary => {
+        this.codingFreshnessSummary = summary;
       });
   }
 
@@ -1533,6 +1742,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
             unitName: string;
             variableId: string;
             responseCount: number;
+            availableCases?: number;
             uniqueCasesAfterAggregation?: number;
           }[]
         ) => {
@@ -1749,6 +1959,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private refreshAfterApplyingCodingResults(): void {
     this.refreshAllStatistics();
+    this.loadCodingFreshness();
     this.reloadCodingJobsList();
   }
 

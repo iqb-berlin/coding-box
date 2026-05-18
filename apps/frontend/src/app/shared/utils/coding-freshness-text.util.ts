@@ -5,7 +5,7 @@ import {
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 
 export const CODING_FRESHNESS_TASK_RESULT_HELP =
-  'Ein Aufgaben-Ergebnis ist eine konkrete Aufgabe einer Testperson in einem Testheft; die Antwortzahl zählt die einzelnen Antwortwerte darin.';
+  'Eine Aufgabenbearbeitung ist eine Aufgabe, die eine bestimmte Testperson in einem Testheft bearbeitet hat. Zu einer Aufgabenbearbeitung können mehrere Antwortwerte gehören.';
 
 export function getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
   const labels: Record<CodingFreshnessVersion, string> = {
@@ -19,21 +19,25 @@ export function getCodingFreshnessVersionLabel(version: CodingFreshnessVersion):
 export function getCodingFreshnessStateLabel(state: CodingFreshnessState): string {
   const labels: Record<CodingFreshnessState, string> = {
     CURRENT: 'aktuell',
-    PENDING: 'neu zu kodieren',
-    STALE: 'veraltet',
-    MANUAL_REVIEW_REQUIRED: 'manuell zu prüfen'
+    PENDING: 'zu kodieren',
+    STALE: 'zu aktualisieren',
+    MANUAL_REVIEW_REQUIRED: 'zu prüfen'
   };
   return labels[state];
 }
 
 export function formatCodingFreshnessTaskResultCount(count: number): string {
   const safeCount = normalizeCount(count);
-  return `${safeCount} ${safeCount === 1 ? 'Aufgaben-Ergebnis' : 'Aufgaben-Ergebnisse'}`;
+  return `${safeCount} ${safeCount === 1 ? 'Aufgabenbearbeitung' : 'Aufgabenbearbeitungen'}`;
 }
 
 export function formatCodingFreshnessResponseCount(count: number): string {
   const safeCount = normalizeCount(count);
-  return `${safeCount} ${safeCount === 1 ? 'einzelne Antwort' : 'einzelne Antworten'}`;
+  return `${safeCount} ${safeCount === 1 ? 'Antwortwert' : 'Antwortwerte'}`;
+}
+
+export function isCodingFreshnessOpenWarning(item: CodingFreshnessSummaryItemDto): boolean {
+  return item.state !== 'CURRENT' && normalizeCount(item.unitCount) > 0;
 }
 
 export function getCodingFreshnessAffectedTaskResultCount(items: CodingFreshnessSummaryItemDto[]): number {
@@ -48,6 +52,7 @@ export function getCodingFreshnessAutoCodingWarnings(
   items: CodingFreshnessSummaryItemDto[]
 ): CodingFreshnessSummaryItemDto[] {
   return items.filter(item => (
+    isCodingFreshnessOpenWarning(item) &&
     (item.version === 'v1' || item.version === 'v3') &&
     (item.state === 'PENDING' || item.state === 'STALE')
   ));
@@ -57,8 +62,7 @@ export function getCodingFreshnessManualReviewWarnings(
   items: CodingFreshnessSummaryItemDto[]
 ): CodingFreshnessSummaryItemDto[] {
   return items.filter(item => (
-    item.state !== 'CURRENT' &&
-    normalizeCount(item.unitCount) > 0 &&
+    isCodingFreshnessOpenWarning(item) &&
     (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED')
   ));
 }
@@ -68,6 +72,28 @@ export function hasOnlyManualCodingFreshnessWarnings(
 ): boolean {
   return getCodingFreshnessManualReviewWarnings(items).length > 0 &&
     getCodingFreshnessAutoCodingWarnings(items).length === 0;
+}
+
+export function getCodingFreshnessAttentionTitle(
+  items: CodingFreshnessSummaryItemDto[]
+): string {
+  const warnings = items.filter(isCodingFreshnessOpenWarning);
+  if (warnings.length === 0) {
+    return 'Kodierstand aktuell';
+  }
+
+  const autoCodingWarnings = getCodingFreshnessAutoCodingWarnings(warnings);
+  const manualReviewWarnings = getCodingFreshnessManualReviewWarnings(warnings);
+
+  if (autoCodingWarnings.length > 0 && manualReviewWarnings.length === 0) {
+    return 'Auto-Coding aktualisieren';
+  }
+
+  if (autoCodingWarnings.length === 0 && manualReviewWarnings.length > 0) {
+    return 'Manuelle Kodierung prüfen';
+  }
+
+  return 'Kodierstand prüfen';
 }
 
 export function getCodingFreshnessManualReviewGuidanceText(
@@ -85,33 +111,36 @@ export function getCodingFreshnessManualReviewGuidanceText(
 }
 
 export function getCodingFreshnessSummaryText(items: CodingFreshnessSummaryItemDto[]): string {
-  const warnings = items.filter(item => item.state !== 'CURRENT' && normalizeCount(item.unitCount) > 0);
+  const warnings = items.filter(isCodingFreshnessOpenWarning);
   if (warnings.length === 0) {
     return 'Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.';
   }
 
-  const taskResults = formatCodingFreshnessTaskResultCount(
-    getCodingFreshnessAffectedTaskResultCount(warnings)
-  );
-  const responses = formatCodingFreshnessResponseCount(
-    getCodingFreshnessAffectedResponseCount(warnings)
-  );
-  const singleAutoCodingVersion = getSingleAutoCodingVersion(warnings);
-  if (singleAutoCodingVersion) {
-    return `Für ${taskResults} muss ${getCodingFreshnessVersionLabel(singleAutoCodingVersion)} ` +
-      `${getAutoCodingActionText(warnings, singleAutoCodingVersion)}. Das betrifft ${responses}.`;
+  const autoCodingWarnings = getCodingFreshnessAutoCodingWarnings(warnings);
+  const manualReviewWarnings = getCodingFreshnessManualReviewWarnings(warnings);
+
+  if (autoCodingWarnings.length > 0 && manualReviewWarnings.length === 0) {
+    return getAutoCodingSummaryText(autoCodingWarnings);
+  }
+
+  if (autoCodingWarnings.length === 0 && manualReviewWarnings.length > 0) {
+    return getManualReviewSummaryText(manualReviewWarnings);
   }
 
   if (warnings.length === 1) {
-    return `${getSingleCodingFreshnessActionText(warnings[0], taskResults)}. Das betrifft ${responses}.`;
+    const taskResults = formatCodingFreshnessTaskResultCount(
+      getCodingFreshnessAffectedTaskResultCount(warnings)
+    );
+    return getSingleCodingFreshnessActionText(warnings[0], taskResults);
   }
 
-  return `Für ${taskResults} muss die Kodierung geprüft oder aktualisiert werden. Das betrifft ${responses}.`;
+  return 'Es sind mehrere Kodierschritte offen. ' +
+    'Die Chips zeigen je Kodierschritt, wie viele Aufgabenbearbeitungen betroffen sind.';
 }
 
 export function getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
   return `${getCodingFreshnessVersionLabel(item.version)}: ` +
-    `${getCodingFreshnessStateLabel(item.state)} (${formatCodingFreshnessTaskResultCount(item.unitCount)})`;
+    `${formatCodingFreshnessTaskResultCount(item.unitCount)} ${getChipActionText(item)}`;
 }
 
 export function getCodingFreshnessAutoCodingButtonLabel(
@@ -123,7 +152,59 @@ export function getCodingFreshnessAutoCodingButtonLabel(
     .reduce((sum, item) => sum + normalizeCount(item.unitCount), 0);
   const action = getAutoCodingButtonActionText(items, version);
 
-  return `${formatCodingFreshnessTaskResultCount(count)} mit ${getCodingFreshnessVersionLabel(version)} ${action}`;
+  return `${getCodingFreshnessVersionLabel(version)} für ${formatCodingFreshnessTaskResultCount(count)} ${action}`;
+}
+
+function getAutoCodingSummaryText(
+  items: CodingFreshnessSummaryItemDto[]
+): string {
+  const versions = Array.from(
+    new Set(items.map(item => item.version))
+  ) as Array<Extract<CodingFreshnessVersion, 'v1' | 'v3'>>;
+
+  if (versions.length === 1) {
+    const [version] = versions;
+    const taskResults = formatCodingFreshnessTaskResultCount(
+      getCodingFreshnessAffectedTaskResultCount(items)
+    );
+    const responses = formatCodingFreshnessResponseCount(
+      getCodingFreshnessAffectedResponseCount(items)
+    );
+    return `${getCodingFreshnessVersionLabel(version)} muss für ${taskResults} ` +
+      `${getAutoCodingActionText(items, version)}. Das betrifft ${responses}.`;
+  }
+
+  const hasSameTaskResultCount = items.every(item => (
+    normalizeCount(item.unitCount) === normalizeCount(items[0].unitCount)
+  ));
+  const hasSameResponseCount = items.every(item => (
+    normalizeCount(item.affectedResponseCount) === normalizeCount(items[0].affectedResponseCount)
+  ));
+
+  if (hasSameTaskResultCount && hasSameResponseCount) {
+    const taskResults = formatCodingFreshnessTaskResultCount(items[0].unitCount);
+    const responses = formatCodingFreshnessResponseCount(items[0].affectedResponseCount);
+    return `Je betroffenem Auto-Coding-Lauf sind ${responses} in ${taskResults} zu bearbeiten. ` +
+      `${formatVersionList(versions)} müssen ` +
+      `${getCombinedAutoCodingActionText(items)}.`;
+  }
+
+  return `Es sind ${items.length} Auto-Coding-Aktualisierungen offen. ` +
+    'Die Chips zeigen je Auto-Coding-Lauf, wie viele Aufgabenbearbeitungen betroffen sind.';
+}
+
+function getManualReviewSummaryText(
+  items: CodingFreshnessSummaryItemDto[]
+): string {
+  const taskResults = formatCodingFreshnessTaskResultCount(
+    getCodingFreshnessAffectedTaskResultCount(items)
+  );
+  const responses = formatCodingFreshnessResponseCount(
+    getCodingFreshnessAffectedResponseCount(items)
+  );
+
+  return `Die manuelle Kodierung muss für ${taskResults} geprüft werden. ` +
+    `Das betrifft ${responses}.`;
 }
 
 function getSingleCodingFreshnessActionText(
@@ -132,15 +213,15 @@ function getSingleCodingFreshnessActionText(
 ): string {
   if ((item.version === 'v1' || item.version === 'v3') &&
     (item.state === 'PENDING' || item.state === 'STALE')) {
-    const action = item.state === 'PENDING' ? 'ausgeführt werden' : 'erneut ausgeführt werden';
-    return `Für ${taskResults} muss ${getCodingFreshnessVersionLabel(item.version)} ${action}`;
+    return `${getCodingFreshnessVersionLabel(item.version)} muss für ${taskResults} ` +
+      `${getAutoCodingActionText([item], item.version)}`;
   }
 
   if (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED') {
-    return `Für ${taskResults} muss die manuelle Kodierung geprüft werden`;
+    return `Die manuelle Kodierung muss für ${taskResults} geprüft werden`;
   }
 
-  return `Für ${taskResults} muss die Kodierung aktualisiert werden`;
+  return `Die Kodierung muss für ${taskResults} aktualisiert werden`;
 }
 
 function getAutoCodingActionText(
@@ -156,7 +237,7 @@ function getAutoCodingActionText(
   }
 
   if (states.size === 1 && states.has('STALE')) {
-    return 'erneut ausgeführt werden';
+    return 'aktualisiert werden';
   }
 
   return 'ausgeführt oder aktualisiert werden';
@@ -171,31 +252,48 @@ function getAutoCodingButtonActionText(
     .map(item => item.state));
 
   if (states.size === 1 && states.has('PENDING')) {
-    return 'kodieren';
+    return 'starten';
   }
 
-  return 'neu kodieren';
+  return 'aktualisieren';
 }
 
-function getSingleAutoCodingVersion(
+function getCombinedAutoCodingActionText(
   items: CodingFreshnessSummaryItemDto[]
-): Extract<CodingFreshnessVersion, 'v1' | 'v3'> | null {
-  const versions = new Set<CodingFreshnessVersion>();
-  for (const item of items) {
-    const isAutoCodingRefresh = (item.version === 'v1' || item.version === 'v3') &&
-      (item.state === 'PENDING' || item.state === 'STALE');
-    if (!isAutoCodingRefresh) {
-      return null;
-    }
-    versions.add(item.version);
+): string {
+  const states = new Set(items.map(item => item.state));
+  if (states.size === 1 && states.has('PENDING')) {
+    return 'ausgeführt werden';
   }
 
-  if (versions.size !== 1) {
-    return null;
+  if (states.size === 1 && states.has('STALE')) {
+    return 'aktualisiert werden';
   }
 
-  const [version] = Array.from(versions);
-  return version === 'v1' || version === 'v3' ? version : null;
+  return 'ausgeführt oder aktualisiert werden';
+}
+
+function getChipActionText(item: CodingFreshnessSummaryItemDto): string {
+  if (item.version === 'v1' || item.version === 'v3') {
+    return item.state === 'PENDING' ? 'kodieren' : 'aktualisieren';
+  }
+
+  if (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED') {
+    return 'prüfen';
+  }
+
+  return getCodingFreshnessStateLabel(item.state);
+}
+
+function formatVersionList(
+  versions: Array<Extract<CodingFreshnessVersion, 'v1' | 'v3'>>
+): string {
+  const labels = versions.map(version => getCodingFreshnessVersionLabel(version));
+  if (labels.length <= 1) {
+    return labels[0] || 'Auto-Coding';
+  }
+
+  return `${labels.slice(0, -1).join(', ')} und ${labels[labels.length - 1]}`;
 }
 
 function normalizeCount(count: number): number {

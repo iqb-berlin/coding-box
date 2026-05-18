@@ -1561,8 +1561,8 @@ export class CodingFreshnessService {
         const versionLabel = this.getFreshnessVersionLabel(item.version);
         const stateLabel = this.getFreshnessStateLabel(item.state);
         const unitLabel = item.unitCount === 1 ?
-          '1 Aufgaben-Ergebnis' :
-          `${item.unitCount} Aufgaben-Ergebnisse`;
+          '1 Aufgabenbearbeitung' :
+          `${item.unitCount} Aufgabenbearbeitungen`;
         return `${versionLabel}: ${unitLabel} ${stateLabel}`;
       })
       .join('; ');
@@ -1644,11 +1644,11 @@ export class CodingFreshnessService {
 
   private getFreshnessStateLabel(state: CodingFreshnessState): string {
     if (state === 'PENDING') {
-      return 'neu zu kodieren';
+      return 'zu kodieren';
     }
 
     if (state === 'STALE') {
-      return 'veraltet';
+      return 'zu aktualisieren';
     }
 
     return 'manuell zu prüfen';
