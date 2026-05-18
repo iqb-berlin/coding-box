@@ -515,7 +515,7 @@ describe('CodingValidationService', () => {
 
       expect(result).toEqual(cachedVariables);
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v3:1'
+        'coding_incomplete_variables_v4:1'
       );
     });
 
@@ -565,7 +565,7 @@ describe('CodingValidationService', () => {
         })
       ]);
       expect(mockCacheService.set).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v3:1',
+        'coding_incomplete_variables_v4:1',
         result,
         300
       );
@@ -675,6 +675,72 @@ describe('CodingValidationService', () => {
       );
     });
 
+    it('should calculate availability on aggregation groups instead of raw job response counts', async () => {
+      const codingIncompleteQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseCount: '6' }
+      ]);
+      const intendedIncompleteQb = createQueryBuilderMock([]);
+      const casesInJobsQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', casesInJobs: '4' }
+      ]);
+      const assignedResponsesQb = createQueryBuilderMock([
+        { unitName: 'unit1', variableId: 'var1', responseId: '1' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '2' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '3' },
+        { unitName: 'unit1', variableId: 'var1', responseId: '5' }
+      ]);
+
+      mockResponseRepository.createQueryBuilder = jest.fn()
+        .mockReturnValueOnce(codingIncompleteQb)
+        .mockReturnValueOnce(intendedIncompleteQb);
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock)
+        .mockReturnValueOnce(casesInJobsQb)
+        .mockReturnValueOnce(assignedResponsesQb);
+
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
+        new Map([['UNIT1', new Set(['var1'])]])
+      );
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(4);
+      mockCodingJobService.getResponseMatchingMode.mockResolvedValue([]);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue([
+        {
+          id: 1, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 2, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 3, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 4, unitName: 'unit1', variableid: 'var1', value: 'same'
+        },
+        {
+          id: 5, unitName: 'unit1', variableid: 'var1', value: 'single'
+        },
+        {
+          id: 6, unitName: 'unit1', variableid: 'var1', value: 'single'
+        }
+      ] as never);
+
+      const result = await service.getCodingIncompleteVariables(1);
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          unitName: 'unit1',
+          variableId: 'var1',
+          responseCount: 6,
+          casesInJobs: 2,
+          availableCases: 1,
+          uniqueCasesAfterAggregation: 3
+        })
+      ]);
+    });
+
     it.skip('should fetch from database on cache miss', async () => {
       const rawResults = [
         { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
@@ -773,7 +839,7 @@ describe('CodingValidationService', () => {
     it('should generate correct cache key', () => {
       const cacheKey = service.generateIncompleteVariablesCacheKey(123);
 
-      expect(cacheKey).toBe('coding_incomplete_variables_v3:123');
+      expect(cacheKey).toBe('coding_incomplete_variables_v4:123');
     });
   });
 
@@ -784,7 +850,7 @@ describe('CodingValidationService', () => {
       await service.invalidateIncompleteVariablesCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding_incomplete_variables_v3:1'
+        'coding_incomplete_variables_v4:1'
       );
     });
   });

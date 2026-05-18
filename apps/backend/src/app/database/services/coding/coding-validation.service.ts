@@ -34,6 +34,27 @@ interface NormalizedExpectedCombination {
   variableAnchor: string;
 }
 
+type ManualCodingVariableCaseCounts = {
+  unitName: string;
+  variableId: string;
+  responseCount: number;
+  isDerived: boolean;
+  coderTrainingRequired: boolean;
+};
+
+type SlimCodingResponse = {
+  id: number;
+  unitName: string;
+  variableid: string;
+  value: string | null;
+};
+
+type VariableCaseInfo = {
+  casesInJobs: number;
+  availableCases: number;
+  uniqueCasesAfterAggregation: number;
+};
+
 @Injectable()
 export class CodingValidationService {
   private readonly logger = new Logger(CodingValidationService.name);
@@ -513,7 +534,7 @@ export class CodingValidationService {
      */
   private async enrichVariablesWithCaseInfo(
     workspaceId: number,
-    variables: { unitName: string; variableId: string; responseCount: number; isDerived: boolean; coderTrainingRequired: boolean }[]
+    variables: ManualCodingVariableCaseCounts[]
   ): Promise<
     {
       unitName: string;
@@ -526,59 +547,67 @@ export class CodingValidationService {
       coderTrainingRequired: boolean;
     }[]
     > {
-    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
-
-    // Compute aggregation-reduced counts for all variables at once
-    const aggregationMap = await this.computeUniqueCasesAfterAggregation(workspaceId, variables);
+    const caseInfoMap = await this.computeVariableCaseInfo(workspaceId, variables);
 
     return variables.map(variable => {
       const key = `${variable.unitName}::${variable.variableId}`;
-      const casesInJobs = casesInJobsMap.get(key) || 0;
-      const uniqueCasesAfterAggregation = aggregationMap.get(key) ?? variable.responseCount;
-      const availableCases = Math.max(0, uniqueCasesAfterAggregation - casesInJobs);
+      const caseInfo = caseInfoMap.get(key) || {
+        casesInJobs: 0,
+        availableCases: variable.responseCount,
+        uniqueCasesAfterAggregation: variable.responseCount
+      };
 
       return {
         ...variable,
-        casesInJobs,
-        availableCases,
-        uniqueCasesAfterAggregation
+        ...caseInfo
       };
     });
   }
 
   /**
-   * Compute the number of unique coding cases per variable after applying aggregation grouping.
-   * When aggregation is disabled (threshold = null), returns responseCount for each variable.
-   * Derived variables are never aggregated because they share empty/null underlying string values.
+   * Compute total, assigned and available cases per variable on the same case level.
+   * With duplicate aggregation active, raw response ids can outnumber effective coding
+   * cases. Availability therefore has to be calculated per aggregation group.
    */
-  private async computeUniqueCasesAfterAggregation(
+  private async computeVariableCaseInfo(
     workspaceId: number,
-    variables: { unitName: string; variableId: string; responseCount: number; isDerived?: boolean }[]
-  ): Promise<Map<string, number>> {
-    const result = new Map<string, number>();
+    variables: ManualCodingVariableCaseCounts[]
+  ): Promise<Map<string, VariableCaseInfo>> {
+    const result = new Map<string, VariableCaseInfo>();
 
     if (variables.length === 0) {
       return result;
     }
 
+    const casesInJobsMap = await this.getVariableCasesInJobs(workspaceId);
     const aggregationThreshold = await this.codingJobService.getAggregationThreshold(workspaceId);
 
     if (aggregationThreshold === null) {
-      // Aggregation disabled — unique cases = raw response count
       variables.forEach(v => {
-        result.set(`${v.unitName}::${v.variableId}`, v.responseCount);
+        const key = `${v.unitName}::${v.variableId}`;
+        const casesInJobs = casesInJobsMap.get(key) || 0;
+        result.set(key, {
+          casesInJobs,
+          availableCases: Math.max(0, v.responseCount - casesInJobs),
+          uniqueCasesAfterAggregation: v.responseCount
+        });
       });
       return result;
     }
 
     const matchingFlags = await this.codingJobService.getResponseMatchingMode(workspaceId);
-
-    // Fetch slim responses for all base variables in one call (skip derived vars)
     const baseVariables = variables.filter(v => !v.isDerived);
-    const slimResponses = await this.codingJobService.getSlimResponsesForVariables(
-      workspaceId,
-      baseVariables.map(v => ({ unitName: v.unitName, variableId: v.variableId }))
-    );
+    const baseVariableReferences = baseVariables.map(v => ({
+      unitName: v.unitName,
+      variableId: v.variableId
+    }));
+    const [slimResponses, assignedResponseIdsByVariable] = await Promise.all([
+      this.codingJobService.getSlimResponsesForVariables(
+        workspaceId,
+        baseVariableReferences
+      ) as Promise<SlimCodingResponse[]>,
+      this.getAssignedResponseIdsByVariable(workspaceId, baseVariableReferences)
+    ]);
 
     const derivedVariableMap = new Map<string, Set<string>>();
     variables
@@ -590,14 +619,16 @@ export class CodingValidationService {
         derivedVariableMap.set(unitKey, derivedVariables);
       });
 
-    // Group by variable key and apply the same aggregation rules as progress/job coverage.
     for (const variable of variables) {
       const key = `${variable.unitName}::${variable.variableId}`;
+      const rawCasesInJobs = casesInJobsMap.get(key) || 0;
 
-      // Derived variables are not fetched as base response values here. Keep their
-      // effective case count at the raw response count, matching job distribution.
       if (variable.isDerived) {
-        result.set(key, variable.responseCount);
+        result.set(key, {
+          casesInJobs: rawCasesInJobs,
+          availableCases: Math.max(0, variable.responseCount - rawCasesInJobs),
+          uniqueCasesAfterAggregation: variable.responseCount
+        });
         continue;
       }
 
@@ -617,20 +648,88 @@ export class CodingValidationService {
       );
 
       let uniqueCases = 0;
+      let casesInJobs = 0;
+      const assignedResponseIds = assignedResponseIdsByVariable.get(key) || new Set<number>();
+
       for (const group of aggregatedGroups) {
         if (group.responses.length >= aggregationThreshold) {
           uniqueCases += 1;
+          if (group.responses.some(response => assignedResponseIds.has(response.responseId))) {
+            casesInJobs += 1;
+          }
         } else {
           uniqueCases += group.responses.length;
+          casesInJobs += group.responses
+            .filter(response => assignedResponseIds.has(response.responseId))
+            .length;
         }
       }
 
-      result.set(key, uniqueCases);
+      result.set(key, {
+        casesInJobs,
+        availableCases: Math.max(0, uniqueCases - casesInJobs),
+        uniqueCasesAfterAggregation: uniqueCases
+      });
     }
 
     this.logger.log(
-      `Computed unique cases after aggregation for ${variables.length} variables in workspace ${workspaceId}`
+      `Computed case availability for ${variables.length} variables in workspace ${workspaceId}`
     );
+
+    return result;
+  }
+
+  private async getAssignedResponseIdsByVariable(
+    workspaceId: number,
+    variables: { unitName: string; variableId: string }[]
+  ): Promise<Map<string, Set<number>>> {
+    const result = new Map<string, Set<number>>();
+
+    if (variables.length === 0) {
+      return result;
+    }
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('cju.unit_name', 'unitName')
+      .addSelect('cju.variable_id', 'variableId')
+      .addSelect('cju.response_id', 'responseId')
+      .leftJoin('cju.coding_job', 'coding_job')
+      .where('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('coding_job.training_id IS NULL');
+
+    const conditions: string[] = [];
+    const parameters: Record<string, string> = {};
+
+    variables.forEach((variable, index) => {
+      const unitParam = `assignedUnitName${index}`;
+      const variableParam = `assignedVariableId${index}`;
+      conditions.push(`(cju.unit_name = :${unitParam} AND cju.variable_id = :${variableParam})`);
+      parameters[unitParam] = variable.unitName;
+      parameters[variableParam] = variable.variableId;
+    });
+
+    query.andWhere(`(${conditions.join(' OR ')})`, parameters);
+    applyResolvedExclusionsToQuery(query, exclusions, {
+      unitNameExpression: 'cju.unit_name',
+      bookletNameExpression: 'cju.booklet_name',
+      parameterPrefix: 'codingValidationAssignedResponses'
+    });
+
+    const rawResults = await query.getRawMany();
+
+    rawResults.forEach(row => {
+      const responseId = Number(row.responseId);
+      if (!Number.isFinite(responseId)) {
+        return;
+      }
+
+      const key = `${row.unitName}::${row.variableId}`;
+      const responseIds = result.get(key) || new Set<number>();
+      responseIds.add(responseId);
+      result.set(key, responseIds);
+    });
 
     return result;
   }
@@ -772,7 +871,7 @@ export class CodingValidationService {
   }
 
   generateIncompleteVariablesCacheKey(workspaceId: number): string {
-    return `coding_incomplete_variables_v3:${workspaceId}`;
+    return `coding_incomplete_variables_v4:${workspaceId}`;
   }
 
   async invalidateIncompleteVariablesCache(workspaceId: number): Promise<void> {
