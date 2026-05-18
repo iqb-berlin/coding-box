@@ -71,7 +71,7 @@ describe('authInterceptor', () => {
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
-  it('should handle other 401 errors as expired sessions', () => {
+  it('should handle other 401 errors as expired sessions without a duplicate global error', () => {
     appService.isBackendLoginRunning.mockReturnValue(false);
 
     http.get('/api/workspaces').subscribe({
@@ -83,7 +83,7 @@ describe('authInterceptor', () => {
     req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
-    expect(appService.addErrorMessage).toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 

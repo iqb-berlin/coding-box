@@ -209,6 +209,42 @@ describe('AppService', () => {
       expect(service.errorMessages[0].requestCount).toBe(2);
     });
 
+    it('should keep the displayed user message in sync when grouped errors append details', () => {
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/journal',
+        message: 'Das Von-Datum ist ungültig.',
+        userMessage: 'Das Von-Datum ist ungültig.',
+        requestId: 'request-1'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 400,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/journal',
+        message: 'Das Bis-Datum ist ungültig.',
+        userMessage: 'Das Bis-Datum ist ungültig.',
+        requestId: 'request-2'
+      } as AppHttpError);
+
+      expect(service.errorMessages).toHaveLength(1);
+      expect(service.errorMessages[0].message).toBe('Das Von-Datum ist ungültig.; Das Bis-Datum ist ungültig.');
+      expect(service.errorMessages[0].userMessage).toBe('Das Von-Datum ist ungültig.; Das Bis-Datum ist ungültig.');
+      expect(service.errorMessages[0].requestCount).toBe(2);
+      expect(service.errorMessages[0].affectedRequests).toEqual([
+        {
+          method: 'GET',
+          urlWithParams: '/api/admin/workspace/5/journal',
+          requestId: 'request-1'
+        },
+        {
+          method: 'GET',
+          urlWithParams: '/api/admin/workspace/5/journal',
+          requestId: 'request-2'
+        }
+      ]);
+    });
+
     it('should group backend connectivity errors across different request URLs', () => {
       service.addErrorMessage({
         status: 504,

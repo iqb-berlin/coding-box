@@ -72,8 +72,12 @@ describe('ErrorMessageDisplayComponent', () => {
       requestCount: 2,
       isBackendConnectivityError: true,
       affectedRequests: [
-        { method: 'GET', urlWithParams: '/api/admin/users/access/5' },
-        { method: 'POST', urlWithParams: '/api/admin/workspace/5/coding/statistics/job?version=v1' }
+        { method: 'GET', urlWithParams: '/api/admin/users/access/5', requestId: 'request-a' },
+        {
+          method: 'POST',
+          urlWithParams: '/api/admin/workspace/5/coding/statistics/job?version=v1',
+          requestId: 'request-b'
+        }
       ]
     } as AppHttpError];
 
@@ -87,5 +91,39 @@ describe('ErrorMessageDisplayComponent', () => {
 
     expect(fixture.nativeElement.textContent).toContain('/api/admin/users/access/5');
     expect(fixture.nativeElement.textContent).toContain('/api/admin/workspace/5/coding/statistics/job?version=v1');
+    expect(fixture.nativeElement.textContent).toContain('request-a');
+    expect(fixture.nativeElement.textContent).toContain('request-b');
+  });
+
+  it('should keep technical server messages hidden until details are expanded', () => {
+    appService.errorMessages = [{
+      id: 2,
+      status: 500,
+      message: 'Auf dem Server ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+      userMessage: 'Auf dem Server ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.',
+      technicalMessage: 'Internal server error',
+      requestId: 'request-123',
+      occurredAt: '2026-05-18T10:42:00.000Z',
+      method: 'GET',
+      urlWithParams: '/api/admin/workspace/5/journal?page=1&limit=20',
+      requestCount: 1,
+      isBackendConnectivityError: false,
+      affectedRequests: [
+        { method: 'GET', urlWithParams: '/api/admin/workspace/5/journal?page=1&limit=20' }
+      ]
+    } as AppHttpError];
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Auf dem Server ist ein Fehler aufgetreten');
+    expect(fixture.nativeElement.textContent).not.toContain('Internal server error');
+    expect(fixture.nativeElement.textContent).not.toContain('/api/admin/workspace/5/journal');
+
+    fixture.componentInstance.toggleErrorDetails(2);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('Internal server error');
+    expect(fixture.nativeElement.textContent).toContain('request-123');
+    expect(fixture.nativeElement.textContent).toContain('/api/admin/workspace/5/journal?page=1&limit=20');
   });
 });

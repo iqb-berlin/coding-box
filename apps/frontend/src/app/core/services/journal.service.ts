@@ -1,23 +1,20 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable, catchError, of } from 'rxjs';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { Observable } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../interceptors/http-error-context';
+import {
+  AuditJournalEntryDto,
+  AuditJournalQueryDto,
+  PaginatedAuditJournalEntriesDto
+} from '../../../../../../api-dto/audit-journal/audit-journal.dto';
 
-export interface JournalEntry {
-  id: number;
-  timestamp: Date;
-  user_id: string;
-  action_type: string;
-  entity_type: string;
-  entity_id: string;
-  details: string;
-}
+export type JournalEntry = AuditJournalEntryDto;
+export type PaginatedJournalEntries = PaginatedAuditJournalEntriesDto;
+export type JournalFilters = Omit<AuditJournalQueryDto, 'page' | 'limit'>;
 
-export interface PaginatedJournalEntries {
-  data: JournalEntry[];
-  total: number;
-  page: number;
-  limit: number;
+export interface JournalRequestOptions {
+  suppressGlobalError?: boolean;
 }
 
 @Injectable({
@@ -34,17 +31,16 @@ export class JournalService {
    * @param limit The number of entries per page
    * @returns An Observable of paginated journal entries
    */
-  getJournalEntries(workspaceId: number, page: number = 1, limit: number = 20): Observable<PaginatedJournalEntries> {
+  getJournalEntries(
+    workspaceId: number,
+    page: number = 1,
+    limit: number = 20,
+    filters: JournalFilters = {},
+    options: JournalRequestOptions = {}
+  ): Observable<PaginatedJournalEntries> {
     return this.http.get<PaginatedJournalEntries>(
-      `${this.serverUrl}admin/workspace/${workspaceId}/journal?page=${page}&limit=${limit}`,
-      {}
-    ).pipe(
-      catchError(() => of({
-        data: [],
-        total: 0,
-        page,
-        limit
-      }))
+      `${this.serverUrl}admin/workspace/${workspaceId}/journal`,
+      this.createListRequestOptions(page, limit, filters, options)
     );
   }
 
@@ -62,27 +58,18 @@ export class JournalService {
     actionType: string,
     entityType: string,
     entityId: string,
-    details: string
+    details: Record<string, unknown> | string
   ): Observable<JournalEntry> {
     return this.http.post<JournalEntry>(
       `${this.serverUrl}admin/workspace/${workspaceId}/journal`,
       {
         action_type: actionType,
         entity_type: entityType,
+        entityType,
         entity_id: entityId,
+        entityId,
         details
-      },
-      {}
-    ).pipe(
-      catchError(() => of({
-        id: 0,
-        timestamp: new Date(),
-        user_id: '',
-        action_type: actionType,
-        entity_type: entityType,
-        entity_id: entityId,
-        details
-      }))
+      }
     );
   }
 
@@ -91,14 +78,52 @@ export class JournalService {
    * @param workspaceId The ID of the workspace
    * @returns An Observable of the CSV data as a Blob
    */
-  downloadJournalEntriesAsCsv(workspaceId: number): Observable<Blob> {
+  downloadJournalEntriesAsCsv(
+    workspaceId: number,
+    options: JournalRequestOptions = {}
+  ): Observable<Blob> {
+    const requestOptions: { responseType: 'blob'; context?: HttpContext } = {
+      responseType: 'blob'
+    };
+
+    if (options.suppressGlobalError) {
+      requestOptions.context = suppressGlobalHttpErrorContext();
+    }
+
     return this.http.get(
       `${this.serverUrl}admin/workspace/${workspaceId}/journal/csv`,
-      {
-        responseType: 'blob'
-      }
-    ).pipe(
-      catchError(() => of(new Blob([])))
+      requestOptions
     );
+  }
+
+  private createListRequestOptions(
+    page: number,
+    limit: number,
+    filters: JournalFilters,
+    options: JournalRequestOptions
+  ): { params: HttpParams; context?: HttpContext } {
+    const requestOptions: { params: HttpParams; context?: HttpContext } = {
+      params: this.createParams(page, limit, filters)
+    };
+
+    if (options.suppressGlobalError) {
+      requestOptions.context = suppressGlobalHttpErrorContext();
+    }
+
+    return requestOptions;
+  }
+
+  private createParams(page: number, limit: number, filters: JournalFilters): HttpParams {
+    let params = new HttpParams()
+      .set('page', String(page))
+      .set('limit', String(limit));
+
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        params = params.set(key, String(value));
+      }
+    });
+
+    return params;
   }
 }

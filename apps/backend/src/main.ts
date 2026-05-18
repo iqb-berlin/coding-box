@@ -7,6 +7,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AppModule } from './app/app.module';
+import { GlobalHttpExceptionFilter } from './app/http/global-http-exception.filter';
+import { REQUEST_ID_HEADER } from './app/http/request-id';
+import { requestIdMiddleware } from './app/http/request-id.middleware';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -14,6 +17,9 @@ async function bootstrap() {
   const host = configService.get('API_HOST') || 'localhost';
   const port = 3333;
   const globalPrefix = 'api';
+
+  app.use(requestIdMiddleware);
+  app.useGlobalFilters(new GlobalHttpExceptionFilter());
 
   app.use((req, _res, next) => {
     const [pathname, query = ''] = req.url.split('?', 2);
@@ -59,7 +65,9 @@ async function bootstrap() {
   app.useStaticAssets('./packages', { prefix: '/api/packages' });
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);
-  app.enableCors();
+  app.enableCors({
+    exposedHeaders: [REQUEST_ID_HEADER]
+  });
 
   // Enable Swagger-UI
   const config = new DocumentBuilder()

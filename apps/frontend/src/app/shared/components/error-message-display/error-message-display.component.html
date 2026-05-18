@@ -45,7 +45,7 @@
       <mat-icon class="error-icon">error_outline</mat-icon>
       <div class="error-text">
         <h3>{{ 'error.error_title' | translate }}</h3>
-        <p>{{ error.message }}</p>
+        <p>{{ getDisplayMessage(error) }}</p>
         @if ((error.requestCount || 1) > 1) {
         <small class="error-summary">
           {{ 'error.requests_affected' | translate:{ count: error.requestCount } }}
@@ -53,13 +53,30 @@
         }
         @if (hasErrorDetails(error)) {
         <button mat-button type="button" class="details-toggle" (click)="toggleErrorDetails(error.id)">
-          {{ (isErrorDetailsExpanded(error.id) ? 'error.hide_details' : 'error.show_details') | translate }}
+          {{ (isErrorDetailsExpanded(error.id) ? 'error.hide_technical_details' : 'error.show_technical_details') | translate }}
         </button>
         }
         @if (isErrorDetailsExpanded(error.id)) {
         <div class="error-details">
-          @for (request of getAffectedRequests(error); track request.method + request.urlWithParams) {
-          <small>{{ request.method }} {{ request.urlWithParams }}</small>
+          @if (hasRequestId(error)) {
+          <small>{{ 'error.details_request_id' | translate }} {{ error.requestId }}</small>
+          }
+          @if (hasHttpStatus(error)) {
+          <small>{{ 'error.details_status' | translate }} {{ error.status }}</small>
+          }
+          @if (error.occurredAt) {
+          <small>{{ 'error.details_time' | translate }} {{ error.occurredAt | date:'dd.MM.yyyy HH:mm:ss' }}</small>
+          }
+          @if (hasTechnicalMessage(error)) {
+          <small>{{ 'error.details_message' | translate }} {{ error.technicalMessage }}</small>
+          }
+          @for (request of getAffectedRequests(error); track request.method + request.urlWithParams + (request.requestId || '')) {
+          <small>
+            {{ 'error.details_request' | translate }} {{ request.method }} {{ request.urlWithParams }}
+            @if (shouldShowAffectedRequestId(error, request)) {
+            <span>{{ 'error.details_request_id' | translate }} {{ request.requestId }}</span>
+            }
+          </small>
           }
         </div>
         }
