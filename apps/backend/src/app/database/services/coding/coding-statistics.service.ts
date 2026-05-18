@@ -6,7 +6,10 @@ import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatistics } from '../shared';
 import { CacheService } from '../../../cache/cache.service';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import {
+  STATISTICS_IGNORED_STATUSES,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { BullJobManagementService } from '../jobs/bull-job-management.service';
 // eslint-disable-next-line import/no-cycle
@@ -146,6 +149,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         validVariablePairKeys
       ];
 
+      whereCondition += ` AND (${statusColumn}) <> ALL($${paramIndex}::smallint[])`;
+      queryParams.push(STATISTICS_IGNORED_STATUSES);
+      paramIndex += 1;
+
       if (globalIgnoredUnits.length > 0) {
         whereCondition += ` AND ${normalizedUnitExpression} != ALL($${paramIndex})`;
         queryParams.push(globalIgnoredUnits.map(normalizeExclusionUnitId));
@@ -182,10 +189,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           AND ${whereCondition}
           AND person.workspace_id = $2
           AND person.consider = $3
-          AND (
-            ${variablePairExpression} = ANY($4::text[])
-            OR response.is_autocoder_generated = TRUE
-          )
+          AND ${variablePairExpression} = ANY($4::text[])
         GROUP BY ${statusColumn}, ${derivedExpression}
       `, queryParams);
 

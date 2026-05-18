@@ -32,6 +32,10 @@ export const STATISTICS_IGNORED_STATUSES = [
   10 // PARTLY_DISPLAYED
 ];
 
+export const STATISTICS_VISIBLE_STATUSES = responseStatesNumericMap
+  .map(entry => entry.key)
+  .filter(status => !STATISTICS_IGNORED_STATUSES.includes(status));
+
 const stringToNumberMap = new Map(responseStatesNumericMap.map(entry => [entry.value, entry.key]));
 const numberToStringMap = new Map(responseStatesNumericMap.map(entry => [entry.key, entry.value]));
 

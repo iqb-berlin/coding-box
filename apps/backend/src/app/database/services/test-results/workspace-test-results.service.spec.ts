@@ -71,6 +71,10 @@ describe('WorkspaceTestResultsService', () => {
   let sessionRepository: Repository<Session>;
   let bookletLogRepository: Repository<BookletLog>;
   let chunkRepository: Repository<ChunkEntity>;
+  let codingListService: {
+    getVariablePageMap: jest.Mock;
+    getValidVariablePairKeys: jest.Mock;
+  };
   let codingValidationService: CodingValidationService;
   let codingStatisticsService: CodingStatisticsService;
   let cacheService: {
@@ -162,6 +166,11 @@ describe('WorkspaceTestResultsService', () => {
       find: jest.fn().mockResolvedValue([])
     } as unknown as Repository<ChunkEntity>;
 
+    codingListService = {
+      getVariablePageMap: jest.fn().mockResolvedValue(new Map()),
+      getValidVariablePairKeys: jest.fn().mockResolvedValue(['Unit1\u001Fvar1', 'Unit2\u001Fvar2'])
+    };
+
     dataSource = {
       createQueryRunner: jest.fn().mockReturnValue({
         connect: jest.fn().mockResolvedValue(undefined),
@@ -189,7 +198,7 @@ describe('WorkspaceTestResultsService', () => {
       unitTagService,
       journalService,
       cacheService as unknown as CacheService,
-      {} as unknown as CodingListService,
+      codingListService as unknown as CodingListService,
       codingValidationService,
       responseManagementService,
       workspaceCoreService,
@@ -554,6 +563,10 @@ describe('WorkspaceTestResultsService', () => {
         'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
         { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
       );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
+      );
       expect(result).toEqual({ data: [], total: 0 });
     });
 
@@ -588,6 +601,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith(
         'response.status_v1 NOT IN (:...ignoredDerivedCodingStatuses)',
         { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
       );
       expect(qb.andWhere).not.toHaveBeenCalledWith(
         'response.is_autocoder_generated IS NOT TRUE'
@@ -630,10 +647,25 @@ describe('WorkspaceTestResultsService', () => {
         { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
       );
     });
+
+    it('should return no derived/all coding responses when no valid coding variables exist', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      codingListService.getValidVariablePairKeys.mockResolvedValue([]);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('1 = 0');
+    });
   });
 
   describe('getResponsesByStatus', () => {
-    it('should include all raw response statuses used by coding statistics', async () => {
+    it('should filter details to visible coding status and valid coding variables', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
       qb.getManyAndCount.mockResolvedValue([[], 2180]);
@@ -652,6 +684,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.andWhere).toHaveBeenCalledWith(
         'response.status_v1 = :statusParam',
         { statusParam: 5 }
+      );
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys: ['Unit1\u001Fvar1', 'Unit2\u001Fvar2'] }
       );
       expect(result).toEqual([[], 2180]);
     });
@@ -672,6 +708,21 @@ describe('WorkspaceTestResultsService', () => {
         expect.stringContaining('WHEN response.is_autocoder_generated = TRUE THEN'),
         { statusParam: 5 }
       );
+    });
+
+    it('should return no details for ignored raw statistics statuses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+
+      const result = await service.getResponsesByStatus(
+        1,
+        'NOT_REACHED',
+        'v1',
+        { page: 1, limit: 100 }
+      );
+
+      expect(result).toEqual([[], 0]);
+      expect(qb.getManyAndCount).not.toHaveBeenCalled();
     });
   });
 

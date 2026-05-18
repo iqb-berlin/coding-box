@@ -49,10 +49,7 @@ export class CodingManagementService {
   private translateService = inject(TranslateService);
   private snackBar = inject(MatSnackBar);
 
-  private _codingStatistics = new BehaviorSubject<CodingStatistics>({
-    totalResponses: 0,
-    statusCounts: {}
-  });
+  private _codingStatistics = new BehaviorSubject<CodingStatistics | null>(null);
 
   private readonly emptyStats: CodingStatistics = { totalResponses: 0, statusCounts: {} };
 
@@ -495,9 +492,19 @@ export class CodingManagementService {
 
   private statisticsDiffer(stats1: CodingStatistics, stats2: CodingStatistics): boolean {
     if (stats1.totalResponses !== stats2.totalResponses) return true;
+    if ((stats1.baseResponseCount || 0) !== (stats2.baseResponseCount || 0)) return true;
+    if ((stats1.derivedResponseCount || 0) !== (stats2.derivedResponseCount || 0)) return true;
+    if ((stats1.derivedVariableCount || 0) !== (stats2.derivedVariableCount || 0)) return true;
     const allStatuses = new Set([...Object.keys(stats1.statusCounts), ...Object.keys(stats2.statusCounts)]);
     for (const status of allStatuses) {
       if ((stats1.statusCounts[status] || 0) !== (stats2.statusCounts[status] || 0)) return true;
+    }
+    const allDerivedStatuses = new Set([
+      ...Object.keys(stats1.derivedStatusCounts || {}),
+      ...Object.keys(stats2.derivedStatusCounts || {})
+    ]);
+    for (const status of allDerivedStatuses) {
+      if ((stats1.derivedStatusCounts?.[status] || 0) !== (stats2.derivedStatusCounts?.[status] || 0)) return true;
     }
     return false;
   }

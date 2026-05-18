@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { Response } from 'express';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -18,6 +18,17 @@ type ExportCancellationCheck = () => Promise<boolean> | boolean;
 type WorkspaceExportTable = {
   name: string;
   query: string;
+};
+
+type ExportTableColumn = {
+  column_name: string;
+  data_type: string;
+  is_nullable: string;
+};
+
+type ResolvedWorkspaceExportTable = WorkspaceExportTable & {
+  columns: ExportTableColumn[];
+  rowCount: number;
 };
 
 @Injectable()
@@ -391,8 +402,13 @@ export class DatabaseExportService {
     const db = new sqlite3.Database(outputFilePath);
     const dbRun = promisify(db.run.bind(db));
     const dbClose = promisify(db.close.bind(db));
+    const queryRunner = this.dataSource.createQueryRunner();
 
     try {
+      await queryRunner.connect();
+      await queryRunner.startTransaction('REPEATABLE READ');
+      await queryRunner.query('SET TRANSACTION READ ONLY');
+
       await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
       await this.throwIfCancelled(isCancelled);
 
@@ -402,18 +418,30 @@ export class DatabaseExportService {
       await dbRun('PRAGMA cache_size=10000');
       await dbRun('PRAGMA temp_store=memory');
 
-      const workspaceTables = this.getWorkspaceExportTables();
-      const rowCounts = new Map<string, number>();
+      const workspaceTableConfigs = this.getWorkspaceExportTables();
+      const workspaceTables: ResolvedWorkspaceExportTable[] = [];
       let totalRows = 0;
 
-      for (const tableConfig of workspaceTables) {
+      for (const tableConfig of workspaceTableConfigs) {
         await this.throwIfCancelled(isCancelled);
-        const countResult = await this.dataSource.query(
+        const columns = await this.getTableColumns(tableConfig.name, queryRunner);
+
+        if (columns.length === 0) {
+          this.logger.warn(`Table ${tableConfig.name} not found, skipping...`);
+          continue;
+        }
+
+        await this.throwIfCancelled(isCancelled);
+        const countResult = await queryRunner.query(
           `SELECT COUNT(*) as count FROM (${tableConfig.query}) export_rows`,
           [workspaceId]
         );
         const rowCount = Number(countResult[0]?.count ?? 0);
-        rowCounts.set(tableConfig.name, rowCount);
+        workspaceTables.push({
+          ...tableConfig,
+          columns,
+          rowCount
+        });
         totalRows += rowCount;
       }
 
@@ -429,18 +457,7 @@ export class DatabaseExportService {
 
         this.logger.log(`Processing workspace table: ${tableName}`);
 
-        const columns = await this.dataSource.query(`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_name = $1 AND table_schema = 'public'
-          ORDER BY ordinal_position
-        `, [tableName]);
-
-        if (columns.length === 0) {
-          this.logger.warn(`Table ${tableName} not found, skipping...`);
-          processedTables += 1;
-          continue;
-        }
+        const { columns } = tableConfig;
 
         const columnDefs = columns.map(col => {
           const colType = this.mapPostgresTypeToSqlite(col.data_type);
@@ -450,7 +467,7 @@ export class DatabaseExportService {
 
         await dbRun(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`);
 
-        const totalRowsInTable = rowCounts.get(tableName) ?? 0;
+        const totalRowsInTable = tableConfig.rowCount;
         if (totalRowsInTable === 0) {
           processedTables += 1;
           await this.reportProgress(
@@ -466,14 +483,14 @@ export class DatabaseExportService {
           continue;
         }
 
-        const orderByClause = await this.getStableOrderByClause(tableName, columns);
+        const orderByClause = await this.getStableOrderByClause(tableName, columns, queryRunner);
         const batchSize = 1000;
         let offset = 0;
 
         while (offset < totalRowsInTable) {
           await this.throwIfCancelled(isCancelled);
 
-          const rows = await this.dataSource.query(
+          const rows = await queryRunner.query(
             `SELECT * FROM (${tableConfig.query}) export_rows
              ORDER BY ${orderByClause}
              LIMIT $2 OFFSET $3`,
@@ -520,8 +537,20 @@ export class DatabaseExportService {
       }
 
       await dbClose();
+      await queryRunner.commitTransaction();
       await this.reportProgress(onProgress, 100, 'Export abgeschlossen');
     } catch (error) {
+      if (queryRunner.isTransactionActive) {
+        try {
+          await queryRunner.rollbackTransaction();
+        } catch (rollbackError) {
+          this.logger.error(
+            `Error rolling back workspace export transaction: ${rollbackError?.message || rollbackError}`,
+            rollbackError?.stack
+          );
+        }
+      }
+
       try {
         await dbClose();
       } catch (closeError) {
@@ -543,6 +572,17 @@ export class DatabaseExportService {
       }
 
       throw error;
+    } finally {
+      if (!queryRunner.isReleased) {
+        try {
+          await queryRunner.release();
+        } catch (releaseError) {
+          this.logger.error(
+            `Error releasing workspace export query runner: ${releaseError?.message || releaseError}`,
+            releaseError?.stack
+          );
+        }
+      }
     }
   }
 
@@ -641,10 +681,11 @@ export class DatabaseExportService {
 
   private async getStableOrderByClause(
     tableName: string,
-    columns: Array<{ column_name: string }>
+    columns: Array<{ column_name: string }>,
+    queryRunner?: QueryRunner
   ): Promise<string> {
     const columnNames = columns.map(column => column.column_name);
-    const primaryKeyColumns = await this.getPrimaryKeyColumns(tableName);
+    const primaryKeyColumns = await this.getPrimaryKeyColumns(tableName, queryRunner);
     let orderColumns = primaryKeyColumns;
     if (orderColumns.length === 0) {
       orderColumns = columnNames.includes('id') ? ['id'] : columnNames;
@@ -656,8 +697,23 @@ export class DatabaseExportService {
       .join(', ') || columnNames.map(columnName => `"${columnName}" ASC`).join(', ');
   }
 
-  private async getPrimaryKeyColumns(tableName: string): Promise<string[]> {
-    const rows = await this.dataSource.query(`
+  private async getTableColumns(
+    tableName: string,
+    queryRunner?: QueryRunner
+  ): Promise<ExportTableColumn[]> {
+    return (queryRunner || this.dataSource).query(`
+      SELECT column_name, data_type, is_nullable
+      FROM information_schema.columns
+      WHERE table_name = $1 AND table_schema = 'public'
+      ORDER BY ordinal_position
+    `, [tableName]);
+  }
+
+  private async getPrimaryKeyColumns(
+    tableName: string,
+    queryRunner?: QueryRunner
+  ): Promise<string[]> {
+    const rows = await (queryRunner || this.dataSource).query(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
       INNER JOIN information_schema.key_column_usage kcu
@@ -689,6 +745,10 @@ export class DatabaseExportService {
   private getWorkspaceExportTables(): WorkspaceExportTable[] {
     return [
       {
+        name: 'workspace',
+        query: 'SELECT w.* FROM workspace w WHERE w.id = $1'
+      },
+      {
         name: 'persons',
         query: 'SELECT * FROM persons WHERE workspace_id = $1'
       },
@@ -703,7 +763,7 @@ export class DatabaseExportService {
       {
         name: 'bookletinfo',
         query: `
-          SELECT bi.* FROM bookletinfo bi
+          SELECT DISTINCT bi.* FROM bookletinfo bi
           INNER JOIN booklet b ON bi.id = b.infoid
           INNER JOIN persons p ON b.personid = p.id
           WHERE p.workspace_id = $1
@@ -787,8 +847,111 @@ export class DatabaseExportService {
         `
       },
       {
+        name: 'logs',
+        query: 'SELECT l.* FROM logs l WHERE l.workspace_id = $1'
+      },
+      {
+        name: 'journal_entries',
+        query: 'SELECT je.* FROM journal_entries je WHERE je.workspace_id = $1'
+      },
+      {
+        name: 'replay_statistics',
+        query: 'SELECT rs.* FROM replay_statistics rs WHERE rs.workspace_id = $1'
+      },
+      {
+        name: 'workspace_test_results_revision',
+        query: 'SELECT wtrr.* FROM workspace_test_results_revision wtrr WHERE wtrr.workspace_id = $1'
+      },
+      {
+        name: 'job_definitions',
+        query: 'SELECT jd.* FROM job_definitions jd WHERE jd.workspace_id = $1'
+      },
+      {
+        name: 'variable_bundle',
+        query: 'SELECT vb.* FROM variable_bundle vb WHERE vb.workspace_id = $1'
+      },
+      {
+        name: 'coder_training',
+        query: 'SELECT ct.* FROM coder_training ct WHERE ct.workspace_id = $1'
+      },
+      {
+        name: 'coder_training_variable',
+        query: `
+          SELECT ctv.* FROM coder_training_variable ctv
+          INNER JOIN coder_training ct ON ctv.coder_training_id = ct.id
+          WHERE ct.workspace_id = $1
+        `
+      },
+      {
+        name: 'coder_training_bundle',
+        query: `
+          SELECT ctb.* FROM coder_training_bundle ctb
+          INNER JOIN coder_training ct ON ctb.coder_training_id = ct.id
+          WHERE ct.workspace_id = $1
+        `
+      },
+      {
+        name: 'coder_training_coder',
+        query: `
+          SELECT ctc.* FROM coder_training_coder ctc
+          INNER JOIN coder_training ct ON ctc.coder_training_id = ct.id
+          WHERE ct.workspace_id = $1
+        `
+      },
+      {
+        name: 'coder_training_discussion_result',
+        query: 'SELECT ctdr.* FROM coder_training_discussion_result ctdr WHERE ctdr.workspace_id = $1'
+      },
+      {
+        name: 'coding_job',
+        query: 'SELECT cj.* FROM coding_job cj WHERE cj.workspace_id = $1'
+      },
+      {
+        name: 'coding_job_coder',
+        query: `
+          SELECT cjc.* FROM coding_job_coder cjc
+          INNER JOIN coding_job cj ON cjc.coding_job_id = cj.id
+          WHERE cj.workspace_id = $1
+        `
+      },
+      {
+        name: 'coding_job_variable',
+        query: `
+          SELECT cjv.* FROM coding_job_variable cjv
+          INNER JOIN coding_job cj ON cjv.coding_job_id = cj.id
+          WHERE cj.workspace_id = $1
+        `
+      },
+      {
+        name: 'coding_job_variable_bundle',
+        query: `
+          SELECT cjvb.* FROM coding_job_variable_bundle cjvb
+          INNER JOIN coding_job cj ON cjvb.coding_job_id = cj.id
+          WHERE cj.workspace_id = $1
+        `
+      },
+      {
         name: 'coding_job_unit',
-        query: 'SELECT cju.* FROM coding_job_unit cju WHERE cju.workspace_id = $1'
+        query: `
+          SELECT cju.* FROM coding_job_unit cju
+          LEFT JOIN coding_job cj ON cju.coding_job_id = cj.id
+          WHERE COALESCE(cju.workspace_id, cj.workspace_id) = $1
+        `
+      },
+      {
+        name: 'coding_unit_freshness',
+        query: 'SELECT cuf.* FROM coding_unit_freshness cuf WHERE cuf.workspace_id = $1'
+      },
+      {
+        name: 'missings_profile',
+        query: `
+          SELECT mp.* FROM missings_profile mp
+          WHERE EXISTS (
+            SELECT 1 FROM coding_job cj
+            WHERE cj.missings_profile_id = mp.id
+              AND cj.workspace_id = $1
+          )
+        `
       },
       {
         name: 'chunk',

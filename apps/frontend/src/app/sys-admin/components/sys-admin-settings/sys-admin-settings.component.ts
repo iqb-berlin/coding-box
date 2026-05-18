@@ -18,6 +18,7 @@ import { LogoService } from '../../../core/services/logo.service';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
 import { ContentPoolSettings } from '../../../ws-admin/models/content-pool.model';
 import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
+import { SERVER_URL } from '../../../injection-tokens';
 
 type DatabaseExportStatus =
   | 'queued'
@@ -30,7 +31,6 @@ interface DatabaseExportJobState {
   status: DatabaseExportStatus;
   progress: number;
   result?: {
-    filePath: string;
     fileName: string;
     fileSize: number;
     createdAt: number;
@@ -61,6 +61,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private logoService = inject(LogoService);
   private systemSettingsService = inject(SystemSettingsService);
   private snackBar = inject(MatSnackBar);
+  private rawServerUrl = inject(SERVER_URL);
   private exportPollingSubscription: Subscription | null = null;
 
   selectedFile: File | null = null;
@@ -80,8 +81,6 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   };
 
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
-  private readonly exportBaseUrl = `${window.location.origin}/api/admin/database/export/sqlite`;
-
   constructor() {
     this.isDefaultLogo = this.appService.appLogo.data === standardLogo.data;
     this.logoAltText = this.appService.appLogo.alt;
@@ -458,6 +457,16 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json'
     });
+  }
+
+  private get exportBaseUrl(): string {
+    return `${this.serverUrl}/admin/database/export/sqlite`;
+  }
+
+  private get serverUrl(): string {
+    return this.rawServerUrl.endsWith('/') ?
+      this.rawServerUrl.slice(0, -1) :
+      this.rawServerUrl;
   }
 
   private saveBlob(blob: Blob, filename: string): void {

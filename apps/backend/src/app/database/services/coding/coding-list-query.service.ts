@@ -36,6 +36,13 @@ export class CodingListQueryService {
     private readonly workspaceExclusionService: WorkspaceExclusionService
   ) { }
 
+  async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    return Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+      Array.from(variableIds).map(variableId => `${unitName}\u001F${variableId}`)
+    ));
+  }
+
   /**
    * Get the complete coding list for a workspace.
    * Returns all CODING_INCOMPLETE responses that should be coded.

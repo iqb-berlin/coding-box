@@ -73,14 +73,14 @@ describe('StatisticsCardComponent', () => {
     expect(component.getTotalResponsesDifference()).toBe(50);
   });
 
-  it('should expose effective derived responses without ignored response states', () => {
+  it('should use backend-provided coding-relevant totals without UI subtraction', () => {
     component.codingStatistics = {
-      totalResponses: 12,
+      totalResponses: 10,
       baseResponseCount: 7,
-      derivedResponseCount: 5,
+      derivedResponseCount: 3,
       derivedVariableCount: 2,
-      statusCounts: { 5: 10, 1: 2 },
-      derivedStatusCounts: { 5: 3, 1: 2 }
+      statusCounts: { 5: 10 },
+      derivedStatusCounts: { 5: 3 }
     };
 
     expect(component.effectiveTotalResponses).toBe(10);
@@ -129,15 +129,15 @@ describe('StatisticsCardComponent', () => {
     expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.no-coding-results-text');
   });
 
-  it('should explain when only raw or intermediate statuses are available', () => {
+  it('should not subtract raw statuses in the UI for legacy cached statistics', () => {
     component.codingStatistics = {
       totalResponses: 4,
       statusCounts: { 1: 2, 2: 2 }
     };
 
-    expect(component.effectiveTotalResponses).toBe(0);
+    expect(component.effectiveTotalResponses).toBe(4);
     expect(component.getStatuses()).toEqual([]);
-    expect(component.showCodingStatisticsEmptyState).toBe(true);
+    expect(component.showCodingStatisticsEmptyState).toBe(false);
     expect(component.codingStatisticsEmptyTextKey).toBe('coding-management.statistics.only-raw-statuses-text');
   });
 

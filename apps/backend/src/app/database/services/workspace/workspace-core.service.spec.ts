@@ -97,9 +97,9 @@ describe('WorkspaceCoreService', () => {
     await expect(service.setWorkspaceSettings(1, { b: true } as never)).resolves.toBeUndefined();
     await expect(service.setWorkspaceSettings(99, { b: true } as never)).rejects.toBeInstanceOf(AdminWorkspaceNotFoundException);
     expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
-    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v2:1:v1');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v2:1:v2');
-    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v2:1:v3');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v3:1:v1');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v3:1:v2');
+    expect(cacheService.delete).toHaveBeenCalledWith('coding-statistics:schema-v3:1:v3');
     expect(cacheService.delete).toHaveBeenCalledWith('flat_response_filter_options:version:1');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('response-analysis:1_*');
     expect(cacheService.deleteByPattern).toHaveBeenCalledWith('responses:1:*');

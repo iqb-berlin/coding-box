@@ -42,9 +42,11 @@ interface RequestWithUser extends Request {
 interface DatabaseExportJobStatusResponse {
   status: string;
   progress: number;
-  result?: DatabaseExportJobResult;
+  result?: PublicDatabaseExportJobResult;
   error?: string;
 }
+
+type PublicDatabaseExportJobResult = Omit<DatabaseExportJobResult, 'filePath'>;
 
 @Controller('admin/database')
 @ApiTags('admin')
@@ -154,7 +156,7 @@ export class DatabaseAdminController {
       status,
       progress,
       ...(status === 'completed' && job.returnvalue ?
-        { result: job.returnvalue as DatabaseExportJobResult } :
+        { result: this.toPublicJobResult(job.returnvalue as DatabaseExportJobResult) } :
         {}),
       ...((status === 'failed' || status === 'cancelled') && job.failedReason ?
         { error: job.failedReason } :
@@ -211,7 +213,9 @@ export class DatabaseAdminController {
     res.setHeader('Content-Length', String(result.fileSize));
 
     const stream = fs.createReadStream(result.filePath);
+    this.cleanupExportFileAfterResponse(res, result.filePath);
     stream.on('error', () => {
+      this.cleanupExportFile(result.filePath);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Fehler beim Lesen der Exportdatei.' });
       }
@@ -260,5 +264,45 @@ export class DatabaseAdminController {
     }
 
     return 0;
+  }
+
+  private toPublicJobResult(
+    result: DatabaseExportJobResult
+  ): PublicDatabaseExportJobResult {
+    return {
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      createdAt: result.createdAt,
+      requestedByUserId: result.requestedByUserId,
+      scope: result.scope,
+      workspaceId: result.workspaceId
+    };
+  }
+
+  private cleanupExportFileAfterResponse(
+    res: Response,
+    filePath: string
+  ): void {
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) {
+        return;
+      }
+      cleaned = true;
+      this.cleanupExportFile(filePath);
+    };
+
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+  }
+
+  private cleanupExportFile(filePath: string): void {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch {
+      // Best-effort cleanup; download failures should surface through the stream.
+    }
   }
 }

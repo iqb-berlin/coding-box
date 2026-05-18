@@ -13,7 +13,7 @@ import { ProcessDto } from '../../../../../../api-dto/workspaces/process-dto';
 @ApiTags('Workspace Admin')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
-@RequireAccessLevel(1)
+@RequireAccessLevel(3)
 @Controller('admin/workspace/:workspace_id/processes')
 export class WorkspaceProcessesController {
   constructor(private readonly jobQueueService: JobQueueService) {}
@@ -44,7 +44,7 @@ export class WorkspaceProcessesController {
       @Param('id') id: string
   ): Promise<boolean> {
     try {
-      return await this.jobQueueService.cancelJob(queueName, id);
+      return await this.jobQueueService.cancelWorkspaceJob(wsId, queueName, id);
     } catch (e) {
       throw new InternalServerErrorException(e.message);
     }

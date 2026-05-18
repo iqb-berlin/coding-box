@@ -84,13 +84,30 @@ describe('CodingResponseFilterService', () => {
       ([condition]) => String(condition).includes('statisticsIgnoredStatuses')
     )?.[0] as string;
 
-    expect(whereCondition).toContain("response.status_v3 ~ '^-?[0-9]+$'");
-    expect(whereCondition).toContain('response.status_v3::smallint');
+    expect(whereCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
+    expect(whereCondition).not.toContain('response.status_v3::smallint');
     expect(whereCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
-    expect(whereCondition).toContain('ELSE COALESCE(CASE WHEN response.status_v3');
+    expect(whereCondition).toContain('ELSE COALESCE(response.status_v3');
     expect(whereCondition).toContain('response.status_v2, response.status_v1');
-    expect(ignoredStatusCondition).toContain("response.status_v3 ~ '^-?[0-9]+$'");
+    expect(ignoredStatusCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
     expect(ignoredStatusCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
     expect(ignoredStatusCondition).toContain('NOT IN (:...statisticsIgnoredStatuses)');
+  });
+
+  it('requires valid coding variable pairs for generated responses as well', async () => {
+    const { service, queryBuilder } = createService();
+
+    await service.countResponses(1, {
+      version: 'v1',
+      validCodingVariablesOnly: true
+    });
+
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+      'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+      { validVariablePairKeys: ['Unit1\u001Fvar1'] }
+    );
+    expect(
+      queryBuilder.andWhere.mock.calls.some(([condition]) => String(condition).includes('OR response.is_autocoder_generated'))
+    ).toBe(false);
   });
 });
