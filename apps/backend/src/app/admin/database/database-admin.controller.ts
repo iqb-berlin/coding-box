@@ -293,7 +293,11 @@ export class DatabaseAdminController {
     };
 
     res.once('finish', cleanup);
-    res.once('close', cleanup);
+    res.once('close', () => {
+      if (res.writableEnded) {
+        cleanup();
+      }
+    });
   }
 
   private cleanupExportFile(filePath: string): void {
