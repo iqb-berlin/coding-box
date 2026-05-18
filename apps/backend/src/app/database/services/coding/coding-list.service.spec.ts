@@ -25,8 +25,8 @@ describe('CodingListService', () => {
     const fileCacheService = new CodingFileCacheService(fileUploadRepository);
     const itemBuilderService = new CodingItemBuilderService(fileCacheService);
     const queryService = new CodingListQueryService(
-      fileUploadRepository,
       responseRepository,
+      fileCacheService,
       workspaceFilesService,
       {} as unknown as WorkspaceCoreService,
       {
