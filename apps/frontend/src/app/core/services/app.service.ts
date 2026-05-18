@@ -185,6 +185,7 @@ export class AppService {
       this.addAffectedRequest(alikeError, error);
       if (!alikeError.isBackendConnectivityError && !alikeError.message.includes(error.message)) {
         alikeError.message += `; ${error.message}`;
+        alikeError.userMessage = alikeError.message;
       }
       return;
     }
@@ -291,10 +292,13 @@ export class AppService {
   private normalizeError(error: AppHttpError): void {
     error.requestCount = error.requestCount || 1;
     error.affectedRequests = error.affectedRequests || [];
+    error.userMessage = error.userMessage || error.message;
+    error.technicalMessage = error.technicalMessage || '';
     error.isBackendConnectivityError = isBackendConnectivityStatus(error.status);
 
     if (error.isBackendConnectivityError) {
       error.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
+      error.userMessage = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
     }
   }
 
@@ -317,11 +321,13 @@ export class AppService {
 
     const request = {
       method: source.method,
-      urlWithParams: source.urlWithParams
+      urlWithParams: source.urlWithParams,
+      requestId: source.requestId?.trim() || undefined
     };
     const isKnownRequest = target.affectedRequests.some(knownRequest => (
       knownRequest.method === request.method &&
-      knownRequest.urlWithParams === request.urlWithParams
+      knownRequest.urlWithParams === request.urlWithParams &&
+      knownRequest.requestId === request.requestId
     ));
 
     if (!isKnownRequest) {

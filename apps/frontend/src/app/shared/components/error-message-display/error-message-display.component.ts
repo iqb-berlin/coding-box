@@ -59,7 +59,34 @@ export class ErrorMessageDisplayComponent {
   }
 
   hasErrorDetails(error: AppHttpError): boolean {
-    return this.getAffectedRequests(error).length > 0;
+    return this.hasRequestId(error) ||
+      this.hasHttpStatus(error) ||
+      this.hasTechnicalMessage(error) ||
+      this.getAffectedRequests(error).length > 0;
+  }
+
+  hasRequestId(error: AppHttpError): boolean {
+    return !!error.requestId?.trim();
+  }
+
+  hasHttpStatus(error: AppHttpError): boolean {
+    return Number.isFinite(error.status);
+  }
+
+  hasTechnicalMessage(error: AppHttpError): boolean {
+    return !!error.technicalMessage?.trim() &&
+      error.technicalMessage.trim() !== this.getDisplayMessage(error).trim();
+  }
+
+  getDisplayMessage(error: AppHttpError): string {
+    return error.userMessage || error.message;
+  }
+
+  shouldShowAffectedRequestId(error: AppHttpError, request: AppHttpErrorRequest): boolean {
+    const requestId = request.requestId?.trim();
+
+    return !!requestId &&
+      (requestId !== error.requestId?.trim() || this.getAffectedRequests(error).length > 1);
   }
 
   getAffectedRequests(error: AppHttpError): AppHttpErrorRequest[] {
@@ -70,7 +97,8 @@ export class ErrorMessageDisplayComponent {
     if (error.method || error.urlWithParams) {
       return [{
         method: error.method,
-        urlWithParams: error.urlWithParams
+        urlWithParams: error.urlWithParams,
+        requestId: error.requestId?.trim() || undefined
       }];
     }
 

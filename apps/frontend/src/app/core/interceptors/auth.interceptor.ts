@@ -54,6 +54,7 @@ export const authInterceptor: HttpInterceptorFn = (
           }
 
           if (error.status === 401 || error.status === 403) {
+            suppressGlobalErrorMessage = true;
             const errorMessage = error.error?.message || error.message || '';
 
             if (errorMessage.includes('Access level')) {
