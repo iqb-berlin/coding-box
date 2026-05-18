@@ -63,6 +63,7 @@ export interface AuditJournalQueryDto {
   actorUserId?: number;
   actorType?: AuditActorType;
   eventType?: AuditEventType | string;
+  actionType?: string;
   entityType?: string;
   entityId?: string;
   result?: AuditEventResult;

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Logger,
   Param,
   Req,
   UseGuards,
@@ -35,6 +36,8 @@ interface RequestWithUser extends Request {
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingVersionController {
+  private readonly logger = new Logger(WorkspaceCodingVersionController.name);
+
   constructor(
     private codingStatisticsService: CodingStatisticsService,
     private journalService: JournalService,
@@ -114,26 +117,43 @@ export class WorkspaceCodingVersionController {
       variableFilters: body.variableFilters
     });
 
-    // Log to journal
     const userId = request.user?.id || 'unknown';
-    await this.journalService.createEntry(
-      userId,
-      workspace_id,
-      'RESET_VERSION',
-      'CODING',
-      workspace_id,
-      {
+    await this.tryRecordAuditEvent({
+      workspaceId: workspace_id,
+      actorUserId: userId,
+      eventType: 'CODING_VERSION_RESET',
+      entityType: 'coding',
+      entityId: workspace_id,
+      result: 'started',
+      summary: `Coding version reset queued for ${body.version}`,
+      jobId: job.id.toString(),
+      details: {
         version: body.version,
         jobId: job.id.toString(),
-        unitFilters: body.unitFilters || [],
-        variableFilters: body.variableFilters || []
+        unitFilterCount: body.unitFilters?.length || 0,
+        variableFilterCount: body.variableFilters?.length || 0
       }
-    );
+    });
 
     return {
       jobId: job.id.toString(),
       message: `Reset coding version job enqueued for version ${body.version}`
     };
+  }
+
+  private async tryRecordAuditEvent(
+    event: Parameters<JournalService['recordEvent']>[0]
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to record audit journal event ${event.eventType}: ${message}`,
+        stack
+      );
+    }
   }
 
   @Get(':workspace_id/coding/reset-version/job/:jobId')

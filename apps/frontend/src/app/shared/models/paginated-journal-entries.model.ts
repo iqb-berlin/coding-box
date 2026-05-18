@@ -1,6 +1,3 @@
-import { JournalEntry } from './journal-entry.model';
+import { PaginatedAuditJournalEntriesDto } from '../../../../../../api-dto/audit-journal/audit-journal.dto';
 
-export interface PaginatedJournalEntries {
-  entries: JournalEntry[];
-  total: number;
-}
+export type PaginatedJournalEntries = PaginatedAuditJournalEntriesDto;

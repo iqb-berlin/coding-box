@@ -1,9 +1,11 @@
 import { QueryRunner } from 'typeorm';
+import { Logger } from '@nestjs/common';
 import { ResponseManagementService } from './response-management.service';
 import { AutocoderSourceRevisionStaleError } from './autocoder-source-revision-stale.error';
 import { ResponseEntity } from '../../entities/response.entity';
 
 describe('ResponseManagementService', () => {
+  let loggerErrorSpy: jest.SpyInstance;
   const workspaceTestResultsService = {
     invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
     invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
@@ -29,6 +31,11 @@ describe('ResponseManagementService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    loggerErrorSpy.mockRestore();
   });
 
   it('updates existing generated autocoder rows and clears stale generated rows', async () => {
@@ -486,7 +493,7 @@ describe('ResponseManagementService', () => {
       })
     };
     const journalService = {
-      createEntry: jest.fn().mockResolvedValue(undefined)
+      recordEvent: jest.fn().mockResolvedValue(undefined)
     };
     const codingFreshnessService = {
       markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
@@ -498,6 +505,7 @@ describe('ResponseManagementService', () => {
       workspaceTestResultsService as never,
       codingFreshnessService as never
     );
+    journalService.recordEvent.mockRejectedValueOnce(new Error('audit down'));
 
     const result = await service.deleteResponse(1, 50, 'user-1');
 
@@ -510,5 +518,84 @@ describe('ResponseManagementService', () => {
       .toHaveBeenCalledWith(1);
     expect(workspaceTestResultsService.invalidateCodingStatisticsCache)
       .toHaveBeenCalledWith(1);
+    expect(journalService.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 1,
+        actorUserId: 'user-1',
+        eventType: 'RESPONSE_DELETED',
+        entityType: 'response',
+        entityId: 50,
+        result: 'success'
+      })
+    );
+  });
+
+  it('keeps duplicate-resolution journal events visible through legacy delete filters', async () => {
+    const selectQueryBuilder = {
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([
+        { id: 50, unitid: 7 },
+        { id: 51, unitid: 7 }
+      ])
+    };
+    const deleteQueryBuilder = {
+      delete: jest.fn().mockReturnThis(),
+      from: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 })
+    };
+    const manager = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(selectQueryBuilder)
+        .mockReturnValueOnce(deleteQueryBuilder)
+    };
+    const connection = {
+      transaction: jest.fn(cb => cb(manager)),
+      createQueryRunner: jest.fn().mockReturnValue({
+        connect: jest.fn().mockResolvedValue(undefined),
+        query: jest.fn().mockResolvedValue([]),
+        release: jest.fn().mockResolvedValue(undefined)
+      })
+    };
+    const journalService = {
+      recordEvent: jest.fn().mockResolvedValue(undefined)
+    };
+    const codingFreshnessService = {
+      markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined),
+      markCodingJobsStaleForResponseIds: jest.fn().mockResolvedValue(undefined)
+    };
+    const service = new ResponseManagementService(
+      connection as never,
+      journalService as never,
+      workspaceTestResultsService as never,
+      codingFreshnessService as never
+    );
+    const key = [
+      encodeURIComponent('UNIT_1'),
+      encodeURIComponent('VAR_1'),
+      '',
+      encodeURIComponent('login-1'),
+      '',
+      ''
+    ].join('|');
+
+    const result = await service.resolveDuplicateResponses(1, { [key]: 50 }, 'user-1');
+
+    expect(result).toEqual({ resolvedCount: 1, success: true });
+    expect(journalService.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 1,
+        actorUserId: 'user-1',
+        eventType: 'DUPLICATE_RESPONSES_RESOLVED',
+        legacyActionType: 'delete',
+        entityType: 'response',
+        entityId: 50,
+        result: 'success'
+      }),
+      manager
+    );
   });
 });
