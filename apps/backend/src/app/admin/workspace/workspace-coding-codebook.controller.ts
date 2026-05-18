@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Controller,
   Post,
   Get,
@@ -6,7 +7,10 @@ import {
   Param,
   Res,
   UseGuards,
-  Logger
+  Logger,
+  ForbiddenException,
+  NotFoundException,
+  HttpException
 } from '@nestjs/common';
 import {
   ApiOkResponse,
@@ -22,6 +26,35 @@ import { WorkspaceId } from './workspace.decorator';
 import { CodebookGenerationService } from '../../database/services/coding';
 import { JobQueueService, CodebookJobResult } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import {
+  CodeBookContentSetting,
+  CodebookExportFormat
+} from '../code-book/codebook.interfaces';
+
+type CodebookRequestBody = {
+  missingsProfile?: unknown;
+  contentOptions?: Partial<CodeBookContentSetting>;
+  unitList?: unknown;
+};
+
+type NormalizedCodebookRequest = {
+  missingsProfile: number;
+  contentOptions: CodeBookContentSetting;
+  unitList: number[];
+};
+
+type PublicCodebookJobResult = Omit<CodebookJobResult, 'filePath'>;
+
+type CodebookJobStatusResponse =
+  | {
+    status: string;
+    progress: number;
+    result?: PublicCodebookJobResult;
+    error?: string;
+  }
+  | { error: string };
+
+type BooleanCodebookContentSetting = Exclude<keyof CodeBookContentSetting, 'exportFormat' | 'missingsProfile'>;
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -83,26 +116,11 @@ export class WorkspaceCodingCodebookController {
   })
   async generateCodebook(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     missingsProfile: number;
-                     contentOptions: {
-                       exportFormat: string;
-                       missingsProfile: string;
-                       hasOnlyManualCoding: boolean;
-                       hasGeneralInstructions: boolean;
-                       hasDerivedVars: boolean;
-                       hasOnlyVarsWithCodes: boolean;
-                       hasClosedVars: boolean;
-                       codeLabelToUpper: boolean;
-                       showScore: boolean;
-                       hideItemVarRelation: boolean;
-                     };
-                     unitList: number[];
-                   },
-                   @Res() res: Response
+      @Body() body: CodebookRequestBody,
+      @Res() res: Response
   ): Promise<void> {
-    const { missingsProfile, contentOptions, unitList } = body;
+    const { missingsProfile, contentOptions, unitList } =
+      this.normalizeCodebookRequest(body);
 
     const codebook = await this.codebookGenerationService.generateCodebook(
       workspace_id,
@@ -174,30 +192,17 @@ export class WorkspaceCodingCodebookController {
   })
   async startCodebookJob(
     @WorkspaceId() workspace_id: number,
-      @Body()
-                   body: {
-                     missingsProfile: number;
-                     contentOptions: {
-                       exportFormat: string;
-                       missingsProfile: string;
-                       hasOnlyManualCoding: boolean;
-                       hasGeneralInstructions: boolean;
-                       hasDerivedVars: boolean;
-                       hasOnlyVarsWithCodes: boolean;
-                       hasClosedVars: boolean;
-                       codeLabelToUpper: boolean;
-                       showScore: boolean;
-                       hideItemVarRelation: boolean;
-                     };
-                     unitList: number[];
-                   }
+      @Body() body: CodebookRequestBody
   ): Promise<{ jobId: string; message: string }> {
+    const { missingsProfile, contentOptions, unitList } =
+      this.normalizeCodebookRequest(body);
+
     try {
       const job = await this.jobQueueService.addCodebookGenerationJob({
         workspaceId: workspace_id,
-        missingsProfile: body.missingsProfile,
-        contentOptions: body.contentOptions,
-        unitIds: body.unitList
+        missingsProfile,
+        contentOptions,
+        unitIds: unitList
       });
 
       this.logger.log(
@@ -235,20 +240,18 @@ export class WorkspaceCodingCodebookController {
     }
   })
   async getCodebookJobStatus(
-    @Param('jobId') jobId: string
-  ): Promise<
-      | {
-        status: string;
-        progress: number;
-        result?: CodebookJobResult;
-        error?: string;
-      }
-      | { error: string }
-      > {
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<CodebookJobStatusResponse> {
     try {
       const job = await this.jobQueueService.getCodebookGenerationJob(jobId);
       if (!job) {
-        return { error: `Codebook generation job with ID ${jobId} not found` };
+        throw new NotFoundException(
+          `Codebook generation job with ID ${jobId} not found`
+        );
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        throw new ForbiddenException('Access denied to this codebook job');
       }
 
       const state = await job.getState();
@@ -274,15 +277,30 @@ export class WorkspaceCodingCodebookController {
           status = state;
       }
 
+      const normalizedProgress = typeof progress === 'number' ? progress : 0;
+      if (status === 'completed') {
+        const result = await this.getAvailableCodebookResult(
+          jobId,
+          job.returnvalue
+        );
+        return result ?
+          { status, progress: normalizedProgress, result } :
+          {
+            status: 'failed',
+            progress: normalizedProgress,
+            error: 'Codebook file expired'
+          };
+      }
+
       return {
         status,
-        progress: typeof progress === 'number' ? progress : 0,
-        ...(status === 'completed' && job.returnvalue ?
-          { result: job.returnvalue } :
-          {}),
+        progress: normalizedProgress,
         ...(status === 'failed' && failedReason ? { error: failedReason } : {})
       };
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.error(
         `Error getting codebook job status: ${error.message}`,
         error.stack
@@ -320,8 +338,10 @@ export class WorkspaceCodingCodebookController {
       }
 
       const filePath = metadata.filePath;
+      const cacheKey = `codebook-result:${jobId}`;
 
       if (!fs.existsSync(filePath)) {
+        await this.cacheService.delete(cacheKey);
         res.status(404).json({ error: 'Codebook file not found on disk' });
         return;
       }
@@ -339,14 +359,232 @@ export class WorkspaceCodingCodebookController {
       );
       res.setHeader('Content-Length', metadata.fileSize);
 
-      const fileStream = fs.createReadStream(filePath);
-      fileStream.pipe(res);
+      await this.streamCodebookFile(filePath, res);
+      await this.cleanupCodebookResult(filePath, cacheKey);
     } catch (error) {
       this.logger.error(
         `Error downloading codebook: ${error.message}`,
         error.stack
       );
+      if (res.headersSent || res.destroyed || res.writableEnded) {
+        if (!res.destroyed) {
+          res.destroy(error);
+        }
+        return;
+      }
+      res.removeHeader('Content-Disposition');
+      res.removeHeader('Content-Length');
+      res.setHeader('Content-Type', 'application/json');
       res.status(500).json({ error: error.message });
+    }
+  }
+
+  private normalizeCodebookRequest(body: CodebookRequestBody): NormalizedCodebookRequest {
+    if (!body || typeof body !== 'object') {
+      throw new BadRequestException('Request body is required');
+    }
+
+    const missingsProfile = this.normalizeMissingsProfile(body.missingsProfile);
+    const contentOptions = this.normalizeContentOptions(
+      body.contentOptions,
+      missingsProfile
+    );
+    const unitList = this.normalizeUnitList(body.unitList);
+
+    return {
+      missingsProfile,
+      contentOptions,
+      unitList
+    };
+  }
+
+  private normalizeMissingsProfile(value: unknown): number {
+    return this.normalizeInteger(value, 0, 'missingsProfile');
+  }
+
+  private normalizeContentOptions(
+    contentOptions: Partial<CodeBookContentSetting> | undefined,
+    missingsProfile: number
+  ): CodeBookContentSetting {
+    if (!contentOptions || typeof contentOptions !== 'object') {
+      throw new BadRequestException('contentOptions are required');
+    }
+
+    const exportFormat = this.normalizeExportFormat(contentOptions.exportFormat);
+    const booleanFields: BooleanCodebookContentSetting[] = [
+      'hasOnlyManualCoding',
+      'hasGeneralInstructions',
+      'hasDerivedVars',
+      'hasOnlyVarsWithCodes',
+      'hasClosedVars',
+      'codeLabelToUpper',
+      'showScore',
+      'hideItemVarRelation'
+    ];
+
+    booleanFields.forEach(field => {
+      if (typeof contentOptions[field] !== 'boolean') {
+        throw new BadRequestException(`contentOptions.${field} must be boolean`);
+      }
+    });
+
+    return {
+      exportFormat,
+      missingsProfile: `${missingsProfile}`,
+      hasOnlyManualCoding: contentOptions.hasOnlyManualCoding,
+      hasGeneralInstructions: contentOptions.hasGeneralInstructions,
+      hasDerivedVars: contentOptions.hasDerivedVars,
+      hasOnlyVarsWithCodes: contentOptions.hasOnlyVarsWithCodes,
+      hasClosedVars: contentOptions.hasClosedVars,
+      codeLabelToUpper: contentOptions.codeLabelToUpper,
+      showScore: contentOptions.showScore,
+      hideItemVarRelation: contentOptions.hideItemVarRelation
+    };
+  }
+
+  private normalizeExportFormat(value: unknown): CodebookExportFormat {
+    const normalized = typeof value === 'string' ? value.toLowerCase() : '';
+    if (normalized !== 'docx' && normalized !== 'json') {
+      throw new BadRequestException(
+        'Unsupported codebook export format. Use "docx" or "json".'
+      );
+    }
+    return normalized;
+  }
+
+  private normalizeUnitList(value: unknown): number[] {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new BadRequestException('unitList must contain at least one unit ID');
+    }
+
+    const normalized = value.map(unitId => this.normalizeInteger(
+      unitId,
+      1,
+      'unitList'
+    ));
+
+    return Array.from(new Set(normalized));
+  }
+
+  private normalizeInteger(
+    value: unknown,
+    minValue: number,
+    fieldName: string
+  ): number {
+    let normalized: number;
+    if (typeof value === 'number') {
+      normalized = value;
+    } else if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+      normalized = Number(value.trim());
+    } else {
+      throw new BadRequestException(this.getIntegerValidationMessage(fieldName, minValue));
+    }
+
+    if (!Number.isSafeInteger(normalized) || normalized < minValue) {
+      throw new BadRequestException(this.getIntegerValidationMessage(fieldName, minValue));
+    }
+    return normalized;
+  }
+
+  private getIntegerValidationMessage(fieldName: string, minValue: number): string {
+    return minValue === 0 ?
+      `${fieldName} must be a non-negative integer` :
+      `${fieldName} may only contain positive integer IDs`;
+  }
+
+  private async getAvailableCodebookResult(
+    jobId: string,
+    result: CodebookJobResult | undefined
+  ): Promise<PublicCodebookJobResult | null> {
+    if (!result) {
+      return null;
+    }
+
+    const cacheKey = `codebook-result:${jobId}`;
+    const cachedResult = await this.cacheService.get<CodebookJobResult>(cacheKey);
+    if (!cachedResult) {
+      return null;
+    }
+
+    if (!this.isMatchingCodebookResult(cachedResult, result)) {
+      await this.cacheService.delete(cacheKey);
+      return null;
+    }
+
+    if (!fs.existsSync(cachedResult.filePath)) {
+      await this.cacheService.delete(cacheKey);
+      return null;
+    }
+
+    return this.toPublicCodebookJobResult(cachedResult);
+  }
+
+  private isMatchingCodebookResult(
+    cachedResult: CodebookJobResult,
+    jobResult: CodebookJobResult
+  ): boolean {
+    return cachedResult.fileId === jobResult.fileId &&
+      cachedResult.filePath === jobResult.filePath &&
+      cachedResult.workspaceId === jobResult.workspaceId &&
+      cachedResult.exportFormat === jobResult.exportFormat;
+  }
+
+  private toPublicCodebookJobResult(
+    result: CodebookJobResult
+  ): PublicCodebookJobResult {
+    return {
+      fileId: result.fileId,
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      workspaceId: result.workspaceId,
+      exportFormat: result.exportFormat,
+      createdAt: result.createdAt
+    };
+  }
+
+  private streamCodebookFile(filePath: string, res: Response): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const fileStream = fs.createReadStream(filePath);
+      const cleanupListeners = () => {
+        fileStream.removeListener('error', fail);
+        res.removeListener('error', fail);
+        res.removeListener('finish', finish);
+        res.removeListener('close', close);
+      };
+      const fail = (error: Error) => {
+        cleanupListeners();
+        fileStream.destroy();
+        reject(error);
+      };
+      const finish = () => {
+        cleanupListeners();
+        resolve();
+      };
+      const close = () => {
+        if (!res.writableEnded) {
+          fail(new Error('Codebook download connection closed before completion'));
+        }
+      };
+
+      fileStream.once('error', fail);
+      res.once('error', fail);
+      res.once('finish', finish);
+      res.once('close', close);
+      fileStream.pipe(res);
+    });
+  }
+
+  private async cleanupCodebookResult(
+    filePath: string,
+    cacheKey: string
+  ): Promise<void> {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+      await this.cacheService.delete(cacheKey);
+    } catch (error) {
+      this.logger.warn(`Failed to clean up codebook result: ${error.message}`);
     }
   }
 }

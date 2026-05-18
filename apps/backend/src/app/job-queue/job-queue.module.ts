@@ -82,8 +82,6 @@ import { ValidationTask } from '../database/entities/validation-task.entity';
     UploadResultsProcessor,
     CodebookGenerationProcessor,
     ResetCodingVersionProcessor,
-    CodebookGenerationProcessor,
-    ResetCodingVersionProcessor,
     ValidationTaskProcessor,
     CodingAnalysisProcessor,
     VariableAnalysisProcessor,

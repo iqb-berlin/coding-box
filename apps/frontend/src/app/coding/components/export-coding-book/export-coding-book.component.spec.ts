@@ -469,6 +469,21 @@ describe('ExportCodingBookComponent', () => {
     });
   });
 
+  describe('downloadCodebookResult', () => {
+    it('marks the codebook job as failed when the result download fails', () => {
+      exportService.downloadCodebookFile.mockReturnValue(
+        throwError(() => new Error('Download failed'))
+      );
+
+      (component as unknown as {
+        downloadCodebookResult: (workspaceId: number, jobId: string) => void;
+      }).downloadCodebookResult(1, 'job-1');
+
+      expect(component.codebookJobStatus).toBe('failed');
+      expect(component.codebookJobError).toBe('Failed to download codebook file');
+    });
+  });
+
   describe('checkWorkspaceChanges', () => {
     it('should return false', () => {
       expect((component as unknown as { checkWorkspaceChanges: () => boolean }).checkWorkspaceChanges()).toBe(false);

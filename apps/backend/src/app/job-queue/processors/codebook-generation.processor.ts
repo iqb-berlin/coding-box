@@ -11,6 +11,7 @@ import { CodebookGenerationJobData, CodebookJobResult } from '../job-queue.servi
 @Processor('codebook-generation')
 export class CodebookGenerationProcessor {
   private readonly logger = new Logger(CodebookGenerationProcessor.name);
+  private readonly resultTtlSeconds = 86400;
 
   constructor(
     private readonly codebookGenerationService: CodebookGenerationService,
@@ -49,6 +50,7 @@ export class CodebookGenerationProcessor {
       if (!fs.existsSync(tempDir)) {
         fs.mkdirSync(tempDir, { recursive: true });
       }
+      this.cleanupExpiredCodebookFiles(tempDir);
 
       const fileExt = contentOptions.exportFormat.toLowerCase();
       const fileName = `codebook_${job.id}_${Date.now()}.${fileExt}`;
@@ -71,7 +73,7 @@ export class CodebookGenerationProcessor {
       await this.cacheService.set(
         `codebook-result:${job.id}`,
         result,
-        86400
+        this.resultTtlSeconds
       );
 
       await job.progress(100);
@@ -83,6 +85,23 @@ export class CodebookGenerationProcessor {
         error.stack
       );
       throw error;
+    }
+  }
+
+  private cleanupExpiredCodebookFiles(tempDir: string): void {
+    try {
+      const expiresBefore = Date.now() - this.resultTtlSeconds * 1000;
+      fs.readdirSync(tempDir)
+        .filter(fileName => /^codebook_.+\.(docx|json)$/i.test(fileName))
+        .forEach(fileName => {
+          const filePath = path.join(tempDir, fileName);
+          const stats = fs.statSync(filePath);
+          if (stats.mtimeMs < expiresBefore) {
+            fs.unlinkSync(filePath);
+          }
+        });
+    } catch (error) {
+      this.logger.warn(`Failed to clean up expired codebook files: ${error.message}`);
     }
   }
 }

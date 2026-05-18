@@ -165,7 +165,6 @@ export class CodingExportService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         exportFormat: string;
@@ -179,7 +178,6 @@ export class CodingExportService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         exportFormat: string;

@@ -10,6 +10,7 @@ import { Queue, JobOptions, Job } from 'bull';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
 import { ProcessDto } from '../../../../../api-dto/workspaces/process-dto';
+import { CodebookExportFormat } from '../../../../../api-dto/coding/codebook-content-setting';
 
 export interface TestResultsUploadJobData {
   workspaceId: number;
@@ -44,7 +45,7 @@ export interface CodebookGenerationJobData {
   workspaceId: number;
   missingsProfile: number;
   contentOptions: {
-    exportFormat: string;
+    exportFormat: CodebookExportFormat;
     missingsProfile: string;
     hasOnlyManualCoding: boolean;
     hasGeneralInstructions: boolean;
@@ -64,7 +65,7 @@ export interface CodebookJobResult {
   filePath: string;
   fileSize: number;
   workspaceId: number;
-  exportFormat: string;
+  exportFormat: CodebookExportFormat;
   createdAt: number;
 }
 
