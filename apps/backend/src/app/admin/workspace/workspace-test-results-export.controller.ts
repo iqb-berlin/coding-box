@@ -6,6 +6,7 @@ import {
   Delete,
   ForbiddenException,
   Get,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -33,6 +34,7 @@ import { WorkspaceTestResultsService } from '../../database/services/test-result
 import { DatabaseExportService } from '../database/database-export.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { CacheService } from '../../cache/cache.service';
+import { JournalService } from '../../database/services/shared';
 import {
   DatabaseExportJobData,
   DatabaseExportJobResult
@@ -55,11 +57,14 @@ type PublicDatabaseExportJobResult = Omit<DatabaseExportJobResult, 'filePath'>;
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsExportController {
+  private readonly logger = new Logger(WorkspaceTestResultsExportController.name);
+
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private databaseExportService: DatabaseExportService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService,
+    private journalService: JournalService,
     @InjectQueue('database-export')
     private readonly databaseExportQueue: Queue<DatabaseExportJobData>
   ) { }
@@ -165,6 +170,17 @@ export class WorkspaceTestResultsExportController {
       requestedByUserId: Number(req.user.id),
       scope: 'workspace',
       workspaceId: workspace_id
+    });
+
+    await this.tryRecordAuditEvent({
+      workspaceId: workspace_id,
+      actorUserId: req.user.id,
+      eventType: 'DATABASE_EXPORT_STARTED',
+      entityType: 'workspace',
+      entityId: workspace_id,
+      result: 'started',
+      summary: 'Workspace database export started',
+      jobId: job.id
     });
 
     return {
@@ -369,6 +385,21 @@ export class WorkspaceTestResultsExportController {
       testResultFilters: filters
     });
 
+    await this.tryRecordAuditEvent({
+      workspaceId: workspace_id,
+      actorUserId: req.user.id,
+      eventType: 'TEST_RESULTS_EXPORT_STARTED',
+      entityType: 'test-results-export',
+      entityId: workspace_id,
+      result: 'started',
+      summary: 'Test results export started',
+      jobId: job.id,
+      details: {
+        exportType: 'test-results',
+        hasFilters: Boolean(filters && Object.keys(filters).length > 0)
+      }
+    });
+
     return {
       jobId: job.id.toString(),
       message: 'Export job started successfully'
@@ -412,10 +443,40 @@ export class WorkspaceTestResultsExportController {
       testResultFilters: filters
     });
 
+    await this.tryRecordAuditEvent({
+      workspaceId: workspace_id,
+      actorUserId: req.user.id,
+      eventType: 'TEST_LOGS_EXPORT_STARTED',
+      entityType: 'test-logs-export',
+      entityId: workspace_id,
+      result: 'started',
+      summary: 'Test logs export started',
+      jobId: job.id,
+      details: {
+        exportType: 'test-logs',
+        hasFilters: Boolean(filters && Object.keys(filters).length > 0)
+      }
+    });
+
     return {
       jobId: job.id.toString(),
       message: 'Export job started successfully'
     };
+  }
+
+  private async tryRecordAuditEvent(
+    event: Parameters<JournalService['recordEvent']>[0]
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(
+        `Failed to record audit journal event ${event.eventType}: ${message}`,
+        stack
+      );
+    }
   }
 
   @Get(':workspace_id/results/export/jobs')

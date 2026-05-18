@@ -37,6 +37,7 @@ import { CoderTrainingDiscussionResult } from '../../entities/coder-training-dis
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitTagService } from '../workspace/unit-tag.service';
 import { JournalService, Chunk, TcMergeResponse } from '../shared';
+import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { CacheService } from '../../../cache/cache.service';
 // eslint-disable-next-line import/no-cycle
 import { CodingListService } from '../coding/coding-list.service';
@@ -4118,77 +4119,75 @@ export class WorkspaceTestResultsService {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
-      async () => this.connection.transaction(async manager => {
-        const ids = testPersonIds.split(',').map(id => id.trim());
-        const report = {
-          deletedPersons: [],
-          warnings: []
-        };
+      async () => {
+        const auditEvents: RecordAuditJournalEventInput[] = [];
+        const result = await this.connection.transaction(async manager => {
+          const ids = testPersonIds.split(',').map(id => id.trim());
+          const report = {
+            deletedPersons: [],
+            warnings: []
+          };
 
-        const existingPersons = await manager
-          .createQueryBuilder(Persons, 'persons')
-          .select([
-            'persons.id',
-            'persons.login',
-            'persons.code',
-            'persons.group',
-            'persons.workspace_id',
-            'persons.uploaded_at',
-            'persons.source'
-          ])
-          .where('persons.id IN (:...ids)', { ids })
-          .getMany();
+          const existingPersons = await manager
+            .createQueryBuilder(Persons, 'persons')
+            .select([
+              'persons.id',
+              'persons.login',
+              'persons.code',
+              'persons.group',
+              'persons.workspace_id',
+              'persons.uploaded_at',
+              'persons.source'
+            ])
+            .where('persons.id IN (:...ids)', { ids })
+            .getMany();
 
-        if (!existingPersons.length) {
-          const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
-          this.logger.warn(warningMessage);
-          report.warnings.push(warningMessage);
-          return { success: false, report };
-        }
+          if (!existingPersons.length) {
+            const warningMessage = `Keine Personen gefunden für die angegebenen IDs: ${testPersonIds}`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
+          }
 
-        const existingIds = existingPersons.map(person => person.id);
+          const existingIds = existingPersons.map(person => person.id);
 
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(Persons)
-          .where('id IN (:...ids)', { ids: existingIds })
-          .execute();
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Persons)
+            .where('id IN (:...ids)', { ids: existingIds })
+            .execute();
 
-        report.deletedPersons = existingIds;
+          report.deletedPersons = existingIds;
 
-        for (const person of existingPersons) {
-          try {
-            await this.journalService.createEntry(
-              userId,
+          for (const person of existingPersons) {
+            auditEvents.push({
               workspaceId,
-              'delete',
-              'test-person',
-              person.id,
-              {
+              actorUserId: userId,
+              eventType: 'TEST_PERSON_DELETED',
+              entityType: 'test-person',
+              entityId: person.id,
+              result: 'success',
+              summary: 'Test person deleted',
+              details: {
                 personId: person.id,
-                personLogin: person.login,
-                personCode: person.code,
-                personGroup: person.group,
-                personSource: person.source,
-                personUploadedAt: person.uploaded_at,
                 message: 'Test person deleted'
               }
-            );
-          } catch (error) {
-            this.logger.error(
-              `Failed to create journal entry for deleting test person ${person.id}: ${error.message}`
-            );
+            });
           }
-        }
 
-        return { success: true, report };
-      }).then(async result => {
+          return { success: true, report };
+        });
+
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          await Promise.all(auditEvents.map(event => this.tryRecordAuditEvent(
+            event,
+            `Failed to create journal entry for deleting test person ${event.entityId}`
+          )));
         }
         return result;
-      })
+      }
     );
   }
 
@@ -4339,18 +4338,21 @@ export class WorkspaceTestResultsService {
 
     if (userId) {
       try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'test-results',
-          0,
+        await this.journalService.recordEvent(
           {
-            scope: request.scope,
-            deletedTargetKind: targets.kind,
-            deletedTargetCount,
-            preview: targets.preview,
-            message: 'Test results deleted by bulk job'
+            workspaceId,
+            actorUserId: userId,
+            eventType: 'TEST_RESULTS_DELETED',
+            entityType: 'test-results',
+            entityId: null,
+            result: 'success',
+            summary: 'Test results deleted by bulk job',
+            details: {
+              scope: request.scope,
+              deletedTargetKind: targets.kind,
+              deletedTargetCount,
+              preview: targets.preview
+            }
           }
         );
       } catch (error) {
@@ -4438,11 +4440,13 @@ export class WorkspaceTestResultsService {
         snapshot.bookletIds
       );
 
-      return {
+      const counts = {
         deletedBookletLogs,
         deletedUnitLogs,
         deletedSessions
       };
+
+      return counts;
     });
 
     await onProgress?.(90, 'Log-Löschung wird abschließend geprüft...');
@@ -4457,28 +4461,22 @@ export class WorkspaceTestResultsService {
       deletedCounts.deletedSessions;
 
     if (userId) {
-      try {
-        await this.journalService.createEntry(
-          userId,
-          workspaceId,
-          'delete',
-          'test-logs',
-          0,
-          {
-            scope: request.scope,
-            deletedTargetKind: targets.kind,
-            deletedTargetCount,
-            ...deletedCounts,
-            preview,
-            message: 'Test logs deleted by bulk job'
-          }
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to create journal entry for bulk test log deletion: ${error.message}`,
-          error.stack
-        );
-      }
+      await this.tryRecordAuditEvent({
+        workspaceId,
+        actorUserId: userId,
+        eventType: 'TEST_LOGS_DELETED',
+        entityType: 'test-logs',
+        entityId: null,
+        result: 'success',
+        summary: 'Test logs deleted by bulk job',
+        details: {
+          scope: request.scope,
+          deletedTargetKind: targets.kind,
+          deletedTargetCount,
+          ...deletedCounts,
+          preview
+        }
+      }, 'Failed to create journal entry for bulk test log deletion');
     }
 
     return {
@@ -5387,70 +5385,69 @@ export class WorkspaceTestResultsService {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
-      async () => this.connection.transaction(async manager => {
-        const report = {
-          deletedUnit: null,
-          warnings: []
-        };
+      async () => {
+        let auditEvent: RecordAuditJournalEventInput | null = null;
+        const result = await this.connection.transaction(async manager => {
+          const report = {
+            deletedUnit: null,
+            warnings: []
+          };
 
-        const unit = await manager
-          .createQueryBuilder(Unit, 'unit')
-          .leftJoinAndSelect('unit.booklet', 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .where('unit.id = :unitId', { unitId })
-          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-          .getOne();
+          const unit = await manager
+            .createQueryBuilder(Unit, 'unit')
+            .leftJoinAndSelect('unit.booklet', 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .where('unit.id = :unitId', { unitId })
+            .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+            .getOne();
 
-        if (!unit) {
-          const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
-          this.logger.warn(warningMessage);
-          report.warnings.push(warningMessage);
-          return { success: false, report };
-        }
+          if (!unit) {
+            const warningMessage = `Keine Unit mit ID ${unitId} im Workspace ${workspaceId} gefunden`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
+          }
 
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(Unit)
-          .where('id = :unitId', { unitId })
-          .execute();
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Unit)
+            .where('id = :unitId', { unitId })
+            .execute();
 
-        report.deletedUnit = unitId;
+          report.deletedUnit = unitId;
 
-        try {
-          await this.journalService.createEntry(
-            userId,
+          auditEvent = {
             workspaceId,
-            'delete',
-            'unit',
-            unitId,
-            {
+            actorUserId: userId,
+            eventType: 'UNIT_DELETED',
+            entityType: 'unit',
+            entityId: unitId,
+            result: 'success',
+            summary: 'Unit deleted',
+            details: {
               unitId,
               unitName: unit.name,
               unitAlias: unit.alias,
               bookletId: unit.booklet?.id,
-              personId: unit.booklet?.person?.id,
-              personLogin: unit.booklet?.person?.login,
-              personCode: unit.booklet?.person?.code,
-              personGroup: unit.booklet?.person?.group,
-              personSource: unit.booklet?.person?.source,
-              personUploadedAt: unit.booklet?.person?.uploaded_at,
-              message: 'Unit deleted'
+              personId: unit.booklet?.person?.id
             }
-          );
-        } catch (error) {
-          this.logger.error(
-            `Failed to create journal entry for deleting unit ${unitId}: ${error.message}`
-          );
-        }
+          };
 
-        return { success: true, report };
-      }).then(async result => {
+          return { success: true, report };
+        });
+
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              `Failed to create journal entry for deleting unit ${unitId}`
+            );
+          }
         }
         return result;
-      })
+      }
     );
   }
 
@@ -5493,69 +5490,81 @@ export class WorkspaceTestResultsService {
     return withWorkspaceTestResultsMutationLock(
       this.connection,
       workspaceId,
-      async () => this.connection.transaction(async manager => {
-        const report = {
-          deletedBooklet: null,
-          warnings: []
-        };
+      async () => {
+        let auditEvent: RecordAuditJournalEventInput | null = null;
+        const result = await this.connection.transaction(async manager => {
+          const report = {
+            deletedBooklet: null,
+            warnings: []
+          };
 
-        const booklet = await manager
-          .createQueryBuilder(Booklet, 'booklet')
-          .leftJoinAndSelect('booklet.person', 'person')
-          .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-          .where('booklet.id = :bookletId', { bookletId })
-          .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-          .getOne();
+          const booklet = await manager
+            .createQueryBuilder(Booklet, 'booklet')
+            .leftJoinAndSelect('booklet.person', 'person')
+            .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+            .where('booklet.id = :bookletId', { bookletId })
+            .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+            .getOne();
 
-        if (!booklet) {
-          const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
-          this.logger.warn(warningMessage);
-          report.warnings.push(warningMessage);
-          return { success: false, report };
-        }
+          if (!booklet) {
+            const warningMessage = `Kein Booklet mit ID ${bookletId} im Workspace ${workspaceId} gefunden`;
+            this.logger.warn(warningMessage);
+            report.warnings.push(warningMessage);
+            return { success: false, report };
+          }
 
-        await manager
-          .createQueryBuilder()
-          .delete()
-          .from(Booklet)
-          .where('id = :bookletId', { bookletId })
-          .execute();
+          await manager
+            .createQueryBuilder()
+            .delete()
+            .from(Booklet)
+            .where('id = :bookletId', { bookletId })
+            .execute();
 
-        report.deletedBooklet = bookletId;
+          report.deletedBooklet = bookletId;
 
-        try {
-          await this.journalService.createEntry(
-            userId,
+          auditEvent = {
             workspaceId,
-            'delete',
-            'booklet',
-            bookletId,
-            {
+            actorUserId: userId,
+            eventType: 'BOOKLET_DELETED',
+            entityType: 'booklet',
+            entityId: bookletId,
+            result: 'success',
+            summary: 'Booklet deleted',
+            details: {
               bookletId,
               bookletName: booklet.bookletinfo?.name || 'Unknown',
-              personId: booklet.personid,
-              personLogin: booklet.person?.login || 'Unknown',
-              personCode: booklet.person?.code,
-              personGroup: booklet.person?.group,
-              personSource: booklet.person?.source,
-              personUploadedAt: booklet.person?.uploaded_at,
-              message: 'Booklet deleted'
+              personId: booklet.personid
             }
-          );
-        } catch (error) {
-          this.logger.error(
-            `Failed to create journal entry for deleting booklet ${bookletId}: ${error.message}`
-          );
-        }
+          };
 
-        return { success: true, report };
-      }).then(async result => {
+          return { success: true, report };
+        });
+
         if (result.success) {
           await this.invalidateCachesAfterTestResultDeletion(workspaceId);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              `Failed to create journal entry for deleting booklet ${bookletId}`
+            );
+          }
         }
         return result;
-      })
+      }
     );
+  }
+
+  private async tryRecordAuditEvent(
+    event: RecordAuditJournalEventInput,
+    failureMessage: string
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`${failureMessage}: ${message}`, stack);
+    }
   }
 
   async searchResponses(

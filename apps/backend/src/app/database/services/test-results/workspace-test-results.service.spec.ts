@@ -124,7 +124,8 @@ describe('WorkspaceTestResultsService', () => {
     } as unknown as CodingStatisticsService;
 
     journalService = {
-      createEntry: jest.fn().mockResolvedValue(undefined)
+      createEntry: jest.fn().mockResolvedValue(undefined),
+      recordEvent: jest.fn().mockResolvedValue(undefined)
     } as unknown as JournalService;
 
     cacheService = {
@@ -404,6 +405,7 @@ describe('WorkspaceTestResultsService', () => {
         .mockResolvedValue(undefined);
 
       (dataSource.transaction as jest.Mock).mockImplementation(cb => cb(manager));
+      (journalService.recordEvent as jest.Mock).mockRejectedValueOnce(new Error('audit down'));
 
       const result = await service.deleteTestLogsByRequest(
         1,
@@ -424,14 +426,18 @@ describe('WorkspaceTestResultsService', () => {
       expect(cacheService.delete).toHaveBeenCalledWith(
         'workspace-overview-stats-1'
       );
-      expect(journalService.createEntry).toHaveBeenCalledWith(
-        'user-1',
-        1,
-        'delete',
-        'test-logs',
-        0,
+      expect(journalService.recordEvent).toHaveBeenCalledWith(
         expect.objectContaining({
-          deletedTargetCount: 3
+          workspaceId: 1,
+          actorUserId: 'user-1',
+          eventType: 'TEST_LOGS_DELETED',
+          entityType: 'test-logs',
+          entityId: null,
+          result: 'success',
+          summary: 'Test logs deleted by bulk job',
+          details: expect.objectContaining({
+            deletedTargetCount: 3
+          })
         })
       );
 

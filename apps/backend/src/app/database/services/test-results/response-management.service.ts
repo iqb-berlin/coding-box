@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { ResponseEntity } from '../../entities/response.entity';
 import { JournalService, CodedResponse } from '../shared';
+import type { RecordAuditJournalEventInput } from '../shared/journal.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 // eslint-disable-next-line import/no-cycle
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
@@ -725,17 +726,22 @@ export class ResponseManagementService {
 
           resolvedCount += deleteResult.affected || 0;
 
-          await this.journalService.createEntry(
-            userId,
-            workspaceId,
-            'delete',
-            'response',
-            selectedResponseId,
+          await this.journalService.recordEvent(
             {
-              duplicateGroupKey: key,
-              keptResponseId: selectedResponseId,
-              deletedResponseIds: deleteIds
-            }
+              workspaceId,
+              actorUserId: userId,
+              eventType: 'DUPLICATE_RESPONSES_RESOLVED',
+              legacyActionType: 'delete',
+              entityType: 'response',
+              entityId: selectedResponseId,
+              result: 'success',
+              summary: 'Duplicate responses resolved',
+              details: {
+                keptResponseId: selectedResponseId,
+                deletedResponseIds: deleteIds
+              }
+            },
+            manager
           );
         }
 
@@ -773,6 +779,7 @@ export class ResponseManagementService {
     }> {
     return withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
       let affectedUnitId: number | null = null;
+      let auditEvent: RecordAuditJournalEventInput | null = null;
       return this.connection.transaction(async manager => {
         const report = {
           deletedResponse: null,
@@ -813,28 +820,23 @@ export class ResponseManagementService {
         report.deletedResponse = responseId;
         affectedUnitId = response.unit.id;
 
-        try {
-          await this.journalService.createEntry(
-            userId,
-            workspaceId,
-            'delete',
-            'response',
+        auditEvent = {
+          workspaceId,
+          actorUserId: userId,
+          eventType: 'RESPONSE_DELETED',
+          entityType: 'response',
+          entityId: responseId,
+          result: 'success',
+          summary: 'Response deleted',
+          details: {
             responseId,
-            {
-              responseId,
-              unitId: response.unit.id,
-              unitName: response.unit.name,
-              variableId: response.variableid,
-              value: response.value,
-              bookletId: response.unit.booklet?.id,
-              personId: response.unit.booklet?.person?.id
-            }
-          );
-        } catch (e) {
-          this.logger.error(
-            `Failed to create journal entry for response deletion: ${e.message}`
-          );
-        }
+            unitId: response.unit.id,
+            unitName: response.unit.name,
+            variableId: response.variableid,
+            bookletId: response.unit.booklet?.id,
+            personId: response.unit.booklet?.person?.id
+          }
+        };
 
         return { success: true, report };
       }).then(async result => {
@@ -848,9 +850,28 @@ export class ResponseManagementService {
             this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
             this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
           ]);
+          if (auditEvent) {
+            await this.tryRecordAuditEvent(
+              auditEvent,
+              'Failed to create journal entry for response deletion'
+            );
+          }
         }
         return result;
       });
     });
+  }
+
+  private async tryRecordAuditEvent(
+    event: RecordAuditJournalEventInput,
+    failureMessage: string
+  ): Promise<void> {
+    try {
+      await this.journalService.recordEvent(event);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      this.logger.error(`${failureMessage}: ${message}`, stack);
+    }
   }
 }
