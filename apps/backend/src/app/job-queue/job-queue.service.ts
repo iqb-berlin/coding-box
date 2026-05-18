@@ -336,18 +336,19 @@ export class JobQueueService {
     for (const [queueName, queue] of queues.entries()) {
       processPromises.push(
         queue.getJobs(['active', 'waiting', 'delayed', 'completed', 'failed', 'paused']).then(async jobs => {
-          let matchedJobs = jobs;
+          const existingJobs = jobs.filter(Boolean);
+          let matchedJobs = existingJobs;
           if (queueName === 'validation-task') {
-            const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
+            const taskIds = existingJobs.map(j => j.data?.taskId as number).filter(Boolean);
             if (taskIds.length === 0) return [];
             const tasks = await this.validationTaskRepository.find({
               where: { id: In(taskIds) },
               select: ['id', 'workspace_id']
             });
             const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-            matchedJobs = jobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
+            matchedJobs = existingJobs.filter(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
           } else {
-            matchedJobs = jobs.filter(j => j.data && j.data.workspaceId === workspaceId);
+            matchedJobs = existingJobs.filter(j => j.data && j.data.workspaceId === workspaceId);
           }
 
           const mappedPromises = matchedJobs.map(async job => {
@@ -455,20 +456,20 @@ export class JobQueueService {
     workspaceId: number
   ): Promise<Job | undefined> {
     const queue = this.getQueue(queueName);
-    const jobs = await queue.getJobs(['active', 'waiting', 'delayed']);
+    const jobs = (await queue.getJobs(['active', 'waiting', 'delayed'])).filter(Boolean);
 
     if (queueName === 'validation-task') {
-      const taskIds = jobs.map(j => j.data.taskId as number).filter(Boolean);
+      const taskIds = jobs.map(j => j.data?.taskId as number).filter(Boolean);
       if (taskIds.length === 0) return undefined;
       const tasks = await this.validationTaskRepository.find({
         where: { id: In(taskIds) },
         select: ['id', 'workspace_id']
       });
       const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
-      return jobs.find(j => taskWorkspaceMap.get(j.data.taskId) === workspaceId);
+      return jobs.find(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
     }
 
-    return jobs.find(j => j.data.workspaceId === workspaceId);
+    return jobs.find(j => j.data?.workspaceId === workspaceId);
   }
 
   async assertNoDependencyConflicts(

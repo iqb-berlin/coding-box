@@ -244,6 +244,29 @@ describe('JobQueueService', () => {
     expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('example.test');
   });
 
+  it('ignores stale null jobs returned by Bull when listing workspace jobs', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[1].getJobs.mockResolvedValue([
+      null,
+      createJob({ workspaceId: 1, version: 'v1' })
+    ] as never);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toHaveLength(1);
+    expect(workspaceJobs[0]).toMatchObject({
+      queueName: 'coding-statistics',
+      status: 'waiting'
+    });
+  });
+
+  it('ignores stale null jobs when checking dependency conflicts', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[1].getJobs.mockResolvedValue([null] as never);
+
+    await expect(service.assertNoDependencyConflicts('data-export', 1)).resolves.toBeUndefined();
+  });
+
   it('checks dependency conflicts and redis status', async () => {
     await expect(service.assertNoActiveUploadForWorkspace(1)).rejects.toBeInstanceOf(ConflictException);
     await expect(service.assertNoDependencyConflicts('data-export', 1)).rejects.toBeInstanceOf(ConflictException);
