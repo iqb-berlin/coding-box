@@ -96,6 +96,7 @@ export class ExportJobProcessor {
       'aggregated',
       'by-coder',
       'by-variable',
+      'by-variable-compact',
       'detailed',
       'coding-times',
       'test-results',
@@ -124,6 +125,7 @@ export class ExportJobProcessor {
       }
       const isCsv =
         job.data.exportType === 'detailed' ||
+        job.data.exportType === 'by-variable-compact' ||
         (job.data.exportType === 'results-by-version' &&
           job.data.format !== 'excel') ||
         (job.data.exportType === 'coding-list' &&
@@ -283,6 +285,31 @@ export class ExportJobProcessor {
             job.data.coderTrainingIds,
             job.data.coderIds,
             job.data.serverUrl || ''
+          );
+          break;
+
+        case 'by-variable-compact':
+          await this.writeStreamToFile(
+            this.codingExportService.exportCodingResultsByVariableCompactAsCsvStream(
+              job.data.workspaceId,
+              job.data.includeModalValue || false,
+              job.data.includeDoubleCoded || false,
+              job.data.includeComments || false,
+              job.data.outputCommentsInsteadOfCodes || false,
+              job.data.includeReplayUrl || false,
+              job.data.anonymizeCoders || false,
+              job.data.usePseudoCoders || false,
+              job.data.authToken || '',
+              undefined, // req is not available in background job
+              job.data.excludeAutoCoded || false,
+              checkCancellation,
+              job.data.jobDefinitionIds,
+              job.data.coderTrainingIds,
+              job.data.coderIds,
+              job.data.serverUrl || ''
+            ),
+            filePath,
+            { prependUtf8Bom: true }
           );
           break;
 

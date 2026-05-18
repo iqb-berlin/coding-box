@@ -209,6 +209,116 @@ describe('WorkspaceCodingExportController', () => {
     });
   });
 
+  it('estimates by-variable export sizes before starting a background job', async () => {
+    const codingExportService = {
+      estimateCodingResultsByVariableExport: jest.fn().mockResolvedValue({
+        exportType: 'by-variable',
+        unitVariableCount: 2578,
+        worksheetLimit: 1000,
+        exceedsWorksheetLimit: true
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      codingExportService as unknown as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.estimateExportJob(
+      5,
+      {
+        exportType: 'by-variable',
+        excludeAutoCoded: true,
+        jobDefinitionIds: [1],
+        coderTrainingIds: [2],
+        coderIds: [3]
+      }
+    )).resolves.toEqual({
+      exportType: 'by-variable',
+      unitVariableCount: 2578,
+      worksheetLimit: 1000,
+      exceedsWorksheetLimit: true
+    });
+
+    expect(codingExportService.estimateCodingResultsByVariableExport).toHaveBeenCalledWith(
+      5,
+      'by-variable',
+      true,
+      [1],
+      [2],
+      [3]
+    );
+  });
+
+  it('does not apply the worksheet limit flag to compact by-variable estimates', async () => {
+    const codingExportService = {
+      estimateCodingResultsByVariableExport: jest.fn().mockResolvedValue({
+        exportType: 'by-variable-compact',
+        unitVariableCount: 2578,
+        worksheetLimit: null,
+        exceedsWorksheetLimit: false
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      codingExportService as unknown as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.estimateExportJob(
+      5,
+      {
+        exportType: 'by-variable-compact'
+      }
+    )).resolves.toEqual({
+      exportType: 'by-variable-compact',
+      unitVariableCount: 2578,
+      worksheetLimit: null,
+      exceedsWorksheetLimit: false
+    });
+
+    expect(codingExportService.estimateCodingResultsByVariableExport).toHaveBeenCalledWith(
+      5,
+      'by-variable-compact',
+      false,
+      undefined,
+      undefined,
+      undefined
+    );
+  });
+
+  it('rejects export estimates for unsupported export types', async () => {
+    const codingExportService = {
+      estimateCodingResultsByVariableExport: jest.fn()
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      codingExportService as unknown as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      {} as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.estimateExportJob(
+      5,
+      {
+        exportType: 'detailed'
+      }
+    )).rejects.toThrow(BadRequestException);
+
+    expect(codingExportService.estimateCodingResultsByVariableExport).not.toHaveBeenCalled();
+  });
+
   it('does not expose internal file paths in export job status results', async () => {
     const jobQueueService = {
       getExportJob: jest.fn().mockResolvedValue({
@@ -253,6 +363,38 @@ describe('WorkspaceCodingExportController', () => {
       }
     });
     expect(JSON.stringify(status)).not.toContain('filePath');
+  });
+
+  it('adds structured details for worksheet limit failures in export job status', async () => {
+    const failedReason = 'Der Export enthaelt 2578 Unit-Variable-Kombinationen und ueberschreitet das konfigurierte Limit von 1000 Tabellenblaettern.';
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5 },
+        getState: jest.fn().mockResolvedValue('failed'),
+        progress: jest.fn().mockResolvedValue(20),
+        failedReason
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      status: 'failed',
+      progress: 20,
+      error: failedReason,
+      errorCode: 'EXPORT_TOO_MANY_WORKSHEETS',
+      errorDetails: {
+        actual: 2578,
+        max: 1000
+      }
+    });
   });
 
   it('rejects export job status access for jobs from another workspace', async () => {

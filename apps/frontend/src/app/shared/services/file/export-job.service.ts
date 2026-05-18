@@ -12,7 +12,7 @@ import {
   takeUntil,
   tap
 } from 'rxjs/operators';
-import { CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
+import { CodingExportEstimate, CodingJobBackendService } from '../../../coding/services/coding-job-backend.service';
 
 export interface ExportJob {
   jobId: string;
@@ -25,6 +25,8 @@ export interface ExportJob {
     fileSize: number;
   };
   error?: string;
+  errorCode?: string;
+  errorDetails?: Record<string, number | string | boolean>;
   createdAt?: number;
 }
 
@@ -33,6 +35,7 @@ export interface ExportJobConfig {
   | 'aggregated'
   | 'by-coder'
   | 'by-variable'
+  | 'by-variable-compact'
   | 'detailed'
   | 'coding-times'
   | 'results-by-version';
@@ -105,6 +108,10 @@ export class ExportJobService implements OnDestroy {
     );
   }
 
+  estimateJob(workspaceId: number, config: ExportJobConfig): Observable<CodingExportEstimate> {
+    return this.codingJobBackendService.estimateExportJob(workspaceId, config);
+  }
+
   private addJob(job: ExportJob): void {
     const currentJobs = this.jobsSubject.value;
     this.jobsSubject.next([...currentJobs, job]);
@@ -139,6 +146,8 @@ export class ExportJobService implements OnDestroy {
             progress?: number;
             result?: { fileName?: string; fileSize?: number };
             error?: string;
+            errorCode?: string;
+            errorDetails?: Record<string, number | string | boolean>;
           };
 
           if (!statusAny.status && statusAny.error) {
@@ -161,7 +170,9 @@ export class ExportJobService implements OnDestroy {
             status: mappedStatus,
             progress: statusAny.progress || 0,
             result,
-            error: statusAny.error
+            error: statusAny.error,
+            errorCode: statusAny.errorCode,
+            errorDetails: statusAny.errorDetails
           });
 
           // Stop polling when job is done
@@ -263,7 +274,7 @@ export class ExportJobService implements OnDestroy {
     if (fileExtension && ['csv', 'xlsx', 'json'].includes(fileExtension)) {
       return fileExtension;
     }
-    return exportType === 'detailed' ? 'csv' : 'xlsx';
+    return exportType === 'detailed' || exportType === 'by-variable-compact' ? 'csv' : 'xlsx';
   }
 
   ngOnDestroy(): void {

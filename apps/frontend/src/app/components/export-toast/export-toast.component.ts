@@ -35,6 +35,7 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     aggregated: 'export-toast.types.aggregated',
     'by-coder': 'export-toast.types.by-coder',
     'by-variable': 'export-toast.types.by-variable',
+    'by-variable-compact': 'export-toast.types.by-variable-compact',
     detailed: 'export-toast.types.detailed',
     'coding-times': 'export-toast.types.coding-times',
     'results-by-version': 'export-toast.types.results-by-version'
@@ -102,6 +103,25 @@ export class ExportToastComponent implements OnInit, OnDestroy {
     return translationKey ? this.translateService.instant(translationKey) : exportType;
   }
 
+  getErrorTitle(job: ExportJob): string {
+    if (this.getWorksheetLimitError(job)) {
+      return this.translateService.instant('export-toast.errors.too-many-worksheets-title');
+    }
+    return this.translateService.instant('export-toast.errors.generic-title');
+  }
+
+  getErrorMessage(job: ExportJob): string {
+    const worksheetLimitError = this.getWorksheetLimitError(job);
+    if (worksheetLimitError) {
+      return this.translateService.instant('export-toast.errors.too-many-worksheets-message', worksheetLimitError);
+    }
+    return job.error || '';
+  }
+
+  hasTechnicalDetails(job: ExportJob): boolean {
+    return !!job.error && this.getErrorMessage(job) !== job.error;
+  }
+
   downloadFile(job: ExportJob): void {
     this.exportJobService.downloadFile(job.workspaceId, job.jobId, job.exportType, job.result?.fileName);
   }
@@ -117,5 +137,22 @@ export class ExportToastComponent implements OnInit, OnDestroy {
   clearCompleted(): void {
     const completedJobs = this.jobs.filter(j => j.status === 'completed' || j.status === 'failed' || j.status === 'cancelled');
     completedJobs.forEach(job => this.exportJobService.removeJob(job.jobId));
+  }
+
+  private getWorksheetLimitError(job: ExportJob): { actual: number; max: number } | null {
+    if (job.errorCode === 'EXPORT_TOO_MANY_WORKSHEETS') {
+      const actual = Number(job.errorDetails?.actual);
+      const max = Number(job.errorDetails?.max);
+      if (Number.isFinite(actual) && Number.isFinite(max)) {
+        return { actual, max };
+      }
+    }
+
+    const match = job.error?.match(/enthaelt\s+(\d+)\s+Unit-Variable-Kombinationen[\s\S]*Limit von\s+(\d+)\s+Tabellenblaettern/i);
+    if (!match) return null;
+    return {
+      actual: Number(match[1]),
+      max: Number(match[2])
+    };
   }
 }

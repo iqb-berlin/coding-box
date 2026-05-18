@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import { Readable } from 'stream';
 import { CodingExportService } from './coding-export.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -18,6 +19,17 @@ jest.mock('../workspace/workspace-core.service', () => ({
 }));
 
 type MockedRepo<T> = Partial<Record<keyof Repository<T>, jest.Mock>>;
+
+async function streamToString(stream: Readable): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    stream.on('data', chunk => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf-8'));
+    });
+    stream.on('error', reject);
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
+  });
+}
 
 function createServiceWithDetailedMocks(
   codingIssueOption: number,
@@ -500,6 +512,218 @@ describe('CodingExportService (WS-Admin export smoke)', () => {
     expect(dataQuery.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 7 });
     expect(dataQuery.andWhere).toHaveBeenCalledWith('person.consider = :consider', { consider: true });
     expect(dataQuery.andWhere).toHaveBeenCalledWith('cj.workspace_id = :workspaceId', { workspaceId: 7 });
+  });
+
+  it('streams compact by-variable export rows from batched coding-unit queries', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const firstBatchQuery = createQueryBuilder([
+      {
+        cjuId: '1',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        login: 'login-a',
+        personCode: 'code-a',
+        personGroup: 'group-a',
+        bookletName: 'BOOKLET-A',
+        cju_code: '5',
+        coding_issue_option: null,
+        updatedAt: new Date('2026-04-14T10:00:00.000Z'),
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        status_v1: 8,
+        username: 'Coder A',
+        notes: 'note-a',
+        pId: '10',
+        trainingId: null,
+        responseId: '100'
+      },
+      {
+        cjuId: '2',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        login: 'login-a',
+        personCode: 'code-a',
+        personGroup: 'group-a',
+        bookletName: 'BOOKLET-A',
+        cju_code: '7',
+        coding_issue_option: null,
+        updatedAt: new Date('2026-04-14T10:05:00.000Z'),
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        status_v1: 8,
+        username: 'Coder B',
+        notes: 'note-b',
+        pId: '10',
+        trainingId: null,
+        responseId: '100'
+      }
+    ]);
+    const emptyBatchQuery = createQueryBuilder([]);
+    const responseRepository = {
+      createQueryBuilder: jest.fn()
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(firstBatchQuery)
+        .mockReturnValueOnce(emptyBatchQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      {} as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    const csv = await streamToString(service.exportCodingResultsByVariableCompactAsCsvStream(
+      7,
+      false,
+      true,
+      true
+    ));
+
+    expect(csv).toContain('"Unit";"Variable";"Test Person Login"');
+    expect(csv).toContain('"UNIT";"VAR";"login-a";"code-a";"group-a";"Coder A";"5";"note-a";');
+    expect(csv).toContain('"UNIT";"VAR";"login-a";"code-a";"group-a";"Coder B";"7";"note-b";');
+    expect(csv).toContain('"Ja"');
+    expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+    expect(codingJobUnitRepository.createQueryBuilder).toHaveBeenCalledTimes(2);
+    expect(firstBatchQuery.offset).toHaveBeenCalledWith(0);
+    expect(emptyBatchQuery.offset).toHaveBeenCalledWith(2);
+  });
+
+  it('limits compact by-variable export rows and anonymization mapping to selected coders', async () => {
+    const createQueryBuilder = (rawRows: unknown[] = []) => {
+      const qb = {
+        innerJoin: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        addOrderBy: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        offset: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(rawRows)
+      };
+      return qb;
+    };
+
+    const coderMappingQuery = createQueryBuilder([{ username: 'Coder A' }]);
+    const firstBatchQuery = createQueryBuilder([
+      {
+        cjuId: '1',
+        unitName: 'UNIT',
+        variableId: 'VAR',
+        login: 'login-a',
+        personCode: 'code-a',
+        personGroup: 'group-a',
+        bookletName: 'BOOKLET-A',
+        cju_code: '5',
+        coding_issue_option: null,
+        updatedAt: new Date('2026-04-14T10:00:00.000Z'),
+        code_v1: null,
+        code_v2: null,
+        code_v3: null,
+        status_v1: 8,
+        username: 'Coder A',
+        notes: null,
+        pId: '10',
+        trainingId: null,
+        responseId: '100'
+      }
+    ]);
+    const emptyBatchQuery = createQueryBuilder([]);
+    const responseRepository = {
+      createQueryBuilder: jest.fn()
+    };
+    const codingJobRepository = {
+      createQueryBuilder: jest.fn().mockReturnValue(coderMappingQuery)
+    };
+    const codingJobUnitRepository = {
+      createQueryBuilder: jest.fn()
+        .mockReturnValueOnce(firstBatchQuery)
+        .mockReturnValueOnce(emptyBatchQuery)
+    };
+    const workspaceExclusionService = {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [],
+        ignoredBooklets: [],
+        testletIgnoredUnits: []
+      })
+    };
+
+    const service = new CodingExportService(
+      responseRepository as unknown as Repository<ResponseEntity>,
+      codingJobRepository as unknown as Repository<CodingJob>,
+      {} as Repository<CodingJobVariable>,
+      codingJobUnitRepository as unknown as Repository<CodingJobUnit>,
+      { find: jest.fn() } as unknown as Repository<CoderTrainingDiscussionResult>,
+      { findBy: jest.fn() } as unknown as Repository<User>,
+      {} as CodingListService,
+      {} as WorkspaceCoreService,
+      workspaceExclusionService as unknown as WorkspaceExclusionService
+    );
+
+    const csv = await streamToString(service.exportCodingResultsByVariableCompactAsCsvStream(
+      7,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      '',
+      undefined,
+      false,
+      undefined,
+      undefined,
+      undefined,
+      [101]
+    ));
+
+    expect(csv).toContain('"UNIT";"VAR";"login-a";"code-a";"group-a";"K1";"5"');
+    expect(firstBatchQuery.andWhere).toHaveBeenCalledWith(
+      'cjc.user_id IN (:...selectedCoderIds)',
+      { selectedCoderIds: [101] }
+    );
+    expect(coderMappingQuery.andWhere).toHaveBeenCalledWith(
+      'cjc.user_id IN (:...selectedCoderIds)',
+      { selectedCoderIds: [101] }
+    );
   });
 
   it('combines job/training scope with coder filter when all are selected', () => {

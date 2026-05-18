@@ -22,6 +22,7 @@ export interface CodingExportConfig {
   | 'aggregated'
   | 'by-coder'
   | 'by-variable'
+  | 'by-variable-compact'
   | 'detailed'
   | 'coding-times'
   | 'results-by-version';
@@ -47,6 +48,13 @@ export interface CodingExportConfig {
   coderIds?: number[];
   authToken?: string;
   serverUrl?: string;
+}
+
+export interface CodingExportEstimate {
+  exportType: 'by-variable' | 'by-variable-compact';
+  unitVariableCount: number;
+  worksheetLimit: number | null;
+  exceedsWorksheetLimit: boolean;
 }
 
 interface JobDefinitionApiResponse {
@@ -687,6 +695,20 @@ export class CodingJobBackendService {
     );
   }
 
+  estimateExportJob(
+    workspaceId: number,
+    exportConfig: CodingExportConfig
+  ): Observable<CodingExportEstimate> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/estimate`;
+    return this.http.post<CodingExportEstimate>(
+      url,
+      exportConfig,
+      {
+        headers: this.authHeader
+      }
+    );
+  }
+
   getExportJobStatus(
     workspaceId: number,
     jobId: string
@@ -703,6 +725,8 @@ export class CodingJobBackendService {
         createdAt: number;
       };
       error?: string;
+      errorCode?: string;
+      errorDetails?: Record<string, number | string | boolean>;
     }> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
     return this.http.get<{

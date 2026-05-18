@@ -14,10 +14,17 @@ describe('ExportComponent', () => {
   let fixture: ComponentFixture<ExportComponent>;
   let component: ExportComponent;
   let startJob: jest.Mock;
+  let estimateJob: jest.Mock;
   let snackOpen: jest.Mock;
 
   beforeEach(async () => {
     startJob = jest.fn().mockReturnValue(of({ jobId: 'job-1' }));
+    estimateJob = jest.fn().mockReturnValue(of({
+      exportType: 'by-variable',
+      unitVariableCount: 10,
+      worksheetLimit: 1000,
+      exceedsWorksheetLimit: false
+    }));
     snackOpen = jest.fn();
 
     await TestBed.configureTestingModule({
@@ -38,7 +45,7 @@ describe('ExportComponent', () => {
         },
         {
           provide: ExportJobService,
-          useValue: { startJob }
+          useValue: { startJob, estimateJob }
         },
         {
           provide: CodingFacadeService,
@@ -74,7 +81,8 @@ describe('ExportComponent', () => {
         export: {
           'job-started': 'Datenexport gestartet',
           errors: {
-            'start-failed': 'Datenexport konnte nicht gestartet werden'
+            'start-failed': 'Datenexport konnte nicht gestartet werden',
+            'too-many-worksheets-short': 'Der Export ist zu groß für einzelne Tabellenblätter.'
           }
         },
         'export-options': {
@@ -102,6 +110,7 @@ describe('ExportComponent', () => {
     expect(component.exportFormatGroups[1].formats.map(format => format.value)).toEqual([
       'by-coder',
       'by-variable',
+      'by-variable-compact',
       'detailed',
       'coding-times'
     ]);
@@ -149,6 +158,33 @@ describe('ExportComponent', () => {
       coderIds: [30],
       excludeAutoCoded: true
     }));
+  });
+
+  it('blocks oversized legacy by-variable exports and suggests the compact export', () => {
+    estimateJob.mockReturnValueOnce(of({
+      exportType: 'by-variable',
+      unitVariableCount: 2578,
+      worksheetLimit: 1000,
+      exceedsWorksheetLimit: true
+    }));
+    component.selectedFormat = 'by-variable';
+
+    component.onExport();
+
+    expect(estimateJob).toHaveBeenCalledWith(5, expect.objectContaining({
+      exportType: 'by-variable'
+    }));
+    expect(startJob).not.toHaveBeenCalled();
+    expect(component.largeByVariableEstimate?.unitVariableCount).toBe(2578);
+    expect(snackOpen).toHaveBeenCalledWith(
+      'Der Export ist zu groß für einzelne Tabellenblätter.',
+      'Schließen',
+      { duration: 7000 }
+    );
+
+    component.selectCompactVariableExport();
+    expect(component.selectedFormat).toBe('by-variable-compact');
+    expect(component.largeByVariableEstimate).toBeNull();
   });
 
   it('shows an error when the export job cannot be started', () => {

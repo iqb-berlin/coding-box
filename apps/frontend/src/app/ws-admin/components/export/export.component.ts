@@ -11,6 +11,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSelectModule } from '@angular/material/select';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
 import { FormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
 import { Observable } from 'rxjs';
@@ -19,7 +20,7 @@ import { AppService } from '../../../core/services/app.service';
 import { ExportJobConfig, ExportJobService } from '../../../shared/services/file/export-job.service';
 import { CodingFacadeService } from '../../../services/facades/coding-facade.service';
 import { CoderService } from '../../../coding/services/coder.service';
-import { JobDefinition } from '../../../coding/services/coding-job-backend.service';
+import { CodingExportEstimate, JobDefinition } from '../../../coding/services/coding-job-backend.service';
 import { CoderTraining } from '../../../coding/models/coder-training.model';
 import { Coder } from '../../../coding/models/coder.model';
 import {
@@ -32,6 +33,7 @@ export type ExportFormat =
   | 'aggregated'
   | 'by-coder'
   | 'by-variable'
+  | 'by-variable-compact'
   | 'detailed'
   | 'coding-times';
 type ResultsVersion = 'v1' | 'v2' | 'v3';
@@ -66,6 +68,7 @@ interface ExportFormatGroup {
     MatSelectModule,
     MatFormFieldModule,
     MatDialogModule,
+    MatIconModule,
     FormsModule,
     CommonModule
   ]
@@ -93,6 +96,7 @@ export class ExportComponent {
   excludeAutoCoded = false;
   resultsVersion: ResultsVersion = 'v2';
   resultsFormat: ResultsExportFormat = 'csv';
+  largeByVariableEstimate: CodingExportEstimate | null = null;
 
   jobDefinitions: JobDefinition[] = [];
   coderTrainings: CoderTraining[] = [];
@@ -133,6 +137,11 @@ export class ExportComponent {
           description: this.translateService.instant('ws-admin.export-formats.by-variable-description')
         },
         {
+          value: 'by-variable-compact',
+          label: this.translateService.instant('ws-admin.export-formats.by-variable-compact'),
+          description: this.translateService.instant('ws-admin.export-formats.by-variable-compact-description')
+        },
+        {
           value: 'detailed',
           label: this.translateService.instant('ws-admin.export-formats.detailed'),
           description: this.translateService.instant('ws-admin.export-formats.detailed-description')
@@ -165,6 +174,7 @@ export class ExportComponent {
     dialogRef.afterClosed().subscribe((result: ExportSelectionDialogResult | undefined) => {
       if (!result) return;
       this.selectedCombinedJobIds = result.selectedCombinedJobIds;
+      this.clearLargeByVariableEstimate();
     });
   }
 
@@ -222,10 +232,21 @@ export class ExportComponent {
   }
 
   onFormatChange(): void {
+    this.clearLargeByVariableEstimate();
     this.clearUnsupportedOptions();
   }
 
   onDoubleCodingMethodChange(): void {
+    this.clearUnsupportedOptions();
+  }
+
+  clearLargeByVariableEstimate(): void {
+    this.largeByVariableEstimate = null;
+  }
+
+  selectCompactVariableExport(): void {
+    this.selectedFormat = 'by-variable-compact';
+    this.clearLargeByVariableEstimate();
     this.clearUnsupportedOptions();
   }
 
@@ -300,6 +321,32 @@ export class ExportComponent {
 
     this.isStartingExport = true;
 
+    if (this.selectedFormat === 'by-variable') {
+      this.exportJobService.estimateJob(workspaceId, this.buildExportConfig('')).subscribe({
+        next: estimate => {
+          if (estimate.exceedsWorksheetLimit) {
+            this.largeByVariableEstimate = estimate;
+            this.snackBar.open(
+              this.translateService.instant('ws-admin.export.errors.too-many-worksheets-short'),
+              this.translateService.instant('close'),
+              { duration: 7000 }
+            );
+            this.isStartingExport = false;
+            return;
+          }
+          this.startExportWithToken(workspaceId);
+        },
+        error: () => {
+          this.startExportWithToken(workspaceId);
+        }
+      });
+      return;
+    }
+
+    this.startExportWithToken(workspaceId);
+  }
+
+  private startExportWithToken(workspaceId: number): void {
     const tokenObservable = this.includeReplayUrl ?
       this.appService.createOwnToken(workspaceId, 60).pipe(catchError(() => {
         this.snackBar.open(

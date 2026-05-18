@@ -110,6 +110,7 @@ export interface ExportJobData {
   | 'aggregated'
   | 'by-coder'
   | 'by-variable'
+  | 'by-variable-compact'
   | 'detailed'
   | 'coding-times'
   | 'test-results'

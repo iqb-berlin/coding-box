@@ -26,6 +26,59 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 
+interface ByVariableCombination {
+  unitName: string;
+  variableId: string;
+  bookletName?: string;
+}
+
+export interface ByVariableExportEstimate {
+  exportType: 'by-variable' | 'by-variable-compact';
+  unitVariableCount: number;
+  worksheetLimit: number | null;
+  exceedsWorksheetLimit: boolean;
+}
+
+interface CompactByVariableRawRow {
+  cjuId: string | number;
+  unitName: string;
+  variableId: string;
+  login: string;
+  personCode: string;
+  personGroup: string | null;
+  bookletName: string | null;
+  cju_code: string | number | null;
+  coding_issue_option: string | number | null;
+  updatedAt: Date | string | null;
+  code_v1: string | number | null;
+  code_v2: string | number | null;
+  code_v3: string | number | null;
+  status_v1: string | number | null;
+  username: string | null;
+  notes: string | null;
+  pId: string | number;
+  trainingId: string | number | null;
+  responseId: string | number | null;
+}
+
+interface CompactByVariableCoding {
+  code: number | null;
+  notes: string | null;
+  codingIssueOption: number | null;
+  updatedAt: Date | string | null;
+}
+
+interface CompactByVariableGroup {
+  key: string;
+  unitName: string;
+  variableId: string;
+  login: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
+  codings: Map<string, CompactByVariableCoding>;
+}
+
 @Injectable()
 export class CodingExportService {
   private readonly logger = new Logger(CodingExportService.name);
@@ -51,6 +104,15 @@ export class CodingExportService {
   private async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     return (bookletName: string, unitName: string) => !unitName || isExcludedByResolvedExclusions(exclusions, bookletName, unitName);
+  }
+
+  private getByVariableWorksheetLimit(): number {
+    const configuredLimit = Number.parseInt(process.env.EXPORT_MAX_WORKSHEETS || '1000', 10);
+    return Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : 1000;
+  }
+
+  private escapeCsvField(field: unknown): string {
+    return `"${field?.toString().replace(/"/g, '""') || ''}"`;
   }
 
   private normalizeCodingIssueOption(issueOption: number | null | undefined): number | null {
@@ -379,6 +441,92 @@ export class CodingExportService {
       variableAnchor: variableId,
       authToken
     });
+  }
+
+  private async getByVariableCombinations(
+    workspaceId: number,
+    excludeAutoCoded: boolean,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): Promise<ByVariableCombination[]> {
+    const unitVariableResultsQuery = this.responseRepository.createQueryBuilder('resp')
+      .innerJoin('resp.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .select('unit.name', 'unitName')
+      .addSelect('resp.variableid', 'variableId')
+      .addSelect('MIN(bookletinfo.name)', 'bookletName')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyResolvedExclusionsToQuery(unitVariableResultsQuery, exclusions, {
+      unitAlias: 'unit',
+      bookletInfoAlias: 'bookletinfo'
+    });
+
+    if (excludeAutoCoded) {
+      unitVariableResultsQuery.andWhere('resp.status_v1 = :status', {
+        status: statusStringToNumber('CODING_INCOMPLETE')
+      });
+    }
+
+    if (jobDefinitionIds?.length || coderTrainingIds?.length || coderIds?.length) {
+      unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
+        .innerJoin('cju.coding_job', 'cj');
+      this.applyJobFilters(
+        unitVariableResultsQuery,
+        jobDefinitionIds,
+        coderTrainingIds,
+        coderIds
+      );
+    }
+
+    const combinations = await unitVariableResultsQuery
+      .groupBy('unit.name')
+      .addGroupBy('resp.variableid')
+      .orderBy('unit.name', 'ASC')
+      .addOrderBy('resp.variableid', 'ASC')
+      .getRawMany<ByVariableCombination>();
+
+    const isExcluded = await this.getExclusionChecker(workspaceId);
+
+    return combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName));
+  }
+
+  async estimateCodingResultsByVariableExport(
+    workspaceId: number,
+    exportType: 'by-variable' | 'by-variable-compact' = 'by-variable',
+    excludeAutoCoded = false,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[]
+  ): Promise<ByVariableExportEstimate> {
+    const {
+      jobDefinitionIds: normalizedJobDefinitionIds,
+      coderTrainingIds: normalizedCoderTrainingIds,
+      coderIds: normalizedCoderIds
+    } = this.normalizeJobFilters(
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    );
+    const combinations = await this.getByVariableCombinations(
+      workspaceId,
+      excludeAutoCoded,
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
+    const worksheetLimit = this.getByVariableWorksheetLimit();
+
+    return {
+      exportType,
+      unitVariableCount: combinations.length,
+      worksheetLimit: exportType === 'by-variable' ? worksheetLimit : null,
+      exceedsWorksheetLimit: exportType === 'by-variable' && combinations.length > worksheetLimit
+    };
   }
 
   async exportCodingResultsAggregated(
@@ -1910,7 +2058,7 @@ export class CodingExportService {
       coderTrainingIds,
       coderIds
     );
-    const MAX_WORKSHEETS = parseInt(process.env.EXPORT_MAX_WORKSHEETS || '1000', 10);
+    const MAX_WORKSHEETS = this.getByVariableWorksheetLimit();
 
     const BATCH_SIZE = 100;
 
@@ -1926,46 +2074,14 @@ export class CodingExportService {
 
     if (checkCancellation) await checkCancellation();
 
-    const unitVariableResultsQuery = this.responseRepository.createQueryBuilder('resp')
-      .innerJoin('resp.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .select('unit.name', 'unitName')
-      .addSelect('resp.variableid', 'variableId')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    applyResolvedExclusionsToQuery(unitVariableResultsQuery, exclusions, {
-      unitAlias: 'unit',
-      bookletInfoAlias: 'bookletinfo'
-    });
-
-    if (excludeAutoCoded) {
-      unitVariableResultsQuery.andWhere('resp.status_v1 = :status', { status: statusStringToNumber('CODING_INCOMPLETE') });
-    }
-
-    if (normalizedJobDefinitionIds.length || normalizedCoderTrainingIds.length || normalizedCoderIds.length) {
-      unitVariableResultsQuery.innerJoin('coding_job_unit', 'cju', 'cju.response_id = resp.id')
-        .innerJoin('cju.coding_job', 'cj');
-      this.applyJobFilters(
-        unitVariableResultsQuery,
-        normalizedJobDefinitionIds,
-        normalizedCoderTrainingIds,
-        normalizedCoderIds
-      );
-    }
-
-    const combinations = await unitVariableResultsQuery
-      .groupBy('unit.name')
-      .addGroupBy('resp.variableid')
-      .orderBy('unit.name', 'ASC')
-      .addOrderBy('resp.variableid', 'ASC')
-      .getRawMany();
-
-    const isExcluded = await this.getExclusionChecker(workspaceId);
-
-    const filteredCombinations = combinations.filter(c => c.unitName && !isExcluded(c.bookletName || '', c.unitName));
+    const filteredCombinations = await this.getByVariableCombinations(
+      workspaceId,
+      excludeAutoCoded,
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
 
     if (filteredCombinations.length === 0) {
       throw new Error(
@@ -2242,6 +2358,519 @@ export class CodingExportService {
 
     await workbook.commit();
     return Buffer.concat(chunks);
+  }
+
+  exportCodingResultsByVariableCompactAsCsvStream(
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Readable {
+    return Readable.from(this.generateCodingResultsByVariableCompactCsv(
+      workspaceId,
+      includeModalValue,
+      includeDoubleCoded,
+      includeComments,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl
+    ));
+  }
+
+  async exportCodingResultsByVariableCompact(
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): Promise<Buffer> {
+    const stream = this.exportCodingResultsByVariableCompactAsCsvStream(
+      workspaceId,
+      includeModalValue,
+      includeDoubleCoded,
+      includeComments,
+      outputCommentsInsteadOfCodes,
+      includeReplayUrl,
+      anonymizeCoders,
+      usePseudoCoders,
+      authToken,
+      req,
+      excludeAutoCoded,
+      checkCancellation,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds,
+      serverUrl
+    );
+
+    return new Promise((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      stream.on('data', chunk => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk), 'utf-8'));
+      });
+      stream.on('error', reject);
+      stream.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+  }
+
+  private async* generateCodingResultsByVariableCompactCsv(
+    workspaceId: number,
+    includeModalValue = false,
+    includeDoubleCoded = false,
+    includeComments = false,
+    outputCommentsInsteadOfCodes = false,
+    includeReplayUrl = false,
+    anonymizeCoders = false,
+    usePseudoCoders = false,
+    authToken = '',
+    req?: Request,
+    excludeAutoCoded = false,
+    checkCancellation?: () => Promise<void>,
+    jobDefinitionIds?: number[],
+    coderTrainingIds?: number[],
+    coderIds?: number[],
+    serverUrl?: string
+  ): AsyncGenerator<string> {
+    this.logger.log(`Exporting compact coding results by variable for workspace ${workspaceId}${excludeAutoCoded ? ' (CODING_INCOMPLETE only)' : ''}${includeModalValue ? ' with modal value' : ''}${includeDoubleCoded ? ' with double coding indicator' : ''}${includeComments ? ' with comments' : ''}${outputCommentsInsteadOfCodes ? ' with comments instead of codes' : ''}${includeReplayUrl ? ' with replay URLs' : ''}${anonymizeCoders ? ' with anonymized coders' : ''}${usePseudoCoders ? ' using pseudo coders' : ''}`);
+
+    this.clearPageMapsCache();
+    const {
+      jobDefinitionIds: normalizedJobDefinitionIds,
+      coderTrainingIds: normalizedCoderTrainingIds,
+      coderIds: normalizedCoderIds
+    } = this.normalizeJobFilters(
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    );
+    const hasScopedJobFilters = this.hasScopedJobFilters(
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
+    const BATCH_SIZE = 1000;
+
+    if (checkCancellation) await checkCancellation();
+
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const globalCoderMapping = await this.getCompactByVariableCoderMapping(
+      workspaceId,
+      anonymizeCoders,
+      usePseudoCoders,
+      normalizedJobDefinitionIds,
+      normalizedCoderTrainingIds,
+      normalizedCoderIds
+    );
+
+    yield this.buildCompactByVariableHeader(
+      includeComments,
+      includeModalValue,
+      includeDoubleCoded,
+      includeReplayUrl
+    );
+
+    let exportedRowCount = 0;
+    let currentGroup: CompactByVariableGroup | null = null;
+    let offset = 0;
+
+    while (true) {
+      if (checkCancellation) await checkCancellation();
+
+      const dataQueryBuilder = this.codingJobUnitRepository.createQueryBuilder('cju')
+        .innerJoin('cju.coding_job', 'cj')
+        .innerJoin('cju.response', 'resp')
+        .innerJoin('resp.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .leftJoin('booklet.bookletinfo', 'bookletinfo')
+        .leftJoin('cj.codingJobCoders', 'cjc')
+        .leftJoin('cjc.user', 'user')
+        .select('cju.id', 'cjuId')
+        .addSelect('unit.name', 'unitName')
+        .addSelect('resp.variableid', 'variableId')
+        .addSelect('person.login', 'login')
+        .addSelect('person.code', 'personCode')
+        .addSelect('person.group', 'personGroup')
+        .addSelect('bookletinfo.name', 'bookletName')
+        .addSelect('cju.code', 'cju_code')
+        .addSelect('cju.coding_issue_option', 'coding_issue_option')
+        .addSelect('cju.updated_at', 'updatedAt')
+        .addSelect('resp.code_v1', 'code_v1')
+        .addSelect('resp.code_v2', 'code_v2')
+        .addSelect('resp.code_v3', 'code_v3')
+        .addSelect('resp.status_v1', 'status_v1')
+        .addSelect('user.username', 'username')
+        .addSelect('cju.notes', 'notes')
+        .addSelect('person.id', 'pId')
+        .addSelect('cj.training_id', 'trainingId')
+        .addSelect('cju.response_id', 'responseId')
+        .where('person.workspace_id = :workspaceId', { workspaceId })
+        .andWhere('person.consider = :consider', { consider: true })
+        .andWhere('cj.workspace_id = :workspaceId', { workspaceId });
+
+      applyResolvedExclusionsToQuery(dataQueryBuilder, exclusions, {
+        unitAlias: 'unit',
+        bookletInfoAlias: 'bookletinfo',
+        parameterPrefix: 'variableCompactRows'
+      });
+
+      if (excludeAutoCoded) {
+        dataQueryBuilder.andWhere('resp.status_v1 = :manualCodingStatus', {
+          manualCodingStatus: statusStringToNumber('CODING_INCOMPLETE')
+        });
+      }
+
+      this.applyJobFilters(
+        dataQueryBuilder,
+        normalizedJobDefinitionIds,
+        normalizedCoderTrainingIds,
+        normalizedCoderIds
+      );
+      this.applySelectedCoderJoinFilter(dataQueryBuilder, normalizedCoderIds);
+
+      const rows = await dataQueryBuilder
+        .orderBy('unit.name', 'ASC')
+        .addOrderBy('resp.variableid', 'ASC')
+        .addOrderBy('person.id', 'ASC')
+        .addOrderBy('user.username', 'ASC')
+        .addOrderBy('cju.updated_at', 'ASC')
+        .addOrderBy('cju.id', 'ASC')
+        .offset(offset)
+        .limit(BATCH_SIZE)
+        .getRawMany<CompactByVariableRawRow>();
+
+      if (rows.length === 0) {
+        break;
+      }
+
+      const discussionResultMap = normalizedCoderTrainingIds.length > 0 ?
+        await this.getTrainingDiscussionResultsMap(
+          workspaceId,
+          normalizedCoderTrainingIds,
+          Array.from(new Set(
+            rows
+              .map(row => this.toIntegerOrNull(row.responseId))
+              .filter((responseId): responseId is number => responseId !== null)
+          ))
+        ) :
+        new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
+
+      for (const row of rows) {
+        const groupKey = this.getCompactByVariableGroupKey(row);
+        if (currentGroup && currentGroup.key !== groupKey) {
+          const renderedGroup = await this.renderCompactByVariableGroup(
+            currentGroup,
+            includeModalValue,
+            includeDoubleCoded,
+            includeComments,
+            outputCommentsInsteadOfCodes,
+            includeReplayUrl,
+            anonymizeCoders,
+            usePseudoCoders,
+            globalCoderMapping,
+            authToken,
+            req,
+            serverUrl,
+            workspaceId
+          );
+          exportedRowCount += renderedGroup.rowCount;
+          if (renderedGroup.csv) yield renderedGroup.csv;
+          currentGroup = null;
+        }
+
+        if (!currentGroup) {
+          currentGroup = this.createCompactByVariableGroup(row, groupKey);
+        }
+
+        this.addCompactCodingToGroup(currentGroup, row);
+        this.addCompactDiscussionToGroup(currentGroup, row, discussionResultMap);
+      }
+
+      offset += rows.length;
+    }
+
+    if (currentGroup) {
+      const renderedGroup = await this.renderCompactByVariableGroup(
+        currentGroup,
+        includeModalValue,
+        includeDoubleCoded,
+        includeComments,
+        outputCommentsInsteadOfCodes,
+        includeReplayUrl,
+        anonymizeCoders,
+        usePseudoCoders,
+        globalCoderMapping,
+        authToken,
+        req,
+        serverUrl,
+        workspaceId
+      );
+      exportedRowCount += renderedGroup.rowCount;
+      if (renderedGroup.csv) yield renderedGroup.csv;
+    }
+
+    if (exportedRowCount === 0) {
+      throw new Error(this.getNoCodingResultsMessage(hasScopedJobFilters));
+    }
+
+    this.logger.log(`Exported compact by-variable results for workspace ${workspaceId}`);
+  }
+
+  private buildCompactByVariableHeader(
+    includeComments: boolean,
+    includeModalValue: boolean,
+    includeDoubleCoded: boolean,
+    includeReplayUrl: boolean
+  ): string {
+    const headerColumns = [
+      'Unit',
+      'Variable',
+      'Test Person Login',
+      'Test Person Code',
+      'Test Person Group',
+      'Kodierer',
+      'Code',
+      'Kodierzeitpunkt',
+      'Code-Hinweis'
+    ];
+    if (includeComments) headerColumns.splice(7, 0, 'Kommentar');
+    if (includeModalValue) headerColumns.push('Häufigster Wert', 'Anzahl der Abweichungen');
+    if (includeDoubleCoded) headerColumns.push('Doppelkodierung');
+    if (includeReplayUrl) headerColumns.push('Replay URL');
+    return `${headerColumns.map(h => this.escapeCsvField(h)).join(';')}\n`;
+  }
+
+  private async getCompactByVariableCoderMapping(
+    workspaceId: number,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    jobDefinitionIds: number[],
+    coderTrainingIds: number[],
+    coderIds: number[]
+  ): Promise<Map<string, string> | null> {
+    if (!anonymizeCoders || usePseudoCoders) {
+      return null;
+    }
+
+    const coderQueryBuilder = this.codingJobRepository.createQueryBuilder('cj')
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .innerJoin('cjc.user', 'user')
+      .select('user.username', 'username')
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(
+      coderQueryBuilder,
+      jobDefinitionIds,
+      coderTrainingIds,
+      coderIds
+    );
+    this.applySelectedCoderJoinFilter(coderQueryBuilder, coderIds);
+
+    const coderRows = await coderQueryBuilder
+      .groupBy('user.username')
+      .getRawMany<{ username: string }>();
+    const coderNames = new Set(coderRows.map(row => row.username).filter(Boolean));
+
+    if (coderTrainingIds.length > 0) {
+      const managerNames = await this.getTrainingManagerUsernames(workspaceId, coderTrainingIds);
+      managerNames.forEach(managerName => coderNames.add(managerName));
+    }
+
+    return buildCoderNameMapping(Array.from(coderNames).sort(), false);
+  }
+
+  private getCompactByVariableGroupKey(row: CompactByVariableRawRow): string {
+    return [
+      row.unitName || '',
+      row.variableId || '',
+      row.pId?.toString() || ''
+    ].join('\u001F');
+  }
+
+  private createCompactByVariableGroup(
+    row: CompactByVariableRawRow,
+    key: string
+  ): CompactByVariableGroup {
+    return {
+      key,
+      unitName: row.unitName || '',
+      variableId: row.variableId || '',
+      login: row.login || '',
+      personCode: row.personCode || '',
+      personGroup: row.personGroup || '',
+      bookletName: row.bookletName || '',
+      codings: new Map()
+    };
+  }
+
+  private addCompactCodingToGroup(
+    group: CompactByVariableGroup,
+    row: CompactByVariableRawRow
+  ): void {
+    if (!row.username) return;
+
+    const latest = getLatestCode(row as unknown as ResponseEntity);
+    const rawCode = row.cju_code ?? latest.code;
+    const parsedCode = this.toIntegerOrNull(rawCode);
+    const coding = {
+      code: mapCodeForExport(parsedCode),
+      notes: row.notes || null,
+      codingIssueOption: this.toIntegerOrNull(row.coding_issue_option),
+      updatedAt: row.updatedAt || null
+    };
+    const existingCoding = group.codings.get(row.username);
+    if (!existingCoding || this.isLaterCoding(coding.updatedAt, existingCoding.updatedAt)) {
+      group.codings.set(row.username, coding);
+    }
+  }
+
+  private addCompactDiscussionToGroup(
+    group: CompactByVariableGroup,
+    row: CompactByVariableRawRow,
+    discussionResultMap: Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>
+  ): void {
+    const trainingId = this.toIntegerOrNull(row.trainingId);
+    const responseId = this.toIntegerOrNull(row.responseId);
+    if (trainingId === null || responseId === null) return;
+
+    const discussion = discussionResultMap.get(`${trainingId}|${responseId}`);
+    if (!discussion?.managerUsername || group.codings.has(discussion.managerUsername)) return;
+
+    group.codings.set(discussion.managerUsername, {
+      code: mapCodeForExport(discussion.code),
+      notes: null,
+      codingIssueOption: null,
+      updatedAt: discussion.updatedAt
+    });
+  }
+
+  private async renderCompactByVariableGroup(
+    group: CompactByVariableGroup,
+    includeModalValue: boolean,
+    includeDoubleCoded: boolean,
+    includeComments: boolean,
+    outputCommentsInsteadOfCodes: boolean,
+    includeReplayUrl: boolean,
+    anonymizeCoders: boolean,
+    usePseudoCoders: boolean,
+    globalCoderMapping: Map<string, string> | null,
+    authToken: string,
+    req: Request | undefined,
+    serverUrl: string | undefined,
+    workspaceId: number
+  ): Promise<{ csv: string; rowCount: number }> {
+    const codingEntries = Array.from(group.codings.entries())
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (codingEntries.length === 0) {
+      return { csv: '', rowCount: 0 };
+    }
+
+    const codes = codingEntries
+      .map(([, coding]) => mapCodeForExport(coding.code))
+      .filter((code): code is number => code !== null && code !== undefined);
+    const modal = includeModalValue ? calculateModalValue(codes) : null;
+    const pseudoCoderMapping = anonymizeCoders && usePseudoCoders ?
+      buildCoderNameMapping(codingEntries.map(([coderName]) => coderName), true) :
+      null;
+    const replayUrl = includeReplayUrl && (req || serverUrl) ?
+      await this.generateReplayUrlWithPageLookup(
+        req,
+        group.login,
+        group.personCode,
+        group.personGroup,
+        group.bookletName,
+        group.unitName,
+        group.variableId,
+        workspaceId,
+        authToken,
+        serverUrl
+      ) :
+      '';
+    let csv = '';
+
+    codingEntries.forEach(([coderName, coding]) => {
+      const displayCoderName = pseudoCoderMapping?.get(coderName) ||
+        globalCoderMapping?.get(coderName) ||
+        coderName;
+      const codeValue = outputCommentsInsteadOfCodes ?
+        coding.notes || '' :
+        this.formatCodeWithIssueSuffix(coding.code, coding.codingIssueOption);
+      const timestamp = coding.updatedAt ?
+        new Date(coding.updatedAt).toLocaleString('de-DE').replace(',', '') :
+        '';
+      const rowFields = [
+        this.escapeCsvField(group.unitName),
+        this.escapeCsvField(group.variableId),
+        this.escapeCsvField(group.login),
+        this.escapeCsvField(group.personCode),
+        this.escapeCsvField(group.personGroup),
+        this.escapeCsvField(displayCoderName),
+        this.escapeCsvField(codeValue)
+      ];
+      if (includeComments) rowFields.push(this.escapeCsvField(coding.notes || ''));
+      rowFields.push(
+        this.escapeCsvField(timestamp),
+        this.escapeCsvField(this.getCodingIssueText(coding.codingIssueOption))
+      );
+      if (includeModalValue) {
+        rowFields.push(
+          this.escapeCsvField(modal?.modalValue ?? ''),
+          this.escapeCsvField(modal?.deviationCount ?? '')
+        );
+      }
+      if (includeDoubleCoded) rowFields.push(this.escapeCsvField(codes.length > 1 ? 'Ja' : 'Nein'));
+      if (includeReplayUrl) rowFields.push(this.escapeCsvField(replayUrl));
+      csv += `${rowFields.join(';')}\n`;
+    });
+
+    return { csv, rowCount: codingEntries.length };
+  }
+
+  private toIntegerOrNull(value: unknown): number | null {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+    return Number.isInteger(parsed) ? parsed : null;
+  }
+
+  private isLaterCoding(
+    candidate: Date | string | null,
+    existing: Date | string | null
+  ): boolean {
+    if (!candidate) return false;
+    if (!existing) return true;
+    return new Date(candidate).getTime() >= new Date(existing).getTime();
   }
 
   async exportCodingResultsDetailed(
@@ -2980,5 +3609,17 @@ export class CodingExportService {
         AND filter_cjc.user_id IN (:...coderIds)
       )`, { coderIds: normalizedCoderIds });
     }
+  }
+
+  private applySelectedCoderJoinFilter(
+    query: SelectQueryBuilder<unknown>,
+    coderIds?: number[]
+  ): void {
+    const normalizedCoderIds = this.normalizeFilterIds(coderIds);
+    if (normalizedCoderIds.length === 0) return;
+
+    query.andWhere('cjc.user_id IN (:...selectedCoderIds)', {
+      selectedCoderIds: normalizedCoderIds
+    });
   }
 }
