@@ -184,6 +184,14 @@ describe('JobQueueService', () => {
     expect(unsupportedActiveJob.remove).not.toHaveBeenCalled();
   });
 
+  it('removes paused workspace jobs', async () => {
+    const pausedJob = createJob({ workspaceId: 1 }, 'paused');
+    queues[1].getJob.mockResolvedValue(pausedJob);
+
+    await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(true);
+    expect(pausedJob.remove).toHaveBeenCalled();
+  });
+
   it('handles missing jobs and failing queue operations', async () => {
     queues.forEach(queue => queue.getJob.mockResolvedValue(null));
 
