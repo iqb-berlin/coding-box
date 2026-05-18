@@ -5,16 +5,18 @@ import {
   Logger,
   Param,
   Query,
+  Res,
   Req,
   UseGuards
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import {
   ApiOkResponse,
   ApiParam,
   ApiQuery,
   ApiTags
 } from '@nestjs/swagger';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { parseStringPromise } from 'xml2js';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
@@ -28,17 +30,45 @@ import { WorkspaceTestResultsService } from '../../database/services/test-result
 import FileUpload from '../../database/entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 
+interface ReplayUnitResponsePayload {
+  responses: {
+    id: string;
+    content: string;
+  }[];
+}
+
+interface ReplayAssetsPayload {
+  unitDef: FilesDto[];
+  player: FilesDto[];
+  vocs: FilesDto[];
+}
+
+interface ReplayResponsePayload {
+  response: ReplayUnitResponsePayload;
+}
+
+type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload;
+
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
 export class WorkspaceCodingReplayController {
   private readonly logger = new Logger(WorkspaceCodingReplayController.name);
+  private readonly replayPayloadBrowserCacheSeconds: number;
 
   constructor(
     private codingReplayService: CodingReplayService,
     private workspacePlayerService: WorkspacePlayerService,
     private workspaceFilesService: WorkspaceFilesService,
-    private workspaceTestResultsService: WorkspaceTestResultsService
-  ) { }
+    private workspaceTestResultsService: WorkspaceTestResultsService,
+    private configService: ConfigService
+  ) {
+    const configuredTtl = Number(
+      this.configService.get('REPLAY_PAYLOAD_BROWSER_CACHE_SECONDS')
+    );
+    this.replayPayloadBrowserCacheSeconds = Number.isFinite(configuredTtl) ?
+      Math.max(0, Math.floor(configuredTtl)) :
+      300;
+  }
 
   @Get(':workspace_id/coding/responses/:responseId/replay-url')
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
@@ -102,93 +132,236 @@ export class WorkspaceCodingReplayController {
   async getReplayPayload(
     @WorkspaceId() workspaceId: number,
       @Param('testPerson') testPerson: string,
-      @Param('unitId') unitId: string
-  ): Promise<{
-        unitDef: FilesDto[];
-        response: {
-          responses: {
-            id: string;
-            content: string;
-          }[];
-        };
-        player: FilesDto[];
-        vocs: FilesDto[];
-      }> {
+      @Param('unitId') unitId: string,
+      @Res({ passthrough: true }) res: Response
+  ): Promise<ReplayPayload> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};
-    const timed = async <T>(key: string, fn: () => Promise<T>): Promise<T> => {
-      const started = performance.now();
-      const result = await fn();
-      timings[key] = Number((performance.now() - started).toFixed(2));
-      return result;
-    };
 
     try {
-      const normalizedUnitId = unitId.toUpperCase();
-      const [unitDef, unit, response, vocs] = await Promise.all([
-        timed('findUnitDefMs', () => this.workspacePlayerService.findUnitDef(
-          workspaceId,
-          normalizedUnitId
-        )),
-        timed('findUnitMs', () => this.workspacePlayerService.findUnit(
-          workspaceId,
-          normalizedUnitId
-        )),
-        timed('findUnitResponseMs', () => this.workspaceTestResultsService.findUnitResponse(
-          workspaceId,
-          testPerson,
-          unitId
-        )),
-        timed('getVocsMs', () => this.workspaceFilesService.getVocs(
-          workspaceId,
-          normalizedUnitId
-        ))
+      const [assets, responsePayload] = await Promise.all([
+        this.getReplayAssetsData(workspaceId, unitId, timings),
+        this.getReplayResponseData(workspaceId, testPerson, unitId, timings)
       ]);
-
-      if (!unitDef?.length) {
-        throw new Error(`Unit definition not found for ${unitId}`);
-      }
-      if (!unit?.length) {
-        throw new Error(`Unit file not found for ${unitId}`);
-      }
-
-      const playerName = await timed(
-        'extractPlayerIdMs',
-        () => this.extractNormalizedPlayerIdFromUnit(unit[0])
-      );
-
-      const player = await timed(
-        'findPlayerMs',
-        () => this.workspacePlayerService.findPlayer(workspaceId, playerName)
-      );
-
-      if (!player?.length) {
-        throw new Error(`Player not found for ${playerName}`);
-      }
 
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
       this.logger.debug(
-        `Replay payload timings ws=${workspaceId} unit=${normalizedUnitId}: ${JSON.stringify({
+        `Replay payload timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify({
           ...timings,
           totalMs
         })}`
       );
 
+      this.setReplayCacheHeaders(res);
       return {
-        unitDef,
-        response,
-        player,
-        vocs
+        ...assets,
+        response: responsePayload.response
       };
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
       this.logger.warn(
         `Replay payload failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
       );
+      this.setReplayNoStoreHeaders(res);
       throw new InternalServerErrorException(
         `Error retrieving replay payload: ${error.message}`
       );
     }
+  }
+
+  @Get(':workspace_id/replay-assets/:unitId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'unitId',
+    type: String,
+    description: 'Unit alias/ID'
+  })
+  @ApiOkResponse({
+    description: 'Replay unit assets retrieved successfully.'
+  })
+  async getReplayAssets(
+    @WorkspaceId() workspaceId: number,
+      @Param('unitId') unitId: string,
+      @Res({ passthrough: true }) res: Response
+  ): Promise<ReplayAssetsPayload> {
+    const startedAt = performance.now();
+    const timings: Record<string, number> = {};
+
+    try {
+      const assets = await this.getReplayAssetsData(workspaceId, unitId, timings);
+      const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      this.logger.debug(
+        `Replay asset timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify({
+          ...timings,
+          totalMs
+        })}`
+      );
+      this.setReplayCacheHeaders(res);
+      return assets;
+    } catch (error) {
+      const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      this.logger.warn(
+        `Replay assets failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
+      );
+      this.setReplayNoStoreHeaders(res);
+      throw new InternalServerErrorException(
+        `Error retrieving replay assets: ${error.message}`
+      );
+    }
+  }
+
+  @Get(':workspace_id/replay-response/:testPerson/:unitId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({
+    name: 'testPerson',
+    type: String,
+    description: 'Replay test person connector'
+  })
+  @ApiParam({
+    name: 'unitId',
+    type: String,
+    description: 'Unit alias/ID'
+  })
+  @ApiOkResponse({
+    description: 'Replay response retrieved successfully.'
+  })
+  async getReplayResponse(
+    @WorkspaceId() workspaceId: number,
+      @Param('testPerson') testPerson: string,
+      @Param('unitId') unitId: string,
+      @Res({ passthrough: true }) res: Response
+  ): Promise<ReplayResponsePayload> {
+    const startedAt = performance.now();
+    const timings: Record<string, number> = {};
+
+    try {
+      const responsePayload = await this.getReplayResponseData(
+        workspaceId,
+        testPerson,
+        unitId,
+        timings
+      );
+      const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      this.logger.debug(
+        `Replay response timings ws=${workspaceId} unit=${unitId}: ${JSON.stringify({
+          ...timings,
+          totalMs
+        })}`
+      );
+      this.setReplayCacheHeaders(res);
+      return responsePayload;
+    } catch (error) {
+      const totalMs = Number((performance.now() - startedAt).toFixed(2));
+      this.logger.warn(
+        `Replay response failed ws=${workspaceId} unit=${unitId} after ${totalMs}ms: ${error.message}`
+      );
+      this.setReplayNoStoreHeaders(res);
+      throw new InternalServerErrorException(
+        `Error retrieving replay response: ${error.message}`
+      );
+    }
+  }
+
+  private async getReplayAssetsData(
+    workspaceId: number,
+    unitId: string,
+    timings: Record<string, number>
+  ): Promise<ReplayAssetsPayload> {
+    const normalizedUnitId = unitId.toUpperCase();
+    const [unitDef, unit, vocs] = await Promise.all([
+      this.timed(timings, 'findUnitDefMs', () => this.workspacePlayerService.findUnitDef(
+        workspaceId,
+        normalizedUnitId
+      )),
+      this.timed(timings, 'findUnitMs', () => this.workspacePlayerService.findUnit(
+        workspaceId,
+        normalizedUnitId
+      )),
+      this.timed(timings, 'getVocsMs', () => this.workspaceFilesService.getVocs(
+        workspaceId,
+        normalizedUnitId
+      ))
+    ]);
+
+    if (!unitDef?.length) {
+      throw new Error(`Unit definition not found for ${unitId}`);
+    }
+    if (!unit?.length) {
+      throw new Error(`Unit file not found for ${unitId}`);
+    }
+
+    const playerName = await this.timed(
+      timings,
+      'extractPlayerIdMs',
+      () => this.extractNormalizedPlayerIdFromUnit(unit[0])
+    );
+
+    const player = await this.timed(
+      timings,
+      'findPlayerMs',
+      () => this.workspacePlayerService.findPlayer(workspaceId, playerName)
+    );
+
+    if (!player?.length) {
+      throw new Error(`Player not found for ${playerName}`);
+    }
+
+    return {
+      unitDef,
+      player,
+      vocs
+    };
+  }
+
+  private async getReplayResponseData(
+    workspaceId: number,
+    testPerson: string,
+    unitId: string,
+    timings: Record<string, number>
+  ): Promise<ReplayResponsePayload> {
+    const response = await this.timed(
+      timings,
+      'findUnitResponseMs',
+      () => this.workspaceTestResultsService.findUnitResponse(
+        workspaceId,
+        testPerson,
+        unitId
+      )
+    );
+
+    return { response };
+  }
+
+  private async timed<T>(
+    timings: Record<string, number>,
+    key: string,
+    fn: () => Promise<T>
+  ): Promise<T> {
+    const started = performance.now();
+    const result = await fn();
+    timings[key] = Number((performance.now() - started).toFixed(2));
+    return result;
+  }
+
+  private setReplayCacheHeaders(res: Response): void {
+    if (this.replayPayloadBrowserCacheSeconds > 0) {
+      res.setHeader(
+        'Cache-Control',
+        `private, max-age=${this.replayPayloadBrowserCacheSeconds}`
+      );
+    } else {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+    res.setHeader('Vary', 'Authorization');
+  }
+
+  private setReplayNoStoreHeaders(res: Response): void {
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Vary', 'Authorization');
   }
 
   private async extractNormalizedPlayerIdFromUnit(
