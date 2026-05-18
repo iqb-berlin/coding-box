@@ -342,6 +342,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
         document.body.removeChild(a);
       },
       error: () => {
+        this.codebookJobStatus = 'failed';
         this.codebookJobError = 'Failed to download codebook file';
       }
     });
