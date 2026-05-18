@@ -178,8 +178,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.codingStatistics$
       .pipe(takeUntil(this.destroy$))
       .subscribe(stats => {
-        this.codingStatistics = stats;
-        this.statisticsLoaded = true;
+        if (stats) {
+          this.codingStatistics = stats;
+          this.statisticsLoaded = true;
+        }
       });
 
     this.codingManagementService.referenceStatistics$

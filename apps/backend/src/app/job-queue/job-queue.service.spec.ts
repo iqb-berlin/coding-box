@@ -139,6 +139,51 @@ describe('JobQueueService', () => {
     await expect(service.cancelVariableAnalysisJob('job-1')).resolves.toBe(true);
   });
 
+  it('only cancels workspace jobs that belong to the requested workspace', async () => {
+    const ownJob = createJob({ workspaceId: 1 }, 'waiting');
+    const otherWorkspaceJob = createJob({ workspaceId: 2 }, 'waiting');
+
+    queues[0].getJob.mockResolvedValueOnce(otherWorkspaceJob);
+    await expect(service.cancelWorkspaceJob(1, 'test-person-coding', 'job-1')).resolves.toBe(false);
+    expect(otherWorkspaceJob.remove).not.toHaveBeenCalled();
+
+    queues[0].getJob.mockResolvedValueOnce(ownJob);
+    await expect(service.cancelWorkspaceJob(1, 'test-person-coding', 'job-1')).resolves.toBe(true);
+    expect(ownJob.remove).toHaveBeenCalled();
+  });
+
+  it('checks validation-task ownership through the validation task table before cancelling', async () => {
+    const validationJob = createJob({ taskId: 7 }, 'waiting');
+    queues[7].getJob.mockResolvedValue(validationJob);
+
+    validationTaskRepository.find.mockResolvedValueOnce([{ id: 7, workspace_id: 2 }]);
+    await expect(service.cancelWorkspaceJob(1, 'validation-task', 'job-1')).resolves.toBe(false);
+    expect(validationJob.remove).not.toHaveBeenCalled();
+
+    validationTaskRepository.find.mockResolvedValueOnce([{ id: 7, workspace_id: 1 }]);
+    await expect(service.cancelWorkspaceJob(1, 'validation-task', 'job-1')).resolves.toBe(true);
+    expect(validationJob.remove).toHaveBeenCalled();
+  });
+
+  it('marks supported active jobs for cancellation without removing locked jobs', async () => {
+    const exportJob = createJob({ workspaceId: 1, exportType: 'test-results' }, 'active');
+    queues[2].getJob.mockResolvedValue(exportJob);
+
+    await expect(service.cancelWorkspaceJob(1, 'data-export', 'job-1')).resolves.toBe(true);
+    expect(exportJob.update).toHaveBeenCalledWith({
+      workspaceId: 1,
+      exportType: 'test-results',
+      isCancelled: true
+    });
+    expect(exportJob.discard).toHaveBeenCalled();
+    expect(exportJob.remove).not.toHaveBeenCalled();
+
+    const unsupportedActiveJob = createJob({ workspaceId: 1 }, 'active');
+    queues[1].getJob.mockResolvedValue(unsupportedActiveJob);
+    await expect(service.cancelWorkspaceJob(1, 'coding-statistics', 'job-1')).resolves.toBe(false);
+    expect(unsupportedActiveJob.remove).not.toHaveBeenCalled();
+  });
+
   it('handles missing jobs and failing queue operations', async () => {
     queues.forEach(queue => queue.getJob.mockResolvedValue(null));
 
@@ -164,6 +209,31 @@ describe('JobQueueService', () => {
     await expect(service.getVariableAnalysisJobs(1)).resolves.toHaveLength(1);
     await expect(service.getActiveCodingAnalysisJob(1)).resolves.toHaveProperty('id', 'job-1');
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
+  });
+
+  it('sanitizes workspace job data before exposing process metadata', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([
+      createJob({
+        workspaceId: 1,
+        exportType: 'test-results',
+        authToken: 'secret-token',
+        serverUrl: 'https://example.test',
+        personIds: ['p1', 'p2'],
+        testResultFilters: { personIds: [1, 2] }
+      })
+    ]);
+
+    const workspaceJobs = await service.getAllWorkspaceJobs(1);
+
+    expect(workspaceJobs).toHaveLength(1);
+    expect(workspaceJobs[0].data).toEqual({
+      workspaceId: 1,
+      exportType: 'test-results',
+      personCount: 2
+    });
+    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('secret-token');
+    expect(JSON.stringify(workspaceJobs[0].data)).not.toContain('example.test');
   });
 
   it('checks dependency conflicts and redis status', async () => {

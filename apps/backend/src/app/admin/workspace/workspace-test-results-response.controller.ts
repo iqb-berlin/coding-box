@@ -186,41 +186,6 @@ export class WorkspaceTestResultsResponseController {
     );
   }
 
-  @Get(':workspace_id/coding/responses/:status')
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
-  @ApiTags('coding')
-  @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiParam({ name: 'status', type: String })
-  @ApiOkResponse({
-    description: 'Responses with the specified status retrieved successfully.'
-  })
-  async getResponsesByStatus(
-    @WorkspaceId() workspace_id: number,
-      @Param('status') status: string,
-                   @Query('version') version: 'v1' | 'v2' | 'v3' = 'v1',
-                   @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
-                   @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number = 20
-  ): Promise<{
-        data: ResponseEntity[];
-        total: number;
-        page: number;
-        limit: number;
-      }> {
-    const [responses, total] =
-      await this.workspaceTestResultsService.getResponsesByStatus(
-        workspace_id,
-        status,
-        version,
-        { page, limit }
-      );
-    return {
-      data: responses,
-      total,
-      page,
-      limit
-    };
-  }
-
   @Get(':workspace_id/responses/search')
   @ApiOperation({
     summary: 'Search for responses',

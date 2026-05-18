@@ -137,7 +137,7 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(2);
 
       // Check if statistics were emitted
-      let currentStats: CodingStatistics | undefined;
+      let currentStats: CodingStatistics | null | undefined;
       service.codingStatistics$.subscribe(stats => {
         currentStats = stats;
       });

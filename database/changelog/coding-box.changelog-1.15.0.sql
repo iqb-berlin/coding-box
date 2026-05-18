@@ -257,3 +257,90 @@ FROM affected_jobs
 WHERE cj."id" = affected_jobs."coding_job_id";
 
 -- rollback SELECT 1;
+
+-- changeset jurei733:14 splitStatements:false
+-- comment: Validate response status_v3 values before numeric migration
+
+DO $$
+DECLARE
+  invalid_count INTEGER;
+  invalid_examples TEXT;
+BEGIN
+  WITH normalized AS (
+    SELECT BTRIM("status_v3"::TEXT) AS value
+    FROM "public"."response"
+    WHERE "status_v3" IS NOT NULL
+  ),
+  invalid AS (
+    SELECT value
+    FROM normalized
+    WHERE value <> ''
+      AND value NOT IN (
+        'UNSET',
+        'NOT_REACHED',
+        'DISPLAYED',
+        'VALUE_CHANGED',
+        'DERIVE_ERROR',
+        'CODING_COMPLETE',
+        'NO_CODING',
+        'INVALID',
+        'CODING_INCOMPLETE',
+        'CODING_ERROR',
+        'PARTLY_DISPLAYED',
+        'DERIVE_PENDING',
+        'INTENDED_INCOMPLETE',
+        'CODE_SELECTION_PENDING'
+      )
+      AND NOT (
+        CASE
+          WHEN value ~ '^[0-9]+$' THEN value::NUMERIC BETWEEN 0 AND 13
+          ELSE FALSE
+        END
+      )
+  ),
+  examples AS (
+    SELECT DISTINCT value
+    FROM invalid
+    ORDER BY value
+    LIMIT 10
+  )
+  SELECT
+    (SELECT COUNT(*) FROM invalid),
+    (SELECT STRING_AGG(value, ', ') FROM examples)
+  INTO invalid_count, invalid_examples;
+
+  IF invalid_count > 0 THEN
+    RAISE EXCEPTION
+      'Cannot migrate response.status_v3 to SMALLINT: found % invalid value(s). Examples: %',
+      invalid_count,
+      invalid_examples;
+  END IF;
+END $$;
+
+-- rollback SELECT 1;
+
+-- changeset jurei733:15
+-- comment: Normalize response status_v3 to numeric SMALLINT like status_v1 and status_v2
+
+ALTER TABLE "public"."response"
+  ALTER COLUMN "status_v3" TYPE SMALLINT
+  USING CASE
+    WHEN BTRIM("status_v3"::TEXT) = '' THEN NULL
+    WHEN BTRIM("status_v3"::TEXT) = 'UNSET' THEN 0
+    WHEN BTRIM("status_v3"::TEXT) = 'NOT_REACHED' THEN 1
+    WHEN BTRIM("status_v3"::TEXT) = 'DISPLAYED' THEN 2
+    WHEN BTRIM("status_v3"::TEXT) = 'VALUE_CHANGED' THEN 3
+    WHEN BTRIM("status_v3"::TEXT) = 'DERIVE_ERROR' THEN 4
+    WHEN BTRIM("status_v3"::TEXT) = 'CODING_COMPLETE' THEN 5
+    WHEN BTRIM("status_v3"::TEXT) = 'NO_CODING' THEN 6
+    WHEN BTRIM("status_v3"::TEXT) = 'INVALID' THEN 7
+    WHEN BTRIM("status_v3"::TEXT) = 'CODING_INCOMPLETE' THEN 8
+    WHEN BTRIM("status_v3"::TEXT) = 'CODING_ERROR' THEN 9
+    WHEN BTRIM("status_v3"::TEXT) = 'PARTLY_DISPLAYED' THEN 10
+    WHEN BTRIM("status_v3"::TEXT) = 'DERIVE_PENDING' THEN 11
+    WHEN BTRIM("status_v3"::TEXT) = 'INTENDED_INCOMPLETE' THEN 12
+    WHEN BTRIM("status_v3"::TEXT) = 'CODE_SELECTION_PENDING' THEN 13
+    ELSE BTRIM("status_v3"::TEXT)::SMALLINT
+  END;
+
+-- rollback ALTER TABLE "public"."response" ALTER COLUMN "status_v3" TYPE VARCHAR(255);

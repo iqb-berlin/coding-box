@@ -4,13 +4,7 @@ export function getNumericStatusExpression(
   responseAlias: string,
   version: CodingVersion
 ): string {
-  const statusColumn = `${responseAlias}.status_${version}`;
-
-  if (version === 'v3') {
-    return `CASE WHEN ${statusColumn} ~ '^-?[0-9]+$' THEN ${statusColumn}::smallint ELSE NULL END`;
-  }
-
-  return statusColumn;
+  return `${responseAlias}.status_${version}`;
 }
 
 export function getEffectiveCodingStatusExpression(

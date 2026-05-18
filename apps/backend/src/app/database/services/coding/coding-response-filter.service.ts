@@ -160,11 +160,8 @@ export class CodingResponseFilterService {
         queryBuilder.andWhere('1 = 0');
       } else {
         queryBuilder.andWhere(
-          '(CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys) OR response.is_autocoder_generated = :isAutocoderGenerated)',
-          {
-            validVariablePairKeys,
-            isAutocoderGenerated: true
-          }
+          'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+          { validVariablePairKeys }
         );
       }
     }

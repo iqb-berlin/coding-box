@@ -206,17 +206,17 @@ describe('WsSettingsComponent', () => {
 
       component.exportWorkspaceDatabase();
 
-      const startRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job');
+      const startRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job');
       expect(startRequest.request.method).toBe('POST');
       startRequest.flush({ jobId: 'job-1', message: 'started' });
 
       tick(0);
 
-      const statusRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job/job-1');
+      const statusRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1');
       expect(statusRequest.request.method).toBe('GET');
       statusRequest.flush({ status: 'completed', progress: 100 });
 
-      const downloadRequest = httpMock.expectOne('http://localhost/api/admin/workspace/1/export/sqlite/job/job-1/download');
+      const downloadRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1/download');
       expect(downloadRequest.request.method).toBe('GET');
       downloadRequest.flush(new Blob(['test']));
 

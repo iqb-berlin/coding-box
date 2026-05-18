@@ -244,30 +244,75 @@ export class JobQueueService {
     ]);
   }
 
-  async cancelJob(queueName: string, jobId: string): Promise<boolean> {
-    const queue = this.getQueue(queueName);
-    if (!queue) return false;
-    const job = await queue.getJob(jobId);
-    if (!job) return false;
+  private async jobBelongsToWorkspace(
+    queueName: string,
+    job: Job,
+    workspaceId: number
+  ): Promise<boolean> {
+    if (queueName === 'validation-task') {
+      const taskId = Number((job.data as ValidationTaskJobData | undefined)?.taskId);
+      if (!taskId) return false;
 
+      const tasks = await this.validationTaskRepository.find({
+        where: { id: In([taskId]) },
+        select: ['id', 'workspace_id']
+      });
+      return tasks.some(task => Number(task.workspace_id) === Number(workspaceId));
+    }
+
+    const jobWorkspaceId = Number((job.data as { workspaceId?: number } | undefined)?.workspaceId);
+    return Boolean(jobWorkspaceId) && jobWorkspaceId === Number(workspaceId);
+  }
+
+  private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
     try {
       const state = await job.getState();
       if (state === 'waiting' || state === 'delayed' || state === 'completed' || state === 'failed') {
         await job.remove();
         return true;
       }
+
       if (state === 'active') {
         if (queueName === 'data-export') {
           await job.update({ ...job.data, isCancelled: true });
+          await job.discard();
+          return true;
         }
-        await job.discard();
-        await job.remove(); // Also remove active jobs once discarded to clear it from UI
-        return true;
+
+        if (queueName === 'test-person-coding') {
+          await job.update({ ...job.data, isPaused: true });
+          await job.discard();
+          return true;
+        }
+
+        return false;
       }
-      return true;
+
+      return false;
     } catch {
       return false;
     }
+  }
+
+  async cancelJob(queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    return this.cancelKnownJob(queueName, job);
+  }
+
+  async cancelWorkspaceJob(workspaceId: number, queueName: string, jobId: string): Promise<boolean> {
+    const queue = this.getQueue(queueName);
+    if (!queue) return false;
+    const job = await queue.getJob(jobId);
+    if (!job) return false;
+
+    const belongsToWorkspace = await this.jobBelongsToWorkspace(queueName, job, workspaceId);
+    if (!belongsToWorkspace) return false;
+
+    return this.cancelKnownJob(queueName, job);
   }
 
   async deleteJob(queueName: string, jobId: string): Promise<boolean> {
@@ -323,7 +368,7 @@ export class JobQueueService {
               queueName: queueName,
               status: state as ProcessDto['status'],
               progress: progress,
-              data: job.data,
+              data: this.sanitizeJobData(job.data),
               failedReason: job.failedReason,
               timestamp: job.timestamp,
               processedOn: job.processedOn,
@@ -337,6 +382,72 @@ export class JobQueueService {
 
     const results = await Promise.all(processPromises);
     return results.flat().sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  private sanitizeJobData(data: unknown): Record<string, unknown> | undefined {
+    if (!data || typeof data !== 'object') return undefined;
+
+    const source = data as Record<string, unknown>;
+    const sanitized: Record<string, unknown> = {};
+    const scalarKeys = [
+      'workspaceId',
+      'taskId',
+      'resultType',
+      'overwriteExisting',
+      'personMatchMode',
+      'overwriteMode',
+      'scope',
+      'exportType',
+      'version',
+      'format',
+      'source',
+      'autoCoderRun',
+      'freshnessVersion',
+      'processingDurationThresholdMs',
+      'missingsProfile',
+      'unitId',
+      'variableId',
+      'fileName',
+      'sourceFormat',
+      'sourceVersion',
+      'scoreMode',
+      'existingCodingMode',
+      'isPaused',
+      'isCancelled'
+    ];
+
+    scalarKeys.forEach(key => {
+      const value = source[key];
+      if (
+        typeof value === 'string' ||
+        typeof value === 'number' ||
+        typeof value === 'boolean'
+      ) {
+        sanitized[key] = value;
+      }
+    });
+
+    const file = source.file as { originalname?: unknown } | undefined;
+    if (file && typeof file.originalname === 'string') {
+      sanitized.fileName = file.originalname;
+    }
+
+    [
+      ['personIds', 'personCount'],
+      ['unitIds', 'unitCount'],
+      ['groupNames', 'groupCount'],
+      ['jobDefinitionIds', 'jobDefinitionCount'],
+      ['coderTrainingIds', 'coderTrainingCount'],
+      ['coderIds', 'coderCount'],
+      ['matchingFlags', 'matchingFlagCount']
+    ].forEach(([sourceKey, targetKey]) => {
+      const value = source[sourceKey];
+      if (Array.isArray(value)) {
+        sanitized[targetKey] = value.length;
+      }
+    });
+
+    return Object.keys(sanitized).length ? sanitized : undefined;
   }
 
   private async hasActiveJobForWorkspace(

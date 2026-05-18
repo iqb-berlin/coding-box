@@ -1,13 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import {
+  Inject, Injectable, Logger, forwardRef
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import {
+  STATISTICS_IGNORED_STATUSES,
+  statusStringToNumber
+} from '../../utils/response-status-converter';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+// eslint-disable-next-line import/no-cycle
+import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 
 @Injectable()
 export class CodingResponseQueryService {
@@ -21,7 +28,9 @@ export class CodingResponseQueryService {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @Inject(forwardRef(() => WorkspaceFilesService))
+    private readonly workspaceFilesService: WorkspaceFilesService
   ) { }
 
   async getResponsesByStatus(
@@ -47,8 +56,26 @@ export class CodingResponseQueryService {
           limit
         };
       }
+      if (STATISTICS_IGNORED_STATUSES.includes(statusNumber)) {
+        this.logger.warn(`Ignored statistics status requested: ${status}`);
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
 
       const offset = (page - 1) * limit;
+      const validVariablePairKeys = await this.getValidVariablePairKeys(workspaceId);
+      if (validVariablePairKeys.length === 0) {
+        return {
+          data: [],
+          total: 0,
+          page,
+          limit
+        };
+      }
 
       const queryBuilder = this.responseRepository
         .createQueryBuilder('response')
@@ -67,6 +94,10 @@ export class CodingResponseQueryService {
       queryBuilder.andWhere(
         `${getEffectiveCodingStatusExpression(version)} = :status`,
         { status: statusNumber }
+      );
+      queryBuilder.andWhere(
+        'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+        { validVariablePairKeys }
       );
 
       const total = await queryBuilder.getCount();
@@ -95,6 +126,17 @@ export class CodingResponseQueryService {
         'Could not retrieve responses. Please check the database connection or query.'
       );
     }
+  }
+
+  private async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    const unitVariableMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    return Array.from(unitVariableMap.entries()).flatMap(([unitName, variableIds]) => (
+      Array.from(variableIds).map(variableId => this.toVariablePairKey(unitName, variableId))
+    ));
+  }
+
+  private toVariablePairKey(unitName: string, variableId: string): string {
+    return `${unitName}\u001F${variableId}`;
   }
 
   async getManualTestPersons(

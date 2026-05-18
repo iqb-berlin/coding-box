@@ -54,6 +54,10 @@ export class CodingListService {
     return this.fileCacheService.getVariablePageMap(unitName, workspaceId);
   }
 
+  async getValidVariablePairKeys(workspaceId: number): Promise<string[]> {
+    return this.queryService.getValidVariablePairKeys(workspaceId);
+  }
+
   /**
    * Get the complete coding list for a workspace.
    * Delegates to CodingListQueryService.

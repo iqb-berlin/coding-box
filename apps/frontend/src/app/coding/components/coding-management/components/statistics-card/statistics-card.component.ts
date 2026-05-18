@@ -80,31 +80,11 @@ export class StatisticsCardComponent {
 
   get effectiveTotalResponses(): number {
     if (!this.codingStatistics) return 0;
-    return this.getIgnoredAdjustedTotal(this.codingStatistics);
-  }
-
-  private getIgnoredAdjustedTotal(statistics: CodingStatistics): number {
-    let total = statistics.totalResponses;
-    for (const status of this.ignoredStatuses) {
-      if (statistics.statusCounts && statistics.statusCounts[status]) {
-        total -= statistics.statusCounts[status];
-      }
-    }
-    return total;
+    return this.codingStatistics.totalResponses;
   }
 
   get effectiveDerivedResponses(): number {
-    if (!this.codingStatistics?.derivedStatusCounts) {
-      return this.codingStatistics?.derivedResponseCount || 0;
-    }
-
-    let total = this.codingStatistics.derivedResponseCount || 0;
-    for (const status of this.ignoredStatuses) {
-      if (this.codingStatistics.derivedStatusCounts[status]) {
-        total -= this.codingStatistics.derivedStatusCounts[status];
-      }
-    }
-    return total;
+    return this.codingStatistics?.derivedResponseCount || 0;
   }
 
   get derivedAnswerCount(): number {
@@ -132,7 +112,7 @@ export class StatisticsCardComponent {
 
   get effectiveReferenceTotalResponses(): number {
     if (!this.referenceStatistics) return 0;
-    return this.getIgnoredAdjustedTotal(this.referenceStatistics);
+    return this.referenceStatistics.totalResponses;
   }
 
   getStatuses(): string[] {

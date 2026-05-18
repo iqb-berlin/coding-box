@@ -27,6 +27,7 @@ import { ReplayStatisticsDialogComponent } from '../replay-statistics-dialog/rep
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../services/workspace-settings.service';
 import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
+import { SERVER_URL } from '../../../injection-tokens';
 
 type DatabaseExportStatus =
   | 'queued'
@@ -39,7 +40,6 @@ interface DatabaseExportJobState {
   status: DatabaseExportStatus;
   progress: number;
   result?: {
-    filePath: string;
     fileName: string;
     fileSize: number;
     createdAt: number;
@@ -80,6 +80,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   private snackBar = inject(MatSnackBar);
   private dialog = inject(MatDialog);
   private translateService = inject(TranslateService);
+  private rawServerUrl = inject(SERVER_URL);
   private exportPollingSubscription: Subscription | null = null;
 
   authToken: string | null = null;
@@ -246,7 +247,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     this.databaseExportStatus = 'queued';
     this.databaseExportError = null;
 
-    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
 
     this.http
       .post<{ jobId: string; message: string }>(`${apiUrl}/job`, {}, { headers: authHeaders })
@@ -291,7 +292,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   ): void {
     this.stopExportPolling();
 
-    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
 
     this.exportPollingSubscription = timer(0, 2000)
       .pipe(
@@ -345,7 +346,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     jobId: string,
     headers: HttpHeaders
   ): void {
-    const apiUrl = `${window.location.origin}/api/admin/workspace/${workspaceId}/export/sqlite`;
+    const apiUrl = this.getWorkspaceDatabaseExportApiUrl(workspaceId);
 
     this.http
       .get(`${apiUrl}/job/${jobId}/download`, {
@@ -400,6 +401,16 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
       Authorization: `Bearer ${token}`,
       Accept: 'application/json'
     });
+  }
+
+  private getWorkspaceDatabaseExportApiUrl(workspaceId: number): string {
+    return `${this.serverUrl}/admin/workspace/${workspaceId}/export/sqlite`;
+  }
+
+  private get serverUrl(): string {
+    return this.rawServerUrl.endsWith('/') ?
+      this.rawServerUrl.slice(0, -1) :
+      this.rawServerUrl;
   }
 
   private saveBlob(blob: Blob, filename: string): void {

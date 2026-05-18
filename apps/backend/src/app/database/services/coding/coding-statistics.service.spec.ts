@@ -119,8 +119,8 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, isDerived: false, count: '10' },
-        { statusValue: 2, isDerived: false, count: '20' }
+        { statusValue: 5, isDerived: false, count: '10' },
+        { statusValue: 8, isDerived: false, count: '20' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v1');
@@ -128,7 +128,7 @@ describe('CodingStatisticsService', () => {
       expect(result.totalResponses).toBe(30);
       expect(result.baseResponseCount).toBe(30);
       expect(result.derivedResponseCount).toBe(0);
-      expect(result.statusCounts).toEqual({ 1: 10, 2: 20 });
+      expect(result.statusCounts).toEqual({ 5: 10, 8: 20 });
       expect(mockCacheService.set).toHaveBeenCalled();
     });
 
@@ -136,8 +136,8 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, isDerived: false, count: '15' },
-        { statusValue: 2, isDerived: false, count: '25' }
+        { statusValue: 5, isDerived: false, count: '15' },
+        { statusValue: 9, isDerived: false, count: '25' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v2');
@@ -150,7 +150,7 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, isDerived: false, count: '5' }
+        { statusValue: 5, isDerived: false, count: '5' }
       ]);
 
       const result = await service.getCodingStatistics(1, 'v3');
@@ -158,7 +158,7 @@ describe('CodingStatisticsService', () => {
       expect(result.totalResponses).toBe(5);
     });
 
-    it('should cast varchar status_v3 before falling back to earlier versions', async () => {
+    it('should use numeric status_v3 before falling back to earlier versions', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -166,9 +166,10 @@ describe('CodingStatisticsService', () => {
       await service.getCodingStatistics(1, 'v3');
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
-      expect(queryCall[0]).toContain('response.status_v3::smallint');
+      expect(queryCall[0]).not.toContain('response.status_v3::smallint');
+      expect(queryCall[0]).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
       expect(queryCall[0]).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
-      expect(queryCall[0]).toContain('COALESCE(CASE WHEN response.status_v3');
+      expect(queryCall[0]).toContain('COALESCE(response.status_v3');
       expect(queryCall[0]).toContain('response.status_v2, response.status_v1');
     });
 
@@ -181,8 +182,8 @@ describe('CodingStatisticsService', () => {
 
       const queryCall = mockResponseRepository.query.mock.calls[0];
       expect(queryCall[0]).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
-      expect(queryCall[0]).toContain('THEN CASE WHEN response.status_v3');
-      expect(queryCall[0]).toContain('ELSE COALESCE(CASE WHEN response.status_v3');
+      expect(queryCall[0]).toContain('THEN response.status_v3');
+      expect(queryCall[0]).toContain('ELSE COALESCE(response.status_v3');
     });
 
     it('should default to v1 when no version specified', async () => {
@@ -217,9 +218,9 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, isDerived: false, count: '100' },
-        { statusValue: 2, isDerived: false, count: '50' },
-        { statusValue: 3, isDerived: false, count: '25' }
+        { statusValue: 5, isDerived: false, count: '100' },
+        { statusValue: 8, isDerived: false, count: '50' },
+        { statusValue: 9, isDerived: false, count: '25' }
       ]);
 
       const result = await service.getCodingStatistics(1);
@@ -232,13 +233,13 @@ describe('CodingStatisticsService', () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([
-        { statusValue: 1, isDerived: false, count: 'invalid' }
+        { statusValue: 5, isDerived: false, count: 'invalid' }
       ]);
 
       const result = await service.getCodingStatistics(1);
 
       expect(result.totalResponses).toBe(0);
-      expect(result.statusCounts[1]).toBe(0);
+      expect(result.statusCounts[5]).toBe(0);
     });
 
     it('should include autocoder-generated responses in derived answer counts', async () => {
@@ -279,6 +280,27 @@ describe('CodingStatisticsService', () => {
           expect.arrayContaining(['Unit1\u001FbaseVar', 'Unit1\u001FderivedVar'])
         ])
       );
+      expect(mockResponseRepository.query.mock.calls[0][0]).not.toContain(
+        'OR response.is_autocoder_generated = TRUE'
+      );
+    });
+
+    it('should exclude raw response states from statistics totals', async () => {
+      mockCacheService.get.mockResolvedValue(null);
+      mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
+      mockResponseRepository.query.mockResolvedValue([
+        { statusValue: 5, isDerived: false, count: '4' }
+      ]);
+
+      const result = await service.getCodingStatistics(1);
+
+      expect(result.totalResponses).toBe(4);
+      expect(mockResponseRepository.query.mock.calls[0][0]).toContain(
+        '<> ALL($5::smallint[])'
+      );
+      expect(mockResponseRepository.query.mock.calls[0][1]).toEqual(
+        expect.arrayContaining([[0, 1, 2, 3, 10]])
+      );
     });
   });
 
@@ -289,7 +311,7 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1, 'v1');
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v1'
+        'coding-statistics:schema-v3:1:v1'
       );
     });
 
@@ -299,13 +321,13 @@ describe('CodingStatisticsService', () => {
       await service.invalidateCache(1);
 
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v1'
+        'coding-statistics:schema-v3:1:v1'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v2'
+        'coding-statistics:schema-v3:1:v2'
       );
       expect(mockCacheService.delete).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v3'
+        'coding-statistics:schema-v3:1:v3'
       );
     });
 
@@ -438,7 +460,7 @@ describe('CodingStatisticsService', () => {
 
       expect(result.jobId).toBe('job-123');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v1'
+        'coding-statistics:schema-v3:1:v1'
       );
       expect(mockJobQueueService.addCodingStatisticsJob).toHaveBeenCalledWith(
         1,
@@ -457,7 +479,7 @@ describe('CodingStatisticsService', () => {
       expect(result.jobId).toBe('');
       expect(result.message).toBe('Using cached coding statistics');
       expect(mockCacheService.get).toHaveBeenCalledWith(
-        'coding-statistics:schema-v2:1:v1'
+        'coding-statistics:schema-v3:1:v1'
       );
     });
 

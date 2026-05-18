@@ -17,6 +17,7 @@ import { Writable } from 'stream';
 import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import Persons from '../../entities/persons.entity';
 import {
+  STATISTICS_IGNORED_STATUSES,
   statusNumberToString,
   statusStringToNumber
 } from '../../utils/response-status-converter';
@@ -229,7 +230,7 @@ export class WorkspaceTestResultsService {
     statusStringToNumber('VALUE_CHANGED') || 3
   ];
 
-  private static readonly ignoredDerivedCodingStatuses = [0, 1, 2, 3, 10];
+  private static readonly ignoredDerivedCodingStatuses = STATISTICS_IGNORED_STATUSES;
 
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
     const normalizedVariableId = String(variableId || '').trim();
@@ -4058,18 +4059,22 @@ export class WorkspaceTestResultsService {
       this.applyExclusionsToQuery(queryBuilder, exclusions);
 
       if (status === 'null') {
-        queryBuilder.andWhere(`${effectiveStatusExpression} IS NULL`);
-      } else {
-        const statusNumber = statusStringToNumber(status);
-        if (statusNumber === null) {
-          this.logger.warn(`Invalid coding status filter: ${status}`);
-          return [[], 0];
-        }
-
-        queryBuilder.andWhere(`${effectiveStatusExpression} = :statusParam`, {
-          statusParam: statusNumber
-        });
+        return [[], 0];
       }
+
+      const statusNumber = statusStringToNumber(status);
+      if (
+        statusNumber === null ||
+        WorkspaceTestResultsService.ignoredDerivedCodingStatuses.includes(statusNumber)
+      ) {
+        this.logger.warn(`Invalid or ignored coding status filter: ${status}`);
+        return [[], 0];
+      }
+
+      queryBuilder.andWhere(`${effectiveStatusExpression} = :statusParam`, {
+        statusParam: statusNumber
+      });
+      await this.applyValidCodingVariableFilter(queryBuilder, workspace_id);
 
       let result: [ResponseEntity[], number];
 
@@ -5698,6 +5703,7 @@ export class WorkspaceTestResultsService {
         query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
         });
+        await this.applyValidCodingVariableFilter(query, workspaceId);
       } else if (responseSource === 'all') {
         const effectiveStatusExpression = getEffectiveCodingStatusExpression(
           searchParams.version || 'v1'
@@ -5706,6 +5712,7 @@ export class WorkspaceTestResultsService {
         query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: WorkspaceTestResultsService.ignoredDerivedCodingStatuses
         });
+        await this.applyValidCodingVariableFilter(query, workspaceId);
       } else {
         this.excludeAutocoderGeneratedResponses(query);
       }
@@ -5790,6 +5797,22 @@ export class WorkspaceTestResultsService {
         `An error occurred while searching for responses: ${error.message}`
       );
     }
+  }
+
+  private async applyValidCodingVariableFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    workspaceId: number
+  ): Promise<void> {
+    const validVariablePairKeys = await this.codingListService.getValidVariablePairKeys(workspaceId);
+    if (validVariablePairKeys.length === 0) {
+      query.andWhere('1 = 0');
+      return;
+    }
+
+    query.andWhere(
+      'CONCAT(unit.name, CHR(31), response.variableid) IN (:...validVariablePairKeys)',
+      { validVariablePairKeys }
+    );
   }
 
   async findUnitsByName(

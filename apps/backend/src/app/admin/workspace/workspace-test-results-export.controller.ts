@@ -46,9 +46,11 @@ import {
 interface DatabaseExportJobStatusResponse {
   status: string;
   progress: number;
-  result?: DatabaseExportJobResult;
+  result?: PublicDatabaseExportJobResult;
   error?: string;
 }
+
+type PublicDatabaseExportJobResult = Omit<DatabaseExportJobResult, 'filePath'>;
 
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
@@ -86,7 +88,8 @@ export class WorkspaceTestResultsExportController {
     }
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async exportWorkspaceToSqlite(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Res() response: Response
@@ -127,7 +130,8 @@ export class WorkspaceTestResultsExportController {
     description: 'Workspace database export job started successfully.'
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async startWorkspaceDatabaseExportJob(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Req() req: RequestWithUser
@@ -188,7 +192,8 @@ export class WorkspaceTestResultsExportController {
     description: 'Workspace database export job status retrieved successfully.'
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async getWorkspaceDatabaseExportJobStatus(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Param('jobId') jobId: string
@@ -203,7 +208,7 @@ export class WorkspaceTestResultsExportController {
       status,
       progress,
       ...(status === 'completed' && job.returnvalue ?
-        { result: job.returnvalue as DatabaseExportJobResult } :
+        { result: this.toPublicJobResult(job.returnvalue as DatabaseExportJobResult) } :
         {}),
       ...((status === 'failed' || status === 'cancelled') && job.failedReason ?
         { error: job.failedReason } :
@@ -227,7 +232,8 @@ export class WorkspaceTestResultsExportController {
     description: 'Bull job ID of the workspace database export'
   })
   @ApiBearerAuth()
-  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
   async downloadWorkspaceDatabaseExport(
     @Param('workspace_id', ParseIntPipe) workspace_id: number,
       @Param('jobId') jobId: string,
@@ -267,7 +273,9 @@ export class WorkspaceTestResultsExportController {
     res.setHeader('Content-Length', String(result.fileSize));
 
     const stream = fs.createReadStream(result.filePath);
+    this.cleanupExportFileAfterResponse(res, result.filePath);
     stream.on('error', () => {
+      this.cleanupExportFile(result.filePath);
       if (!res.headersSent) {
         res.status(500).json({ error: 'Fehler beim Lesen der Exportdatei.' });
       }
@@ -566,5 +574,45 @@ export class WorkspaceTestResultsExportController {
     }
 
     return 0;
+  }
+
+  private toPublicJobResult(
+    result: DatabaseExportJobResult
+  ): PublicDatabaseExportJobResult {
+    return {
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      createdAt: result.createdAt,
+      requestedByUserId: result.requestedByUserId,
+      scope: result.scope,
+      workspaceId: result.workspaceId
+    };
+  }
+
+  private cleanupExportFileAfterResponse(
+    res: Response,
+    filePath: string
+  ): void {
+    let cleaned = false;
+    const cleanup = () => {
+      if (cleaned) {
+        return;
+      }
+      cleaned = true;
+      this.cleanupExportFile(filePath);
+    };
+
+    res.once('finish', cleanup);
+    res.once('close', cleanup);
+  }
+
+  private cleanupExportFile(filePath: string): void {
+    try {
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    } catch {
+      // Best-effort cleanup; download failures should surface through the stream.
+    }
   }
 }
