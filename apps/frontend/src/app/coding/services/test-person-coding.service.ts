@@ -4,7 +4,8 @@ import {
   Observable,
   Subject,
   catchError,
-  of
+  of,
+  throwError
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
@@ -486,16 +487,7 @@ export class TestPersonCodingService {
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of({
-          results: [],
-          total: 0,
-          missing: 0,
-          currentPage: page || 1,
-          pageSize: pageSize || 50,
-          totalPages: 0,
-          hasNextPage: false,
-          hasPreviousPage: false
-        }))
+        catchError(error => throwError(() => error))
       );
   }
 

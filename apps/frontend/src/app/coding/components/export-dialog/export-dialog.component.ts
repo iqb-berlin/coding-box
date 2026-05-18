@@ -65,6 +65,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   validationCacheKey: string | null = null;
   validationCurrentPage = 1;
   expectedCombinations: ExpectedCombinationDto[] = [];
+  private readonly maxDisplayedMappingErrors = 5;
 
   ngOnInit(): void {
     this.validationStateService.validationProgress$
@@ -122,7 +123,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
 
     const file = input.files[0];
     if (!this.isExcelFile(file)) {
-      this.validationStateService.setValidationError(this.translate.instant('coding.coding-management-manual.errors.invalid-file-type'));
+      this.validationStateService.setValidationError(this.translate.instant('export-dialog.validation.invalid-file-type'));
       return;
     }
 
@@ -133,7 +134,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
   }
 
   private isExcelFile(file: File): boolean {
-    return file.name.endsWith('.xlsx') || file.name.endsWith('.xls');
+    return file.name.toLowerCase().endsWith('.xlsx');
   }
 
   private readExcelFile(file: File): void {
@@ -153,7 +154,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         }
         const headers: string[] = [];
         worksheet.getRow(1).eachCell(cell => {
-          headers.push(cell.value?.toString() || '');
+          headers.push(this.normalizeValidationHeader(this.getCellText(cell)));
         });
 
         this.validationStateService.updateProgress(40, 'Daten werden extrahiert...');
@@ -166,7 +167,7 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
 
           headers.forEach((header, index) => {
             const cell = row.getCell(index + 1);
-            rowData[header.trim()] = cell.value?.toString() || '';
+            rowData[header] = this.getCellText(cell);
           });
 
           data.push(rowData);
@@ -186,7 +187,17 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
         }
 
         this.validationStateService.updateProgress(60, 'Daten werden für Validierung vorbereitet...');
-        const expectedCombinations = this.mapToExpectedCombinations(data);
+        const { expectedCombinations, errors } = this.mapToExpectedCombinations(data);
+        if (errors.length > 0) {
+          const displayedErrors = errors.slice(0, this.maxDisplayedMappingErrors).join(' ');
+          const additionalErrorCount = Math.max(0, errors.length - this.maxDisplayedMappingErrors);
+          this.validationStateService.setValidationError(
+            additionalErrorCount > 0 ?
+              `${displayedErrors} Weitere ${additionalErrorCount} Zeilen enthalten Fehler.` :
+              displayedErrors
+          );
+          return;
+        }
 
         this.validationStateService.updateProgress(70, 'Validierung wird durchgeführt...');
         this.validateCodingCompleteness(expectedCombinations);
@@ -202,14 +213,93 @@ export class ExportDialogComponent implements OnInit, OnDestroy {
     reader.readAsArrayBuffer(file);
   }
 
-  private mapToExpectedCombinations(data: Record<string, string>[]): ExpectedCombinationDto[] {
-    return data.map(item => ({
-      unit_key: item.unit_key || '',
-      login_name: item.login_name || '',
-      login_code: item.login_code || '',
-      booklet_id: item.booklet_id || '',
-      variable_id: item.variable_id || ''
-    }));
+  private mapToExpectedCombinations(data: Record<string, string>[]): {
+    expectedCombinations: ExpectedCombinationDto[];
+    errors: string[];
+  } {
+    const errors: string[] = [];
+    const expectedCombinations = data.map((item, index) => {
+      const unitKey = this.getFirstValue(item, ['unit_key', 'unit_name', 'unitname']);
+      const unitAlias = this.getFirstValue(item, ['unit_alias', 'unitalias']);
+      const loginName = this.getFirstValue(item, ['login_name', 'person_login', 'loginname', 'personlogin', 'login']);
+      const loginCode = this.getFirstValue(item, ['login_code', 'person_code', 'logincode', 'personcode']);
+      const personGroup = this.getFirstValue(item, ['person_group', 'login_group', 'persongroup', 'logingroup', 'group']);
+      const bookletId = this.getFirstValue(item, ['booklet_id', 'booklet_name', 'bookletid', 'bookletname']);
+      const variableId = this.getFirstValue(item, ['variable_id']);
+      const variablePage = this.getFirstValue(item, ['variable_page']);
+      const variableAnchor = this.getFirstValue(item, ['variable_anchor']);
+
+      const missingFields: string[] = [];
+      if (!unitKey && !unitAlias) missingFields.push('unit_key/unit_alias');
+      if (!loginName) missingFields.push('login_name/person_login');
+      if (!loginCode) missingFields.push('login_code/person_code');
+      if (!bookletId) missingFields.push('booklet_id/booklet_name');
+      if (!variableId) missingFields.push('variable_id');
+
+      if (missingFields.length > 0) {
+        errors.push(`Zeile ${index + 2}: Pflichtfelder fehlen (${missingFields.join(', ')}).`);
+      }
+
+      return {
+        unit_key: unitKey || unitAlias,
+        unit_alias: unitAlias || undefined,
+        login_name: loginName,
+        login_code: loginCode,
+        person_group: personGroup || undefined,
+        booklet_id: bookletId,
+        variable_id: variableId,
+        variable_page: variablePage || undefined,
+        variable_anchor: variableAnchor || undefined
+      };
+    });
+
+    return { expectedCombinations, errors };
+  }
+
+  private normalizeValidationHeader(header: string): string {
+    return header
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, '_');
+  }
+
+  private getFirstValue(
+    row: Record<string, string>,
+    candidates: string[]
+  ): string {
+    for (const candidate of candidates) {
+      const value = row[candidate]?.trim();
+      if (value) {
+        return value;
+      }
+    }
+    return '';
+  }
+
+  private getCellText(cell: ExcelJS.Cell): string {
+    const value = cell.value;
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'object') {
+      const objectValue = value as unknown as Record<string, unknown>;
+      if (typeof objectValue.text === 'string') {
+        return objectValue.text.trim();
+      }
+      if (Array.isArray(objectValue.richText)) {
+        return objectValue.richText
+          .map(part => (
+            typeof part === 'object' && part && 'text' in part ? String(part.text) : ''
+          ))
+          .join('')
+          .trim();
+      }
+      if (objectValue.result !== undefined && objectValue.result !== null) {
+        return String(objectValue.result).trim();
+      }
+    }
+    return String(value).trim();
   }
 
   private validateCodingCompleteness(expectedCombinations: ExpectedCombinationDto[]): void {

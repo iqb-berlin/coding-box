@@ -55,16 +55,19 @@
           <tr>
             <th>{{ 'coding-validation-results.table.headers.unit-key' | translate }}</th>
             <th>{{ 'coding-validation-results.table.headers.login-name' | translate }}</th>
+            <th>{{ 'coding-validation-results.table.headers.login-group' | translate }}</th>
             <th>{{ 'coding-validation-results.table.headers.login-code' | translate }}</th>
             <th>{{ 'coding-validation-results.table.headers.booklet-id' | translate }}</th>
             <th>{{ 'coding-validation-results.table.headers.variable-id' | translate }}</th>
             <th>{{ 'coding-validation-results.table.headers.status' | translate }}</th>
+            <th>{{ 'coding-validation-results.table.headers.issues' | translate }}</th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let result of validationResults.results" [class.missing]="result.status === 'MISSING'">
             <td>{{result.combination.unit_key}}</td>
             <td>{{result.combination.login_name}}</td>
+            <td>{{result.combination.person_group || ''}}</td>
             <td>{{result.combination.login_code}}</td>
             <td>{{result.combination.booklet_id}}</td>
             <td>{{result.combination.variable_id}}</td>
@@ -74,6 +77,7 @@
                 {{ 'coding-validation-results.table.status.' + (result.status === 'MISSING' ? 'missing' : 'present') | translate }}
               </mat-chip>
             </td>
+            <td>{{result.issues?.join(' | ') || ''}}</td>
           </tr>
         </tbody>
       </table>

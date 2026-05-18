@@ -43,7 +43,7 @@
           <mat-icon>file_upload</mat-icon>
           {{ 'export-dialog.validation.upload-button' | translate }}
         </button>
-        <input #validationFileInput type="file" style="display: none;" accept=".xlsx, .xls" (change)="onValidationFileSelected($event)">
+        <input #validationFileInput type="file" style="display: none;" accept=".xlsx" (change)="onValidationFileSelected($event)">
       </div>
 
       <!-- Validation Progress -->
