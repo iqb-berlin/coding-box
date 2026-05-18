@@ -53,6 +53,9 @@ describe('JobQueueService', () => {
   });
 
   it('adds and retrieves queue jobs', async () => {
+    queues[0].getJobs.mockResolvedValue([]);
+    queues[6].getJobs.mockResolvedValue([]);
+
     await expect(service.addTestPersonCodingJob({ workspaceId: 1, personIds: ['p1'] })).resolves.toMatchObject({ data: { workspaceId: 1 } });
     await expect(service.getTestPersonCodingJob('job-1')).resolves.toHaveProperty('id', 'job-1');
     await expect(service.addUploadJob({
@@ -76,6 +79,7 @@ describe('JobQueueService', () => {
   });
 
   it('prevents duplicate active jobs where required', async () => {
+    await expect(service.addTestPersonCodingJob({ workspaceId: 1, personIds: ['p1'] })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addCodingStatisticsJob(1, 'v2')).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addFlatResponseFilterOptionsJob(1, 250)).resolves.toBeNull();
     await expect(service.addCodebookGenerationJob({
@@ -95,6 +99,7 @@ describe('JobQueueService', () => {
       },
       unitIds: [1]
     })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addValidationTaskJob({ taskId: 7 })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addExternalCodingImportJob({ workspaceId: 1, tempFilePath: '/tmp/a', fileName: 'a.csv' })).rejects.toBeInstanceOf(ConflictException);
   });
@@ -102,6 +107,7 @@ describe('JobQueueService', () => {
   it('allows jobs when no duplicate active job exists', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
 
+    await expect(service.addTestPersonCodingJob({ workspaceId: 1, personIds: ['p1'] })).resolves.toHaveProperty('data.workspaceId', 1);
     await expect(service.addCodingStatisticsJob(1, 'v1')).resolves.toHaveProperty('data.version', 'v1');
     await expect(service.addFlatResponseFilterOptionsJob(1, 100)).resolves.toHaveProperty('data.processingDurationThresholdMs', 100);
     await expect(service.addCodebookGenerationJob({
@@ -121,6 +127,7 @@ describe('JobQueueService', () => {
       },
       unitIds: [1]
     })).resolves.toHaveProperty('data.workspaceId', 1);
+    await expect(service.addResetCodingVersionJob({ workspaceId: 1, version: 'v1' })).resolves.toHaveProperty('data.version', 'v1');
     await expect(service.addValidationTaskJob({ taskId: 8 })).resolves.toHaveProperty('data.taskId', 8);
     await expect(service.addExportJob({ workspaceId: 1, userId: 2, exportType: 'coding-list' })).resolves.toHaveProperty('data.exportType', 'coding-list');
   });
