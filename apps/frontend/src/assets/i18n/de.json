@@ -401,7 +401,10 @@
     "reauthentication_title": "Anmeldung erforderlich",
     "reauthentication_message": "Ihre Sitzung ist abgelaufen oder Sie sind nicht mehr angemeldet. Bitte melden Sie sich erneut an.",
     "login_button": "Anmelden",
-    "error_title": "Fehler"
+    "error_title": "Fehler",
+    "requests_affected": "{{count}} Anfragen betroffen",
+    "show_details": "Details anzeigen",
+    "hide_details": "Details ausblenden"
   },
   "coding": {
     "schemer": {

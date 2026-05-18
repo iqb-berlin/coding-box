@@ -8,7 +8,10 @@ import { LogoService } from './logo.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
-import { AppHttpError } from '../interceptors/app-http-error.class';
+import {
+  AppHttpError,
+  BACKEND_CONNECTIVITY_ERROR_MESSAGE
+} from '../interceptors/app-http-error.class';
 
 describe('AppService', () => {
   let service: AppService;
@@ -181,28 +184,55 @@ describe('AppService', () => {
       expect(service.authBootstrapStatus).toBe('ready');
     });
 
-    it('should group repeated HTTP errors by status and request URL', () => {
+    it('should group repeated non-connectivity HTTP errors by status and request URL', () => {
       service.addErrorMessage({
-        status: 0,
+        status: 400,
         method: 'GET',
         urlWithParams: '/api/admin/workspace/5/coding/jobs',
-        message: 'Backend nicht erreichbar'
+        message: 'Bad Request'
       } as AppHttpError);
       service.addErrorMessage({
-        status: 0,
+        status: 400,
         method: 'GET',
         urlWithParams: '/api/admin/workspace/5/coding/jobs',
-        message: 'Backend nicht erreichbar'
+        message: 'Bad Request'
       } as AppHttpError);
       service.addErrorMessage({
-        status: 0,
+        status: 400,
         method: 'GET',
         urlWithParams: '/api/admin/workspace/5/coding/coder-trainings',
-        message: 'Backend nicht erreichbar'
+        message: 'Bad Request'
       } as AppHttpError);
 
       expect(service.errorMessages).toHaveLength(2);
-      expect(service.errorMessages[0].message).toBe('Backend nicht erreichbar');
+      expect(service.errorMessages[0].message).toBe('Bad Request');
+      expect(service.errorMessages[0].requestCount).toBe(2);
+    });
+
+    it('should group backend connectivity errors across different request URLs', () => {
+      service.addErrorMessage({
+        status: 504,
+        method: 'GET',
+        urlWithParams: '/api/admin/users/access/5',
+        message: 'Gateway Timeout'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 504,
+        method: 'POST',
+        urlWithParams: '/api/admin/workspace/5/coding/statistics/job?version=v1',
+        message: 'Gateway Timeout'
+      } as AppHttpError);
+      service.addErrorMessage({
+        status: 0,
+        method: 'GET',
+        urlWithParams: '/api/admin/workspace/5/coding/freshness',
+        message: 'Backend nicht erreichbar'
+      } as AppHttpError);
+
+      expect(service.errorMessages).toHaveLength(1);
+      expect(service.errorMessages[0].message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE);
+      expect(service.errorMessages[0].requestCount).toBe(3);
+      expect(service.errorMessages[0].affectedRequests).toHaveLength(3);
     });
   });
 });

@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -102,7 +103,7 @@ export class CodingExecutionService {
       error?: string;
     }>(
       `${this.serverUrl}admin/workspace/${workspace_id}/coding/statistics/job/${jobId}`,
-      {}
+      { context: suppressGlobalHttpErrorContext() }
     )
       .pipe(
         catchError(() => of({

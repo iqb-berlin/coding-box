@@ -1,9 +1,15 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpContext,
+  provideHttpClient,
+  withInterceptors
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { authInterceptor } from './auth.interceptor';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from './http-error-context';
 import { AppService } from '../services/app.service';
 
 describe('authInterceptor', () => {
@@ -78,6 +84,38 @@ describe('authInterceptor', () => {
 
     expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
     expect(appService.addErrorMessage).toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('should suppress global error messages when requested by request context', () => {
+    const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
+
+    http.get('/api/admin/workspace/5/coding/freshness', { context }).subscribe({
+      error: () => {
+      }
+    });
+
+    const req = httpMock.expectOne('/api/admin/workspace/5/coding/freshness');
+    req.flush('Gateway Timeout', { status: 504, statusText: 'Gateway Timeout' });
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('should still handle suppressed 401 errors as expired sessions', () => {
+    const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
+
+    http.get('/api/admin/workspace/5/coding/freshness', { context }).subscribe({
+      error: () => {
+      }
+    });
+
+    const req = httpMock.expectOne('/api/admin/workspace/5/coding/freshness');
+    req.flush('Unauthorized', { status: 401, statusText: 'Unauthorized' });
+
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 });

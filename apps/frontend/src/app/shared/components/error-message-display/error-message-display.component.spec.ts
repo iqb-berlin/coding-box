@@ -4,13 +4,14 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ErrorMessageDisplayComponent } from './error-message-display.component';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
+import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
 
 describe('ErrorMessageDisplayComponent', () => {
   let fixture: ComponentFixture<ErrorMessageDisplayComponent>;
   let appService: {
     backendUnavailable: boolean;
     needsReAuthentication: boolean;
-    errorMessages: unknown[];
+    errorMessages: AppHttpError[];
     reAuthenticationReturnUrl?: string;
     setBackendUnavailable: jest.Mock;
     setNeedsReAuthentication: jest.Mock;
@@ -59,5 +60,32 @@ describe('ErrorMessageDisplayComponent', () => {
     fixture.componentInstance.handleLogin();
 
     expect(authService.login).toHaveBeenCalledWith('/coding');
+  });
+
+  it('should hide request details until the user expands them', () => {
+    appService.errorMessages = [{
+      id: 1,
+      status: 504,
+      message: 'Der Server antwortet gerade nicht.',
+      method: '',
+      urlWithParams: '',
+      requestCount: 2,
+      isBackendConnectivityError: true,
+      affectedRequests: [
+        { method: 'GET', urlWithParams: '/api/admin/users/access/5' },
+        { method: 'POST', urlWithParams: '/api/admin/workspace/5/coding/statistics/job?version=v1' }
+      ]
+    } as AppHttpError];
+
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('error.requests_affected');
+    expect(fixture.nativeElement.textContent).not.toContain('/api/admin/users/access/5');
+
+    fixture.componentInstance.toggleErrorDetails(1);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.textContent).toContain('/api/admin/users/access/5');
+    expect(fixture.nativeElement.textContent).toContain('/api/admin/workspace/5/coding/statistics/job?version=v1');
   });
 });
