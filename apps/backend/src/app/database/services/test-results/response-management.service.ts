@@ -432,6 +432,18 @@ export class ResponseManagementService {
     }
 
     if (response.subform) {
+      const legacySubformWhereParams: Record<string, unknown> = {
+        unitid: response.unitid,
+        variableid: response.variableid,
+        generated: true
+      };
+      const legacySubformValueCondition = response.value !== undefined ?
+        'AND value = :value' :
+        '';
+      if (response.value !== undefined) {
+        legacySubformWhereParams.value = response.value;
+      }
+
       const legacySubformUpdateResult = await queryRunner.manager
         .createQueryBuilder()
         .update(ResponseEntity)
@@ -443,15 +455,12 @@ export class ResponseManagementService {
             WHERE unitid = :unitid
               AND variableid = :variableid
               AND COALESCE(subform, '') = ''
+              ${legacySubformValueCondition}
               AND is_autocoder_generated = :generated
             ORDER BY id DESC
             LIMIT 1
           )`,
-          {
-            unitid: response.unitid,
-            variableid: response.variableid,
-            generated: true
-          }
+          legacySubformWhereParams
         )
         .returning('id')
         .execute();
