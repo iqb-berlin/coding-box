@@ -71,6 +71,7 @@ import {
 } from '../database/services/validation';
 import {
   CodingListExportService,
+  CodingExportOrchestratorService,
   CodingResultsExportService,
   CodingTimesExportService,
   CodingValidationService,
@@ -169,6 +170,7 @@ import { CodingModule } from '../coding/coding.module';
     BullJobManagementService,
     ResponseManagementService,
     CodingListExportService,
+    CodingExportOrchestratorService,
     CodingResultsExportService,
     CodingTimesExportService,
     CodingValidationService,
@@ -212,6 +214,7 @@ import { CodingModule } from '../coding/coding.module';
     BullJobManagementService,
     ResponseManagementService,
     CodingListExportService,
+    CodingExportOrchestratorService,
     CodingResultsExportService,
     CodingTimesExportService,
     CodingValidationService,

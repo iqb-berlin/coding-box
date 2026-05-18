@@ -36,7 +36,12 @@ import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/var
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
 import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
 import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
-import { CodingManagementService, StatisticsVersion, FilterParams } from '../../services/coding-management.service';
+import {
+  CodingManagementService,
+  StatisticsVersion,
+  FilterParams,
+  CodingResultsExportFormat
+} from '../../services/coding-management.service';
 import { CodingManagementUiService } from './services/coding-management-ui.service';
 import { StatisticsCardComponent } from './components/statistics-card/statistics-card.component';
 import { ResponseFiltersComponent } from './components/response-filters/response-filters.component';
@@ -826,7 +831,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result: boolean | undefined) => {
       if (result === true) {
         this.resetCodingVersion(this.selectedStatisticsVersion);
       }
@@ -858,7 +863,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       }
     });
 
-    dialogRef.afterClosed().subscribe(result => {
+    dialogRef.afterClosed().subscribe((result: {
+      version: StatisticsVersion;
+      format: CodingResultsExportFormat;
+      includeReplayUrls: boolean;
+      includeResponseValues: boolean;
+    } | undefined) => {
       if (result) {
         const {
           version, format, includeReplayUrls, includeResponseValues

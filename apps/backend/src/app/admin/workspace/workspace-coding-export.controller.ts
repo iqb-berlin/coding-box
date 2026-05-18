@@ -33,10 +33,22 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import {
   CodingExportService,
+  CodingExportOrchestratorService,
   CodingListExportService,
   CodingResultsExportService,
   CodingTimesExportService
 } from '../../database/services/coding';
+
+type PublicExportJobResult = Omit<ExportJobResult, 'filePath'>;
+type PublicExportJobStatus =
+  | {
+    status: string;
+    progress: number;
+    result?: PublicExportJobResult;
+    error?: string;
+  }
+  | { error: string };
+type RequestUser = { id?: number | string; userId?: number | string };
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -48,6 +60,7 @@ export class WorkspaceCodingExportController {
     private codingResultsExportService: CodingResultsExportService,
     private codingExportService: CodingExportService,
     private codingTimesExportService: CodingTimesExportService,
+    private codingExportOrchestratorService: CodingExportOrchestratorService,
     private jobQueueService: JobQueueService,
     private cacheService: CacheService
   ) { }
@@ -65,6 +78,17 @@ export class WorkspaceCodingExportController {
         'results-by-version exports support only "csv" or "excel" format'
       );
     }
+  }
+
+  private getRequestUserId(req: Request): number {
+    const user = (req as Request & { user?: RequestUser }).user;
+    const userId = Number(user?.id ?? user?.userId);
+
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('Authenticated user id is invalid');
+    }
+
+    return userId;
   }
 
   private pipeExportStream(
@@ -333,15 +357,14 @@ export class WorkspaceCodingExportController {
                    @Res() res: Response
   ): Promise<void> {
     try {
-      const csvStream = await this.codingResultsExportService.exportCodingResultsByVersionAsCsv(
-        workspace_id,
+      const csvStream = await this.codingExportOrchestratorService.exportResultsByVersionAsCsv({
+        workspaceId: workspace_id,
         version,
-        authToken,
+        authToken: authToken || '',
         serverUrl,
-        includeReplayUrls,
-        undefined,
+        includeReplayUrl: includeReplayUrls,
         includeResponseValues
-      );
+      });
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader(
@@ -428,15 +451,14 @@ export class WorkspaceCodingExportController {
                    includeResponseValues: boolean,
                    @Res() res: Response
   ): Promise<void> {
-    const buffer = await this.codingResultsExportService.exportCodingResultsByVersionAsExcel(
-      workspace_id,
+    const buffer = await this.codingExportOrchestratorService.exportResultsByVersionAsExcel({
+      workspaceId: workspace_id,
       version,
-      authToken,
+      authToken: authToken || '',
       serverUrl,
-      includeReplayUrls,
-      undefined,
+      includeReplayUrl: includeReplayUrls,
       includeResponseValues
-    );
+    });
 
     res.setHeader(
       'Content-Type',
@@ -877,16 +899,16 @@ export class WorkspaceCodingExportController {
       const anonymizeCodersParam = anonymizeCoders === 'true';
       const usePseudoCodersParam = usePseudoCoders === 'true';
       const excludeAutoCodedParam = excludeAutoCoded === 'true';
-      const buffer = await this.codingExportService.exportCodingResultsDetailed(
-        workspace_id,
-        outputCommentsParam,
-        includeReplayUrlParam,
-        anonymizeCodersParam,
-        usePseudoCodersParam,
-        authToken || '',
+      const buffer = await this.codingExportOrchestratorService.exportDetailed({
+        workspaceId: workspace_id,
+        outputCommentsInsteadOfCodes: outputCommentsParam,
+        includeReplayUrl: includeReplayUrlParam,
+        anonymizeCoders: anonymizeCodersParam,
+        usePseudoCoders: usePseudoCodersParam,
+        authToken: authToken || '',
         req,
-        excludeAutoCodedParam
-      );
+        excludeAutoCoded: excludeAutoCodedParam
+      });
 
       res.setHeader('Content-Type', 'text/csv');
       res.setHeader(
@@ -974,7 +996,7 @@ export class WorkspaceCodingExportController {
     description: 'Start a background export job',
     schema: {
       type: 'object',
-      required: ['exportType', 'userId'],
+      required: ['exportType'],
       properties: {
         exportType: {
           type: 'string',
@@ -988,10 +1010,6 @@ export class WorkspaceCodingExportController {
             'results-by-version'
           ],
           description: 'Type of export to generate'
-        },
-        userId: {
-          type: 'number',
-          description: 'ID of the user requesting the export'
         },
         version: {
           type: 'string',
@@ -1047,10 +1065,11 @@ export class WorkspaceCodingExportController {
     this.validateBackgroundExportRequest(body);
 
     try {
+      const userId = this.getRequestUserId(req);
       const job = await this.jobQueueService.addExportJob({
         ...body,
         workspaceId: workspace_id,
-        userId: (req.user as { id: number }).id
+        userId
       });
 
       this.logger.log(
@@ -1096,7 +1115,7 @@ export class WorkspaceCodingExportController {
         result: {
           type: 'object',
           description:
-            'Export metadata (only available when status is completed)'
+            'Export metadata without internal storage paths (only available when status is completed)'
         },
         error: {
           type: 'string',
@@ -1105,28 +1124,17 @@ export class WorkspaceCodingExportController {
       }
     }
   })
-  async getExportJobStatus(@Param('jobId') jobId: string): Promise<
-  | {
-    status: string;
-    progress: number;
-    result?: {
-      fileId: string;
-      fileName: string;
-      filePath: string;
-      fileSize: number;
-      workspaceId: number;
-      userId: number;
-      exportType: string;
-      createdAt: number;
-    };
-    error?: string;
-  }
-  | { error: string }
-  > {
+  async getExportJobStatus(
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
+  ): Promise<PublicExportJobStatus> {
     try {
       const job = await this.jobQueueService.getExportJob(jobId);
       if (!job) {
         return { error: `Export job with ID ${jobId} not found` };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return { error: 'Access denied to this export' };
       }
 
       const state = await job.getState();
@@ -1159,7 +1167,7 @@ export class WorkspaceCodingExportController {
         status,
         progress: typeof progress === 'number' ? progress : 0,
         ...(status === 'completed' && job.returnvalue ?
-          { result: job.returnvalue } :
+          { result: this.toPublicExportJobResult(job.returnvalue as ExportJobResult) } :
           {}),
         ...(status === 'failed' && failedReason ? { error: failedReason } : {})
       };
@@ -1170,6 +1178,18 @@ export class WorkspaceCodingExportController {
       );
       return { error: error.message };
     }
+  }
+
+  private toPublicExportJobResult(result: ExportJobResult): PublicExportJobResult {
+    return {
+      fileId: result.fileId,
+      fileName: result.fileName,
+      fileSize: result.fileSize,
+      workspaceId: result.workspaceId,
+      userId: result.userId,
+      exportType: result.exportType,
+      createdAt: result.createdAt
+    };
   }
 
   @Get(':workspace_id/coding/export/job/:jobId/download')
@@ -1328,9 +1348,24 @@ export class WorkspaceCodingExportController {
     }
   })
   async deleteExportJob(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
+      const job = await this.jobQueueService.getExportJob(jobId);
+      if (!job) {
+        return {
+          success: false,
+          message: 'Export job not found'
+        };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
+        };
+      }
+
       const success = await this.jobQueueService.deleteExportJob(jobId);
 
       if (success) {
@@ -1387,7 +1422,8 @@ export class WorkspaceCodingExportController {
     }
   })
   async cancelExportJob(
-    @Param('jobId') jobId: string
+    @WorkspaceId() workspace_id: number,
+      @Param('jobId') jobId: string
   ): Promise<{ success: boolean; message: string }> {
     try {
       // First, check the job state
@@ -1396,6 +1432,12 @@ export class WorkspaceCodingExportController {
         return {
           success: false,
           message: 'Export job not found'
+        };
+      }
+      if (job.data.workspaceId !== workspace_id) {
+        return {
+          success: false,
+          message: 'Access denied to this export'
         };
       }
 

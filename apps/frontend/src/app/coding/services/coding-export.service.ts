@@ -234,7 +234,6 @@ export class CodingExportService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         userId: number;
@@ -249,7 +248,6 @@ export class CodingExportService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         userId: number;

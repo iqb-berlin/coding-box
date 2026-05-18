@@ -1,0 +1,2 @@
+groupname;loginname;code;bookletname;unitname;originalUnitId;responses;laststate
+GOLDEN-GROUP;golden-login;golden-code;BOOKLET-GOLDEN;UNIT-GOLDEN;UNIT-GOLDEN.XML;"[{""content"":""[{\""id\"":\""VAR_SCORE\"",\""status\"":\""VALUE_CHANGED\"",\""value\"":\""Die Antwort ist 42\""}]"",""id"":""chunk-1"",""responseType"":""state"",""ts"":1779000000000,""variables"":[""VAR_SCORE""]}]";

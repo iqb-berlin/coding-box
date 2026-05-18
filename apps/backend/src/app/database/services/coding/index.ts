@@ -17,6 +17,7 @@ export { CodingValidationService } from './coding-validation.service';
 export { CodingVersionService } from './coding-version.service';
 export { CodingAnalysisService } from './coding-analysis.service';
 export { CodingExportService } from './coding-export.service';
+export { CodingExportOrchestratorService } from './coding-export-orchestrator.service';
 export { CodingFreshnessService } from './coding-freshness.service';
 export { CodingListExportService } from './coding-list-export.service';
 export { CodingResultsExportService } from './coding-results-export.service';

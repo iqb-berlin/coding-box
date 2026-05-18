@@ -11,7 +11,7 @@ import { MatCardModule } from '@angular/material/card';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 
-export type ExportFormat = 'json' | 'csv' | 'excel';
+export type CodingResultsExportFormat = 'csv' | 'excel';
 
 export interface DownloadCodingResultsDialogData {
   currentVersion: 'v1' | 'v2' | 'v3';
@@ -85,13 +85,6 @@ export interface DownloadCodingResultsDialogData {
               <div class="radio-content">
                 <mat-icon>table_chart</mat-icon>
                 <span class="option-title">CSV</span>
-              </div>
-            </mat-radio-button>
-
-            <mat-radio-button value="json" class="radio-option">
-              <div class="radio-content">
-                <mat-icon>description</mat-icon>
-                <span class="option-title">JSON</span>
               </div>
             </mat-radio-button>
 
@@ -246,7 +239,7 @@ export interface DownloadCodingResultsDialogData {
 
     .format-group {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      grid-template-columns: repeat(2, 1fr);
       gap: 12px;
     }
 
@@ -333,7 +326,7 @@ export interface DownloadCodingResultsDialogData {
 })
 export class DownloadCodingResultsDialogComponent {
   selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
-  selectedFormat: ExportFormat = 'csv';
+  selectedFormat: CodingResultsExportFormat = 'csv';
   includeReplayUrls: boolean = false;
   includeResponseValues: boolean = true;
 

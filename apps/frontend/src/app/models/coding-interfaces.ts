@@ -100,7 +100,6 @@ export interface ExportJobStatus {
   result?: {
     fileId: string;
     fileName: string;
-    filePath: string;
     fileSize: number;
     workspaceId: number;
     userId: number;
