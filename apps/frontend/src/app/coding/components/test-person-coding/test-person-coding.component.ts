@@ -380,7 +380,6 @@ export class TestPersonCodingComponent implements OnInit {
     }
 
     this.loadStatistics();
-    this.loadCodingList(this.currentPage, this.pageSize);
     this.loadWorkspaceGroups();
     this.testPersonCodingService.notifyAutoCodingCompleted();
   }
