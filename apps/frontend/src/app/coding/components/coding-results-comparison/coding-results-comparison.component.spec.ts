@@ -80,7 +80,7 @@ describe('CodingResultsComparisonComponent', () => {
           useValue: {
             authData: { userName: 'Test User' },
             loggedUser: undefined,
-            createToken: jest.fn()
+            createOwnToken: jest.fn()
           }
         }
       ]

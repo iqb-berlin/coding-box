@@ -15,7 +15,7 @@ describe('CodingStatisticsService', () => {
   beforeEach(() => {
     appServiceMock = {
       loggedUser: { sub: 'user' },
-      createToken: jest.fn().mockReturnValue(of('auth-token'))
+      createOwnToken: jest.fn().mockReturnValue(of('auth-token'))
     } as unknown as jest.Mocked<AppService>;
 
     TestBed.configureTestingModule({

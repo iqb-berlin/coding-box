@@ -16,8 +16,7 @@ export class CodingExportService {
   private appService = inject(AppService);
 
   getCodingListAsCsv(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()
@@ -38,8 +37,7 @@ export class CodingExportService {
   }
 
   getCodingListAsExcel(workspace_id: number, trainingRequired?: boolean): Observable<Blob> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         let params = new HttpParams()
@@ -65,8 +63,7 @@ export class CodingExportService {
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true
   ): Observable<Blob> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -92,8 +89,7 @@ export class CodingExportService {
     includeReplayUrls: boolean = false,
     includeResponseValues: boolean = true
   ): Observable<Blob> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspace_id, identity, 60).pipe(
+    return this.appService.createOwnToken(workspace_id, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const params = new HttpParams()
@@ -207,8 +203,7 @@ export class CodingExportService {
     trainingRequired?: boolean,
     includeResponseValues: boolean = true
   ): Observable<{ jobId: string; message: string }> {
-    const identity = this.appService.loggedUser?.sub || '';
-    return this.appService.createToken(workspaceId, identity, 60).pipe(
+    return this.appService.createOwnToken(workspaceId, 60).pipe(
       catchError(() => of('')),
       switchMap(token => {
         const payload = {

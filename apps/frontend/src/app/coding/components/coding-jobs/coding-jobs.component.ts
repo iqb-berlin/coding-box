@@ -635,7 +635,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
         }
 
         this.appService
-          .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+          .createOwnToken(workspaceId, 1)
           .subscribe(token => {
             const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(selectedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}`;
             const replayUrl = `${startResult.firstReplayUrl}?${queryParams}`;
@@ -820,7 +820,7 @@ export class CodingJobsComponent implements OnInit, AfterViewInit {
                 }
 
                 this.appService
-                  .createToken(workspaceId, this.appService.loggedUser?.sub || '', 1)
+                  .createOwnToken(workspaceId, 1)
                   .subscribe(token => {
                     const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(restartedJob.id)}&workspaceId=${encodeURIComponent(workspaceId)}&onlyOpen=true`;
                     const replayUrl = `${restartResult.firstReplayUrl}?${queryParams}`;

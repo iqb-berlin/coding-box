@@ -148,7 +148,7 @@ const createInstance = (ClassExport: ConstructorExport) => {
       selectedWorkspaceId: 1,
       authData: { userName: 'Reviewer' },
       loggedUser: { sub: 'user-sub', preferred_username: 'user' },
-      createToken: jest.fn(() => makeObservable('token'))
+      createOwnToken: jest.fn(() => makeObservable('token'))
     },
     testPersonCodingService: makeSafeProxy('testPersonCodingService'),
     codingJobBackendService: makeSafeProxy('codingJobBackendService'),

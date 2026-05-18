@@ -106,7 +106,7 @@ describe('CodingJobsComponent', () => {
         userId: 1, isAdmin: false, userName: '', email: '', firstName: '', lastName: '', workspaces: []
       },
       loggedUser: { sub: 'user-1' },
-      createToken: jest.fn().mockReturnValue(of('token'))
+      createOwnToken: jest.fn().mockReturnValue(of('token'))
     };
 
     userBackendServiceMock = {
@@ -434,7 +434,7 @@ describe('CodingJobsComponent', () => {
     component.startCodingJob(job);
 
     expect(codingJobBackendServiceMock.startCodingJob).toHaveBeenCalledWith(1, job.id);
-    expect(appServiceMock.createToken).toHaveBeenCalled();
+    expect(appServiceMock.createOwnToken).toHaveBeenCalled();
     expect(window.open).toHaveBeenCalled();
   });
 

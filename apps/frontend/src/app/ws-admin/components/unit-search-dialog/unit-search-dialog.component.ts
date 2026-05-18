@@ -329,7 +329,7 @@ export class UnitSearchDialogComponent implements OnInit {
 
   replayUnit(item: UnitSearchResult | ResponseSearchResult): void {
     this.appService
-      .createToken(this.appService.selectedWorkspaceId, this.appService.loggedUser?.sub || '', 1)
+      .createOwnToken(this.appService.selectedWorkspaceId, 1)
       .subscribe(token => {
         const queryParams = {
           auth: token

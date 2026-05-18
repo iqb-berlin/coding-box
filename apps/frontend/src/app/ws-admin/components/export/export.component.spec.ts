@@ -33,7 +33,7 @@ describe('ExportComponent', () => {
             selectedWorkspaceId: 5,
             userId: 2,
             loggedUser: undefined,
-            createToken: jest.fn().mockReturnValue(of('token'))
+            createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
         },
         {

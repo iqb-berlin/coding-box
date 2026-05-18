@@ -287,7 +287,7 @@ export class MyCodingJobsComponent implements OnInit, AfterViewInit, OnDestroy {
         }
 
         this.appService
-          .createToken(job.workspace_id, this.appService.loggedUser?.sub || '', 1)
+          .createOwnToken(job.workspace_id, 1)
           .subscribe(token => {
             const queryParams = `auth=${encodeURIComponent(token || '')}&mode=coding&codingJobId=${encodeURIComponent(job.id)}&workspaceId=${encodeURIComponent(job.workspace_id)}`;
             const replayUrl = `${result.firstReplayUrl}?${queryParams}`;

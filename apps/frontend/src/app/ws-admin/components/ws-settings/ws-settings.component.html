@@ -10,12 +10,19 @@
 
         <mat-form-field class="full-width">
           <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
-          <input matInput [(ngModel)]="duration" type="number" min="1" placeholder="Laufzeit in Tagen"/>
+          <input
+            matInput
+            [(ngModel)]="duration"
+            type="number"
+            [min]="minTokenDurationDays"
+            [max]="maxTokenDurationDays"
+            step="1"
+            placeholder="Laufzeit in Tagen"/>
           <mat-hint>{{ 'ws-settings.enter-validity-days' | translate }}</mat-hint>
         </mat-form-field>
 
         <div class="token-actions">
-          <button mat-raised-button color="primary" [disabled]="!duration || duration < 0" (click)="createToken()">
+          <button mat-raised-button color="primary" [disabled]="!isTokenDurationValid()" (click)="createToken()">
             <mat-icon>vpn_key</mat-icon> {{ 'ws-settings.generate-access-token' | translate }}
           </button>
         </div>

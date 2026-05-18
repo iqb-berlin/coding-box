@@ -115,6 +115,23 @@ export class UsersService {
     } as UserFullDto;
   }
 
+  async findUserById(userId: number): Promise<UserFullDto | null> {
+    this.logger.log(`Searching for user with id: ${userId}`);
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      this.logger.warn(`User with id ${userId} not found.`);
+      return null;
+    }
+    this.logger.log(`Returning user with id: ${user.id}`);
+
+    return {
+      id: user.id,
+      username: user.username,
+      isAdmin: user.isAdmin
+    } as UserFullDto;
+  }
+
   async updateUser(userId: number, userData: UserFullDto): Promise<UserFullDto> {
     this.logger.log(`Updating user with id: ${userId}`);
     const existingUser = await this.usersRepository.findOne({ where: { id: userId } });

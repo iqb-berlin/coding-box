@@ -35,7 +35,7 @@ describe('TestResultsComponent', () => {
   let component: TestResultsComponent;
   let fixture: ComponentFixture<TestResultsComponent>;
   let unitsReplayService: { getUnitsFromFileUpload: jest.Mock };
-  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createToken: jest.Mock };
+  let appService: { selectedWorkspaceId: number; loggedUser: { sub: string }; createOwnToken: jest.Mock };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -132,7 +132,7 @@ describe('TestResultsComponent', () => {
           useValue: {
             selectedWorkspaceId: 1,
             loggedUser: { sub: 'user' },
-            createToken: jest.fn().mockReturnValue(of('token'))
+            createOwnToken: jest.fn().mockReturnValue(of('token'))
           }
         },
         {
@@ -172,7 +172,7 @@ describe('TestResultsComponent', () => {
     fixture = TestBed.createComponent(TestResultsComponent);
     component = fixture.componentInstance;
     unitsReplayService = TestBed.inject(UnitsReplayService) as unknown as { getUnitsFromFileUpload: jest.Mock };
-    appService = TestBed.inject(AppService) as unknown as { selectedWorkspaceId: number; loggedUser: { sub: string }; createToken: jest.Mock };
+    appService = TestBed.inject(AppService) as unknown as { selectedWorkspaceId: number; loggedUser: { sub: string }; createOwnToken: jest.Mock };
     fixture.detectChanges();
   });
 
@@ -296,7 +296,7 @@ describe('TestResultsComponent', () => {
     };
 
     unitsReplayService.getUnitsFromFileUpload.mockReturnValue(of(bookletReplay));
-    appService.createToken.mockReturnValue(of('token'));
+    appService.createOwnToken.mockReturnValue(of('token'));
     component.testPerson = {
       login: 'login',
       code: 'code',
