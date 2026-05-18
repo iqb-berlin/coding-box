@@ -36,7 +36,7 @@ export interface ExportJobConfig {
   | 'detailed'
   | 'coding-times'
   | 'results-by-version';
-  userId: number;
+  userId?: number;
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;

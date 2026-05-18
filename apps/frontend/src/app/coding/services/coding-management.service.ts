@@ -22,6 +22,7 @@ import { ExportFormat } from '../components/export-dialog/export-dialog.componen
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
 export type ResponseSource = 'base' | 'derived' | 'all';
+export type CodingResultsExportFormat = Exclude<ExportFormat, 'json'>;
 
 export interface FilterParams {
   unitName: string;
@@ -345,7 +346,7 @@ export class CodingManagementService {
 
   downloadCodingResults(
     version: StatisticsVersion,
-    format: ExportFormat,
+    format: CodingResultsExportFormat,
     includeReplayUrls: boolean,
     includeResponseValues: boolean = true
   ): Promise<void> {
@@ -360,21 +361,19 @@ export class CodingManagementService {
   private async performBackgroundDownload(
     workspaceId: number,
     version: StatisticsVersion,
-    format: ExportFormat,
+    format: CodingResultsExportFormat,
     includeReplayUrls: boolean,
     includeResponseValues: boolean
   ): Promise<void> {
     this.downloadProgress$.next(0);
 
     try {
-      const jobFormat = format === 'json' ? 'csv' : format;
-
       // Start the job
       const jobStartResult = await this.exportService.startExportJob(
         workspaceId,
         'results-by-version',
         version,
-        jobFormat,
+        format,
         includeReplayUrls,
         undefined,
         includeResponseValues
@@ -391,13 +390,8 @@ export class CodingManagementService {
       const blob = await this.pollJobAndProgress(workspaceId, jobId, this.downloadProgress$);
 
       // Handle file download
-      if (format === 'json') {
-        const jsonBlob = await this.convertCsvBlobToJsonBlob(blob);
-        this.saveBlob(jsonBlob, `coding-results-${version}-${this.getDateString()}.json`);
-      } else {
-        const ext = format === 'csv' ? 'csv' : 'xlsx';
-        this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
-      }
+      const ext = format === 'csv' ? 'csv' : 'xlsx';
+      this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
       this.showErrorSnackbar(
@@ -546,27 +540,5 @@ export class CodingManagementService {
     a.click();
     window.URL.revokeObjectURL(url);
     document.body.removeChild(a);
-  }
-
-  private async convertCsvBlobToJsonBlob(blob: Blob): Promise<Blob> {
-    const text = await blob.text();
-    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
-    if (lines.length === 0) throw new Error('No entries');
-
-    const headerLine = lines[0].replace(/^\uFEFF/, '');
-    const delimiter = headerLine.includes(';') ? ';' : ',';
-    const splitRegex = delimiter === ';' ? /;(?=(?:[^"]*"[^"]*")*[^"]*$)/ : /,(?=(?:[^"]*"[^"]*")*[^"]*$)/;
-
-    const headers = headerLine.split(splitRegex).map(h => h.replace(/^"|"$/g, ''));
-    const data = lines.slice(1).map(line => {
-      const cleanLine = line.replace(/^\uFEFF/, '');
-      const values = cleanLine.split(splitRegex).map(v => v.replace(/^"|"$/g, ''));
-      const obj: Record<string, unknown> = {};
-      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
-      return obj;
-    });
-
-    const jsonData = JSON.stringify(data, null, 2);
-    return new Blob([jsonData], { type: 'application/json' });
   }
 }

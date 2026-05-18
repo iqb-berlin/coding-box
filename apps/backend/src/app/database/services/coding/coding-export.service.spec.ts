@@ -30,6 +30,7 @@ function createServiceWithDetailedMocks(
 ) {
   const totalCountQueryBuilder = {
     innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     getCount: jest.fn().mockResolvedValue(overrides.totalCount ?? 1)
@@ -48,6 +49,7 @@ function createServiceWithDetailedMocks(
       codingJobCoders: [{ user: { username: 'coder1' } }]
     },
     response: {
+      status_v1: 8,
       unit: {
         name: 'U1',
         booklet: {
@@ -114,13 +116,62 @@ function createServiceWithDetailedMocks(
 
 describe('CodingExportService (WS-Admin export smoke)', () => {
   it('keeps code value and writes code hint when coding_issue_option is set', async () => {
-    const { service } = createServiceWithDetailedMocks(1);
+    const { service, totalCountQueryBuilder, unitsBatchQueryBuilder } = createServiceWithDetailedMocks(1);
 
     const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
     const csv = buffer.toString('utf-8');
 
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
+    expect(totalCountQueryBuilder.leftJoin).toHaveBeenCalledWith('cju.response', 'countResp');
+    expect(totalCountQueryBuilder.andWhere).toHaveBeenCalledWith(
+      '(countResp.status_v1 IS NULL OR countResp.status_v1 NOT IN (:...excludedStatuses))',
+      { excludedStatuses: [0, 1, 2, 10] }
+    );
+    expect(unitsBatchQueryBuilder.andWhere).toHaveBeenCalledWith(
+      '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
+      { excludedStatuses: [0, 1, 2, 10] }
+    );
+  });
+
+  it('skips detailed coding rows with excluded response statuses defensively', async () => {
+    const { service } = createServiceWithDetailedMocks(1, {
+      unit: {
+        code: 7,
+        coding_issue_option: 1,
+        notes: '',
+        updated_at: new Date('2026-04-14T10:00:00.000Z'),
+        response_id: 123,
+        unit_name: 'U1',
+        variable_id: 'V1',
+        coding_job: {
+          training_id: null,
+          codingJobCoders: [{ user: { username: 'coder1' } }]
+        },
+        response: {
+          status_v1: 2,
+          unit: {
+            name: 'U1',
+            booklet: {
+              person: {
+                login: 'p-login',
+                code: 'p-code',
+                group: 'G1'
+              },
+              bookletinfo: {
+                name: 'B1'
+              }
+            }
+          }
+        }
+      }
+    });
+
+    const buffer = await service.exportCodingResultsDetailed(1, false, false, false, false);
+    const csv = buffer.toString('utf-8');
+
+    expect(csv).toContain('"Person Login";"Person Code";"Person Group"');
+    expect(csv).not.toContain('"p-login"');
   });
 
   it('normalizes negative coding_issue_option values in detailed export', async () => {

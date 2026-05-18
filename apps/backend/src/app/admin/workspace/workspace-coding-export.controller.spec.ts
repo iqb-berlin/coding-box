@@ -6,6 +6,7 @@ import { BadRequestException } from '@nestjs/common';
 import { WorkspaceCodingExportController } from './workspace-coding-export.controller';
 import {
   CodingExportService,
+  CodingExportOrchestratorService,
   CodingListExportService,
   CodingResultsExportService,
   CodingTimesExportService
@@ -54,14 +55,15 @@ const createWritableResponse = () => {
 describe('WorkspaceCodingExportController', () => {
   it('ends the response instead of crashing when versioned CSV streaming fails', async () => {
     const csvStream = new PassThrough();
-    const codingResultsExportService = {
-      exportCodingResultsByVersionAsCsv: jest.fn().mockResolvedValue(csvStream)
+    const codingExportOrchestratorService = {
+      exportResultsByVersionAsCsv: jest.fn().mockResolvedValue(csvStream)
     };
     const controller = new WorkspaceCodingExportController(
       {} as CodingListExportService,
-      codingResultsExportService as unknown as CodingResultsExportService,
+      {} as CodingResultsExportService,
       {} as CodingExportService,
       {} as CodingTimesExportService,
+      codingExportOrchestratorService as unknown as CodingExportOrchestratorService,
       {} as JobQueueService,
       {} as CacheService
     );
@@ -83,8 +85,15 @@ describe('WorkspaceCodingExportController', () => {
     csvStream.emit('error', new Error('Connection terminated unexpectedly'));
     await exportPromise;
 
-    expect(codingResultsExportService.exportCodingResultsByVersionAsCsv)
-      .toHaveBeenCalledWith(5, 'v2', 'token', 'http://server', false, undefined, false);
+    expect(codingExportOrchestratorService.exportResultsByVersionAsCsv)
+      .toHaveBeenCalledWith({
+        workspaceId: 5,
+        version: 'v2',
+        authToken: 'token',
+        serverUrl: 'http://server',
+        includeReplayUrl: false,
+        includeResponseValues: false
+      });
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/csv; charset=utf-8');
     expect(res.end).toHaveBeenCalled();
   });
@@ -112,6 +121,7 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingResultsExportService,
       {} as CodingExportService,
       {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
       {} as JobQueueService,
       cacheService as unknown as CacheService
     );
@@ -150,6 +160,7 @@ describe('WorkspaceCodingExportController', () => {
       {} as CodingResultsExportService,
       {} as CodingExportService,
       {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
       jobQueueService as unknown as JobQueueService,
       {} as CacheService
     );
@@ -164,5 +175,104 @@ describe('WorkspaceCodingExportController', () => {
     )).rejects.toThrow(BadRequestException);
 
     expect(jobQueueService.addExportJob).not.toHaveBeenCalled();
+  });
+
+  it('normalizes authenticated user IDs before starting background export jobs', async () => {
+    const jobQueueService = {
+      addExportJob: jest.fn().mockResolvedValue({ id: 'job-1' })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.startExportJob(
+      5,
+      { user: { id: '2' } } as never,
+      {
+        exportType: 'detailed'
+      }
+    )).resolves.toEqual({
+      jobId: 'job-1',
+      message: 'Export job created successfully. Job ID: job-1'
+    });
+
+    expect(jobQueueService.addExportJob).toHaveBeenCalledWith({
+      exportType: 'detailed',
+      workspaceId: 5,
+      userId: 2
+    });
+  });
+
+  it('does not expose internal file paths in export job status results', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 5 },
+        getState: jest.fn().mockResolvedValue('completed'),
+        progress: jest.fn().mockResolvedValue(100),
+        returnvalue: {
+          fileId: 'job-1',
+          fileName: 'export_job-1.csv',
+          filePath: '/server/temp/export_job-1.csv',
+          fileSize: 128,
+          workspaceId: 5,
+          userId: 2,
+          exportType: 'detailed',
+          createdAt: 123
+        }
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    const status = await controller.getExportJobStatus(5, 'job-1');
+
+    expect(status).toEqual({
+      status: 'completed',
+      progress: 100,
+      result: {
+        fileId: 'job-1',
+        fileName: 'export_job-1.csv',
+        fileSize: 128,
+        workspaceId: 5,
+        userId: 2,
+        exportType: 'detailed',
+        createdAt: 123
+      }
+    });
+    expect(JSON.stringify(status)).not.toContain('filePath');
+  });
+
+  it('rejects export job status access for jobs from another workspace', async () => {
+    const jobQueueService = {
+      getExportJob: jest.fn().mockResolvedValue({
+        data: { workspaceId: 9 }
+      })
+    };
+    const controller = new WorkspaceCodingExportController(
+      {} as CodingListExportService,
+      {} as CodingResultsExportService,
+      {} as CodingExportService,
+      {} as CodingTimesExportService,
+      {} as CodingExportOrchestratorService,
+      jobQueueService as unknown as JobQueueService,
+      {} as CacheService
+    );
+
+    await expect(controller.getExportJobStatus(5, 'job-1')).resolves.toEqual({
+      error: 'Access denied to this export'
+    });
   });
 });

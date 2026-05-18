@@ -25,7 +25,7 @@ export interface CodingExportConfig {
   | 'detailed'
   | 'coding-times'
   | 'results-by-version';
-  userId: number;
+  userId?: number;
   version?: 'v1' | 'v2' | 'v3';
   format?: 'csv' | 'excel';
   outputCommentsInsteadOfCodes?: boolean;
@@ -696,7 +696,6 @@ export class CodingJobBackendService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         userId: number;
@@ -712,7 +711,6 @@ export class CodingJobBackendService {
       result?: {
         fileId: string;
         fileName: string;
-        filePath: string;
         fileSize: number;
         workspaceId: number;
         userId: number;

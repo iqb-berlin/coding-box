@@ -9,7 +9,51 @@ import { CodingListService } from './coding-list.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
+jest.mock('./coding-list.service', () => ({
+  CodingListService: jest.fn()
+}));
+jest.mock('../workspace/workspace-core.service', () => ({
+  WorkspaceCoreService: jest.fn()
+}));
+
 type MockedRepo<T> = Partial<Record<keyof Repository<T>, jest.Mock>>;
+type TestCodingJobUnit = {
+  id?: number;
+  code?: number | null;
+  score?: number | null;
+  coding_issue_option?: number | null;
+  notes?: string | null;
+  updated_at?: Date;
+  unit_name?: string;
+  variable_id?: string;
+  booklet_name?: string;
+  person_login?: string;
+  person_code?: string;
+  person_group?: string;
+  coding_job?: {
+    training_id?: number | null;
+    codingJobCoders?: Array<{
+      user?: {
+        id?: number;
+        username?: string;
+      };
+    }>;
+  };
+  response?: {
+    status_v1?: number | null;
+    unit?: {
+      name?: string;
+      booklet?: {
+        bookletinfo?: { name?: string };
+        person?: {
+          login?: string;
+          code?: string;
+          group?: string;
+        };
+      };
+    };
+  };
+};
 
 const baseUnit = {
   code: 7,
@@ -42,6 +86,58 @@ const baseUnit = {
   }
 };
 
+const queryVisibleUnits = (units: TestCodingJobUnit[]): TestCodingJobUnit[] => units.filter(
+  unit => !unit.coding_job?.training_id &&
+    (unit.response?.status_v1 === null ||
+      unit.response?.status_v1 === undefined ||
+      ![0, 1, 2, 10].includes(unit.response.status_v1))
+);
+
+const createCodingJobUnitQueryBuilder = (units: TestCodingJobUnit[]) => {
+  let skipValue = 0;
+  let takeValue = units.length || 500;
+  const queryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
+    leftJoin: jest.fn().mockReturnThis(),
+    innerJoinAndSelect: jest.fn().mockReturnThis(),
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    addOrderBy: jest.fn().mockReturnThis(),
+    skip: jest.fn((value: number) => {
+      skipValue = value;
+      return queryBuilder;
+    }),
+    take: jest.fn((value: number) => {
+      takeValue = value;
+      return queryBuilder;
+    }),
+    getCount: jest.fn().mockImplementation(async () => queryVisibleUnits(units).length),
+    getMany: jest.fn().mockImplementation(async () => queryVisibleUnits(units)
+      .slice(skipValue, skipValue + takeValue))
+  };
+  return queryBuilder;
+};
+
+const createCodingJobQueryBuilder = (units: TestCodingJobUnit[]) => {
+  const queryBuilder = {
+    innerJoin: jest.fn().mockReturnThis(),
+    select: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    andWhere: jest.fn().mockReturnThis(),
+    groupBy: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockImplementation(async () => Array.from(
+      new Set(
+        queryVisibleUnits(units)
+          .map(unit => unit.coding_job?.codingJobCoders?.[0]?.user?.username)
+          .filter((username): username is string => !!username)
+      )
+    ).map(username => ({ username })))
+  };
+  return queryBuilder;
+};
+
 function createService(overrides: {
   codingJobUnits?: unknown[];
   codingListVariables?: Array<{ unitName: string; variableId: string }>;
@@ -55,14 +151,22 @@ function createService(overrides: {
   const responseRepository: MockedRepo<ResponseEntity> = {
     createQueryBuilder: jest.fn()
   };
+  const codingJobUnits = (overrides.codingJobUnits ?? [baseUnit]) as TestCodingJobUnit[];
+  const codingJobUnitQueryBuilders: ReturnType<typeof createCodingJobUnitQueryBuilder>[] = [];
   const codingJobRepository: MockedRepo<CodingJob> = {
-    find: jest.fn().mockResolvedValue([])
+    find: jest.fn().mockResolvedValue([]),
+    createQueryBuilder: jest.fn(() => createCodingJobQueryBuilder(codingJobUnits))
   };
   const codingJobVariableRepository: MockedRepo<CodingJobVariable> = {
     find: jest.fn().mockResolvedValue([])
   };
   const codingJobUnitRepository: MockedRepo<CodingJobUnit> = {
-    find: jest.fn().mockResolvedValue(overrides.codingJobUnits ?? [baseUnit])
+    find: jest.fn().mockResolvedValue(codingJobUnits),
+    createQueryBuilder: jest.fn(() => {
+      const queryBuilder = createCodingJobUnitQueryBuilder(codingJobUnits);
+      codingJobUnitQueryBuilders.push(queryBuilder);
+      return queryBuilder;
+    })
   };
   const codingListService = {
     getVariablePageMap: jest.fn().mockResolvedValue(overrides.pageMap ?? new Map([['VAR1', '3']])),
@@ -94,6 +198,7 @@ function createService(overrides: {
     codingJobRepository,
     codingJobVariableRepository,
     codingJobUnitRepository,
+    codingJobUnitQueryBuilders,
     codingListService,
     workspaceExclusionService
   };
@@ -138,6 +243,7 @@ describe('CodingResultsExportService', () => {
     expect(csv).toContain('"Code";"Code-Hinweis"');
     expect(csv).toContain('"7";"Code-Vergabe unsicher"');
     expect(csv).toContain('"0";""');
+    expect(csv).toContain('"zero-code note"');
     expect(csv).not.toContain('skipped');
   });
 
@@ -178,6 +284,58 @@ describe('CodingResultsExportService', () => {
     expect(codingListService.getCodingListVariables).toHaveBeenCalledWith(1);
   });
 
+  it('assigns unique pseudo coder names in first-seen order', async () => {
+    const { service } = createService({
+      codingJobUnits: [
+        {
+          ...baseUnit,
+          coding_job: { codingJobCoders: [{ user: { id: 12, username: 'coder-b' } }] }
+        },
+        {
+          ...baseUnit,
+          notes: 'second coder',
+          coding_job: { codingJobCoders: [{ user: { id: 11, username: 'coder-a' } }] }
+        }
+      ]
+    });
+
+    const csv = (await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      true,
+      true
+    )).toString('utf-8');
+
+    const pseudoCoderCells = csv.match(/"K[12]"/g) || [];
+    expect(pseudoCoderCells).toEqual(['"K1"', '"K2"']);
+  });
+
+  it('reads detailed export rows in batches', async () => {
+    const codingJobUnits = Array.from({ length: 501 }, (_, index) => ({
+      ...baseUnit,
+      id: index + 1,
+      variable_id: `VAR${index + 1}`,
+      coding_issue_option: 0,
+      notes: `note ${index + 1}`
+    }));
+    const {
+      service,
+      codingJobUnitRepository,
+      codingJobUnitQueryBuilders
+    } = createService({ codingJobUnits });
+
+    const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+
+    expect(codingJobUnitRepository.createQueryBuilder).toHaveBeenCalledTimes(3);
+    expect(codingJobUnitQueryBuilders[1].skip).toHaveBeenCalledWith(0);
+    expect(codingJobUnitQueryBuilders[1].take).toHaveBeenCalledWith(500);
+    expect(codingJobUnitQueryBuilders[2].skip).toHaveBeenCalledWith(500);
+    expect(codingJobUnitQueryBuilders[2].take).toHaveBeenCalledWith(500);
+    expect(csv).toContain('"VAR501"');
+    expect(csv).toContain('"note 501"');
+  });
+
   it('filters ignored units and excluded response statuses from detailed export', async () => {
     const { service } = createService({
       codingJobUnits: [
@@ -193,13 +351,44 @@ describe('CodingResultsExportService', () => {
 
     const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
 
-    expect(csv.split('\n')).toHaveLength(1);
+    expect(csv.trimEnd().split('\n')).toHaveLength(1);
   });
 
-  it('rejects manual-only detailed export when no manual variables exist', async () => {
+  it('filters training jobs from unscoped detailed export', async () => {
+    const { service } = createService({
+      codingJobUnits: [
+        { ...baseUnit, variable_id: 'VAR1' },
+        {
+          ...baseUnit,
+          variable_id: 'TRAINING_VAR',
+          coding_job: {
+            ...baseUnit.coding_job,
+            training_id: 12
+          }
+        }
+      ]
+    });
+
+    const csv = (await service.exportCodingResultsDetailed(1)).toString('utf-8');
+
+    expect(csv).toContain('"VAR1"');
+    expect(csv).not.toContain('TRAINING_VAR');
+  });
+
+  it('keeps manual-only detailed export stable when no manual variables exist', async () => {
     const { service } = createService({ codingListVariables: [] });
 
-    await expect(service.exportCodingResultsDetailed(1, false, false, false, false, '', undefined, true))
-      .rejects.toThrow('No manual coding variables found');
+    const csv = (await service.exportCodingResultsDetailed(
+      1,
+      false,
+      false,
+      false,
+      false,
+      '',
+      undefined,
+      true
+    )).toString('utf-8');
+
+    expect(csv).toContain('"VAR1"');
   });
 });

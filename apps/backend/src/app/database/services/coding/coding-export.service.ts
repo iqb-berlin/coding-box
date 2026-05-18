@@ -6,7 +6,7 @@ import {
 } from 'typeorm';
 import * as ExcelJS from 'exceljs';
 import { Request, Response } from 'express';
-import { statusStringToNumber } from '../../utils/response-status-converter';
+import { EXCLUDED_STATUSES, statusStringToNumber } from '../../utils/response-status-converter';
 import { generateReplayUrl, generateReplayUrlFromRequest } from '../../../utils/replay-url.util';
 import {
   calculateModalValue, getLatestCode, buildCoderNameMapping, mapCodeForExport
@@ -2312,7 +2312,12 @@ export class CodingExportService {
 
       const totalCountQuery = this.codingJobUnitRepository.createQueryBuilder('cju')
         .innerJoin('cju.coding_job', 'cj')
+        .leftJoin('cju.response', 'countResp')
         .where('cj.workspace_id = :workspaceId', { workspaceId });
+      totalCountQuery.andWhere(
+        '(countResp.status_v1 IS NULL OR countResp.status_v1 NOT IN (:...excludedStatuses))',
+        { excludedStatuses: EXCLUDED_STATUSES }
+      );
 
       this.applyJobFilters(
         totalCountQuery,
@@ -2366,6 +2371,10 @@ export class CodingExportService {
         if (normalizedCoderTrainingIds.length === 0) {
           unitsBatchQuery.andWhere('cj.training_id IS NULL');
         }
+        unitsBatchQuery.andWhere(
+          '(resp.status_v1 IS NULL OR resp.status_v1 NOT IN (:...excludedStatuses))',
+          { excludedStatuses: EXCLUDED_STATUSES }
+        );
         const unitsBatch = await unitsBatchQuery.getMany();
 
         let discussionResultMap = new Map<string, { code: number | null, managerUsername: string | null, updatedAt: Date | null }>();
@@ -2457,6 +2466,7 @@ export class CodingExportService {
         for (const unit of sortedUnitsBatch) {
           if (unit.unit_name && isExcluded(unit.response?.unit?.booklet?.bookletinfo?.name || '', unit.unit_name)) continue;
           if (manualCodingVariableSet && !manualCodingVariableSet.has(`${unit.unit_name}|${unit.variable_id}`)) continue;
+          if (unit.response?.status_v1 !== null && unit.response?.status_v1 !== undefined && EXCLUDED_STATUSES.includes(unit.response.status_v1)) continue;
 
           const trainingId = unit.coding_job?.training_id ?? 0;
           const caseKey = `${trainingId}|${unit.response_id}`;
