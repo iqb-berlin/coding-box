@@ -427,3 +427,17 @@ CREATE INDEX IF NOT EXISTS "idx_journal_entries_workspace_result"
 -- rollback ALTER TABLE "public"."journal_entries" DROP COLUMN IF EXISTS "event_type";
 -- rollback ALTER TABLE "public"."journal_entries" DROP COLUMN IF EXISTS "actor_type";
 -- rollback ALTER TABLE "public"."journal_entries" DROP COLUMN IF EXISTS "actor_user_id";
+
+-- changeset jurei733:17
+-- comment: Add bookletlog indexes for flat-response filter option queries
+
+CREATE INDEX IF NOT EXISTS "idx_bookletlog_controller_booklet_parameter_id"
+  ON "public"."bookletlog" ("bookletid", "parameter", "id")
+  WHERE "key" = 'CONTROLLER';
+
+CREATE INDEX IF NOT EXISTS "idx_bookletlog_current_unit_booklet_parameter"
+  ON "public"."bookletlog" ("bookletid", "parameter")
+  WHERE "key" = 'CURRENT_UNIT_ID';
+
+-- rollback DROP INDEX IF EXISTS "public"."idx_bookletlog_current_unit_booklet_parameter";
+-- rollback DROP INDEX IF EXISTS "public"."idx_bookletlog_controller_booklet_parameter_id";
