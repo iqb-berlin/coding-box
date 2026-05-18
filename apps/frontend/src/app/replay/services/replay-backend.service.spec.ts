@@ -51,6 +51,66 @@ describe('ReplayBackendService', () => {
     });
   });
 
+  describe('getReplayPayload', () => {
+    it('should fetch split replay assets and response and merge them', done => {
+      service.getReplayPayload(1, 'person@code@booklet', 'unit 1', 'url-token')
+        .subscribe(result => {
+          expect(result).toEqual({
+            unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
+            player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
+            vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }],
+            response: { responses: [{ id: 'var1', content: '[]' }] }
+          });
+          done();
+        });
+
+      const assetsReq = httpMock.expectOne(req => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-assets/unit%201`;
+        return req.url === expectedUrl && req.params.get('replayPart') === 'assets';
+      });
+      expect(assetsReq.request.method).toBe('GET');
+      expect(assetsReq.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-assets/unit%201?replayPart=assets`
+      );
+      expect(assetsReq.request.headers.get('Authorization')).toBe('Bearer url-token');
+      assetsReq.flush({
+        unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
+        player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
+        vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }]
+      });
+
+      const responseReq = httpMock.expectOne(req => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-response/person%40code%40booklet/unit%201`;
+        return req.url === expectedUrl && req.params.get('replayPart') === 'response';
+      });
+      expect(responseReq.request.method).toBe('GET');
+      expect(responseReq.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-response/person%40code%40booklet/unit%201?replayPart=response`
+      );
+      expect(responseReq.request.headers.get('Authorization')).toBe('Bearer url-token');
+      responseReq.flush({
+        response: { responses: [{ id: 'var1', content: '[]' }] }
+      });
+    });
+  });
+
+  describe('getReplayAssets', () => {
+    it('should fetch assets with the stored auth token when no URL token is supplied', () => {
+      service.getReplayAssets(1, 'unit-1').subscribe();
+
+      const req = httpMock.expectOne(request => {
+        const expectedUrl = `${mockServerUrl}admin/workspace/1/replay-assets/unit-1`;
+        return request.url === expectedUrl && request.params.get('replayPart') === 'assets';
+      });
+      expect(req.request.method).toBe('GET');
+      expect(req.request.urlWithParams).toBe(
+        `${mockServerUrl}admin/workspace/1/replay-assets/unit-1?replayPart=assets`
+      );
+      expect(req.request.headers.get('Authorization')).toBe('Bearer mock-token');
+      req.flush({ unitDef: [], player: [], vocs: [] });
+    });
+  });
+
   describe('getReplayFrequencyByUnit', () => {
     it('should fetch frequency with params', () => {
       service.getReplayFrequencyByUnit(1, { limit: 10 }).subscribe();
