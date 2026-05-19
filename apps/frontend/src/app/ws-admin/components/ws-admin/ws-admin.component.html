@@ -1,7 +1,7 @@
 <div class="page-body">
   <div class="admin-background">
     @if(accessLevel === 1) {
-      <coding-box-coding-jobs></coding-box-coding-jobs>
+      <coding-box-my-coding-jobs [workspaceId]="appService.selectedWorkspaceId"></coding-box-my-coding-jobs>
     } @else if (accessLevel === 2){
       <div class="flex-container">
         <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">

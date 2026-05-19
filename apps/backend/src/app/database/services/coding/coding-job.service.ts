@@ -423,6 +423,65 @@ export class CodingJobService {
     };
   }
 
+  private async getCodingJobProgressByJobIds(
+    jobIds: number[],
+    workspaceId: number
+  ): Promise<Map<number, { progress: number; coded: number; total: number; open: number }>> {
+    const progressByJobId = new Map<number, { progress: number; coded: number; total: number; open: number }>();
+    jobIds.forEach(jobId => progressByJobId.set(jobId, {
+      progress: 0, coded: 0, total: 0, open: 0
+    }));
+
+    if (jobIds.length === 0) {
+      return progressByJobId;
+    }
+
+    const progressQuery = this.codingJobUnitRepository
+      .createQueryBuilder('cju')
+      .select('cju.coding_job_id', 'jobId')
+      .addSelect('COUNT(*)', 'total')
+      .addSelect('COUNT(*) FILTER (WHERE cju.code IS NOT NULL)', 'coded')
+      .addSelect('COUNT(*) FILTER (WHERE cju.is_open = true)', 'open')
+      .where('cju.coding_job_id IN (:...jobIds)', { jobIds })
+      .groupBy('cju.coding_job_id');
+    await this.applyCodingJobUnitExclusions(progressQuery, workspaceId, 'codingJobsProgress');
+
+    const progressRows = await progressQuery.getRawMany<{
+      jobId: string | number;
+      total: string | number;
+      coded: string | number;
+      open: string | number;
+    }>();
+
+    progressRows.forEach(row => {
+      const jobId = Number(row.jobId);
+      const total = Number(row.total || 0);
+      const coded = Number(row.coded || 0);
+      const open = Number(row.open || 0);
+      progressByJobId.set(jobId, {
+        progress: total > 0 ? Math.round((Math.min(total, coded) / total) * 100) : 0,
+        coded,
+        total,
+        open
+      });
+    });
+
+    return progressByJobId;
+  }
+
+  private async getAssignedCodingJobIds(workspaceId: number, userId: number): Promise<number[]> {
+    const rows = await this.codingJobCoderRepository
+      .createQueryBuilder('coder')
+      .select('coder.coding_job_id', 'codingJobId')
+      .innerJoin('coder.coding_job', 'coding_job')
+      .where('coder.user_id = :userId', { userId })
+      .andWhere('coding_job.workspace_id = :workspaceId', { workspaceId })
+      .getRawMany<{ codingJobId: string | number }>();
+
+    return Array.from(new Set(rows.map(row => Number(row.codingJobId))))
+      .filter(jobId => Number.isFinite(jobId));
+  }
+
   async getCodingJobCountsByDefinitionIds(
     workspaceId: number,
     definitionIds: number[]
@@ -823,7 +882,8 @@ export class CodingJobService {
   async getCodingJobs(
     workspaceId: number,
     page: number = 1,
-    limit?: number
+    limit?: number,
+    assignedToUserId?: number
   ): Promise<{
       data: (CodingJob & {
         assignedCoders?: number[];
@@ -835,23 +895,40 @@ export class CodingJobService {
         openUnits?: number;
       })[]; total: number; totalOpenUnits?: number; page: number; limit?: number
     }> {
+    const validPage = page > 0 ? page : 1;
+    const shouldPaginate = limit !== undefined && limit > 0;
+    const skip = shouldPaginate ? (validPage - 1) * limit : undefined;
+    const take = shouldPaginate ? limit : undefined;
+    const assignedJobIds = assignedToUserId ?
+      await this.getAssignedCodingJobIds(workspaceId, assignedToUserId) :
+      undefined;
+
+    if (assignedJobIds && assignedJobIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        totalOpenUnits: 0,
+        page: validPage,
+        limit
+      };
+    }
+
     await this.codingFreshnessService?.reconcileAppliedManualCodingJobs(
       workspaceId,
       'RESET',
       'current'
     );
 
-    const validPage = page > 0 ? page : 1;
-    const shouldPaginate = limit !== undefined && limit > 0;
-    const skip = shouldPaginate ? (validPage - 1) * limit : undefined;
-    const take = shouldPaginate ? limit : undefined;
+    const jobWhere = assignedJobIds ?
+      { workspace_id: workspaceId, id: In(assignedJobIds) } :
+      { workspace_id: workspaceId };
 
     const total = await this.codingJobRepository.count({
-      where: { workspace_id: workspaceId }
+      where: jobWhere
     });
 
     const jobs = await this.codingJobRepository.find({
-      where: { workspace_id: workspaceId },
+      where: jobWhere,
       relations: ['training'],
       order: { created_at: 'DESC' },
       skip,
@@ -860,19 +937,21 @@ export class CodingJobService {
 
     const jobIds = jobs.map(job => job.id);
 
-    const [allCoders, allVariables, variableBundleEntities, progressData] = await Promise.all([
-      this.codingJobCoderRepository.find({
-        where: { coding_job_id: In(jobIds) }
-      }),
-      this.codingJobVariableRepository.find({
-        where: { coding_job_id: In(jobIds) }
-      }),
-      this.codingJobVariableBundleRepository.find({
-        where: { coding_job_id: In(jobIds) },
-        relations: ['variable_bundle']
-      }),
-      Promise.all(jobIds.map(jobId => this.getCodingJobProgress(jobId)))
-    ]);
+    const [allCoders, allVariables, variableBundleEntities, progressByJobId] = jobIds.length > 0 ?
+      await Promise.all([
+        this.codingJobCoderRepository.find({
+          where: { coding_job_id: In(jobIds) }
+        }),
+        this.codingJobVariableRepository.find({
+          where: { coding_job_id: In(jobIds) }
+        }),
+        this.codingJobVariableBundleRepository.find({
+          where: { coding_job_id: In(jobIds) },
+          relations: ['variable_bundle']
+        }),
+        this.getCodingJobProgressByJobIds(jobIds, workspaceId)
+      ]) :
+      [[], [], [], new Map<number, { progress: number; coded: number; total: number; open: number }>()];
 
     const codersByJobId = new Map<number, number[]>();
     allCoders.forEach(coder => {
@@ -906,22 +985,28 @@ export class CodingJobService {
       }
     });
 
-    const data = jobs.map((job, index) => ({
-      ...job,
-      assignedCoders: codersByJobId.get(job.id) || [],
-      assignedVariables: variablesByJobId.get(job.id) || [],
-      assignedVariableBundles: variableBundlesByJobId.get(job.id) || [],
-      progress: progressData[index]?.progress || 0,
-      codedUnits: progressData[index]?.coded || 0,
-      totalUnits: progressData[index]?.total || 0,
-      openUnits: progressData[index]?.open || 0
-    }));
+    const data = jobs.map(job => {
+      const progress = progressByJobId.get(job.id);
+      return {
+        ...job,
+        assignedCoders: codersByJobId.get(job.id) || [],
+        assignedVariables: variablesByJobId.get(job.id) || [],
+        assignedVariableBundles: variableBundlesByJobId.get(job.id) || [],
+        progress: progress?.progress || 0,
+        codedUnits: progress?.coded || 0,
+        totalUnits: progress?.total || 0,
+        openUnits: progress?.open || 0
+      };
+    });
 
     const totalOpenUnitsQuery = this.codingJobUnitRepository
       .createQueryBuilder('cju')
       .leftJoin('cju.coding_job', 'coding_job')
       .where('coding_job.workspace_id = :workspaceId', { workspaceId })
       .andWhere('cju.is_open = :isOpen', { isOpen: true });
+    if (assignedJobIds) {
+      totalOpenUnitsQuery.andWhere('coding_job.id IN (:...assignedJobIds)', { assignedJobIds });
+    }
     await this.applyCodingJobUnitExclusions(totalOpenUnitsQuery, workspaceId, 'codingJobsOpenUnits');
     const totalOpenUnits = await totalOpenUnitsQuery.getCount();
 

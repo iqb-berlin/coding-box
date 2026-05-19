@@ -274,7 +274,8 @@ export class CodingJobBackendService {
   getCodingJobs(
     workspaceId: number,
     page?: number,
-    limit?: number
+    limit?: number,
+    options: { assignedTo?: 'me' } = {}
   ): Observable<PaginatedResponse<CodingJob>> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
     let params = new HttpParams();
@@ -285,6 +286,10 @@ export class CodingJobBackendService {
 
     if (limit !== undefined) {
       params = params.set('limit', limit.toString());
+    }
+
+    if (options.assignedTo) {
+      params = params.set('assignedTo', options.assignedTo);
     }
 
     return this.http.get<PaginatedResponse<unknown>>(url, { params, headers: this.authHeader }).pipe(

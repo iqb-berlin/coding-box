@@ -242,11 +242,15 @@ describe('CodingJobService', () => {
         variables: [{ unitName: 'UNIT', variableId: 'VAR2' }]
       }
     }]);
-    codingJobRepository.findOne.mockResolvedValue({ id: 11, workspace_id: 3 });
     codingJobUnitRepository.createQueryBuilder
-      .mockReturnValueOnce(createQueryBuilder(4))
-      .mockReturnValueOnce(createQueryBuilder(2))
-      .mockReturnValueOnce(createQueryBuilder(1))
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          jobId: '11',
+          total: '4',
+          coded: '2',
+          open: '1'
+        }
+      ]))
       .mockReturnValueOnce(createQueryBuilder(9));
 
     const result = await service.getCodingJobs(3, 0, 25);
@@ -266,6 +270,66 @@ describe('CodingJobService', () => {
       totalUnits: 4,
       openUnits: 1
     });
+  });
+
+  it('filters coding jobs by assigned coder before loading assignments and progress', async () => {
+    const job = { id: 11, workspace_id: 3, name: 'Assigned job' };
+    const assignedJobsQueryBuilder = createQueryBuilder([{ codingJobId: 11 }]);
+    codingJobCoderRepository.createQueryBuilder.mockReturnValueOnce(assignedJobsQueryBuilder);
+    codingJobCoderRepository.find.mockResolvedValueOnce([{ coding_job_id: 11, user_id: 5 }]);
+    codingJobRepository.count.mockResolvedValue(1);
+    codingJobRepository.find.mockResolvedValue([job]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.createQueryBuilder
+      .mockReturnValueOnce(createQueryBuilder([
+        {
+          jobId: 11,
+          total: 2,
+          coded: 1,
+          open: 0
+        }
+      ]))
+      .mockReturnValueOnce(createQueryBuilder(0));
+
+    const result = await service.getCodingJobs(3, 1, 25, 5);
+
+    expect(codingJobCoderRepository.createQueryBuilder).toHaveBeenCalledWith('coder');
+    expect(assignedJobsQueryBuilder.innerJoin).toHaveBeenCalledWith('coder.coding_job', 'coding_job');
+    expect(assignedJobsQueryBuilder.where).toHaveBeenCalledWith('coder.user_id = :userId', { userId: 5 });
+    expect(assignedJobsQueryBuilder.andWhere).toHaveBeenCalledWith(
+      'coding_job.workspace_id = :workspaceId',
+      { workspaceId: 3 }
+    );
+    expect(codingJobRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ workspace_id: 3 }),
+      relations: ['training']
+    }));
+    expect(result.total).toBe(1);
+    expect(result.data).toHaveLength(1);
+    expect(result.data[0]).toMatchObject({
+      id: 11,
+      assignedCoders: [5],
+      progress: 50,
+      codedUnits: 1,
+      totalUnits: 2
+    });
+  });
+
+  it('returns an empty coding job page when assigned coder has no jobs', async () => {
+    codingJobCoderRepository.createQueryBuilder.mockReturnValueOnce(createQueryBuilder([]));
+
+    const result = await service.getCodingJobs(3, 1, 25, 5);
+
+    expect(result).toEqual({
+      data: [],
+      total: 0,
+      totalOpenUnits: 0,
+      page: 1,
+      limit: 25
+    });
+    expect(codingJobRepository.count).not.toHaveBeenCalled();
+    expect(codingJobRepository.find).not.toHaveBeenCalled();
   });
 
   it('counts coding jobs by job definition id', async () => {

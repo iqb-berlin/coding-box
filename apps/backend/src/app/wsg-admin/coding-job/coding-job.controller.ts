@@ -129,6 +129,12 @@ export class WsgCodingJobController {
     description: 'Number of items per page',
     type: Number
   })
+  @ApiQuery({
+    name: 'assignedTo',
+    required: false,
+    description: 'Use "me" to return only coding jobs assigned to the authenticated user',
+    type: String
+  })
   @ApiOkResponse({
     description: 'List of coding jobs retrieved successfully',
     schema: {
@@ -151,9 +157,19 @@ export class WsgCodingJobController {
   async getCodingJobs(
     @WorkspaceId() workspaceId: number,
       @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-      @Query('limit', new ParseIntPipe({ optional: true })) limit?: number
+      @Query('limit', new ParseIntPipe({ optional: true })) limit: number | undefined,
+      @Query('assignedTo') assignedTo: string | undefined,
+      @Req() req: Request
   ): Promise<{ data: CodingJobDto[]; total: number; totalOpenUnits: number; page: number; limit?: number }> {
-    const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit);
+    let assignedToUserId: number | undefined;
+    if (assignedTo) {
+      if (assignedTo !== 'me') {
+        throw new BadRequestException('assignedTo must be "me" when provided');
+      }
+      assignedToUserId = this.getRequestUserId(req);
+    }
+
+    const result = await this.codingJobService.getCodingJobs(workspaceId, page, limit, assignedToUserId);
     return {
       data: result.data.map(job => CodingJobDto.fromEntity(job, job.assignedCoders, job.assignedVariables, job.assignedVariableBundles)),
       total: result.total,
