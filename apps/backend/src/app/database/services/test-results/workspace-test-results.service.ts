@@ -3062,6 +3062,93 @@ export class WorkspaceTestResultsService {
     return result;
   }
 
+  private buildFlatResponseFilteredBookletsSubquery(
+    baseQb: SelectQueryBuilder<ResponseEntity>
+  ): [string, unknown[]] {
+    return baseQb
+      .clone()
+      .select('"bookletEntity"."id"', 'bookletId')
+      .distinct(true)
+      .getQueryAndParameters();
+  }
+
+  private async queryFlatResponseProcessingDurationOptions(
+    baseQb: SelectQueryBuilder<ResponseEntity>,
+    maxOptions: number,
+    processingDurationThresholdMs: number
+  ): Promise<Array<{ v: string }>> {
+    const [filteredBookletsSql, filteredBookletsParams] =
+      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
+    const thresholdParam = `$${filteredBookletsParams.length + 1}`;
+    const limit = Math.max(1, Math.floor(maxOptions));
+
+    return this.connection.query(
+      `
+        SELECT DISTINCT
+          CASE
+            WHEN first_duration.duration_ms IS NULL THEN 'Unbekannt'
+            WHEN first_duration.duration_ms < ${thresholdParam} THEN 'Kurz'
+            ELSE 'Lang'
+          END AS v
+        FROM (${filteredBookletsSql}) filtered_booklets
+        LEFT JOIN LATERAL (
+          SELECT (bl_terminated.ts - bl_running.ts) AS duration_ms
+          FROM bookletlog bl_running
+          JOIN bookletlog bl_terminated
+            ON bl_terminated.bookletid = bl_running.bookletid
+          WHERE bl_running.bookletid = filtered_booklets."bookletId"
+            AND bl_running.key = 'CONTROLLER'
+            AND bl_running.parameter = 'RUNNING'
+            AND bl_terminated.key = 'CONTROLLER'
+            AND bl_terminated.parameter = 'TERMINATED'
+          ORDER BY bl_running.id ASC, bl_terminated.id ASC
+          LIMIT 1
+        ) first_duration ON TRUE
+        ORDER BY v ASC
+        LIMIT ${limit}
+      `,
+      [...filteredBookletsParams, processingDurationThresholdMs]
+    );
+  }
+
+  private async queryFlatResponseUnitProgressOptions(
+    baseQb: SelectQueryBuilder<ResponseEntity>,
+    maxOptions: number
+  ): Promise<Array<{ v: string }>> {
+    const [filteredBookletsSql, filteredBookletsParams] =
+      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
+    const limit = Math.max(1, Math.floor(maxOptions));
+
+    return this.connection.query(
+      `
+        SELECT DISTINCT progress.v AS v
+        FROM (${filteredBookletsSql}) filtered_booklets
+        CROSS JOIN LATERAL (
+          SELECT
+            CASE
+              WHEN COUNT(DISTINCT progress_unit.id) > 0
+                AND COUNT(DISTINCT progress_unit.id) =
+                  COUNT(DISTINCT CASE
+                    WHEN progress_log.id IS NOT NULL THEN progress_unit.id
+                  END)
+              THEN 'complete'
+              ELSE 'incomplete'
+            END AS v
+          FROM unit progress_unit
+          LEFT JOIN bookletlog progress_log
+            ON progress_log.bookletid = filtered_booklets."bookletId"
+            AND progress_log.key = 'CURRENT_UNIT_ID'
+            AND progress_log.parameter = progress_unit.alias
+          WHERE progress_unit.bookletid = filtered_booklets."bookletId"
+            AND progress_unit.alias IS NOT NULL
+        ) progress
+        ORDER BY progress.v ASC
+        LIMIT ${limit}
+      `,
+      filteredBookletsParams
+    );
+  }
+
   async findFlatResponseFilterOptions(
     workspaceId: number,
     options: {
@@ -3431,8 +3518,6 @@ export class WorkspaceTestResultsService {
       responseRows,
       responseStatusRows,
       tagRows,
-      processingDurationRows,
-      unitProgressRows,
       sessionBrowserRows,
       sessionOsRows,
       sessionScreenRows,
@@ -3483,86 +3568,15 @@ export class WorkspaceTestResultsService {
       baseQb
         .clone()
         .select('DISTINCT unitTag.tag', 'v')
-        .where('unitTag.tag IS NOT NULL')
+        .andWhere('unitTag.tag IS NOT NULL')
         .orderBy('unitTag.tag', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select(
-          `DISTINCT (
-            CASE
-              WHEN (
-                SELECT (bl_terminated.ts - bl_running.ts)
-                FROM bookletlog bl_running
-                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
-                WHERE bl_running.bookletid = "bookletEntity"."id"
-                  AND bl_running.key = 'CONTROLLER'
-                  AND bl_running.parameter = 'RUNNING'
-                  AND bl_terminated.key = 'CONTROLLER'
-                  AND bl_terminated.parameter = 'TERMINATED'
-                ORDER BY bl_running.id ASC, bl_terminated.id ASC
-                LIMIT 1
-              ) IS NULL THEN 'Unbekannt'
-              WHEN (
-                SELECT (bl_terminated.ts - bl_running.ts)
-                FROM bookletlog bl_running
-                JOIN bookletlog bl_terminated ON bl_terminated.bookletid = bl_running.bookletid
-                WHERE bl_running.bookletid = "bookletEntity"."id"
-                  AND bl_running.key = 'CONTROLLER'
-                  AND bl_running.parameter = 'RUNNING'
-                  AND bl_terminated.key = 'CONTROLLER'
-                  AND bl_terminated.parameter = 'TERMINATED'
-                ORDER BY bl_running.id ASC, bl_terminated.id ASC
-                LIMIT 1
-              ) < :processingDurationThresholdMs THEN 'Kurz'
-              ELSE 'Lang'
-            END
-          )`,
-          'v'
-        )
-        .orderBy('v', 'ASC')
-        .limit(MAX_OPTIONS)
-        .setParameter(
-          'processingDurationThresholdMs',
-          processingDurationThresholdMs
-        )
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select(
-          `DISTINCT (
-            CASE
-              WHEN EXISTS (
-                SELECT 1 FROM unit u2
-                WHERE u2.bookletid = "bookletEntity"."id"
-                  AND u2.alias IS NOT NULL
-              )
-              AND NOT EXISTS (
-                SELECT 1 FROM unit u3
-                WHERE u3.bookletid = "bookletEntity"."id"
-                  AND u3.alias IS NOT NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM bookletlog bl
-                    WHERE bl.bookletid = "bookletEntity"."id"
-                      AND bl.key = 'CURRENT_UNIT_ID'
-                      AND bl.parameter = u3.alias
-                  )
-              )
-              THEN 'complete'
-              ELSE 'incomplete'
-            END
-          )`,
-          'v'
-        )
-        .orderBy('v', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
       baseQb
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.browser', 'v')
-        .where('session.browser IS NOT NULL')
+        .andWhere('session.browser IS NOT NULL')
         .orderBy('session.browser', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -3570,7 +3584,7 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.os', 'v')
-        .where('session.os IS NOT NULL')
+        .andWhere('session.os IS NOT NULL')
         .orderBy('session.os', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -3578,7 +3592,7 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.screen', 'v')
-        .where('session.screen IS NOT NULL')
+        .andWhere('session.screen IS NOT NULL')
         .orderBy('session.screen', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>(),
@@ -3586,10 +3600,19 @@ export class WorkspaceTestResultsService {
         .clone()
         .leftJoin('bookletEntity.sessions', 'session')
         .select('DISTINCT session.id', 'v')
-        .where('session.id IS NOT NULL')
+        .andWhere('session.id IS NOT NULL')
         .orderBy('session.id', 'ASC')
         .limit(MAX_OPTIONS)
         .getRawMany<{ v: string }>()
+    ]);
+
+    const [processingDurationRows, unitProgressRows] = await Promise.all([
+      this.queryFlatResponseProcessingDurationOptions(
+        baseQb,
+        MAX_OPTIONS,
+        processingDurationThresholdMs
+      ),
+      this.queryFlatResponseUnitProgressOptions(baseQb, MAX_OPTIONS)
     ]);
 
     const mapVals = (rows: Array<{ v: string }>) => (rows || []).map(r => String(r.v || '').trim()).filter(Boolean);

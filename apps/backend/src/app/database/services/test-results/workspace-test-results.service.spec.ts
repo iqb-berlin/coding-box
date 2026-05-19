@@ -47,6 +47,10 @@ const mockQueryBuilder = () => ({
   stream: jest.fn(),
   getRawOne: jest.fn().mockResolvedValue({}),
   clone: jest.fn().mockReturnThis(),
+  getQueryAndParameters: jest.fn().mockReturnValue([
+    'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response',
+    []
+  ]),
   setParameter: jest.fn().mockReturnThis(),
   addGroupBy: jest.fn().mockReturnThis(),
   addOrderBy: jest.fn().mockReturnThis(),
@@ -182,6 +186,7 @@ describe('WorkspaceTestResultsService', () => {
       getRepository: jest.fn().mockReturnValue({
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
       }),
+      query: jest.fn().mockResolvedValue([]),
       transaction: jest.fn()
     } as unknown as DataSource;
 
@@ -545,6 +550,66 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(responseManagementService.resolveDuplicateResponses).toHaveBeenCalledWith(workspaceId, resolutionMap, userId);
       expect(result).toEqual({ resolvedCount: 1, success: true });
+    });
+  });
+
+  describe('findFlatResponseFilterOptions', () => {
+    it('keeps scoped option predicates and derives log options from filtered booklets', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getQueryAndParameters
+        .mockReturnValueOnce([
+          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
+          [1]
+        ])
+        .mockReturnValueOnce([
+          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
+          [1]
+        ]);
+      (dataSource.query as jest.Mock)
+        .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
+        .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
+
+      const result = await service.findFlatResponseFilterOptions(1, {});
+
+      expect(qb.where).toHaveBeenCalledWith(
+        'person.workspace_id = :workspaceId',
+        { workspaceId: 1 }
+      );
+      expect(qb.where).not.toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+
+      expect(dataSource.query).toHaveBeenCalledTimes(2);
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+        'LEFT JOIN LATERAL'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+        'first_duration.duration_ms < $2'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
+        1,
+        60000
+      ]);
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+        'CROSS JOIN LATERAL'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+        'COUNT(DISTINCT progress_unit.id)'
+      );
+      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
+      expect(result.unitProgresses).toEqual([
+        'Vollständig',
+        'Unvollständig'
+      ]);
     });
   });
 
