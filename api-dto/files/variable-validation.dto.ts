@@ -1,3 +1,12 @@
+export type VariableValidationErrorCode =
+  | 'UNIT_FILE_NOT_FOUND'
+  | 'VARIABLE_NOT_DEFINED_IN_UNIT';
+
+export interface VariableValidationSummaryDto {
+  unitFileNotFound: number;
+  variableNotDefinedInUnit: number;
+}
+
 export interface InvalidVariableDto {
   fileName: string;
   variableId: string;
@@ -5,6 +14,7 @@ export interface InvalidVariableDto {
   responseId?: number;
   expectedType?: string;
   errorReason?: string;
+  errorCode?: VariableValidationErrorCode;
 }
 
 export interface VariableValidationDto {
