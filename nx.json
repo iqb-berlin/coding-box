@@ -3,20 +3,6 @@
   "cli": {
     "packageManager": "npm"
   },
-  "tasksRunnerOptions": {
-    "default": {
-      "runner": "nx/tasks-runners/default",
-      "options": {
-        "cacheableOperations": [
-          "build",
-          "lint",
-          "test",
-          "e2e",
-          "compodoc"
-        ]
-      }
-    }
-  },
   "generators": {
     "@nx/angular:application": {
       "style": "scss",
@@ -96,16 +82,49 @@
         "production",
         "^production"
       ]
+    },
+    "lint": {
+      "cache": true,
+      "inputs": [
+        "default"
+      ]
+    },
+    "test": {
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/jest.config.ts",
+        "{workspaceRoot}/jest.preset.js"
+      ]
+    },
+    "e2e": {
+      "cache": true,
+      "inputs": [
+        "default",
+        "^production",
+        "frontendE2e"
+      ]
     }
   },
   "namedInputs": {
     "default": [
       "{projectRoot}/**/*",
-      "sharedGlobals"
+      "sharedGlobals",
+      "sharedApiDto"
     ],
     "sharedGlobals": [
+      "{workspaceRoot}/.nvmrc",
       "{workspaceRoot}/package.json",
-      "{workspaceRoot}/.eslintrc.json"
+      "{workspaceRoot}/package-lock.json",
+      "{workspaceRoot}/tsconfig.base.json"
+    ],
+    "sharedApiDto": [
+      "{workspaceRoot}/api-dto/**/*"
+    ],
+    "frontendE2e": [
+      "{workspaceRoot}/cypress.config.ts",
+      "{workspaceRoot}/cypress/**/*"
     ],
     "production": [
       "default"
