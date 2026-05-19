@@ -20,6 +20,7 @@ describe('PersonPersistenceService', () => {
   let personsRepository: Repository<Persons>;
   let bookletRepository: Repository<Booklet>;
   let unitRepository: Repository<Unit>;
+  let responseRepository: Repository<ResponseEntity>;
   let bookletInfoRepository: Repository<BookletInfo>;
   let bookletLogRepository: Repository<BookletLog>;
   let bookletSessionRepository: Repository<Session>;
@@ -46,10 +47,13 @@ describe('PersonPersistenceService', () => {
     personsRepository = module.get(getRepositoryToken(Persons));
     bookletRepository = module.get(getRepositoryToken(Booklet));
     unitRepository = module.get(getRepositoryToken(Unit));
+    responseRepository = module.get(getRepositoryToken(ResponseEntity));
     bookletInfoRepository = module.get(getRepositoryToken(BookletInfo));
     bookletLogRepository = module.get(getRepositoryToken(BookletLog));
     bookletSessionRepository = module.get(getRepositoryToken(Session));
     chunkRepository = module.get(getRepositoryToken(ChunkEntity));
+
+    jest.spyOn(unitRepository, 'create').mockImplementation(entity => entity as Unit);
   });
 
   it('should process logs from input persons even if they are not in DB booklets array', async () => {
@@ -388,5 +392,262 @@ describe('PersonPersistenceService', () => {
         variables: 's1'
       }
     ]);
+  });
+
+  it('imports a new person in an existing test group by matching the full person key', async () => {
+    const importedPerson = {
+      id: 41,
+      group: 'existing-group',
+      login: 'new-login',
+      code: 'new-code',
+      workspace_id: 1,
+      booklets: [
+        {
+          id: 'BOOKLET_1',
+          logs: [],
+          sessions: [],
+          units: []
+        }
+      ]
+    } as unknown as Persons;
+    const bracketQb = {
+      where: jest.fn(),
+      orWhere: jest.fn()
+    };
+    const qb = {
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn((brackets: { whereFactory: (qb: unknown) => void }) => {
+        brackets.whereFactory(bracketQb);
+        return qb;
+      }),
+      getMany: jest.fn().mockResolvedValue([importedPerson])
+    };
+    jest.spyOn(personsRepository, 'upsert').mockResolvedValue({} as never);
+    jest.spyOn(personsRepository, 'createQueryBuilder').mockReturnValue(qb as never);
+    const processBookletSpy = jest.spyOn(service, 'processBookletWithTransaction')
+      .mockResolvedValue({
+        addedUnitIds: [11],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+
+    const result = await service.processPersonBooklets([
+      {
+        group: 'existing-group',
+        login: 'new-login',
+        code: 'new-code',
+        workspace_id: 1,
+        booklets: importedPerson.booklets
+      }
+    ], 1, 'merge', 'person');
+
+    expect(personsRepository.upsert).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          group: 'existing-group',
+          login: 'new-login',
+          code: 'new-code',
+          workspace_id: 1
+        })
+      ],
+      ['group', 'code', 'login', 'workspace_id']
+    );
+    expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId: 1 });
+    expect(qb.andWhere).toHaveBeenCalled();
+    expect(bracketQb.where).toHaveBeenCalledWith(
+      '(person.group = :g0 AND person.login = :l0 AND person.code = :c0)',
+      { g0: 'existing-group', l0: 'new-login', c0: 'new-code' }
+    );
+    expect(processBookletSpy).toHaveBeenCalledWith(
+      importedPerson.booklets[0],
+      importedPerson,
+      'merge',
+      []
+    );
+    expect(result.addedUnitIds).toEqual([11]);
+  });
+
+  it('adds a new unit for an existing person/booklet', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'BOOKLET_1' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30, personid: 10, infoid: 20 } as Booklet);
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue(null);
+    jest.spyOn(unitRepository, 'save').mockResolvedValue({
+      id: 99, name: 'UNIT_NEW', alias: 'UNIT_NEW', bookletid: 30
+    } as Unit);
+    jest.spyOn(responseRepository, 'find').mockResolvedValue([]);
+    jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
+
+    const result = await service.processBookletWithTransaction(
+      {
+        id: 'BOOKLET_1',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'UNIT_NEW',
+            alias: 'UNIT_NEW',
+            laststate: [],
+            chunks: [],
+            subforms: [
+              {
+                id: '',
+                responses: [
+                  {
+                    id: 'VAR_1',
+                    status: 'VALUE_CHANGED',
+                    value: 'answer'
+                  }
+                ]
+              }
+            ],
+            logs: []
+          }
+        ]
+      },
+      {
+        id: 10, group: 'G', login: 'L', code: 'C', workspace_id: 1
+      } as Persons,
+      'skip'
+    );
+
+    expect(unitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      alias: 'UNIT_NEW',
+      name: 'UNIT_NEW',
+      bookletid: 30
+    }));
+    expect(responseRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unitid: 99,
+        variableid: 'VAR_1',
+        value: 'answer',
+        subform: ''
+      })
+    ]);
+    expect(result).toMatchObject({
+      addedUnitIds: [99],
+      changedUnitIds: [],
+      addedResponseCount: 1,
+      changedResponseCount: 0
+    });
+  });
+
+  it('adds a new variable in an existing unit when upload mode is merge', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'BOOKLET_1' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30, personid: 10, infoid: 20 } as Booklet);
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue({
+      id: 40, name: 'UNIT_1', alias: 'UNIT_1', bookletid: 30
+    } as Unit);
+    jest.spyOn(responseRepository, 'find').mockResolvedValue([
+      { variableid: 'VAR_OLD', subform: '' } as ResponseEntity
+    ]);
+    jest.spyOn(responseRepository, 'save').mockResolvedValue([] as never);
+
+    const result = await service.processBookletWithTransaction(
+      {
+        id: 'BOOKLET_1',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'UNIT_1',
+            alias: 'UNIT_1',
+            laststate: [],
+            chunks: [],
+            subforms: [
+              {
+                id: '',
+                responses: [
+                  {
+                    id: 'VAR_OLD',
+                    status: 'VALUE_CHANGED',
+                    value: 'old'
+                  },
+                  {
+                    id: 'VAR_NEW',
+                    status: 'VALUE_CHANGED',
+                    value: 'new'
+                  }
+                ]
+              }
+            ],
+            logs: []
+          }
+        ]
+      },
+      {
+        id: 10, group: 'G', login: 'L', code: 'C', workspace_id: 1
+      } as Persons,
+      'merge'
+    );
+
+    expect(responseRepository.save).toHaveBeenCalledWith([
+      expect.objectContaining({
+        unitid: 40,
+        variableid: 'VAR_NEW',
+        value: 'new'
+      })
+    ]);
+    expect(responseRepository.save).not.toHaveBeenCalledWith([
+      expect.objectContaining({ variableid: 'VAR_OLD' })
+    ]);
+    expect(result).toMatchObject({
+      addedUnitIds: [],
+      changedUnitIds: [40],
+      addedResponseCount: 0,
+      changedResponseCount: 1
+    });
+  });
+
+  it('keeps an existing unit untouched in skip mode even when the upload contains a new variable', async () => {
+    jest.spyOn(bookletInfoRepository, 'findOne').mockResolvedValue({ id: 20, name: 'BOOKLET_1' } as BookletInfo);
+    jest.spyOn(bookletRepository, 'findOne').mockResolvedValue({ id: 30, personid: 10, infoid: 20 } as Booklet);
+    jest.spyOn(unitRepository, 'findOne').mockResolvedValue({
+      id: 40, name: 'UNIT_1', alias: 'UNIT_1', bookletid: 30
+    } as Unit);
+    const responseSaveSpy = jest.spyOn(responseRepository, 'save');
+    const chunkDeleteSpy = jest.spyOn(chunkRepository, 'delete');
+
+    const result = await service.processBookletWithTransaction(
+      {
+        id: 'BOOKLET_1',
+        logs: [],
+        sessions: [],
+        units: [
+          {
+            id: 'UNIT_1',
+            alias: 'UNIT_1',
+            laststate: [],
+            chunks: [],
+            subforms: [
+              {
+                id: '',
+                responses: [
+                  {
+                    id: 'VAR_NEW',
+                    status: 'VALUE_CHANGED',
+                    value: 'new'
+                  }
+                ]
+              }
+            ],
+            logs: []
+          }
+        ]
+      },
+      {
+        id: 10, group: 'G', login: 'L', code: 'C', workspace_id: 1
+      } as Persons,
+      'skip'
+    );
+
+    expect(responseSaveSpy).not.toHaveBeenCalled();
+    expect(chunkDeleteSpy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      addedUnitIds: [],
+      changedUnitIds: [],
+      addedResponseCount: 0,
+      changedResponseCount: 0
+    });
   });
 });

@@ -10,11 +10,15 @@ import { PersonService } from './person.service';
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
+import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
 
 describe('UploadResultsService', () => {
   let service: UploadResultsService;
   let personService: PersonService;
   let workspaceTestResultsService: WorkspaceTestResultsService;
+  let codingFreshnessService: CodingFreshnessService;
+  let codingAnalysisService: CodingAnalysisService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -47,7 +51,21 @@ describe('UploadResultsService', () => {
         {
           provide: WorkspaceTestResultsService,
           useValue: createMock<WorkspaceTestResultsService>({
-            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined)
+          })
+        },
+        {
+          provide: CodingFreshnessService,
+          useValue: createMock<CodingFreshnessService>({
+            markUnitsPendingAfterImport: jest.fn().mockResolvedValue(undefined),
+            markUnitsStaleAfterResultChange: jest.fn().mockResolvedValue(undefined)
+          })
+        },
+        {
+          provide: CodingAnalysisService,
+          useValue: createMock<CodingAnalysisService>({
+            invalidateCache: jest.fn().mockResolvedValue(undefined)
           })
         },
         {
@@ -68,6 +86,8 @@ describe('UploadResultsService', () => {
     workspaceTestResultsService = module.get<WorkspaceTestResultsService>(
       WorkspaceTestResultsService
     );
+    codingFreshnessService = module.get<CodingFreshnessService>(CodingFreshnessService);
+    codingAnalysisService = module.get<CodingAnalysisService>(CodingAnalysisService);
   });
 
   it('should be defined', () => {
@@ -668,6 +688,175 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(result.overviewPending).toBe(true);
       expect(result.overviewMessage).toContain('aggregierten Datenbankzahlen');
       expect(result.issues?.some(issue => issue.category === 'other')).toBe(true);
+    });
+
+    it('should mark freshness and invalidate response-analysis and coding-statistics caches after importing responses', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
+test-group;test-user;code;booklet1;unit1;[];""`;
+
+      const filePath = path.join(os.tmpdir(), 'test-response-cache-invalidation.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: []
+      };
+      const personWithBooklets = {
+        ...person,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      const personWithUnits = {
+        ...personWithBooklets,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            sessions: [],
+            units: [
+              {
+                id: 'unit1',
+                alias: 'unit1',
+                laststate: [],
+                chunks: [],
+                subforms: [],
+                logs: []
+              }
+            ]
+          }
+        ]
+      };
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletsToPerson').mockResolvedValue(personWithBooklets);
+      jest.spyOn(personService, 'assignUnitsToBookletAndPerson').mockResolvedValue(personWithUnits);
+      jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
+        addedUnitIds: [101],
+        changedUnitIds: [202],
+        addedResponseCount: 1,
+        changedResponseCount: 1
+      });
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'merge'
+        }
+      }));
+
+      expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
+      expect(codingFreshnessService.markUnitsStaleAfterResultChange).toHaveBeenCalledWith(
+        1,
+        [202],
+        'RESULT_UPDATED'
+      );
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    });
+
+    it('should invalidate response-analysis and coding-statistics caches after a post-write freshness failure', async () => {
+      const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
+test-group;test-user;code;booklet1;unit1;[];""`;
+
+      const filePath = path.join(os.tmpdir(), 'test-response-cache-invalidation-after-error.csv');
+      fs.writeFileSync(filePath, fileContent);
+
+      const person = {
+        workspace_id: 1,
+        group: 'test-group',
+        login: 'test-user',
+        code: 'code',
+        booklets: []
+      };
+      const personWithBooklets = {
+        ...person,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            units: [],
+            sessions: []
+          }
+        ]
+      };
+      const personWithUnits = {
+        ...personWithBooklets,
+        booklets: [
+          {
+            id: 'booklet1',
+            logs: [],
+            sessions: [],
+            units: [
+              {
+                id: 'unit1',
+                alias: 'unit1',
+                laststate: [],
+                chunks: [],
+                subforms: [],
+                logs: []
+              }
+            ]
+          }
+        ]
+      };
+      jest.spyOn(personService, 'createPersonList').mockResolvedValue([person]);
+      jest.spyOn(personService, 'assignBookletsToPerson').mockResolvedValue(personWithBooklets);
+      jest.spyOn(personService, 'assignUnitsToBookletAndPerson').mockResolvedValue(personWithUnits);
+      jest.spyOn(personService, 'processPersonBooklets').mockResolvedValue({
+        addedUnitIds: [101],
+        changedUnitIds: [],
+        addedResponseCount: 1,
+        changedResponseCount: 0
+      });
+      jest.spyOn(codingFreshnessService, 'markUnitsPendingAfterImport')
+        .mockRejectedValueOnce(new Error('freshness failed'));
+
+      const file: FileIo = {
+        buffer: Buffer.from(fileContent),
+        originalname: 'test.csv',
+        mimetype: 'text/csv',
+        size: fileContent.length,
+        fieldname: 'file',
+        encoding: 'utf-8',
+        path: filePath
+      };
+
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: '1',
+        data: {
+          workspaceId: 1,
+          file,
+          resultType: 'responses',
+          overwriteMode: 'merge'
+        }
+      }));
+
+      expect(codingFreshnessService.markUnitsPendingAfterImport).toHaveBeenCalledWith(1, [101], 1);
+      expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(1);
+      expect(workspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
+      expect(result.issues?.some(issue => issue.message.includes('freshness failed'))).toBe(true);
     });
   });
 });
