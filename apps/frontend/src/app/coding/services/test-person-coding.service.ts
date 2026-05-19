@@ -1054,15 +1054,7 @@ export class TestPersonCodingService {
     }>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/double-coded-review`,
       { headers: this.authHeader, params }
-    )
-      .pipe(
-        catchError(() => of({
-          data: [],
-          total: 0,
-          page,
-          limit
-        }))
-      );
+    );
   }
 
   applyDoubleCodedResolutions(
