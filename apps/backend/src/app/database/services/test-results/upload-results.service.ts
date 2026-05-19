@@ -24,6 +24,7 @@ import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test
 import { JobQueueService, TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
+import { CodingAnalysisService } from '../coding/coding-analysis.service';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 type PersonWithoutBooklets = Omit<Person, 'booklets'>;
@@ -54,7 +55,9 @@ export class UploadResultsService {
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     private readonly connection: DataSource,
     @Optional()
-    private readonly codingFreshnessService?: CodingFreshnessService
+    private readonly codingFreshnessService?: CodingFreshnessService,
+    @Optional()
+    private readonly codingAnalysisService?: CodingAnalysisService
   ) {
   }
 
@@ -113,6 +116,39 @@ export class UploadResultsService {
       });
       return true;
     }
+  }
+
+  private async invalidateCodingCachesAfterResponsesImport(
+    workspaceId: number,
+    issues: TestResultsUploadIssueDto[]
+  ): Promise<void> {
+    try {
+      await Promise.all([
+        this.codingAnalysisService?.invalidateCache(workspaceId),
+        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId)
+      ]);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.warn(`Could not invalidate coding caches after responses import: ${detail}`);
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message:
+          'Die Ergebnisdaten wurden verarbeitet, aber Kodierstatistiken oder Antwort-Analyse konnten nicht zuverlässig aktualisiert werden. Die Werte können sich nach Aktualisierung noch ändern.'
+      });
+    }
+  }
+
+  private responseImportMutatedTestResults(mutationSummary: {
+    addedUnitIds?: number[];
+    changedUnitIds?: number[];
+    addedResponseCount?: number;
+    changedResponseCount?: number;
+  }): boolean {
+    return (mutationSummary.addedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.changedUnitIds?.length || 0) > 0 ||
+      (mutationSummary.addedResponseCount || 0) > 0 ||
+      (mutationSummary.changedResponseCount || 0) > 0;
   }
 
   private createUploadSummaryAccumulator(): UploadSummaryAccumulator {
@@ -556,117 +592,126 @@ export class UploadResultsService {
             }
           });
         } else if (resultType === 'responses') {
-          await this.handleCsvStream<Response>(fileStream, resultType, issues, file.originalname, async rowData => {
-            // ... (Same logic as uploadFile for responses)
-            rowData.forEach((row, rowIndex) => {
-              importSummaryAgg.totalRows += 1;
-              importSummaryAgg.responseRows += 1;
+          let responsesImportMutatedData = false;
+          try {
+            await this.handleCsvStream<Response>(fileStream, resultType, issues, file.originalname, async rowData => {
+              // ... (Same logic as uploadFile for responses)
+              rowData.forEach((row, rowIndex) => {
+                importSummaryAgg.totalRows += 1;
+                importSummaryAgg.responseRows += 1;
 
-              const groupname = row.groupname || '';
-              const loginname = row.loginname || '';
-              const code = row.code || '';
-              const bookletname = row.bookletname || '';
-              const unitKey = row.unitname || '';
+                const groupname = row.groupname || '';
+                const loginname = row.loginname || '';
+                const code = row.code || '';
+                const bookletname = row.bookletname || '';
+                const unitKey = row.unitname || '';
 
-              const personKey = personMatchMode === 'loose' ? `${loginname}@@${code}` : `${groupname}@@${loginname}@@${code}`;
-              expectedAgg.persons.add(personKey);
-              expectedAgg.groups.add(groupname);
-              if (bookletname) {
-                expectedAgg.booklets.add(bookletname);
-              }
-              if (unitKey) {
-                expectedAgg.units.add(unitKey);
-              }
+                const personKey = personMatchMode === 'loose' ? `${loginname}@@${code}` : `${groupname}@@${loginname}@@${code}`;
+                expectedAgg.persons.add(personKey);
+                expectedAgg.groups.add(groupname);
+                if (bookletname) {
+                  expectedAgg.booklets.add(bookletname);
+                }
+                if (unitKey) {
+                  expectedAgg.units.add(unitKey);
+                }
 
-              try {
-                const chunks = typeof row.responses === 'string' ? JSON.parse(row.responses) : row.responses;
-                if (Array.isArray(chunks)) {
-                  chunks.forEach(chunk => {
-                    if (!chunk || typeof chunk !== 'object') return;
-                    const subForm = (chunk as { subForm?: string }).subForm || '';
-                    const content = (chunk as { content?: string }).content;
-                    if (!content || typeof content !== 'string') return;
-                    try {
-                      const chunkResponses = JSON.parse(content) as Array<{ id?: string; status?: string }>;
-                      if (!Array.isArray(chunkResponses)) return;
-                      chunkResponses.forEach(r => {
-                        const responseId = r?.id || '';
-                        if (!responseId) return;
-                        const uniqueKey = `${personKey}@@${bookletname}@@${unitKey}@@${subForm}@@${responseId}`;
-                        expectedAgg.responses.add(uniqueKey);
+                try {
+                  const chunks = typeof row.responses === 'string' ? JSON.parse(row.responses) : row.responses;
+                  if (Array.isArray(chunks)) {
+                    chunks.forEach(chunk => {
+                      if (!chunk || typeof chunk !== 'object') return;
+                      const subForm = (chunk as { subForm?: string }).subForm || '';
+                      const content = (chunk as { content?: string }).content;
+                      if (!content || typeof content !== 'string') return;
+                      try {
+                        const chunkResponses = JSON.parse(content) as Array<{ id?: string; status?: string }>;
+                        if (!Array.isArray(chunkResponses)) return;
+                        chunkResponses.forEach(r => {
+                          const responseId = r?.id || '';
+                          if (!responseId) return;
+                          const uniqueKey = `${personKey}@@${bookletname}@@${unitKey}@@${subForm}@@${responseId}`;
+                          expectedAgg.responses.add(uniqueKey);
 
-                        let status = r?.status;
-                        if (!status) {
-                          status = 'INVALID';
-                          issues.push({
-                            level: 'warning',
-                            message: `Missing status (defaulting to INVALID) in response for ${uniqueKey}`,
-                            fileName: file.originalname,
-                            rowIndex,
-                            category: 'missing_status'
-                          });
-                        } else if (statusStringToNumber(status) === null) {
-                          issues.push({
-                            level: 'warning',
-                            message: `Invalid status '${status}' (defaulting to INVALID) in response for ${uniqueKey}`,
-                            fileName: file.originalname,
-                            rowIndex,
-                            category: 'invalid_status'
-                          });
-                          status = 'INVALID';
-                        }
+                          let status = r?.status;
+                          if (!status) {
+                            status = 'INVALID';
+                            issues.push({
+                              level: 'warning',
+                              message: `Missing status (defaulting to INVALID) in response for ${uniqueKey}`,
+                              fileName: file.originalname,
+                              rowIndex,
+                              category: 'missing_status'
+                            });
+                          } else if (statusStringToNumber(status) === null) {
+                            issues.push({
+                              level: 'warning',
+                              message: `Invalid status '${status}' (defaulting to INVALID) in response for ${uniqueKey}`,
+                              fileName: file.originalname,
+                              rowIndex,
+                              category: 'invalid_status'
+                            });
+                            status = 'INVALID';
+                          }
 
-                        statusCounts[status] = (statusCounts[status] || 0) + 1;
-                      });
-                    } catch {
-                      issues.push({
-                        level: 'warning',
-                        message: 'Malformed chunk content JSON',
-                        fileName: file.originalname,
-                        rowIndex
-                      });
-                    }
+                          statusCounts[status] = (statusCounts[status] || 0) + 1;
+                        });
+                      } catch {
+                        issues.push({
+                          level: 'warning',
+                          message: 'Malformed chunk content JSON',
+                          fileName: file.originalname,
+                          rowIndex
+                        });
+                      }
+                    });
+                  }
+                } catch {
+                  importSummaryAgg.skippedRows += 1;
+                  issues.push({
+                    level: 'warning',
+                    message: 'Malformed responses JSON',
+                    fileName: file.originalname,
+                    rowIndex
                   });
                 }
-              } catch {
-                importSummaryAgg.skippedRows += 1;
-                issues.push({
-                  level: 'warning',
-                  message: 'Malformed responses JSON',
-                  fileName: file.originalname,
-                  rowIndex
-                });
-              }
-            });
+              });
 
-            const basePersons = await this.personService.createPersonList(rowData, workspaceId);
-            const personsWithUnits = await Promise.all(
-              basePersons.map(async person => {
-                const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
-                return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
-              })
-            );
+              const basePersons = await this.personService.createPersonList(rowData, workspaceId);
+              const personsWithUnits = await Promise.all(
+                basePersons.map(async person => {
+                  const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
+                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
+                })
+              );
 
-            const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
-            await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
-              const mutationSummary = await this.personService.processPersonBooklets(
-                filteredPersons,
-                workspaceId,
-                overwriteMode,
-                scope === 'workspace' ? 'workspace' : 'person'
-              );
-              await this.codingFreshnessService?.markUnitsPendingAfterImport(
-                workspaceId,
-                mutationSummary.addedUnitIds,
-                mutationSummary.addedResponseCount
-              );
-              await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
-                workspaceId,
-                mutationSummary.changedUnitIds,
-                'RESULT_UPDATED'
-              );
+              const filteredPersons = this.filterImportedPersons(personsWithUnits, scope, scopeFilters);
+              await withWorkspaceTestResultsMutationLock(this.connection, workspaceId, async () => {
+                const mutationSummary = await this.personService.processPersonBooklets(
+                  filteredPersons,
+                  workspaceId,
+                  overwriteMode,
+                  scope === 'workspace' ? 'workspace' : 'person'
+                );
+                responsesImportMutatedData = responsesImportMutatedData ||
+                  this.responseImportMutatedTestResults(mutationSummary);
+                await this.codingFreshnessService?.markUnitsPendingAfterImport(
+                  workspaceId,
+                  mutationSummary.addedUnitIds,
+                  mutationSummary.addedResponseCount
+                );
+                await this.codingFreshnessService?.markUnitsStaleAfterResultChange(
+                  workspaceId,
+                  mutationSummary.changedUnitIds,
+                  'RESULT_UPDATED'
+                );
+              });
             });
-          });
+          } finally {
+            if (responsesImportMutatedData) {
+              await this.invalidateCodingCachesAfterResponsesImport(workspaceId, issues);
+            }
+          }
         }
         // Cleanup temp file
         // Cleanup temp file
