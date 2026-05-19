@@ -460,7 +460,7 @@ test-app:
     - !reference [ .default_rules, rules ]
   image: ${CI_REGISTRY_IMAGE}/${CICD_BASE_IMAGE}
   script:
-    - npx nx affected --base=HEAD~1 --target=test --parallel=2
+    - npx nx affected --base=HEAD~1 --target=test --parallel=1 -- --maxWorkers=2
 
 lint-app:
   stage: lint
