@@ -9,8 +9,10 @@ jest.mock('../../database/services/coding', () => ({
 describe('WsgCodingJobController', () => {
   let controller: WsgCodingJobController;
   let codingJobService: {
+    getCodingJobs: jest.Mock;
     getCodingJob: jest.Mock;
     getCodingJobUnits: jest.Mock;
+    getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
     assertUserCanAccessCodingJob: jest.Mock;
@@ -19,8 +21,16 @@ describe('WsgCodingJobController', () => {
 
   beforeEach(() => {
     codingJobService = {
+      getCodingJobs: jest.fn().mockResolvedValue({
+        data: [],
+        total: 0,
+        totalOpenUnits: 0,
+        page: 1,
+        limit: undefined
+      }),
       getCodingJob: jest.fn().mockResolvedValue({ codingJob: { id: 123 } }),
       getCodingJobUnits: jest.fn().mockResolvedValue([]),
+      getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn(),
       assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined)
@@ -75,5 +85,18 @@ describe('WsgCodingJobController', () => {
       .rejects.toBeInstanceOf(BadRequestException);
 
     expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('passes the authenticated user id for assignedTo=me job lists', async () => {
+    await controller.getCodingJobs(47, 1, undefined, 'me', req);
+
+    expect(codingJobService.getCodingJobs).toHaveBeenCalledWith(47, 1, undefined, 5);
+  });
+
+  it('rejects unsupported assignedTo values', async () => {
+    await expect(controller.getCodingJobs(47, 1, undefined, '7', req))
+      .rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.getCodingJobs).not.toHaveBeenCalled();
   });
 });

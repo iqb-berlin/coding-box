@@ -74,6 +74,16 @@ describe('CodingJobBackendService', () => {
       expect(req.request.method).toBe('GET');
       req.flush(mockApiResponse);
     });
+
+    it('should pass assignedTo=me when requesting own coding jobs', () => {
+      service.getCodingJobs(1, undefined, undefined, { assignedTo: 'me' }).subscribe(res => {
+        expect(res.data).toEqual([]);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job?assignedTo=me`);
+      expect(req.request.method).toBe('GET');
+      req.flush({ data: [], total: 0, page: 1 });
+    });
   });
 
   describe('getJobDefinitions', () => {

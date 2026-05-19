@@ -5,7 +5,7 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { MatTabLink, MatTabNav, MatTabNavPanel } from '@angular/material/tabs';
 import { AppService } from '../../../core/services/app.service';
-import { CodingJobsComponent } from '../../../coding/components/coding-jobs/coding-jobs.component';
+import { MyCodingJobsComponent } from '../../../coding/components/my-coding-jobs/my-coding-jobs.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 
 @Component({
@@ -20,7 +20,7 @@ import { UserBackendService } from '../../../shared/services/user/user-backend.s
     MatTabNavPanel,
     RouterOutlet,
     TranslateModule,
-    CodingJobsComponent]
+    MyCodingJobsComponent]
 })
 export class WsAdminComponent implements OnInit {
   private route = inject(ActivatedRoute);
