@@ -441,3 +441,28 @@ CREATE INDEX IF NOT EXISTS "idx_bookletlog_current_unit_booklet_parameter"
 
 -- rollback DROP INDEX IF EXISTS "public"."idx_bookletlog_current_unit_booklet_parameter";
 -- rollback DROP INDEX IF EXISTS "public"."idx_bookletlog_controller_booklet_parameter_id";
+
+-- changeset jurei733:18
+-- comment: Separate workspace coding capability from access level
+
+ALTER TABLE "public"."workspace_user"
+  ADD COLUMN IF NOT EXISTS "can_code" BOOLEAN NOT NULL DEFAULT FALSE;
+
+UPDATE "public"."workspace_user"
+SET "can_code" = TRUE
+WHERE "access_level" = 1;
+
+UPDATE "public"."workspace_user" wu
+SET "can_code" = TRUE
+FROM "public"."coding_job_coder" cjc
+JOIN "public"."coding_job" cj
+  ON cj."id" = cjc."coding_job_id"
+WHERE wu."workspace_id" = cj."workspace_id"
+  AND wu."user_id" = cjc."user_id"
+  AND wu."access_level" > 0;
+
+UPDATE "public"."workspace_user"
+SET "can_code" = FALSE
+WHERE COALESCE("access_level", 0) <= 0;
+
+-- rollback ALTER TABLE "public"."workspace_user" DROP COLUMN IF EXISTS "can_code";

@@ -336,7 +336,8 @@
     "access-level-1": "Kodierer:in",
     "access-level-2": "Kodierung-Manager:in",
     "access-level-3": "Studienmanager:in",
-    "access-level-4": "Admin"
+    "access-level-4": "Admin",
+    "can-code": "Als Kodierer:in einsetzbar"
   },
   "access-matrix": {
     "title": "Zugriffsrechte-Matrix",

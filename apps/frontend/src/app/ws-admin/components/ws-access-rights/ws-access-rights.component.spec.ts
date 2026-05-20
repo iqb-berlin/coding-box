@@ -19,10 +19,10 @@ describe('WsAccessRightsComponent', () => {
 
   const mockUsers = [
     {
-      id: 1, name: 'user1', displayName: 'User One', accessLevel: 1
+      id: 1, name: 'user1', displayName: 'User One', accessLevel: 1, canCode: true
     },
     {
-      id: 2, name: 'user2', displayName: 'User Two', accessLevel: 2
+      id: 2, name: 'user2', displayName: 'User Two', accessLevel: 2, canCode: false
     }
   ];
 
@@ -81,6 +81,45 @@ describe('WsAccessRightsComponent', () => {
     component.changeAccessLevel(false, user, 3);
     expect(user.accessLevel).toBe(0);
     expect(user.isChecked).toBe(false);
+    expect(user.canCode).toBe(false);
+  });
+
+  it('should auto-enable coding only when switching to coder access', () => {
+    const user = component.workspaceUsers.entries[1];
+
+    component.changeAccessLevel(true, user, 3);
+    expect(user.accessLevel).toBe(3);
+    expect(user.canCode).toBe(false);
+
+    component.changeCanCode(true, user);
+    component.changeAccessLevel(true, user, 2);
+    expect(user.accessLevel).toBe(2);
+    expect(user.canCode).toBe(true);
+
+    component.changeCanCode(false, user);
+    component.changeAccessLevel(true, user, 1);
+    expect(user.accessLevel).toBe(1);
+    expect(user.canCode).toBe(true);
+  });
+
+  it('should change coding capability independently from access level', () => {
+    const user = component.workspaceUsers.entries[1];
+
+    component.changeCanCode(true, user);
+
+    expect(user.accessLevel).toBe(2);
+    expect(user.canCode).toBe(true);
+    expect(component.workspaceUsers.hasChanged).toBe(true);
+  });
+
+  it('should allow disabling coding capability for access level 1', () => {
+    const user = component.workspaceUsers.entries[0];
+
+    component.changeCanCode(false, user);
+
+    expect(user.accessLevel).toBe(1);
+    expect(user.canCode).toBe(false);
+    expect(component.workspaceUsers.hasChanged).toBe(true);
   });
 
   it('should save access rights successfully', () => {
@@ -92,5 +131,20 @@ describe('WsAccessRightsComponent', () => {
     expect(mockUserBackendService.saveUsers).toHaveBeenCalled();
     expect(mockSnackBar.open).toHaveBeenCalledWith('Zugriffsrechte erfolgreich gespeichert', 'Schließen', expect.any(Object));
     expect(component.workspaceUsers.hasChanged).toBe(false);
+  });
+
+  it('should send removed existing access rights when saving', () => {
+    const user = component.workspaceUsers.entries[0];
+
+    component.changeAccessLevel(false, user, 1);
+    component.save();
+
+    expect(mockUserBackendService.saveUsers).toHaveBeenCalledWith(1, expect.arrayContaining([
+      {
+        id: 1,
+        accessLevel: 0,
+        canCode: false
+      }
+    ]));
   });
 });

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
@@ -30,7 +30,7 @@ export class WorkspaceUsersService {
     }
 
     const userWorkspaces = await this.workspaceUsersRepository.find({
-      where: { userId: user.id }
+      where: { userId: user.id, accessLevel: MoreThan(0) }
     });
 
     if (userWorkspaces.length === 0) {
@@ -52,7 +52,12 @@ export class WorkspaceUsersService {
 
   async setWorkspaceUsers(workspaceId: number, userIds: number[]): Promise<boolean> {
     this.logger.log(`Setting users for workspace with id: ${workspaceId}`);
-    const entries = userIds.map(user => ({ userId: user, workspaceId: workspaceId, accessLevel: 3 }));
+    const entries = userIds.map(user => ({
+      userId: user,
+      workspaceId: workspaceId,
+      accessLevel: 3,
+      canCode: false
+    }));
     const hasRights = this.workspaceUsersRepository.find({ where: { workspaceId: workspaceId } });
     if (hasRights) {
       await this.workspaceUsersRepository.delete({ workspaceId: workspaceId });
@@ -72,7 +77,7 @@ export class WorkspaceUsersService {
         const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT); // Between 1 and MAX_LIMIT
 
         const [users, total] = await this.workspaceUsersRepository.findAndCount({
-          where: { workspaceId },
+          where: { workspaceId, accessLevel: MoreThan(0) },
           skip: (validPage - 1) * validLimit,
           take: validLimit,
           order: { userId: 'ASC' }
@@ -83,7 +88,7 @@ export class WorkspaceUsersService {
       }
 
       const users = await this.workspaceUsersRepository.find({
-        where: { workspaceId },
+        where: { workspaceId, accessLevel: MoreThan(0) },
         order: { userId: 'ASC' }
       });
 
@@ -96,13 +101,14 @@ export class WorkspaceUsersService {
   }
 
   async findCoders(workspaceId: number): Promise<[WorkspaceUser[], number]> {
-    this.logger.log(`Retrieving coders (users with accessLevel 1) for workspace ID: ${workspaceId}`);
+    this.logger.log(`Retrieving users enabled for coding in workspace ID: ${workspaceId}`);
 
     try {
       const workspaceUsers = await this.workspaceUsersRepository.find({
         where: {
           workspaceId,
-          accessLevel: 1
+          accessLevel: MoreThan(0),
+          canCode: true
         },
         order: { userId: 'ASC' }
       });

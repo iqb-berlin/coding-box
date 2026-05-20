@@ -33,6 +33,12 @@
                       fontIcon="account_circle">
             </mat-icon>
           </th>
+          <th class="access-level-column">
+            <mat-icon color="primary"
+                      [matTooltip]="'access-rights.can-code' | translate"
+                      fontIcon="edit_note">
+            </mat-icon>
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -48,6 +54,14 @@
                 </mat-checkbox>
               </td>
             }
+            <td class="access-level-column">
+              <mat-checkbox
+                [checked]="u.canCode"
+                [disabled]="!u.isChecked || u.accessLevel === 0"
+                [matTooltip]="'access-rights.can-code' | translate"
+                (change)="changeCanCode($event.checked, u)">
+              </mat-checkbox>
+            </td>
           </tr>
         }
       </tbody>

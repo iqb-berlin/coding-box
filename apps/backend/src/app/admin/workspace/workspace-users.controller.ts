@@ -213,7 +213,7 @@ export class WorkspaceUsersController {
     description: 'Unique identifier for the workspace'
   })
   @ApiOkResponse({
-    description: 'List of coders (users with accessLevel 1) retrieved successfully',
+    description: 'List of users enabled for coding retrieved successfully',
     schema: {
       type: 'object',
       properties: {
