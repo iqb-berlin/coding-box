@@ -20,7 +20,6 @@
         <mat-label>{{ 'double-coded-review.decision.select-label' | translate }}</mat-label>
         <mat-select
           [formControl]="getItemControl(element)"
-          [disabled]="isLoading"
           (selectionChange)="onSelectionChange(element, $event.value)">
           <mat-select-trigger>
             @if (getSelectedDecisionResult(element); as selectedResult) {
