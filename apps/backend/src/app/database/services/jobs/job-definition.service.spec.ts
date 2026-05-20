@@ -29,6 +29,7 @@ describe('JobDefinitionService', () => {
     calculateDistributionVariableUsageBatch: jest.Mock;
     getCodingJobCountsByDefinitionIds: jest.Mock;
     getBlockingCodingJobCountsByDefinitionIds: jest.Mock;
+    assertCodersCanCodeInWorkspace: jest.Mock;
   };
   let codingValidationService: { getCodingIncompleteVariables: jest.Mock };
   let service: JobDefinitionService;
@@ -61,7 +62,8 @@ describe('JobDefinitionService', () => {
       calculateDistributionVariableUsage: jest.fn(),
       calculateDistributionVariableUsageBatch: jest.fn(),
       getCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
-      getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map())
+      getBlockingCodingJobCountsByDefinitionIds: jest.fn().mockResolvedValue(new Map()),
+      assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
     };
     codingValidationService = {
       getCodingIncompleteVariables: jest.fn().mockResolvedValue([
@@ -663,6 +665,7 @@ describe('JobDefinitionService', () => {
         { coderId: 3, capacityPercent: 100 }
       ]
     });
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([2, 3], 7);
   });
 
   it('checks conflicts with the next caseOrderingMode when only ordering changes', async () => {
@@ -682,11 +685,13 @@ describe('JobDefinitionService', () => {
     jobDefinitionRepository.findOne.mockResolvedValue(existingDefinition);
     jobDefinitionRepository.find.mockResolvedValue([existingDefinition]);
     codingJobService.calculateDistributionVariableUsageBatch.mockClear();
+    codingJobService.assertCodersCanCodeInWorkspace.mockClear();
 
     await service.updateJobDefinition(2, {
       caseOrderingMode: 'alternating'
     });
 
+    expect(codingJobService.assertCodersCanCodeInWorkspace).not.toHaveBeenCalled();
     expect(codingJobService.calculateDistributionVariableUsageBatch).toHaveBeenCalledWith(7, [
       expect.objectContaining({
         key: 'requested',
@@ -783,6 +788,33 @@ describe('JobDefinitionService', () => {
     await expect(service.updateJobDefinition(2, {
       status: 'approved'
     })).rejects.toBeInstanceOf(BadRequestException);
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+  });
+
+  it('rejects approval updates when existing assigned coders are no longer coding-enabled', async () => {
+    const editedDefinition = {
+      id: 2,
+      workspace_id: 7,
+      status: 'draft',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 1,
+      case_ordering_mode: 'continuous'
+    };
+
+    jobDefinitionRepository.findOne.mockResolvedValue(editedDefinition);
+    codingJobService.assertCodersCanCodeInWorkspace.mockRejectedValueOnce(
+      new BadRequestException('Coder is not enabled')
+    );
+
+    await expect(service.updateJobDefinition(2, {
+      status: 'approved'
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
   it('attaches created coding job counts to listed definitions', async () => {
@@ -1027,6 +1059,30 @@ describe('JobDefinitionService', () => {
     await expect(service.approveJobDefinition(4, {
       status: 'pending_review'
     })).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects approval endpoint calls when existing assigned coders are no longer coding-enabled', async () => {
+    jobDefinitionRepository.findOne.mockResolvedValue({
+      id: 4,
+      workspace_id: 7,
+      status: 'pending_review',
+      assigned_variables: [{ unitName: 'Unit 1', variableId: 'Var 1' }],
+      assigned_variable_bundles: [],
+      assigned_coders: [1],
+      duration_seconds: 1,
+      max_coding_cases: 1,
+      case_ordering_mode: 'continuous'
+    });
+    codingJobService.assertCodersCanCodeInWorkspace.mockRejectedValueOnce(
+      new BadRequestException('Coder is not enabled')
+    );
+
+    await expect(service.approveJobDefinition(4, {
+      status: 'approved'
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(codingJobService.assertCodersCanCodeInWorkspace).toHaveBeenCalledWith([1], 7);
+    expect(jobDefinitionRepository.save).not.toHaveBeenCalled();
   });
 
   it('creates distributed coding jobs from an approved definition', async () => {

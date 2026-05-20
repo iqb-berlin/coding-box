@@ -104,7 +104,8 @@ describe('CodingJobService distribution from job definitions', () => {
     };
     const usersService = {
       getUserIsAdmin: jest.fn().mockResolvedValue(false),
-      getUserAccessLevel: jest.fn().mockResolvedValue(1)
+      getUserAccessLevel: jest.fn().mockResolvedValue(1),
+      assertUsersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
     };
 
     service = new CodingJobService(

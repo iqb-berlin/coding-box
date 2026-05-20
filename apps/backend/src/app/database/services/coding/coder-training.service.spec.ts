@@ -42,7 +42,8 @@ describe('CoderTrainingService', () => {
     getAggregationThreshold: jest.fn().mockResolvedValue(null),
     getResponseMatchingMode: jest.fn().mockResolvedValue([ResponseMatchingFlag.IGNORE_WHITESPACE]),
     aggregateResponsesByValue: jest.fn().mockReturnValue([]),
-    normalizeValue: jest.fn().mockReturnValue('normalized')
+    normalizeValue: jest.fn().mockReturnValue('normalized'),
+    assertCodersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined)
   };
 
   const mockWorkspaceFilesService = {
