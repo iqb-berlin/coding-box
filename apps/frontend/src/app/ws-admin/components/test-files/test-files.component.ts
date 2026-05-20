@@ -1324,16 +1324,35 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         } else if (file.file_type === 'Resource' && file.filename.toLowerCase().endsWith('.vomd')) {
           this.openMetadataDialog(file, decodedContent);
         } else {
+          const isXmlFile = this.isXmlFile(file.filename);
+          const isJsonFile = this.isJsonFile(file.filename);
+
           this.dialog.open(ContentDialogComponent, {
-            width: '800px',
-            height: '800px',
+            width: isXmlFile ? '82vw' : '800px',
+            maxWidth: isXmlFile ? '1200px' : '80vw',
+            height: isXmlFile ? '82vh' : '800px',
+            maxHeight: isXmlFile ? '90vh' : undefined,
             data: {
               title: file.filename,
-              content: decodedContent
+              content: decodedContent,
+              isJson: isJsonFile,
+              isXml: isXmlFile
             }
           });
         }
       });
+  }
+
+  private isXmlFile(filename: string): boolean {
+    const lowerCaseFilename = filename.toLowerCase();
+
+    return lowerCaseFilename.endsWith('.xml');
+  }
+
+  private isJsonFile(filename: string): boolean {
+    const lowerCaseFilename = filename.toLowerCase();
+
+    return lowerCaseFilename.endsWith('.json') || lowerCaseFilename.endsWith('.voud');
   }
 
   private async openMetadataDialog(file: FilesInListDto, decodedContent: string): Promise<void> {
