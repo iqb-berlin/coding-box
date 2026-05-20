@@ -1,4 +1,5 @@
 import { UserInListDto } from '../../../../../../api-dto/user/user-in-list-dto';
+import { getEffectiveCanCode } from '../../shared/utils/workspace-access';
 
 export class WorkspaceUserChecked {
   id: number;
@@ -6,6 +7,7 @@ export class WorkspaceUserChecked {
   displayName: string | undefined;
   description: string | undefined;
   accessLevel: number;
+  canCode: boolean;
   isChecked: boolean;
   constructor(userDto: UserInListDto) {
     this.id = userDto.id;
@@ -13,6 +15,7 @@ export class WorkspaceUserChecked {
     this.displayName = userDto.displayName;
     this.description = userDto.description;
     this.accessLevel = userDto.accessLevel;
-    this.isChecked = false;
+    this.canCode = getEffectiveCanCode(userDto);
+    this.isChecked = userDto.accessLevel > 0;
   }
 }

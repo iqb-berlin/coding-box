@@ -6,6 +6,7 @@ const createRepo = () => ({
   findOne: jest.fn(),
   create: jest.fn(value => ({ id: 77, ...value })),
   save: jest.fn(value => Promise.resolve({ id: 77, ...value })),
+  upsert: jest.fn(),
   update: jest.fn(),
   delete: jest.fn(),
   count: jest.fn()
@@ -26,7 +27,7 @@ describe('UsersService', () => {
   });
 
   it('lists users with and without workspace filters', async () => {
-    workspaceUserRepository.find.mockResolvedValue([{ userId: 2, accessLevel: 3 }]);
+    workspaceUserRepository.find.mockResolvedValue([{ userId: 2, accessLevel: 3, canCode: true }]);
     usersRepository.find.mockResolvedValue([
       { id: 1, username: 'alice', isAdmin: true },
       { id: 2, username: 'bob', isAdmin: false }
@@ -38,8 +39,47 @@ describe('UsersService', () => {
       name: 'bob',
       username: 'bob',
       accessLevel: 3,
+      canCode: true,
       isAdmin: false
     }]);
+  });
+
+  it('returns workspace access with explicit and legacy canCode values', async () => {
+    workspaceUserRepository.find.mockResolvedValue([
+      { userId: 1, accessLevel: 1 },
+      { userId: 2, accessLevel: 1, canCode: false },
+      { userId: 3, accessLevel: 2, canCode: true },
+      { userId: 4, accessLevel: 3, canCode: false }
+    ]);
+    usersRepository.find.mockResolvedValue([
+      { id: 1, username: 'legacy-coder', isAdmin: false },
+      { id: 2, username: 'level-one-without-coding', isAdmin: false },
+      { id: 3, username: 'coding-manager-coder', isAdmin: false },
+      { id: 4, username: 'study-manager-no-coding', isAdmin: false }
+    ]);
+
+    await expect(service.getUsersWithWorkspaceAccess(10)).resolves.toEqual([
+      expect.objectContaining({
+        id: 1,
+        accessLevel: 1,
+        canCode: true
+      }),
+      expect.objectContaining({
+        id: 2,
+        accessLevel: 1,
+        canCode: false
+      }),
+      expect.objectContaining({
+        id: 3,
+        accessLevel: 2,
+        canCode: true
+      }),
+      expect.objectContaining({
+        id: 4,
+        accessLevel: 3,
+        canCode: false
+      })
+    ]);
   });
 
   it('updates access and checks workspace access', async () => {
@@ -48,10 +88,164 @@ describe('UsersService', () => {
       .mockResolvedValueOnce(null);
     usersRepository.findOne.mockResolvedValueOnce({ id: 3, isAdmin: true });
 
-    await expect(service.updateUsersAccess(2, [{ id: 1, username: 'a', accessLevel: 2 } as never])).resolves.toBe(true);
-    expect(workspaceUserRepository.update).toHaveBeenCalledWith({ workspaceId: 2, userId: 1 }, { accessLevel: 2 });
+    await expect(service.updateUsersAccess(2, [
+      { id: 1, username: 'a', accessLevel: 2 },
+      {
+        id: 2, username: 'b', accessLevel: 1, canCode: false
+      },
+      {
+        id: 3, username: 'c', accessLevel: 0, canCode: true
+      }
+    ] as never)).resolves.toBe(true);
+    expect(workspaceUserRepository.upsert).toHaveBeenCalledWith([
+      {
+        workspaceId: 2,
+        userId: 1,
+        accessLevel: 2,
+        canCode: false
+      },
+      {
+        workspaceId: 2,
+        userId: 2,
+        accessLevel: 1,
+        canCode: false
+      }
+    ], ['workspaceId', 'userId']);
+    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({
+      workspaceId: 2,
+      userId: expect.any(Object)
+    });
     await expect(service.canAccessWorkSpace(1, 2)).resolves.toBe(true);
     await expect(service.canAccessWorkSpace(3, 2)).resolves.toBe(true);
+  });
+
+  it('defaults canCode from accessLevel only when requests omit it', async () => {
+    await expect(service.updateUsersAccess(2, [
+      { id: 1, username: 'legacy-coder', accessLevel: 1 },
+      {
+        id: 2, username: 'level-one-without-coding', accessLevel: 1, canCode: false
+      },
+      {
+        id: 3, username: 'coding-manager-coder', accessLevel: 2, canCode: true
+      },
+      { id: 4, username: 'study-manager-no-coding', accessLevel: 3 },
+      {
+        id: 5, username: 'no-access-with-coding-flag', accessLevel: 0, canCode: true
+      }
+    ] as never)).resolves.toBe(true);
+
+    expect(workspaceUserRepository.upsert).toHaveBeenCalledWith([
+      {
+        workspaceId: 2,
+        userId: 1,
+        accessLevel: 1,
+        canCode: true
+      },
+      {
+        workspaceId: 2,
+        userId: 2,
+        accessLevel: 1,
+        canCode: false
+      },
+      {
+        workspaceId: 2,
+        userId: 3,
+        accessLevel: 2,
+        canCode: true
+      },
+      {
+        workspaceId: 2,
+        userId: 4,
+        accessLevel: 3,
+        canCode: false
+      }
+    ], ['workspaceId', 'userId']);
+    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({
+      workspaceId: 2,
+      userId: expect.any(Object)
+    });
+  });
+
+  it('recreates workspace access after it was removed', async () => {
+    await expect(service.updateUsersAccess(2, [
+      {
+        id: 3, username: 'c', accessLevel: 0, canCode: false
+      }
+    ] as never)).resolves.toBe(true);
+
+    expect(workspaceUserRepository.delete).toHaveBeenCalledWith({
+      workspaceId: 2,
+      userId: expect.any(Object)
+    });
+
+    workspaceUserRepository.delete.mockClear();
+    workspaceUserRepository.upsert.mockClear();
+
+    await expect(service.updateUsersAccess(2, [
+      {
+        id: 3, username: 'c', accessLevel: 3, canCode: true
+      }
+    ] as never)).resolves.toBe(true);
+
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUserRepository.upsert).toHaveBeenCalledWith([
+      {
+        workspaceId: 2,
+        userId: 3,
+        accessLevel: 3,
+        canCode: true
+      }
+    ], ['workspaceId', 'userId']);
+  });
+
+  it('rejects invalid workspace access payloads before writing', async () => {
+    await expect(service.updateUsersAccess(2, [
+      { id: 1, username: 'a', accessLevel: 1 },
+      { id: 1, username: 'a-again', accessLevel: 2 }
+    ] as never)).rejects.toBeInstanceOf(BadRequestException);
+
+    await expect(service.updateUsersAccess(2, [
+      { id: 2, username: 'bad-level', accessLevel: 4 }
+    ] as never)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(workspaceUserRepository.delete).not.toHaveBeenCalled();
+    expect(workspaceUserRepository.upsert).not.toHaveBeenCalled();
+  });
+
+  it('asserts users are enabled as coders in a workspace', async () => {
+    workspaceUserRepository.find.mockResolvedValueOnce([{ userId: 1 }, { userId: 2 }]);
+
+    await expect(service.assertUsersCanCodeInWorkspace([1, 2, 1], 7)).resolves.toBeUndefined();
+    expect(workspaceUserRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspaceId: 7,
+        canCode: true,
+        accessLevel: expect.any(Object)
+      }),
+      select: ['userId']
+    }));
+
+    workspaceUserRepository.find.mockResolvedValueOnce([{ userId: 1 }]);
+    await expect(service.assertUsersCanCodeInWorkspace([1, 2], 7)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('checks whether a single user is enabled as coder in a workspace', async () => {
+    workspaceUserRepository.findOne.mockResolvedValueOnce({ userId: 1 });
+
+    await expect(service.canUserCodeInWorkspace(1, 7)).resolves.toBe(true);
+    expect(workspaceUserRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        workspaceId: 7,
+        userId: 1,
+        accessLevel: expect.any(Object),
+        canCode: true
+      }),
+      select: ['userId']
+    }));
+
+    workspaceUserRepository.findOne.mockResolvedValueOnce(null);
+    await expect(service.canUserCodeInWorkspace(2, 7)).resolves.toBe(false);
+    await expect(service.canUserCodeInWorkspace(0, 7)).resolves.toBe(false);
   });
 
   it('returns access levels, workspace ids and users by identity or id', async () => {
@@ -83,7 +277,12 @@ describe('UsersService', () => {
 
   it('assigns workspaces and validates deletion constraints', async () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce({ userId: 1 });
-    workspaceUserRepository.save.mockResolvedValueOnce([{ userId: 1, workspaceId: 2, accessLevel: 3 }]);
+    workspaceUserRepository.save.mockResolvedValueOnce([{
+      userId: 1,
+      workspaceId: 2,
+      accessLevel: 3,
+      canCode: false
+    }]);
 
     await expect(service.assignUserWorkspaces(1, [2])).resolves.toBe(true);
     expect(workspaceUserRepository.delete).toHaveBeenCalledWith({ userId: 1 });
@@ -123,5 +322,17 @@ describe('UsersService', () => {
     await expect(service.createKeycloakUser({
       username: 'fresh', identity: 'id', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(77);
+  });
+
+  it('does not demote existing database admins during keycloak login', async () => {
+    usersRepository.findOne.mockResolvedValueOnce({
+      id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
+    });
+
+    await expect(service.createKeycloakUser({
+      username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
+    } as never)).resolves.toBe(10);
+
+    expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new' });
   });
 });

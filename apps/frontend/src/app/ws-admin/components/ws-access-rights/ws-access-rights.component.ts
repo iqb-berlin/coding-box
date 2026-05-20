@@ -49,10 +49,23 @@ export class WsAccessRightsComponent {
     if (checked) {
       user.accessLevel = level;
       user.isChecked = true;
+      if (level === 1) {
+        user.canCode = true;
+      }
     } else {
       user.accessLevel = 0;
       user.isChecked = false;
+      user.canCode = false;
     }
+    this.workspaceUsers.updateHasChanged();
+  }
+
+  changeCanCode(checked: boolean, user: WorkspaceUserChecked): void {
+    if (checked && !user.isChecked) {
+      user.isChecked = true;
+      user.accessLevel = 1;
+    }
+    user.canCode = checked && user.isChecked;
     this.workspaceUsers.updateHasChanged();
   }
 }

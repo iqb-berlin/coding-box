@@ -9,4 +9,7 @@ export class WorkspaceUserDto {
 
   @ApiProperty({ nullable: true })
     accessLevel!: number | null;
+
+  @ApiProperty({ required: false })
+    canCode?: boolean;
 }
