@@ -130,6 +130,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   availableCoders: { id: number; name: string }[] = [];
   availableJobDefinitions: Array<{ id: number; label: string }> = [];
   availableCoderTrainings: Array<{ id: number; label: string }> = [];
+  private filterOptionsLoaded = false;
   private resultsApplied = false;
   private destroy$ = new Subject<void>();
 
@@ -200,7 +201,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe(({ jobDefinitions, coderTrainings }) => {
         const sortedJobDefinitions = [...jobDefinitions]
-          .filter(definition => definition.id !== undefined)
+          .filter(definition => definition.id !== undefined && (definition.createdJobsCount ?? 0) > 0)
           .sort((a, b) => (b.id || 0) - (a.id || 0));
 
         this.availableJobDefinitions = sortedJobDefinitions.map(definition => ({
@@ -208,13 +209,34 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
           label: this.getJobDefinitionLabel(definition)
         }));
 
-        this.availableCoderTrainings = coderTrainings.map(training => ({
-          id: training.id,
-          label: training.label || `Training #${training.id}`
-        }));
+        this.availableCoderTrainings = coderTrainings
+          .filter(training => (training.jobsCount ?? 0) > 0)
+          .map(training => ({
+            id: training.id,
+            label: this.getCoderTrainingLabel(training)
+          }));
 
-        if ((!this.scopeControl.value || this.scopeControl.value.length === 0) && this.availableJobDefinitions.length > 0) {
+        const validScopes = new Set([
+          ...this.availableJobDefinitions.map(definition => `job_${definition.id}`),
+          ...this.availableCoderTrainings.map(training => `training_${training.id}`)
+        ]);
+        const currentScopes = (this.scopeControl.value || [])
+          .filter(scope => validScopes.has(scope));
+
+        if (currentScopes.length > 0) {
+          this.scopeControl.setValue(currentScopes, { emitEvent: false });
+        } else if (this.availableJobDefinitions.length > 0) {
           this.scopeControl.setValue([`job_${this.availableJobDefinitions[0].id}`], { emitEvent: false });
+        } else if (this.availableCoderTrainings.length > 0) {
+          this.scopeControl.setValue([`training_${this.availableCoderTrainings[0].id}`], { emitEvent: false });
+        } else {
+          this.scopeControl.setValue([], { emitEvent: false });
+        }
+
+        this.filterOptionsLoaded = true;
+        if (!this.hasScopeOptions()) {
+          this.clearReviewData();
+          return;
         }
 
         this.loadData();
@@ -223,11 +245,48 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private getJobDefinitionLabel(definition: JobDefinition): string {
     const definitionId = definition.id ?? 0;
-    const status = definition.status ? ` (${definition.status})` : '';
-    return `Definition #${definitionId}${status}`;
+    const statusLabel = this.getJobDefinitionStatusLabel(definition.status);
+    const status = statusLabel ? ` (${statusLabel})` : '';
+    const jobsCount = definition.createdJobsCount ?? 0;
+    return `Definition #${definitionId}${status}, ${jobsCount} ${this.getJobCountLabel(jobsCount)}`;
+  }
+
+  private getCoderTrainingLabel(training: CoderTraining): string {
+    const jobsCount = training.jobsCount ?? 0;
+    const trainingLabel = training.label || this.translateService.instant('double-coded-review.filter.training-fallback', {
+      id: training.id
+    });
+    return `${trainingLabel} (${jobsCount} ${this.getJobCountLabel(jobsCount)})`;
+  }
+
+  private getJobDefinitionStatusLabel(status: JobDefinition['status']): string {
+    if (!status) {
+      return '';
+    }
+
+    const statusKey = status === 'pending_review' ?
+      'coding-job-definition-dialog.status.definition.pending-review' :
+      `coding-job-definition-dialog.status.definition.${status}`;
+    return this.translateService.instant(statusKey);
+  }
+
+  private getJobCountLabel(count: number): string {
+    return this.translateService.instant(
+      count === 1 ?
+        'double-coded-review.filter.job-count-singular' :
+        'double-coded-review.filter.job-count-plural'
+    );
+  }
+
+  hasScopeOptions(): boolean {
+    return this.availableJobDefinitions.length > 0 || this.availableCoderTrainings.length > 0;
   }
 
   getScopeSelectionSummary(): string {
+    if (this.filterOptionsLoaded && !this.hasScopeOptions()) {
+      return this.translateService.instant('double-coded-review.filter.scope-none');
+    }
+
     const selectedScopes = this.scopeControl.value || [];
     if (selectedScopes.length === 0) {
       return this.translateService.instant('double-coded-review.filter.scope-all');
@@ -253,7 +312,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     if (scope.startsWith('training_')) {
       const scopeId = parseInt(scope.replace('training_', ''), 10);
-      return this.availableCoderTrainings.find(training => training.id === scopeId)?.label || `Training #${scopeId}`;
+      return this.availableCoderTrainings.find(training => training.id === scopeId)?.label ||
+        this.translateService.instant('double-coded-review.filter.training-fallback', { id: scopeId });
     }
 
     return scope;
@@ -364,6 +424,35 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return item.coderResults.find(result => result.jobId === meta.jobId);
   }
 
+  isGeoGebraAnswer(value: string | null | undefined): boolean {
+    const normalizedValue = (value || '').trim();
+    return normalizedValue.startsWith('UEsD') || /^data:[^,]*;base64,UEsD/i.test(normalizedValue);
+  }
+
+  getAnswerDisplay(value: string | null | undefined): string {
+    if (!value) {
+      return 'N/A';
+    }
+
+    if (this.isGeoGebraAnswer(value)) {
+      return this.translateService.instant('double-coded-review.values.geogebra-answer');
+    }
+
+    return value;
+  }
+
+  getAnswerTooltip(value: string | null | undefined): string {
+    if (!value) {
+      return 'N/A';
+    }
+
+    if (this.isGeoGebraAnswer(value)) {
+      return this.translateService.instant('double-coded-review.values.geogebra-tooltip');
+    }
+
+    return value;
+  }
+
   openReplay(responseId: number): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -471,6 +560,11 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.filterOptionsLoaded && !this.hasScopeOptions()) {
+      this.clearReviewData();
+      return;
+    }
+
     this.testPersonCodingService.getDoubleCodedVariablesForReview(
       workspaceId,
       this.currentPage,
@@ -505,6 +599,17 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       }
     });
+  }
+
+  private clearReviewData(): void {
+    this.allData = [];
+    this.dataSource.data = [];
+    this.totalItems = 0;
+    this.updateDisplayedColumns([]);
+    if (this.selectionForm) {
+      this.updateForm();
+    }
+    this.isLoading = false;
   }
 
   onPageChange(event: PageEvent): void {
