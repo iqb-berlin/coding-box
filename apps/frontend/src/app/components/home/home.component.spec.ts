@@ -4,7 +4,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  BehaviorSubject, Observable, Subject, of
+  BehaviorSubject, Observable, Subject, of, throwError
 } from 'rxjs';
 import { HomeComponent } from './home.component';
 import { AuthService } from '../../core/services/auth.service';
@@ -12,7 +12,7 @@ import { environment } from '../../../environments/environment';
 import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
-import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
+import { UserService } from '../../shared/services/user/user.service';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
 import {
   AUTH_QUERY_PARAM_ACCESS_DENIED,
@@ -71,7 +71,7 @@ describe('HomeComponent', () => {
   let authDataSubject: BehaviorSubject<AuthDataDto>;
   let snackBarOpen: jest.Mock;
   let routerNavigate: jest.Mock;
-  let getWorkspaceUsers: jest.Mock;
+  let getUsers: jest.Mock;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -80,7 +80,7 @@ describe('HomeComponent', () => {
     authDataSubject = new BehaviorSubject<AuthDataDto>(defaultAuthData);
     snackBarOpen = jest.fn();
     routerNavigate = jest.fn();
-    getWorkspaceUsers = jest.fn();
+    getUsers = jest.fn();
     mockActivatedRoute.queryParams = queryParamsSubject.asObservable();
     mockAppService.authBootstrapStatus$ = authStatusSubject.asObservable();
     mockAppService.authData$ = authDataSubject.asObservable();
@@ -101,8 +101,8 @@ describe('HomeComponent', () => {
           useValue: { open: snackBarOpen }
         },
         {
-          provide: WorkspaceBackendService,
-          useValue: { getWorkspaceUsers }
+          provide: UserService,
+          useValue: { getUsers }
         },
         {
           provide: Router,
@@ -251,9 +251,7 @@ describe('HomeComponent', () => {
   });
 
   it('should not route to coding when canCode is explicitly false for a level 1 user', async () => {
-    getWorkspaceUsers.mockReturnValue(of({
-      data: [{ userId: 7, accessLevel: 1, canCode: false }]
-    }));
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: false }]));
     authDataSubject.next({
       ...defaultAuthData,
       userId: 7,
@@ -263,45 +261,43 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getWorkspaceUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
   it.each([
     {
       label: 'pure coder',
-      workspaceUser: { userId: 7, accessLevel: 1, canCode: true },
+      workspaceUser: { id: 7, accessLevel: 1, canCode: true },
       shouldRouteToCoding: true
     },
     {
       label: 'coding manager with coding rights',
-      workspaceUser: { userId: 7, accessLevel: 2, canCode: true },
+      workspaceUser: { id: 7, accessLevel: 2, canCode: true },
       shouldRouteToCoding: false
     },
     {
       label: 'coding manager without coding rights',
-      workspaceUser: { userId: 7, accessLevel: 2, canCode: false },
+      workspaceUser: { id: 7, accessLevel: 2, canCode: false },
       shouldRouteToCoding: false
     },
     {
       label: 'study manager with coding rights',
-      workspaceUser: { userId: 7, accessLevel: 3, canCode: true },
+      workspaceUser: { id: 7, accessLevel: 3, canCode: true },
       shouldRouteToCoding: false
     },
     {
       label: 'study manager without coding rights',
-      workspaceUser: { userId: 7, accessLevel: 3, canCode: false },
+      workspaceUser: { id: 7, accessLevel: 3, canCode: false },
       shouldRouteToCoding: false
     },
     {
       label: 'legacy level 1 coder without canCode field',
-      workspaceUser: { userId: 7, accessLevel: 1 },
+      workspaceUser: { id: 7, accessLevel: 1 },
       shouldRouteToCoding: true
     }
   ])('should handle home auto-routing for $label', async ({ workspaceUser, shouldRouteToCoding }) => {
-    getWorkspaceUsers.mockReturnValue(of({
-      data: [workspaceUser]
-    }));
+    getUsers.mockReturnValue(of([workspaceUser]));
     authDataSubject.next({
       ...defaultAuthData,
       userId: 7,
@@ -311,7 +307,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getWorkspaceUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11);
     if (shouldRouteToCoding) {
       expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
     } else {
@@ -320,11 +316,9 @@ describe('HomeComponent', () => {
   });
 
   it('should not route to coding when a user is a coder in one workspace and manager in another', async () => {
-    getWorkspaceUsers.mockImplementation((workspaceId: number) => of({
-      data: workspaceId === 11 ?
-        [{ userId: 7, accessLevel: 1, canCode: true }] :
-        [{ userId: 7, accessLevel: 3, canCode: true }]
-    }));
+    getUsers.mockImplementation((workspaceId: number) => of(workspaceId === 11 ?
+      [{ id: 7, accessLevel: 1, canCode: true }] :
+      [{ id: 7, accessLevel: 3, canCode: true }]));
     authDataSubject.next({
       ...defaultAuthData,
       userId: 7,
@@ -337,15 +331,49 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getWorkspaceUsers).toHaveBeenCalledWith(11);
-    expect(getWorkspaceUsers).toHaveBeenCalledWith(12);
+    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(12);
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
+
+  it('should not route to coding when one of multiple workspace access requests fails', async () => {
+    getUsers.mockImplementation((workspaceId: number) => (workspaceId === 11 ?
+      of([{ id: 7, accessLevel: 1, canCode: true }]) :
+      throwError(() => new Error('access failed'))));
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [
+        { id: 11 } as WorkspaceFullDto,
+        { id: 12 } as WorkspaceFullDto
+      ]
+    });
+
+    createComponent();
+    await fixture.whenStable();
+
+    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(12);
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+  });
+
+  it('should not route to coding when workspace access cannot be loaded', async () => {
+    getUsers.mockReturnValue(throwError(() => new Error('access failed')));
+    authDataSubject.next({
+      ...defaultAuthData,
+      userId: 7,
+      workspaces: [{ id: 11 } as WorkspaceFullDto]
+    });
+
+    createComponent();
+    await fixture.whenStable();
+
+    expect(getUsers).toHaveBeenCalledWith(11);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
   it('should not auto-route admins to coding even when they can code', async () => {
-    getWorkspaceUsers.mockReturnValue(of({
-      data: [{ userId: 7, accessLevel: 3, canCode: true }]
-    }));
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 3, canCode: true }]));
     authDataSubject.next({
       ...defaultAuthData,
       userId: 7,
@@ -356,7 +384,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getWorkspaceUsers).not.toHaveBeenCalled();
+    expect(getUsers).not.toHaveBeenCalled();
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 });

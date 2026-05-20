@@ -7,7 +7,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
-  Subscription, forkJoin
+  Subscription, catchError, forkJoin, of
 } from 'rxjs';
 import { ActivatedRoute, Params, Router } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -17,13 +17,16 @@ import { AppInfoComponent } from '../app-info/app-info.component';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { UserWorkspacesAreaComponent } from '../../workspace/components/user-workspaces-area/user-workspaces-area.component';
 import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace-full-dto';
-import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
+import { UserService } from '../../shared/services/user/user.service';
 import {
   AUTH_QUERY_PARAM_ACCESS_DENIED,
   AUTH_QUERY_PARAM_AUTH_DATA_FAILED,
   AUTH_QUERY_PARAM_SESSION_EXPIRED
 } from '../../core/guards/auth-redirect';
-import { hasOnlyPersonalCodingAccess } from '../../shared/utils/workspace-access';
+import {
+  getCurrentUserWorkspaceAccesses,
+  hasOnlyPersonalCodingAccess
+} from '../../shared/utils/workspace-access';
 
 @Component({
   selector: 'coding-box-home',
@@ -45,7 +48,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private snackBar = inject(MatSnackBar);
-  private workspaceBackendService = inject(WorkspaceBackendService);
+  private userService = inject(UserService);
   private authService = inject(AuthService);
 
   workspaces: WorkspaceFullDto[] = [];
@@ -114,10 +117,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
 
     const workspaceIds = this.workspaces.map(workspace => workspace.id);
-    const observables = workspaceIds.map(workspaceId => this.workspaceBackendService.getWorkspaceUsers(workspaceId));
+    const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
 
-    forkJoin(observables).subscribe(responses => {
-      const currentUserAccess = responses.flatMap(response => response.data.filter(user => user.userId === userId));
+    forkJoin(observables).pipe(catchError(() => of(null))).subscribe(responses => {
+      if (!responses) {
+        return;
+      }
+
+      const currentUserAccess = getCurrentUserWorkspaceAccesses(responses, userId);
       if (hasOnlyPersonalCodingAccess(currentUserAccess)) {
         this.router.navigate(['/coding']);
       }
