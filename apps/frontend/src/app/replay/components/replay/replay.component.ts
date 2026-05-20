@@ -109,6 +109,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private watermarkElement: ElementRef<HTMLElement> | null = null;
   private watermarkObserver: ResizeObserver | null = null;
   private watermarkCheckPending: boolean = false;
+  private anchorHighlightTimeout: ReturnType<typeof setTimeout> | null = null;
+  private anchorHighlightRunId = 0;
+  private readonly ANCHOR_HIGHLIGHT_RETRY_DELAY_MS = 100;
+  private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
 
   // Resize handle state
   codePanelWidth: number = 350;
@@ -292,14 +296,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
               if (workspace) {
                 const unitData = await this.getUnitData(Number(workspace), this.authToken);
                 this.setUnitProperties(unitData);
-                setTimeout(() => {
-                  if (this.unitPlayerComponent?.hostingIframe?.nativeElement) {
-                    if (this.anchor) {
-                      highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
-                      scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
-                    }
-                  }
-                }, 1000);
               }
             } else {
               this.storeErrorInStatistics('QueryError');
@@ -413,6 +409,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       vocs: FilesDto[]
     }
   ) {
+    this.cancelPendingAnchorHighlight();
     this.player = unitData.player[0].data;
     this.unitDef = unitData.unitDef[0].data;
     this.reloadKey += 1;
@@ -519,6 +516,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onResponseVisible(): void {
+    this.scheduleAnchorHighlight();
+
     if (this.successStoredForCurrentReplay) {
       return;
     }
@@ -607,6 +606,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   async handleUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (!unit) return;
+    this.cancelPendingAnchorHighlight();
     const unitAny = unit as unknown as { name: string; testPerson?: string; variableId?: string };
     const incomingTestPerson = unitAny.testPerson;
 
@@ -631,12 +631,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       if (workspace) {
         this.getUnitData(Number(workspace), this.authToken).then(unitData => {
           this.setUnitProperties(unitData);
-          setTimeout(() => {
-            if (this.unitPlayerComponent?.hostingIframe?.nativeElement && this.anchor) {
-              highlightAspectSectionWithAnchor(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
-              scrollToElementByAlias(this.unitPlayerComponent.hostingIframe.nativeElement, this.anchor);
-            }
-          }, 500);
         });
       }
     }
@@ -674,6 +668,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private resetUnitData() {
+    this.cancelPendingAnchorHighlight();
     this.unitId = '';
     this.player = '';
     this.unitDef = '';
@@ -685,9 +680,55 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   ngOnDestroy(): void {
     this.routerSubscription?.unsubscribe();
     this.routerSubscription = null;
+    this.cancelPendingAnchorHighlight();
     this.resetSnackBars();
     this.watermarkObserver?.disconnect();
     this.watermarkObserver = null;
+  }
+
+  private scheduleAnchorHighlight(): void {
+    if (!this.anchor) {
+      return;
+    }
+
+    this.clearAnchorHighlightTimeout();
+    this.anchorHighlightRunId += 1;
+    const runId = this.anchorHighlightRunId;
+    this.tryHighlightAnchor(runId, 1);
+  }
+
+  private tryHighlightAnchor(runId: number, attempt: number): void {
+    if (runId !== this.anchorHighlightRunId || !this.anchor) {
+      return;
+    }
+
+    const iframe = this.unitPlayerComponent?.hostingIframe?.nativeElement as HTMLIFrameElement | undefined;
+    const highlightedElements = iframe ? highlightAspectSectionWithAnchor(iframe, this.anchor) : [];
+
+    if (highlightedElements.length > 0 && iframe) {
+      scrollToElementByAlias(iframe, this.anchor);
+      return;
+    }
+
+    if (attempt >= this.ANCHOR_HIGHLIGHT_MAX_ATTEMPTS) {
+      return;
+    }
+
+    this.anchorHighlightTimeout = setTimeout(() => {
+      this.tryHighlightAnchor(runId, attempt + 1);
+    }, this.ANCHOR_HIGHLIGHT_RETRY_DELAY_MS);
+  }
+
+  private cancelPendingAnchorHighlight(): void {
+    this.clearAnchorHighlightTimeout();
+    this.anchorHighlightRunId += 1;
+  }
+
+  private clearAnchorHighlightTimeout(): void {
+    if (this.anchorHighlightTimeout) {
+      clearTimeout(this.anchorHighlightTimeout);
+      this.anchorHighlightTimeout = null;
+    }
   }
 
   async onCodeSelected(event: { variableId: string; code: any }): Promise<void> {
