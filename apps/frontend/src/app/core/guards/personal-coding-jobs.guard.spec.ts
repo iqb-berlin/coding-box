@@ -1,7 +1,7 @@
 import { Router, UrlTree } from '@angular/router';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
-import { WorkspaceBackendService } from '../../workspace/services/workspace-backend.service';
+import { UserService } from '../../shared/services/user/user.service';
 import {
   canActivatePersonalCodingJobs,
   createPersonalCodingJobsGuardResult,
@@ -78,45 +78,49 @@ describe('Personal Coding Jobs Guard', () => {
   });
 
   it('detects management access across the users workspaces', async () => {
-    const workspaceBackendService = {
-      getWorkspaceUsers: jest.fn((workspaceId: number) => of({
-        data: workspaceId === 2 ?
-          [{ userId: 7, accessLevel: 2, canCode: true }] :
-          [{ userId: 7, accessLevel: 1, canCode: true }],
-        total: 1,
-        page: 0,
-        limit: 25
-      }))
-    } as unknown as Pick<WorkspaceBackendService, 'getWorkspaceUsers'>;
+    const userService = {
+      getUsers: jest.fn((workspaceId: number) => of(workspaceId === 2 ?
+        [{ id: 7, accessLevel: 2, canCode: true }] :
+        [{ id: 7, accessLevel: 1, canCode: true }]))
+    } as unknown as Pick<UserService, 'getUsers'>;
 
     await expect(userHasAnyManagementWorkspaceAccess(
       {
         ...authData,
         workspaces: [{ id: 1 }, { id: 2 }]
       },
-      workspaceBackendService
+      userService
     )).resolves.toBe(true);
 
-    expect(workspaceBackendService.getWorkspaceUsers).toHaveBeenCalledWith(1);
-    expect(workspaceBackendService.getWorkspaceUsers).toHaveBeenCalledWith(2);
+    expect(userService.getUsers).toHaveBeenCalledWith(1);
+    expect(userService.getUsers).toHaveBeenCalledWith(2);
   });
 
   it('does not treat pure coders as workspace managers', async () => {
-    const workspaceBackendService = {
-      getWorkspaceUsers: jest.fn(() => of({
-        data: [{ userId: 7, accessLevel: 1, canCode: true }],
-        total: 1,
-        page: 0,
-        limit: 25
-      }))
-    } as unknown as Pick<WorkspaceBackendService, 'getWorkspaceUsers'>;
+    const userService = {
+      getUsers: jest.fn(() => of([{ id: 7, accessLevel: 1, canCode: true }]))
+    } as unknown as Pick<UserService, 'getUsers'>;
 
     await expect(userHasAnyManagementWorkspaceAccess(
       {
         ...authData,
         workspaces: [{ id: 1 }]
       },
-      workspaceBackendService
+      userService
     )).resolves.toBe(false);
+  });
+
+  it('does not silently allow coding when workspace access cannot be loaded', async () => {
+    const userService = {
+      getUsers: jest.fn(() => throwError(() => new Error('access failed')))
+    } as unknown as Pick<UserService, 'getUsers'>;
+
+    await expect(userHasAnyManagementWorkspaceAccess(
+      {
+        ...authData,
+        workspaces: [{ id: 1 }]
+      },
+      userService
+    )).rejects.toThrow('access failed');
   });
 });
