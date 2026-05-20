@@ -30,6 +30,18 @@ type GeoGebraPackageLayout = {
   geoGebraHtmlEntryName: string;
 };
 
+type PreparedResourcePackageUpload = {
+  zip: AdmZip;
+  packageName: string;
+  packageFiles: string[];
+  safeZipEntries: SafeZipEntry[];
+  geoGebraPackageLayout: GeoGebraPackageLayout | null;
+  contentHash: string;
+  packageType: 'resource' | 'geogebra';
+  scope: 'workspace' | 'global';
+  detectedVersion: string | null;
+};
+
 @Injectable()
 export class ResourcePackageService {
   private static readonly geogebraPackageName = 'Geogebra';
@@ -100,63 +112,45 @@ export class ResourcePackageService {
   async create(workspaceId: number, zippedResourcePackage: Express.Multer.File): Promise<number> {
     this.logger.log(`Creating resource package for workspace ${workspaceId}.`);
     this.ensurePackagesDirectoryExists();
-    const zip = this.readZip(zippedResourcePackage.buffer);
-    const packageName = this.getPackageNameFromFilename(zippedResourcePackage.originalname);
-    this.assertSafePackageName(packageName);
-    const safeZipEntries = this.getSafeZipEntries(zip);
-    const originalPackageFiles = safeZipEntries.map(entry => entry.entryName);
-    const geoGebraPackageLayout = this.detectGeoGebraPackageLayout(originalPackageFiles);
-    const contentHash = this.getContentHash(zippedResourcePackage.buffer);
-    const isGlobalGeoGebraPackage = this.isGlobalGeoGebraPackage(packageName);
-    const normalizedGeoGebraPackageLayout = isGlobalGeoGebraPackage ? geoGebraPackageLayout : null;
-    const packageType = geoGebraPackageLayout ? 'geogebra' : 'resource';
-    if (isGlobalGeoGebraPackage) {
-      this.assertGeoGebraPackage(geoGebraPackageLayout, originalPackageFiles);
-    }
-    const detectedVersion = packageType === 'geogebra' ?
-      this.detectGeoGebraVersion(zip, geoGebraPackageLayout) :
-      null;
-    const packageFiles = normalizedGeoGebraPackageLayout ?
-      normalizedGeoGebraPackageLayout.packageFiles :
-      originalPackageFiles;
+    const preparedUpload = this.prepareResourcePackageUpload(zippedResourcePackage);
 
-    const existingPackages = await this.findPackagesByName(packageName);
-    const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, contentHash);
+    const existingPackages = await this.findPackagesByName(preparedUpload.packageName);
+    const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, preparedUpload.contentHash);
     if (existingPackage) {
       return this.createOrReturnExistingReference(
         workspaceId,
         existingPackage,
-        packageFiles,
+        preparedUpload.packageFiles,
         zippedResourcePackage,
-        contentHash,
-        packageType,
-        isGlobalGeoGebraPackage ? 'global' : 'workspace',
-        detectedVersion
+        preparedUpload.contentHash,
+        preparedUpload.packageType,
+        preparedUpload.scope,
+        preparedUpload.detectedVersion
       );
     }
 
     if (existingPackages.length > 0) {
       throw new ConflictException(
-        `Ein Ressourcenpaket mit dem Namen "${packageName}" existiert bereits mit anderem Inhalt. Bitte verwenden Sie einen anderen Paketnamen.`
+        `Ein Ressourcenpaket mit dem Namen "${preparedUpload.packageName}" existiert bereits mit anderem Inhalt. Bitte verwenden Sie einen anderen Paketnamen.`
       );
     }
 
     await this.extractAndStorePackage(
-      packageName,
-      zip,
+      preparedUpload.packageName,
+      preparedUpload.zip,
       zippedResourcePackage,
-      safeZipEntries,
-      normalizedGeoGebraPackageLayout
+      preparedUpload.safeZipEntries,
+      preparedUpload.geoGebraPackageLayout
     );
     const newResourcePackage = await this.saveResourcePackageReference(
-      isGlobalGeoGebraPackage ? 0 : workspaceId,
-      packageName,
-      packageFiles,
+      preparedUpload.scope === 'global' ? 0 : workspaceId,
+      preparedUpload.packageName,
+      preparedUpload.packageFiles,
       zippedResourcePackage,
-      contentHash,
-      packageType,
-      isGlobalGeoGebraPackage ? 'global' : 'workspace',
-      detectedVersion
+      preparedUpload.contentHash,
+      preparedUpload.packageType,
+      preparedUpload.scope,
+      preparedUpload.detectedVersion
     );
     return newResourcePackage.id;
   }
@@ -186,9 +180,28 @@ export class ResourcePackageService {
   async installGeoGebraBundle(): Promise<ResourcePackageDto> {
     const existingGeoGebraPackage = await this.findGlobalGeoGebraPackage();
     if (existingGeoGebraPackage) {
-      return existingGeoGebraPackage;
+      const existingErrors = this.validateGeoGebraPackageReference(existingGeoGebraPackage);
+      if (existingErrors.length === 0) {
+        return existingGeoGebraPackage;
+      }
+      this.logger.warn(
+        `Existing GeoGebra package is invalid and will be replaced: ${existingErrors.join(' ')}`
+      );
+      const uploadedFile = await this.downloadGeoGebraBundleAsUpload();
+      return this.replaceGlobalGeoGebraPackage(uploadedFile);
     }
 
+    const uploadedFile = await this.downloadGeoGebraBundleAsUpload();
+
+    await this.create(0, uploadedFile);
+    const installedPackage = await this.findGlobalGeoGebraPackage();
+    if (!installedPackage) {
+      throw new Error('GeoGebra installation did not create a resource package entry');
+    }
+    return installedPackage;
+  }
+
+  private async downloadGeoGebraBundleAsUpload(): Promise<Express.Multer.File> {
     const downloadUrl = this.getGeoGebraBundleDownloadUrl();
     this.logger.log(`Downloading GeoGebra Math Apps Bundle from ${downloadUrl}.`);
     let response;
@@ -209,19 +222,12 @@ export class ResourcePackageService {
       );
     }
     const buffer = Buffer.from(response.data);
-    const uploadedFile = {
+    return {
       originalname: `${ResourcePackageService.geogebraPackageName}.itcr.zip`,
       mimetype: 'application/zip',
       buffer,
       size: buffer.length
     } as Express.Multer.File;
-
-    await this.create(0, uploadedFile);
-    const installedPackage = await this.findGlobalGeoGebraPackage();
-    if (!installedPackage) {
-      throw new Error('GeoGebra installation did not create a resource package entry');
-    }
-    return installedPackage;
   }
 
   async findGlobalGeoGebraPackage(): Promise<ResourcePackageDto | null> {
@@ -342,6 +348,75 @@ export class ResourcePackageService {
       createdAt: new Date()
     });
     return this.resourcePackageRepository.save(newResourcePackage);
+  }
+
+  private prepareResourcePackageUpload(
+    zippedResourcePackage: Express.Multer.File
+  ): PreparedResourcePackageUpload {
+    const zip = this.readZip(zippedResourcePackage.buffer);
+    const packageName = this.getPackageNameFromFilename(zippedResourcePackage.originalname);
+    this.assertSafePackageName(packageName);
+    const safeZipEntries = this.getSafeZipEntries(zip);
+    const originalPackageFiles = safeZipEntries.map(entry => entry.entryName);
+    const geoGebraPackageLayout = this.detectGeoGebraPackageLayout(originalPackageFiles);
+    const contentHash = this.getContentHash(zippedResourcePackage.buffer);
+    const isGlobalGeoGebraPackage = this.isGlobalGeoGebraPackage(packageName);
+    const normalizedGeoGebraPackageLayout = isGlobalGeoGebraPackage ? geoGebraPackageLayout : null;
+    const packageType = geoGebraPackageLayout ? 'geogebra' : 'resource';
+    if (isGlobalGeoGebraPackage) {
+      this.assertGeoGebraPackage(geoGebraPackageLayout, originalPackageFiles);
+    }
+    const detectedVersion = packageType === 'geogebra' ?
+      this.detectGeoGebraVersion(zip, geoGebraPackageLayout) :
+      null;
+    const packageFiles = normalizedGeoGebraPackageLayout ?
+      normalizedGeoGebraPackageLayout.packageFiles :
+      originalPackageFiles;
+
+    return {
+      zip,
+      packageName,
+      packageFiles,
+      safeZipEntries,
+      geoGebraPackageLayout: normalizedGeoGebraPackageLayout,
+      contentHash,
+      packageType,
+      scope: isGlobalGeoGebraPackage ? 'global' : 'workspace',
+      detectedVersion
+    };
+  }
+
+  private async replaceGlobalGeoGebraPackage(
+    zippedResourcePackage: Express.Multer.File
+  ): Promise<ResourcePackageDto> {
+    this.ensurePackagesDirectoryExists();
+    const preparedUpload = this.prepareResourcePackageUpload(zippedResourcePackage);
+    if (preparedUpload.scope !== 'global') {
+      throw new BadRequestException('Das GeoGebra Math Apps Bundle muss als globales GeoGebra-Paket installiert werden.');
+    }
+
+    await this.extractAndStorePackage(
+      preparedUpload.packageName,
+      preparedUpload.zip,
+      zippedResourcePackage,
+      preparedUpload.safeZipEntries,
+      preparedUpload.geoGebraPackageLayout
+    );
+    const newResourcePackage = await this.saveResourcePackageReference(
+      0,
+      preparedUpload.packageName,
+      preparedUpload.packageFiles,
+      zippedResourcePackage,
+      preparedUpload.contentHash,
+      preparedUpload.packageType,
+      'global',
+      preparedUpload.detectedVersion
+    );
+    await this.deleteGlobalPackageReferencesExcept(
+      preparedUpload.packageName,
+      newResourcePackage.id
+    );
+    return newResourcePackage;
   }
 
   private async extractAndStorePackage(
@@ -591,7 +666,7 @@ export class ResourcePackageService {
   }
 
   private validateGeoGebraPackageReference(
-    resourcePackage: ResourcePackage
+    resourcePackage: ResourcePackageDto
   ): string[] {
     const errors: string[] = [];
 
@@ -649,6 +724,20 @@ export class ResourcePackageService {
       .from(ResourcePackage)
       .where('LOWER(name) = LOWER(:packageName)', { packageName })
       .andWhere('scope = :scope', { scope: 'global' })
+      .execute();
+  }
+
+  private async deleteGlobalPackageReferencesExcept(
+    packageName: string,
+    retainedId: number
+  ): Promise<void> {
+    await this.resourcePackageRepository
+      .createQueryBuilder()
+      .delete()
+      .from(ResourcePackage)
+      .where('LOWER(name) = LOWER(:packageName)', { packageName })
+      .andWhere('scope = :scope', { scope: 'global' })
+      .andWhere('id != :retainedId', { retainedId })
       .execute();
   }
 

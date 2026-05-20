@@ -6,8 +6,13 @@ import {
   inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { finalize, takeUntil } from 'rxjs/operators';
-import { Subject } from 'rxjs';
+import {
+  concatMap,
+  finalize,
+  reduce,
+  takeUntil
+} from 'rxjs/operators';
+import { range, Subject } from 'rxjs';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatIcon } from '@angular/material/icon';
 import {
@@ -71,6 +76,7 @@ import {
   hasOnlyManualCodingFreshnessWarnings,
   isCodingFreshnessOpenWarning
 } from '../../../shared/utils/coding-freshness-text.util';
+import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
 @Component({
   selector: 'app-coding-management',
@@ -102,6 +108,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   private uiService = inject(CodingManagementUiService);
   private translateService = inject(TranslateService);
   private router = inject(Router);
+  private readonly reviewBatchSize = 500;
+  private readonly maxReviewResponses = 5000;
 
   // State
   data: Success[] = [];
@@ -121,6 +129,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   isLoading = false;
   isLoadingStatistics = false;
+  isLoadingReview = false;
   isDownloadInProgress = false;
   resetProgress: number | null = null;
   downloadProgress: number | null = null;
@@ -390,10 +399,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   // Filter Event Handlers
   onFilterChange(filterParams: FilterParams): void {
-    this.filterParams = {
+    this.filterParams = this.normalizeFilterParams({
       ...filterParams,
       version: this.selectedStatisticsVersion
-    };
+    });
 
     if (!this.hasActiveFilters(this.filterParams)) {
       this.data = [];
@@ -462,13 +471,91 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
+    if (this.hasActiveFilters() && this.totalRecords > this.data.length) {
+      if (this.totalRecords > this.maxReviewResponses) {
+        this.snackBar.open(
+          this.translateService.instant(
+            'coding-management.messages.review-too-many-results',
+            {
+              count: this.totalRecords,
+              max: this.maxReviewResponses
+            }
+          ),
+          this.translateService.instant('coding-management.actions.close'),
+          { duration: 7000 }
+        );
+        return;
+      }
+      this.loadAllReviewResponses();
+      return;
+    }
+
+    this.openReviewDialog(this.data);
+  }
+
+  private loadAllReviewResponses(): void {
+    const totalReviewRecords = this.totalRecords;
+    if (totalReviewRecords <= 0) {
+      this.snackBar.open(
+        this.translateService.instant('coding-management.messages.no-data-to-review'),
+        this.translateService.instant('coding-management.actions.close'),
+        { duration: 3000 }
+      );
+      return;
+    }
+
+    this.isLoadingReview = true;
+    const reviewFilterParams = { ...this.filterParams };
+    const reviewBatchSize = Math.min(this.reviewBatchSize, totalReviewRecords);
+    const reviewPageCount = Math.ceil(totalReviewRecords / reviewBatchSize);
+
+    range(0, reviewPageCount).pipe(
+      concatMap(batchIndex => this.codingManagementService.searchResponses(
+        reviewFilterParams,
+        batchIndex + 1,
+        reviewBatchSize
+      )),
+      reduce(
+        (
+          responses: Success[],
+          response: { data: SearchResponseItem[]; total: number }
+        ) => responses.concat(this.mapSearchResponseItemsToSuccess(response.data)),
+        [] as Success[]
+      ),
+      finalize(() => {
+        this.isLoadingReview = false;
+      }),
+      takeUntil(this.destroy$)
+    ).subscribe({
+      next: responses => {
+        if (!responses.length) {
+          this.snackBar.open(
+            this.translateService.instant('coding-management.messages.no-data-to-review'),
+            this.translateService.instant('coding-management.actions.close'),
+            { duration: 3000 }
+          );
+          return;
+        }
+        this.openReviewDialog(responses);
+      },
+      error: () => {
+        this.snackBar.open(
+          this.translateService.instant('coding-management.messages.review-load-failed'),
+          this.translateService.instant('coding-management.actions.close'),
+          { duration: 5000 }
+        );
+      }
+    });
+  }
+
+  private openReviewDialog(responses: Success[]): void {
     this.dialog.open(ReviewListDialogComponent, {
       width: '95vw',
       height: '95vh',
       maxWidth: '100vw',
       panelClass: 'full-screen-dialog',
       data: {
-        responses: this.data,
+        responses,
         title: this.translateService.instant('coding-management.actions.review-session')
       }
     });
@@ -687,32 +774,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.pageSize
     ).subscribe({
       next: (response: { data: SearchResponseItem[]; total: number }) => {
-        this.data = response.data.map((item: SearchResponseItem) => ({
-          id: item.responseId,
-          unitid: item.unitId,
-          variableid: item.variableId || '',
-          status: item.status || '',
-          value: item.value || '',
-          subform: '',
-          code: item.code?.toString() || null,
-          score: item.score?.toString() || null,
-          unit: { name: item.unitName },
-          codedstatus: item.codedStatus || '',
-          unitname: item.unitName || '',
-          login_name: item.personLogin || '',
-          login_group: item.personGroup || '',
-          login_code: item.personCode || '',
-          booklet_id: item.bookletName || '',
-          person_code: item.personCode || '',
-          person_group: item.personGroup || '',
-          variable_page: item.variablePage || '0',
-          code_v1: item.code_v1,
-          code_v2: item.code_v2,
-          code_v3: item.code_v3,
-          status_v1: item.status_v1,
-          status_v2: item.status_v2,
-          status_v3: item.status_v3
-        })) as Success[];
+        this.data = this.mapSearchResponseItemsToSuccess(response.data);
         this.totalRecords = response.total;
         this.isLoading = false;
 
@@ -728,6 +790,42 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         this.isLoading = false;
       }
     });
+  }
+
+  private mapSearchResponseItemsToSuccess(items: SearchResponseItem[]): Success[] {
+    return items.map(item => this.mapSearchResponseItemToSuccess(item));
+  }
+
+  private mapSearchResponseItemToSuccess(item: SearchResponseItem): Success {
+    const geoGebraBase64 = extractGeoGebraBase64(item.value);
+    return {
+      id: item.responseId,
+      unitid: item.unitId,
+      variableid: item.variableId || '',
+      status: item.status || '',
+      value: item.value || '',
+      isGeoGebraValue: !!geoGebraBase64,
+      geoGebraBase64,
+      subform: '',
+      code: item.code?.toString() || null,
+      score: item.score?.toString() || null,
+      unit: { name: item.unitName },
+      codedstatus: item.codedStatus || '',
+      unitname: item.unitName || '',
+      login_name: item.personLogin || '',
+      login_group: item.personGroup || '',
+      login_code: item.personCode || '',
+      booklet_id: item.bookletName || '',
+      person_code: item.personCode || '',
+      person_group: item.personGroup || '',
+      variable_page: item.variablePage || '0',
+      code_v1: item.code_v1,
+      code_v2: item.code_v2,
+      code_v3: item.code_v3,
+      status_v1: item.status_v1,
+      status_v2: item.status_v2,
+      status_v3: item.status_v3
+    };
   }
 
   // Dialog Methods
@@ -908,6 +1006,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       responseSource: 'all',
       personLogin: ''
     };
+  }
+
+  private normalizeFilterParams(filterParams: FilterParams): FilterParams {
+    if (filterParams.geogebra && filterParams.responseSource === 'all') {
+      return {
+        ...filterParams,
+        responseSource: 'base'
+      };
+    }
+
+    return filterParams;
   }
 
   private hasActiveFilters(filterParams: FilterParams = this.filterParams): boolean {

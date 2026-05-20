@@ -389,12 +389,15 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
       return;
     }
 
+    const packageExists = this.hasGeoGebraPackage;
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '560px',
       data: <ConfirmDialogData>{
-        title: 'GeoGebra Math Apps Bundle installieren',
-        content: 'Das GeoGebra Math Apps Bundle wird von download.geogebra.org geladen, als globales Ressourcenpaket installiert und steht danach in allen Workspaces zur Verfügung. Bitte beachten Sie die GeoGebra-Lizenzbedingungen.',
-        confirmButtonLabel: 'Installieren',
+        title: packageExists ?
+          'GeoGebra Math Apps Bundle prüfen/reparieren' :
+          'GeoGebra Math Apps Bundle installieren',
+        content: 'Das GeoGebra Math Apps Bundle wird geprüft. Falls kein gültiges Bundle vorhanden ist, wird es von download.geogebra.org geladen, als globales Ressourcenpaket installiert und steht danach in allen Workspaces zur Verfügung. Bitte beachten Sie die GeoGebra-Lizenzbedingungen.',
+        confirmButtonLabel: packageExists ? 'Prüfen/reparieren' : 'Installieren',
         showCancel: true
       }
     });
@@ -413,7 +416,7 @@ export class ResourcePackagesDialogComponent implements OnInit, OnDestroy {
             if (event instanceof HttpResponse) {
               this.finishResourcePackageOperation();
               this.snackBar.open(
-                `GeoGebra wurde installiert${event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : ''}.`,
+                `GeoGebra ist verfügbar${event.body?.detectedVersion ? ` (${event.body.detectedVersion})` : ''}.`,
                 '',
                 { duration: 3000 }
               );

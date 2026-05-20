@@ -33,6 +33,7 @@ import { MatDivider } from '@angular/material/divider';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { responseStatesNumericMap } from '@iqbspecs/response/response.interface';
 import { Success } from '../../../../models/success.model';
+import { extractGeoGebraBase64 } from '../../../../utils/geogebra-value.util';
 
 @Component({
   selector: 'app-response-table',
@@ -76,6 +77,7 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
   @Input() selectedVersion: 'v1' | 'v2' | 'v3' = 'v1';
   @Input() isGeogebraFilterActive = false;
   @Input() isDerivedFilterActive = false;
+  @Input() isReviewLoading = false;
 
   @Output() pageChange = new EventEmitter<PageEvent>();
   @Output() replayClick = new EventEmitter<Success>();
@@ -161,11 +163,46 @@ export class ResponseTableComponent implements AfterViewInit, OnChanges {
     this.reviewClick.emit();
   }
 
+  isGeoGebraValue(value: unknown): boolean {
+    return !!extractGeoGebraBase64(value);
+  }
+
+  downloadGeoGebraValue(response: Success): void {
+    const base64 = response.geoGebraBase64 || extractGeoGebraBase64(response.value);
+    if (!base64) {
+      return;
+    }
+
+    let bytes: Uint8Array;
+    try {
+      bytes = Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+    } catch {
+      return;
+    }
+
+    const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/vnd.geogebra.file' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `${this.toSafeFileName(response.unitname || 'geogebra')}-${this.toSafeFileName(response.variableid || 'response')}.ggb`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+  }
+
   getFilterStatusLabel(): string {
     if (!this.currentStatusFilter || this.currentStatusFilter === 'null') {
       return '';
     }
     const num = parseInt(this.currentStatusFilter, 10);
     return Number.isNaN(num) ? this.currentStatusFilter : this.mapStatusToString(num);
+  }
+
+  private toSafeFileName(value: string): string {
+    return value
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'geogebra';
   }
 }

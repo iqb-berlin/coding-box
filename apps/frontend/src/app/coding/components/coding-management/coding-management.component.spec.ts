@@ -27,6 +27,7 @@ describe('CodingManagementComponent', () => {
   let mockWorkspaceSettingsService: jest.Mocked<Partial<WorkspaceSettingsService>>;
   let mockTestPersonCodingService: jest.Mocked<Partial<TestPersonCodingService>>;
   let mockRouter: jest.Mocked<Partial<Router>>;
+  let mockSnackBar: jest.Mocked<Partial<MatSnackBar>>;
 
   const fakeActivatedRoute = {
     snapshot: { data: {} }
@@ -120,6 +121,10 @@ describe('CodingManagementComponent', () => {
       navigate: jest.fn()
     };
 
+    mockSnackBar = {
+      open: jest.fn()
+    };
+
     await TestBed.configureTestingModule({
       providers: [
         provideHttpClient(),
@@ -133,7 +138,7 @@ describe('CodingManagementComponent', () => {
         },
         {
           provide: MatSnackBar,
-          useValue: { open: jest.fn() }
+          useValue: mockSnackBar
         },
         {
           provide: CodingManagementService,
@@ -275,6 +280,28 @@ describe('CodingManagementComponent', () => {
       );
     });
 
+    it('should normalize GeoGebra filter changes to base responses', () => {
+      component.onFilterChange({
+        unitName: '',
+        codedStatus: '',
+        version: 'v1',
+        code: '',
+        group: '',
+        bookletName: '',
+        variableId: '',
+        geogebra: true,
+        responseSource: 'all',
+        personLogin: ''
+      });
+
+      expect(component.filterParams.responseSource).toBe('base');
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        component.filterParams,
+        1,
+        100
+      );
+    });
+
     it('should clear data when filter status is empty', () => {
       component.data = [{ id: 1 } as Success];
       component.totalRecords = 10;
@@ -380,6 +407,156 @@ describe('CodingManagementComponent', () => {
       component.onShowUnitXml(789);
 
       expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789);
+    });
+
+    it('should load all filtered responses before opening the review dialog', () => {
+      (mockDialog.open as jest.Mock).mockClear();
+      component.filterParams = {
+        ...component.filterParams,
+        geogebra: true
+      };
+      component.data = [{ id: 1 } as Success];
+      component.totalRecords = 2;
+      mockCodingManagementService.searchResponses = jest.fn().mockReturnValue(of({
+        total: 2,
+        data: [
+          {
+            responseId: 1,
+            unitId: 10,
+            variableId: 'v1',
+            value: 'UEsD',
+            status: 'VALUE_CHANGED',
+            unitName: 'Unit1',
+            unitAlias: null,
+            bookletId: 20,
+            bookletName: 'Booklet1',
+            personId: 30,
+            personLogin: 'login1',
+            personCode: 'code1',
+            personGroup: 'group1'
+          },
+          {
+            responseId: 2,
+            unitId: 11,
+            variableId: 'v2',
+            value: 'UEsD',
+            status: 'VALUE_CHANGED',
+            unitName: 'Unit2',
+            unitAlias: null,
+            bookletId: 21,
+            bookletName: 'Booklet2',
+            personId: 31,
+            personLogin: 'login2',
+            personCode: 'code2',
+            personGroup: 'group2'
+          }
+        ]
+      }));
+
+      component.onReviewClick();
+
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledWith(
+        component.filterParams,
+        1,
+        2
+      );
+      expect(mockDialog.open).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            responses: expect.arrayContaining([
+              expect.objectContaining({ id: 1, unitname: 'Unit1' }),
+              expect.objectContaining({ id: 2, unitname: 'Unit2' })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should load review responses in batches for large filtered result sets', () => {
+      (mockDialog.open as jest.Mock).mockClear();
+      component.filterParams = {
+        ...component.filterParams,
+        geogebra: true
+      };
+      component.data = [{ id: 1 } as Success];
+      component.totalRecords = 1200;
+      mockCodingManagementService.searchResponses = jest.fn().mockImplementation(
+        (_params, page: number) => of({
+          total: 1200,
+          data: [{
+            responseId: page,
+            unitId: page,
+            variableId: `v${page}`,
+            value: 'UEsD',
+            status: 'VALUE_CHANGED',
+            unitName: `Unit${page}`,
+            unitAlias: null,
+            bookletId: page,
+            bookletName: `Booklet${page}`,
+            personId: page,
+            personLogin: `login${page}`,
+            personCode: `code${page}`,
+            personGroup: `group${page}`
+          }]
+        })
+      );
+
+      component.onReviewClick();
+
+      expect(mockCodingManagementService.searchResponses).toHaveBeenCalledTimes(3);
+      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ geogebra: true }),
+        1,
+        500
+      );
+      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ geogebra: true }),
+        2,
+        500
+      );
+      expect(mockCodingManagementService.searchResponses).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({ geogebra: true }),
+        3,
+        500
+      );
+      expect(mockDialog.open).toHaveBeenCalledWith(
+        expect.any(Function),
+        expect.objectContaining({
+          data: expect.objectContaining({
+            responses: expect.arrayContaining([
+              expect.objectContaining({ id: 1, unitname: 'Unit1' }),
+              expect.objectContaining({ id: 2, unitname: 'Unit2' }),
+              expect.objectContaining({ id: 3, unitname: 'Unit3' })
+            ])
+          })
+        })
+      );
+    });
+
+    it('should not start a review for result sets beyond the review limit', () => {
+      (mockCodingManagementService.searchResponses as jest.Mock).mockClear();
+      (mockSnackBar.open as jest.Mock).mockClear();
+      (mockDialog.open as jest.Mock).mockClear();
+      component.filterParams = {
+        ...component.filterParams,
+        geogebra: true
+      };
+      component.data = [{ id: 1 } as Success];
+      component.totalRecords = 5001;
+
+      component.onReviewClick();
+
+      expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
+      expect(mockDialog.open).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'coding-management.messages.review-too-many-results',
+        'coding-management.actions.close',
+        { duration: 7000 }
+      );
     });
   });
 

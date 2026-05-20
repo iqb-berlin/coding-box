@@ -20,7 +20,10 @@
     margin-left: auto;
 
     button[mat-raised-button] {
+        align-items: center;
         border-radius: 8px;
+        display: inline-flex;
+        gap: 8px;
         min-height: 40px;
         height: auto;
         line-height: 1.2;
@@ -173,6 +176,49 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.geogebra-value-cell {
+    align-items: center;
+    display: inline-flex;
+    gap: 8px;
+    max-width: 100%;
+    min-width: 0;
+}
+
+.geogebra-badge {
+    align-items: center;
+    background: #eef7f4;
+    border: 1px solid rgba(0, 108, 117, 0.2);
+    border-radius: 4px;
+    color: #006c75;
+    display: inline-flex;
+    font-size: 13px;
+    font-weight: 500;
+    gap: 6px;
+    line-height: 1.2;
+    min-width: 0;
+    padding: 4px 8px;
+
+    mat-icon {
+        flex-shrink: 0;
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+    }
+}
+
+.geogebra-download-button {
+    color: #006c75;
+    flex: 0 0 auto;
+    height: 34px;
+    width: 34px;
+
+    mat-icon {
+        font-size: 20px;
+        height: 20px;
+        width: 20px;
+    }
 }
 
 mat-paginator {

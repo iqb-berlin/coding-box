@@ -1,7 +1,7 @@
 <div class="filter-controls">
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.response-source' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.responseSource" (selectionChange)="onFilterChange()">
+        <mat-select [(ngModel)]="filterParams.responseSource" (selectionChange)="onInstantFilterChange()">
             @for (option of responseSourceOptions; track option.value) {
             <mat-option [value]="option.value">
                 {{ option.label | translate }}
@@ -12,7 +12,7 @@
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.coded-status' | translate }}</mat-label>
-        <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onFilterChange()">
+        <mat-select [(ngModel)]="filterParams.codedStatus" (selectionChange)="onInstantFilterChange()">
             <mat-option></mat-option>
             @for (status of availableStatuses; track status) {
             <mat-option [value]="status">
@@ -28,42 +28,42 @@
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.unit-name' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.unitName" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.unitName" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.unit-name-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.person-code' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.code" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.code" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-code-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.person-login' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.personLogin" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.personLogin" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-login-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.person-group' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.group" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.group" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.person-group-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.booklet-name' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.bookletName" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.bookletName" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.booklet-name-placeholder' | translate }}">
     </mat-form-field>
 
     <mat-form-field appearance="outline" class="filter-field">
         <mat-label>{{ 'coding-management.filters.variable-id' | translate }}</mat-label>
-        <input matInput [(ngModel)]="filterParams.variableId" (input)="onFilterChange()"
+        <input matInput [(ngModel)]="filterParams.variableId" (input)="onTextFilterChange()"
             placeholder="{{ 'coding-management.filters.variable-id-placeholder' | translate }}">
     </mat-form-field>
 
     @if (isGeogebraAvailable) {
-    <mat-checkbox [(ngModel)]="filterParams.geogebra" (change)="onFilterChange()" class="filter-checkbox">
+    <mat-checkbox [(ngModel)]="filterParams.geogebra" (change)="onGeoGebraFilterChange()" class="filter-checkbox">
         {{ 'coding-management.filters.geogebra' | translate }}
     </mat-checkbox>
     }

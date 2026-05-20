@@ -33,8 +33,12 @@
         }
         @if (isGeogebraFilterActive) {
         <div class="header-actions">
-            <button mat-raised-button color="primary" (click)="onReviewClick()">
+            <button mat-raised-button color="primary" [disabled]="isReviewLoading" (click)="onReviewClick()">
+                @if (isReviewLoading) {
+                <mat-spinner diameter="18"></mat-spinner>
+                } @else {
                 <mat-icon>rate_review</mat-icon>
+                }
                 {{ 'coding-management.actions.review-session' | translate }}
             </button>
         </div>
@@ -73,9 +77,24 @@
                         {{ element[column] }}
                     </span>
                     } @else if (column === 'value') {
+                    @if (element.isGeoGebraValue) {
+                    <div class="geogebra-value-cell">
+                        <span class="geogebra-badge">
+                            <mat-icon>extension</mat-icon>
+                            {{ 'coding-management.labels.geogebra-file' | translate }}
+                        </span>
+                        <button mat-icon-button type="button" class="geogebra-download-button"
+                            [matTooltip]="'coding-management.tooltips.download-geogebra-file' | translate"
+                            [attr.aria-label]="'coding-management.tooltips.download-geogebra-file' | translate"
+                            (click)="downloadGeoGebraValue(element); $event.stopPropagation()">
+                            <mat-icon>download</mat-icon>
+                        </button>
+                    </div>
+                    } @else {
                     <div class="truncated-value" [matTooltip]="element[column].length < 500 ? element[column] : null">
                         {{ element[column] }}
                     </div>
+                    }
                     } @else {
                     @if (column === 'codedstatus') {
                     {{ getStatusString(element[column]) }}
