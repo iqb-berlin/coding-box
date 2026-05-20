@@ -139,6 +139,7 @@
           [pageSize]="pageSize" [pageIndex]="pageIndex" [pageSizeOptions]="pageSizeOptions" [isLoading]="isLoading"
           [currentStatusFilter]="filterParams.codedStatus || currentStatusFilter" [selectedVersion]="selectedStatisticsVersion"
           [isGeogebraFilterActive]="filterParams.geogebra" [isDerivedFilterActive]="filterParams.responseSource === 'derived'"
+          [isReviewLoading]="isLoadingReview"
           (pageChange)="onPageChange($event)"
           (replayClick)="onReplayClick($event)" (showCodingScheme)="onShowCodingScheme($event)"
           (showUnitXml)="onShowUnitXml($event)" (reviewClick)="onReviewClick()">

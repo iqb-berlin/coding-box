@@ -976,22 +976,31 @@
     },
     "actions": {
       "review-session": "Review",
-      "close": "Schließen"
+      "close": "Schließen",
+      "retry": "Erneut versuchen"
+    },
+    "labels": {
+      "geogebra-file": "GeoGebra-Datei"
     },
     "messages": {
-      "no-data-to-review": "Keine Daten zur Überprüfung vorhanden."
+      "no-data-to-review": "Keine Daten zur Überprüfung vorhanden.",
+      "review-load-failed": "Die Daten für das Review konnten nicht geladen werden.",
+      "review-too-many-results": "Für das Review sind {{count}} Antworten gefiltert. Bitte grenzen Sie die Auswahl auf höchstens {{max}} Antworten ein.",
+      "replay-load-failed": "Der Session-Player konnte für diesen Eintrag nicht geladen werden."
     },
     "loading": {
       "loading-statistics": "Lade Kodierstatistiken...",
       "coding-responses": "Antworten werden kodiert...",
       "processing-data": "Daten werden verarbeitet...",
-      "creating-coding-statistics": "Fehler beim Erstellen des Statistik-Jobs"
+      "creating-coding-statistics": "Fehler beim Erstellen des Statistik-Jobs",
+      "session-player": "Session-Player wird geladen..."
     },
     "tooltips": {
       "load-statistics": "Kodierstatistiken laden",
       "view-in-replay": "Im Replay anzeigen",
       "show-coding-schema": "Kodierschema anzeigen",
-      "show-unit-xml": "Unit-XML anzeigen"
+      "show-unit-xml": "Unit-XML anzeigen",
+      "download-geogebra-file": "GeoGebra-Datei herunterladen"
     },
     "statistics": {
       "total-responses": "Kodierstatistisch berücksichtigte Antworten:",
@@ -1046,7 +1055,7 @@
       "booklet-name-placeholder": "Testheft-Name eingeben...",
       "variable-id": "Variablen-ID",
       "variable-id-placeholder": "Variablen-ID eingeben...",
-      "geogebra": "Spezialfilter: Geogebra",
+      "geogebra": "Spezialfilter: GeoGebra",
       "response-source": "Antwortquelle",
       "response-source-base": "Basisantworten",
       "response-source-derived": "Abgeleitete Variablen",

@@ -57,7 +57,7 @@ export class ResponseFiltersComponent implements OnDestroy {
   @Output() filterChange = new EventEmitter<FilterParams>();
   @Output() clearFilters = new EventEmitter<void>();
 
-  private filterTimer?: NodeJS.Timeout;
+  private filterTimer?: ReturnType<typeof setTimeout>;
 
   readonly responseSourceOptions = [
     { value: 'all' as const, label: 'coding-management.filters.response-source-all' },
@@ -73,17 +73,24 @@ export class ResponseFiltersComponent implements OnDestroy {
     this.clearFilterTimer();
   }
 
-  onFilterChange(): void {
+  onTextFilterChange(): void {
     this.clearFilterTimer();
-
-    if (!this.filterParams.codedStatus) {
-      this.filterChange.emit(this.filterParams);
-      return;
-    }
 
     this.filterTimer = setTimeout(() => {
       this.filterChange.emit(this.filterParams);
     }, 500);
+  }
+
+  onInstantFilterChange(): void {
+    this.clearFilterTimer();
+    this.filterChange.emit(this.filterParams);
+  }
+
+  onGeoGebraFilterChange(): void {
+    if (this.filterParams.geogebra && this.filterParams.responseSource === 'all') {
+      this.filterParams.responseSource = 'base';
+    }
+    this.onInstantFilterChange();
   }
 
   onClearFilters(): void {

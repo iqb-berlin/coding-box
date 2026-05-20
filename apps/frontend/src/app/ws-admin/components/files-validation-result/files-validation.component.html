@@ -81,6 +81,13 @@
             Für diese Testdateien werden GeoGebra-Aufgaben erkannt, aber es ist kein gültiges GeoGebra Math Apps Bundle
             verfügbar.
           </p>
+          @if (data.workspaceId) {
+          <button mat-raised-button color="primary" class="geogebra-resource-action"
+            [disabled]="isRefreshingValidation" (click)="openGeoGebraResourcePackagesDialog()">
+            <mat-icon>archive</mat-icon>
+            GeoGebra-Ressourcenpakete öffnen
+          </button>
+          }
           @if (geogebra?.packageStatus?.errors?.length) {
           <ul class="geogebra-error-list">
             @for (error of geogebra?.packageStatus?.errors || []; track error) {

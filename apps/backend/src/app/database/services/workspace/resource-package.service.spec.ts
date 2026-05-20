@@ -164,6 +164,68 @@ describe('ResourcePackageService', () => {
     expect(packages).toHaveLength(0);
   });
 
+  it('should keep an invalid existing GeoGebra package when replacement download fails', async () => {
+    packages.push({
+      id: nextId,
+      name: 'Geogebra',
+      workspaceId: 0,
+      packageType: 'geogebra',
+      scope: 'global',
+      elements: ['GeoGebra/deployggb.js'],
+      packageSize: 12,
+      createdAt: new Date()
+    } as ResourcePackage);
+    nextId += 1;
+    fs.mkdirSync(path.join(packagesPath, 'Geogebra', 'GeoGebra'), { recursive: true });
+    fs.writeFileSync(path.join(packagesPath, 'Geogebra', 'GeoGebra', 'deployggb.js'), 'deploy');
+    httpService.axiosRef.get.mockRejectedValue(new Error('not found'));
+
+    await expect(service.installGeoGebraBundle())
+      .rejects
+      .toBeInstanceOf(BadRequestException);
+
+    expect(packages).toHaveLength(1);
+    expect(packages[0].elements).toEqual(['GeoGebra/deployggb.js']);
+    expect(fs.existsSync(path.join(packagesPath, 'Geogebra', 'GeoGebra', 'deployggb.js'))).toBe(true);
+  });
+
+  it('should replace invalid existing global GeoGebra packages during installation', async () => {
+    packages.push({
+      id: nextId,
+      name: 'Geogebra',
+      workspaceId: 0,
+      packageType: 'geogebra',
+      scope: 'global',
+      elements: ['GeoGebra/deployggb.js'],
+      packageSize: 12,
+      createdAt: new Date()
+    } as ResourcePackage);
+    nextId += 1;
+    fs.mkdirSync(path.join(packagesPath, 'Geogebra', 'GeoGebra'), { recursive: true });
+    fs.writeFileSync(path.join(packagesPath, 'Geogebra', 'GeoGebra', 'deployggb.js'), 'deploy');
+    httpService.axiosRef.get.mockResolvedValue({
+      data: createGeoGebraBundle('GeoGebra', '6.0.4')
+    });
+
+    const installedPackage = await service.installGeoGebraBundle();
+
+    expect(httpService.axiosRef.get).toHaveBeenCalled();
+    expect(installedPackage).toMatchObject({
+      name: 'Geogebra',
+      workspaceId: 0,
+      packageType: 'geogebra',
+      scope: 'global',
+      detectedVersion: '6.0.4'
+    });
+    expect(packages).toHaveLength(1);
+    expect(packages[0].elements).toEqual(
+      expect.arrayContaining(['GeoGebra/deployggb.js', 'GeoGebra/HTML5/5.0/GeoGebra.html'])
+    );
+    expect(
+      fs.existsSync(path.join(packagesPath, 'Geogebra', 'GeoGebra', 'HTML5', '5.0', 'GeoGebra.html'))
+    ).toBe(true);
+  });
+
   function createResourcePackageRepository(): Repository<ResourcePackage> {
     return {
       create: jest.fn((resourcePackage: ResourcePackage) => resourcePackage),
@@ -180,13 +242,22 @@ describe('ResourcePackageService', () => {
         }
         return resourcePackage;
       }),
-      findOne: jest.fn(async () => null),
+      findOne: jest.fn(async (options?: { where?: Partial<ResourcePackage> | Partial<ResourcePackage>[] }) => {
+        const whereConditions = Array.isArray(options?.where) ? options.where : [options?.where];
+        return (
+          packages.find(resourcePackage => whereConditions.some(
+            where => where && matchesWhere(resourcePackage, where)
+          )
+          ) || null
+        );
+      }),
       createQueryBuilder: jest.fn(() => createQueryBuilder())
     } as unknown as Repository<ResourcePackage>;
   }
 
   function createQueryBuilder() {
     const params: Record<string, unknown> = {};
+    let isDeleteQuery = false;
     const builder = {
       where: jest.fn((_condition: string, queryParams?: Record<string, unknown>) => {
         Object.assign(params, queryParams || {});
@@ -205,9 +276,39 @@ describe('ResourcePackageService', () => {
       getOne: jest.fn(async () => packages.find(resourcePackage => matchesParams(
         resourcePackage,
         params
-      )) || null)
+      )) || null),
+      getCount: jest.fn(async () => packages.filter(resourcePackage => matchesParams(
+        resourcePackage,
+        params
+      )).length),
+      delete: jest.fn(() => {
+        isDeleteQuery = true;
+        return builder;
+      }),
+      from: jest.fn(() => builder),
+      execute: jest.fn(async () => {
+        if (!isDeleteQuery) {
+          return { affected: 0 };
+        }
+        const beforeDelete = packages.length;
+        const remainingPackages = packages.filter(resourcePackage => !matchesParams(resourcePackage, {
+          name: params.packageName,
+          scope: params.scope,
+          retainedId: params.retainedId
+        }));
+        packages.splice(0, packages.length, ...remainingPackages);
+        return { affected: beforeDelete - packages.length };
+      })
     };
     return builder;
+  }
+
+  function matchesWhere(
+    resourcePackage: ResourcePackage,
+    where: Partial<ResourcePackage>
+  ): boolean {
+    const resourcePackageRecord = resourcePackage as unknown as Record<string, unknown>;
+    return Object.entries(where).every(([key, value]) => resourcePackageRecord[key] === value);
   }
 
   function matchesParams(
@@ -217,8 +318,10 @@ describe('ResourcePackageService', () => {
     const name = typeof params.name === 'string' ? params.name : null;
     const scope = typeof params.scope === 'string' ? params.scope : null;
     const workspaceId = typeof params.workspaceId === 'number' ? params.workspaceId : null;
+    const retainedId = typeof params.retainedId === 'number' ? params.retainedId : null;
     return (!name || resourcePackage.name.toLowerCase() === name.toLowerCase()) &&
       (!scope || resourcePackage.scope === scope) &&
+      (retainedId === null || resourcePackage.id !== retainedId) &&
       (workspaceId === null ||
         resourcePackage.workspaceId === workspaceId ||
         resourcePackage.scope === scope);

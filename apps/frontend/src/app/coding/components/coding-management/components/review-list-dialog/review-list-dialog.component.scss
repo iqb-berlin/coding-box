@@ -119,6 +119,41 @@
     }
 }
 
+.error-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.94);
+    color: #b00020;
+    gap: 12px;
+    padding: 24px;
+    text-align: center;
+
+    mat-icon {
+        font-size: 32px;
+        height: 32px;
+        width: 32px;
+    }
+
+    p {
+        color: #5f2630;
+        font-size: 14px;
+        margin: 0;
+    }
+
+    button mat-icon {
+        font-size: 18px;
+        height: 18px;
+        width: 18px;
+    }
+}
+
 .replay-iframe {
     width: 100%;
     height: 100%;

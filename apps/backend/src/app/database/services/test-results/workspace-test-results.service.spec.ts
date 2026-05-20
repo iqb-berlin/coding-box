@@ -657,6 +657,43 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('should filter GeoGebra searches by raw and data-uri ggb response values', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { geogebra: true },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('response.value LIKE :ggRawPrefix OR response.value ILIKE :ggDataUriPrefix'),
+        {
+          ggRawPrefix: 'UEsD%',
+          ggDataUriPrefix: 'data:%;base64,UEsD%'
+        }
+      );
+    });
+
+    it('should treat GeoGebra all-source searches as base responses', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getCount.mockResolvedValue(0);
+
+      await service.searchResponses(
+        1,
+        { geogebra: true, responseSource: 'all' },
+        { page: 1, limit: 100 }
+      );
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        'response.is_autocoder_generated IS NOT TRUE'
+      );
+      expect(qb.andWhere).not.toHaveBeenCalledWith('response.status_v1 IS NOT NULL');
+    });
+
     it('should include base and derived responses with kodierstatistical statuses when responseSource is all', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);

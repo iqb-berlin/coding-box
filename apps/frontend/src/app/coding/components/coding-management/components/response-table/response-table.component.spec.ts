@@ -77,6 +77,37 @@ describe('ResponseTableComponent', () => {
     expect(component.getSelectedVersionLabel()).toBe('coding-management.statistics.second-autocode-run');
   });
 
+  it('should recognize GeoGebra response values', () => {
+    expect(component.isGeoGebraValue('UEsDBBQAAAAI')).toBe(true);
+    expect(component.isGeoGebraValue('data:application/octet-stream;base64,UEsDBBQAAAAI')).toBe(true);
+    expect(component.isGeoGebraValue('regular answer')).toBe(false);
+    expect(component.isGeoGebraValue(null)).toBe(false);
+  });
+
+  it('should download GeoGebra response values as ggb files', () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      writable: true,
+      value: jest.fn().mockReturnValue('blob:test')
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      writable: true,
+      value: jest.fn()
+    });
+    const clickSpy = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation();
+
+    component.downloadGeoGebraValue({
+      value: 'UEsD',
+      unitname: 'Unit 1',
+      variableid: 'var/1'
+    } as Success);
+
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(clickSpy).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:test');
+
+    clickSpy.mockRestore();
+  });
+
   it('should return correct label for filter status', () => {
     component.currentStatusFilter = '200';
     expect(component.getFilterStatusLabel()).toBeTruthy();

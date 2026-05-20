@@ -36,7 +36,18 @@
                 @if (item.isLoading) {
                 <div class="loading-overlay">
                     <mat-spinner diameter="30"></mat-spinner>
-                    <p>Loading session player...</p>
+                    <p>{{ 'coding-management.loading.session-player' | translate }}</p>
+                </div>
+                }
+
+                @if (item.hasError) {
+                <div class="error-overlay">
+                    <mat-icon>error</mat-icon>
+                    <p>{{ 'coding-management.messages.replay-load-failed' | translate }}</p>
+                    <button mat-stroked-button type="button" (click)="retryReplay(i)">
+                        <mat-icon>refresh</mat-icon>
+                        {{ 'coding-management.actions.retry' | translate }}
+                    </button>
                 </div>
                 }
 

@@ -233,6 +233,19 @@ export class WorkspaceTestResultsService {
 
   private static readonly ignoredDerivedCodingStatuses = STATISTICS_IGNORED_STATUSES;
 
+  private static readonly geoGebraValueParams = {
+    ggRawPrefix: 'UEsD%',
+    ggDataUriPrefix: 'data:%;base64,UEsD%'
+  };
+
+  private static createGeoGebraValueCondition(responseAlias: string): string {
+    return `(${responseAlias}.value LIKE :ggRawPrefix OR ${responseAlias}.value ILIKE :ggDataUriPrefix)`;
+  }
+
+  private static createGeoGebraUnitExistsCondition(unitAlias: string): string {
+    return `EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = ${unitAlias}.id AND ${WorkspaceTestResultsService.createGeoGebraValueCondition('r2')})`;
+  }
+
   private static parseStoredResponseValue(value: string | null, variableId?: string): unknown {
     const normalizedVariableId = String(variableId || '').trim();
     const isMarkingPanel = normalizedVariableId.startsWith('marking-panel_');
@@ -2385,8 +2398,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       qb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -2632,8 +2645,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       countQb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -3338,8 +3351,8 @@ export class WorkspaceTestResultsService {
 
     if (geogebraOnly) {
       baseQb.andWhere(
-        'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-        { ggPrefix: 'UEsD%' }
+        WorkspaceTestResultsService.createGeoGebraUnitExistsCondition('unit'),
+        WorkspaceTestResultsService.geoGebraValueParams
       );
     }
 
@@ -5714,15 +5727,18 @@ export class WorkspaceTestResultsService {
 
       if (searchParams.geogebra) {
         query.andWhere(
-          'EXISTS (SELECT 1 FROM response r2 WHERE r2.unitid = unit.id AND r2.value LIKE :ggPrefix)',
-          { ggPrefix: 'UEsD%' }
+          WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
+          WorkspaceTestResultsService.geoGebraValueParams
         );
         const version = searchParams.version || 'v1';
         query.addOrderBy(`response.code_${version}`, 'ASC');
         query.addOrderBy('person.code', 'ASC');
       }
 
-      const responseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+      const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+      const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
+        'base' :
+        requestedResponseSource;
 
       if (responseSource === 'derived') {
         const effectiveStatusExpression = getEffectiveCodingStatusExpression(
@@ -6891,7 +6907,10 @@ export class WorkspaceTestResultsService {
       .innerJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.value LIKE :ggPrefix', { ggPrefix: 'UEsD%' });
+      .andWhere(
+        WorkspaceTestResultsService.createGeoGebraValueCondition('response'),
+        WorkspaceTestResultsService.geoGebraValueParams
+      );
     this.applyExclusionsToQuery(query, exclusions);
     const count = await query
       .getCount();

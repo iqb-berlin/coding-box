@@ -58,6 +58,7 @@ import { BookletTestletDto } from '../../../../../../../api-dto/booklet-info/boo
 import { BookletUnitDto } from '../../../../../../../api-dto/booklet-info/booklet-unit.dto';
 import { ValidationService } from '../../../shared/services/validation/validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 
 const VALIDATION_REFRESH_POLL_INTERVAL_MS = 300;
 
@@ -522,6 +523,28 @@ export class FilesValidationDialogComponent implements OnInit {
           `Validierung wird durchgeführt (${this.refreshValidationProgress}%)...`;
     }
     this.cdr.markForCheck();
+  }
+
+  openGeoGebraResourcePackagesDialog(): void {
+    if (!this.data.workspaceId) {
+      this.snackBar.open('Fehler: Kein Workspace ausgewählt', 'OK', { duration: 3000 });
+      return;
+    }
+
+    const dialogRef = this.dialog.open(ResourcePackagesDialogComponent, {
+      width: '94vw',
+      maxWidth: '1440px',
+      maxHeight: '94vh',
+      data: {
+        workspaceId: this.data.workspaceId
+      }
+    });
+
+    dialogRef.afterClosed().subscribe(result => {
+      if (result === true) {
+        this.refreshValidationData('GeoGebra-Ressourcenpakete wurden aktualisiert.');
+      }
+    });
   }
 
   private createValidationView(result: FilesValidation): FilesValidationView {

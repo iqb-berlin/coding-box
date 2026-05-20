@@ -8,14 +8,12 @@
         <mat-icon>upload</mat-icon>
         Ressourcenpaket hochladen
       </a>
-      @if (!hasGeoGebraPackage) {
       <a mat-raised-button color="accent" [disabled]="isResourcePackageOperationActive"
         (click)="installGeoGebraPackage()"
-        matTooltip="Lädt das GeoGebra Math Apps Bundle herunter und installiert es global">
+        matTooltip="Lädt das GeoGebra Math Apps Bundle herunter und installiert oder repariert es global">
         <mat-icon>add_circle</mat-icon>
-        GeoGebra installieren
+        {{ hasGeoGebraPackage ? 'GeoGebra prüfen/reparieren' : 'GeoGebra installieren' }}
       </a>
-      }
       <a mat-raised-button color="primary"
         [disabled]="isResourcePackageOperationActive || resourcePackageSelection.selected.length === 0"
         (click)="deleteResourcePackages()">
