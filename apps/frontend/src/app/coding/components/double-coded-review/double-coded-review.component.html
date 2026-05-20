@@ -1,3 +1,81 @@
+<ng-template #decisionCell let-element="element">
+  <div class="selection-cell">
+    <div
+      class="decision-status"
+      [ngClass]="getDecisionStatusClass(element)"
+      [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
+      <mat-icon>{{ getDecisionStatusIcon(element) }}</mat-icon>
+      <span class="status-label">{{ getDecisionStatusLabel(element) }}</span>
+      @if (!element.isResolved) {
+        <span class="progress-dots">
+          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
+            <span class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></span>
+          }
+        </span>
+      }
+    </div>
+
+    @if (!element.isResolved) {
+      <mat-form-field class="decision-select-field" appearance="outline">
+        <mat-label>{{ 'double-coded-review.decision.select-label' | translate }}</mat-label>
+        <mat-select
+          [formControl]="getItemControl(element)"
+          (selectionChange)="onSelectionChange(element, $event.value)">
+          <mat-select-trigger>
+            @if (getSelectedDecisionResult(element); as selectedResult) {
+              <span class="decision-trigger">
+                <span class="decision-code-value" [matTooltip]="getCodeLabel(selectedResult.code)">
+                  {{ getCodeDisplay(selectedResult.code) || 'N/A' }}
+                </span>
+                @if (selectedResult.score !== null) {
+                  <span class="decision-score-value">({{ selectedResult.score }})</span>
+                }
+                <span class="decision-source">{{ selectedResult.coderName }}</span>
+              </span>
+            } @else {
+              <span class="pending-coder">{{ 'double-coded-review.decision.no-selection' | translate }}</span>
+            }
+          </mat-select-trigger>
+
+          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
+            <mat-option [value]="result.jobId.toString()" [disabled]="result.code === null">
+              <span class="decision-option" [matTooltip]="result.jobName || ''">
+                <span class="decision-option-source">{{ result.coderName }}</span>
+                <span class="decision-option-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
+                @if (result.score !== null) {
+                  <span class="decision-option-score">({{ result.score }})</span>
+                }
+                @if (result.code === null) {
+                  <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
+                }
+              </span>
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+
+      @if (shouldShowDecisionComment(element)) {
+        <mat-form-field class="comment-field" appearance="outline">
+          <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
+          <textarea matInput
+                    [formControl]="getCommentControl(element)"
+                    rows="2"
+                    [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
+        </mat-form-field>
+      }
+
+      <div class="row-actions">
+        <button mat-mini-fab color="primary"
+                [disabled]="!getItemControl(element).value || isLoading"
+                (click)="applySingleDecision(element)"
+                matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
+          <mat-icon>check</mat-icon>
+        </button>
+      </div>
+    }
+  </div>
+</ng-template>
+
 <div *ngIf="dialogRef" class="dialog-layout">
   <h1 mat-dialog-title>
     <mat-icon>compare</mat-icon>
@@ -216,58 +294,7 @@
                   <ng-container matColumnDef="selection">
                     <th mat-header-cell *matHeaderCellDef>{{ getSelectionColumnHeader() }}</th>
                     <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
-                      <div class="selection-cell">
-                        <div class="coding-status" 
-                             [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
-                             [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
-                          @if (hasConflict(element) && !element.isResolved) {
-                            <mat-icon class="conflict-icon" color="warn" [matTooltip]="'double-coded-review.conflict-indicator' | translate">warning</mat-icon>
-                          }
-                          <div class="progress-dots" *ngIf="!element.isResolved">
-                            @for (result of element.coderResults; track $index) {
-                              <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
-                            }
-                          </div>
-                          <mat-icon *ngIf="element.isResolved" color="primary">check_circle</mat-icon>
-                          <span *ngIf="element.isResolved" class="status-label resolved">{{ 'double-coded-review.applied' | translate }}</span>
-                        </div>
-
-                        <ng-container *ngIf="!element.isResolved">
-                          <mat-radio-group
-                            [formControlName]="getItemControlName(element)"
-                            (change)="onSelectionChange(element, $event.value)"
-                            class="coder-selection">
-                            @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                              <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
-                                  <span class="radio-coder-name" [matTooltip]="result.jobName || ''">{{ result.coderName }}</span>
-                                  <span class="radio-coder-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
-                                  @if (result.code === null) {
-                                    <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
-                                  }
-                              </mat-radio-button>
-                            }
-                          </mat-radio-group>
-                          
-                          @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
-                            <mat-form-field class="comment-field" appearance="outline">
-                              <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
-                              <textarea matInput
-                                        [formControlName]="getCommentControlName(element)"
-                                        rows="2"
-                                        [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
-                            </mat-form-field>
-                          }
-
-                          <div class="row-actions">
-                            <button mat-mini-fab color="primary"
-                                    [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
-                                    (click)="applySingleDecision(element)"
-                                    matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
-                              <mat-icon>check</mat-icon>
-                            </button>
-                          </div>
-                        </ng-container>
-                      </div>
+                      <ng-container *ngTemplateOutlet="decisionCell; context: { element: element }"></ng-container>
                     </td>
                   </ng-container>
 
@@ -518,58 +545,7 @@
                 <ng-container matColumnDef="selection">
                   <th mat-header-cell *matHeaderCellDef>{{ getSelectionColumnHeader() }}</th>
                   <td mat-cell *matCellDef="let element; let i = index" [ngClass]="{'incomplete-row': !isAllCodersDone(element)}">
-                    <div class="selection-cell">
-                      <div class="coding-status" 
-                           [ngClass]="element.isResolved ? 'resolved' : (isAllCodersDone(element) ? 'complete' : 'incomplete')"
-                           [matTooltip]="element.isResolved ? ('double-coded-review.applied' | translate) : (getCodedCount(element) + '/' + element.coderResults.length + ' ' + ('double-coded-review.coders-done' | translate))">
-                        @if (hasConflict(element) && !element.isResolved) {
-                          <mat-icon class="conflict-icon" color="warn" [matTooltip]="'double-coded-review.conflict-indicator' | translate">warning</mat-icon>
-                        }
-                        <div class="progress-dots" *ngIf="!element.isResolved">
-                          @for (result of element.coderResults; track $index) {
-                            <div class="dot" [ngClass]="result.code !== null ? 'filled' : 'empty'"></div>
-                          }
-                        </div>
-                        <mat-icon *ngIf="element.isResolved" color="primary">check_circle</mat-icon>
-                        <span *ngIf="element.isResolved" class="status-label resolved">{{ 'double-coded-review.applied' | translate }}</span>
-                      </div>
-
-                      <ng-container *ngIf="!element.isResolved">
-                        <mat-radio-group
-                          [formControlName]="getItemControlName(element)"
-                          (change)="onSelectionChange(element, $event.value)"
-                          class="coder-selection">
-                          @for (result of element.coderResults; track result.coderId + '-' + result.jobId) {
-                            <mat-radio-button [value]="result.jobId.toString()" class="coder-radio" [disabled]="result.code === null">
-                                <span class="radio-coder-name" [matTooltip]="result.jobName || ''">{{ result.coderName }}</span>
-                                <span class="radio-coder-code">{{ getCodeDisplay(result.code) || 'N/A' }}</span>
-                                @if (result.code === null) {
-                                  <span class="pending-coder">({{ 'double-coded-review.pending' | translate }})</span>
-                                }
-                            </mat-radio-button>
-                          }
-                        </mat-radio-group>
-                        
-                        @if (hasConflict(element) || selectionForm.get(getCommentControlName(element))?.value) {
-                          <mat-form-field class="comment-field" appearance="outline">
-                            <mat-label>{{ 'double-coded-review.comment-label' | translate }}</mat-label>
-                            <textarea matInput
-                                      [formControlName]="getCommentControlName(element)"
-                                      rows="2"
-                                      [placeholder]="'double-coded-review.comment-placeholder' | translate"></textarea>
-                          </mat-form-field>
-                        }
-
-                        <div class="row-actions">
-                          <button mat-mini-fab color="primary"
-                                  [disabled]="!selectionForm.get(getItemControlName(element))?.value || isLoading"
-                                  (click)="applySingleDecision(element)"
-                                  matTooltip="{{ 'double-coded-review.apply-single-tooltip' | translate }}">
-                            <mat-icon>check</mat-icon>
-                          </button>
-                        </div>
-                      </ng-container>
-                    </div>
+                    <ng-container *ngTemplateOutlet="decisionCell; context: { element: element }"></ng-container>
                   </td>
                 </ng-container>
 
