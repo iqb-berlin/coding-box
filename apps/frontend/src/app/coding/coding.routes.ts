@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { canActivateAuth } from '../core/guards/auth.guard';
+import { canActivatePersonalCodingJobs } from '../core/guards/personal-coding-jobs.guard';
 
 export const codingRoutes: Routes = [
   {
@@ -14,7 +15,7 @@ export const codingRoutes: Routes = [
   },
   {
     path: 'coding',
-    canActivate: [canActivateAuth],
+    canActivate: [canActivatePersonalCodingJobs],
     loadComponent: () => import('./components/my-coding-jobs/my-coding-jobs.component').then(m => m.MyCodingJobsComponent)
   }
 ];

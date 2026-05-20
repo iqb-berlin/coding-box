@@ -23,6 +23,7 @@ import {
   AUTH_QUERY_PARAM_AUTH_DATA_FAILED,
   AUTH_QUERY_PARAM_SESSION_EXPIRED
 } from '../../core/guards/auth-redirect';
+import { hasOnlyPersonalCodingAccess } from '../../shared/utils/workspace-access';
 
 @Component({
   selector: 'coding-box-home',
@@ -49,7 +50,7 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   workspaces: WorkspaceFullDto[] = [];
   authData = AppService.defaultAuthData;
-  private isCoderChecked = false;
+  private isPersonalCodingJobsRedirectChecked = false;
   private authBootstrapStatus: AuthBootstrapStatus = 'checking';
   private authDataRefreshRequested = false;
   private authDataFailedQueryParamActive = false;
@@ -64,8 +65,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       if (authData) {
         this.authData = authData;
         this.workspaces = authData.workspaces;
-        if (!this.isCoderChecked && authData.userId > 0) {
-          this.checkIfUserIsCoder(authData.userId);
+        if (!this.isPersonalCodingJobsRedirectChecked && authData.userId > 0 && !authData.isAdmin) {
+          this.redirectPureCoderToPersonalCodingJobs(authData.userId);
         }
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
@@ -105,8 +106,8 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.appService.refreshAuthData();
   }
 
-  private checkIfUserIsCoder(userId: number): void {
-    this.isCoderChecked = true;
+  private redirectPureCoderToPersonalCodingJobs(userId: number): void {
+    this.isPersonalCodingJobsRedirectChecked = true;
 
     if (!this.workspaces || this.workspaces.length === 0) {
       return;
@@ -116,12 +117,9 @@ export class HomeComponent implements OnInit, OnDestroy {
     const observables = workspaceIds.map(workspaceId => this.workspaceBackendService.getWorkspaceUsers(workspaceId));
 
     forkJoin(observables).subscribe(responses => {
-      for (const response of responses) {
-        const currentUser = response.data.find(user => user.userId === userId);
-        if (currentUser && currentUser.accessLevel === 1) {
-          this.router.navigate(['/coding']);
-          return;
-        }
+      const currentUserAccess = responses.flatMap(response => response.data.filter(user => user.userId === userId));
+      if (hasOnlyPersonalCodingAccess(currentUserAccess)) {
+        this.router.navigate(['/coding']);
       }
     });
   }

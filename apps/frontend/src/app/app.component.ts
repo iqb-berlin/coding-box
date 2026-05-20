@@ -24,6 +24,7 @@ import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
 import { ExportToastComponent } from './components/export-toast/export-toast.component';
 import { ErrorMessageDisplayComponent } from './shared/components/error-message-display/error-message-display.component';
 import { handleKeycloakSessionEvent } from './core/services/keycloak-session-events';
+import { hasAdminBypass } from './core/guards/admin-access';
 
 @Component({
   selector: 'app-root',
@@ -115,7 +116,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
       try {
         const keycloakUserProfile = await this.authService.loadUserProfile();
-        const isAdmin = this.authService.getRoles().includes('admin');
+        const isAdmin = hasAdminBypass(this.authService.getRoles());
 
         if (this.isValidUserProfile(keycloakUserProfile)) {
           const keycloakUser = this.createKeycloakUser(keycloakUserProfile, isAdmin);
@@ -156,5 +157,9 @@ export class AppComponent implements OnInit, OnDestroy {
       email: userProfile.email || '',
       isAdmin: isAdmin
     };
+  }
+
+  isAdminUser(): boolean {
+    return hasAdminBypass(this.authService.getRoles(), this.authData.isAdmin);
   }
 }
