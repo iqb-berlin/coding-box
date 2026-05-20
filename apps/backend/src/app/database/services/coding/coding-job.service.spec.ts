@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobCoder } from '../../entities/coding-job-coder.entity';
@@ -69,6 +69,12 @@ describe('CodingJobService', () => {
   let connection: { transaction: jest.Mock };
   let cacheService: { delete: jest.Mock };
   let codingFreshnessService: { reconcileAppliedManualCodingJobs: jest.Mock };
+  let usersService: {
+    getUserIsAdmin: jest.Mock;
+    getUserAccessLevel: jest.Mock;
+    assertUsersCanCodeInWorkspace: jest.Mock;
+    canUserCodeInWorkspace: jest.Mock;
+  };
 
   const mockCodingScheme = (
     {
@@ -159,9 +165,11 @@ describe('CodingJobService', () => {
     const workspaceFilesService = {
       getDerivedVariableMap: jest.fn().mockResolvedValue(new Map())
     };
-    const usersService = {
+    usersService = {
       getUserIsAdmin: jest.fn().mockResolvedValue(false),
-      getUserAccessLevel: jest.fn().mockResolvedValue(1)
+      getUserAccessLevel: jest.fn().mockResolvedValue(1),
+      assertUsersCanCodeInWorkspace: jest.fn().mockResolvedValue(undefined),
+      canUserCodeInWorkspace: jest.fn().mockResolvedValue(true)
     };
     codingFreshnessService = {
       reconcileAppliedManualCodingJobs: jest.fn().mockResolvedValue(0)
@@ -186,6 +194,68 @@ describe('CodingJobService', () => {
     );
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
+  });
+
+  it('allows assigned coder access only when coding capability is active', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
+    codingJobCoderRepository.count.mockResolvedValue(1);
+
+    await expect(service.assertUserCanAccessCodingJob(12, 7, 5)).resolves.toBeUndefined();
+
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(codingJobCoderRepository.count).toHaveBeenCalledWith({
+      where: {
+        coding_job_id: 12,
+        user_id: 5
+      }
+    });
+  });
+
+  it('rejects assigned coder access when coding capability was revoked', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
+    usersService.canUserCodeInWorkspace.mockResolvedValueOnce(false);
+
+    await expect(service.assertUserCanAccessCodingJob(12, 7, 5)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(codingJobCoderRepository.count).not.toHaveBeenCalled();
+  });
+
+  it('keeps manager access independent from coding capability for management actions', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
+    usersService.getUserAccessLevel.mockResolvedValueOnce(2);
+
+    await expect(service.assertUserCanAccessCodingJob(12, 7, 5)).resolves.toBeUndefined();
+
+    expect(usersService.canUserCodeInWorkspace).not.toHaveBeenCalled();
+    expect(codingJobCoderRepository.count).not.toHaveBeenCalled();
+  });
+
+  it('requires coding capability for coding actions even when the user has manager access', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
+    usersService.getUserAccessLevel.mockResolvedValueOnce(2);
+    usersService.canUserCodeInWorkspace.mockResolvedValueOnce(false);
+
+    await expect(service.assertUserCanCodeCodingJob(12, 7, 5)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(usersService.getUserAccessLevel).not.toHaveBeenCalled();
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(codingJobCoderRepository.count).not.toHaveBeenCalled();
+  });
+
+  it('allows coding actions for assigned users with active coding capability', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
+    codingJobCoderRepository.count.mockResolvedValue(1);
+
+    await expect(service.assertUserCanCodeCodingJob(12, 7, 5)).resolves.toBeUndefined();
+
+    expect(usersService.canUserCodeInWorkspace).toHaveBeenCalledWith(5, 7);
+    expect(codingJobCoderRepository.count).toHaveBeenCalledWith({
+      where: {
+        coding_job_id: 12,
+        user_id: 5
+      }
+    });
   });
 
   it('reports coding job progress with totals and open units', async () => {
@@ -695,10 +765,15 @@ describe('CodingJobService', () => {
   });
 
   it('creates, updates and deletes direct assignments', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 12, workspace_id: 7 });
     codingJobCoderRepository.save.mockImplementation(value => Promise.resolve(value));
 
     const result = await service.assignCoders(12, [1, 2]);
 
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 12 },
+      select: ['id', 'workspace_id']
+    });
     expect(codingJobCoderRepository.delete).toHaveBeenCalledWith({ coding_job_id: 12 });
     expect(result).toEqual([
       { coding_job_id: 12, user_id: 1 },
@@ -724,6 +799,7 @@ describe('CodingJobService', () => {
 
     const result = await service.transferCodingCases(3, 1, 2);
 
+    expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith([2], 3);
     expect(result).toEqual({
       sourceCoderId: 1,
       targetCoderId: 2,
@@ -737,6 +813,17 @@ describe('CodingJobService', () => {
 
   it('rejects transfer to the same coder', async () => {
     await expect(service.transferCodingCases(3, 1, 1)).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('rejects transfer when target user is not enabled as coder', async () => {
+    usersService.assertUsersCanCodeInWorkspace.mockRejectedValueOnce(
+      new BadRequestException('User is not enabled as coder')
+    );
+
+    await expect(service.transferCodingCases(3, 1, 2)).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith([2], 3);
+    expect(connection.transaction).not.toHaveBeenCalled();
   });
 
   it('returns assigned coding jobs and coder ids', async () => {
@@ -778,6 +865,30 @@ describe('CodingJobService', () => {
     await expect(service.updateCodingJob(1, 3, { status: 'paused' }))
       .rejects.toBeInstanceOf(BadRequestException);
     expect(codingJobRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('validates updated coders before saving job fields or deleting existing assignments', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1,
+      workspace_id: 3,
+      status: 'active'
+    });
+    codingJobCoderRepository.find.mockResolvedValue([]);
+    codingJobVariableRepository.find.mockResolvedValue([]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+    variableBundleRepository.find.mockResolvedValue([]);
+    usersService.assertUsersCanCodeInWorkspace.mockRejectedValueOnce(
+      new BadRequestException('User is not enabled as coder')
+    );
+
+    await expect(service.updateCodingJob(1, 3, {
+      name: 'Changed',
+      assignedCoders: [99]
+    })).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(usersService.assertUsersCanCodeInWorkspace).toHaveBeenCalledWith([99], 3);
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(codingJobCoderRepository.delete).not.toHaveBeenCalled();
   });
 
   it('rejects unsupported coding job statuses', async () => {

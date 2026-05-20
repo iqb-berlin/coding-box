@@ -564,6 +564,10 @@ export class JobDefinitionService {
       doubleCodingPercentage: createDto.doubleCodingPercentage,
       caseOrderingMode: createDto.caseOrderingMode
     });
+    await this.codingJobService.assertCodersCanCodeInWorkspace(
+      coderAssignments.assignedCoders,
+      workspaceId
+    );
 
     const conflicts = await this.checkVariableConflicts(
       workspaceId,
@@ -818,6 +822,15 @@ export class JobDefinitionService {
 
     this.validateStatusTransition(jobDefinition.status, updateDto.status);
     this.validateDefinitionState(nextState);
+    const coderAssignmentsChanged = updateDto.assignedCoders !== undefined ||
+      updateDto.assignedCoderConfigs !== undefined;
+    const approvesDefinition = updateDto.status === 'approved' && jobDefinition.status !== 'approved';
+    if (coderAssignmentsChanged || approvesDefinition) {
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        nextCoderAssignments.assignedCoders,
+        jobDefinition.workspace_id
+      );
+    }
 
     if (
       updateDto.assignedVariables !== undefined ||
@@ -931,6 +944,10 @@ export class JobDefinitionService {
     if (approveDto.status === 'pending_review' && jobDefinition.status === 'draft') {
       jobDefinition.status = 'pending_review';
     } else if (approveDto.status === 'approved' && ['draft', 'pending_review'].includes(jobDefinition.status)) {
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        coderAssignments.assignedCoders,
+        jobDefinition.workspace_id
+      );
       // Validate variable availability before approving
       await this.validateVariableAvailability(jobDefinition);
       jobDefinition.status = 'approved';

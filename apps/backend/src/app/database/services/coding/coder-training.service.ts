@@ -718,6 +718,10 @@ export class CoderTrainingService {
   ): Promise<{ success: boolean; jobsCreated: number; message: string; jobs: TrainingJob[]; trainingId?: number }> {
     try {
       this.logger.log(`Creating coder training jobs for workspace ${workspaceId} with ${selectedCoders.length} coders and label '${trainingLabel}'`);
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        selectedCoders.map(coder => coder.id),
+        workspaceId
+      );
 
       const coderTraining = new CoderTraining();
       coderTraining.workspace_id = workspaceId;
@@ -1368,6 +1372,10 @@ export class CoderTrainingService {
   ): Promise<{ success: boolean; message: string; jobsCreated?: number; jobs?: TrainingJob[] }> {
     try {
       this.logger.log(`Updating coder training ${trainingId} in workspace ${workspaceId}`);
+      await this.codingJobService.assertCodersCanCodeInWorkspace(
+        selectedCoders.map(coder => coder.id),
+        workspaceId
+      );
 
       const training = await this.coderTrainingRepository.findOne({
         where: { id: trainingId, workspace_id: workspaceId },

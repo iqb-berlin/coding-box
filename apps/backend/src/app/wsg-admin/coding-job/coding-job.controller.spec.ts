@@ -15,7 +15,10 @@ describe('WsgCodingJobController', () => {
     getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
+    saveCodingProgress: jest.Mock;
+    saveCodingNotes: jest.Mock;
     assertUserCanAccessCodingJob: jest.Mock;
+    assertUserCanCodeCodingJob: jest.Mock;
   };
   const req = { user: { id: 5 }, protocol: 'http', get: jest.fn().mockReturnValue('localhost') } as never;
 
@@ -33,7 +36,10 @@ describe('WsgCodingJobController', () => {
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn(),
-      assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined)
+      saveCodingProgress: jest.fn().mockResolvedValue({ id: 123 }),
+      saveCodingNotes: jest.fn().mockResolvedValue({ id: 123 }),
+      assertUserCanAccessCodingJob: jest.fn().mockResolvedValue(undefined),
+      assertUserCanCodeCodingJob: jest.fn().mockResolvedValue(undefined)
     };
 
     controller = new WsgCodingJobController(
@@ -61,7 +67,34 @@ describe('WsgCodingJobController', () => {
 
     await controller.startCodingJob(47, 123, req);
 
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
     expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+  });
+
+  it('uses coding access for saving coding progress', async () => {
+    await controller.saveCodingProgress(47, 123, {
+      testPerson: 'p@c@b',
+      unitId: 'u',
+      variableId: 'v'
+    } as never, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.saveCodingProgress).toHaveBeenCalled();
+  });
+
+  it('uses coding access for saving coding notes', async () => {
+    await controller.saveCodingNotes(47, 123, {
+      testPerson: 'p@c@b',
+      unitId: 'u',
+      variableId: 'v',
+      notes: 'note'
+    } as never, req);
+
+    expect(codingJobService.assertUserCanCodeCodingJob).toHaveBeenCalledWith(123, 47, 5);
+    expect(codingJobService.assertUserCanAccessCodingJob).not.toHaveBeenCalled();
+    expect(codingJobService.saveCodingNotes).toHaveBeenCalled();
   });
 
   it('rejects jobDefinitionId on direct coding job creates', async () => {

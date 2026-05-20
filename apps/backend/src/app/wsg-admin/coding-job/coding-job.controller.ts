@@ -72,6 +72,18 @@ export class WsgCodingJobController {
     );
   }
 
+  private async assertCodingJobCodingAccess(
+    workspaceId: number,
+    codingJobId: number,
+    req: Request
+  ): Promise<void> {
+    await this.codingJobService.assertUserCanCodeCodingJob(
+      codingJobId,
+      workspaceId,
+      this.getRequestUserId(req)
+    );
+  }
+
   @Post('transfer-cases')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
   @RequireAccessLevel(2)
@@ -340,7 +352,7 @@ export class WsgCodingJobController {
       @Param('id', ParseIntPipe) id: number,
       @Req() req: Request
   ): Promise<{ total: number; firstReplayUrl: string }> {
-    await this.assertCodingJobAccess(workspaceId, id, req);
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
     const job = await this.codingJobService.getCodingJob(id, workspaceId);
 
     const onlyOpen = job.codingJob.status === 'open';
@@ -437,7 +449,7 @@ export class WsgCodingJobController {
       @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingProgressDto: SaveCodingProgressDto,
       @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobAccess(workspaceId, id, req);
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     const codingJob = await this.codingJobService.saveCodingProgress(id, saveCodingProgressDto);
     return CodingJobDto.fromEntity(codingJob);
@@ -478,7 +490,7 @@ export class WsgCodingJobController {
       @Body(new ValidationPipe({ transform: true, whitelist: true })) saveCodingNotesDto: SaveCodingNotesDto,
       @Req() req: Request
   ): Promise<CodingJobDto> {
-    await this.assertCodingJobAccess(workspaceId, id, req);
+    await this.assertCodingJobCodingAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     const codingJob = await this.codingJobService.saveCodingNotes(id, saveCodingNotesDto);
     return CodingJobDto.fromEntity(codingJob);

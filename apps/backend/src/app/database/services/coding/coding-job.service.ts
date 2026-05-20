@@ -333,6 +333,11 @@ export class CodingJobService {
       return;
     }
 
+    const canCode = await this.usersService.canUserCodeInWorkspace(userId, workspaceId);
+    if (!canCode) {
+      throw new ForbiddenException('User is not enabled as coder in this workspace');
+    }
+
     const assignedCount = await this.codingJobCoderRepository.count({
       where: {
         coding_job_id: codingJobId,
@@ -345,6 +350,69 @@ export class CodingJobService {
     }
 
     throw new ForbiddenException('User is not assigned to this coding job');
+  }
+
+  async assertUserCanCodeCodingJob(
+    codingJobId: number,
+    workspaceId: number,
+    userId: number
+  ): Promise<void> {
+    const codingJob = await this.codingJobRepository.findOne({
+      where: { id: codingJobId, workspace_id: workspaceId },
+      select: ['id']
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    const canCode = await this.usersService.canUserCodeInWorkspace(userId, workspaceId);
+    if (!canCode) {
+      throw new ForbiddenException('User is not enabled as coder in this workspace');
+    }
+
+    const assignedCount = await this.codingJobCoderRepository.count({
+      where: {
+        coding_job_id: codingJobId,
+        user_id: userId
+      }
+    });
+
+    if (assignedCount > 0) {
+      return;
+    }
+
+    throw new ForbiddenException('User is not assigned to this coding job');
+  }
+
+  async assertCodersCanCodeInWorkspace(userIds: number[], workspaceId: number): Promise<void> {
+    await this.usersService.assertUsersCanCodeInWorkspace(userIds, workspaceId);
+  }
+
+  private async assertCodingJobCodersCanCode(
+    codingJobId: number,
+    userIds: number[],
+    manager?: EntityManager,
+    workspaceId?: number
+  ): Promise<void> {
+    if (workspaceId !== undefined) {
+      await this.assertCodersCanCodeInWorkspace(userIds, workspaceId);
+      return;
+    }
+
+    const codingJobRepository = manager ?
+      manager.getRepository(CodingJob) :
+      this.codingJobRepository;
+    const codingJob = await codingJobRepository.findOne({
+      where: { id: codingJobId },
+      select: ['id', 'workspace_id']
+    });
+
+    if (!codingJob) {
+      throw new NotFoundException(`Coding job with ID ${codingJobId} not found`);
+    }
+
+    await this.assertCodersCanCodeInWorkspace(userIds, codingJob.workspace_id);
   }
 
   private async applyCodingJobUnitExclusions<T>(
@@ -1101,7 +1169,7 @@ export class CodingJobService {
       const savedCodingJob = await codingJobRepo.save(codingJob);
 
       if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
+        await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager, workspaceId);
       }
 
       if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
@@ -1177,12 +1245,19 @@ export class CodingJobService {
       codingJob.codingJob.suppressGeneralInstructions = updateCodingJobDto.suppressGeneralInstructions;
     }
 
+    if (updateCodingJobDto.assignedCoders !== undefined) {
+      if (updateCodingJobDto.assignedCoders.length > 0) {
+        await this.assertCodersCanCodeInWorkspace(updateCodingJobDto.assignedCoders, workspaceId);
+      }
+    }
+
     const savedCodingJob = await this.codingJobRepository.save(codingJob.codingJob);
 
     if (updateCodingJobDto.assignedCoders !== undefined) {
-      await this.codingJobCoderRepository.delete({ coding_job_id: id });
       if (updateCodingJobDto.assignedCoders.length > 0) {
-        await this.assignCoders(id, updateCodingJobDto.assignedCoders);
+        await this.assignCoders(id, updateCodingJobDto.assignedCoders, undefined, workspaceId);
+      } else {
+        await this.codingJobCoderRepository.delete({ coding_job_id: id });
       }
     }
 
@@ -1290,7 +1365,13 @@ export class CodingJobService {
     this.logger.log(`Invalidated manual coding variables cache for workspace ${workspaceId}`);
   }
 
-  async assignCoders(codingJobId: number, userIds: number[], manager?: EntityManager): Promise<CodingJobCoder[]> {
+  async assignCoders(
+    codingJobId: number,
+    userIds: number[],
+    manager?: EntityManager,
+    workspaceId?: number
+  ): Promise<CodingJobCoder[]> {
+    await this.assertCodingJobCodersCanCode(codingJobId, userIds, manager, workspaceId);
     const repo = manager ? manager.getRepository(CodingJobCoder) : this.codingJobCoderRepository;
     await repo.delete({ coding_job_id: codingJobId });
     const coders = userIds.map(userId => repo.create({
@@ -1309,6 +1390,8 @@ export class CodingJobService {
     if (sourceCoderId === targetCoderId) {
       throw new BadRequestException('Source and target coder must be different');
     }
+
+    await this.assertCodersCanCodeInWorkspace([targetCoderId], workspaceId);
 
     return this.connection.transaction(async manager => {
       const codingJobCoderRepo = manager.getRepository(CodingJobCoder);
@@ -2460,7 +2543,7 @@ export class CodingJobService {
     const savedCodingJob = await codingJobRepo.save(codingJob);
 
     if (createCodingJobDto.assignedCoders && createCodingJobDto.assignedCoders.length > 0) {
-      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager);
+      await this.assignCoders(savedCodingJob.id, createCodingJobDto.assignedCoders, manager, workspaceId);
     }
 
     if (createCodingJobDto.variables && createCodingJobDto.variables.length > 0) {
@@ -3457,6 +3540,7 @@ export class CodingJobService {
     const caseOrderingMode = request.caseOrderingMode || 'continuous';
     const distributionSeed = this.getDistributionSeed(workspaceId, request);
     const coders = this.normalizeDistributionCoders(request.selectedCoders, distributionSeed);
+    await this.assertCodersCanCodeInWorkspace(coders.map(coder => coder.id), workspaceId);
     const codersPerDoubleCodedCase = 2;
 
     const items = this.buildDistributionItems(request);
