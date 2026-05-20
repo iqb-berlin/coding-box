@@ -2,20 +2,31 @@ import { TestBed } from '@angular/core/testing';
 import {
   ActivatedRouteSnapshot, Router, convertToParamMap
 } from '@angular/router';
-import { BehaviorSubject } from 'rxjs';
+import { BehaviorSubject, of } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
-import { AppService } from '../services/app.service';
+import { AppService, AuthBootstrapStatus } from '../services/app.service';
+import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 
 describe('Access Level Guard', () => {
   let mockAuthService: jest.Mocked<AuthService>;
   let mockUserService: jest.Mocked<UserService>;
   let mockAppService: jest.Mocked<AppService>;
   let mockRouter: jest.Mocked<Router>;
-  let authDataSubject: BehaviorSubject<{ userId: number }>;
+  let authDataSubject: BehaviorSubject<AuthDataDto>;
+
+  const defaultAuthData: AuthDataDto = {
+    userId: 0,
+    userName: '',
+    email: '',
+    firstName: '',
+    lastName: '',
+    isAdmin: false,
+    workspaces: []
+  };
 
   beforeEach(() => {
-    authDataSubject = new BehaviorSubject({ userId: 0 });
+    authDataSubject = new BehaviorSubject(defaultAuthData);
 
     mockAuthService = {
       getRoles: jest.fn()
@@ -26,8 +37,13 @@ describe('Access Level Guard', () => {
     } as unknown as jest.Mocked<UserService>;
 
     mockAppService = {
-      authData$: authDataSubject.asObservable()
+      authData$: authDataSubject.asObservable(),
+      authBootstrapStatus$: of('ready' as AuthBootstrapStatus)
     } as unknown as jest.Mocked<AppService>;
+    Object.defineProperty(mockAppService, 'authData', {
+      get: () => authDataSubject.value,
+      configurable: true
+    });
 
     mockRouter = {
       createUrlTree: jest.fn()
@@ -119,6 +135,14 @@ describe('Access Level Guard', () => {
       );
 
       expect(hasAdminRole).toBe(false);
+    });
+
+    it('should recognize database admins for bypass even without an admin role', async () => {
+      const { hasAdminBypass } = await import('./admin-access');
+
+      expect(hasAdminBypass([], true)).toBe(true);
+      expect(hasAdminBypass(['user'], true)).toBe(true);
+      expect(hasAdminBypass(['user'], false)).toBe(false);
     });
   });
 
@@ -354,11 +378,11 @@ describe('Access Level Guard', () => {
       }
     });
 
-    it('should redirect Coder (level 1) to my-jobs', () => {
-      const userAccessLevel = 1;
+    it('should redirect users with coding access to my-jobs', () => {
+      const canCode = true;
       const workspaceId = '123';
 
-      if (userAccessLevel === 1) {
+      if (canCode) {
         const redirectPath = `/workspace-admin/${workspaceId}/coding/my-jobs`;
         expect(redirectPath).toBe('/workspace-admin/123/coding/my-jobs');
       }

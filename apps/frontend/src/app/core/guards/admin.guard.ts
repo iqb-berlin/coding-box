@@ -11,6 +11,7 @@ import {
   createReAuthenticationUrlTree
 } from './auth-redirect';
 import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
+import { hasAdminBypass } from './admin-access';
 
 const isAdminAccessAllowed = async (
   _route: ActivatedRouteSnapshot,
@@ -25,22 +26,21 @@ const isAdminAccessAllowed = async (
   }
 
   const authService = inject(AuthService);
-  const userRoles = authService.getRoles();
+  const userRoles = authService.getRoles() || [];
 
-  const adminRoles = ['admin', 'system-admin', 'sys-admin', 'administrator'];
-  const hasAdminRole = userRoles.some((role : string) => adminRoles.includes(role.toLowerCase())
-  );
-
-  if (hasAdminRole) {
-    try {
-      const authDataStatus = await waitForRequiredAuthData(appService);
-      return createRequiredAuthDataGuardResult(router, state.url, authDataStatus);
-    } catch {
-      return createAuthDataFailedUrlTree(router, state.url);
+  try {
+    const authDataStatus = await waitForRequiredAuthData(appService);
+    const authDataGuardResult = createRequiredAuthDataGuardResult(router, state.url, authDataStatus);
+    if (authDataGuardResult !== true) {
+      return authDataGuardResult;
     }
-  }
 
-  return createAccessDeniedUrlTree(router, state.url);
+    return hasAdminBypass(userRoles, appService.authData.isAdmin) ?
+      true :
+      createAccessDeniedUrlTree(router, state.url);
+  } catch {
+    return createAuthDataFailedUrlTree(router, state.url);
+  }
 };
 
 export const canActivateAdmin = createAuthGuard<CanActivateFn>(isAdminAccessAllowed);

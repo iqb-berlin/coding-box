@@ -1,7 +1,22 @@
 <div class="page-body">
   <div class="admin-background">
-    @if(accessLevel === 1) {
-      <coding-box-my-coding-jobs [workspaceId]="appService.selectedWorkspaceId"></coding-box-my-coding-jobs>
+    @if (authData.isAdmin || accessLevel >= 3 || (accessLevel < 2 && hasCodingJobsAccess)){
+      <div class="flex-container">
+      <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
+      @for (link of navLinks; track link) {
+        <a mat-tab-link
+           [routerLink]="link.path"
+           routerLinkActive="active-link"
+           #rla="routerLinkActive"
+           [active]="rla.isActive">
+          {{ link.label | translate }}
+        </a>
+      }
+    </nav>
+      <mat-tab-nav-panel #tabPanel class="router-panel">
+        <router-outlet></router-outlet>
+      </mat-tab-nav-panel>
+      </div>
     } @else if (accessLevel === 2){
       <div class="flex-container">
         <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
@@ -18,23 +33,6 @@
         <mat-tab-nav-panel #tabPanel class="router-panel">
           <router-outlet></router-outlet>
         </mat-tab-nav-panel>
-      </div>
-    } @else if (accessLevel >= 3 || authData.isAdmin){
-      <div class="flex-container">
-      <nav mat-tab-nav-bar class="navigation" [tabPanel]="tabPanel">
-      @for (link of navLinks; track link) {
-        <a mat-tab-link
-           [routerLink]="link"
-           routerLinkActive="active-link"
-           #rla="routerLinkActive"
-           [active]="rla.isActive">
-          {{'ws-admin.' + link | translate}}
-        </a>
-      }
-    </nav>
-      <mat-tab-nav-panel #tabPanel class="router-panel">
-        <router-outlet></router-outlet>
-      </mat-tab-nav-panel>
       </div>
     } @else {
       <div class="no-access-message">
