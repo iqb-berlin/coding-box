@@ -15,6 +15,8 @@ import {
 export class CodingReviewService {
   private readonly logger = new Logger(CodingReviewService.name);
 
+  private readonly codingResultSignatureSql = "cju.code::text || ':' || COALESCE(cju.score::text, 'NULL')";
+
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
@@ -90,16 +92,16 @@ export class CodingReviewService {
       });
 
       if (agreementFilter === 'differ') {
-        // Conflict: at least two codes available and they differ.
+        // Conflict: at least two coding decisions are available and code or score differs.
         query.andHaving('COUNT(cju.code) > 1');
-        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) > 1`);
       } else if (agreementFilter === 'match') {
-        // Match: no differing non-null codes.
-        query.andHaving('COUNT(DISTINCT cju.code) <= 1');
+        // Match: no differing non-null coding decisions.
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) <= 1`);
       } else if (onlyConflicts) {
         // Legacy behavior for older clients that still use onlyConflicts.
         query.andHaving('COUNT(cju.code) > 1');
-        query.andHaving('COUNT(DISTINCT cju.code) > 1');
+        query.andHaving(`COUNT(DISTINCT (${this.codingResultSignatureSql})) > 1`);
       }
 
       // Applied Status Filter Logic
@@ -108,8 +110,8 @@ export class CodingReviewService {
         query.andWhere('resp.status_v2 = :completeStatus', { completeStatus });
       } else if (resolvedFilter === 'unresolved') {
         query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
-      } else if ((agreementFilter === 'differ' || (onlyConflicts && agreementFilter !== 'match')) && !resolvedFilter) {
-        // Legacy behavior: onlyConflicts hides resolved items by default if no status filter is set
+      } else if (onlyConflicts && !agreementFilter && !resolvedFilter) {
+        // Legacy behavior: older onlyConflicts clients hide resolved items by default.
         query.andWhere('(resp.status_v2 IS NULL OR resp.status_v2 != :completeStatus)', { completeStatus });
       }
 
