@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -45,6 +45,18 @@ describe('CodingManagementManualComponent', () => {
       ],
       imports: [CodingManagementManualComponent, TranslateModule.forRoot()]
     }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'coding-management-manual': {
+        freshness: {
+          'second-autocoding-ready-title': 'Auto-Coding 2 bereit',
+          'second-autocoding-ready-summary': 'Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.',
+          'second-autocoding-ready-help': 'Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}'
+        }
+      }
+    });
+    translateService.use('de');
 
     fixture = TestBed.createComponent(CodingManagementManualComponent);
     component = fixture.componentInstance;
@@ -189,7 +201,7 @@ describe('CodingManagementManualComponent', () => {
     expect(component.getPlanningStatusTitle()).toBe('Manuelle Kodierung abgeschlossen');
   });
 
-  it('should explain open auto-coding work separately from completed manual coding', () => {
+  it('should hide second auto-coding work while manual coding is still open', () => {
     component.codingFreshnessSummary = {
       workspaceId: 1,
       currentRevision: 2,
@@ -212,11 +224,62 @@ describe('CodingManagementManualComponent', () => {
     expect(component.hasCodingFreshnessWarnings).toBe(true);
     expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
     expect(component.manualCodingFreshnessSummaryText).toBe(
-      'Je betroffenem Auto-Coding-Lauf sind 5098 Antwortwerte in 671 Aufgabenbearbeitungen zu bearbeiten. ' +
-      'Auto-Coding 1 und Auto-Coding 2 müssen ausgeführt werden.'
+      'Auto-Coding 1 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
+      'Das betrifft 5098 Antwortwerte.'
     );
+    expect(component.codingFreshnessWarnings).toHaveLength(1);
     expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
       'Auto-Coding 1: 671 Aufgabenbearbeitungen kodieren'
+    );
+  });
+
+  it('should not show second auto-coding as a manual planning warning before completion', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+
+    expect(component.hasCodingFreshnessWarnings).toBe(false);
+    expect(component.manualCodingFreshnessPanelTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('should show second auto-coding as the next step after manual coding is complete', () => {
+    setCompletePlanningState();
+    setCodingProgress(671, 671);
+    setAppliedResults(5098, 5098, 0);
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+
+    expect(component.hasCodingFreshnessWarnings).toBe(true);
+    expect(component.manualCodingFreshnessPanelTitle).toBe('Auto-Coding 2 bereit');
+    expect(component.manualCodingFreshnessSummaryText).toBe(
+      'Die manuelle Kodierung ist abgeschlossen. ' +
+      'Auto-Coding 2 kann nun für 671 Aufgabenbearbeitungen gestartet oder aktualisiert werden. ' +
+      'Das betrifft 5098 Antwortwerte.'
+    );
+    expect(component.manualCodingFreshnessExplanationText).toContain(
+      'Starten Sie Auto-Coding 2 in der Kodierübersicht.'
+    );
+    expect(component.getManualFreshnessChipLabel(component.codingFreshnessWarnings[0])).toBe(
+      'Auto-Coding 2: 671 Aufgabenbearbeitungen kodieren'
     );
   });
 

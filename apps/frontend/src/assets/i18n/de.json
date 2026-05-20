@@ -1550,6 +1550,11 @@
       "manual-coding-incomplete": "Es gibt noch Kodierungen, die unvollständig oder absichtlich unvollständig markiert sind. Die manuelle Kodierung ist noch nicht abgeschlossen.",
       "manual-coding-complete": "Die manuelle Kodierung ist vollständig abgeschlossen. Sie können nun mit dem zweiten Durchlauf des Autocoders fortfahren."
     },
+    "freshness": {
+      "second-autocoding-ready-title": "Auto-Coding 2 bereit",
+      "second-autocoding-ready-summary": "Die manuelle Kodierung ist abgeschlossen. Auto-Coding 2 kann nun für {{taskResults}} gestartet oder aktualisiert werden. Das betrifft {{responses}}.",
+      "second-autocoding-ready-help": "Starten Sie Auto-Coding 2 in der Kodierübersicht. {{taskResultHelp}}"
+    },
     "duplicate-aggregation": {
       "is-applied": "Aggregation angewendet",
       "config-title": "Aggregationseinstellungen",
