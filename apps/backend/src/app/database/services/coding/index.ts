@@ -13,6 +13,7 @@ export { CodingResponseQueryService } from './coding-response-query.service';
 export { CodingResultsService } from './coding-results.service';
 export { CodingReviewService } from './coding-review.service';
 export { CodingStatisticsService } from './coding-statistics.service';
+export { CodingReadinessService } from './coding-readiness.service';
 export { CodingValidationService } from './coding-validation.service';
 export { CodingVersionService } from './coding-version.service';
 export { CodingAnalysisService } from './coding-analysis.service';

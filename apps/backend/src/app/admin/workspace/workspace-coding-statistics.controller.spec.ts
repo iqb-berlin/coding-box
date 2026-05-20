@@ -3,6 +3,7 @@ import { WorkspaceCodingStatisticsController } from './workspace-coding-statisti
 
 describe('WorkspaceCodingStatisticsController', () => {
   let codingJobService: { createDistributedCodingJobs: jest.Mock };
+  let codingReadinessService: { getReadiness: jest.Mock };
   let controller: WorkspaceCodingStatisticsController;
 
   beforeEach(() => {
@@ -16,6 +17,27 @@ describe('WorkspaceCodingStatisticsController', () => {
         jobs: []
       })
     };
+    codingReadinessService = {
+      getReadiness: jest.fn().mockResolvedValue({
+        workspaceId: 5,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 0,
+        rawResponsesWithRelevantStatus: 0,
+        resultUnitsTotal: 0,
+        resultUnitKeysTotal: 0,
+        matchedUnitFiles: 0,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 0,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 0,
+        validResponses: 0,
+        codeableResponses: 0,
+        invalidVariableSamples: []
+      })
+    };
 
     controller = new WorkspaceCodingStatisticsController(
       {} as never,
@@ -25,6 +47,7 @@ describe('WorkspaceCodingStatisticsController', () => {
       {} as never,
       {} as never,
       {} as never,
+      codingReadinessService as never,
       {} as never
     );
   });
@@ -55,5 +78,14 @@ describe('WorkspaceCodingStatisticsController', () => {
     await controller.createDistributedCodingJobs(5, body);
 
     expect(codingJobService.createDistributedCodingJobs).toHaveBeenCalledWith(5, body);
+  });
+
+  it('delegates autocoding readiness requests with parsed options', async () => {
+    await controller.getAutocodingReadiness(5, '2', 'true');
+
+    expect(codingReadinessService.getReadiness).toHaveBeenCalledWith(5, {
+      autoCoderRun: 2,
+      forceRefresh: true
+    });
   });
 });

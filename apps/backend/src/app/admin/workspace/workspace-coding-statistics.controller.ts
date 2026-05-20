@@ -25,7 +25,8 @@ import {
   CodingProgressService,
   CodingReviewService,
   CodingFreshnessService,
-  CodingProcessService
+  CodingProcessService,
+  CodingReadinessService
 } from '../../database/services/coding';
 import { PersonService } from '../../database/services/test-results';
 import { CodingStatistics } from '../../database/services/shared';
@@ -37,6 +38,7 @@ import {
   CodingFreshnessVersion,
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 type CodingStatisticsJobStatusResponse = {
@@ -100,6 +102,7 @@ export class WorkspaceCodingStatisticsController {
     private codingReviewService: CodingReviewService,
     private codingFreshnessService: CodingFreshnessService,
     private codingProcessService: CodingProcessService,
+    private codingReadinessService: CodingReadinessService,
     private jobQueueService: JobQueueService
   ) { }
 
@@ -169,6 +172,35 @@ export class WorkspaceCodingStatisticsController {
       this.parseVersions(version),
       this.parseStates(state)
     );
+  }
+
+  @Get(':workspace_id/coding/readiness')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'autoCoderRun',
+    required: false,
+    description: 'Autocoder run to validate.',
+    enum: [1, 2]
+  })
+  @ApiQuery({
+    name: 'forceRefresh',
+    required: false,
+    description: 'Ignore the short-lived readiness cache and recalculate.'
+  })
+  @ApiOkResponse({
+    description: 'Auto-coding readiness diagnostics retrieved successfully.'
+  })
+  async getAutocodingReadiness(
+    @WorkspaceId() workspace_id: number,
+      @Query('autoCoderRun') autoCoderRun?: string | string[],
+      @Query('forceRefresh') forceRefresh?: string | string[]
+  ): Promise<AutocodingReadinessDto> {
+    return this.codingReadinessService.getReadiness(workspace_id, {
+      autoCoderRun: this.parseAutoCoderRun(autoCoderRun),
+      forceRefresh: this.parseBooleanQuery(forceRefresh)
+    });
   }
 
   @Post(':workspace_id/coding/freshness/code')
@@ -319,6 +351,40 @@ export class WorkspaceCodingStatisticsController {
     ]);
     const values = (states || []).filter(state => allowed.has(state));
     return values.length > 0 ? values : ['PENDING', 'STALE'];
+  }
+
+  private parseAutoCoderRun(value?: string | string[]): 1 | 2 {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return 1;
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('autoCoderRun must be provided only once');
+    }
+    const numericValue = Number(values[0]);
+    if (numericValue === 1 || numericValue === 2) {
+      return numericValue;
+    }
+    throw new BadRequestException('autoCoderRun must be 1 or 2');
+  }
+
+  private parseBooleanQuery(value?: string | string[]): boolean {
+    const values = this.parseArrayQuery(value);
+    if (values.length === 0) {
+      return false;
+    }
+    if (values.length > 1) {
+      throw new BadRequestException('Boolean query value must be provided only once');
+    }
+
+    const normalized = values[0].toLowerCase();
+    if (['true', '1', 'yes'].includes(normalized)) {
+      return true;
+    }
+    if (['false', '0', 'no', ''].includes(normalized)) {
+      return false;
+    }
+    throw new BadRequestException('Boolean query value must be true or false');
   }
 
   private parseArrayQuery(value?: string | string[]): string[] {

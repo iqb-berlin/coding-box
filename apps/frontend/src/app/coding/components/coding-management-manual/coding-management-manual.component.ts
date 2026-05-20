@@ -1883,6 +1883,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: overview => {
+          if (!overview) {
+            this.appliedResultsOverview = null;
+            return;
+          }
+
           this.appliedResultsOverview = {
             ...overview,
             totalIncompleteVariables: this.codingIncompleteVariables.length,

@@ -24,12 +24,12 @@ import {
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { JobQueueService } from '../../../job-queue/job-queue.service';
-import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
+import { CodingReadinessService } from './coding-readiness.service';
 
 type UnitCodingJobMetadata = {
   source?: 'manual-selection' | 'coding-freshness';
@@ -56,9 +56,9 @@ export class CodingProcessService {
     private responseRepository: Repository<ResponseEntity>,
     private jobQueueService: JobQueueService,
     private responseManagementService: ResponseManagementService,
-    private workspaceFilesService: WorkspaceFilesService,
     private workspaceCoreService: WorkspaceCoreService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    private codingReadinessService: CodingReadinessService
   ) { }
 
   private codingSchemeCache: Map<
@@ -157,6 +157,14 @@ export class CodingProcessService {
       `Starting job for ${personIds.length} test persons in workspace ${workspace_id}`
     );
 
+    await this.codingReadinessService.assertAutoCodingCanProcess(
+      workspace_id,
+      {
+        personIds,
+        autoCoderRun: resolvedAutoCoderRun
+      }
+    );
+
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
       personIds,
@@ -215,6 +223,14 @@ export class CodingProcessService {
         message: 'No matching coding units found for the selected freshness scope.'
       };
     }
+
+    await this.codingReadinessService.assertAutoCodingCanProcess(
+      workspace_id,
+      {
+        unitIds: includedUnitIds,
+        autoCoderRun: resolvedAutoCoderRun
+      }
+    );
 
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
@@ -418,18 +434,24 @@ export class CodingProcessService {
         return statistics;
       }
 
-      // Step 6: Get unit variables for filtering - 55% progress
-      const filteredResponses = await this.filterResponsesValidVariables(
+      // Step 6: Keep only responses that the same readiness logic considers codeable - 55% progress
+      const filteredResponses = await this.codingReadinessService.filterResponsesCodeable(
         workspace_id,
         allResponses,
         units
       );
 
       this.logger.log(
-        `Filtered responses: ${allResponses.length} -> ${filteredResponses.length
+        `Filtered codeable responses: ${allResponses.length} -> ${filteredResponses.length
         } (removed ${allResponses.length - filteredResponses.length
-        } invalid variable responses)`
+        } non-codeable responses)`
       );
+
+      if (filteredResponses.length === 0) {
+        this.logger.log('Keine kodierbaren Antworten nach Readiness-Filter gefunden.');
+        await queryRunner.release();
+        return statistics;
+      }
 
       if (jobId && (await this.isJobCancelled(jobId))) {
         this.logger.log(
@@ -729,31 +751,6 @@ export class CodingProcessService {
     }
 
     return query.getMany();
-  }
-
-  private async filterResponsesValidVariables(
-    workspaceId: number,
-    responses: ResponseEntity[],
-    units: Unit[]
-  ): Promise<ResponseEntity[]> {
-    const unitVariables = await this.workspaceFilesService.getUnitVariableMap(
-      workspaceId
-    );
-    const validVariableSets = new Map<string, Set<string>>();
-    unitVariables.forEach((vars: Set<string>, unitName: string) => {
-      validVariableSets.set(unitName.toUpperCase(), vars);
-    });
-
-    const unitIdToNameMap = new Map<number, string>();
-    units.forEach(unit => {
-      unitIdToNameMap.set(unit.id, unit.name);
-    });
-
-    return responses.filter(response => {
-      const unitName = unitIdToNameMap.get(response.unitid)?.toUpperCase();
-      const validVars = validVariableSets.get(unitName || '');
-      return validVars?.has(response.variableid);
-    });
   }
 
   private async getTestFilesWithCache(

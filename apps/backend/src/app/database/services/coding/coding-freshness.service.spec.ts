@@ -12,6 +12,7 @@ const queryBuilder = (overrides: Record<string, jest.Mock> = {}) => ({
   where: jest.fn().mockReturnThis(),
   andWhere: jest.fn().mockReturnThis(),
   innerJoin: jest.fn().mockReturnThis(),
+  leftJoin: jest.fn().mockReturnThis(),
   groupBy: jest.fn().mockReturnThis(),
   addGroupBy: jest.fn().mockReturnThis(),
   orderBy: jest.fn().mockReturnThis(),
@@ -706,9 +707,16 @@ describe('CodingFreshnessService', () => {
         }
       ])
     });
+    const openManualCodingQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({
+        affectedUnits: '0',
+        affectedResponses: '0'
+      })
+    });
 
     (responseRepository.createQueryBuilder as jest.Mock)
-      .mockReturnValueOnce(workspacePresenceQb);
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(openManualCodingQb);
     (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 10 }]);
 
@@ -723,9 +731,16 @@ describe('CodingFreshnessService', () => {
     const summaryQb = queryBuilder({
       getRawMany: jest.fn().mockResolvedValue([])
     });
+    const openManualCodingQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({
+        affectedUnits: '0',
+        affectedResponses: '0'
+      })
+    });
 
     (responseRepository.createQueryBuilder as jest.Mock)
-      .mockReturnValueOnce(workspacePresenceQb);
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(openManualCodingQb);
     (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
     (connection.query as jest.Mock)
       .mockResolvedValueOnce([{ revision: 12 }])
@@ -744,6 +759,32 @@ describe('CodingFreshnessService', () => {
     );
   });
 
+  it('blocks the second auto-coding run while manual coding results are not fully applied', async () => {
+    const workspacePresenceQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: false })
+    });
+    const openManualCodingQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({
+        affectedUnits: '3',
+        affectedResponses: '9'
+      })
+    });
+    const summaryQb = queryBuilder({
+      getRawMany: jest.fn().mockResolvedValue([])
+    });
+
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(openManualCodingQb);
+    (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
+    (connection.query as jest.Mock).mockResolvedValue([{ revision: 12 }]);
+
+    await expect(service.assertAutoCodingRunCanStart(1, 2))
+      .rejects.toThrow('manuelle Kodierung');
+
+    expect(openManualCodingQb.leftJoin).toHaveBeenCalledWith('booklet.bookletinfo', 'bookletinfo');
+  });
+
   it('allows the second auto-coding run when only v3 freshness is open', async () => {
     const workspacePresenceQb = queryBuilder({
       getRawOne: jest.fn().mockResolvedValue({ v1: true, v2: true, v3: true })
@@ -758,9 +799,16 @@ describe('CodingFreshnessService', () => {
         }
       ])
     });
+    const openManualCodingQb = queryBuilder({
+      getRawOne: jest.fn().mockResolvedValue({
+        affectedUnits: '0',
+        affectedResponses: '0'
+      })
+    });
 
     (responseRepository.createQueryBuilder as jest.Mock)
-      .mockReturnValueOnce(workspacePresenceQb);
+      .mockReturnValueOnce(workspacePresenceQb)
+      .mockReturnValueOnce(openManualCodingQb);
     (freshnessRepository.createQueryBuilder as jest.Mock).mockReturnValue(summaryQb);
     (connection.query as jest.Mock).mockResolvedValue([{ revision: 11 }]);
 

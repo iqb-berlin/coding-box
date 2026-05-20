@@ -1,11 +1,16 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import { of, Subject, BehaviorSubject } from 'rxjs';
+import {
+  BehaviorSubject,
+  of,
+  Subject,
+  throwError
+} from 'rxjs';
 import { PageEvent } from '@angular/material/paginator';
 import { CodingManagementComponent } from './coding-management.component';
 import { CodingManagementService } from '../../services/coding-management.service';
@@ -92,6 +97,25 @@ describe('CodingManagementComponent', () => {
         currentRevision: 0,
         items: []
       })),
+      getAutocodingReadiness: jest.fn().mockReturnValue(of({
+        workspaceId: 1,
+        autoCoderRun: 1,
+        readiness: 'READY',
+        blockers: [],
+        rawResponsesTotal: 0,
+        rawResponsesWithRelevantStatus: 0,
+        resultUnitsTotal: 0,
+        resultUnitKeysTotal: 0,
+        matchedUnitFiles: 0,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 0,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 0,
+        validResponses: 0,
+        codeableResponses: 0,
+        invalidVariableSamples: []
+      })),
       getCodingFreshnessScope: jest.fn().mockReturnValue(of({
         workspaceId: 1,
         currentRevision: 0,
@@ -105,6 +129,18 @@ describe('CodingManagementComponent', () => {
         personIds: [],
         groupNames: [],
         groups: []
+      })),
+      getAppliedResultsOverview: jest.fn().mockReturnValue(of({
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 0,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 0,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
       })),
       startFreshnessCoding: jest.fn().mockReturnValue(of({
         totalResponses: 0,
@@ -176,6 +212,34 @@ describe('CodingManagementComponent', () => {
       ]
     }).compileComponents();
 
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'coding-management': {
+        actions: {
+          close: 'Schließen'
+        },
+        readiness: {
+          'title-load-failed': 'Auto-Coding-Prüfung nicht verfügbar',
+          'title-blocked': 'Auto-Coding 1 nicht möglich',
+          'title-not-started': 'Kodierung noch nicht gestartet',
+          'title-manual-coding-open': 'Manuelle Kodierung abschließen',
+          summary: '{{rawResponsesTotal}} Rohantworten vorhanden, {{rawResponsesWithRelevantStatus}} mit relevantem Antwortstatus, aber {{codeableResponses}} kodierbare Antworten.',
+          'details-result-units': '{{count}} Ergebnis-Units',
+          'details-unit-files': '{{count}} passende Unit-Dateien',
+          'details-coding-schemes': '{{count}} passende Kodierschemata',
+          'details-valid-responses': '{{count}} Antworten mit passender Kodier-Variable',
+          'additional-items': '+{{count}} weitere',
+          'second-autocoding-waits-summary': 'Auto-Coding 2 ist der nächste Schritt, sobald die manuelle Kodierung abgeschlossen ist. Schließen Sie zuerst die offenen manuellen Kodierfälle ab und übernehmen Sie die Ergebnisse.{{remaining}}',
+          'second-autocoding-waits-remaining': ' Es sind noch {{count}} manuelle Kodierergebnisse offen.',
+          'manual-results-overview-load-failed': 'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
+          'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
+          'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
+          'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.'
+        }
+      }
+    });
+    translateService.use('de');
+
     fixture = TestBed.createComponent(CodingManagementComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -196,6 +260,242 @@ describe('CodingManagementComponent', () => {
 
     it('should check auto-fetch setting on init', () => {
       expect(mockWorkspaceSettingsService.getAutoFetchCodingStatistics).toHaveBeenCalledWith(1);
+    });
+
+    it('should load autocoding readiness for the first autocoder run', () => {
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledTimes(1);
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenCalledWith(1, 1, false);
+    });
+  });
+
+  describe('Autocoding Readiness', () => {
+    it('should treat blocked readiness as coding attention with diagnostic text', () => {
+      component.autocodingReadiness = {
+        workspaceId: 1,
+        autoCoderRun: 1,
+        readiness: 'BLOCKED',
+        blockers: ['NO_VALID_VARIABLE_MATCHES'],
+        rawResponsesTotal: 18787,
+        rawResponsesWithRelevantStatus: 18000,
+        resultUnitsTotal: 33,
+        resultUnitKeysTotal: 33,
+        matchedUnitFiles: 6,
+        missingUnitFiles: ['UNIT_A', 'UNIT_B', 'UNIT_C', 'UNIT_D', 'UNIT_E', 'UNIT_F'],
+        matchedCodingSchemes: 2,
+        missingCodingSchemes: ['SCHEME_A'],
+        invalidCodingSchemes: ['SCHEME_B'],
+        validVariablePairs: 0,
+        validResponses: 0,
+        codeableResponses: 0,
+        invalidVariableSamples: [{
+          unitName: 'UNIT_A',
+          responseCount: 12,
+          sampleVariableIds: ['VAR_A', 'VAR_B', 'VAR_C', 'VAR_D', 'VAR_E'],
+          knownVariableIds: ['KNOWN_A']
+        }]
+      };
+
+      expect(component.hasCodingFreshnessAttention).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding 1 nicht möglich');
+      expect(component.autocodingReadinessSummaryText).toContain('18787 Rohantworten vorhanden');
+      expect(component.autocodingReadinessDetailsText).toContain('0 Antworten mit passender Kodier-Variable');
+      expect(component.autocodingReadinessMissingUnitPreview).toBe('UNIT_A, UNIT_B, UNIT_C, UNIT_D, UNIT_E +1');
+      expect(component.autocodingReadinessInvalidCodingSchemePreview).toBe('SCHEME_B');
+      expect(component.autocodingReadinessInvalidVariablePreview).toBe('UNIT_A: VAR_A, VAR_B, VAR_C, VAR_D +1');
+    });
+
+    it('should expose readiness load failures as attention', () => {
+      (mockTestPersonCodingService.getAutocodingReadiness as jest.Mock)
+        .mockReturnValueOnce(throwError(() => new Error('readiness failed')));
+
+      component.loadAutocodingReadiness();
+
+      expect(component.hasAutocodingReadinessLoadFailed).toBe(true);
+      expect(component.hasCodingFreshnessAttention).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding-Prüfung nicht verfügbar');
+    });
+
+    it('should force-refresh autocoding readiness when requested', () => {
+      component.refreshAutocodingReadiness();
+
+      expect(mockTestPersonCodingService.getAutocodingReadiness).toHaveBeenLastCalledWith(1, 1, true);
+    });
+  });
+
+  describe('Coding Freshness', () => {
+    it('should keep second auto-coding waiting while manual coding results are still open', () => {
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      };
+      component.manualAppliedResultsOverview = {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 4637,
+        rawCompletionPercentage: 91,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      expect(component.hasCodingFreshnessWarnings).toBe(true);
+      expect(component.codingFreshnessPanelTitle).toBe('Manuelle Kodierung abschließen');
+      expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
+      expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
+      expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
+      expect(component.codingFreshnessChipWarnings).toHaveLength(1);
+      expect(component.getFreshnessChipLabel(component.codingFreshnessChipWarnings[0])).toBe(
+        'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
+      );
+    });
+
+    it('should keep earlier coding freshness warnings visible while second auto-coding waits', () => {
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v1',
+            state: 'PENDING',
+            unitCount: 10,
+            affectedResponseCount: 50
+          },
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      };
+      component.manualAppliedResultsOverview = {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 4637,
+        rawCompletionPercentage: 91,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      expect(component.codingFreshnessPanelTitle).toBe('Auto-Coding aktualisieren');
+      expect(component.codingFreshnessSummaryText).toBe(
+        'Auto-Coding 1 muss für 10 Aufgabenbearbeitungen ausgeführt werden. ' +
+        'Das betrifft 50 Antwortwerte.'
+      );
+      expect(component.hasFreshnessAutoCodingWork('v1')).toBe(true);
+      expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
+      expect(component.codingFreshnessChipWarnings).toEqual([
+        expect.objectContaining({ version: 'v1' })
+      ]);
+    });
+
+    it('should expose second auto-coding work after manual coding results are complete', () => {
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      };
+      component.manualAppliedResultsOverview = {
+        totalIncompleteResponses: 671,
+        appliedResponses: 671,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 5098,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      expect(component.hasCodingFreshnessWarnings).toBe(true);
+      expect(component.hasFreshnessAutoCodingWork('v3')).toBe(true);
+      expect(component.codingFreshnessSummaryText).toBe(
+        'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
+        'Das betrifft 5098 Antwortwerte.'
+      );
+    });
+
+    it('should keep second auto-coding blocked when manual result overview cannot be loaded', () => {
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      };
+      (mockTestPersonCodingService.getAppliedResultsOverview as jest.Mock).mockReturnValueOnce(of(null));
+
+      component.loadManualAppliedResultsOverview();
+
+      expect(component.manualAppliedResultsOverview).toBeNull();
+      expect(component.manualAppliedResultsOverviewLoadFailed).toBe(true);
+      expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
+      expect(component.codingFreshnessSummaryText).toContain('konnte nicht geprüft werden');
+    });
+
+    it('should not start second auto-coding while manual coding results are still open', () => {
+      component.codingFreshnessSummary = {
+        workspaceId: 1,
+        currentRevision: 2,
+        items: [
+          {
+            version: 'v3',
+            state: 'PENDING',
+            unitCount: 671,
+            affectedResponseCount: 5098
+          }
+        ]
+      };
+      component.manualAppliedResultsOverview = {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31,
+        rawTotalIncompleteResponses: 5098,
+        rawAppliedResponses: 4637,
+        rawCompletionPercentage: 91,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+      (mockTestPersonCodingService.startFreshnessCoding as jest.Mock).mockClear();
+
+      component.startFreshnessCoding('v3');
+
+      expect(mockTestPersonCodingService.startFreshnessCoding).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
+        'Schließen',
+        { duration: 6000 }
+      );
     });
   });
 
@@ -554,7 +854,7 @@ describe('CodingManagementComponent', () => {
       expect(mockDialog.open).not.toHaveBeenCalled();
       expect(mockSnackBar.open).toHaveBeenCalledWith(
         'coding-management.messages.review-too-many-results',
-        'coding-management.actions.close',
+        'Schließen',
         { duration: 7000 }
       );
     });
@@ -566,6 +866,14 @@ describe('CodingManagementComponent', () => {
 
       expect(mockRouter.navigate).toHaveBeenCalledWith([
         '/workspace-admin/1/coding/manual'
+      ]);
+    });
+
+    it('should navigate to test files route', () => {
+      component.openTestFiles();
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith([
+        '/workspace-admin/1/test-files'
       ]);
     });
   });

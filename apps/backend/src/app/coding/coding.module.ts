@@ -40,7 +40,8 @@ import {
   ExternalCodingImportService,
   CodingValidationService,
   CodingAnalysisService,
-  CodingFreshnessService
+  CodingFreshnessService,
+  CodingReadinessService
 } from '../database/services/coding';
 import { JobDefinitionService } from '../database/services/jobs';
 // eslint-disable-next-line import/no-cycle
@@ -100,7 +101,8 @@ import { UserModule } from '../user/user.module';
     CodingProcessService,
     CodingValidationService,
     CodingAnalysisService,
-    CodingFreshnessService
+    CodingFreshnessService,
+    CodingReadinessService
   ],
   exports: [
     CodingJobService,
@@ -120,7 +122,8 @@ import { UserModule } from '../user/user.module';
     CodingProcessService,
     CodingValidationService,
     CodingAnalysisService,
-    CodingFreshnessService
+    CodingFreshnessService,
+    CodingReadinessService
   ]
 })
 export class CodingModule { }

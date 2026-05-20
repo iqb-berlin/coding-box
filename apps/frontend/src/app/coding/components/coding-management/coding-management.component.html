@@ -44,14 +44,43 @@
 
   <section class="coding-freshness-panel" [class.is-current]="!hasCodingFreshnessAttention">
     <div class="coding-freshness-main">
+      @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
+      <mat-spinner diameter="22" class="coding-freshness-state-spinner"></mat-spinner>
+      } @else {
       <mat-icon>{{ hasCodingFreshnessAttention ? 'warning' : 'check_circle' }}</mat-icon>
+      }
       <div class="coding-freshness-copy">
         <div class="coding-freshness-title">
           {{ codingFreshnessPanelTitle }}
         </div>
         <div class="coding-freshness-text">
-          @if (isLoadingCodingFreshness) {
-          Zustand wird geprüft...
+          @if (isLoadingCodingFreshness || isLoadingAutocodingReadiness || isLoadingManualAppliedResultsOverview) {
+          {{ 'coding-management.readiness.checking' | translate }}
+          } @else if (hasAutocodingReadinessLoadFailed) {
+          {{ 'coding-management.readiness.load-failed' | translate }}
+          } @else if (isAutocodingReadinessBlocked) {
+          <div>{{ autocodingReadinessSummaryText }}</div>
+          <div class="coding-freshness-help">{{ autocodingReadinessDetailsText }}</div>
+          @if (autocodingReadinessMissingUnitPreview) {
+          <div>
+            {{ 'coding-management.readiness.missing-unit-files' | translate:{items: autocodingReadinessMissingUnitPreview} }}
+          </div>
+          }
+          @if (autocodingReadinessMissingCodingSchemePreview) {
+          <div>
+            {{ 'coding-management.readiness.missing-coding-schemes' | translate:{items: autocodingReadinessMissingCodingSchemePreview} }}
+          </div>
+          }
+          @if (autocodingReadinessInvalidCodingSchemePreview) {
+          <div>
+            {{ 'coding-management.readiness.invalid-coding-schemes' | translate:{items: autocodingReadinessInvalidCodingSchemePreview} }}
+          </div>
+          }
+          @if (autocodingReadinessInvalidVariablePreview) {
+          <div>
+            {{ 'coding-management.readiness.invalid-variables' | translate:{items: autocodingReadinessInvalidVariablePreview} }}
+          </div>
+          }
           } @else if (hasCodingFreshnessWarnings) {
           <div>{{ codingFreshnessSummaryText }}</div>
           @if (manualCodingFreshnessGuidanceText) {
@@ -59,17 +88,19 @@
           }
           <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
           @if (codingFreshnessGroupPreview) {
-          <div>Betroffene Gruppen: {{ codingFreshnessGroupPreview }}.</div>
+          <div>
+            {{ 'coding-management.readiness.affected-groups' | translate:{groups: codingFreshnessGroupPreview} }}
+          </div>
           }
           } @else if (hasImportedResultsWithoutCoding) {
-          Testergebnisse sind vorhanden. Starten Sie Auto-Coding 1, damit Kodierergebnisse und Kodierstatistik erzeugt werden.
+          {{ 'coding-management.readiness.imported-results-without-coding' | translate }}
           } @else {
-          Für die aktuell berücksichtigten Testergebnisse gibt es keine offenen Aktualisierungshinweise.
+          {{ 'coding-management.readiness.current' | translate }}
           }
         </div>
         @if (hasCodingFreshnessWarnings) {
         <div class="coding-freshness-chip-row">
-          @for (item of codingFreshnessWarnings; track item.version + item.state) {
+          @for (item of codingFreshnessChipWarnings; track item.version + item.state) {
           <span class="coding-freshness-chip">
             {{ getFreshnessChipLabel(item) }}
           </span>
@@ -82,7 +113,29 @@
     @if (activeFreshnessJobId) {
     <div class="coding-freshness-job">
       <mat-spinner diameter="18"></mat-spinner>
-      <span>Aktualisierung läuft: {{ activeFreshnessJobProgress || 0 }}%</span>
+      <span>
+        {{ 'coding-management.readiness.update-running' | translate:{progress: activeFreshnessJobProgress || 0} }}
+      </span>
+    </div>
+    } @else if (hasAutocodingReadinessLoadFailed) {
+    <div class="coding-freshness-actions">
+      <button mat-stroked-button color="primary" [disabled]="isLoadingAutocodingReadiness"
+        (click)="refreshAutocodingReadiness()">
+        <mat-icon>refresh</mat-icon>
+        {{ 'coding-management.readiness.retry' | translate }}
+      </button>
+    </div>
+    } @else if (isAutocodingReadinessBlocked) {
+    <div class="coding-freshness-actions">
+      <button mat-stroked-button color="primary" [disabled]="isLoadingAutocodingReadiness"
+        (click)="refreshAutocodingReadiness()">
+        <mat-icon>refresh</mat-icon>
+        {{ 'coding-management.readiness.retry' | translate }}
+      </button>
+      <button mat-stroked-button color="primary" (click)="openTestFiles()">
+        <mat-icon>folder_open</mat-icon>
+        {{ 'coding-management.readiness.check-test-files' | translate }}
+      </button>
     </div>
     } @else if (hasCodingFreshnessWarnings) {
     <div class="coding-freshness-actions">
@@ -103,7 +156,7 @@
       @if (manualCodingFreshnessWarnings.length > 0) {
       <button mat-stroked-button color="primary" (click)="openManualCoding()">
         <mat-icon>keyboard</mat-icon>
-        Manuelle Prüfung öffnen
+        {{ 'coding-management.readiness.open-manual-review' | translate }}
       </button>
       }
     </div>

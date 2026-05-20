@@ -26,6 +26,7 @@ import {
   CodingFreshnessVersion,
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
 
 interface ExternalCodingImportWithPreviewDto {
@@ -382,6 +383,30 @@ export class TestPersonCodingService {
       );
   }
 
+  getAutocodingReadiness(
+    workspaceId: number,
+    autoCoderRun: 1 | 2 = 1,
+    forceRefresh = false
+  ): Observable<AutocodingReadinessDto> {
+    let params = new HttpParams().set('autoCoderRun', autoCoderRun.toString());
+    if (forceRefresh) {
+      params = params.set('forceRefresh', 'true');
+    }
+
+    return this.http
+      .get<AutocodingReadinessDto>(
+      `${this.serverUrl}admin/workspace/${workspaceId}/coding/readiness`,
+      {
+        headers: this.authHeader,
+        params,
+        context: suppressGlobalHttpErrorContext()
+      }
+    )
+      .pipe(
+        catchError(error => throwError(() => error))
+      );
+  }
+
   getCodingFreshnessScope(
     workspaceId: number,
     version?: 'v1' | 'v2' | 'v3',
@@ -672,25 +697,14 @@ export class TestPersonCodingService {
       );
   }
 
-  getAppliedResultsOverview(workspaceId: number): Observable<AppliedResultsOverview> {
+  getAppliedResultsOverview(workspaceId: number): Observable<AppliedResultsOverview | null> {
     return this.http
       .get<AppliedResultsOverview>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/applied-results-overview`,
       { headers: this.authHeader }
     )
       .pipe(
-        catchError(() => of({
-          totalIncompleteResponses: 0,
-          appliedResponses: 0,
-          remainingResponses: 0,
-          completionPercentage: 0,
-          rawTotalIncompleteResponses: 0,
-          rawAppliedResponses: 0,
-          rawCompletionPercentage: 0,
-          aggregationActive: false,
-          aggregationThreshold: null,
-          aggregatedDuplicateCases: 0
-        }))
+        catchError(() => of(null))
       );
   }
 
