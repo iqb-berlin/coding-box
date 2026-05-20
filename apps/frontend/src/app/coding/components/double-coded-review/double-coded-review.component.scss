@@ -328,6 +328,14 @@
           -webkit-box-orient: vertical;
           word-break: break-word;
           width: 100%;
+
+          &.geogebra-answer {
+            font-family: inherit;
+            font-weight: 600;
+            color: #1565c0;
+            background-color: #eaf3ff;
+            border: 1px solid #bbd7f5;
+          }
         }
       }
 
