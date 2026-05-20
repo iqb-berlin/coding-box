@@ -10,6 +10,7 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 import { ResponseManagementService } from '../test-results/response-management.service';
 import { AutocoderSourceRevisionStaleError } from '../test-results/autocoder-source-revision-stale.error';
 import { CodingStatisticsService } from './coding-statistics.service';
+import { CodingReadinessService } from './coding-readiness.service';
 import FileUpload from '../../entities/file_upload.entity';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -50,6 +51,28 @@ describe('CodingProcessService', () => {
 
   const mockWorkspaceFilesService = {
     getUnitVariableMap: jest.fn()
+  };
+
+  const mockCodingReadinessService = {
+    assertAutoCodingCanProcess: jest.fn().mockResolvedValue(undefined),
+    filterResponsesCodeable: jest.fn(
+      async (
+        workspaceId: number,
+        responses: ResponseEntity[],
+        units: Unit[]
+      ) => {
+        const unitVariables = await mockWorkspaceFilesService.getUnitVariableMap(workspaceId);
+        const unitIdToName = new Map(
+          units.map(unit => [unit.id, unit.name.toUpperCase()])
+        );
+
+        return responses.filter(response => {
+          const unitName = unitIdToName.get(response.unitid);
+          const validVars = unitName ? unitVariables.get(unitName) : undefined;
+          return validVars?.has(response.variableid) === true;
+        });
+      }
+    )
   };
 
   const mockWorkspaceCoreService = {
@@ -209,6 +232,7 @@ describe('CodingProcessService', () => {
         { provide: JobQueueService, useValue: mockJobQueueService },
         { provide: ResponseManagementService, useValue: mockResponseManagementService },
         { provide: WorkspaceFilesService, useValue: mockWorkspaceFilesService },
+        { provide: CodingReadinessService, useValue: mockCodingReadinessService },
         { provide: CodingStatisticsService, useValue: mockCodingStatisticsService },
         { provide: WorkspaceCoreService, useValue: mockWorkspaceCoreService }
       ]

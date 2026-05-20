@@ -35,7 +35,10 @@ import {
 import { Success } from '../../models/success.model';
 import { ResponseEntity } from '../../../shared/models/response-entity.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
-import { TestPersonCodingService } from '../../services/test-person-coding.service';
+import {
+  AppliedResultsOverview,
+  TestPersonCodingService
+} from '../../services/test-person-coding.service';
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
@@ -60,6 +63,7 @@ import {
   CodingFreshnessSummaryDto,
   CodingFreshnessSummaryItemDto
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import { AutocodingReadinessDto } from '../../../../../../../api-dto/coding/autocoding-readiness.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
   getCodingFreshnessAffectedResponseCount,
@@ -152,6 +156,12 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   codingFreshnessSummary: CodingFreshnessSummaryDto | null = null;
   codingFreshnessScope: CodingFreshnessScopeDto | null = null;
   isLoadingCodingFreshness = false;
+  autocodingReadiness: AutocodingReadinessDto | null = null;
+  isLoadingAutocodingReadiness = false;
+  autocodingReadinessLoadFailed = false;
+  manualAppliedResultsOverview: AppliedResultsOverview | null = null;
+  isLoadingManualAppliedResultsOverview = false;
+  manualAppliedResultsOverviewLoadFailed = false;
   isStartingFreshnessCoding = false;
   activeFreshnessJobId: string | null = null;
   activeFreshnessJobProgress: number | null = null;
@@ -171,6 +181,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
   private freshnessJobPollingInterval: number | null = null;
+  private lastResetProgress: number | null | undefined;
 
   ngOnInit(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
@@ -221,10 +232,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.codingManagementService.resetProgress$
       .pipe(takeUntil(this.destroy$))
       .subscribe(progress => {
+        const previousProgress = this.lastResetProgress;
+        this.lastResetProgress = progress;
         this.resetProgress = progress;
-        if (progress === null && this.statisticsLoaded) {
+        if (previousProgress !== undefined &&
+          previousProgress !== null &&
+          progress === null &&
+          this.statisticsLoaded) {
           this.fetchCodingStatistics();
           this.loadCodingFreshness();
+          this.loadManualAppliedResultsOverview();
+          this.loadAutocodingReadiness();
           this.refreshTableData();
         }
       });
@@ -247,6 +265,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.fetchCodingStatistics();
         this.loadCodingFreshness();
+        this.loadManualAppliedResultsOverview();
+        this.loadAutocodingReadiness();
         this.refreshTableData();
       });
 
@@ -255,12 +275,16 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(() => {
         this.fetchCodingStatistics();
         this.loadCodingFreshness();
+        this.loadManualAppliedResultsOverview();
+        this.loadAutocodingReadiness();
         this.refreshTableData();
       });
 
     // Check for active reset job (persists across navigation)
     this.codingManagementService.checkActiveResetJob();
     this.loadCodingFreshness();
+    this.loadManualAppliedResultsOverview();
+    this.loadAutocodingReadiness();
   }
 
   ngOnDestroy(): void {
@@ -328,9 +352,71 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       });
   }
 
+  loadManualAppliedResultsOverview(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      this.manualAppliedResultsOverview = null;
+      this.manualAppliedResultsOverviewLoadFailed = false;
+      return;
+    }
+
+    this.isLoadingManualAppliedResultsOverview = true;
+    this.manualAppliedResultsOverviewLoadFailed = false;
+    this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      .pipe(
+        finalize(() => {
+          this.isLoadingManualAppliedResultsOverview = false;
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(overview => {
+        this.manualAppliedResultsOverview = overview;
+        this.manualAppliedResultsOverviewLoadFailed = overview === null;
+      });
+  }
+
+  loadAutocodingReadiness(forceRefresh = false): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.isLoadingAutocodingReadiness = true;
+    this.autocodingReadinessLoadFailed = false;
+    this.testPersonCodingService.getAutocodingReadiness(workspaceId, 1, forceRefresh)
+      .pipe(
+        finalize(() => {
+          this.isLoadingAutocodingReadiness = false;
+        }),
+        takeUntil(this.destroy$)
+      )
+      .subscribe({
+        next: readiness => {
+          this.autocodingReadiness = readiness;
+        },
+        error: () => {
+          this.autocodingReadiness = null;
+          this.autocodingReadinessLoadFailed = true;
+        }
+      });
+  }
+
+  refreshAutocodingReadiness(): void {
+    this.loadAutocodingReadiness(true);
+  }
+
   startFreshnessCoding(version: 'v1' | 'v3'): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId || this.isStartingFreshnessCoding) {
+      return;
+    }
+
+    if (version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+      this.snackBar.open(
+        this.translateService.instant('coding-management.readiness.second-autocoding-waits-snackbar'),
+        this.translateService.instant('coding-management.actions.close'),
+        { duration: 6000 }
+      );
       return;
     }
 
@@ -562,12 +648,25 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return (this.codingFreshnessSummary?.items || [])
-      .filter(isCodingFreshnessOpenWarning);
+    return this.allCodingFreshnessWarnings
+      .filter(item => !(item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding));
   }
 
   get hasCodingFreshnessWarnings(): boolean {
-    return this.codingFreshnessWarnings.length > 0;
+    return this.codingFreshnessWarnings.length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState;
+  }
+
+  get codingFreshnessChipWarnings(): CodingFreshnessSummaryItemDto[] {
+    if (this.codingFreshnessWarnings.length > 0) {
+      return this.codingFreshnessWarnings;
+    }
+
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.secondAutocodingFreshnessWarnings;
+    }
+
+    return [];
   }
 
   get hasImportedResultsWithoutCoding(): boolean {
@@ -577,8 +676,19 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       (this.codingStatistics.totalResponses || 0) === 0;
   }
 
+  get isAutocodingReadinessBlocked(): boolean {
+    return this.autocodingReadiness?.readiness === 'BLOCKED';
+  }
+
+  get hasAutocodingReadinessLoadFailed(): boolean {
+    return this.autocodingReadinessLoadFailed;
+  }
+
   get hasCodingFreshnessAttention(): boolean {
-    return this.hasCodingFreshnessWarnings || this.hasImportedResultsWithoutCoding;
+    return this.hasAutocodingReadinessLoadFailed ||
+      this.isAutocodingReadinessBlocked ||
+      this.hasCodingFreshnessWarnings ||
+      this.hasImportedResultsWithoutCoding;
   }
 
   get autoCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -602,19 +712,133 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessSummaryText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      if (this.manualAppliedResultsOverviewLoadFailed) {
+        return this.translateService.instant(
+          'coding-management.readiness.manual-results-overview-load-failed'
+        );
+      }
+
+      const remaining = this.manualAppliedResultsOverview?.remainingResponses || 0;
+      const remainingText = remaining > 0 ?
+        this.translateService.instant(
+          'coding-management.readiness.second-autocoding-waits-remaining',
+          { count: remaining }
+        ) :
+        '';
+
+      return this.translateService.instant(
+        'coding-management.readiness.second-autocoding-waits-summary',
+        { remaining: remainingText }
+      );
+    }
+
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
   }
 
   get codingFreshnessExplanationText(): string {
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant(
+        'coding-management.readiness.second-autocoding-waits-help',
+        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+      );
+    }
+
     return CODING_FRESHNESS_TASK_RESULT_HELP;
   }
 
   get codingFreshnessPanelTitle(): string {
+    if (this.hasAutocodingReadinessLoadFailed) {
+      return this.translateService.instant('coding-management.readiness.title-load-failed');
+    }
+
+    if (this.isAutocodingReadinessBlocked) {
+      return this.translateService.instant('coding-management.readiness.title-blocked');
+    }
+
     if (this.hasImportedResultsWithoutCoding) {
-      return 'Kodierung noch nicht gestartet';
+      return this.translateService.instant('coding-management.readiness.title-not-started');
+    }
+
+    if (this.shouldShowSecondAutocodingWaitingState) {
+      return this.translateService.instant('coding-management.readiness.title-manual-coding-open');
     }
 
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+  }
+
+  get autocodingReadinessSummaryText(): string {
+    if (!this.autocodingReadiness) {
+      return '';
+    }
+
+    return this.translateService.instant(
+      'coding-management.readiness.summary',
+      {
+        rawResponsesTotal: this.autocodingReadiness.rawResponsesTotal,
+        rawResponsesWithRelevantStatus: this.autocodingReadiness.rawResponsesWithRelevantStatus,
+        codeableResponses: this.autocodingReadiness.codeableResponses
+      }
+    );
+  }
+
+  get autocodingReadinessDetailsText(): string {
+    if (!this.autocodingReadiness) {
+      return '';
+    }
+
+    return [
+      this.translateService.instant(
+        'coding-management.readiness.details-result-units',
+        { count: this.autocodingReadiness.resultUnitKeysTotal }
+      ),
+      this.translateService.instant(
+        'coding-management.readiness.details-unit-files',
+        { count: this.autocodingReadiness.matchedUnitFiles }
+      ),
+      this.translateService.instant(
+        'coding-management.readiness.details-coding-schemes',
+        { count: this.autocodingReadiness.matchedCodingSchemes }
+      ),
+      this.translateService.instant(
+        'coding-management.readiness.details-valid-responses',
+        { count: this.autocodingReadiness.validResponses }
+      )
+    ].join(' · ');
+  }
+
+  get autocodingReadinessMissingUnitPreview(): string {
+    return this.formatPreview(this.autocodingReadiness?.missingUnitFiles || [], 5);
+  }
+
+  get autocodingReadinessMissingCodingSchemePreview(): string {
+    return this.formatPreview(this.autocodingReadiness?.missingCodingSchemes || [], 5);
+  }
+
+  get autocodingReadinessInvalidCodingSchemePreview(): string {
+    return this.formatPreview(this.autocodingReadiness?.invalidCodingSchemes || [], 5);
+  }
+
+  get autocodingReadinessInvalidVariablePreview(): string {
+    const samples = this.autocodingReadiness?.invalidVariableSamples || [];
+    if (samples.length === 0) {
+      return '';
+    }
+
+    const visible = samples.slice(0, 3)
+      .map(sample => {
+        const variablePreview = this.formatPreview(sample.sampleVariableIds, 4);
+        return `${sample.unitName}: ${variablePreview}`;
+      })
+      .join(' · ');
+    const hidden = samples.length - 3;
+
+    return hidden > 0 ?
+      `${visible} · ${this.translateService.instant(
+        'coding-management.readiness.additional-items',
+        { count: hidden }
+      )}` :
+      visible;
   }
 
   get manualCodingFreshnessGuidanceText(): string {
@@ -644,6 +868,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   getFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
+    if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding) {
+      const count = getCodingFreshnessAffectedTaskResultCount([item]);
+      const countLabel = `${count} ${count === 1 ? 'Aufgabenbearbeitung' : 'Aufgabenbearbeitungen'}`;
+      return this.translateService.instant(
+        'coding-management.readiness.second-autocoding-waits-chip',
+        {
+          version: getCodingFreshnessVersionLabel(item.version),
+          count: countLabel
+        }
+      );
+    }
+
     return getCodingFreshnessChipLabel(item);
   }
 
@@ -687,9 +923,44 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
               );
             }
             this.loadCodingFreshness();
+            this.loadManualAppliedResultsOverview();
+            this.loadAutocodingReadiness(true);
           }
         });
     }, 2000);
+  }
+
+  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return (this.codingFreshnessSummary?.items || [])
+      .filter(isCodingFreshnessOpenWarning);
+  }
+
+  private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    return this.allCodingFreshnessWarnings
+      .filter(item => item.version === 'v3');
+  }
+
+  private get isSecondAutocodingWaitingForManualCoding(): boolean {
+    return this.secondAutocodingFreshnessWarnings.length > 0 &&
+      this.hasOpenManualCodingResults;
+  }
+
+  private get shouldShowSecondAutocodingWaitingState(): boolean {
+    return this.isSecondAutocodingWaitingForManualCoding &&
+      this.codingFreshnessWarnings.length === 0;
+  }
+
+  private get hasOpenManualCodingResults(): boolean {
+    if (this.manualAppliedResultsOverviewLoadFailed) {
+      return this.secondAutocodingFreshnessWarnings.length > 0;
+    }
+
+    if (!this.manualAppliedResultsOverview) {
+      return this.secondAutocodingFreshnessWarnings.length > 0;
+    }
+
+    return (this.manualAppliedResultsOverview.totalIncompleteResponses || 0) > 0 &&
+      (this.manualAppliedResultsOverview.remainingResponses || 0) > 0;
   }
 
   private stopFreshnessJobPolling(): void {
@@ -869,6 +1140,15 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     this.router.navigate([`/workspace-admin/${workspaceId}/coding/manual`]);
   }
 
+  openTestFiles(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) {
+      return;
+    }
+
+    this.router.navigate([`/workspace-admin/${workspaceId}/test-files`]);
+  }
+
   fetchVariableAnalysis(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
@@ -1027,6 +1307,17 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
         return typeof value === 'string' ? value.trim() !== '' : value === true;
       }
     );
+  }
+
+  private formatPreview(values: string[], maxItems: number): string {
+    if (values.length === 0) {
+      return '';
+    }
+
+    const visible = values.slice(0, maxItems).join(', ');
+    const hidden = values.length - maxItems;
+
+    return hidden > 0 ? `${visible} +${hidden}` : visible;
   }
 
   openItemListDialog(): void {

@@ -2,7 +2,12 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import {
-  TestPersonCodingService, CodingStatistics, PaginatedCodingList, JobStatus, JobInfo
+  TestPersonCodingService,
+  CodingStatistics,
+  PaginatedCodingList,
+  JobStatus,
+  JobInfo,
+  AppliedResultsOverview
 } from './test-person-coding.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { ResponseMatchingFlag } from '../../ws-admin/services/workspace-settings.service';
@@ -208,6 +213,40 @@ describe('TestPersonCodingService', () => {
       });
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/statistics`);
+      req.error(new ProgressEvent('error'));
+    });
+  });
+
+  describe('getAppliedResultsOverview', () => {
+    it('should send a GET request to get applied results overview', () => {
+      const mockResponse: AppliedResultsOverview = {
+        totalIncompleteResponses: 2,
+        appliedResponses: 1,
+        remainingResponses: 1,
+        completionPercentage: 50,
+        rawTotalIncompleteResponses: 2,
+        rawAppliedResponses: 1,
+        rawCompletionPercentage: 50,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      };
+
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
+        expect(response).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
+    it('should return null when applied results overview cannot be loaded', () => {
+      service.getAppliedResultsOverview(mockWorkspaceId).subscribe(response => {
+        expect(response).toBeNull();
+      });
+
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/applied-results-overview`);
       req.error(new ProgressEvent('error'));
     });
   });
@@ -546,6 +585,41 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('coding freshness', () => {
+    it('should request autocoding readiness with run and force-refresh params', () => {
+      const mockResponse = {
+        workspaceId: mockWorkspaceId,
+        autoCoderRun: 1,
+        readiness: 'BLOCKED',
+        blockers: ['NO_CODEABLE_RESPONSES'],
+        rawResponsesTotal: 10,
+        rawResponsesWithRelevantStatus: 10,
+        resultUnitsTotal: 2,
+        resultUnitKeysTotal: 2,
+        matchedUnitFiles: 2,
+        missingUnitFiles: [],
+        matchedCodingSchemes: 1,
+        missingCodingSchemes: [],
+        invalidCodingSchemes: [],
+        validVariablePairs: 0,
+        validResponses: 0,
+        codeableResponses: 0,
+        invalidVariableSamples: []
+      };
+
+      service.getAutocodingReadiness(mockWorkspaceId, 1, true)
+        .subscribe(response => {
+          expect(response).toEqual(mockResponse);
+        });
+
+      const req = httpMock.expectOne(request => (
+        request.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/readiness` &&
+        request.params.get('autoCoderRun') === '1' &&
+        request.params.get('forceRefresh') === 'true'
+      ));
+      expect(req.request.method).toBe('GET');
+      req.flush(mockResponse);
+    });
+
     it('should request the freshness scope with version and states', () => {
       const mockResponse = {
         workspaceId: mockWorkspaceId,
