@@ -141,6 +141,7 @@ describe('ReplayComponent', () => {
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     jest.restoreAllMocks();
   });
 
@@ -258,6 +259,54 @@ describe('ReplayComponent', () => {
     expect(component.anchor).toBe('test-anchor');
     expect(component.unitId).toBe('test-unit');
     expect(component.testPerson).toBe('valid@test@person');
+  });
+
+  it('should retry anchor highlighting after the player reports visible content', () => {
+    jest.useFakeTimers();
+    const iframe = document.createElement('iframe');
+    const highlightedSection = document.createElement('aspect-section') as HTMLElement;
+    const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
+      .mockReturnValueOnce([])
+      .mockReturnValueOnce([highlightedSection]);
+    const scrollSpy = jest.spyOn(domUtils, 'scrollToElementByAlias').mockReturnValue(true);
+    component.anchor = 'VAR1';
+    component.unitPlayerComponent = {
+      hostingIframe: {
+        nativeElement: iframe
+      }
+    } as unknown as typeof component.unitPlayerComponent;
+
+    component.onResponseVisible();
+
+    expect(highlightSpy).toHaveBeenCalledTimes(1);
+    expect(highlightSpy).toHaveBeenCalledWith(iframe, 'VAR1');
+    expect(scrollSpy).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(100);
+
+    expect(highlightSpy).toHaveBeenCalledTimes(2);
+    expect(scrollSpy).toHaveBeenCalledWith(iframe, 'VAR1');
+    jest.useRealTimers();
+  });
+
+  it('should cancel stale anchor highlight retries when unit data resets', () => {
+    jest.useFakeTimers();
+    const iframe = document.createElement('iframe');
+    const highlightSpy = jest.spyOn(domUtils, 'highlightAspectSectionWithAnchor')
+      .mockReturnValue([]);
+    component.anchor = 'VAR1';
+    component.unitPlayerComponent = {
+      hostingIframe: {
+        nativeElement: iframe
+      }
+    } as unknown as typeof component.unitPlayerComponent;
+
+    component.onResponseVisible();
+    (component as unknown as { resetUnitData: () => void }).resetUnitData();
+    jest.advanceTimersByTime(1000);
+
+    expect(highlightSpy).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
   });
 
   it('should load units data for booklet-view mode without coding job side effects', async () => {
