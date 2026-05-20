@@ -23,6 +23,9 @@
               <mat-label>{{ 'double-coded-review.filter.scope-label' | translate }}</mat-label>
               <mat-select [formControl]="scopeControl" multiple>
                 <mat-select-trigger>{{ getScopeSelectionSummary() }}</mat-select-trigger>
+                @if (!hasScopeOptions()) {
+                  <mat-option disabled>{{ 'double-coded-review.filter.scope-none' | translate }}</mat-option>
+                }
                 <mat-optgroup [label]="'double-coded-review.filter.scope-job-definitions' | translate">
                   @for (definition of availableJobDefinitions; track definition.id) {
                     <mat-option [value]="'job_' + definition.id">{{ definition.label }}</mat-option>
@@ -171,8 +174,11 @@
                           (click)="openReplay(element.responseId)">
                           <mat-icon>{{ replayLoadingByResponseId[element.responseId] ? 'hourglass_top' : 'play_circle' }}</mat-icon>
                         </button>
-                        <div class="answer-text" [matTooltip]="element.givenAnswer || 'N/A'">
-                          {{ element.givenAnswer || 'N/A' }}
+                        <div
+                          class="answer-text"
+                          [class.geogebra-answer]="isGeoGebraAnswer(element.givenAnswer)"
+                          [matTooltip]="getAnswerTooltip(element.givenAnswer)">
+                          {{ getAnswerDisplay(element.givenAnswer) }}
                         </div>
                       </div>
                     </td>
@@ -319,6 +325,9 @@
             <mat-label>{{ 'double-coded-review.filter.scope-label' | translate }}</mat-label>
             <mat-select [formControl]="scopeControl" multiple>
               <mat-select-trigger>{{ getScopeSelectionSummary() }}</mat-select-trigger>
+              @if (!hasScopeOptions()) {
+                <mat-option disabled>{{ 'double-coded-review.filter.scope-none' | translate }}</mat-option>
+              }
               <mat-optgroup [label]="'double-coded-review.filter.scope-job-definitions' | translate">
                 @for (definition of availableJobDefinitions; track definition.id) {
                   <mat-option [value]="'job_' + definition.id">{{ definition.label }}</mat-option>
@@ -467,8 +476,11 @@
                         (click)="openReplay(element.responseId)">
                         <mat-icon>{{ replayLoadingByResponseId[element.responseId] ? 'hourglass_top' : 'play_circle' }}</mat-icon>
                       </button>
-                      <div class="answer-text" [matTooltip]="element.givenAnswer || 'N/A'">
-                        {{ element.givenAnswer || 'N/A' }}
+                      <div
+                        class="answer-text"
+                        [class.geogebra-answer]="isGeoGebraAnswer(element.givenAnswer)"
+                        [matTooltip]="getAnswerTooltip(element.givenAnswer)">
+                        {{ getAnswerDisplay(element.givenAnswer) }}
                       </div>
                     </div>
                   </td>

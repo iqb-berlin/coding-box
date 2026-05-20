@@ -21,6 +21,7 @@ describe('CodingReviewService', () => {
 
   let queryBuilder: {
     leftJoin: jest.Mock;
+    innerJoin: jest.Mock;
     select: jest.Mock;
     addSelect: jest.Mock;
     where: jest.Mock;
@@ -84,6 +85,7 @@ describe('CodingReviewService', () => {
   beforeEach(() => {
     queryBuilder = {
       leftJoin: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),

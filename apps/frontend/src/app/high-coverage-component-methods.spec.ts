@@ -469,6 +469,128 @@ describe('high coverage component method smoke tests', () => {
     })).toBe(false);
   });
 
+  it('keeps GeoGebra answers compact in double-coded review rows', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      isGeoGebraAnswer: (value: string) => boolean;
+      getAnswerDisplay: (value: string) => string;
+      getAnswerTooltip: (value: string) => string;
+    };
+
+    expect(instance.isGeoGebraAnswer('UEsDBAoAAAAAA')).toBe(true);
+    expect(instance.isGeoGebraAnswer('data:application/zip;base64,UEsDBAoAAAAAA')).toBe(true);
+    expect(instance.getAnswerDisplay('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-answer');
+    expect(instance.getAnswerTooltip('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-tooltip');
+  });
+
+  it('defaults double-coded review scope to the newest active job definition', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      appService: { selectedWorkspaceId: number };
+      scopeControl: FormControl<string[]>;
+      availableJobDefinitions: Array<{ id: number; label: string }>;
+      availableCoderTrainings: Array<{ id: number; label: string }>;
+      codingFacadeService: {
+        getJobDefinitions: jest.Mock;
+        getCoderTrainings: jest.Mock;
+      };
+      translateService: { instant: jest.Mock };
+      destroy$: Subject<void>;
+      loadData: jest.Mock;
+      hasScopeOptions: () => boolean;
+      loadFilterOptions: () => void;
+    };
+
+    instance.appService = { selectedWorkspaceId: 1 };
+    instance.scopeControl = new FormControl<string[]>(['job_99']) as FormControl<string[]>;
+    instance.availableJobDefinitions = [];
+    instance.availableCoderTrainings = [];
+    instance.destroy$ = new Subject<void>();
+    instance.loadData = jest.fn();
+    instance.translateService = {
+      instant: jest.fn((key: string, params?: Record<string, unknown>) => {
+        const translations: Record<string, string> = {
+          'coding-job-definition-dialog.status.definition.approved': 'Genehmigt',
+          'coding-job-definition-dialog.status.definition.pending-review': 'Warten auf Genehmigung',
+          'double-coded-review.filter.job-count-singular': 'Kodierjob',
+          'double-coded-review.filter.job-count-plural': 'Kodierjobs',
+          'double-coded-review.filter.training-fallback': `Schulung #${params?.id}`
+        };
+        return translations[key] || key;
+      })
+    };
+    instance.codingFacadeService = {
+      getJobDefinitions: jest.fn(() => of([
+        { id: 1, status: 'approved', createdJobsCount: 0 },
+        { id: 3, status: 'approved', createdJobsCount: 2 },
+        { id: 2, status: 'pending_review', createdJobsCount: 1 }
+      ])),
+      getCoderTrainings: jest.fn(() => of([
+        { id: 5, label: 'Training A', jobsCount: 0 },
+        { id: 6, label: 'Training B', jobsCount: 1 }
+      ]))
+    };
+
+    instance.loadFilterOptions();
+
+    expect(instance.scopeControl.value).toEqual(['job_3']);
+    expect(instance.availableJobDefinitions.map(definition => definition.id)).toEqual([3, 2]);
+    expect(instance.availableCoderTrainings.map(training => training.id)).toEqual([6]);
+    expect(instance.availableJobDefinitions.map(definition => definition.label)).toEqual([
+      'Definition #3 (Genehmigt), 2 Kodierjobs',
+      'Definition #2 (Warten auf Genehmigung), 1 Kodierjob'
+    ]);
+    expect(instance.availableCoderTrainings[0].label).toBe('Training B (1 Kodierjob)');
+    expect(instance.hasScopeOptions()).toBe(true);
+    expect(instance.loadData).toHaveBeenCalled();
+  });
+
+  it('does not load double-coded review data without active scopes', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      appService: { selectedWorkspaceId: number };
+      scopeControl: FormControl<string[]>;
+      availableJobDefinitions: Array<{ id: number; label: string }>;
+      availableCoderTrainings: Array<{ id: number; label: string }>;
+      codingFacadeService: {
+        getJobDefinitions: jest.Mock;
+        getCoderTrainings: jest.Mock;
+      };
+      destroy$: Subject<void>;
+      loadData: jest.Mock;
+      allData: unknown[];
+      dataSource: MatTableDataSource<unknown>;
+      totalItems: number;
+      loadFilterOptions: () => void;
+      getScopeSelectionSummary: () => string;
+    };
+
+    instance.appService = { selectedWorkspaceId: 1 };
+    instance.scopeControl = new FormControl<string[]>(['job_99']) as FormControl<string[]>;
+    instance.availableJobDefinitions = [{ id: 99, label: 'Stale scope' }];
+    instance.availableCoderTrainings = [];
+    instance.destroy$ = new Subject<void>();
+    instance.loadData = jest.fn();
+    instance.allData = [sampleReviewItem];
+    instance.dataSource = new MatTableDataSource<unknown>([sampleReviewItem]);
+    instance.totalItems = 1;
+    instance.codingFacadeService = {
+      getJobDefinitions: jest.fn(() => of([{ id: 1, status: 'approved', createdJobsCount: 0 }])),
+      getCoderTrainings: jest.fn(() => of([{ id: 5, label: 'Training A', jobsCount: 0 }]))
+    };
+
+    instance.loadFilterOptions();
+
+    expect(instance.scopeControl.value).toEqual([]);
+    expect(instance.availableJobDefinitions).toEqual([]);
+    expect(instance.availableCoderTrainings).toEqual([]);
+    expect(instance.allData).toEqual([]);
+    expect(instance.dataSource.data).toEqual([]);
+    expect(instance.totalItems).toBe(0);
+    expect(instance.getScopeSelectionSummary()).toBe('double-coded-review.filter.scope-none');
+    expect(instance.loadData).not.toHaveBeenCalled();
+  });
+
   it.each([
     [
       'DoubleCodedReviewComponent',
