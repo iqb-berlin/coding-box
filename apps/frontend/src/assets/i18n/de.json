@@ -1965,6 +1965,13 @@
     "coders-done": "Kodierer fertig",
     "pending": "Ausstehend",
     "applied": "Angewandt",
+    "decision": {
+      "select-label": "Endgültiger Code",
+      "no-selection": "Kein Code gewählt",
+      "status-conflict": "Abweichung",
+      "status-match": "Übereinstimmung",
+      "status-incomplete": "Unvollständig"
+    },
     "filter": {
       "show-only-conflicts": "Nur Konflikte anzeigen",
       "agreement-label": "Übereinstimmung",

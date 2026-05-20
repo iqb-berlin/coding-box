@@ -8,7 +8,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatPaginatorModule, PageEvent, MatPaginatorIntl } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatRadioModule } from '@angular/material/radio';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
@@ -80,7 +79,6 @@ interface CoderColumnMeta {
     MatIconModule,
     MatPaginatorModule,
     MatProgressSpinnerModule,
-    MatRadioModule,
     MatFormFieldModule,
     MatInputModule,
     MatSnackBarModule,
@@ -345,6 +343,25 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     return `comment_${item.responseId}`;
   }
 
+  getItemControl(item: DoubleCodedItem): FormControl {
+    return this.getOrCreateFormControl(this.getItemControlName(item));
+  }
+
+  getCommentControl(item: DoubleCodedItem): FormControl {
+    return this.getOrCreateFormControl(this.getCommentControlName(item));
+  }
+
+  private getOrCreateFormControl(controlName: string): FormControl {
+    const control = this.selectionForm.get(controlName);
+    if (control instanceof FormControl) {
+      return control;
+    }
+
+    const fallbackControl = new FormControl('');
+    this.selectionForm.addControl(controlName, fallbackControl);
+    return fallbackControl;
+  }
+
   private updateForm(): void {
     // Clear existing form controls
     Object.keys(this.selectionForm.controls).forEach(key => {
@@ -356,14 +373,14 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     currentItems.forEach(item => {
       const controlName = this.getItemControlName(item);
 
-      // Look for an existing resolution (a coder result that has a supervisor comment)
       const resolvedResult = item.coderResults.find(cr => !!cr.supervisorComment);
+      const firstCodedResult = item.coderResults.find(cr => cr.code !== null);
 
       let defaultValue = '';
       if (resolvedResult) {
         defaultValue = resolvedResult.jobId.toString();
-      } else if (item.coderResults.length > 0) {
-        defaultValue = item.coderResults[0].jobId.toString();
+      } else if (firstCodedResult) {
+        defaultValue = firstCodedResult.jobId.toString();
       }
 
       this.selectionForm.addControl(controlName, new FormControl(defaultValue));
@@ -422,6 +439,57 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     const meta = this.coderColumnMeta[columnId];
     if (!meta) return undefined;
     return item.coderResults.find(result => result.jobId === meta.jobId);
+  }
+
+  getSelectedDecisionResult(item: DoubleCodedItem): CoderResult | undefined {
+    const selectedJobId = this.selectionForm?.get(this.getItemControlName(item))?.value;
+    const selectedResult = selectedJobId ?
+      item.coderResults.find(result => result.jobId.toString() === selectedJobId) :
+      item.selectedCoderResult;
+
+    return selectedResult && selectedResult.code !== null ? selectedResult : undefined;
+  }
+
+  getDecisionStatusClass(item: DoubleCodedItem): string {
+    if (item.isResolved) {
+      return 'resolved';
+    }
+
+    if (this.hasConflict(item)) {
+      return 'conflict';
+    }
+
+    return this.isAllCodersDone(item) ? 'match' : 'incomplete';
+  }
+
+  getDecisionStatusIcon(item: DoubleCodedItem): string {
+    const statusClass = this.getDecisionStatusClass(item);
+
+    switch (statusClass) {
+      case 'resolved':
+        return 'check_circle';
+      case 'conflict':
+        return 'warning';
+      case 'match':
+        return 'task_alt';
+      default:
+        return 'pending';
+    }
+  }
+
+  getDecisionStatusLabel(item: DoubleCodedItem): string {
+    const statusClass = this.getDecisionStatusClass(item);
+
+    if (statusClass === 'resolved') {
+      return this.translateService.instant('double-coded-review.applied');
+    }
+
+    return this.translateService.instant(`double-coded-review.decision.status-${statusClass}`);
+  }
+
+  shouldShowDecisionComment(item: DoubleCodedItem): boolean {
+    return this.hasConflict(item) ||
+      !!this.selectionForm?.get(this.getCommentControlName(item))?.value;
   }
 
   isGeoGebraAnswer(value: string | null | undefined): boolean {
@@ -582,7 +650,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       next: response => {
         this.allData = response.data.map(item => ({
           ...item,
-          selectedCoderResult: item.coderResults[0]
+          selectedCoderResult: item.coderResults.find(result => result.code !== null)
         }));
         this.updateDisplayedColumns(this.allData);
         this.dataSource.data = this.allData;
@@ -620,7 +688,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   onSelectionChange(item: DoubleCodedItem, selectedJobId: string): void {
     const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
-    if (selectedResult) {
+    if (selectedResult && selectedResult.code !== null) {
       item.selectedCoderResult = selectedResult;
     }
   }
@@ -712,7 +780,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
     if (selectedJobId) {
       const selectedResult = item.coderResults.find(cr => cr.jobId.toString() === selectedJobId);
-      if (selectedResult) {
+      if (selectedResult && selectedResult.code !== null) {
         const decision: { responseId: number; selectedJobId: number; resolutionComment?: string } = {
           responseId: item.responseId,
           selectedJobId: selectedResult.jobId
