@@ -45,7 +45,14 @@ describe('ValidationService', () => {
   describe('validateVariables', () => {
     it('should fetch variables validation results', () => {
       const mockResponse = {
-        data: [], total: 0, page: 1, limit: 10
+        data: [],
+        total: 0,
+        page: 1,
+        limit: 10,
+        summary: {
+          unitFileNotFound: 0,
+          variableNotDefinedInUnit: 0
+        }
       };
 
       service.validateVariables(mockWorkspaceId, 1, 10).subscribe(res => {

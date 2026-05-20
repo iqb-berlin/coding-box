@@ -12,7 +12,10 @@ import {
   take,
   throwError
 } from 'rxjs';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import { TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -29,6 +32,11 @@ interface PaginatedResponse<T> {
   limit: number;
 }
 
+interface VariablesValidationResponse
+  extends PaginatedResponse<InvalidVariableDto> {
+  summary: VariableValidationSummaryDto;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -40,14 +48,14 @@ export class ValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10
-  ): Observable<PaginatedResponse<InvalidVariableDto>> {
+  ): Observable<VariablesValidationResponse> {
     const params = new HttpParams()
       .set('page', page.toString())
       .set('limit', limit.toString());
 
     return this.http
       .get<
-    PaginatedResponse<InvalidVariableDto>
+    VariablesValidationResponse
     >(`${this.serverUrl}admin/workspace/${workspaceId}/files/validate-variables`, { params })
       .pipe(
         catchError(error => throwError(() => error))
