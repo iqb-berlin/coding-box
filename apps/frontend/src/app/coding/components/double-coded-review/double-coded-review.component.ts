@@ -401,12 +401,24 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   }
 
   hasConflict(item: DoubleCodedItem): boolean {
-    const validResults = item.coderResults.filter(cr => cr.code !== null);
-    if (validResults.length < 2) {
+    const validResultSignatures = item.coderResults
+      .map(result => this.getCoderResultSignature(result))
+      .filter((signature): signature is string => signature !== null);
+
+    if (validResultSignatures.length < 2) {
       return false;
     }
-    const firstCode = validResults[0].code;
-    return validResults.some(result => result.code !== firstCode);
+
+    const firstSignature = validResultSignatures[0];
+    return validResultSignatures.some(signature => signature !== firstSignature);
+  }
+
+  private getCoderResultSignature(result: Pick<CoderResult, 'code' | 'score'>): string | null {
+    if (result.code === null || result.code === undefined) {
+      return null;
+    }
+
+    return `${result.code}:${result.score ?? 'NULL'}`;
   }
 
   isAllCodersDone(item: DoubleCodedItem): boolean {

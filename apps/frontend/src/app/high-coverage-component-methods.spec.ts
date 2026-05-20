@@ -442,6 +442,33 @@ describe('high coverage component method smoke tests', () => {
     jest.restoreAllMocks();
   });
 
+  it('recognizes score-only differences as double-coded review conflicts', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      hasConflict: (item: typeof sampleReviewItem) => boolean;
+    };
+
+    expect(instance.hasConflict({
+      ...sampleReviewItem,
+      coderResults: [
+        { ...sampleCoderResult, code: 1, score: 0 },
+        {
+          ...sampleCoderResult, coderId: 2, jobId: 11, code: 1, score: 1
+        }
+      ]
+    })).toBe(true);
+
+    expect(instance.hasConflict({
+      ...sampleReviewItem,
+      coderResults: [
+        { ...sampleCoderResult, code: 1, score: 0 },
+        {
+          ...sampleCoderResult, coderId: 2, jobId: 11, code: 1, score: 0
+        }
+      ]
+    })).toBe(false);
+  });
+
   it.each([
     [
       'DoubleCodedReviewComponent',
