@@ -22,7 +22,7 @@
       <mat-tab label="Roh-XML">
         <div class="tab-content">
           <div class="info-section">
-            <pre class="xml-content">{{ data.unitInfo.rawXml }}</pre>
+            <coding-box-xml-viewer [xml]="data.unitInfo.rawXml"></coding-box-xml-viewer>
           </div>
         </div>
       </mat-tab>

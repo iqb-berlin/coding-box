@@ -36,6 +36,15 @@
   "status-processing": "Wird bearbeitet",
   "status-completed": "Abgeschlossen",
   "status-failed": "Fehlgeschlagen",
+  "xml-viewer": {
+    "format-error": "XML konnte nicht formatiert werden",
+    "enable-line-wrap": "Zeilen umbrechen",
+    "disable-line-wrap": "Zeilenumbruch ausschalten",
+    "toggle-line-wrap": "Zeilenumbruch umschalten",
+    "copy-original": "Original-XML kopieren",
+    "copy-xml": "XML kopieren",
+    "copied": "Kopiert"
+  },
   "export-toast": {
     "title": "Datenexport",
     "download": "Herunterladen",

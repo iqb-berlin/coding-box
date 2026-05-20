@@ -1,0 +1,82 @@
+:host {
+  display: block;
+  height: 100%;
+  min-height: 0;
+}
+
+.xml-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid #d7dce2;
+  border-radius: 4px;
+  background: #fbfcfe;
+  color: #1f2933;
+}
+
+.xml-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 4px 8px;
+  border-bottom: 1px solid #d7dce2;
+  background: #f3f6f9;
+
+  button {
+    width: 36px;
+    height: 36px;
+    flex: 0 0 36px;
+  }
+
+  .is-active {
+    color: #1565c0;
+    background: rgba(21, 101, 192, 0.1);
+  }
+}
+
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.parse-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #8a5a00;
+  font-size: 13px;
+
+  mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+    flex: 0 0 18px;
+  }
+}
+
+.xml-code {
+  flex: 1 1 auto;
+  margin: 0;
+  min-height: 140px;
+  max-height: var(--xml-viewer-code-max-height, min(68vh, 720px));
+  padding: 16px;
+  overflow: auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  tab-size: 2;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #263238;
+  background: #fbfcfe;
+}
+
+.xml-code.wrap {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
