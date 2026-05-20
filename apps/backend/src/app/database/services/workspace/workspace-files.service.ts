@@ -28,7 +28,10 @@ import {
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { FileValidationResultDto } from '../../../../../../../api-dto/files/file-validation-result.dto';
 import { ResponseDto } from '../../../../../../../api-dto/responses/response-dto';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
 import { DuplicateResponsesResultDto } from '../../../../../../../api-dto/files/duplicate-response.dto';
 import { Unit } from '../../entities/unit.entity';
 import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
@@ -2043,6 +2046,7 @@ ${bookletRefs}
       total: number;
       page: number;
       limit: number;
+      summary: VariableValidationSummaryDto;
     }> {
     return this.workspaceResponseValidationService.validateVariables(
       workspaceId,
