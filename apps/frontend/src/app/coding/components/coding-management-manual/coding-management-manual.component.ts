@@ -84,6 +84,10 @@ import {
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import {
   CODING_FRESHNESS_TASK_RESULT_HELP,
+  formatCodingFreshnessResponseCount,
+  formatCodingFreshnessTaskResultCount,
+  getCodingFreshnessAffectedResponseCount,
+  getCodingFreshnessAffectedTaskResultCount,
   getCodingFreshnessAttentionTitle,
   getCodingFreshnessAutoCodingWarnings,
   getCodingFreshnessChipLabel,
@@ -1461,9 +1465,21 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
+    const warnings = this.allCodingFreshnessWarnings;
+    if (this.isCompletionComplete()) {
+      return warnings;
+    }
+
+    return warnings.filter(item => item.version !== 'v3');
+  }
+
+  private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     return (this.codingFreshnessSummary?.items || [])
       .filter(isCodingFreshnessOpenWarning)
-      .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
+      .sort((a, b) => (
+        a.version.localeCompare(b.version) ||
+        a.state.localeCompare(b.state)
+      ));
   }
 
   get hasCodingFreshnessWarnings(): boolean {
@@ -1479,14 +1495,46 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   get manualCodingFreshnessPanelTitle(): string {
+    if (this.hasOnlySecondAutocodingWarnings) {
+      return this.translateService.instant(
+        'coding-management-manual.freshness.second-autocoding-ready-title'
+      );
+    }
+
     return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessSummaryText(): string {
+    if (this.hasOnlySecondAutocodingWarnings) {
+      const taskResults = formatCodingFreshnessTaskResultCount(
+        getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings)
+      );
+      const responses = formatCodingFreshnessResponseCount(
+        getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings)
+      );
+
+      return this.translateService.instant(
+        'coding-management-manual.freshness.second-autocoding-ready-summary',
+        {
+          taskResults,
+          responses
+        }
+      );
+    }
+
     return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessExplanationText(): string {
+    if (this.hasOnlySecondAutocodingWarnings) {
+      return this.translateService.instant(
+        'coding-management-manual.freshness.second-autocoding-ready-help',
+        {
+          taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP
+        }
+      );
+    }
+
     const guidanceText = getCodingFreshnessManualReviewGuidanceText(
       this.codingFreshnessWarnings
     );
@@ -1499,6 +1547,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   getManualFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
     return getCodingFreshnessChipLabel(item);
+  }
+
+  private get hasOnlySecondAutocodingWarnings(): boolean {
+    return this.codingFreshnessWarnings.length > 0 &&
+      this.codingFreshnessWarnings.every(item => item.version === 'v3');
   }
 
   private refreshAggregationDependentViews(): void {
