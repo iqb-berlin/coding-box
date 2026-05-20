@@ -1,4 +1,5 @@
 import {
+  getCurrentUserWorkspaceAccesses,
   getEffectiveCanCode,
   hasActiveCodingAccess,
   hasManagementWorkspaceAccess,
@@ -42,6 +43,21 @@ describe('workspace access utilities', () => {
       { accessLevel: 1, canCode: true },
       { accessLevel: 3, canCode: true }
     ])).toBe(false);
+  });
+
+  it('extracts the current users workspace access rows from id and legacy userId shapes', () => {
+    expect(getCurrentUserWorkspaceAccesses([
+      [
+        { id: 1, accessLevel: 3, canCode: false },
+        { id: 7, accessLevel: 1, canCode: true }
+      ],
+      [
+        { userId: 7, accessLevel: 2, canCode: true }
+      ]
+    ], 7)).toEqual([
+      { id: 7, accessLevel: 1, canCode: true },
+      { userId: 7, accessLevel: 2, canCode: true }
+    ]);
   });
 
   it.each([

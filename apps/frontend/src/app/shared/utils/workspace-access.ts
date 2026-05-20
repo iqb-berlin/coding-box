@@ -3,6 +3,11 @@ export interface WorkspaceAccessLike {
   canCode?: boolean | null;
 }
 
+export interface WorkspaceUserAccessLike extends WorkspaceAccessLike {
+  id?: number | null;
+  userId?: number | null;
+}
+
 export function getEffectiveCanCode(user: WorkspaceAccessLike): boolean {
   return user.canCode ?? ((user.accessLevel ?? 0) === 1);
 }
@@ -17,6 +22,13 @@ export function hasManagementWorkspaceAccess(user: WorkspaceAccessLike): boolean
 
 export function hasOnlyPersonalCodingAccess(users: WorkspaceAccessLike[]): boolean {
   return users.some(hasActiveCodingAccess) && !users.some(hasManagementWorkspaceAccess);
+}
+
+export function getCurrentUserWorkspaceAccesses(
+  workspaceAccesses: WorkspaceUserAccessLike[][],
+  userId: number
+): WorkspaceUserAccessLike[] {
+  return workspaceAccesses.flatMap(users => users.filter(user => (user.id ?? user.userId) === userId));
 }
 
 export function hasMinimumWorkspaceAccess(user: WorkspaceAccessLike, minLevel: number): boolean {
