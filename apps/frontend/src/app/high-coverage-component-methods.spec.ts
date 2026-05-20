@@ -483,6 +483,64 @@ describe('high coverage component method smoke tests', () => {
     expect(instance.getAnswerTooltip('UEsDBAoAAAAAA')).toBe('double-coded-review.values.geogebra-tooltip');
   });
 
+  it('formats the current reviewer decision column in double-coded review rows', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      selectionForm: FormGroup;
+      translateService: { instant: jest.Mock };
+      getItemControlName: (item: typeof sampleReviewItem) => string;
+      getSelectedDecisionResult: (item: typeof sampleReviewItem) => typeof sampleCoderResult | undefined;
+      getDecisionStatusClass: (item: typeof sampleReviewItem) => string;
+      getDecisionStatusIcon: (item: typeof sampleReviewItem) => string;
+      getDecisionStatusLabel: (item: typeof sampleReviewItem) => string;
+    };
+
+    instance.selectionForm = new FormGroup({
+      [instance.getItemControlName(sampleReviewItem)]: new FormControl('11')
+    });
+    instance.translateService = { instant: jest.fn((key: string) => key) };
+
+    expect(instance.getSelectedDecisionResult(sampleReviewItem)?.coderName).toBe('Coder B');
+    expect(instance.getDecisionStatusClass(sampleReviewItem)).toBe('conflict');
+    expect(instance.getDecisionStatusIcon(sampleReviewItem)).toBe('warning');
+    expect(instance.getDecisionStatusLabel(sampleReviewItem)).toBe('double-coded-review.decision.status-conflict');
+    expect(instance.getDecisionStatusClass({
+      ...sampleReviewItem,
+      coderResults: [
+        { ...sampleCoderResult, code: 1, score: 2 },
+        {
+          ...sampleCoderResult, coderId: 2, coderName: 'Coder B', jobId: 11, code: 1, score: 2
+        }
+      ]
+    })).toBe('match');
+  });
+
+  it('defaults double-coded review decisions to the first completed coder result', async () => {
+    const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
+    const item = {
+      ...sampleReviewItem,
+      coderResults: [
+        { ...sampleCoderResult, code: null, jobId: 10 },
+        {
+          ...sampleCoderResult, coderId: 2, coderName: 'Coder B', jobId: 11, code: 2
+        }
+      ]
+    };
+    const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
+      selectionForm: FormGroup;
+      dataSource: MatTableDataSource<unknown>;
+      getItemControlName: (item: unknown) => string;
+      updateForm: () => void;
+    };
+
+    instance.selectionForm = new FormGroup({});
+    instance.dataSource = new MatTableDataSource<unknown>([item]);
+
+    instance.updateForm();
+
+    expect(instance.selectionForm.get(instance.getItemControlName(item))?.value).toBe('11');
+  });
+
   it('defaults double-coded review scope to the newest active job definition', async () => {
     const { DoubleCodedReviewComponent } = await import('./coding/components/double-coded-review/double-coded-review.component');
     const instance = createInstance(DoubleCodedReviewComponent as ConstructorExport) as {
