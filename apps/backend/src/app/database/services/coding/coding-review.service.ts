@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -150,12 +150,34 @@ export class CodingReviewService {
           const sub = subQuery
             .subQuery()
             .select('cju2.response_id')
-            .from('coding_job_unit', 'cju2')
-            .leftJoin('cju2.coding_job', 'cj2')
+            .from(CodingJobUnit, 'cju2')
+            .innerJoin('cju2.coding_job', 'cj2')
             .leftJoin('cj2.codingJobCoders', 'cjc2')
-            .where('cjc2.user_id = :coderId', { coderId })
-            .getQuery();
-          return `cju.response_id IN ${sub}`;
+            .where('cj2.workspace_id = :workspaceId', { workspaceId })
+            .andWhere('cjc2.user_id = :coderId', { coderId });
+
+          if (excludeTrainings) {
+            sub.andWhere('cj2.training_id IS NULL');
+          }
+
+          if (this.hasScopeFilters(jobDefinitionIds, coderTrainingIds)) {
+            const scopeClauses: string[] = [];
+            const scopeParams: Record<string, number[]> = {};
+
+            if (jobDefinitionIds?.length) {
+              scopeClauses.push('cj2.job_definition_id IN (:...coderFilterJobDefinitionIds)');
+              scopeParams.coderFilterJobDefinitionIds = jobDefinitionIds;
+            }
+
+            if (coderTrainingIds?.length) {
+              scopeClauses.push('cj2.training_id IN (:...coderFilterTrainingIds)');
+              scopeParams.coderFilterTrainingIds = coderTrainingIds;
+            }
+
+            sub.andWhere(`(${scopeClauses.join(' OR ')})`, scopeParams);
+          }
+
+          return `cju.response_id IN ${sub.getQuery()}`;
         });
       }
 
@@ -423,10 +445,10 @@ export class CodingReviewService {
               updatedValue = parts[parts.length - 1];
             }
 
-            await transactionalEntityManager.update(
-              CodingJobUnit,
-              { response_id: decision.responseId },
-              { supervisor_comment: null }
+            await this.clearWorkspaceSupervisorComments(
+              transactionalEntityManager,
+              workspaceId,
+              decision.responseId
             );
 
             if (decision.resolutionComment && decision.resolutionComment.trim()) {
@@ -475,6 +497,35 @@ export class CodingReviewService {
         'Could not apply double-coded resolutions. Please check the database connection.'
       );
     }
+  }
+
+  private async clearWorkspaceSupervisorComments(
+    manager: EntityManager,
+    workspaceId: number,
+    responseId: number
+  ): Promise<void> {
+    const rows = await manager
+      .getRepository(CodingJobUnit)
+      .createQueryBuilder('cju')
+      .innerJoin('cju.coding_job', 'cj')
+      .select('cju.id', 'id')
+      .where('cju.response_id = :responseId', { responseId })
+      .andWhere('cj.workspace_id = :workspaceId', { workspaceId })
+      .getRawMany<{ id: number | string }>();
+
+    const ids = rows
+      .map(row => Number(row.id))
+      .filter(id => Number.isFinite(id));
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    await manager.update(
+      CodingJobUnit,
+      { id: In(ids) },
+      { supervisor_comment: null }
+    );
   }
 
   async getWorkspaceCohensKappaSummary(

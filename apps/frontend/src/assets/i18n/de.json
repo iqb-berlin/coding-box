@@ -1967,6 +1967,10 @@
       "scope-summary": "{{jobs}} Definition(en), {{trainings}} Schulung(en)",
       "scope-job-definitions": "Job-Definitionen",
       "scope-trainings": "Schulungen",
+      "scope-none": "Keine Job-Definition oder Schulung mit aktiven Kodierjobs gefunden",
+      "training-fallback": "Schulung #{{id}}",
+      "job-count-singular": "Kodierjob",
+      "job-count-plural": "Kodierjobs",
       "search-label": "Suchen",
       "search-placeholder": "Einheit, Variable, Login, Code oder Gruppe...",
       "coder-label": "Kodierer",
@@ -1985,6 +1989,10 @@
       "coder-notes": "Anmerkungen der Kodierer",
       "no-notes": "Keine Anmerkungen vorhanden.",
       "person-context": "Personen-Kontext"
+    },
+    "values": {
+      "geogebra-answer": "GeoGebra-Antwort",
+      "geogebra-tooltip": "Diese Antwort enthält GeoGebra-Daten. Öffnen Sie das Replay, um sie zu prüfen."
     },
     "statistics": {
       "showing-conflicts": "Zeige {{visible}} von {{total}} Konflikten",
