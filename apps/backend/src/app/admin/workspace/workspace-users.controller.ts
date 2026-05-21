@@ -2,14 +2,13 @@ import {
   BadRequestException,
   Body,
   Controller,
-  Get, Param, ParseIntPipe, Post, Query, Req, UseGuards
+  Get, Logger, Param, ParseIntPipe, Post, Query, Req, UseGuards
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBearerAuth, ApiBody, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiOperation,
   ApiParam, ApiQuery, ApiTags
 } from '@nestjs/swagger';
-import { logger } from 'nx/src/utils/logger';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AuthService } from '../../auth/service/auth.service';
@@ -29,6 +28,8 @@ interface RequestWithUser {
 @ApiTags('Admin Workspace Users')
 @Controller('admin/workspace')
 export class WorkspaceUsersController {
+  private readonly logger = new Logger(WorkspaceUsersController.name);
+
   constructor(
     private workspaceUsersService: WorkspaceUsersService,
     private authService: AuthService
@@ -59,7 +60,7 @@ export class WorkspaceUsersController {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
-    logger.log(`Generating token for user ${request.user.id} in workspace ${workspaceId} with duration ${durationDays}d`);
+    this.logger.log(`Generating token for user ${request.user.id} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createTokenForUserId(
       Number(request.user.id),
@@ -93,7 +94,7 @@ export class WorkspaceUsersController {
       throw new BadRequestException('Invalid input parameters');
     }
     const durationDays = this.parseTokenDurationDays(duration);
-    logger.log(`Generating token for user ${identity} in workspace ${workspaceId} with duration ${durationDays}d`);
+    this.logger.log(`Generating token for user ${identity} in workspace ${workspaceId} with duration ${durationDays}d`);
 
     return this.authService.createToken(
       identity,
@@ -168,7 +169,7 @@ export class WorkspaceUsersController {
         limit
       };
     } catch (error) {
-      logger.error(`Error retrieving users for workspace ${workspaceId}`);
+      this.logger.error(`Error retrieving users for workspace ${workspaceId}`);
       return {
         data: [],
         total: 0,
@@ -236,7 +237,7 @@ export class WorkspaceUsersController {
         total
       };
     } catch (error) {
-      logger.error(`Error retrieving coders for workspace ${workspaceId}`);
+      this.logger.error(`Error retrieving coders for workspace ${workspaceId}`);
       return {
         data: [],
         total: 0
@@ -282,14 +283,14 @@ export class WorkspaceUsersController {
       // For now, we'll return all coders for the workspace
       const [coders, total] = await this.workspaceUsersService.findCoders(workspaceId);
 
-      logger.log(`Retrieved ${total} coders for workspace ${workspaceId} and coding job ${jobId}`);
+      this.logger.log(`Retrieved ${total} coders for workspace ${workspaceId} and coding job ${jobId}`);
 
       return {
         data: coders,
         total
       };
     } catch (error) {
-      logger.error(`Error retrieving coders for workspace ${workspaceId} and coding job ${jobId}`);
+      this.logger.error(`Error retrieving coders for workspace ${workspaceId} and coding job ${jobId}`);
       return {
         data: [],
         total: 0

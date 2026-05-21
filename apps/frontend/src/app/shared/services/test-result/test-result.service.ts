@@ -3,7 +3,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   catchError, Observable, of, Subject, tap
 } from 'rxjs';
-import { logger } from 'nx/src/utils/logger';
 import { SERVER_URL } from '../../../injection-tokens';
 import { TestResultCacheService } from './test-result-cache.service';
 import { ValidationTaskStateService } from '../validation/validation-task-state.service';
@@ -396,10 +395,7 @@ export class TestResultService {
       {}
     )
       .pipe(
-        catchError(() => {
-          logger.error('Error previewing test result deletion');
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 
@@ -432,10 +428,7 @@ export class TestResultService {
       {}
     )
       .pipe(
-        catchError(() => {
-          logger.error('Error previewing test log deletion');
-          return of(null);
-        })
+        catchError(() => of(null))
       );
   }
 
@@ -735,12 +728,7 @@ export class TestResultService {
       params
     })
       .pipe(
-        catchError(() => {
-          logger.error(
-            `Error searching for booklets with name: ${bookletName}`
-          );
-          return of({ data: [], total: 0 });
-        })
+        catchError(() => of({ data: [], total: 0 }))
       );
   }
 
@@ -821,10 +809,7 @@ export class TestResultService {
       params
     })
       .pipe(
-        catchError(() => {
-          logger.error(`Error searching for units with name: ${unitName}`);
-          return of({ data: [], total: 0 });
-        })
+        catchError(() => of({ data: [], total: 0 }))
       );
   }
 
@@ -854,13 +839,10 @@ export class TestResultService {
             this.validationTaskStateService.invalidateWorkspace(workspaceId);
           }
         }),
-        catchError(() => {
-          logger.error(`Error deleting unit with ID: ${unitId}`);
-          return of({
-            success: false,
-            report: { deletedUnit: null, warnings: ['Failed to delete unit'] }
-          });
-        })
+        catchError(() => of({
+          success: false,
+          report: { deletedUnit: null, warnings: ['Failed to delete unit'] }
+        }))
       );
   }
 
@@ -891,16 +873,13 @@ export class TestResultService {
             this.validationTaskStateService.invalidateWorkspace(workspaceId);
           }
         }),
-        catchError(() => {
-          logger.error(`Error deleting booklet with ID: ${bookletId}`);
-          return of({
-            success: false,
-            report: {
-              deletedBooklet: null,
-              warnings: ['Failed to delete booklet']
-            }
-          });
-        })
+        catchError(() => of({
+          success: false,
+          report: {
+            deletedBooklet: null,
+            warnings: ['Failed to delete booklet']
+          }
+        }))
       );
   }
 }
