@@ -34,7 +34,7 @@
         </div>
       </div>
       <div class="freshness-chip-row">
-        @for (item of codingFreshnessWarnings; track item.version + item.state) {
+        @for (item of codingFreshnessDisplayWarnings; track item.version + item.state) {
         <span class="freshness-chip">
           {{ getCodingFreshnessChipLabel(item) }}
         </span>

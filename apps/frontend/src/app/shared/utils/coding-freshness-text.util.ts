@@ -7,6 +7,22 @@ import {
 export const CODING_FRESHNESS_TASK_RESULT_HELP =
   'Eine Aufgabenbearbeitung ist eine Aufgabe, die eine bestimmte Testperson in einem Testheft bearbeitet hat. Zu einer Aufgabenbearbeitung können mehrere Antwortwerte gehören.';
 
+export const SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS = {
+  title: 'coding-management.readiness.title-manual-coding-open',
+  loadFailed: 'coding-management.readiness.manual-results-overview-load-failed',
+  summary: 'coding-management.readiness.second-autocoding-waits-summary',
+  remaining: 'coding-management.readiness.second-autocoding-waits-remaining',
+  help: 'coding-management.readiness.second-autocoding-waits-help',
+  chip: 'coding-management.readiness.second-autocoding-waits-chip'
+} as const;
+
+export interface ManualCodingCompletionOverview {
+  totalIncompleteResponses?: number;
+  appliedResponses?: number;
+  remainingResponses?: number;
+  completionPercentage?: number;
+}
+
 export function getCodingFreshnessVersionLabel(version: CodingFreshnessVersion): string {
   const labels: Record<CodingFreshnessVersion, string> = {
     v1: 'Auto-Coding 1',
@@ -65,6 +81,33 @@ export function getCodingFreshnessManualReviewWarnings(
     isCodingFreshnessOpenWarning(item) &&
     (item.version === 'v2' || item.state === 'MANUAL_REVIEW_REQUIRED')
   ));
+}
+
+export function getSecondAutocodingFreshnessWarnings(
+  items: CodingFreshnessSummaryItemDto[]
+): CodingFreshnessSummaryItemDto[] {
+  return items.filter(item => (
+    isCodingFreshnessOpenWarning(item) &&
+    item.version === 'v3'
+  ));
+}
+
+export function isSecondAutocodingWaitingForManualCoding(
+  items: CodingFreshnessSummaryItemDto[],
+  manualCodingOverview: ManualCodingCompletionOverview | null,
+  manualCodingOverviewLoadFailed: boolean
+): boolean {
+  const secondAutocodingWarnings = getSecondAutocodingFreshnessWarnings(items);
+  if (secondAutocodingWarnings.length === 0) {
+    return false;
+  }
+
+  if (manualCodingOverviewLoadFailed || !manualCodingOverview) {
+    return true;
+  }
+
+  return normalizeCount(manualCodingOverview.totalIncompleteResponses || 0) > 0 &&
+    normalizeCount(manualCodingOverview.remainingResponses || 0) > 0;
 }
 
 export function hasOnlyManualCodingFreshnessWarnings(

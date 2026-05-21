@@ -234,7 +234,8 @@ describe('CodingManagementComponent', () => {
           'manual-results-overview-load-failed': 'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
           'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
           'second-autocoding-waits-chip': '{{version}}: {{count}} wartet',
-          'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.'
+          'second-autocoding-waits-snackbar': 'Schließen Sie zuerst die manuelle Kodierung ab und übernehmen Sie die Ergebnisse.',
+          'open-manual-review': 'Manuelle Prüfung öffnen'
         }
       }
     });
@@ -354,10 +355,21 @@ describe('CodingManagementComponent', () => {
       expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
       expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
       expect(component.hasFreshnessAutoCodingWork('v3')).toBe(false);
+      expect(component.hasManualCodingFreshnessAction).toBe(true);
       expect(component.codingFreshnessChipWarnings).toHaveLength(1);
       expect(component.getFreshnessChipLabel(component.codingFreshnessChipWarnings[0])).toBe(
         'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
       );
+
+      fixture.detectChanges();
+      const actionPanel = fixture.nativeElement.querySelector('.coding-freshness-actions') as HTMLElement | null;
+      const manualActionButton = Array.from(actionPanel?.querySelectorAll('button') || [])
+        .find(button => button.textContent?.includes('Manuelle Prüfung öffnen')) as HTMLButtonElement | undefined;
+      expect(manualActionButton).toBeTruthy();
+
+      manualActionButton?.click();
+
+      expect(mockRouter.navigate).toHaveBeenCalledWith(['/workspace-admin/1/coding/manual']);
     });
 
     it('should keep earlier coding freshness warnings visible while second auto-coding waits', () => {

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   TestResultsUploadResultDialogComponent,
   TestResultsUploadResultDialogData
@@ -13,6 +14,13 @@ describe('TestResultsUploadResultDialogComponent', () => {
 
   const data: TestResultsUploadResultDialogData = {
     resultType: 'responses',
+    manualAppliedResultsOverview: {
+      totalIncompleteResponses: 10,
+      appliedResponses: 7,
+      remainingResponses: 3,
+      completionPercentage: 70
+    },
+    manualAppliedResultsOverviewLoadFailed: false,
     result: {
       expected: {
         testPersons: 1,
@@ -95,12 +103,31 @@ describe('TestResultsUploadResultDialogComponent', () => {
     dialogRef = { close: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [TestResultsUploadResultDialogComponent, NoopAnimationsModule],
+      imports: [
+        TestResultsUploadResultDialogComponent,
+        NoopAnimationsModule,
+        TranslateModule.forRoot()
+      ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data }
       ]
     }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'coding-management': {
+        readiness: {
+          'title-manual-coding-open': 'Manuelle Kodierung abschließen',
+          'second-autocoding-waits-summary': 'Auto-Coding 2 ist der nächste Schritt, sobald die manuelle Kodierung abgeschlossen ist. Schließen Sie zuerst die offenen manuellen Kodierfälle ab und übernehmen Sie die Ergebnisse.{{remaining}}',
+          'second-autocoding-waits-remaining': ' Es sind noch {{count}} manuelle Kodierergebnisse offen.',
+          'manual-results-overview-load-failed': 'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
+          'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
+          'second-autocoding-waits-chip': '{{version}}: {{count}} wartet'
+        }
+      }
+    });
+    translateService.use('de');
 
     fixture = TestBed.createComponent(TestResultsUploadResultDialogComponent);
     component = fixture.componentInstance;
@@ -124,9 +151,13 @@ describe('TestResultsUploadResultDialogComponent', () => {
     ]);
     expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding aktualisieren');
     expect(component.codingFreshnessSummaryText).toBe(
-      'Je betroffenem Auto-Coding-Lauf sind 3 Antwortwerte in 1 Aufgabenbearbeitung zu bearbeiten. ' +
-      'Auto-Coding 1 und Auto-Coding 2 müssen ausgeführt werden.'
+      'Auto-Coding 1 muss für 1 Aufgabenbearbeitung ausgeführt werden. ' +
+      'Das betrifft 3 Antwortwerte.'
     );
+    expect(component.codingFreshnessWarnings).toEqual([
+      expect.objectContaining({ version: 'v1' })
+    ]);
+    expect(component.codingFreshnessDisplayWarnings).toEqual(component.codingFreshnessWarnings);
     expect(component.getCodingFreshnessChipLabel(data.result.codingFreshness!.items[0])).toBe(
       'Auto-Coding 1: 1 Aufgabenbearbeitung kodieren'
     );
@@ -170,6 +201,8 @@ describe('TestResultsUploadResultDialogComponent', () => {
   it('ignores zero-count coding freshness rows', () => {
     component.data = {
       resultType: 'responses',
+      manualAppliedResultsOverview: data.manualAppliedResultsOverview,
+      manualAppliedResultsOverviewLoadFailed: data.manualAppliedResultsOverviewLoadFailed,
       result: {
         ...data.result,
         codingFreshness: {
@@ -190,5 +223,78 @@ describe('TestResultsUploadResultDialogComponent', () => {
     expect(component.codingFreshnessWarnings).toEqual([]);
     expect(component.hasCodingFreshnessWarning).toBe(false);
     expect(component.codingFreshnessDialogTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('shows second auto-coding as waiting when manual coding is still open', () => {
+    component.data = {
+      resultType: 'responses',
+      manualAppliedResultsOverview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 210,
+        remainingResponses: 461,
+        completionPercentage: 31
+      },
+      manualAppliedResultsOverviewLoadFailed: false,
+      result: {
+        ...data.result,
+        codingFreshness: {
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [
+            {
+              version: 'v3',
+              state: 'PENDING',
+              unitCount: 671,
+              affectedResponseCount: 5098
+            }
+          ]
+        }
+      } as never
+    };
+
+    expect(component.hasCodingFreshnessWarning).toBe(true);
+    expect(component.codingFreshnessWarnings).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings).toHaveLength(1);
+    expect(component.codingFreshnessDialogTitle).toBe('Manuelle Kodierung abschließen');
+    expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
+    expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
+    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings[0])).toBe(
+      'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
+    );
+  });
+
+  it('shows second auto-coding as actionable once manual coding is complete', () => {
+    component.data = {
+      resultType: 'responses',
+      manualAppliedResultsOverview: {
+        totalIncompleteResponses: 671,
+        appliedResponses: 671,
+        remainingResponses: 0,
+        completionPercentage: 100
+      },
+      manualAppliedResultsOverviewLoadFailed: false,
+      result: {
+        ...data.result,
+        codingFreshness: {
+          workspaceId: 1,
+          currentRevision: 2,
+          items: [
+            {
+              version: 'v3',
+              state: 'PENDING',
+              unitCount: 671,
+              affectedResponseCount: 5098
+            }
+          ]
+        }
+      } as never
+    };
+
+    expect(component.codingFreshnessWarnings).toHaveLength(1);
+    expect(component.codingFreshnessDialogTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessSummaryText).toBe(
+      'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
+      'Das betrifft 5098 Antwortwerte.'
+    );
   });
 });

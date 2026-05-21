@@ -84,7 +84,7 @@
         <div class="coding-freshness-help">{{ codingFreshnessExplanationText }}</div>
       </div>
       <div class="coding-freshness-chip-row">
-        @for (item of codingFreshnessWarnings; track item.version + item.state) {
+        @for (item of codingFreshnessDisplayWarnings; track item.version + item.state) {
         <span class="coding-freshness-chip">
           {{ getCodingFreshnessChipLabel(item) }}
         </span>

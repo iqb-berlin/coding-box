@@ -1,6 +1,6 @@
 // eslint-disable-next-line max-classes-per-file
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -120,7 +120,19 @@ describe('TestResultsComponent', () => {
         {
           provide: TestPersonCodingService,
           useValue: {
-            notifyTestResultsChanged: jest.fn()
+            notifyTestResultsChanged: jest.fn(),
+            getAppliedResultsOverview: jest.fn().mockReturnValue(of({
+              totalIncompleteResponses: 0,
+              appliedResponses: 0,
+              remainingResponses: 0,
+              completionPercentage: 100,
+              rawTotalIncompleteResponses: 0,
+              rawAppliedResponses: 0,
+              rawCompletionPercentage: 100,
+              aggregationActive: false,
+              aggregationThreshold: null,
+              aggregatedDuplicateCases: 0
+            }))
           }
         },
         {
@@ -168,6 +180,21 @@ describe('TestResultsComponent', () => {
         }
       ]
     }).compileComponents();
+
+    const translateService = TestBed.inject(TranslateService);
+    translateService.setTranslation('de', {
+      'coding-management': {
+        readiness: {
+          'title-manual-coding-open': 'Manuelle Kodierung abschließen',
+          'second-autocoding-waits-summary': 'Auto-Coding 2 ist der nächste Schritt, sobald die manuelle Kodierung abgeschlossen ist. Schließen Sie zuerst die offenen manuellen Kodierfälle ab und übernehmen Sie die Ergebnisse.{{remaining}}',
+          'second-autocoding-waits-remaining': ' Es sind noch {{count}} manuelle Kodierergebnisse offen.',
+          'manual-results-overview-load-failed': 'Der Stand der manuellen Kodierung konnte nicht geprüft werden. Auto-Coding 2 bleibt gesperrt, bis die Prüfung erfolgreich aktualisiert wurde.',
+          'second-autocoding-waits-help': 'Der Start von Auto-Coding 2 bleibt bis dahin gesperrt. {{taskResultHelp}}',
+          'second-autocoding-waits-chip': '{{version}}: {{count}} wartet'
+        }
+      }
+    });
+    translateService.use('de');
 
     fixture = TestBed.createComponent(TestResultsComponent);
     component = fixture.componentInstance;
@@ -376,6 +403,7 @@ describe('TestResultsComponent', () => {
     await component.testCenterImport();
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
 
     const resultCall = dialog.open.mock.calls.find(
       ([componentType]) => componentType === TestResultsUploadResultDialogComponent
@@ -417,5 +445,154 @@ describe('TestResultsComponent', () => {
     expect(component.codingFreshnessWarnings).toEqual([]);
     expect(component.hasCodingFreshnessWarning).toBe(false);
     expect(component.codingFreshnessBannerTitle).toBe('Kodierstand aktuell');
+  });
+
+  it('should show second auto-coding as waiting while manual coding results are still open', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+    component.manualAppliedResultsOverview = {
+      totalIncompleteResponses: 671,
+      appliedResponses: 210,
+      remainingResponses: 461,
+      completionPercentage: 31,
+      rawTotalIncompleteResponses: 5098,
+      rawAppliedResponses: 4637,
+      rawCompletionPercentage: 91,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    };
+
+    expect(component.hasCodingFreshnessWarning).toBe(true);
+    expect(component.codingFreshnessWarnings).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings).toHaveLength(1);
+    expect(component.codingFreshnessBannerTitle).toBe('Manuelle Kodierung abschließen');
+    expect(component.codingFreshnessSummaryText).toContain('Auto-Coding 2 ist der nächste Schritt');
+    expect(component.codingFreshnessSummaryText).toContain('461 manuelle Kodierergebnisse offen');
+    expect(component.getCodingFreshnessChipLabel(component.codingFreshnessDisplayWarnings[0])).toBe(
+      'Auto-Coding 2: 671 Aufgabenbearbeitungen wartet'
+    );
+    expect(component.codingFreshnessActionLabel).toBe('Manuelle Kodierung öffnen');
+  });
+
+  it('should hide second auto-coding while the manual coding status is still loading', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+    component.manualAppliedResultsOverview = {
+      totalIncompleteResponses: 671,
+      appliedResponses: 671,
+      remainingResponses: 0,
+      completionPercentage: 100,
+      rawTotalIncompleteResponses: 5098,
+      rawAppliedResponses: 5098,
+      rawCompletionPercentage: 100,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    };
+    component.manualAppliedResultsOverviewLoadFailed = false;
+    component.isLoadingManualAppliedResultsOverview = true;
+
+    expect(component.hasCodingFreshnessWarning).toBe(false);
+    expect(component.codingFreshnessWarnings).toEqual([]);
+    expect(component.codingFreshnessDisplayWarnings).toEqual([]);
+  });
+
+  it('should show second auto-coding as actionable once manual coding is complete', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+    component.manualAppliedResultsOverview = {
+      totalIncompleteResponses: 671,
+      appliedResponses: 671,
+      remainingResponses: 0,
+      completionPercentage: 100,
+      rawTotalIncompleteResponses: 5098,
+      rawAppliedResponses: 5098,
+      rawCompletionPercentage: 100,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    };
+
+    expect(component.codingFreshnessWarnings).toHaveLength(1);
+    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessSummaryText).toBe(
+      'Auto-Coding 2 muss für 671 Aufgabenbearbeitungen ausgeführt werden. ' +
+      'Das betrifft 5098 Antwortwerte.'
+    );
+    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
+  });
+
+  it('should keep earlier auto-coding warnings actionable while second auto-coding waits', () => {
+    component.codingFreshnessSummary = {
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v1',
+          state: 'PENDING',
+          unitCount: 10,
+          affectedResponseCount: 50
+        },
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 671,
+          affectedResponseCount: 5098
+        }
+      ]
+    };
+    component.manualAppliedResultsOverview = {
+      totalIncompleteResponses: 671,
+      appliedResponses: 210,
+      remainingResponses: 461,
+      completionPercentage: 31,
+      rawTotalIncompleteResponses: 5098,
+      rawAppliedResponses: 4637,
+      rawCompletionPercentage: 91,
+      aggregationActive: false,
+      aggregationThreshold: null,
+      aggregatedDuplicateCases: 0
+    };
+
+    expect(component.codingFreshnessWarnings).toEqual([
+      expect.objectContaining({ version: 'v1' })
+    ]);
+    expect(component.codingFreshnessBannerTitle).toBe('Auto-Coding aktualisieren');
+    expect(component.codingFreshnessSummaryText).toBe(
+      'Auto-Coding 1 muss für 10 Aufgabenbearbeitungen ausgeführt werden. ' +
+      'Das betrifft 50 Antwortwerte.'
+    );
+    expect(component.codingFreshnessActionLabel).toBe('Auto-Coding öffnen');
   });
 });

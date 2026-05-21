@@ -77,8 +77,10 @@ import {
   getCodingFreshnessStateLabel,
   getCodingFreshnessSummaryText,
   getCodingFreshnessVersionLabel,
+  getSecondAutocodingFreshnessWarnings,
   hasOnlyManualCodingFreshnessWarnings,
-  isCodingFreshnessOpenWarning
+  isCodingFreshnessOpenWarning,
+  isSecondAutocodingWaitingForManualCoding
 } from '../../../shared/utils/coding-freshness-text.util';
 import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
@@ -699,6 +701,11 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return getCodingFreshnessManualReviewWarnings(this.codingFreshnessWarnings);
   }
 
+  get hasManualCodingFreshnessAction(): boolean {
+    return this.manualCodingFreshnessWarnings.length > 0 ||
+      this.shouldShowSecondAutocodingWaitingState;
+  }
+
   get hasOnlyManualCodingFreshnessWarnings(): boolean {
     return hasOnlyManualCodingFreshnessWarnings(this.codingFreshnessWarnings);
   }
@@ -936,31 +943,20 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return this.allCodingFreshnessWarnings
-      .filter(item => item.version === 'v3');
+    return getSecondAutocodingFreshnessWarnings(this.allCodingFreshnessWarnings);
   }
 
   private get isSecondAutocodingWaitingForManualCoding(): boolean {
-    return this.secondAutocodingFreshnessWarnings.length > 0 &&
-      this.hasOpenManualCodingResults;
+    return isSecondAutocodingWaitingForManualCoding(
+      this.allCodingFreshnessWarnings,
+      this.manualAppliedResultsOverview,
+      this.manualAppliedResultsOverviewLoadFailed
+    );
   }
 
   private get shouldShowSecondAutocodingWaitingState(): boolean {
     return this.isSecondAutocodingWaitingForManualCoding &&
       this.codingFreshnessWarnings.length === 0;
-  }
-
-  private get hasOpenManualCodingResults(): boolean {
-    if (this.manualAppliedResultsOverviewLoadFailed) {
-      return this.secondAutocodingFreshnessWarnings.length > 0;
-    }
-
-    if (!this.manualAppliedResultsOverview) {
-      return this.secondAutocodingFreshnessWarnings.length > 0;
-    }
-
-    return (this.manualAppliedResultsOverview.totalIncompleteResponses || 0) > 0 &&
-      (this.manualAppliedResultsOverview.remainingResponses || 0) > 0;
   }
 
   private stopFreshnessJobPolling(): void {

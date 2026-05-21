@@ -153,7 +153,7 @@
         {{ getFreshnessAutoCodingButtonLabel('v3') }}
       </button>
       }
-      @if (manualCodingFreshnessWarnings.length > 0) {
+      @if (hasManualCodingFreshnessAction) {
       <button mat-stroked-button color="primary" (click)="openManualCoding()">
         <mat-icon>keyboard</mat-icon>
         {{ 'coding-management.readiness.open-manual-review' | translate }}

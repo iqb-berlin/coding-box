@@ -20,6 +20,11 @@ import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
+import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
+import {
+  getSecondAutocodingFreshnessWarnings,
+  ManualCodingCompletionOverview
+} from '../../shared/utils/coding-freshness-text.util';
 
 export interface PendingUploadBatch {
   workspaceId: number;
@@ -56,12 +61,23 @@ type ImportSummaryNumberKey =
   | 'skippedRows'
   | 'skippedLogs';
 
+type ManualOverviewResult = {
+  overview: ManualCodingCompletionOverview | null;
+  loadFailed: boolean;
+};
+
+type UploadCodingContext = {
+  codingFreshness: TestResultsUploadResultDto['codingFreshness'] | null;
+  manualOverview: ManualOverviewResult;
+};
+
 @Injectable({
   providedIn: 'root'
 })
 export class TestResultsUploadStateService {
   private fileService = inject(FileService);
   private testResultService = inject(TestResultService);
+  private testPersonCodingService = inject(TestPersonCodingService);
   private validationTaskStateService = inject(ValidationTaskStateService);
   private dialog = inject(MatDialog);
   private snackBar = inject(MatSnackBar);
@@ -358,24 +374,102 @@ export class TestResultsUploadStateService {
 
         this.closeProgressDialog(batch);
 
-        this.dialog.open(TestResultsUploadResultDialogComponent, {
-          width: '90vw',
-          maxWidth: '95vw',
-          data: {
-            resultType: batch.resultType,
-            result: uploadResult
-          }
+        this.loadUploadCodingContext(
+          batch.workspaceId,
+          completedResults,
+          batch.resultType === 'responses'
+        ).subscribe(codingContext => {
+          const dialogUploadResult: TestResultsUploadResultDto = {
+            ...uploadResult,
+            codingFreshness: codingContext.codingFreshness || undefined
+          };
+
+          this.dialog.open(TestResultsUploadResultDialogComponent, {
+            width: '90vw',
+            maxWidth: '95vw',
+            data: {
+              resultType: batch.resultType,
+              result: dialogUploadResult,
+              manualAppliedResultsOverview: codingContext.manualOverview.overview,
+              manualAppliedResultsOverviewLoadFailed: codingContext.manualOverview.loadFailed
+            }
+          });
+
+          this.uploadsFinishedSubject.next(batch.workspaceId);
+
+          const batchKey = this.getBatchKey(batch);
+          const remainingBatches = this.batches$.value.filter(b => this.getBatchKey(b) !== batchKey);
+          this.batches$.next(remainingBatches);
+
+          localStorage.removeItem(this.getStorageKey(batch.workspaceId));
         });
-
-        this.uploadsFinishedSubject.next(batch.workspaceId);
-
-        const batchKey = this.getBatchKey(batch);
-        const remainingBatches = this.batches$.value.filter(b => this.getBatchKey(b) !== batchKey);
-        this.batches$.next(remainingBatches);
-
-        localStorage.removeItem(this.getStorageKey(batch.workspaceId));
       });
     });
+  }
+
+  private loadUploadCodingContext(
+    workspaceId: number,
+    completedResults: TestResultsUploadResultDto[],
+    shouldLoadCodingFreshness: boolean
+  ): Observable<UploadCodingContext> {
+    const completedCodingFreshness = this.getLatestCodingFreshness(completedResults);
+    const codingFreshness$ = completedCodingFreshness || !shouldLoadCodingFreshness ?
+      of(completedCodingFreshness || null) :
+      this.testPersonCodingService.getCodingFreshness(workspaceId)
+        .pipe(catchError(() => of(null)));
+
+    return codingFreshness$.pipe(
+      switchMap(codingFreshness => {
+        const manualOverview$ = this.hasSecondAutocodingFreshnessWarning(codingFreshness) ?
+          this.loadManualAppliedResultsOverview(workspaceId) :
+          of({
+            overview: null,
+            loadFailed: false
+          });
+
+        return manualOverview$.pipe(
+          map(manualOverview => ({
+            codingFreshness,
+            manualOverview
+          }))
+        );
+      })
+    );
+  }
+
+  private getLatestCodingFreshness(
+    completedResults: TestResultsUploadResultDto[]
+  ): TestResultsUploadResultDto['codingFreshness'] | null {
+    for (let index = completedResults.length - 1; index >= 0; index -= 1) {
+      const codingFreshness = completedResults[index].codingFreshness;
+      if (codingFreshness) {
+        return codingFreshness;
+      }
+    }
+
+    return null;
+  }
+
+  private hasSecondAutocodingFreshnessWarning(
+    codingFreshness: TestResultsUploadResultDto['codingFreshness'] | null
+  ): boolean {
+    return getSecondAutocodingFreshnessWarnings(codingFreshness?.items || []).length > 0;
+  }
+
+  private loadManualAppliedResultsOverview(
+    workspaceId: number
+  ): Observable<ManualOverviewResult> {
+    return this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
+      .pipe(
+        map(overview => ({
+          overview,
+          loadFailed: overview === null
+        })),
+        catchError(() => of({
+          overview: null,
+          loadFailed: true
+        }))
+      );
   }
 
   private showLogUploadAnomalyFeedback(workspaceId: number): void {

@@ -8,11 +8,13 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultsUploadStateService, PendingUploadBatch } from './test-results-upload-state.service';
+import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
 
 describe('TestResultsUploadStateService', () => {
   let service: TestResultsUploadStateService;
   let fileServiceMock: { getUploadJobStatus: jest.Mock };
   let testResultServiceMock: { invalidateCache: jest.Mock; getWorkspaceOverview: jest.Mock };
+  let testPersonCodingServiceMock: { getAppliedResultsOverview: jest.Mock; getCodingFreshness: jest.Mock };
   let dialogMock: { open: jest.Mock };
   let snackBarMock: { open: jest.Mock };
 
@@ -31,6 +33,25 @@ describe('TestResultsUploadStateService', () => {
         responseStatusCounts: {}
       }))
     };
+    testPersonCodingServiceMock = {
+      getCodingFreshness: jest.fn().mockReturnValue(of({
+        workspaceId: 1,
+        currentRevision: 0,
+        items: []
+      })),
+      getAppliedResultsOverview: jest.fn().mockReturnValue(of({
+        totalIncompleteResponses: 0,
+        appliedResponses: 0,
+        remainingResponses: 0,
+        completionPercentage: 100,
+        rawTotalIncompleteResponses: 0,
+        rawAppliedResponses: 0,
+        rawCompletionPercentage: 100,
+        aggregationActive: false,
+        aggregationThreshold: null,
+        aggregatedDuplicateCases: 0
+      }))
+    };
     dialogMock = {
       open: jest.fn()
     };
@@ -43,6 +64,7 @@ describe('TestResultsUploadStateService', () => {
         TestResultsUploadStateService,
         { provide: FileService, useValue: fileServiceMock },
         { provide: TestResultService, useValue: testResultServiceMock },
+        { provide: TestPersonCodingService, useValue: testPersonCodingServiceMock },
         { provide: MatDialog, useValue: dialogMock },
         { provide: MatSnackBar, useValue: snackBarMock }
       ]
@@ -265,6 +287,18 @@ describe('TestResultsUploadStateService', () => {
       sessionOsCounts: {},
       sessionScreenCounts: {}
     }));
+    testPersonCodingServiceMock.getCodingFreshness.mockReturnValueOnce(of({
+      workspaceId: 1,
+      currentRevision: 2,
+      items: [
+        {
+          version: 'v3',
+          state: 'PENDING',
+          unitCount: 3,
+          affectedResponseCount: 3
+        }
+      ]
+    }));
 
     service.registerBatch(batch);
 
@@ -274,14 +308,25 @@ describe('TestResultsUploadStateService', () => {
     flushMicrotasks();
 
     expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(2);
+    expect(testPersonCodingServiceMock.getCodingFreshness).toHaveBeenCalledWith(1);
     expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
       data: expect.objectContaining({
+        manualAppliedResultsOverview: expect.objectContaining({
+          remainingResponses: 0
+        }),
+        manualAppliedResultsOverviewLoadFailed: false,
         result: expect.objectContaining({
           overviewPending: false,
           expected: expect.objectContaining({
             uniqueResponses: 3
           }),
-          responseStatusCounts: completedResult.responseStatusCounts
+          responseStatusCounts: completedResult.responseStatusCounts,
+          codingFreshness: expect.objectContaining({
+            currentRevision: 2,
+            items: [
+              expect.objectContaining({ version: 'v3' })
+            ]
+          })
         })
       })
     }));
