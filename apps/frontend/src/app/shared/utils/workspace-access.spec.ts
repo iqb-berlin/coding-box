@@ -17,8 +17,8 @@ describe('workspace access utilities', () => {
     expect(getEffectiveCanCode({ accessLevel: 2 })).toBe(false);
   });
 
-  it('requires canCode for level-1 workspace access', () => {
-    expect(hasMinimumWorkspaceAccess({ accessLevel: 1, canCode: false }, 1)).toBe(false);
+  it('checks level-1 workspace access independently from canCode', () => {
+    expect(hasMinimumWorkspaceAccess({ accessLevel: 1, canCode: false }, 1)).toBe(true);
     expect(hasMinimumWorkspaceAccess({ accessLevel: 1, canCode: true }, 1)).toBe(true);
     expect(hasMinimumWorkspaceAccess({ accessLevel: 2, canCode: false }, 1)).toBe(true);
   });
@@ -80,7 +80,7 @@ describe('workspace access utilities', () => {
       expectedLevel3: false
     },
     {
-      label: 'coder',
+      label: 'basis access with coding',
       accessLevel: 1,
       canCode: true,
       expectedCanCode: true,
@@ -89,11 +89,11 @@ describe('workspace access utilities', () => {
       expectedLevel3: false
     },
     {
-      label: 'coder role with coding disabled',
+      label: 'basis access without coding',
       accessLevel: 1,
       canCode: false,
       expectedCanCode: false,
-      expectedLevel1: false,
+      expectedLevel1: true,
       expectedLevel2: false,
       expectedLevel3: false
     },

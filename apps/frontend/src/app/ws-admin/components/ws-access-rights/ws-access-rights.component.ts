@@ -49,9 +49,6 @@ export class WsAccessRightsComponent {
     if (checked) {
       user.accessLevel = level;
       user.isChecked = true;
-      if (level === 1) {
-        user.canCode = true;
-      }
     } else {
       user.accessLevel = 0;
       user.isChecked = false;

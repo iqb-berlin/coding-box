@@ -32,11 +32,5 @@ export function getCurrentUserWorkspaceAccesses(
 }
 
 export function hasMinimumWorkspaceAccess(user: WorkspaceAccessLike, minLevel: number): boolean {
-  const accessLevel = user.accessLevel ?? 0;
-
-  if (minLevel === 1 && accessLevel === 1) {
-    return getEffectiveCanCode(user);
-  }
-
-  return accessLevel >= minLevel;
+  return (user.accessLevel ?? 0) >= minLevel;
 }
