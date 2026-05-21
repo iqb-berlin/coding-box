@@ -181,10 +181,24 @@ describe('WsAdminComponent', () => {
     expect(links).toContain('ws-admin.settings');
   });
 
-  it('should render full admin navigation instead of coder-only navigation for admins with canCode', () => {
+  it('should render full admin navigation without own coding jobs for admins without coding access', () => {
+    const links = renderNavLinks(3, false, false, true);
+
+    expect(links).toEqual([
+      'ws-admin.test-files',
+      'ws-admin.test-results',
+      'ws-admin.coding',
+      'ws-admin.cleaning',
+      'ws-admin.export',
+      'ws-admin.settings'
+    ]);
+  });
+
+  it('should render own coding jobs and full admin navigation for admins with coding access', () => {
     const links = renderNavLinks(1, true, true, true);
 
     expect(links).toEqual([
+      'ws-admin.my-coding-jobs',
       'ws-admin.test-files',
       'ws-admin.test-results',
       'ws-admin.coding',

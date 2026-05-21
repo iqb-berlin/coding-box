@@ -87,33 +87,51 @@ export class WsAdminComponent implements OnInit {
         this.hasAssignedCodingJobs = false;
         this.updateNavLinks();
         this.handleDefaultNavigation();
+        this.updateWorkspaceCodingAccess();
         return;
       }
 
       if (authData.userId > 0) {
-        this.userBackendService.getUsers(this.appService.selectedWorkspaceId).subscribe(users => {
-          const currentUser = users.find(user => user.id === authData.userId);
-          if (currentUser) {
-            this.accessLevel = currentUser.accessLevel;
-            this.canCode = getEffectiveCanCode(currentUser);
-            this.hasAssignedCodingJobs = false;
-            this.updateNavLinks();
-            this.handleDefaultNavigation();
-            this.updateAssignedCodingJobsAccess();
-          }
-        });
+        this.updateWorkspaceCodingAccess();
       }
     });
   }
 
+  private updateWorkspaceCodingAccess(): void {
+    if (this.authData.userId <= 0) {
+      return;
+    }
+
+    this.userBackendService.getUsers(this.appService.selectedWorkspaceId)
+      .pipe(catchError(() => of([])))
+      .subscribe(users => {
+        const currentUser = users.find(user => user.id === this.authData.userId);
+        if (!currentUser) {
+          if (this.authData.isAdmin) {
+            this.updateAssignedCodingJobsAccess();
+          }
+          return;
+        }
+
+        this.accessLevel = this.authData.isAdmin ? 3 : currentUser.accessLevel;
+        this.canCode = getEffectiveCanCode(currentUser);
+        this.hasAssignedCodingJobs = false;
+        this.updateNavLinks();
+        this.handleDefaultNavigation();
+        this.updateAssignedCodingJobsAccess();
+      });
+  }
+
   private updateNavLinks(): void {
-    const showMyCodingJobs = !this.authData.isAdmin && this.hasCodingJobsAccess;
+    const showMyCodingJobs = this.hasCodingJobsAccess;
     this.codingManagerLinks = showMyCodingJobs ?
       [this.myCodingJobsLink, ...this.baseCodingManagerLinks] :
       [...this.baseCodingManagerLinks];
 
     if (this.authData.isAdmin) {
-      this.navLinks = [...this.allNavLinks];
+      this.navLinks = showMyCodingJobs ?
+        [this.myCodingJobsLink, ...this.allNavLinks] :
+        [...this.allNavLinks];
     } else if (this.accessLevel < 2) {
       this.navLinks = showMyCodingJobs ? [this.myCodingJobsLink] : [];
     } else if (this.accessLevel < 3) {
