@@ -27,7 +27,6 @@ export type ReplayAssetsPayload = {
   unitDef: FilesDto[];
   player: FilesDto[];
   vocs: FilesDto[];
-  serverTimings?: ReplayServerTimings;
 };
 
 export type ReplayResponsePayload = {
@@ -42,17 +41,17 @@ export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload & {
 export type ReplayStatisticsResponse = {
   id: number;
   timestamp: string;
-  workspaceId: number;
-  unitId: string;
-  bookletId?: string;
-  testPersonLogin?: string;
-  testPersonCode?: string;
-  durationMilliseconds: number;
-  replayUrl?: string;
+  workspace_id: number;
+  unit_id: string;
+  booklet_id?: string;
+  test_person_login?: string;
+  test_person_code?: string;
+  duration_milliseconds: number;
+  replay_url?: string;
   success?: boolean;
-  errorMessage?: string;
-  clientTimings?: ReplayClientTimings;
-  serverTimings?: ReplayServerTimings;
+  error_message?: string;
+  client_timings?: ReplayClientTimings;
+  server_timings?: ReplayServerTimings;
 };
 
 @Injectable({
@@ -98,38 +97,28 @@ export class ReplayBackendService {
       map(({ assets, responsePayload }) => ({
         ...assets,
         response: responsePayload.response,
-        serverTimings: this.mergeServerTimings(
-          assets.serverTimings,
+        serverTimings: this.prefixServerTimings(
+          'response',
           responsePayload.serverTimings
         )
       }))
     );
   }
 
-  private mergeServerTimings(
-    assetsTimings?: ReplayServerTimings,
-    responseTimings?: ReplayServerTimings
-  ): ReplayServerTimings | undefined {
-    const merged = {
-      ...this.prefixTimings('assets', assetsTimings),
-      ...this.prefixTimings('response', responseTimings)
-    };
-    return Object.keys(merged).length ? merged : undefined;
-  }
-
-  private prefixTimings(
-    prefix: 'assets' | 'response',
+  private prefixServerTimings(
+    prefix: 'response',
     timings?: ReplayServerTimings
-  ): ReplayServerTimings {
+  ): ReplayServerTimings | undefined {
     if (!timings) {
-      return {};
+      return undefined;
     }
-    return Object.entries(timings).reduce<ReplayServerTimings>((acc, [key, value]) => {
+    const prefixed = Object.entries(timings).reduce<ReplayServerTimings>((acc, [key, value]) => {
       if (typeof value === 'number' || value === null) {
         acc[`${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value;
       }
       return acc;
     }, {});
+    return Object.keys(prefixed).length ? prefixed : undefined;
   }
 
   getReplayAssets(
