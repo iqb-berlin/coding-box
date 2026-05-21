@@ -148,7 +148,7 @@ describe('CodingResponseQueryService', () => {
         limit: 100
       });
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'COALESCE(response.status_v2, response.status_v1) = :status',
+        expect.stringContaining('response.status_v2 = 8'),
         { status: 8 }
       );
     });

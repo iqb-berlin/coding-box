@@ -62,10 +62,13 @@ describe('CodingResponseFilterService', () => {
     });
 
     expect(queryBuilder.where).toHaveBeenCalledWith(
-      'COALESCE(response.status_v2, response.status_v1) IS NOT NULL'
+      expect.stringContaining('response.status_v2 = 8')
+    );
+    expect(queryBuilder.where).toHaveBeenCalledWith(
+      expect.stringContaining('IS NOT NULL')
     );
     expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'COALESCE(response.status_v2, response.status_v1) NOT IN (:...statisticsIgnoredStatuses)',
+      expect.stringContaining('NOT IN (:...statisticsIgnoredStatuses)'),
       { statisticsIgnoredStatuses: STATISTICS_IGNORED_STATUSES }
     );
   });
@@ -86,11 +89,11 @@ describe('CodingResponseFilterService', () => {
 
     expect(whereCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
     expect(whereCondition).not.toContain('response.status_v3::smallint');
-    expect(whereCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
-    expect(whereCondition).toContain('ELSE COALESCE(response.status_v3');
+    expect(whereCondition).toContain('COALESCE(response.status_v3');
+    expect(whereCondition).toContain('response.status_v2 = 8');
     expect(whereCondition).toContain('response.status_v2, response.status_v1');
     expect(ignoredStatusCondition).not.toContain("response.status_v3 ~ '^-?[0-9]+$'");
-    expect(ignoredStatusCondition).toContain('WHEN response.is_autocoder_generated = TRUE THEN');
+    expect(ignoredStatusCondition).toContain('COALESCE(response.status_v3');
     expect(ignoredStatusCondition).toContain('NOT IN (:...statisticsIgnoredStatuses)');
   });
 

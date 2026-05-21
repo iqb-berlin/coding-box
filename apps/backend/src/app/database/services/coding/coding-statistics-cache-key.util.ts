@@ -2,7 +2,7 @@ import type { CodingVersion } from '../../utils/effective-coding-status-expressi
 
 export type CodingStatisticsVersion = CodingVersion;
 
-export const CODING_STATISTICS_CACHE_KEY_PREFIX = 'coding-statistics:schema-v3';
+export const CODING_STATISTICS_CACHE_KEY_PREFIX = 'coding-statistics:schema-v4';
 
 export const CODING_STATISTICS_CACHE_VERSIONS: CodingStatisticsVersion[] = [
   'v1',
