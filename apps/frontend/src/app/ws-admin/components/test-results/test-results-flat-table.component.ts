@@ -812,8 +812,10 @@ export class TestResultsFlatTableComponent implements OnChanges, OnDestroy {
           loadingSnackBar.dismiss();
 
           this.dialog.open(BookletInfoDialogComponent, {
-            width: '1200px',
-            height: '80vh',
+            width: 'min(96vw, 1400px)',
+            maxWidth: '96vw',
+            height: '92vh',
+            maxHeight: '92vh',
             data: {
               bookletInfo,
               bookletId: normalizedBookletId
