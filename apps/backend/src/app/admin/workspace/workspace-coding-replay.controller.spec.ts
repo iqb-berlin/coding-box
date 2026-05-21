@@ -66,15 +66,7 @@ describe('WorkspaceCodingReplayController', () => {
     expect(result).toEqual({
       unitDef,
       player,
-      vocs,
-      serverTimings: expect.objectContaining({
-        findUnitDefMs: expect.any(Number),
-        findUnitMs: expect.any(Number),
-        getVocsMs: expect.any(Number),
-        extractPlayerIdMs: expect.any(Number),
-        findPlayerMs: expect.any(Number),
-        totalMs: expect.any(Number)
-      })
+      vocs
     });
     expect(workspacePlayerService.findUnitDef).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspacePlayerService.findUnit).toHaveBeenCalledWith(12, 'UNIT-1');
@@ -108,7 +100,7 @@ describe('WorkspaceCodingReplayController', () => {
       'unit-1'
     );
     expect(workspacePlayerService.findUnitDef).not.toHaveBeenCalled();
-    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=300');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
   });
 
@@ -144,7 +136,7 @@ describe('WorkspaceCodingReplayController', () => {
       'person@code@booklet',
       'unit-1'
     );
-    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'private, max-age=60');
+    expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');
   });
 
@@ -152,7 +144,7 @@ describe('WorkspaceCodingReplayController', () => {
     const controller = createController('0');
     const res = createResponse();
 
-    await controller.getReplayResponse(12, 'person@code@booklet', 'unit-1', res);
+    await controller.getReplayAssets(12, 'unit-1', res);
 
     expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');

@@ -43,7 +43,6 @@ class ReplayBackendServiceMock {
     vocs: [],
     player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
     serverTimings: {
-      assetsTotalMs: 20,
       responseTotalMs: 5
     }
   }));
@@ -165,7 +164,6 @@ describe('ReplayComponent', () => {
   it('should keep server timings from replay payload', () => {
     expect((component as unknown as { serverTimings: Record<string, number> | null }).serverTimings)
       .toEqual({
-        assetsTotalMs: 20,
         responseTotalMs: 5
       });
   });
@@ -221,7 +219,6 @@ describe('ReplayComponent', () => {
     privateComponent.payloadResponseTime = 500;
     privateComponent.playerReadyTime = 650;
     privateComponent.serverTimings = {
-      assetsTotalMs: 20,
       responseTotalMs: 5
     };
 
@@ -242,7 +239,6 @@ describe('ReplayComponent', () => {
           playerReadyToVisibleMs: 250
         },
         serverTimings: {
-          assetsTotalMs: 20,
           responseTotalMs: 5
         }
       })

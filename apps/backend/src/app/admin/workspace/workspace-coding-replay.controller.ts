@@ -41,7 +41,6 @@ interface ReplayAssetsPayload {
   unitDef: FilesDto[];
   player: FilesDto[];
   vocs: FilesDto[];
-  serverTimings: Record<string, number>;
 }
 
 interface ReplayResponsePayload {
@@ -155,7 +154,7 @@ export class WorkspaceCodingReplayController {
         `Replay payload timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify(serverTimings)}`
       );
 
-      this.setReplayCacheHeaders(res);
+      this.setReplayNoStoreHeaders(res);
       return {
         ...assets,
         response: responsePayload.response,
@@ -201,10 +200,7 @@ export class WorkspaceCodingReplayController {
         `Replay asset timings ws=${workspaceId} unit=${unitId.toUpperCase()}: ${JSON.stringify(serverTimings)}`
       );
       this.setReplayCacheHeaders(res);
-      return {
-        ...assets,
-        serverTimings
-      };
+      return assets;
     } catch (error) {
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
       this.logger.warn(
@@ -255,7 +251,7 @@ export class WorkspaceCodingReplayController {
       this.logger.debug(
         `Replay response timings ws=${workspaceId} unit=${unitId}: ${JSON.stringify(serverTimings)}`
       );
-      this.setReplayCacheHeaders(res);
+      this.setReplayNoStoreHeaders(res);
       return {
         ...responsePayload,
         serverTimings
@@ -319,8 +315,7 @@ export class WorkspaceCodingReplayController {
     return {
       unitDef,
       player,
-      vocs,
-      serverTimings: {}
+      vocs
     };
   }
 

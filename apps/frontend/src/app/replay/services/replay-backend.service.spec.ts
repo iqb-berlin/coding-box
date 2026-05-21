@@ -54,7 +54,6 @@ describe('ReplayBackendService', () => {
           playerReadyToVisibleMs: 30
         },
         serverTimings: {
-          assetsTotalMs: 20,
           responseTotalMs: 5
         }
       };
@@ -77,8 +76,6 @@ describe('ReplayBackendService', () => {
             vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }],
             response: { responses: [{ id: 'var1', content: '[]' }] },
             serverTimings: {
-              assetsFindUnitDefMs: 2,
-              assetsTotalMs: 12,
               responseFindUnitResponseMs: 3,
               responseTotalMs: 4
             }
@@ -98,11 +95,7 @@ describe('ReplayBackendService', () => {
       assetsReq.flush({
         unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
         player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
-        vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }],
-        serverTimings: {
-          findUnitDefMs: 2,
-          totalMs: 12
-        }
+        vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }]
       });
 
       const responseReq = httpMock.expectOne(req => {
