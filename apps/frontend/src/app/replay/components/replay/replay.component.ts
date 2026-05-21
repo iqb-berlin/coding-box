@@ -598,7 +598,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       testPersonCode,
       bookletId
     } = this.parseTestPersonData();
-    const replayUrl = window.location.href;
+    const replayUrl = this.getReplayStatisticsUrl();
 
     this.replayBackendService.storeReplayStatistics(workspaceId, {
       unitId: this.unitId || 'unknown',
@@ -621,6 +621,30 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         logger.error(`Error storing replay statistics: ${error}`);
       }
     });
+  }
+
+  private getReplayStatisticsUrl(): string {
+    try {
+      const url = new URL(window.location.href);
+      const hashQueryStart = url.hash.indexOf('?');
+
+      if (hashQueryStart >= 0) {
+        const hashPath = url.hash.slice(0, hashQueryStart);
+        const hashParams = new URLSearchParams(url.hash.slice(hashQueryStart + 1));
+        hashParams.delete('auth');
+        hashParams.delete('unitsData');
+
+        const query = hashParams.toString();
+        url.hash = query ? `${hashPath}?${query}` : hashPath;
+      }
+
+      url.searchParams.delete('auth');
+      url.searchParams.delete('unitsData');
+
+      return url.toString();
+    } catch (error) {
+      return window.location.href.split('?')[0];
+    }
   }
 
   private getWorkspaceIdFromToken(): number | null {

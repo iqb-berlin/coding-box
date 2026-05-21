@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { ReplayBackendService } from './replay-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../core/interceptors/http-error-context';
 
 describe('ReplayBackendService', () => {
   let service: ReplayBackendService;
@@ -62,6 +63,7 @@ describe('ReplayBackendService', () => {
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual(data);
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       req.flush({});
     });
   });

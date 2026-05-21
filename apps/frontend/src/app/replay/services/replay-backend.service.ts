@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, forkJoin, map } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 
 export type ReplayUnitResponse = {
   responses: {
@@ -81,7 +82,10 @@ export class ReplayBackendService {
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
-    return this.http.post<ReplayStatisticsResponse>(url, data, { headers: this.authHeader });
+    return this.http.post<ReplayStatisticsResponse>(url, data, {
+      headers: this.authHeader,
+      context: suppressGlobalHttpErrorContext()
+    });
   }
 
   getReplayPayload(

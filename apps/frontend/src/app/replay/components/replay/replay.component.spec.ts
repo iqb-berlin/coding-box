@@ -148,6 +148,7 @@ describe('ReplayComponent', () => {
   afterEach(() => {
     jest.useRealTimers();
     jest.restoreAllMocks();
+    window.history.pushState({}, '', '/');
   });
 
   it('should create', () => {
@@ -243,6 +244,40 @@ describe('ReplayComponent', () => {
         }
       })
     );
+  });
+
+  it('should omit auth and booklet units data from replay statistics URL', () => {
+    const privateComponent = component as unknown as {
+      storeReplayStatistics: (
+        success: boolean,
+        duration: number,
+        errorMessage?: string,
+        visibleTime?: number
+      ) => void;
+    };
+    const unitsData = encodeURIComponent('x'.repeat(5000));
+
+    window.history.pushState(
+      {},
+      '',
+      `/#/replay/login@@group@BOOKLET_A/UNIT_1/0/0?auth=secret&mode=booklet-view&unitsData=${unitsData}`
+    );
+
+    replayBackendService.storeReplayStatistics.mockClear();
+    component.workspaceId = 42;
+
+    privateComponent.storeReplayStatistics(true, 800, undefined, 900);
+
+    expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
+      expect.any(Number),
+      expect.objectContaining({
+        replayUrl: expect.stringContaining('mode=booklet-view')
+      })
+    );
+    const replayUrl = replayBackendService.storeReplayStatistics.mock.calls[0][1].replayUrl as string;
+    expect(replayUrl).not.toContain('auth=');
+    expect(replayUrl).not.toContain('unitsData=');
+    expect(replayUrl.length).toBeLessThan(2000);
   });
 
   it('should handle invalid testPerson in setTestPerson', () => {
