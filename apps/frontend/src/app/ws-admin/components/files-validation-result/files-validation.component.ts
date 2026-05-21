@@ -1518,8 +1518,10 @@ export class FilesValidationDialogComponent implements OnInit {
         loadingSnackBar.dismiss();
 
         this.dialog.open(UnitInfoDialogComponent, {
-          width: '1200px',
-          height: '80vh',
+          width: 'min(96vw, 1400px)',
+          maxWidth: '96vw',
+          height: '92vh',
+          maxHeight: '92vh',
           data: {
             unitInfo,
             unitId
