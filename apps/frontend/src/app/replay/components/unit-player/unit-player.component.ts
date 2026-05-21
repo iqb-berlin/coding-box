@@ -40,6 +40,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   readonly printMode = input<boolean>(false);
   iFrameHeight = input<number>();
   readonly invalidPage = output<'notInList' | 'notCurrent' | null>();
+  readonly playerReady = output<void>();
   readonly responseVisible = output<void>();
   // Track the last emitted page error to prevent flickering
   private lastPageError: 'notInList' | 'notCurrent' | null = null;
@@ -276,6 +277,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               window.crypto.getRandomValues(array);
               this.sessionId = ((array[0] % 20_000_000) + 10_000_000).toString(); // Session ID between 10M and 30M
               this.postMessageTarget = m.source as Window;
+              this.playerReady.emit();
               this.sendUnitData();
               break;
             }

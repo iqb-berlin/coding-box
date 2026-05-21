@@ -11,17 +11,33 @@ export type ReplayUnitResponse = {
   }[];
 };
 
+export type ReplayTimingMap = Record<string, number | null>;
+export type ReplayClientTimings = {
+  routeToVisibleMs: number | null;
+  loadToVisibleMs: number | null;
+  routeToPayloadRequestMs: number | null;
+  payloadMs: number | null;
+  payloadToVisibleMs: number | null;
+  payloadToPlayerReadyMs: number | null;
+  playerReadyToVisibleMs: number | null;
+};
+export type ReplayServerTimings = ReplayTimingMap;
+
 export type ReplayAssetsPayload = {
   unitDef: FilesDto[];
   player: FilesDto[];
   vocs: FilesDto[];
+  serverTimings?: ReplayServerTimings;
 };
 
 export type ReplayResponsePayload = {
   response: ReplayUnitResponse;
+  serverTimings?: ReplayServerTimings;
 };
 
-export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload;
+export type ReplayPayload = ReplayAssetsPayload & ReplayResponsePayload & {
+  serverTimings?: ReplayServerTimings;
+};
 
 export type ReplayStatisticsResponse = {
   id: number;
@@ -35,6 +51,8 @@ export type ReplayStatisticsResponse = {
   replayUrl?: string;
   success?: boolean;
   errorMessage?: string;
+  clientTimings?: ReplayClientTimings;
+  serverTimings?: ReplayServerTimings;
 };
 
 @Injectable({
@@ -59,6 +77,8 @@ export class ReplayBackendService {
       replayUrl?: string;
       success?: boolean;
       errorMessage?: string;
+      clientTimings?: ReplayClientTimings;
+      serverTimings?: ReplayServerTimings;
     }
   ): Observable<ReplayStatisticsResponse> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-statistics`;
@@ -77,9 +97,39 @@ export class ReplayBackendService {
     }).pipe(
       map(({ assets, responsePayload }) => ({
         ...assets,
-        response: responsePayload.response
+        response: responsePayload.response,
+        serverTimings: this.mergeServerTimings(
+          assets.serverTimings,
+          responsePayload.serverTimings
+        )
       }))
     );
+  }
+
+  private mergeServerTimings(
+    assetsTimings?: ReplayServerTimings,
+    responseTimings?: ReplayServerTimings
+  ): ReplayServerTimings | undefined {
+    const merged = {
+      ...this.prefixTimings('assets', assetsTimings),
+      ...this.prefixTimings('response', responseTimings)
+    };
+    return Object.keys(merged).length ? merged : undefined;
+  }
+
+  private prefixTimings(
+    prefix: 'assets' | 'response',
+    timings?: ReplayServerTimings
+  ): ReplayServerTimings {
+    if (!timings) {
+      return {};
+    }
+    return Object.entries(timings).reduce<ReplayServerTimings>((acc, [key, value]) => {
+      if (typeof value === 'number' || value === null) {
+        acc[`${prefix}${key.charAt(0).toUpperCase()}${key.slice(1)}`] = value;
+      }
+      return acc;
+    }, {});
   }
 
   getReplayAssets(
