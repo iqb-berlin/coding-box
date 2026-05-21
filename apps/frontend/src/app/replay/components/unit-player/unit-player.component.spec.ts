@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { UnitPlayerComponent } from './unit-player.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
+import { AppService } from '../../../core/services/app.service';
 
 describe('UnitPlayerComponent', () => {
   let component: UnitPlayerComponent;
@@ -36,5 +37,21 @@ describe('UnitPlayerComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('should emit playerReady when the hosted player reports ready', () => {
+    const emitSpy = jest.spyOn(component.playerReady, 'emit');
+    const appService = TestBed.inject(AppService);
+    const source = component.hostingIframe.nativeElement.contentWindow;
+
+    appService.postMessage$.next(new MessageEvent('message', {
+      data: {
+        type: 'player',
+        metadata: { specVersion: '3.0' }
+      },
+      source
+    }));
+
+    expect(emitSpy).toHaveBeenCalled();
   });
 });

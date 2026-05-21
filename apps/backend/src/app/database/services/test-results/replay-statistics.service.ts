@@ -4,6 +4,8 @@ import { Repository } from 'typeorm';
 import type { SelectQueryBuilder } from 'typeorm';
 import { ReplayStatistics } from '../../entities/replay-statistics.entity';
 
+type ReplayTimingMap = Record<string, number | null>;
+
 /**
  * Service for managing replay statistics
  * Provides methods for storing and retrieving replay statistics data
@@ -11,6 +13,36 @@ import { ReplayStatistics } from '../../entities/replay-statistics.entity';
 @Injectable()
 export class ReplayStatisticsService {
   private readonly logger = new Logger(ReplayStatisticsService.name);
+
+  private static readonly MAX_TIMING_VALUE_MS = 86_400_000;
+
+  private static readonly CLIENT_TIMING_KEYS = new Set([
+    'routeToVisibleMs',
+    'loadToVisibleMs',
+    'routeToPayloadRequestMs',
+    'payloadMs',
+    'payloadToVisibleMs',
+    'payloadToPlayerReadyMs',
+    'playerReadyToVisibleMs'
+  ]);
+
+  private static readonly SERVER_TIMING_KEYS = new Set([
+    'assetsFindUnitDefMs',
+    'assetsFindUnitMs',
+    'assetsGetVocsMs',
+    'assetsExtractPlayerIdMs',
+    'assetsFindPlayerMs',
+    'assetsTotalMs',
+    'responseFindUnitResponseMs',
+    'responseTotalMs',
+    'payloadFindUnitDefMs',
+    'payloadFindUnitMs',
+    'payloadGetVocsMs',
+    'payloadExtractPlayerIdMs',
+    'payloadFindPlayerMs',
+    'payloadFindUnitResponseMs',
+    'payloadTotalMs'
+  ]);
 
   private applyTimeFilters(
     qb: SelectQueryBuilder<ReplayStatistics>,
@@ -62,6 +94,8 @@ export class ReplayStatisticsService {
     replayUrl?: string;
     success?: boolean;
     errorMessage?: string;
+    clientTimings?: Record<string, unknown>;
+    serverTimings?: Record<string, unknown>;
   }): Promise<ReplayStatistics> {
     try {
       const mappedData = {
@@ -70,10 +104,20 @@ export class ReplayStatisticsService {
         booklet_id: data.bookletId,
         test_person_login: data.testPersonLogin,
         test_person_code: data.testPersonCode,
-        duration_milliseconds: data.durationMilliseconds,
+        duration_milliseconds: this.normalizeDurationMilliseconds(
+          data.durationMilliseconds
+        ),
         replay_url: data.replayUrl,
         success: data.success !== undefined ? data.success : true,
-        error_message: data.errorMessage
+        error_message: data.errorMessage,
+        client_timings: this.sanitizeTimingMap(
+          data.clientTimings,
+          ReplayStatisticsService.CLIENT_TIMING_KEYS
+        ),
+        server_timings: this.sanitizeTimingMap(
+          data.serverTimings,
+          ReplayStatisticsService.SERVER_TIMING_KEYS
+        )
       };
 
       const replayStatistics =
@@ -86,6 +130,43 @@ export class ReplayStatisticsService {
       );
       throw error;
     }
+  }
+
+  private normalizeDurationMilliseconds(durationMilliseconds: number): number {
+    if (!Number.isFinite(durationMilliseconds)) {
+      return 0;
+    }
+    return Math.max(
+      0,
+      Math.min(Math.trunc(durationMilliseconds), 2147483647)
+    );
+  }
+
+  private sanitizeTimingMap(
+    timings: Record<string, unknown> | undefined,
+    allowedKeys: Set<string>
+  ): ReplayTimingMap | undefined {
+    if (!timings || typeof timings !== 'object' || Array.isArray(timings)) {
+      return undefined;
+    }
+
+    const sanitized: ReplayTimingMap = {};
+
+    allowedKeys.forEach(key => {
+      const value = timings[key];
+      if (value === null) {
+        sanitized[key] = null;
+      } else if (typeof value === 'number' && Number.isFinite(value)) {
+        sanitized[key] = Number(
+          Math.max(
+            0,
+            Math.min(value, ReplayStatisticsService.MAX_TIMING_VALUE_MS)
+          ).toFixed(2)
+        );
+      }
+    });
+
+    return Object.keys(sanitized).length ? sanitized : undefined;
   }
 
   /**

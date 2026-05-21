@@ -63,7 +63,19 @@ describe('WorkspaceCodingReplayController', () => {
 
     const result = await controller.getReplayAssets(12, 'unit-1', res);
 
-    expect(result).toEqual({ unitDef, player, vocs });
+    expect(result).toEqual({
+      unitDef,
+      player,
+      vocs,
+      serverTimings: expect.objectContaining({
+        findUnitDefMs: expect.any(Number),
+        findUnitMs: expect.any(Number),
+        getVocsMs: expect.any(Number),
+        extractPlayerIdMs: expect.any(Number),
+        findPlayerMs: expect.any(Number),
+        totalMs: expect.any(Number)
+      })
+    });
     expect(workspacePlayerService.findUnitDef).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspacePlayerService.findUnit).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspaceFilesService.getVocs).toHaveBeenCalledWith(12, 'UNIT-1');
@@ -83,7 +95,13 @@ describe('WorkspaceCodingReplayController', () => {
       res
     );
 
-    expect(result).toEqual({ response });
+    expect(result).toEqual({
+      response,
+      serverTimings: expect.objectContaining({
+        findUnitResponseMs: expect.any(Number),
+        totalMs: expect.any(Number)
+      })
+    });
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(
       12,
       'person@code@booklet',
@@ -109,7 +127,16 @@ describe('WorkspaceCodingReplayController', () => {
       unitDef,
       player,
       vocs,
-      response
+      response,
+      serverTimings: expect.objectContaining({
+        payloadFindUnitDefMs: expect.any(Number),
+        payloadFindUnitMs: expect.any(Number),
+        payloadGetVocsMs: expect.any(Number),
+        payloadExtractPlayerIdMs: expect.any(Number),
+        payloadFindPlayerMs: expect.any(Number),
+        payloadFindUnitResponseMs: expect.any(Number),
+        payloadTotalMs: expect.any(Number)
+      })
     });
     expect(workspacePlayerService.findUnitDef).toHaveBeenCalledWith(12, 'UNIT-1');
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(

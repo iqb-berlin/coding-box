@@ -41,7 +41,23 @@ describe('ReplayBackendService', () => {
 
   describe('storeReplayStatistics', () => {
     it('should post statistics', () => {
-      const data = { unitId: 'u1', durationMilliseconds: 1000 };
+      const data = {
+        unitId: 'u1',
+        durationMilliseconds: 1000,
+        clientTimings: {
+          payloadMs: 100,
+          routeToVisibleMs: null,
+          loadToVisibleMs: 200,
+          routeToPayloadRequestMs: null,
+          payloadToVisibleMs: 50,
+          payloadToPlayerReadyMs: 20,
+          playerReadyToVisibleMs: 30
+        },
+        serverTimings: {
+          assetsTotalMs: 20,
+          responseTotalMs: 5
+        }
+      };
       service.storeReplayStatistics(1, data).subscribe();
 
       const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/replay-statistics`);
@@ -59,7 +75,13 @@ describe('ReplayBackendService', () => {
             unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
             player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
             vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }],
-            response: { responses: [{ id: 'var1', content: '[]' }] }
+            response: { responses: [{ id: 'var1', content: '[]' }] },
+            serverTimings: {
+              assetsFindUnitDefMs: 2,
+              assetsTotalMs: 12,
+              responseFindUnitResponseMs: 3,
+              responseTotalMs: 4
+            }
           });
           done();
         });
@@ -76,7 +98,11 @@ describe('ReplayBackendService', () => {
       assetsReq.flush({
         unitDef: [{ data: 'unitDef data', file_id: 'UNIT-1.VOUD' }],
         player: [{ data: 'player data', file_id: 'PLAYER-1.0' }],
-        vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }]
+        vocs: [{ data: 'vocs data', file_id: 'UNIT-1.VOCS' }],
+        serverTimings: {
+          findUnitDefMs: 2,
+          totalMs: 12
+        }
       });
 
       const responseReq = httpMock.expectOne(req => {
@@ -89,7 +115,11 @@ describe('ReplayBackendService', () => {
       );
       expect(responseReq.request.headers.get('Authorization')).toBe('Bearer url-token');
       responseReq.flush({
-        response: { responses: [{ id: 'var1', content: '[]' }] }
+        response: { responses: [{ id: 'var1', content: '[]' }] },
+        serverTimings: {
+          findUnitResponseMs: 3,
+          totalMs: 4
+        }
       });
     });
   });

@@ -5,7 +5,12 @@ import {
   VariableBundle
 } from '../../coding/models/coding-job.model';
 import { CodingJobBackendService, CodingExportConfig, JobDefinition } from '../../coding/services/coding-job-backend.service';
-import { ReplayBackendService, ReplayStatisticsResponse } from '../../replay/services/replay-backend.service';
+import {
+  ReplayBackendService,
+  ReplayClientTimings,
+  ReplayServerTimings,
+  ReplayStatisticsResponse
+} from '../../replay/services/replay-backend.service';
 import {
   CodingTrainingBackendService,
   CreateCoderTrainingJobsResponse,
@@ -361,7 +366,18 @@ export class CodingFacadeService {
     return this.codingExportService.getCodingBook(workspaceId, missingsProfile, contentOptions, unitList);
   }
 
-  storeReplayStatistics(workspaceId: number, data: { unitId: string; bookletId?: string; testPersonLogin?: string; testPersonCode?: string; durationMilliseconds: number; replayUrl?: string; success?: boolean; errorMessage?: string }): Observable<ReplayStatisticsResponse> {
+  storeReplayStatistics(workspaceId: number, data: {
+    unitId: string;
+    bookletId?: string;
+    testPersonLogin?: string;
+    testPersonCode?: string;
+    durationMilliseconds: number;
+    replayUrl?: string;
+    success?: boolean;
+    errorMessage?: string;
+    clientTimings?: ReplayClientTimings;
+    serverTimings?: ReplayServerTimings;
+  }): Observable<ReplayStatisticsResponse> {
     return this.replayBackendService.storeReplayStatistics(workspaceId, data);
   }
 
